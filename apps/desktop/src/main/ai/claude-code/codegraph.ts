@@ -30,6 +30,10 @@ export function codegraphEnv(): Record<string, string> {
     const value = process.env[key];
     if (value) env[key] = value;
   }
+  // Claude Code merges its own environment (with the session's credentials) into MCP servers.
+  env.ANTHROPIC_API_KEY = '';
+  env.ANTHROPIC_AUTH_TOKEN = '';
+  env.CLAUDE_CODE_OAUTH_TOKEN = '';
   return env;
 }
 

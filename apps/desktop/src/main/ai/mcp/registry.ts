@@ -27,7 +27,7 @@ const CONTEXT7_SERVER: McpServerConfig = {
   transport: {
     type: 'stdio',
     command: 'npx',
-    args: ['-y', '@upstash/context7-mcp@latest'],
+    args: ['-y', '@upstash/context7-mcp@4.4.4'],
   },
 };
 
@@ -79,7 +79,7 @@ const ELECTRON_SERVER: McpServerConfig = {
   transport: {
     type: 'stdio',
     command: 'npx',
-    args: ['-y', 'electron-mcp-server'],
+    args: ['-y', 'electron-mcp-server@1.5.1'],
   },
 };
 

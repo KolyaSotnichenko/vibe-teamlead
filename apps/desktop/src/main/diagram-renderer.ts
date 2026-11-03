@@ -7,7 +7,7 @@
  * layout problems; the app shows the PNG in the task workspace.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
 
 import { BrowserWindow } from 'electron';
 
@@ -49,8 +49,26 @@ export function pngPathFor(drawioPath: string): string {
   return drawioPath.replace(/\.drawio(\.xml)?$/i, '') + '.png';
 }
 
-export async function renderDrawioToPng(drawioPath: string, viewerScriptPath: string): Promise<RenderedDiagram> {
-  const xml = readFileSync(drawioPath, 'utf-8');
+/** The viewer script, read once (it is ~5 MB). */
+let viewerSource: { path: string; code: Promise<string> } | null = null;
+function loadViewer(viewerScriptPath: string): Promise<string> {
+  if (viewerSource?.path !== viewerScriptPath) {
+    viewerSource = { path: viewerScriptPath, code: readFile(viewerScriptPath, 'utf-8') };
+  }
+  return viewerSource.code;
+}
+
+/** Renders run one at a time: each uses a hidden window, and the architect renders often. */
+let queue: Promise<unknown> = Promise.resolve();
+
+export function renderDrawioToPng(drawioPath: string, viewerScriptPath: string): Promise<RenderedDiagram> {
+  const job = queue.then(() => renderOne(drawioPath, viewerScriptPath));
+  queue = job.catch(() => undefined);
+  return job;
+}
+
+async function renderOne(drawioPath: string, viewerScriptPath: string): Promise<RenderedDiagram> {
+  const [xml, viewer] = await Promise.all([readFile(drawioPath, 'utf-8'), loadViewer(viewerScriptPath)]);
   if (!/<mxfile|<mxGraphModel/.test(xml)) {
     throw new Error('Not a draw.io file: expected <mxfile> or <mxGraphModel> XML');
   }
@@ -67,7 +85,7 @@ export async function renderDrawioToPng(drawioPath: string, viewerScriptPath: st
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     await win.loadURL(BLANK_PAGE);
-    await win.webContents.executeJavaScript(readFileSync(viewerScriptPath, 'utf-8'));
+    await win.webContents.executeJavaScript(viewer);
     await win.webContents.executeJavaScript(buildRenderScript(xml));
 
     const deadline = Date.now() + RENDER_TIMEOUT_MS;
@@ -94,7 +112,7 @@ export async function renderDrawioToPng(drawioPath: string, viewerScriptPath: st
       height: box.height,
     });
     const pngPath = pngPathFor(drawioPath);
-    writeFileSync(pngPath, image.toPNG());
+    await writeFile(pngPath, image.toPNG());
     return { pngPath, width: box.width, height: box.height };
   } finally {
     win.destroy();

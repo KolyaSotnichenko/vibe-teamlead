@@ -32,6 +32,17 @@ const SERVER_KEYS: Record<string, string> = {
   'chrome-devtools': 'chrome-devtools',
 };
 
+/**
+ * Claude Code starts stdio MCP servers with its own environment merged in,
+ * which holds the session's Claude credentials. Third-party servers never
+ * need them, so they are blanked.
+ */
+export const CREDENTIAL_BLANKING_ENV: Record<string, string> = {
+  ANTHROPIC_API_KEY: '',
+  ANTHROPIC_AUTH_TOKEN: '',
+  CLAUDE_CODE_OAUTH_TOKEN: '',
+};
+
 export function toSdkServerConfig(config: McpServerConfig): SdkMcpServerConfig {
   const transport = config.transport;
   if (transport.type === 'stdio') {
@@ -39,7 +50,7 @@ export function toSdkServerConfig(config: McpServerConfig): SdkMcpServerConfig {
       type: 'stdio',
       command: transport.command,
       args: transport.args,
-      env: transport.env,
+      env: { ...transport.env, ...CREDENTIAL_BLANKING_ENV },
     };
   }
   return {
