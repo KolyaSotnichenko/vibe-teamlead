@@ -28,8 +28,8 @@
     "start:mcp": "electron . --remote-debugging-port=9222",
     "preview": "electron-vite preview",
     "rebuild": "electron-rebuild",
-    "package": "electron-builder",
-    "package:mac": "electron-builder --mac",
+    "package": "npm run build && node scripts/fetch-scanners.cjs && electron-builder",
+    "package:mac": "npm run build && node scripts/fetch-scanners.cjs && electron-builder --mac",
     "start:packaged:mac": "open 'dist/mac-arm64/Vibe Teamlead.app' || open 'dist/mac/Vibe Teamlead.app'",
     "test": "vitest run",
     "test:unit": "vitest run --exclude src/__tests__/integration/ --exclude src/__tests__/e2e/",
@@ -216,7 +216,10 @@
       {
         "from": "vendor-bin",
         "to": "scanners",
-        "filter": ["gitleaks", "osv-scanner"]
+        "filter": [
+          "gitleaks",
+          "osv-scanner"
+        ]
       },
       {
         "from": "../../node_modules/@playwright/mcp",

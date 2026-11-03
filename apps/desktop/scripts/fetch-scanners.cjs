@@ -16,7 +16,7 @@
 
 const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, copyFileSync } = require('node:fs');
+const { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 
@@ -80,11 +80,25 @@ async function fetchOsvScanner() {
   chmodSync(join(outDir, 'osv-scanner'), 0o755);
 }
 
+const stampPath = join(outDir, 'VERSIONS');
+const stamp = `gitleaks ${GITLEAKS_VERSION}, osv-scanner ${OSV_SCANNER_VERSION}, ${arch}`;
+
 (async () => {
   mkdirSync(outDir, { recursive: true });
+  // Already fetched for this version and architecture (local packaging runs this every time)
+  if (
+    existsSync(stampPath) &&
+    readFileSync(stampPath, 'utf-8').trim() === stamp &&
+    existsSync(join(outDir, 'gitleaks')) &&
+    existsSync(join(outDir, 'osv-scanner'))
+  ) {
+    console.log(`Scanners already in ${outDir} (${stamp})`);
+    return;
+  }
   await fetchGitleaks();
   await fetchOsvScanner();
-  console.log(`Scanners ready in ${outDir} (gitleaks ${GITLEAKS_VERSION}, osv-scanner ${OSV_SCANNER_VERSION}, ${arch})`);
+  writeFileSync(stampPath, `${stamp}\n`);
+  console.log(`Scanners ready in ${outDir} (${stamp})`);
 })().catch((error) => {
   console.error(error.message);
   process.exit(1);
