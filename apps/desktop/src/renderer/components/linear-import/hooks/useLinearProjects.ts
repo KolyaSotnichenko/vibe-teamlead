@@ -3,12 +3,14 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { LinearProject } from '../types';
 
 export function useLinearProjects(
   projectId: string,
   selectedTeamId: string
 ) {
+  const { t } = useTranslation('common');
   const [projects, setProjects] = useState<LinearProject[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,17 +33,17 @@ export function useLinearProjects(
         if (result.success && result.data) {
           setProjects(result.data);
         } else {
-          setError(result.error || 'Failed to load projects');
+          setError(result.error || t('linearImport.errors.failedLoadProjects'));
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : t('errors.unknownError'));
       } finally {
         setIsLoadingProjects(false);
       }
     };
 
     loadProjects();
-  }, [projectId, selectedTeamId]);
+  }, [projectId, selectedTeamId, t]);
 
   return { projects, isLoadingProjects, error, setError };
 }

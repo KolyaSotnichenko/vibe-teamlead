@@ -384,8 +384,51 @@
     "logs": {
       "agentActivity": "Agent Activity",
       "showMore": "Show {{count}} more",
-      "hideMore": "Hide {{count}} more"
-    }
+      "hideMore": "Hide {{count}} more",
+      "prNumber": "PR #{{number}}",
+      "live": "Live",
+      "waiting": "Waiting for logs...",
+      "reviewStarting": "Review is starting",
+      "noLogsAvailable": "No logs available",
+      "runReviewHint": "Run a review to generate logs",
+      "streaming": "Streaming",
+      "running": "Running",
+      "pending": "Pending",
+      "complete": "Complete",
+      "failed": "Failed",
+      "entries_one": "({{count}} entry)",
+      "entries_other": "({{count}} entries)",
+      "noLogsYet": "No logs yet",
+      "less": "Less",
+      "more": "More",
+      "phases": {
+        "context": "Context Gathering",
+        "analysis": "AI Analysis",
+        "synthesis": "Synthesis"
+      }
+    },
+    "fileStatus": {
+      "added": "added",
+      "removed": "removed",
+      "modified": "modified",
+      "renamed": "renamed",
+      "copied": "copied",
+      "changed": "changed",
+      "unchanged": "unchanged"
+    },
+    "errors": {
+      "checkConnection": "Failed to check connection",
+      "fetchPRs": "Failed to fetch PRs",
+      "loadMore": "Failed to load more PRs",
+      "checkNewCommits": "Failed to check for new commits",
+      "cancelReview": "Failed to cancel review",
+      "postReview": "Failed to post review",
+      "postComment": "Failed to post comment",
+      "mergePR": "Failed to merge PR",
+      "assignUser": "Failed to assign user"
+    },
+    "verdictOutdated": "AI verdict may be outdated",
+    "rerunReviewSuggestion": "Consider re-running the review after resolving these issues."
   },
   "downloads": {
     "toggleExpand": "Toggle download details",
@@ -443,6 +486,31 @@
       "analysisUnsupported": "Note: Image analysis is not yet supported. Images are stored for reference but cannot be analyzed by the model.",
       "screenshotTooLarge": "Screenshot is too large ({{size}}MB). Maximum size is {{max}}MB. Consider capturing a smaller area.",
       "notAnalyzed": "Images were stored for reference but not analyzed by the model."
+    },
+    "title": "Insights",
+    "subtitle": "Ask questions about your codebase",
+    "hideSidebar": "Hide sidebar",
+    "showSidebar": "Show sidebar",
+    "newChat": "New Chat",
+    "emptyTitle": "Start a Conversation",
+    "emptyDescription": "Ask questions about your codebase, get suggestions for improvements, or discuss features you'd like to implement.",
+    "suggestions": {
+      "architecture": "What is the architecture of this project?",
+      "codeQuality": "Suggest improvements for code quality",
+      "features": "What features could I add next?",
+      "security": "Are there any security concerns?"
+    },
+    "you": "You",
+    "assistant": "Assistant",
+    "thinking": "Thinking...",
+    "inputPlaceholder": "Ask about your codebase...",
+    "sendHint": "Press Enter to send, Shift+Enter for new line",
+    "toolsUsed_one": "{{count}} tool used",
+    "toolsUsed_other": "{{count}} tools used",
+    "tools": {
+      "readingFile": "Reading file",
+      "searchingFiles": "Searching files",
+      "searchingCode": "Searching code"
     }
   },
   "ideation": {
@@ -456,12 +524,288 @@
     "conversionFailedDescription": "Failed to convert idea to task",
     "conversionError": "Conversion error",
     "conversionErrorDescription": "An error occurred while converting the idea",
-    "noClaudeCredential": "No Claude API key yet. Add it in Settings → Claude to generate ideas."
+    "noClaudeCredential": "No Claude API key yet. Add it in Settings → Claude to generate ideas.",
+    "ideaCount_one": "{{count}} idea",
+    "ideaCount_other": "{{count}} ideas",
+    "noIdeasToDisplay": "No ideas to display",
+    "impactBadge": "{{level}} impact",
+    "types": {
+      "code_improvements": {
+        "label": "Code Improvements",
+        "description": "Code-revealed opportunities from patterns, architecture, and infrastructure analysis"
+      },
+      "ui_ux_improvements": {
+        "label": "UI/UX Improvements",
+        "description": "Visual and interaction improvements identified through app analysis"
+      },
+      "documentation_gaps": {
+        "label": "Documentation",
+        "description": "Missing or outdated documentation that needs attention"
+      },
+      "security_hardening": {
+        "label": "Security",
+        "description": "Security vulnerabilities and hardening opportunities"
+      },
+      "performance_optimizations": {
+        "label": "Performance",
+        "description": "Performance bottlenecks and optimization opportunities"
+      },
+      "code_quality": {
+        "label": "Code Quality",
+        "description": "Refactoring opportunities, large files, code smells, and best practice violations"
+      }
+    },
+    "status": {
+      "draft": "draft",
+      "selected": "selected",
+      "converted": "converted",
+      "dismissed": "dismissed",
+      "archived": "archived"
+    },
+    "effort": {
+      "trivial": "trivial",
+      "small": "small",
+      "medium": "medium",
+      "large": "large",
+      "complex": "complex"
+    },
+    "level": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high",
+      "critical": "critical"
+    },
+    "codeQualitySeverity": {
+      "suggestion": "suggestion",
+      "minor": "minor",
+      "major": "major",
+      "critical": "critical"
+    },
+    "audience": {
+      "developers": "developers",
+      "users": "users",
+      "contributors": "contributors",
+      "maintainers": "maintainers"
+    },
+    "categories": {
+      "uiux": {
+        "usability": "Usability",
+        "accessibility": "Accessibility",
+        "performance": "Performance",
+        "visual": "Visual Design",
+        "interaction": "Interaction"
+      },
+      "documentation": {
+        "readme": "README",
+        "api_docs": "API Documentation",
+        "inline_comments": "Inline Comments",
+        "examples": "Examples & Tutorials",
+        "architecture": "Architecture Docs",
+        "troubleshooting": "Troubleshooting Guide"
+      },
+      "security": {
+        "authentication": "Authentication",
+        "authorization": "Authorization",
+        "input_validation": "Input Validation",
+        "data_protection": "Data Protection",
+        "dependencies": "Dependencies",
+        "configuration": "Configuration",
+        "secrets_management": "Secrets Management"
+      },
+      "performance": {
+        "bundle_size": "Bundle Size",
+        "runtime": "Runtime Performance",
+        "memory": "Memory Usage",
+        "database": "Database Queries",
+        "network": "Network Requests",
+        "rendering": "Rendering",
+        "caching": "Caching"
+      },
+      "codeQuality": {
+        "large_files": "Large Files",
+        "code_smells": "Code Smells",
+        "complexity": "High Complexity",
+        "duplication": "Code Duplication",
+        "naming": "Naming Conventions",
+        "structure": "File Structure",
+        "linting": "Linting Issues",
+        "testing": "Test Coverage",
+        "types": "Type Safety",
+        "dependencies": "Dependency Issues",
+        "dead_code": "Dead Code",
+        "git_hygiene": "Git Hygiene"
+      }
+    },
+    "details": {
+      "severity": "Severity",
+      "effort": "Effort",
+      "category": "Category",
+      "files": "Files",
+      "breakingChange": "Breaking Change",
+      "breakingChangeHint": "This refactoring may break existing code or tests.",
+      "currentState": "Current State",
+      "proposedChange": "Proposed Change",
+      "codeExample": "Code Example",
+      "metrics": "Metrics",
+      "lines": "Lines",
+      "complexity": "Complexity",
+      "duplicateLines": "Duplicate Lines",
+      "testCoverage": "Test Coverage",
+      "affectedFiles": "Affected Files",
+      "bestPractice": "Best Practice",
+      "prerequisites": "Prerequisites",
+      "buildsUpon": "Builds Upon",
+      "implementationApproach": "Implementation Approach",
+      "patternsToFollow": "Patterns to Follow",
+      "targetAudience": "Target Audience",
+      "currentDocumentation": "Current Documentation",
+      "proposedContent": "Proposed Content",
+      "affectedAreas": "Affected Areas",
+      "priority": "Priority",
+      "impact": "Impact",
+      "expectedImprovement": "Expected Improvement",
+      "implementation": "Implementation",
+      "tradeoffs": "Tradeoffs",
+      "vulnerability": "Vulnerability",
+      "currentRisk": "Current Risk",
+      "remediation": "Remediation",
+      "references": "References",
+      "compliance": "Compliance",
+      "userBenefit": "User Benefit",
+      "affectedComponents": "Affected Components"
+    },
+    "generation": {
+      "title": "Generating Ideas",
+      "completeCount": "{{completed}}/{{total}} complete",
+      "showLogs": "Show Logs",
+      "hideLogs": "Hide Logs",
+      "waiting": "Waiting to start...",
+      "failed": "Failed to generate ideas for this category",
+      "noIdeas": "No ideas generated for this category"
+    },
+    "dialogs": {
+      "configTitle": "Ideation Configuration",
+      "configDescription": "Configure which types of ideas to generate",
+      "ideationTypes": "Ideation Types",
+      "contextSources": "Context Sources",
+      "includeRoadmapContext": "Include Roadmap Context",
+      "includeKanbanContext": "Include Kanban Context",
+      "addMoreTitle": "Add More Ideas",
+      "addMoreDescription": "Select additional ideation types to generate. Your existing ideas will be preserved.",
+      "allGenerated": "You've already generated all ideation types!",
+      "useRegenerate": "Use \"Regenerate\" to refresh existing ideas.",
+      "generateTypes_one": "Generate {{count}} Type",
+      "generateTypes_other": "Generate {{count}} Types",
+      "generateIdeas": "Generate Ideas"
+    },
+    "empty": {
+      "title": "No Ideas Yet",
+      "description": "Generate AI-powered feature ideas based on your project's context, existing patterns, and target audience.",
+      "enabledTypes": "Enabled Ideation Types"
+    },
+    "filters": {
+      "all": "All",
+      "code": "Code",
+      "uiux": "UI/UX",
+      "docs": "Docs",
+      "security": "Security",
+      "performance": "Performance"
+    },
+    "header": {
+      "title": "Ideation",
+      "subtitle": "AI-generated feature ideas for your project",
+      "addMore": "Add More"
+    }
   },
   "issues": {
     "loadingMore": "Loading more...",
     "scrollForMore": "Scroll for more",
-    "allLoaded": "All issues loaded"
+    "allLoaded": "All issues loaded",
+    "noMatch": "No issues match your search",
+    "noIssuesFound": "No issues found",
+    "selectIssue": "Select an issue to view details",
+    "notConnectedDescription": "Configure your GitHub token and repository in project settings to sync issues.",
+    "complexity": {
+      "simple": "Simple",
+      "standard": "Standard",
+      "complex": "Complex"
+    },
+    "header": {
+      "title": "GitHub Issues",
+      "openCount": "{{count}} open",
+      "analyzeTooltip": "Analyze up to 200 open issues, group similar ones, and review proposed batches before creating tasks.",
+      "autoFixNew": "Auto-Fix New",
+      "autoFixTooltip": "Automatically fix new issues as they come in.",
+      "processingIssues_one": "Processing {{count}} issue...",
+      "processingIssues_other": "Processing {{count}} issues...",
+      "searchPlaceholder": "Search issues...",
+      "filterAll": "All"
+    },
+    "detail": {
+      "comments_one": "{{count}} comment",
+      "comments_other": "{{count}} comments",
+      "taskLinked": "Task Linked",
+      "taskId": "Task ID: {{id}}",
+      "assignees": "Assignees",
+      "milestone": "Milestone"
+    },
+    "autoFix": {
+      "specCreated": "Spec created from issue",
+      "failed": "Auto-fix failed",
+      "retry": "Retry Auto Fix",
+      "processing": "Processing...",
+      "button": "Auto Fix"
+    },
+    "investigation": {
+      "title": "Create Task from Issue",
+      "issueHeading": "Issue #{{number}}: {{title}}",
+      "description": "Create a task from this GitHub issue. The task will be added to your Kanban board in the Backlog column.",
+      "failedToLoadComments": "Failed to load comments",
+      "selectComments": "Select Comments to Include ({{selected}}/{{total}})",
+      "willInclude": "The task will include:",
+      "includeTitle": "Issue title and description",
+      "includeLink": "Link back to the GitHub issue",
+      "includeLabels": "Labels and metadata from the issue",
+      "noComments": "No comments (this issue has no comments)",
+      "taskCreated": "Task created! View it in your Kanban board."
+    },
+    "batchReview": {
+      "title": "Analyze & Group Issues",
+      "introDescription": "This will analyze up to 200 open issues, group similar ones together, and let you review the proposed batches before creating any tasks.",
+      "startAnalysis": "Start Analysis",
+      "analyzing": "Analyzing Issues...",
+      "computingSimilarity": "Computing similarity and validating batches...",
+      "percentComplete": "{{percent}}% complete",
+      "issuesAnalyzed_one": "issue analyzed",
+      "issuesAnalyzed_other": "issues analyzed",
+      "batchesProposed_one": "batch proposed",
+      "batchesProposed_other": "batches proposed",
+      "singleIssues_one": "single issue",
+      "singleIssues_other": "single issues",
+      "deselectAll": "Deselect All",
+      "singleIssuesNotGrouped": "Single Issues (not grouped)",
+      "andMore": "...and {{count}} more",
+      "issueCount_one": "{{count}} issue",
+      "issueCount_other": "{{count}} issues",
+      "selectionSummary_one": "{{count}} batch selected ({{issues}})",
+      "selectionSummary_other": "{{count}} batches selected ({{issues}})",
+      "plusSingleIssues_one": "+ {{count}} single issue",
+      "plusSingleIssues_other": "+ {{count}} single issues",
+      "creatingBatches": "Creating Batches...",
+      "creatingBatchesDescription": "Setting up the approved issue batches for processing.",
+      "batchesCreated": "Batches Created",
+      "batchesCreatedDescription": "Your selected issue batches are ready for processing.",
+      "stepIntro": "Analyze open issues and group similar ones for batch processing.",
+      "stepAnalyzing": "Analyzing issues for semantic similarity...",
+      "stepReview": "Review and approve the proposed issue batches.",
+      "stepApproving": "Creating the approved batches...",
+      "stepDone": "Batches have been created successfully.",
+      "approveCreate_one": "Approve & Create ({{count}} batch)",
+      "approveCreate_other": "Approve & Create ({{count}} batches)",
+      "batchNumber": "Batch {{number}}",
+      "percentSimilar": "{{percent}}% similar",
+      "approveFailed": "Failed to approve batches"
+    }
   },
   "roadmap": {
     "taskCompleted": "Completed",
@@ -477,7 +821,89 @@
     "convertToTask": "Convert to Auto-Build Task",
     "build": "Build",
     "task": "Task",
-    "viewTask": "View Task"
+    "viewTask": "View Task",
+    "impactBadge": "{{level}} impact",
+    "competitorInsight": "Competitor Insight",
+    "competitorInsightTooltip": "This feature addresses competitor pain points",
+    "insight": "Insight",
+    "featureCount_one": "{{count}} feature",
+    "featureCount_other": "{{count}} features",
+    "priority": {
+      "must": "Must Have",
+      "should": "Should Have",
+      "could": "Could Have",
+      "wont": "Won't Have"
+    },
+    "level": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    },
+    "roadmapStatus": {
+      "draft": "draft",
+      "active": "active",
+      "archived": "archived"
+    },
+    "phaseStatus": {
+      "planned": "planned",
+      "in_progress": "in progress",
+      "completed": "completed"
+    },
+    "columns": {
+      "under_review": "Under Review",
+      "planned": "Planned",
+      "in_progress": "In Progress",
+      "done": "Done"
+    },
+    "header": {
+      "competitorAnalysis": "Competitor Analysis",
+      "clickToViewAnalysis": "Click to view detailed analysis",
+      "analysisSummary": "Analyzed {{competitors}} competitors with {{painPoints}} pain points identified",
+      "addFeature": "Add Feature",
+      "addFeatureTooltip": "Add a new feature to the roadmap",
+      "regenerate": "Regenerate Roadmap",
+      "target": "Target:",
+      "morePersonas_one": "+{{count}} more persona",
+      "morePersonas_other": "+{{count}} more personas",
+      "secondaryPersonas": "Secondary Personas:",
+      "featuresUnit_one": "feature",
+      "featuresUnit_other": "features",
+      "phasesUnit_one": "phase",
+      "phasesUnit_other": "phases"
+    },
+    "empty": {
+      "title": "No Roadmap Yet",
+      "description": "Generate an AI-powered roadmap that understands your project's target audience and creates a strategic feature plan.",
+      "generate": "Generate Roadmap"
+    },
+    "phase": {
+      "featuresProgress": "{{completed}}/{{total}} features",
+      "milestones": "Milestones",
+      "featuresCount": "Features ({{count}})"
+    },
+    "tabs": {
+      "kanban": "Kanban",
+      "phases": "Phases",
+      "allFeatures": "All Features",
+      "byPriority": "By Priority"
+    },
+    "detail": {
+      "complexity": "Complexity",
+      "impact": "Impact",
+      "dependencies": "Dependencies",
+      "userStories": "User Stories",
+      "acceptanceCriteria": "Acceptance Criteria",
+      "addressesPainPoints": "Addresses Competitor Pain Points",
+      "severityBadge": "{{level}} severity",
+      "deleteTitle": "Delete Feature?",
+      "deleteDescription": "This will permanently remove \"{{title}}\" from your roadmap."
+    },
+    "kanban": {
+      "dropHere": "Drop here",
+      "noFeatures": "No features",
+      "dragHere": "Drag features here",
+      "unknownStatus": "Unknown Status"
+    }
   },
   "roadmapGeneration": {
     "progress": "Progress",
@@ -829,5 +1255,255 @@
     "votes_other": "{{count}} votes from user feedback",
     "external": "External",
     "importedFrom": "Imported from {{provider}}"
+  },
+  "changelog": {
+    "noProjectSelected": "No Project Selected",
+    "selectProjectHint": "Select a project from the sidebar to generate changelogs.",
+    "generationFailed": "Generation failed",
+    "header": {
+      "title": "Changelog Generator",
+      "step1": "Step 1: Select completed tasks to include",
+      "step2": "Step 2: Configure and generate changelog",
+      "step3": "Step 3: Release and archive tasks",
+      "stepSelect": "Select",
+      "stepGenerate": "Generate",
+      "stepRelease": "Release"
+    },
+    "sourceModes": {
+      "title": "Changelog Source",
+      "tasks": {
+        "label": "Completed Tasks",
+        "description": "Generate from completed spec tasks"
+      },
+      "git-history": {
+        "label": "Git History",
+        "description": "Generate from recent commits or tag range"
+      },
+      "branch-diff": {
+        "label": "Branch Comparison",
+        "description": "Generate from commits between two branches"
+      }
+    },
+    "gitHistory": {
+      "title": "Git History Options",
+      "historyType": "History Type",
+      "sinceVersion": "Since Version",
+      "recentCommits": "Recent Commits",
+      "sinceDate": "Since Date",
+      "tagRange": "Tag Range",
+      "numberOfCommits": "Number of Commits",
+      "fromTag": "From Tag",
+      "selectTag": "Select tag...",
+      "toTag": "To Tag (optional)",
+      "headLatest": "HEAD (latest)",
+      "lastVersion": "Last Version",
+      "selectVersion": "Select version...",
+      "sinceVersionHint": "All commits since this version will be included",
+      "includeMergeCommits": "Include merge commits",
+      "loadCommits": "Load Commits"
+    },
+    "branchDiff": {
+      "title": "Branch Comparison",
+      "baseBranch": "Base Branch",
+      "selectBaseBranch": "Select base branch...",
+      "defaultBadge": "default",
+      "baseBranchHint": "The branch you're merging into",
+      "compareBranch": "Compare Branch",
+      "selectCompareBranch": "Select compare branch...",
+      "currentBadge": "current",
+      "compareBranchHint": "The branch with your changes",
+      "mustDiffer": "Branches must be different"
+    },
+    "list": {
+      "tasksSelected": "{{selected}} of {{total}} tasks selected",
+      "clear": "Clear",
+      "noCompletedTasks": "No Completed Tasks",
+      "noCompletedTasksHint": "Complete tasks in the Kanban board and mark them as \"Done\" to include them in your changelog.",
+      "commitsFound_one": "{{count}} commit found",
+      "commitsFound_other": "{{count}} commits found",
+      "loadingCommits": "Loading commits...",
+      "noCommitsFound": "No Commits Found",
+      "noCommitsGitHistoryHint": "Configure the history options and click \"Load Commits\" to preview.",
+      "noCommitsBranchDiffHint": "Select both branches and click \"Load Commits\" to see the changes."
+    },
+    "summary": {
+      "task_one": "{{count}} task",
+      "task_other": "{{count}} tasks",
+      "commit_one": "{{count}} commit",
+      "commit_other": "{{count}} commits",
+      "item_one": "{{count}} item",
+      "item_other": "{{count}} items",
+      "more": "+{{count}} more",
+      "including": "Including {{items}}"
+    },
+    "config": {
+      "backToSelection": "Back to Selection",
+      "releaseInfo": "Release Info",
+      "version": "Version",
+      "date": "Date",
+      "previous": "Previous: {{version}}",
+      "outputStyle": "Output Style",
+      "format": "Format",
+      "audience": "Audience",
+      "emojis": "Emojis",
+      "advancedOptions": "Advanced Options",
+      "customInstructions": "Custom Instructions",
+      "customInstructionsPlaceholder": "Add any special instructions for the AI...",
+      "customInstructionsHint": "Optional. Guide the AI on tone, specific details to include, etc.",
+      "generating": "Generating...",
+      "generate": "Generate Changelog"
+    },
+    "versionBump": {
+      "major": "Major version bump (breaking changes detected)",
+      "minor": "Minor version bump (new features detected)",
+      "patch": "Patch version bump (fixes/improvements)"
+    },
+    "formats": {
+      "keep-a-changelog": {
+        "label": "Keep a Changelog",
+        "description": "Structured format with Added/Changed/Fixed/Removed sections"
+      },
+      "simple-list": {
+        "label": "Simple List",
+        "description": "Clean bulleted list with categories"
+      },
+      "github-release": {
+        "label": "GitHub Release",
+        "description": "GitHub-style release notes"
+      }
+    },
+    "audiences": {
+      "technical": {
+        "label": "Technical",
+        "description": "Detailed technical changes for developers"
+      },
+      "user-facing": {
+        "label": "User-Facing",
+        "description": "Clear, non-technical descriptions for end users"
+      },
+      "marketing": {
+        "label": "Marketing",
+        "description": "Value-focused copy emphasizing benefits"
+      }
+    },
+    "emojiLevels": {
+      "none": {
+        "label": "None",
+        "description": "No emojis"
+      },
+      "little": {
+        "label": "Headings Only",
+        "description": "Emojis on section headings only"
+      },
+      "medium": {
+        "label": "Headings + Highlights",
+        "description": "Emojis on headings and key items"
+      },
+      "high": {
+        "label": "Everything",
+        "description": "Emojis on headings and every line"
+      }
+    },
+    "stages": {
+      "loading_specs": "Loading spec files...",
+      "loading_commits": "Loading commits...",
+      "generating": "Generating changelog...",
+      "formatting": "Formatting output...",
+      "complete": "Complete",
+      "error": "Error"
+    },
+    "preview": {
+      "title": "Preview",
+      "markdown": "Markdown",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "copyTooltip": "Copy to clipboard",
+      "save": "Save to CHANGELOG.md",
+      "saved": "Saved!",
+      "saveTooltip": "Prepend to CHANGELOG.md in project root",
+      "dropImages": "Drop images here to add to changelog",
+      "pasteImagesHint": "Paste images into the description to save them to the changelog",
+      "placeholder": "Generated changelog will appear here...",
+      "emptyHint": "Click \"Generate Changelog\" to create release notes.",
+      "loadingImage": "Loading image...",
+      "imageNotFound": "Image not found",
+      "noProjectPath": "Cannot load local image: no project path",
+      "failedToLoadImage": "Failed to load image"
+    },
+    "images": {
+      "invalidType": "Invalid image type. Allowed: {{types}}",
+      "failedToSave": "Failed to save image",
+      "failedToProcess": "Failed to process image"
+    },
+    "success": {
+      "title": "Changelog Saved!",
+      "versionAdded": "Version {{tag}} has been added to CHANGELOG.md",
+      "done": "Done"
+    },
+    "release": {
+      "title": "Create GitHub Release",
+      "created": "Release created successfully!",
+      "view": "View Release on GitHub",
+      "description": "Create a new release {{tag}} on GitHub with the changelog as release notes.",
+      "creating": "Creating Release...",
+      "create": "Create Release {{tag}}",
+      "failed": "Failed to create release"
+    },
+    "archive": {
+      "title": "Archive Completed Tasks",
+      "archived_one": "{{count}} task archived!",
+      "archived_other": "{{count}} tasks archived!",
+      "description_one": "Archive {{count}} task to clean up your Kanban board. Archived tasks can be viewed using the \"Show Archived\" toggle.",
+      "description_other": "Archive {{count}} tasks to clean up your Kanban board. Archived tasks can be viewed using the \"Show Archived\" toggle.",
+      "archiving": "Archiving...",
+      "button_one": "Archive {{count}} Task",
+      "button_other": "Archive {{count}} Tasks",
+      "failed": "Failed to archive tasks"
+    },
+    "entry": {
+      "hasSpecs": "Has Specs",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    }
+  },
+  "linearImport": {
+    "title": "Import Linear Tasks",
+    "description": "Select tasks from Linear to import into AutoBuild",
+    "importing": "Importing...",
+    "importTasks_one": "Import {{count}} Task",
+    "importTasks_other": "Import {{count}} Tasks",
+    "importedTasks_one": "Successfully imported {{count}} task",
+    "importedTasks_other": "Successfully imported {{count}} tasks",
+    "processingHint": "Tasks are being processed. Check your Kanban board for progress.",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "team": "Team",
+    "selectTeam": "Select a team",
+    "projectOptional": "Project (Optional)",
+    "allProjects": "All projects",
+    "searchPlaceholder": "Search tasks...",
+    "allStates": "All states",
+    "stateTypes": {
+      "backlog": "Backlog",
+      "unstarted": "Unstarted",
+      "started": "Started",
+      "completed": "Completed",
+      "canceled": "Canceled",
+      "triage": "Triage"
+    },
+    "moreLabels": "+{{count}} more",
+    "hideDescription": "Hide description",
+    "showDescription": "Show description",
+    "assignedTo": "Assigned to {{name}}",
+    "projectName": "Project: {{name}}",
+    "viewInLinear": "View in Linear",
+    "selectTeamHint": "Select a team to view issues",
+    "noIssuesMatchFilters": "No issues match your filters",
+    "errors": {
+      "failedImport": "Failed to import issues",
+      "failedLoadIssues": "Failed to load issues",
+      "failedLoadProjects": "Failed to load projects",
+      "failedLoadTeams": "Failed to load teams"
+    }
   }
 }

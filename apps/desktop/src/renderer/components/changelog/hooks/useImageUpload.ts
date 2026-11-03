@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, type DragEvent, type ClipboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { blobToBase64, isValidImageMimeType, resolveFilename } from '../../ImageUpload';
 import { ALLOWED_IMAGE_TYPES_DISPLAY } from '../../../../shared/constants';
 
@@ -9,6 +10,7 @@ interface UseImageUploadOptions {
 }
 
 export function useImageUpload({ projectId, content, onContentChange }: UseImageUploadOptions) {
+  const { t } = useTranslation('common');
   const [isDragOver, setIsDragOver] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -35,7 +37,7 @@ export function useImageUpload({ projectId, content, onContentChange }: UseImage
     if (!projectId) return;
 
     if (!isValidImageMimeType(file.type)) {
-      setImageError(`Invalid image type. Allowed: ${ALLOWED_IMAGE_TYPES_DISPLAY}`);
+      setImageError(t('changelog.images.invalidType', { types: ALLOWED_IMAGE_TYPES_DISPLAY }));
       return;
     }
 
@@ -56,12 +58,12 @@ export function useImageUpload({ projectId, content, onContentChange }: UseImage
         const imageMarkdown = `\n![${filename}](${result.data.relativePath})\n`;
         insertImageAtCursor(imageMarkdown);
       } else {
-        setImageError(result.error || 'Failed to save image');
+        setImageError(result.error || t('changelog.images.failedToSave'));
       }
     } catch (_err) {
-      setImageError('Failed to process image');
+      setImageError(t('changelog.images.failedToProcess'));
     }
-  }, [projectId, insertImageAtCursor]);
+  }, [projectId, insertImageAtCursor, t]);
 
   const handlePaste = useCallback(async (e: ClipboardEvent<HTMLTextAreaElement>) => {
     if (!projectId) return;

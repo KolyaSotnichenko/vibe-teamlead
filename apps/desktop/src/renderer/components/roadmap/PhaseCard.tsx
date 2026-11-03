@@ -53,16 +53,16 @@ export function PhaseCard({
           </div>
         </div>
         <Badge variant={phase.status === 'completed' ? 'default' : 'outline'}>
-          {phase.status}
+          {t(`roadmap.phaseStatus.${phase.status}`, { defaultValue: phase.status })}
         </Badge>
       </div>
 
       {/* Progress */}
       <div className="mb-4">
         <div className="flex items-center justify-between text-sm mb-1">
-          <span className="text-muted-foreground">Progress</span>
+          <span className="text-muted-foreground">{t('roadmapGeneration.progress')}</span>
           <span>
-            {completedCount}/{features.length} features
+            {t('roadmap.phase.featuresProgress', { completed: completedCount, total: features.length })}
           </span>
         </div>
         <Progress value={progress} className="h-2" />
@@ -71,7 +71,7 @@ export function PhaseCard({
       {/* Milestones */}
       {phase.milestones.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-sm font-medium mb-2">Milestones</h4>
+          <h4 className="text-sm font-medium mb-2">{t('roadmap.phase.milestones')}</h4>
           <div className="space-y-2">
             {phase.milestones.map((milestone) => (
               <div key={milestone.id} className="flex items-center gap-2 text-sm">
@@ -95,7 +95,7 @@ export function PhaseCard({
 
       {/* Features */}
       <div>
-        <h4 className="text-sm font-medium mb-2">Features ({features.length})</h4>
+        <h4 className="text-sm font-medium mb-2">{t('roadmap.phase.featuresCount', { count: features.length })}</h4>
         <div className="grid gap-2">
           {visibleFeatures.map((feature) => {
             const isDone = feature.status === 'done';
@@ -128,7 +128,7 @@ export function PhaseCard({
                   variant="outline"
                   className={`text-xs ${ROADMAP_PRIORITY_COLORS[feature.priority]}`}
                 >
-                  {feature.priority}
+                  {t(`roadmap.priority.${feature.priority}`, { defaultValue: feature.priority })}
                 </Badge>
                 <span className="text-sm truncate">{feature.title}</span>
                 {feature.competitorInsightIds && feature.competitorInsightIds.length > 0 && (

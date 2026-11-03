@@ -29,29 +29,29 @@ export function FeatureCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <Badge variant="outline" className={ROADMAP_PRIORITY_COLORS[feature.priority]}>
-              {ROADMAP_PRIORITY_LABELS[feature.priority]}
+              {t(`roadmap.priority.${feature.priority}`, { defaultValue: ROADMAP_PRIORITY_LABELS[feature.priority] ?? feature.priority })}
             </Badge>
             <Badge
               variant="outline"
               className={`text-xs ${ROADMAP_COMPLEXITY_COLORS[feature.complexity]}`}
             >
-              {feature.complexity}
+              {t(`roadmap.level.${feature.complexity}`, { defaultValue: feature.complexity })}
             </Badge>
             <Badge
               variant="outline"
               className={`text-xs ${ROADMAP_IMPACT_COLORS[feature.impact]}`}
             >
-              {feature.impact} impact
+              {t('roadmap.impactBadge', { level: t(`roadmap.level.${feature.impact}`, { defaultValue: feature.impact }) })}
             </Badge>
             {hasCompetitorInsight && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge variant="outline" className="text-xs text-primary border-primary/50">
                     <TrendingUp className="h-3 w-3 mr-1" />
-                    Competitor Insight
+                    {t('roadmap.competitorInsight')}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>This feature addresses competitor pain points</TooltipContent>
+                <TooltipContent>{t('roadmap.competitorInsightTooltip')}</TooltipContent>
               </Tooltip>
             )}
           </div>

@@ -414,7 +414,7 @@ export function Insights({ projectId }: InsightsProps) {
               size="icon"
               className="h-8 w-8"
               onClick={() => setShowSidebar(!showSidebar)}
-              title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+              title={showSidebar ? t('insights.hideSidebar') : t('insights.showSidebar')}
             >
               {showSidebar ? (
                 <PanelLeftClose className="h-4 w-4" />
@@ -426,9 +426,9 @@ export function Insights({ projectId }: InsightsProps) {
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Insights</h2>
+              <h2 className="font-semibold text-foreground">{t('insights.title')}</h2>
               <p className="text-sm text-muted-foreground">
-                Ask questions about your codebase
+                {t('insights.subtitle')}
               </p>
             </div>
           </div>
@@ -444,7 +444,7 @@ export function Insights({ projectId }: InsightsProps) {
               onClick={handleNewSession}
             >
               <Plus className="mr-2 h-4 w-4" />
-              New Chat
+              {t('insights.newChat')}
             </Button>
           </div>
         </div>
@@ -460,18 +460,17 @@ export function Insights({ projectId }: InsightsProps) {
               <MessageSquare className="h-8 w-8 text-muted-foreground" />
             </div>
             <h3 className="mb-2 text-lg font-medium text-foreground">
-              Start a Conversation
+              {t('insights.emptyTitle')}
             </h3>
             <p className="max-w-md text-sm text-muted-foreground">
-              Ask questions about your codebase, get suggestions for improvements,
-              or discuss features you'd like to implement.
+              {t('insights.emptyDescription')}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {[
-                'What is the architecture of this project?',
-                'Suggest improvements for code quality',
-                'What features could I add next?',
-                'Are there any security concerns?'
+                t('insights.suggestions.architecture'),
+                t('insights.suggestions.codeQuality'),
+                t('insights.suggestions.features'),
+                t('insights.suggestions.security')
               ].map((suggestion) => (
                 <Button
                   key={suggestion}
@@ -509,7 +508,7 @@ export function Insights({ projectId }: InsightsProps) {
                 </div>
                 <div className="flex-1">
                   <div className="mb-1 text-sm font-medium text-foreground">
-                    Assistant
+                    {t('insights.assistant')}
                   </div>
                   {streamingContent && (
                     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -534,7 +533,7 @@ export function Insights({ projectId }: InsightsProps) {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Thinking...
+                  {t('insights.thinking')}
                 </div>
               </div>
             )}
@@ -564,7 +563,7 @@ export function Insights({ projectId }: InsightsProps) {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              placeholder="Ask about your codebase..."
+              placeholder={t('insights.inputPlaceholder')}
               className={cn(
                 'min-h-[80px] resize-none',
                 isDragOver && 'border-primary ring-2 ring-primary/20'
@@ -649,7 +648,7 @@ export function Insights({ projectId }: InsightsProps) {
         )}
 
         <p className="mt-2 text-xs text-muted-foreground">
-          {t('insights.images.pasteHint')} · Press Enter to send, Shift+Enter for new line
+          {t('insights.images.pasteHint')} · {t('insights.sendHint')}
         </p>
       </div>
 
@@ -698,7 +697,7 @@ function MessageBubble({
       </div>
       <div className="flex-1 space-y-2">
         <div className="text-sm font-medium text-foreground">
-          {isUser ? 'You' : 'Assistant'}
+          {isUser ? t('insights.you') : t('insights.assistant')}
         </div>
         {message.content && (
           <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -765,8 +764,9 @@ function MessageBubble({
                               TASK_CATEGORY_COLORS[task.metadata.category]
                             )}
                           >
-                            {TASK_CATEGORY_LABELS[task.metadata.category] ||
-                              task.metadata.category}
+                            {t(`tasks:overview.values.category.${task.metadata.category}`, {
+                              defaultValue: TASK_CATEGORY_LABELS[task.metadata.category] || task.metadata.category
+                            })}
                           </Badge>
                         )}
                         {task.metadata.complexity && (
@@ -777,8 +777,9 @@ function MessageBubble({
                               TASK_COMPLEXITY_COLORS[task.metadata.complexity]
                             )}
                           >
-                            {TASK_COMPLEXITY_LABELS[task.metadata.complexity] ||
-                              task.metadata.complexity}
+                            {t(`tasks:overview.values.complexity.${task.metadata.complexity}`, {
+                              defaultValue: TASK_COMPLEXITY_LABELS[task.metadata.complexity] || task.metadata.complexity
+                            })}
                           </Badge>
                         )}
                       </div>
@@ -826,6 +827,7 @@ interface ToolUsageHistoryProps {
 }
 
 function ToolUsageHistory({ tools }: ToolUsageHistoryProps) {
+  const { t } = useTranslation('common');
   const [expanded, setExpanded] = useState(false);
 
   if (tools.length === 0) return null;
@@ -880,7 +882,7 @@ function ToolUsageHistory({ tools }: ToolUsageHistoryProps) {
             );
           })}
         </span>
-        <span>{tools.length} tool{tools.length !== 1 ? 's' : ''} used</span>
+        <span>{t('insights.toolsUsed', { count: tools.length })}</span>
         <span className="text-[10px]">{expanded ? '▲' : '▼'}</span>
       </button>
 
@@ -916,25 +918,26 @@ interface ToolIndicatorProps {
 }
 
 function ToolIndicator({ name, input }: ToolIndicatorProps) {
+  const { t } = useTranslation('common');
   // Get friendly name and icon for each tool
   const getToolInfo = (toolName: string) => {
     switch (toolName) {
       case 'Read':
         return {
           icon: FileText,
-          label: 'Reading file',
+          label: t('insights.tools.readingFile'),
           color: 'text-blue-500 bg-blue-500/10'
         };
       case 'Glob':
         return {
           icon: FolderSearch,
-          label: 'Searching files',
+          label: t('insights.tools.searchingFiles'),
           color: 'text-amber-500 bg-amber-500/10'
         };
       case 'Grep':
         return {
           icon: Search,
-          label: 'Searching code',
+          label: t('insights.tools.searchingCode'),
           color: 'text-green-500 bg-green-500/10'
         };
       default:

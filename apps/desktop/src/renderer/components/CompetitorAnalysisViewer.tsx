@@ -127,7 +127,7 @@ export function CompetitorAnalysisViewer({
                               }
                               className="mt-0.5"
                             >
-                              {painPoint.severity}
+                              {t(`roadmap.level.${painPoint.severity}`, { defaultValue: painPoint.severity })}
                             </Badge>
                             <div className="flex-1">
                               <p className="text-sm font-medium">

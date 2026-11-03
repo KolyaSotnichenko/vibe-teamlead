@@ -20,7 +20,8 @@
   },
   "empty": {
     "noMatch": "Жодна issue не відповідає пошуку",
-    "selectIssue": "Виберіть issue, щоб переглянути подробиці"
+    "selectIssue": "Виберіть issue, щоб переглянути подробиці",
+    "noIssues": "Issue не знайдено"
   },
   "notConnected": {
     "title": "GitLab не підключено",
@@ -55,7 +56,8 @@
     "creating": "Створення...",
     "cancel": "Скасувати",
     "done": "Готово",
-    "close": "Закрити"
+    "close": "Закрити",
+    "investigateIssue": "Дослідити issue"
   },
   "settings": {
     "enableIssues": "Увімкнути GitLab Issues",
@@ -130,7 +132,37 @@
       "closed": "Закриті",
       "merged": "Злиті",
       "all": "Усі"
-    }
+    },
+    "tryAgain": "Спробувати знову",
+    "listTitle": "Merge request",
+    "searchPlaceholder": "Пошук merge request...",
+    "noMatching": "Немає відповідних merge request",
+    "noneFound": "Merge request не знайдено",
+    "byAuthor": "автор: {{author}}",
+    "create": {
+      "title": "Створити merge request",
+      "description": "Створити новий merge request у GitLab",
+      "titleLabel": "Назва",
+      "titlePlaceholder": "Назва merge request",
+      "sourceBranch": "Вихідна гілка",
+      "targetBranch": "Цільова гілка",
+      "descriptionLabel": "Опис (необов’язково)",
+      "descriptionPlaceholder": "Опишіть зміни в цьому merge request...",
+      "requiredFields": "Потрібно вказати назву, вихідну й цільову гілки",
+      "failed": "Не вдалося створити merge request"
+    },
+    "errors": {
+      "checkConnection": "Не вдалося перевірити підключення",
+      "fetchMRs": "Не вдалося отримати MR",
+      "checkNewCommits": "Не вдалося перевірити нові коміти",
+      "cancelReview": "Не вдалося скасувати рев’ю",
+      "postReview": "Не вдалося опублікувати рев’ю",
+      "postNote": "Не вдалося опублікувати коментар",
+      "mergeMR": "Не вдалося злити MR",
+      "assignUsers": "Не вдалося призначити користувачів",
+      "approveMR": "Не вдалося схвалити MR"
+    },
+    "reviewCancelled": "Рев’ю скасовано користувачем"
   },
   "mrReview": {
     "runReview": "Запустити AI-рев’ю",
@@ -177,6 +209,80 @@
       "stillOpen": "досі відкрито",
       "newIssue": "нова проблема",
       "newIssues": "нові проблеми"
+    },
+    "followupReviewWithCommits_one": "Повторне рев’ю ({{count}} новий коміт)",
+    "followupReviewWithCommits_few": "Повторне рев’ю ({{count}} нові коміти)",
+    "followupReviewWithCommits_many": "Повторне рев’ю ({{count}} нових комітів)",
+    "followupReviewWithCommits_other": "Повторне рев’ю ({{count}} нового коміту)",
+    "postFindingsCount_one": "Опублікувати {{count}} зауваження",
+    "postFindingsCount_few": "Опублікувати {{count}} зауваження",
+    "postFindingsCount_many": "Опублікувати {{count}} зауважень",
+    "postFindingsCount_other": "Опублікувати {{count}} зауваження",
+    "postedFindingsToGitLab_one": "Опубліковано {{count}} зауваження в GitLab",
+    "postedFindingsToGitLab_few": "Опубліковано {{count}} зауваження в GitLab",
+    "postedFindingsToGitLab_many": "Опубліковано {{count}} зауважень у GitLab",
+    "postedFindingsToGitLab_other": "Опубліковано {{count}} зауваження в GitLab",
+    "runFollowupReview": "Запустити повторне рев’ю",
+    "newCommitsCount_one": "{{count}} новий коміт",
+    "newCommitsCount_few": "{{count}} нові коміти",
+    "newCommitsCount_many": "{{count}} нових комітів",
+    "newCommitsCount_other": "{{count}} нового коміту",
+    "resolvedCount": "Усунено: {{count}}",
+    "stillOpenCount": "Досі відкрито: {{count}}",
+    "newIssuesCount_one": "{{count}} нова проблема",
+    "newIssuesCount_few": "{{count}} нові проблеми",
+    "newIssuesCount_many": "{{count}} нових проблем",
+    "newIssuesCount_other": "{{count}} нової проблеми",
+    "reviewedAt": "Перевірено: {{date}}",
+    "atCommit": "на коміті {{sha}}",
+    "reviewFailed": "Рев’ю не вдалося",
+    "statusDesc": {
+      "newCommitsSinceFollowup_one": "{{count}} новий коміт після повторного рев’ю. Запустіть ще одне повторне рев’ю.",
+      "newCommitsSinceFollowup_few": "{{count}} нові коміти після повторного рев’ю. Запустіть ще одне повторне рев’ю.",
+      "newCommitsSinceFollowup_many": "{{count}} нових комітів після повторного рев’ю. Запустіть ще одне повторне рев’ю.",
+      "newCommitsSinceFollowup_other": "{{count}} нового коміту після повторного рев’ю. Запустіть ще одне повторне рев’ю.",
+      "allIssuesResolved_one": "Усунено {{count}} проблему. Цей MR можна злити.",
+      "allIssuesResolved_few": "Усунено всі {{count}} проблеми. Цей MR можна злити.",
+      "allIssuesResolved_many": "Усунено всі {{count}} проблем. Цей MR можна злити.",
+      "allIssuesResolved_other": "Усунено всі {{count}} проблеми. Цей MR можна злити.",
+      "nonBlockingSuggestions_one": "Усунено: {{resolved}}. Залишилася {{count}} неблокувальна пропозиція.",
+      "nonBlockingSuggestions_few": "Усунено: {{resolved}}. Залишилося {{count}} неблокувальні пропозиції.",
+      "nonBlockingSuggestions_many": "Усунено: {{resolved}}. Залишилося {{count}} неблокувальних пропозицій.",
+      "nonBlockingSuggestions_other": "Усунено: {{resolved}}. Залишилося {{count}} неблокувальної пропозиції.",
+      "blockingIssues_one": "Усунено: {{resolved}}, досі відкрита {{count}} блокувальна проблема.",
+      "blockingIssues_few": "Усунено: {{resolved}}, досі відкриті {{count}} блокувальні проблеми.",
+      "blockingIssues_many": "Усунено: {{resolved}}, досі відкрито {{count}} блокувальних проблем.",
+      "blockingIssues_other": "Усунено: {{resolved}}, досі відкрито {{count}} блокувальної проблеми.",
+      "newCommitsSinceReview_one": "{{count}} новий коміт після рев’ю. Запустіть повторне рев’ю, щоб перевірити, чи проблеми усунено.",
+      "newCommitsSinceReview_few": "{{count}} нові коміти після рев’ю. Запустіть повторне рев’ю, щоб перевірити, чи проблеми усунено.",
+      "newCommitsSinceReview_many": "{{count}} нових комітів після рев’ю. Запустіть повторне рев’ю, щоб перевірити, чи проблеми усунено.",
+      "newCommitsSinceReview_other": "{{count}} нового коміту після рев’ю. Запустіть повторне рев’ю, щоб перевірити, чи проблеми усунено.",
+      "findingsPostedWaiting_one": "Опубліковано {{count}} зауваження. Очікуємо, поки автор усуне проблеми.",
+      "findingsPostedWaiting_few": "Опубліковано {{count}} зауваження. Очікуємо, поки автор усуне проблеми.",
+      "findingsPostedWaiting_many": "Опубліковано {{count}} зауважень. Очікуємо, поки автор усуне проблеми.",
+      "findingsPostedWaiting_other": "Опубліковано {{count}} зауваження. Очікуємо, поки автор усуне проблеми.",
+      "findingsPostedNoBlockers_one": "Опубліковано {{count}} зауваження. Блокувальних проблем не залишилося.",
+      "findingsPostedNoBlockers_few": "Опубліковано {{count}} зауваження. Блокувальних проблем не залишилося.",
+      "findingsPostedNoBlockers_many": "Опубліковано {{count}} зауважень. Блокувальних проблем не залишилося.",
+      "findingsPostedNoBlockers_other": "Опубліковано {{count}} зауваження. Блокувальних проблем не залишилося.",
+      "findingsNeedPosting_one": "{{count}} зауваження потрібно опублікувати в GitLab.",
+      "findingsNeedPosting_few": "{{count}} зауваження потрібно опублікувати в GitLab.",
+      "findingsNeedPosting_many": "{{count}} зауважень потрібно опублікувати в GitLab.",
+      "findingsNeedPosting_other": "{{count}} зауваження потрібно опублікувати в GitLab.",
+      "findingsFoundSelectPost_one": "Знайдено {{count}} зауваження. Виберіть і опублікуйте його в GitLab.",
+      "findingsFoundSelectPost_few": "Знайдено {{count}} зауваження. Виберіть і опублікуйте їх у GitLab.",
+      "findingsFoundSelectPost_many": "Знайдено {{count}} зауважень. Виберіть і опублікуйте їх у GitLab.",
+      "findingsFoundSelectPost_other": "Знайдено {{count}} зауваження. Виберіть і опублікуйте їх у GitLab."
+    },
+    "severity": {
+      "critical": "Блокувальне",
+      "criticalDesc": "Обов’язково виправити",
+      "high": "Обов’язкове",
+      "highDesc": "Варто виправити",
+      "medium": "Рекомендоване",
+      "mediumDesc": "Покращить якість",
+      "low": "Пропозиція",
+      "lowDesc": "На розгляд"
     }
   },
   "findings": {
@@ -206,6 +312,14 @@
       "pattern": "Патерн",
       "performance": "Продуктивність",
       "logic": "Логіка"
+    },
+    "selectCriticalHighCount": "Вибрати критичні/високі ({{count}})",
+    "selectedOfTotal": "Вибрано: {{selected}}/{{total}}",
+    "summaryCounts": {
+      "critical": "Критичних: {{count}}",
+      "high": "Високих: {{count}}",
+      "medium": "Середніх: {{count}}",
+      "low": "Низьких: {{count}}"
     }
   }
 }
