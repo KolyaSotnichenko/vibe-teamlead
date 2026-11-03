@@ -12,22 +12,17 @@
  * Key Design:
  * - Replaces SDK `agents={}` with Promise.allSettled() pattern
  * - Each specialist loads a rich .md system prompt from apps/desktop/prompts/github/
- * - Specialists get Read/Grep/Glob tool access via the agent config registry
+ * - Specialists get Read/Grep/Glob tool access (Claude Code tools from the agent config)
  * - Cross-validation: findings flagged by multiple specialists get boosted severity
  * - Finding-validator pass: re-reads actual code to confirm/dismiss each finding
- * - Uses createSimpleClient() for lightweight parallel sessions
+ * - Each specialist / validator / synthesis step is one `runClaudeTask()` session
  */
 
-import { streamText, stepCountIs, Output } from 'ai';
-import type { Tool as AITool } from 'ai';
 import * as crypto from 'node:crypto';
 
-import { createSimpleClient } from '../../client/factory';
-import type { SimpleClientResult } from '../../client/types';
+import { ClaudeTaskError, runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
-import { buildThinkingProviderOptions } from '../../config/types';
-import { parseLLMJson } from '../../schema/structured-output';
-import { SpecialistOutputSchema, SynthesisResultSchema, FindingValidationArraySchema } from '../../schema/pr-review';
+import type { StreamEvent } from '../../session/types';
 import {
   SpecialistOutputOutputSchema,
   SynthesisResultOutputSchema,
@@ -41,12 +36,7 @@ import type {
 } from './pr-review-engine';
 import { ReviewCategory, ReviewSeverity } from './pr-review-engine';
 import { loadPrompt } from '../../prompts/prompt-loader';
-import { buildToolRegistry } from '../../tools/build-registry';
-import { getSecurityProfile } from '../../security/security-profile';
 import { getAgentConfig, type AgentType } from '../../config/agent-configs';
-import type { ToolContext } from '../../tools/types';
-import type { ToolRegistry } from '../../tools/registry';
-import type { SecurityProfile } from '../../security/bash-validator';
 
 // =============================================================================
 // Types
@@ -222,15 +212,9 @@ Before producing your final JSON output, you MUST complete these steps:
 
 function parseSpecialistOutput(
   _name: string,
-  input: string | { findings: Array<Record<string, unknown>>; summary: string },
+  input: { findings: Array<Record<string, unknown>>; summary?: string } | undefined,
 ): PRReviewFinding[] {
-  // Accept either a structured object (from Output.object()) or raw text (fallback)
-  let parsed: { findings: Array<Record<string, unknown>>; summary?: string } | null;
-  if (typeof input === 'string') {
-    parsed = parseLLMJson(input, SpecialistOutputSchema);
-  } else {
-    parsed = input as unknown as { findings: Array<Record<string, unknown>>; summary?: string };
-  }
+  const parsed = input;
   if (!parsed) return [];
 
   const findings: PRReviewFinding[] = [];
@@ -305,43 +289,44 @@ Return ONLY valid JSON (no markdown fencing):
 }
 
 // =============================================================================
-// Provider-agnostic generateText options
+// Claude Code tool helpers
 // =============================================================================
 
+/** Claude Code tool names for an agent type (SpawnSubagent is not available here). */
+function toolsForAgent(agentType: AgentType): string[] {
+  return getAgentConfig(agentType).tools.filter((t) => t !== 'SpawnSubagent');
+}
+
 /**
- * Build provider-agnostic options for generateText().
- *
- * Codex models require system prompt via providerOptions.openai.instructions
- * instead of the `system` parameter, plus `store: false`.
- * Other providers use the standard `system` parameter.
+ * Collect tool calls per agentic step from StreamEvents and report each step
+ * that used tools (replaces the AI SDK `onStepFinish` callback).
  */
-function buildGenerateTextOptions(
-  client: SimpleClientResult,
-): { system: string | undefined; providerOptions?: Record<string, Record<string, string | number | boolean | null>> } {
-  const isCodex = client.resolvedModelId?.includes('codex') ?? false;
-
-  // Build thinking/reasoning provider options
-  const thinkingOptions = client.thinkingLevel
-    ? buildThinkingProviderOptions(client.resolvedModelId, client.thinkingLevel)
-    : undefined;
-
-  if (isCodex) {
-    return {
-      system: undefined,
-      providerOptions: {
-        ...(thinkingOptions ?? {}),
-        openai: {
-          ...(thinkingOptions?.openai as Record<string, string | number | boolean | null> ?? {}),
-          ...(client.systemPrompt ? { instructions: client.systemPrompt } : {}),
-          store: false,
-        },
-      },
-    };
-  }
-
+function createStepTracker(onStep: (step: number, toolNames: string[]) => void) {
+  let stepCount = 0;
+  let toolCallCount = 0;
+  const toolsUsed = new Set<string>();
+  let pending: string[] = [];
   return {
-    system: client.systemPrompt,
-    ...(thinkingOptions ? { providerOptions: thinkingOptions as Record<string, Record<string, string | number | boolean | null>> } : {}),
+    onEvent(event: StreamEvent): void {
+      if (event.type === 'tool-call') {
+        pending.push(event.toolName);
+        toolCallCount++;
+        toolsUsed.add(event.toolName);
+      } else if (event.type === 'step-finish') {
+        stepCount++;
+        if (pending.length > 0) onStep(stepCount, pending);
+        pending = [];
+      }
+    },
+    get stepCount() {
+      return stepCount;
+    },
+    get toolCallCount() {
+      return toolCallCount;
+    },
+    get toolsUsed() {
+      return toolsUsed;
+    },
   };
 }
 
@@ -352,14 +337,10 @@ function buildGenerateTextOptions(
 export class ParallelOrchestratorReviewer {
   private readonly config: ParallelOrchestratorConfig;
   private readonly progressCallback?: ProgressCallback;
-  private readonly registry: ToolRegistry;
-  private readonly securityProfile: SecurityProfile;
 
   constructor(config: ParallelOrchestratorConfig, progressCallback?: ProgressCallback) {
     this.config = config;
     this.progressCallback = progressCallback;
-    this.registry = buildToolRegistry();
-    this.securityProfile = getSecurityProfile(config.projectDir);
   }
 
   private reportProgress(update: ProgressUpdate): void {
@@ -515,85 +496,44 @@ export class ParallelOrchestratorReviewer {
     // Load rich .md prompt as system prompt
     const systemPrompt = loadPrompt(config.promptName);
 
-    // Build tool set from agent config (Read, Grep, Glob)
-    const toolContext: ToolContext = {
-      cwd: this.config.projectDir,
-      projectDir: this.config.projectDir,
-      specDir: '',
-      securityProfile: this.securityProfile,
-      abortSignal,
-    };
-
-    const tools: Record<string, AITool> = {};
-    const agentConfig = getAgentConfig(config.agentType);
-    for (const toolName of agentConfig.tools) {
-      const definedTool = this.registry.getTool(toolName);
-      if (definedTool) {
-        tools[toolName] = definedTool.bind(toolContext);
-      }
-    }
-
-    const boundToolNames = Object.keys(tools);
+    // Claude Code tools from the agent config (Read, Grep, Glob)
+    const tools = toolsForAgent(config.agentType);
     this.reportProgress({
       phase: config.name,
       progress: 36,
-      message: `[Specialist:${config.name}] Tools: ${boundToolNames.length > 0 ? boundToolNames.join(', ') : 'NONE (!) — check agent config'}`,
+      message: `[Specialist:${config.name}] Tools: ${tools.length > 0 ? tools.join(', ') : 'NONE (!) — check agent config'}`,
       prNumber: context.prNumber,
     });
 
     // Build PR context as user message
     const userMessage = buildPRContextMessage(context);
 
-    const client = await createSimpleClient({
-      systemPrompt,
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const genOptions = buildGenerateTextOptions(client);
-
     try {
-      // Track tool usage across steps
-      let stepCount = 0;
-      let toolCallCount = 0;
-      const toolsUsed = new Set<string>();
-
-      // Use streamText instead of generateText — Codex endpoint only supports streaming.
-      // Output.object() generates structured output as a final step after all tool calls.
-      const stream = streamText({
-        model: client.model,
-        system: genOptions.system,
-        messages: [{ role: 'user' as const, content: userMessage }],
-        tools,
-        stopWhen: stepCountIs(100),
-        output: Output.object({ schema: SpecialistOutputOutputSchema }),
-        abortSignal,
-        ...(genOptions.providerOptions ? { providerOptions: genOptions.providerOptions } : {}),
-        onStepFinish: ({ toolCalls }) => {
-          stepCount++;
-          if (toolCalls && toolCalls.length > 0) {
-            for (const tc of toolCalls) {
-              toolCallCount++;
-              toolsUsed.add(tc.toolName);
-            }
-            this.reportProgress({
-              phase: config.name,
-              progress: 40,
-              message: `[Specialist:${config.name}] Step ${stepCount}: ${toolCalls.length} tool call(s) — ${toolCalls.map((tc) => tc.toolName).join(', ')}`,
-              prNumber: context.prNumber,
-            });
-          }
-        },
+      const tracker = createStepTracker((step, toolNames) => {
+        this.reportProgress({
+          phase: config.name,
+          progress: 40,
+          message: `[Specialist:${config.name}] Step ${step}: ${toolNames.length} tool call(s) — ${toolNames.join(', ')}`,
+          prNumber: context.prNumber,
+        });
       });
 
-      // Consume the stream (required before accessing output/text)
-      for await (const _part of stream.fullStream) { /* consume */ }
+      const { output } = await runClaudeTask({
+        systemPrompt,
+        prompt: userMessage,
+        model: modelShorthand,
+        thinkingLevel,
+        tools,
+        cwd: this.config.projectDir,
+        agentType: config.agentType,
+        outputSchema: SpecialistOutputOutputSchema,
+        maxTurns: 100,
+        abortSignal,
+        onEvent: tracker.onEvent,
+      });
 
-      // Use structured output if available, fall back to text parsing
-      const structuredOutput = await stream.output;
-      const findings = structuredOutput
-        ? parseSpecialistOutput(config.name, structuredOutput)
-        : parseSpecialistOutput(config.name, await stream.text);
+      const findings = parseSpecialistOutput(config.name, output);
+      const { stepCount, toolCallCount, toolsUsed } = tracker;
 
       const toolSummary = toolCallCount > 0
         ? ` (${toolCallCount} tool calls: ${Array.from(toolsUsed).join(', ')})`
@@ -611,17 +551,14 @@ export class ParallelOrchestratorReviewer {
       if (abortSignal?.aborted) {
         return { name: config.name, findings: [] };
       }
-      // Extract detailed error info for debugging
-      const err = error as Record<string, unknown>;
+      // Include the session outcome (auth_failure, rate_limited, ...) for debugging
       const message = error instanceof Error ? error.message : String(error);
-      const statusCode = err.statusCode ?? err.status ?? '';
-      const responseBody = err.responseBody ?? err.data ?? '';
-      const detail = statusCode ? ` [${statusCode}]` : '';
-      const bodySnippet = responseBody ? ` Body: ${String(responseBody).slice(0, 200)}` : '';
+      const outcome = error instanceof ClaudeTaskError ? error.session.outcome : '';
+      const detail = outcome ? ` [${outcome}]` : '';
       this.reportProgress({
         phase: config.name,
         progress: 50,
-        message: `[Specialist:${config.name}] Failed${detail}: ${message.slice(0, 150)}${bodySnippet}`,
+        message: `[Specialist:${config.name}] Failed${detail}: ${message.slice(0, 150)}`,
         prNumber: context.prNumber,
       });
       return { name: config.name, findings: [] };
@@ -705,24 +642,8 @@ export class ParallelOrchestratorReviewer {
 
     const systemPrompt = loadPrompt('github/pr_finding_validator');
 
-    // Build tools from pr_finding_validator config (ALL_BUILTIN_TOOLS excl SpawnSubagent)
-    const toolContext: ToolContext = {
-      cwd: this.config.projectDir,
-      projectDir: this.config.projectDir,
-      specDir: '',
-      securityProfile: this.securityProfile,
-      abortSignal,
-    };
-
-    const tools: Record<string, AITool> = {};
-    const agentConfig = getAgentConfig('pr_finding_validator');
-    for (const toolName of agentConfig.tools) {
-      if (toolName === 'SpawnSubagent') continue;
-      const definedTool = this.registry.getTool(toolName);
-      if (definedTool) {
-        tools[toolName] = definedTool.bind(toolContext);
-      }
-    }
+    // Claude Code tools from pr_finding_validator config (ALL_BUILTIN_TOOLS excl SpawnSubagent)
+    const tools = toolsForAgent('pr_finding_validator');
 
     // Build validation request listing all findings
     const findingsList = findings
@@ -744,57 +665,32 @@ ${findingsList}
 
 Validate each finding by reading the actual code at the specified file and line. Return a JSON array of validation results, one per finding.`;
 
-    const client = await createSimpleClient({
-      systemPrompt,
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const genOptions = buildGenerateTextOptions(client);
-
     try {
-      let validatorToolCalls = 0;
-
-      // Use streamText — Codex endpoint only supports streaming.
-      // Output.object() generates the validation array (wrapped in { validations: [...] }) as a final step.
-      const stream = streamText({
-        model: client.model,
-        system: genOptions.system,
-        messages: [{ role: 'user' as const, content: userMessage }],
-        tools,
-        stopWhen: stepCountIs(150),
-        output: Output.object({ schema: FindingValidationsOutputSchema }),
-        abortSignal,
-        ...(genOptions.providerOptions ? { providerOptions: genOptions.providerOptions } : {}),
-        onStepFinish: ({ toolCalls }) => {
-          if (toolCalls && toolCalls.length > 0) {
-            validatorToolCalls += toolCalls.length;
-            this.reportProgress({
-              phase: 'validation',
-              progress: 75,
-              message: `[FindingValidator] Examining code: ${toolCalls.map((tc) => tc.toolName).join(', ')}`,
-              prNumber: context.prNumber,
-            });
-          }
-        },
+      const tracker = createStepTracker((_step, toolNames) => {
+        this.reportProgress({
+          phase: 'validation',
+          progress: 75,
+          message: `[FindingValidator] Examining code: ${toolNames.join(', ')}`,
+          prNumber: context.prNumber,
+        });
       });
 
-      // Consume stream before reading output
-      for await (const _part of stream.fullStream) { /* consume */ }
+      const { output } = await runClaudeTask({
+        systemPrompt,
+        prompt: userMessage,
+        model: modelShorthand,
+        thinkingLevel,
+        tools,
+        cwd: this.config.projectDir,
+        agentType: 'pr_finding_validator',
+        outputSchema: FindingValidationsOutputSchema,
+        maxTurns: 150,
+        abortSignal,
+        onEvent: tracker.onEvent,
+      });
 
-      // Use structured output if available, fall back to text parsing
-      const structuredOutput = await stream.output;
-      let rawValidations: Array<{ findingId: string; validationStatus: string; explanation: string }>;
-      if (structuredOutput) {
-        rawValidations = structuredOutput.validations;
-      } else {
-        const text = await stream.text;
-        const parsed = parseLLMJson(text, FindingValidationArraySchema);
-        if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
-          return findings; // Fail-safe: keep all findings
-        }
-        rawValidations = parsed;
-      }
+      const rawValidations: Array<{ findingId: string; validationStatus: string; explanation: string }> =
+        output?.validations ?? [];
 
       if (rawValidations.length === 0) {
         return findings; // Fail-safe: keep all findings
@@ -897,14 +793,6 @@ Validate each finding by reading the actual code at the specified file and line.
 
     const prompt = buildSynthesisPrompt(context, specialistResults);
 
-    const client = await createSimpleClient({
-      systemPrompt: 'You are a senior code review orchestrator.',
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const genOptions = buildGenerateTextOptions(client);
-
     const verdictMap: Record<string, MergeVerdict> = {
       ready_to_merge: MergeVerdict.READY_TO_MERGE,
       merge_with_changes: MergeVerdict.MERGE_WITH_CHANGES,
@@ -913,29 +801,15 @@ Validate each finding by reading the actual code at the specified file and line.
     };
 
     try {
-      // Use streamText — Codex endpoint only supports streaming.
-      // Output.object() generates the structured verdict as a final step.
-      const stream = streamText({
-        model: client.model,
-        system: genOptions.system,
+      const { output } = await runClaudeTask({
+        systemPrompt: 'You are a senior code review orchestrator.',
         prompt,
-        output: Output.object({ schema: SynthesisResultOutputSchema }),
+        model: modelShorthand,
+        thinkingLevel,
+        outputSchema: SynthesisResultOutputSchema,
         abortSignal,
-        ...(genOptions.providerOptions ? { providerOptions: genOptions.providerOptions } : {}),
       });
-
-      // Consume stream before reading output
-      for await (const _part of stream.fullStream) { /* consume */ }
-
-      // Use structured output if available, fall back to text parsing
-      const structuredOutput = await stream.output;
-      let data: { verdict: string; verdictReasoning: string; removedFindingIds: string[] } | null;
-      if (structuredOutput) {
-        data = structuredOutput;
-      } else {
-        const text = await stream.text;
-        data = parseLLMJson(text, SynthesisResultSchema);
-      }
+      const data: { verdict: string; verdictReasoning: string; removedFindingIds: string[] } | undefined = output;
 
       if (!data) {
         throw new Error('Failed to parse synthesis result');

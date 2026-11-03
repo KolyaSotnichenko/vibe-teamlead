@@ -2,25 +2,24 @@
  * PR Creator Runner
  * =================
  *
- * Creates GitHub Pull Requests with AI-generated descriptions using Vercel AI SDK.
+ * Creates GitHub Pull Requests with AI-generated descriptions using Claude Code.
  * See apps/desktop/src/main/ai/runners/github/pr-creator.ts for the TypeScript implementation.
  *
  * Steps:
  * 1. Push the worktree branch to origin via git
  * 2. Gather diff/commit context from the branch
- * 3. Generate a semantic PR description via generateText
+ * 3. Generate a semantic PR description via runClaudeTask
  * 4. Create the PR via `gh pr create`
  * 5. Return the PR URL and metadata
  *
- * Uses `createSimpleClient()` with no tools (single-turn text generation).
+ * Uses `runClaudeTask()` with no tools (single-turn text generation).
  */
 
-import { generateText } from 'ai';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../../client/factory';
+import { runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
 
 // =============================================================================
@@ -190,16 +189,11 @@ ${diffSummary || '(no diff available)'}
 Write a professional PR description. Output ONLY the Markdown body — no preamble.`;
 
   try {
-    const client = await createSimpleClient({
+    const result = await runClaudeTask({
       systemPrompt: SYSTEM_PROMPT,
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
       prompt,
+      model: modelShorthand,
+      thinkingLevel,
     });
 
     return result.text.trim() || null;

@@ -5,22 +5,14 @@
  * Core logic for multi-pass PR code review.
  * See apps/desktop/src/main/ai/runners/github/pr-review-engine.ts for the TypeScript implementation.
  *
- * Uses `createSimpleClient()` with `generateText()` for each review pass.
+ * Uses `runClaudeTask()` (no tools, structured output) for each review pass.
  * Supports multi-pass review: quick scan → parallel security/quality/structural/deep analysis.
  */
 
-import { generateText, Output } from 'ai';
-import { z } from 'zod';
+import type { ZodSchema } from 'zod';
 
-import { createSimpleClient } from '../../client/factory';
+import { ClaudeTaskError, runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
-import { parseLLMJson } from '../../schema/structured-output';
-import {
-  ScanResultSchema,
-  ReviewFindingsArraySchema,
-  StructuralIssueSchema,
-  AICommentTriageSchema,
-} from '../../schema/pr-review';
 import {
   ScanResultOutputSchema,
   ReviewFindingsOutputSchema,
@@ -206,6 +198,8 @@ export interface MultiPassReviewResult {
 // Review Pass Prompts
 // =============================================================================
 
+const REVIEWER_SYSTEM_PROMPT = 'You are an expert code reviewer. Respond with structured JSON only.';
+
 const REVIEW_PASS_PROMPTS: Record<ReviewPass, string> = {
   [ReviewPass.QUICK_SCAN]: `You are a senior code reviewer performing a quick scan of a pull request.
 
@@ -283,34 +277,6 @@ Output a JSON array of objects with:
 
 Respond with ONLY a JSON array, no markdown fencing.`,
 };
-
-// =============================================================================
-// Response Parsers
-// =============================================================================
-
-function parseScanResult(text: string): ScanResult {
-  const result = parseLLMJson(text, ScanResultSchema);
-  if (result) return result as ScanResult;
-  return { complexity: 'low', riskAreas: [] };
-}
-
-function parseFindings(text: string): PRReviewFinding[] {
-  const result = parseLLMJson(text, ReviewFindingsArraySchema);
-  if (!result) return [];
-  return result as PRReviewFinding[];
-}
-
-function parseStructuralIssues(text: string): StructuralIssue[] {
-  const result = parseLLMJson(text, z.array(StructuralIssueSchema));
-  if (!result) return [];
-  return result as StructuralIssue[];
-}
-
-function parseAICommentTriages(text: string): AICommentTriage[] {
-  const result = parseLLMJson(text, z.array(AICommentTriageSchema));
-  if (!result) return [];
-  return result as AICommentTriage[];
-}
 
 // =============================================================================
 // Context Formatting
@@ -511,35 +477,45 @@ ${diff}
   const modelShorthand = config.model ?? 'sonnet';
   const thinkingLevel = config.thinkingLevel ?? 'medium';
 
-  const client = await createSimpleClient({
-    systemPrompt: 'You are an expert code reviewer. Respond with structured JSON only.',
-    modelShorthand,
-    thinkingLevel,
-  });
-
   if (reviewPass === ReviewPass.QUICK_SCAN) {
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
-      prompt: fullPrompt,
-      output: Output.object({ schema: ScanResultOutputSchema }),
-    });
-    if (result.output) {
-      return result.output as ScanResult;
-    }
-    return parseScanResult(result.text);
+    const output = await runStructuredPass(fullPrompt, modelShorthand, thinkingLevel, ScanResultOutputSchema);
+    return (output as ScanResult | undefined) ?? { complexity: 'low', riskAreas: [] };
   }
 
-  const result = await generateText({
-    model: client.model,
-    system: client.systemPrompt,
-    prompt: fullPrompt,
-    output: Output.object({ schema: ReviewFindingsOutputSchema }),
-  });
-  if (result.output) {
-    return result.output.findings as PRReviewFinding[];
+  const output = await runStructuredPass(fullPrompt, modelShorthand, thinkingLevel, ReviewFindingsOutputSchema);
+  return (output?.findings ?? []) as PRReviewFinding[];
+}
+
+/**
+ * Run one tool-less structured pass.
+ * Returns undefined when the session completed but produced no valid output
+ * (callers fall back to empty results); session failures (auth, rate limit,
+ * API errors) still throw.
+ */
+async function runStructuredPass<T>(
+  prompt: string,
+  model: ModelShorthand,
+  thinkingLevel: ThinkingLevel,
+  outputSchema: ZodSchema<T>,
+): Promise<T | undefined> {
+  try {
+    const { output } = await runClaudeTask({
+      systemPrompt: REVIEWER_SYSTEM_PROMPT,
+      prompt,
+      model,
+      thinkingLevel,
+      outputSchema,
+    });
+    return output;
+  } catch (error) {
+    if (
+      error instanceof ClaudeTaskError &&
+      (error.session.outcome === 'completed' || error.session.outcome === 'max_steps')
+    ) {
+      return undefined;
+    }
+    throw error;
   }
-  return parseFindings(result.text);
 }
 
 /**
@@ -553,23 +529,14 @@ async function runStructuralPass(
   const prContext = buildReviewContext(context);
   const fullPrompt = `${passPrompt}\n\n---\n\n${prContext}`;
 
-  const client = await createSimpleClient({
-    systemPrompt: 'You are an expert code reviewer. Respond with structured JSON only.',
-    modelShorthand: config.model ?? 'sonnet',
-    thinkingLevel: config.thinkingLevel ?? 'medium',
-  });
-
   try {
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
-      prompt: fullPrompt,
-      output: Output.object({ schema: StructuralIssuesOutputSchema }),
-    });
-    if (result.output) {
-      return result.output.issues as StructuralIssue[];
-    }
-    return parseStructuralIssues(result.text);
+    const output = await runStructuredPass(
+      fullPrompt,
+      config.model ?? 'sonnet',
+      config.thinkingLevel ?? 'medium',
+      StructuralIssuesOutputSchema,
+    );
+    return (output?.issues ?? []) as StructuralIssue[];
   } catch {
     return [];
   }
@@ -589,23 +556,14 @@ async function runAITriagePass(
   const prContext = buildReviewContext(context);
   const fullPrompt = `${passPrompt}\n\n---\n\n${aiContext}\n\n---\n\n${prContext}`;
 
-  const client = await createSimpleClient({
-    systemPrompt: 'You are an expert code reviewer. Respond with structured JSON only.',
-    modelShorthand: config.model ?? 'sonnet',
-    thinkingLevel: config.thinkingLevel ?? 'medium',
-  });
-
   try {
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
-      prompt: fullPrompt,
-      output: Output.object({ schema: AICommentTriagesOutputSchema }),
-    });
-    if (result.output) {
-      return result.output.triages as AICommentTriage[];
-    }
-    return parseAICommentTriages(result.text);
+    const output = await runStructuredPass(
+      fullPrompt,
+      config.model ?? 'sonnet',
+      config.thinkingLevel ?? 'medium',
+      AICommentTriagesOutputSchema,
+    );
+    return (output?.triages ?? []) as AICommentTriage[];
   } catch {
     return [];
   }

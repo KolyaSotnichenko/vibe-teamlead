@@ -5,15 +5,11 @@
  * Issue triage logic for detecting duplicates, spam, and feature creep.
  * See apps/desktop/src/main/ai/runners/github/triage-engine.ts for the TypeScript implementation.
  *
- * Uses `createSimpleClient()` with `generateText()` for single-turn triage.
+ * Uses `runClaudeTask()` (no tools, structured output) for single-turn triage.
  */
 
-import { generateText, Output } from 'ai';
-
-import { createSimpleClient } from '../../client/factory';
+import { runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
-import { parseLLMJson } from '../../schema/structured-output';
-import { TriageResultSchema } from '../../schema/triage';
 import { TriageResultOutputSchema } from '../../schema/output';
 
 // =============================================================================
@@ -162,15 +158,11 @@ export function buildTriageContext(issue: GitHubIssue, allIssues: GitHubIssue[])
 }
 
 // =============================================================================
-// Response Parsing
+// Defaults
 // =============================================================================
 
-function parseTriageResult(
-  issue: GitHubIssue,
-  text: string,
-  repo: string,
-): TriageResult {
-  const defaults: TriageResult = {
+function defaultTriageResult(issue: GitHubIssue, repo: string): TriageResult {
+  return {
     issueNumber: issue.number,
     repo,
     category: TriageCategory.FEATURE,
@@ -184,27 +176,6 @@ function parseTriageResult(
     suggestedBreakdown: [],
     priority: 'medium',
     comment: null,
-  };
-
-  const validated = parseLLMJson(text, TriageResultSchema);
-  if (!validated) {
-    return defaults;
-  }
-
-  return {
-    issueNumber: issue.number,
-    repo,
-    category: validated.category as TriageCategory,
-    confidence: validated.confidence,
-    labelsToAdd: validated.labelsToAdd,
-    labelsToRemove: validated.labelsToRemove,
-    isDuplicate: validated.isDuplicate,
-    duplicateOf: validated.duplicateOf,
-    isSpam: validated.isSpam,
-    isFeatureCreep: validated.isFeatureCreep,
-    suggestedBreakdown: validated.suggestedBreakdown,
-    priority: validated.priority,
-    comment: validated.comment,
   };
 }
 
@@ -223,57 +194,34 @@ export async function triageSingleIssue(
   const context = buildTriageContext(issue, allIssues);
   const fullPrompt = `${TRIAGE_PROMPT}\n\n---\n\n${context}`;
 
-  const client = await createSimpleClient({
-    systemPrompt: TRIAGE_SYSTEM_PROMPT,
-    modelShorthand: config.model ?? 'sonnet',
-    thinkingLevel: config.thinkingLevel ?? 'low',
-  });
-
   try {
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
+    const { output: o } = await runClaudeTask({
+      systemPrompt: TRIAGE_SYSTEM_PROMPT,
       prompt: fullPrompt,
-      output: Output.object({ schema: TriageResultOutputSchema }),
+      model: config.model ?? 'sonnet',
+      thinkingLevel: config.thinkingLevel ?? 'low',
+      outputSchema: TriageResultOutputSchema,
     });
 
-    if (result.output) {
-      const o = result.output;
-      return {
-        issueNumber: issue.number,
-        repo: config.repo,
-        category: o.category as TriageCategory,
-        confidence: o.confidence,
-        labelsToAdd: o.labels_to_add,
-        labelsToRemove: o.labels_to_remove,
-        isDuplicate: o.is_duplicate,
-        duplicateOf: o.duplicate_of,
-        isSpam: o.is_spam,
-        isFeatureCreep: o.is_feature_creep,
-        suggestedBreakdown: o.suggested_breakdown,
-        priority: o.priority,
-        comment: o.comment,
-      };
-    }
+    if (!o) return defaultTriageResult(issue, config.repo);
 
-    // Fallback for providers without constrained decoding
-    return parseTriageResult(issue, result.text, config.repo);
-  } catch {
     return {
       issueNumber: issue.number,
       repo: config.repo,
-      category: TriageCategory.FEATURE,
-      confidence: 0.0,
-      labelsToAdd: [],
-      labelsToRemove: [],
-      isDuplicate: false,
-      duplicateOf: null,
-      isSpam: false,
-      isFeatureCreep: false,
-      suggestedBreakdown: [],
-      priority: 'medium',
-      comment: null,
+      category: o.category as TriageCategory,
+      confidence: o.confidence,
+      labelsToAdd: o.labels_to_add,
+      labelsToRemove: o.labels_to_remove,
+      isDuplicate: o.is_duplicate,
+      duplicateOf: o.duplicate_of,
+      isSpam: o.is_spam,
+      isFeatureCreep: o.is_feature_creep,
+      suggestedBreakdown: o.suggested_breakdown,
+      priority: o.priority,
+      comment: o.comment,
     };
+  } catch {
+    return defaultTriageResult(issue, config.repo);
   }
 }
 

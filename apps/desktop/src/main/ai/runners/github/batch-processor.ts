@@ -5,13 +5,11 @@
  * Groups similar issues together for combined processing with configurable
  * concurrency limits. See apps/desktop/src/main/ai/runners/github/batch-processor.ts for the TypeScript implementation.
  *
- * Uses a single AI call (generateText) to analyze and group issues, then
+ * Uses a single Claude task (runClaudeTask, no tools) to analyze and group issues, then
  * processes each batch with bounded concurrency via a semaphore.
  */
 
-import { generateText } from 'ai';
-
-import { createSimpleClient } from '../../client/factory';
+import { runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
 import type { GitHubIssue } from './duplicate-detector';
 
@@ -120,7 +118,7 @@ function parseJsonResponse(text: string): unknown {
 /**
  * Use AI to analyze issues and suggest optimal batching.
  *
- * Makes a single generateText() call for all issues, replacing the
+ * Makes a single runClaudeTask() call for all issues, replacing the
  * Python claude-agent-sdk implementation.
  */
 async function analyzeAndBatchIssues(
@@ -179,17 +177,12 @@ Respond with JSON only:
 }`;
 
   try {
-    const client = await createSimpleClient({
+    const result = await runClaudeTask({
       systemPrompt:
         'You are an expert at analyzing GitHub issues and grouping related ones. Respond ONLY with valid JSON. Do NOT use any tools.',
-      modelShorthand: config.model,
-      thinkingLevel: config.thinkingLevel,
-    });
-
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
       prompt,
+      model: config.model,
+      thinkingLevel: config.thinkingLevel,
     });
 
     const parsed = parseJsonResponse(result.text) as {

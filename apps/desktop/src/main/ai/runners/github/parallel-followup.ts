@@ -12,14 +12,12 @@
  *
  * Key Design:
  * - Replaces SDK `agents={}` with Promise.allSettled() pattern
- * - Each specialist runs as its own generateText() call
- * - Uses createSimpleClient() for lightweight parallel sessions
+ * - Each specialist runs as its own `runClaudeTask()` session (structured output)
  */
 
-import { generateText, Output } from 'ai';
 import * as crypto from 'node:crypto';
 
-import { createSimpleClient } from '../../client/factory';
+import { runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
 import { safeParseJson } from '../../../utils/json-repair';
 import { ResolutionVerificationSchema, ReviewFindingsArraySchema } from '../../schema/pr-review';
@@ -608,45 +606,34 @@ export class ParallelFollowupReviewer {
     thinkingLevel: ThinkingLevel,
     abortSignal?: AbortSignal,
   ): Promise<{ type: string; result: string }> {
-    const client = await createSimpleClient({
-      systemPrompt: `You are a ${type} specialist for PR follow-up review.`,
-      modelShorthand,
-      thinkingLevel,
-    });
+    const systemPrompt = `You are a ${type} specialist for PR follow-up review.`;
 
-    // Use Output.object() with the schema appropriate for this specialist type.
+    // Structured output with the schema appropriate for this specialist type.
     // ResolutionVerificationOutputSchema returns { verifications: [...] }.
     // ReviewFindingsOutputSchema returns { findings: [...] }.
-    // Each branch uses the concrete schema type so TypeScript can infer the output type.
+    // Output is serialized so the downstream parsing/validation is unchanged.
     if (type === 'resolution-verifier') {
-      const result = await generateText({
-        model: client.model,
-        system: client.systemPrompt,
+      const { output } = await runClaudeTask({
+        systemPrompt,
         prompt,
-        output: Output.object({ schema: ResolutionVerificationOutputSchema }),
+        model: modelShorthand,
+        thinkingLevel,
+        outputSchema: ResolutionVerificationOutputSchema,
         abortSignal,
       });
-      // Use structured output if available; serialize so downstream parsing is unchanged.
-      if (result.output) {
-        return { type, result: JSON.stringify(result.output) };
-      }
-      return { type, result: result.text };
+      return { type, result: JSON.stringify(output) };
     }
 
     // new-code-reviewer and comment-analyzer both return { findings: [...] }
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
+    const { output } = await runClaudeTask({
+      systemPrompt,
       prompt,
-      output: Output.object({ schema: ReviewFindingsOutputSchema }),
+      model: modelShorthand,
+      thinkingLevel,
+      outputSchema: ReviewFindingsOutputSchema,
       abortSignal,
     });
-    // Use structured output if available; serialize so downstream parsing is unchanged.
-    if (result.output) {
-      return { type, result: JSON.stringify(result.output) };
-    }
-    // Fall back to raw text for providers that don't support Output.object()
-    return { type, result: result.text };
+    return { type, result: JSON.stringify(output) };
   }
 
   private deduplicateFindings(findings: PRReviewFinding[]): PRReviewFinding[] {

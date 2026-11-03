@@ -1448,9 +1448,8 @@ function getGitHubPRSettings(): { model: string; thinkingLevel: string } {
   const featureThinking = rawSettings?.featureThinking ?? DEFAULT_FEATURE_THINKING;
 
   // Get PR-specific settings (with fallback to defaults)
-  // Return the raw shorthand — createSimpleClient() handles model-to-provider resolution
-  // via resolveModelId() and the priority queue. Do NOT resolve through MODEL_ID_MAP
-  // which is Anthropic-only and would silently replace non-Anthropic models.
+  // Return the raw shorthand — runClaudeTask() resolves it to a Claude model id
+  // via resolveModelId() (honouring env overrides), so don't resolve it here.
   const model = featureModels.githubPrs ?? DEFAULT_FEATURE_MODELS.githubPrs;
   const thinkingLevel = featureThinking.githubPrs ?? DEFAULT_FEATURE_THINKING.githubPrs;
 

@@ -6,5 +6,10 @@
 import { readSettingsFile } from '../../settings-utils';
 
 export function isSubscriptionModeEnabled(): boolean {
-  return readSettingsFile()?.useClaudeSubscription === true;
+  try {
+    return readSettingsFile()?.useClaudeSubscription === true;
+  } catch {
+    // Settings unavailable (tests, early startup) — personal mode stays off.
+    return false;
+  }
 }

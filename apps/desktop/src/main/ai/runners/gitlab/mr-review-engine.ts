@@ -5,16 +5,30 @@
  * Core logic for AI-powered GitLab Merge Request code review.
  * See apps/desktop/src/main/ai/runners/gitlab/mr-review-engine.ts for the TypeScript implementation.
  *
- * Uses `createSimpleClient()` with `generateText()` for single-pass review.
+ * Uses `runClaudeTask()` (no tools) for single-pass review.
  */
 
-import { generateText } from 'ai';
 import * as crypto from 'node:crypto';
 
-import { createSimpleClient } from '../../client/factory';
+import { runClaudeTask } from '../../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../../config/types';
-import { parseLLMJson } from '../../schema/structured-output';
 import { MRReviewResultSchema } from '../../schema/pr-review';
+import { safeParseJson } from '../../../utils/json-repair';
+
+/**
+ * Parse the model's JSON reply (markdown fences tolerated, JSON repaired)
+ * and validate it with the coercing MR review schema.
+ */
+function parseReviewJson(text: string) {
+  if (!text?.trim()) return null;
+  let cleaned = text.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenceMatch) cleaned = fenceMatch[1];
+  const raw = safeParseJson<unknown>(cleaned);
+  if (raw === null) return null;
+  const result = MRReviewResultSchema.safeParse(raw);
+  return result.success ? result.data : null;
+}
 
 // =============================================================================
 // Enums & Types
@@ -253,17 +267,12 @@ ${diffContent}
 
     const prompt = `${MR_REVIEW_PROMPT}\n\n---\n\n${mrContext}`;
 
-    const client = await createSimpleClient({
-      systemPrompt: 'You are a senior code reviewer for GitLab Merge Requests.',
-      modelShorthand: this.config.model ?? 'sonnet',
-      thinkingLevel: this.config.thinkingLevel ?? 'medium',
-    });
-
     try {
-      const result = await generateText({
-        model: client.model,
-        system: client.systemPrompt,
+      const result = await runClaudeTask({
+        systemPrompt: 'You are a senior code reviewer for GitLab Merge Requests.',
         prompt,
+        model: this.config.model ?? 'sonnet',
+        thinkingLevel: this.config.thinkingLevel ?? 'medium',
         abortSignal,
       });
 
@@ -291,7 +300,7 @@ ${diffContent}
       blocked: MergeVerdict.BLOCKED,
     };
 
-    const parsed = parseLLMJson(resultText, MRReviewResultSchema);
+    const parsed = parseReviewJson(resultText);
     if (!parsed) {
       return {
         findings: [],
