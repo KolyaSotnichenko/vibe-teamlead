@@ -11,12 +11,14 @@
  */
 
 import { ipcMain, shell } from 'electron';
+import { existsSync } from 'node:fs';
 import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult } from '../../../shared/types';
 import type { TaskWorkspace, WorkspaceAdr, WorkspaceArchitecture, WorkspaceDiagram } from '../../../shared/types/task-workspace';
 import { ensureAbsolutePath } from '../../utils/path-helpers';
+import { findTaskWorktree } from '../../worktree-paths';
 import { findTaskAndProject } from './shared';
 import {
   buildTimeline,
@@ -151,11 +153,23 @@ export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace>
   };
 }
 
-function resolveSpecDir(taskId: string, projectId?: string): string | null {
+/**
+ * Where the task's spec files are now: while the task builds in its worktree,
+ * the agents (QA reports, security results, architecture) write the worktree's
+ * copy of the spec directory; the project's copy catches up on merge.
+ */
+export function resolveSpecDir(taskId: string, projectId?: string): string | null {
   const { task, project } = findTaskAndProject(taskId, projectId);
   if (!task || !project) return null;
+  const projectPath = ensureAbsolutePath(project.path);
+  const specsBase = getSpecsDir(project.autoBuildPath);
+  const worktree = findTaskWorktree(projectPath, task.specId);
+  if (worktree) {
+    const worktreeSpecDir = path.join(worktree, specsBase, task.specId);
+    if (existsSync(worktreeSpecDir)) return worktreeSpecDir;
+  }
   if (task.specsPath) return task.specsPath;
-  return path.join(ensureAbsolutePath(project.path), getSpecsDir(project.autoBuildPath), task.specId);
+  return path.join(projectPath, specsBase, task.specId);
 }
 
 /** True when `target` is `root` or lies inside it (after resolving `..`). */
