@@ -1,9 +1,9 @@
 {
-  "name": "auto-claude",
-  "version": "2.8.0-beta.6",
-  "description": "Autonomous multi-agent coding framework powered by Claude AI",
+  "name": "vibe-teamlead",
+  "version": "2.0.0-alpha.1",
+  "description": "Vibe Teamlead — a team of Claude Code agents that builds software from a spec",
   "license": "AGPL-3.0",
-  "author": "Auto Claude Team",
+  "author": "Mykola Sotnichenko",
   "workspaces": [
     "apps/*",
     "libs/*"
@@ -26,15 +26,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/AndyMik90/Auto-Claude.git"
+    "url": "https://github.com/KolyaSotnichenko/vibe-teamlead.git"
   },
   "keywords": [
     "ai",
-    "claude",
-    "autonomous",
-    "coding",
+    "claude-code",
     "agents",
-    "electron"
+    "multi-agent",
+    "electron",
+    "macos"
   ],
   "devDependencies": {
     "jsdom": "^27.4.0"

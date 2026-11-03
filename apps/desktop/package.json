@@ -1,17 +1,17 @@
 {
-  "name": "aperant",
-  "version": "2.8.0-beta.6",
+  "name": "vibe-teamlead-desktop",
+  "productName": "Vibe Teamlead",
+  "version": "2.0.0-alpha.1",
   "type": "module",
-  "description": "Autonomous multi-agent coding framework",
-  "homepage": "https://github.com/AndyMik90/Aperant",
+  "description": "Vibe Teamlead — a team of Claude Code agents that builds software from a spec",
+  "homepage": "https://github.com/KolyaSotnichenko/vibe-teamlead",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AndyMik90/Aperant.git"
+    "url": "https://github.com/KolyaSotnichenko/vibe-teamlead.git"
   },
   "main": "./out/main/index.js",
   "author": {
-    "name": "Aperant Team",
-    "email": "119136210+AndyMik90@users.noreply.github.com"
+    "name": "Mykola Sotnichenko"
   },
   "license": "AGPL-3.0",
   "engines": {
@@ -224,20 +224,8 @@
       "entitlements": "resources/entitlements.mac.plist",
       "entitlementsInherit": "resources/entitlements.mac.plist",
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
+        "dmg",
+        "zip"
       ]
     }
   },
