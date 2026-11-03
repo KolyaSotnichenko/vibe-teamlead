@@ -3,7 +3,6 @@
  * ==============
  *
  * Validates spec outputs at each checkpoint.
- * See apps/desktop/src/main/ai/spec/spec-validator.ts for the TypeScript implementation.
  *
  * Includes:
  *   - validateImplementationPlan() — DAG validation, field checks
@@ -11,11 +10,10 @@
  *   - Validation fixer agent runner (up to 3 retries via AI)
  */
 
-import { generateText } from 'ai';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
+import { runClaudeTask } from '../claude-code/task';
 import { safeParseJson } from '../../utils/json-repair';
 
 // ---------------------------------------------------------------------------
@@ -703,21 +701,20 @@ export async function runValidationFixer(
     }
 
     // Build AI fixer prompt
-    const errorList = lastResult.errors.map((e) => `  - ${e}`).join('\n');
     const prompt = buildFixerPrompt(specDir, checkpoint, lastResult.errors);
 
     try {
-      const client = await createSimpleClient({
+      // The fixer edits spec files in place, so it gets file tools scoped to the spec dir.
+      await runClaudeTask({
         systemPrompt: VALIDATION_FIXER_SYSTEM_PROMPT,
-        modelShorthand: 'sonnet',
-        thinkingLevel: 'low',
-        maxSteps: 10,
-      });
-
-      await generateText({
-        model: client.model,
-        system: client.systemPrompt,
         prompt,
+        model: 'sonnet',
+        thinkingLevel: 'low',
+        tools: ['Read', 'Write', 'Edit'],
+        cwd: specDir,
+        specDir,
+        allowedWritePaths: [specDir],
+        maxTurns: 10,
       });
     } catch {
       // Continue regardless — the fixer may have written files before failing

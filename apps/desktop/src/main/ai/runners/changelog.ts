@@ -2,18 +2,16 @@
  * Changelog Runner
  * ================
  *
- * AI-powered changelog generation using Vercel AI SDK.
+ * AI-powered changelog generation with a Claude Code task.
  * Provides the AI generation logic previously handled by the Claude CLI subprocess
  * in apps/desktop/src/main/changelog/generator.ts.
  *
  * Supports multiple source modes: tasks (specs), git history, or branch diffs.
  *
- * Uses `createSimpleClient()` with no tools (single-turn text generation).
+ * Uses `runClaudeTask()` with no tools (single-turn text generation).
  */
 
-import { generateText } from 'ai';
-
-import { createSimpleClient } from '../client/factory';
+import { runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
 
 // =============================================================================
@@ -131,16 +129,11 @@ export async function generateChangelog(
   const prompt = buildChangelogPrompt(config);
 
   try {
-    const client = await createSimpleClient({
+    const result = await runClaudeTask({
       systemPrompt: SYSTEM_PROMPT,
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
       prompt,
+      model: modelShorthand,
+      thinkingLevel,
     });
 
     if (result.text.trim()) {

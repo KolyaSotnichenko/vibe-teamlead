@@ -2,18 +2,15 @@
  * Merge Resolver Runner
  * =====================
  *
- * AI-powered merge conflict resolution using Vercel AI SDK.
- * See apps/desktop/src/main/ai/runners/merge-resolver.ts for the TypeScript implementation.
+ * AI-powered merge conflict resolution with a Claude Code task.
  *
  * Simple single-turn text generation — takes a system prompt describing
  * the merge context and a user prompt with the conflict, returns the resolution.
  *
- * Uses `createSimpleClient()` with no tools.
+ * Uses `runClaudeTask()` with no tools.
  */
 
-import { generateText } from 'ai';
-
-import { createSimpleClient } from '../client/factory';
+import { runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
 
 // =============================================================================
@@ -66,16 +63,11 @@ export async function resolveMergeConflict(
   } = config;
 
   try {
-    const client = await createSimpleClient({
+    const result = await runClaudeTask({
       systemPrompt,
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
       prompt: userPrompt,
+      model: modelShorthand,
+      thinkingLevel,
     });
 
     if (result.text.trim()) {

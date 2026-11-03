@@ -5,15 +5,12 @@
  * Summarizes phase outputs to maintain continuity between phases while
  * reducing token usage. After each phase completes, key findings are
  * summarized and passed as context to subsequent phases.
- *
- * See apps/desktop/src/main/ai/spec/conversation-compactor.ts for the TypeScript implementation.
  */
 
-import { generateText } from 'ai';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
+import { runClaudeTask } from '../claude-code/task';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -137,16 +134,11 @@ ${truncatedOutput}
 `;
 
   try {
-    const client = await createSimpleClient({
+    const result = await runClaudeTask({
       systemPrompt: COMPACTOR_SYSTEM_PROMPT,
-      modelShorthand: 'haiku',
-      thinkingLevel: 'low',
-    });
-
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
       prompt,
+      model: 'haiku',
+      thinkingLevel: 'low',
     });
 
     if (result.text.trim()) {

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
-import { streamText } from 'ai';
-import { createSimpleClient } from './ai/client/factory';
+import { ClaudeTaskError, runClaudeTask } from './ai/claude-code/task';
+import type { ThinkingLevel } from './ai/config/types';
 import { getActiveProviderFeatureSettings } from './ipc-handlers/feature-settings-helper';
 import { safeBreadcrumb, safeCaptureException } from './sentry';
 
@@ -19,7 +19,7 @@ const SYSTEM_PROMPT =
   'You generate short, concise task titles (3-7 words). Output ONLY the title, nothing else. No quotes, no explanation, no preamble.';
 
 /**
- * Service for generating task titles from descriptions using the Vercel AI SDK.
+ * Service for generating task titles from descriptions via a Claude Code task (`runClaudeTask`).
  *
  * Replaces the previous Python subprocess implementation.
  * Emits "sdk-rate-limit" events on 429 errors (same interface as before).
@@ -51,41 +51,24 @@ export class TitleGenerator extends EventEmitter {
 
     safeBreadcrumb({
       category: 'title-generator',
-      message: 'Generating title via Vercel AI SDK',
+      message: 'Generating title via Claude Code',
       level: 'info',
       data: { descriptionLength: description.length },
     });
 
     try {
-      // Read the user's configured naming model for their active provider.
-      // This ensures we use the correct model for the active provider
-      // (e.g., Codex models for OpenAI Codex OAuth, Gemini for Google, etc.)
+      // Read the user's configured naming model
       const namingSettings = getActiveProviderFeatureSettings('naming');
       debug('Using naming settings:', namingSettings.model, namingSettings.thinkingLevel);
 
-      const client = await createSimpleClient({
+      const result = await runClaudeTask({
         systemPrompt: SYSTEM_PROMPT,
-        modelShorthand: namingSettings.model,
-        thinkingLevel: namingSettings.thinkingLevel as 'low' | 'medium' | 'high' | 'xhigh',
-      });
-
-      // Handle Codex models the same way as runner.ts:
-      // Codex requires instructions field (not system messages in input) and store=false
-      const isCodex = client.resolvedModelId?.includes('codex') ?? false;
-
-      const result = streamText({
-        model: client.model,
-        system: isCodex ? undefined : client.systemPrompt,
         prompt,
-        providerOptions: isCodex ? {
-          openai: {
-            ...(client.systemPrompt ? { instructions: client.systemPrompt } : {}),
-            store: false,
-          },
-        } : undefined,
+        model: namingSettings.model,
+        thinkingLevel: namingSettings.thinkingLevel as ThinkingLevel,
       });
 
-      const raw = (await result.text).trim();
+      const raw = result.text.trim();
       if (!raw) {
         debug('AI returned empty response');
         safeBreadcrumb({
@@ -106,9 +89,10 @@ export class TitleGenerator extends EventEmitter {
       return title;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const outcome = error instanceof ClaudeTaskError ? error.session.outcome : undefined;
 
-      // Surface 429 rate-limit errors as sdk-rate-limit events
-      if (message.includes('429') || message.toLowerCase().includes('rate limit')) {
+      // Surface rate-limit errors as sdk-rate-limit events
+      if (outcome === 'rate_limited') {
         debug('Rate limit detected:', message);
         safeBreadcrumb({
           category: 'title-generator',
@@ -124,7 +108,7 @@ export class TitleGenerator extends EventEmitter {
       }
 
       // Auth failures
-      if (message.includes('401') || message.toLowerCase().includes('unauthorized')) {
+      if (outcome === 'auth_failure') {
         debug('Auth failure during title generation');
         safeBreadcrumb({
           category: 'title-generator',

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
-import { generateText } from 'ai';
-import { createSimpleClient } from './ai/client/factory';
+import { ClaudeTaskError, runClaudeTask } from './ai/claude-code/task';
+import type { ThinkingLevel } from './ai/config/types';
 import { getActiveProviderFeatureSettings } from './ipc-handlers/feature-settings-helper';
 
 /**
@@ -18,7 +18,7 @@ const SYSTEM_PROMPT =
   'You generate very short, concise terminal names (2-3 words MAX). Output ONLY the name, nothing else. No quotes, no explanation, no preamble. Keep it as short as possible while being descriptive.';
 
 /**
- * Service for generating terminal names from commands using the Vercel AI SDK.
+ * Service for generating terminal names from commands via a Claude Code task (`runClaudeTask`).
  *
  * Replaces the previous Python subprocess implementation.
  * Emits "sdk-rate-limit" events on 429 errors (same interface as before).
@@ -52,16 +52,11 @@ export class TerminalNameGenerator extends EventEmitter {
       // Read the user's configured naming model for their active provider
       const namingSettings = getActiveProviderFeatureSettings('naming');
 
-      const client = await createSimpleClient({
+      const result = await runClaudeTask({
         systemPrompt: SYSTEM_PROMPT,
-        modelShorthand: namingSettings.model,
-        thinkingLevel: namingSettings.thinkingLevel as 'low' | 'medium' | 'high' | 'xhigh',
-      });
-
-      const result = await generateText({
-        model: client.model,
-        system: client.systemPrompt,
         prompt,
+        model: namingSettings.model,
+        thinkingLevel: namingSettings.thinkingLevel as ThinkingLevel,
       });
 
       const raw = result.text.trim();
@@ -76,8 +71,8 @@ export class TerminalNameGenerator extends EventEmitter {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      // Surface 429 rate-limit errors as sdk-rate-limit events
-      if (message.includes('429') || message.toLowerCase().includes('rate limit')) {
+      // Surface rate-limit errors as sdk-rate-limit events
+      if (error instanceof ClaudeTaskError && error.session.outcome === 'rate_limited') {
         debug('Rate limit detected:', message);
         this.emit('sdk-rate-limit', {
           source: 'other',

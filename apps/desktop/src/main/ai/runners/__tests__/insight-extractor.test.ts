@@ -4,20 +4,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks — must be declared before any imports that use them
 // =============================================================================
 
-const mockGenerateText = vi.fn();
+const mockRunClaudeTask = vi.fn();
 
-vi.mock('ai', () => ({
-  generateText: (...args: unknown[]) => mockGenerateText(...args),
-  Output: {
-    object: ({ schema }: { schema: unknown }) => ({ type: 'object', schema }),
-  },
-}));
-
-const mockCreateSimpleClient = vi.fn();
-
-vi.mock('../../client/factory', () => ({
-  createSimpleClient: (...args: unknown[]) => mockCreateSimpleClient(...args),
-}));
+vi.mock('../../claude-code/task', () => {
+  class ClaudeTaskError extends Error {
+    constructor(
+      message: string,
+      readonly session: unknown,
+    ) {
+      super(message);
+      this.name = 'ClaudeTaskError';
+    }
+  }
+  return {
+    runClaudeTask: (...args: unknown[]) => mockRunClaudeTask(...args),
+    ClaudeTaskError,
+  };
+});
 
 // Mock schema/structured-output so we don't need the actual implementation
 vi.mock('../../schema/structured-output', () => ({
@@ -40,15 +43,18 @@ vi.mock('../../schema/output', () => ({
 import { extractSessionInsights } from '../insight-extractor';
 import type { InsightExtractionConfig } from '../insight-extractor';
 import { parseLLMJson } from '../../schema/structured-output';
+import { ClaudeTaskError } from '../../claude-code/task';
+import type { SessionResult } from '../../session/types';
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
-const fakeModel = { modelId: 'claude-haiku-test' };
-
-function makeMockClient() {
-  return { model: fakeModel, systemPrompt: 'You are an expert code analyst.' };
+function makeSession(outcome: SessionResult['outcome'], assistantText = ''): SessionResult {
+  return {
+    outcome,
+    messages: assistantText ? [{ role: 'assistant', content: assistantText }] : [],
+  } as unknown as SessionResult;
 }
 
 function makeValidOutput() {
@@ -88,9 +94,8 @@ function baseConfig(overrides: Partial<InsightExtractionConfig> = {}): InsightEx
 describe('extractSessionInsights', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateSimpleClient.mockResolvedValue(makeMockClient());
-    // By default, result.output contains the structured data (constrained decoding path)
-    mockGenerateText.mockResolvedValue({
+    // By default, result.output contains the validated structured data
+    mockRunClaudeTask.mockResolvedValue({
       output: makeValidOutput(),
       text: '',
     });
@@ -127,10 +132,9 @@ describe('extractSessionInsights', () => {
   // Fallback to parseLLMJson when result.output is absent
   // ---------------------------------------------------------------------------
 
-  it('falls back to parseLLMJson when result.output is null/undefined', async () => {
-    mockGenerateText.mockResolvedValue({
-      output: null,
-      text: JSON.stringify({
+  it('falls back to parseLLMJson when structured output validation fails', async () => {
+    mockRunClaudeTask.mockRejectedValue(
+      new ClaudeTaskError('Claude did not return valid structured output', makeSession('completed', JSON.stringify({
         file_insights: [{ file: 'src/login.ts', insight: 'Heavy coupling' }],
         patterns_discovered: ['MVC'],
         gotchas_discovered: [],
@@ -142,8 +146,8 @@ describe('extractSessionInsights', () => {
           alternatives_tried: [],
         },
         recommendations: [],
-      }),
-    });
+      }))),
+    );
 
     const parsedData = {
       file_insights: [{ file: 'src/login.ts', insight: 'Heavy coupling' }],
@@ -166,6 +170,28 @@ describe('extractSessionInsights', () => {
     expect(result.file_insights[0].file).toBe('src/login.ts');
     expect(result.patterns_discovered).toContain('MVC');
     expect(result.approach_outcome.why_it_failed).toBe('Too hacky');
+    expect(vi.mocked(parseLLMJson).mock.calls[0][0]).toContain('src/login.ts');
+  });
+
+  it('falls back to parseLLMJson when output is absent on success', async () => {
+    mockRunClaudeTask.mockResolvedValue({ output: undefined, text: '{"patterns_discovered":["X"]}' });
+    vi.mocked(parseLLMJson).mockReturnValueOnce(
+      { patterns_discovered: ['X'] } as unknown as ReturnType<typeof parseLLMJson>,
+    );
+
+    const result = await extractSessionInsights(baseConfig());
+
+    expect(result.patterns_discovered).toEqual(['X']);
+    expect(result.file_insights).toEqual([]);
+  });
+
+  it('returns generic insights on auth/rate-limit failures without parsing', async () => {
+    mockRunClaudeTask.mockRejectedValue(new ClaudeTaskError('rate limited', makeSession('rate_limited', '{}')));
+
+    const result = await extractSessionInsights(baseConfig());
+
+    expect(result.file_insights).toEqual([]);
+    expect(parseLLMJson).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
@@ -173,7 +199,7 @@ describe('extractSessionInsights', () => {
   // ---------------------------------------------------------------------------
 
   it('returns generic insights when result.output is null and parseLLMJson returns null', async () => {
-    mockGenerateText.mockResolvedValue({ output: null, text: 'not valid json' });
+    mockRunClaudeTask.mockResolvedValue({ output: null, text: 'not valid json' });
     vi.mocked(parseLLMJson).mockReturnValueOnce(null);
 
     const result = await extractSessionInsights(baseConfig({ subtaskId: 'sub-fallback', success: false }));
@@ -187,8 +213,8 @@ describe('extractSessionInsights', () => {
     expect(result.approach_outcome.approach_used).toContain('sub-fallback');
   });
 
-  it('returns generic insights when generateText throws', async () => {
-    mockGenerateText.mockRejectedValue(new Error('API unavailable'));
+  it('returns generic insights when runClaudeTask throws', async () => {
+    mockRunClaudeTask.mockRejectedValue(new Error('API unavailable'));
 
     const result = await extractSessionInsights(baseConfig({ subtaskId: 'sub-error', success: true }));
 
@@ -197,21 +223,12 @@ describe('extractSessionInsights', () => {
     expect(result.file_insights).toEqual([]);
   });
 
-  it('returns generic insights when createSimpleClient throws', async () => {
-    mockCreateSimpleClient.mockRejectedValue(new Error('No credentials'));
-
-    const result = await extractSessionInsights(baseConfig());
-
-    expect(result.subtask_id).toBe('sub-001');
-    expect(result.file_insights).toEqual([]);
-  });
-
   // ---------------------------------------------------------------------------
   // Never throws
   // ---------------------------------------------------------------------------
 
   it('never throws — always returns a valid InsightResult', async () => {
-    mockGenerateText.mockRejectedValue(new Error('catastrophic failure'));
+    mockRunClaudeTask.mockRejectedValue(new Error('catastrophic failure'));
 
     await expect(extractSessionInsights(baseConfig())).resolves.toBeDefined();
   });
@@ -223,8 +240,8 @@ describe('extractSessionInsights', () => {
   it('uses haiku model and low thinking level by default', async () => {
     await extractSessionInsights(baseConfig());
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('haiku');
+    const clientArgs = mockRunClaudeTask.mock.calls[0][0];
+    expect(clientArgs.model).toBe('haiku');
     expect(clientArgs.thinkingLevel).toBe('low');
   });
 
@@ -233,8 +250,8 @@ describe('extractSessionInsights', () => {
       baseConfig({ modelShorthand: 'sonnet', thinkingLevel: 'medium' }),
     );
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('sonnet');
+    const clientArgs = mockRunClaudeTask.mock.calls[0][0];
+    expect(clientArgs.model).toBe('sonnet');
     expect(clientArgs.thinkingLevel).toBe('medium');
   });
 
@@ -250,7 +267,7 @@ describe('extractSessionInsights', () => {
       }),
     );
 
-    const callArgs = mockGenerateText.mock.calls[0][0];
+    const callArgs = mockRunClaudeTask.mock.calls[0][0];
     expect(callArgs.prompt).toContain('my-task-42');
     expect(callArgs.prompt).toContain('Fix login regression');
   });
@@ -260,7 +277,7 @@ describe('extractSessionInsights', () => {
 
     await extractSessionInsights(baseConfig({ diff: longDiff }));
 
-    const callArgs = mockGenerateText.mock.calls[0][0];
+    const callArgs = mockRunClaudeTask.mock.calls[0][0];
     const prompt = callArgs.prompt as string;
     // The prompt must mention truncation and not contain all 20k chars of diff
     expect(prompt).toContain('truncated');
@@ -271,7 +288,7 @@ describe('extractSessionInsights', () => {
       baseConfig({ changedFiles: ['src/login.ts', 'src/session.ts'] }),
     );
 
-    const callArgs = mockGenerateText.mock.calls[0][0];
+    const callArgs = mockRunClaudeTask.mock.calls[0][0];
     expect(callArgs.prompt).toContain('src/login.ts');
   });
 
@@ -285,16 +302,16 @@ describe('extractSessionInsights', () => {
       }),
     );
 
-    const callArgs = mockGenerateText.mock.calls[0][0];
+    const callArgs = mockRunClaudeTask.mock.calls[0][0];
     expect(callArgs.prompt).toContain('patch method');
     expect(callArgs.prompt).toContain('full rewrite');
   });
 
-  it('passes output schema configuration to generateText', async () => {
+  it('passes the output schema to runClaudeTask', async () => {
     await extractSessionInsights(baseConfig());
 
-    const callArgs = mockGenerateText.mock.calls[0][0];
-    // The output key should be set (from Output.object())
-    expect(callArgs).toHaveProperty('output');
+    const callArgs = mockRunClaudeTask.mock.calls[0][0];
+    expect(callArgs).toHaveProperty('outputSchema');
+    expect(callArgs.tools).toBeUndefined();
   });
 });

@@ -2,22 +2,20 @@
  * Commit Message Runner
  * =====================
  *
- * Generates high-quality commit messages using Vercel AI SDK.
- * See apps/desktop/src/main/ai/runners/commit-message.ts for the TypeScript implementation.
+ * Generates high-quality commit messages with a Claude Code task.
  *
  * Features:
  * - Conventional commits format (feat/fix/refactor/etc)
  * - GitHub issue references (Fixes #123)
  * - Context-aware descriptions from spec metadata
  *
- * Uses `createSimpleClient()` with no tools (single-turn text generation).
+ * Uses `runClaudeTask()` with no tools (single-turn text generation).
  */
 
-import { generateText } from 'ai';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
+import { runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
 import { safeParseJson } from '../../utils/json-repair';
 
@@ -259,16 +257,11 @@ export async function generateCommitMessage(
 
   // Call AI
   try {
-    const client = await createSimpleClient({
+    const result = await runClaudeTask({
       systemPrompt: SYSTEM_PROMPT,
-      modelShorthand,
-      thinkingLevel,
-    });
-
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
       prompt,
+      model: modelShorthand,
+      thinkingLevel,
     });
 
     if (result.text.trim()) {

@@ -2,24 +2,22 @@
  * Insight Extractor Runner
  * ========================
  *
- * Extracts structured insights from completed coding sessions using Vercel AI SDK.
- * See apps/desktop/src/main/ai/runners/insight-extractor.ts for the TypeScript implementation.
+ * Extracts structured insights from completed coding sessions with a Claude Code task.
  *
  * Runs after each session to capture rich, actionable knowledge for the memory system.
  * Falls back to generic insights if extraction fails (never blocks the build).
  *
- * Uses `createSimpleClient()` with no tools (single-turn text generation).
+ * Uses `runClaudeTask()` with no tools and a structured output schema.
  */
 
-import { generateText, Output } from 'ai';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
+import { ClaudeTaskError, runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
 import { parseLLMJson } from '../schema/structured-output';
 import { ExtractedInsightsSchema } from '../schema/insight-extractor';
-import { ExtractedInsightsOutputSchema } from '../schema/output';
+import { type ExtractedInsightsOutput, ExtractedInsightsOutputSchema } from '../schema/output';
 
 // =============================================================================
 // Constants
@@ -250,21 +248,29 @@ export async function extractSessionInsights(
   try {
     const prompt = buildExtractionPrompt(config);
 
-    const client = await createSimpleClient({
-      systemPrompt: SYSTEM_PROMPT,
-      modelShorthand,
-      thinkingLevel,
-    });
+    let output: ExtractedInsightsOutput | undefined;
+    let text = '';
+    try {
+      const result = await runClaudeTask({
+        systemPrompt: SYSTEM_PROMPT,
+        prompt,
+        model: modelShorthand,
+        thinkingLevel,
+        outputSchema: ExtractedInsightsOutputSchema,
+      });
+      output = result.output;
+      text = result.text;
+    } catch (error) {
+      // Session completed but structured output failed validation:
+      // fall back to lenient parsing of the final assistant text.
+      if (!(error instanceof ClaudeTaskError)) throw error;
+      const { outcome, messages } = error.session;
+      if (outcome !== 'completed' && outcome !== 'max_steps') throw error;
+      text = [...messages].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+    }
 
-    const result = await generateText({
-      model: client.model,
-      system: client.systemPrompt,
-      prompt,
-      output: Output.object({ schema: ExtractedInsightsOutputSchema }),
-    });
-
-    if (result.output) {
-      const o = result.output;
+    if (output) {
+      const o = output;
       return {
         file_insights: o.file_insights,
         patterns_discovered: o.patterns_discovered,
@@ -278,8 +284,8 @@ export async function extractSessionInsights(
       };
     }
 
-    // Fallback for providers without constrained decoding
-    const parsed = parseInsights(result.text);
+    // Fallback when structured output was not produced
+    const parsed = parseInsights(text);
 
     if (parsed) {
       return {
