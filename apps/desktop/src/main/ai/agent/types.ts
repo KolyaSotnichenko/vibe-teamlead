@@ -7,6 +7,9 @@
  * (WorkerBridge) and the worker thread (worker.ts).
  */
 
+import type { AgentQuestionRequest } from '../../agent/types';
+import type { BundledTools } from '../claude-code/bundled-tools';
+import type { AgentAnswers } from '../claude-code/user-questions';
 import type { ExecutionProgressData, ProcessType } from '../../../main/agent/types';
 import type { SessionConfig, SessionResult, StreamEvent } from '../session/types';
 
@@ -52,6 +55,8 @@ export interface SerializableSessionConfig {
   provider: string;
   /** Model ID for model reconstruction */
   modelId: string;
+  /** Tools shipped with the app, resolved in the main process */
+  bundled?: BundledTools;
   /** API key or token for auth */
   apiKey?: string;
   /** Base URL override for the provider */
@@ -100,7 +105,16 @@ export type WorkerMessage =
   | WorkerProgressMessage
   | WorkerStreamEventMessage
   | WorkerResultMessage
-  | WorkerTaskEventMessage;
+  | WorkerTaskEventMessage
+  | WorkerQuestionMessage;
+
+/** An agent asked the user something; the worker waits for a 'user-answer'. */
+export interface WorkerQuestionMessage {
+  type: 'user-question';
+  taskId: string;
+  projectId?: string;
+  data: AgentQuestionRequest;
+}
 
 export interface WorkerLogMessage {
   type: 'log';
@@ -150,7 +164,8 @@ export interface WorkerTaskEventMessage {
 
 /** Messages sent from main thread to worker */
 export type MainToWorkerMessage =
-  | { type: 'abort' };
+  | { type: 'abort' }
+  | { type: 'user-answer'; questionId: string; answers: AgentAnswers | null };
 
 // =============================================================================
 // Serialized Security Profile

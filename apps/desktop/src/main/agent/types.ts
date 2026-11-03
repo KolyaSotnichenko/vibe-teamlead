@@ -38,6 +38,15 @@ export interface AgentManagerEvents {
   exit: (taskId: string, code: number | null, processType: ProcessType, projectId?: string) => void;
   'execution-progress': (taskId: string, progress: ExecutionProgressData, projectId?: string) => void;
   'task-event': (taskId: string, event: TaskEventPayload, projectId?: string) => void;
+  /** An agent is waiting for the user to answer; reply via WorkerBridge.answerQuestion() */
+  'agent-question': (taskId: string, question: AgentQuestionRequest, projectId?: string) => void;
+}
+
+/** Questions an agent asked (Claude Code AskUserQuestion), waiting for the user. */
+export interface AgentQuestionRequest {
+  questionId: string;
+  agentType: string;
+  questions: import('../ai/claude-code/user-questions').AgentQuestion[];
 }
 
 // IdeationConfig now imported from shared types to maintain consistency

@@ -30,14 +30,7 @@
     "rebuild": "electron-rebuild",
     "package": "electron-builder",
     "package:mac": "electron-builder --mac",
-    "package:win": "electron-builder --win",
-    "package:linux": "electron-builder --linux",
-    "package:flatpak": "electron-builder --linux flatpak",
-    "verify:linux": "node scripts/verify-linux-packages.cjs dist",
-    "test:verify-linux": "node --test scripts/verify-linux-packages.test.mjs",
-    "start:packaged:mac": "open dist/mac-arm64/Aperant.app || open dist/mac/Aperant.app",
-    "start:packaged:win": "start \"\" \"dist\\win-unpacked\\Aperant.exe\"",
-    "start:packaged:linux": "./dist/linux-unpacked/aperant",
+    "start:packaged:mac": "open 'dist/mac-arm64/Vibe Teamlead.app' || open 'dist/mac/Vibe Teamlead.app'",
     "test": "vitest run",
     "test:unit": "vitest run --exclude src/__tests__/integration/ --exclude src/__tests__/e2e/",
     "test:integration": "vitest run src/__tests__/integration/",
@@ -60,8 +53,9 @@
     "@ai-sdk/openai": "^3.0.41",
     "@ai-sdk/openai-compatible": "^2.0.35",
     "@ai-sdk/xai": "^3.0.67",
-    "@anthropic-ai/claude-agent-sdk": "^0.3.317",
+    "@anthropic-ai/claude-agent-sdk": "0.3.317",
     "@anthropic-ai/sdk": "^1.4.0",
+    "@colbymchenry/codegraph": "1.6.2",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -159,15 +153,15 @@
     "@electron/rebuild": "4.0.3"
   },
   "build": {
-    "appId": "com.aperant.app",
-    "productName": "Aperant",
+    "appId": "com.vibeteamlead.app",
+    "productName": "Vibe Teamlead",
     "npmRebuild": false,
     "artifactName": "${productName}-${version}-${platform}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",
-        "owner": "AndyMik90",
-        "repo": "Aperant"
+        "owner": "KolyaSotnichenko",
+        "repo": "vibe-teamlead"
       }
     ],
     "directories": {
@@ -182,10 +176,6 @@
       "out/main/node_modules/@lydell/node-pty-*/**"
     ],
     "extraResources": [
-      {
-        "from": "resources/icon.ico",
-        "to": "icon.ico"
-      },
       {
         "from": "prompts",
         "to": "prompts"
@@ -205,6 +195,25 @@
       {
         "from": "../../node_modules/detect-libc",
         "to": "node_modules/detect-libc"
+      },
+      {
+        "from": "vendor/superpowers",
+        "to": "plugins/superpowers"
+      },
+      {
+        "from": "../../node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/claude",
+        "to": "claude-code/claude"
+      },
+      {
+        "from": "../../node_modules/@colbymchenry/codegraph-darwin-${arch}",
+        "to": "codegraph",
+        "filter": [
+          "bin/**",
+          "lib/**",
+          "node",
+          "package.json",
+          "LICENSE*"
+        ]
       }
     ],
     "mac": {
@@ -215,40 +224,20 @@
       "entitlements": "resources/entitlements.mac.plist",
       "entitlementsInherit": "resources/entitlements.mac.plist",
       "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "win": {
-      "icon": "resources/icon.ico",
-      "target": [
-        "nsis",
-        "zip"
-      ]
-    },
-    "linux": {
-      "icon": "resources/icons",
-      "target": [
-        "AppImage",
-        "deb",
-        "flatpak"
-      ],
-      "category": "Development"
-    },
-    "flatpak": {
-      "runtime": "org.freedesktop.Platform",
-      "runtimeVersion": "25.08",
-      "sdk": "org.freedesktop.Sdk",
-      "base": "org.electronjs.Electron2.BaseApp",
-      "baseVersion": "25.08",
-      "finishArgs": [
-        "--socket=wayland",
-        "--socket=x11",
-        "--share=ipc",
-        "--share=network",
-        "--device=dri",
-        "--filesystem=home",
-        "--talk-name=org.freedesktop.Notifications"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ]
     }
   },

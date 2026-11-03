@@ -18,9 +18,7 @@
     "lint": "cd apps/desktop && npm run lint",
     "test": "cd apps/desktop && npm test",
     "package": "cd apps/desktop && npm run package",
-    "package:mac": "cd apps/desktop && npm run package:mac",
-    "package:win": "cd apps/desktop && npm run package:win",
-    "package:linux": "cd apps/desktop && npm run package:linux"
+    "package:mac": "cd apps/desktop && npm run package:mac"
   },
   "engines": {
     "node": ">=24.0.0",

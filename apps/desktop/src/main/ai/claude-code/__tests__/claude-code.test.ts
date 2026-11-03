@@ -105,7 +105,10 @@ describe('buildQueryOptions', () => {
       baseConfig({ thinkingLevel: 'high', outputSchema: z.object({ ok: z.boolean() }) }),
       new AbortController(),
     );
-    expect(options.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code', append: 'You are the coder.' });
+    expect(options.systemPrompt).toMatchObject({ type: 'preset', preset: 'claude_code' });
+    const append = (options.systemPrompt as { append: string }).append;
+    expect(append.startsWith('You are the coder.')).toBe(true);
+    expect(append).toContain('AskUserQuestion');
     expect(options.cwd).toBe('/work/tree');
     expect(options.maxTurns).toBe(50);
     expect(options.effort).toBe('high');
@@ -113,7 +116,7 @@ describe('buildQueryOptions', () => {
     expect(options.env?.ANTHROPIC_API_KEY).toBe('sk-ant-test');
     expect(options.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     expect(options.env?.CLAUDE_CONFIG_DIR).toMatch(/\.vibe-teamlead/);
-    expect(options.hooks?.PreToolUse).toHaveLength(1);
+    expect(options.hooks?.PreToolUse).toHaveLength(2);
     expect(options.mcpServers).toHaveProperty('auto-claude');
     expect(options.outputFormat?.type).toBe('json_schema');
   });

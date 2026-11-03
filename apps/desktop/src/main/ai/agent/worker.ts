@@ -16,6 +16,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
 import { runAgentSession } from '../claude-code/runner';
+import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import { buildSubagents, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
@@ -105,8 +106,42 @@ const abortController = new AbortController();
 parentPort.on('message', (msg: MainToWorkerMessage) => {
   if (msg.type === 'abort') {
     abortController.abort();
+  } else if (msg.type === 'user-answer') {
+    pendingQuestions.get(msg.questionId)?.(msg.answers);
+    pendingQuestions.delete(msg.questionId);
   }
 });
+
+// =============================================================================
+// Agent questions (Claude Code AskUserQuestion → app UI → back)
+// =============================================================================
+
+const pendingQuestions = new Map<string, (answers: AgentAnswers | null) => void>();
+let questionCounter = 0;
+
+/** Ask the user through the main process; resolves null when dismissed or aborted. */
+function askUserFor(agentType: AgentType): AskUserHandler {
+  return (questions, signal) =>
+    new Promise((resolve) => {
+      const questionId = `${config.taskId}-q${++questionCounter}`;
+      const finish = (answers: AgentAnswers | null) => {
+        signal.removeEventListener('abort', onAbort);
+        abortController.signal.removeEventListener('abort', onAbort);
+        pendingQuestions.delete(questionId);
+        resolve(answers);
+      };
+      const onAbort = () => finish(null);
+      signal.addEventListener('abort', onAbort, { once: true });
+      abortController.signal.addEventListener('abort', onAbort, { once: true });
+      pendingQuestions.set(questionId, finish);
+      postMessage({
+        type: 'user-question',
+        taskId: config.taskId,
+        projectId: config.projectId,
+        data: { questionId, agentType, questions },
+      });
+    });
+}
 
 // =============================================================================
 // Shared Helpers
@@ -191,9 +226,10 @@ function loadPrompt(promptName: string): string | null {
 /** Fields every Claude Code session shares, derived from the worker config. */
 function claudeSessionBase(session: SerializableSessionConfig): Pick<
   SessionConfig,
-  'auth' | 'mcpOptions' | 'memoryMcpUrl' | 'linearApiKey'
+  'auth' | 'mcpOptions' | 'memoryMcpUrl' | 'linearApiKey' | 'bundled'
 > {
   return {
+    bundled: session.bundled,
     auth: { apiKey: session.apiKey, baseURL: session.baseURL },
     mcpOptions: {
       context7Enabled: session.mcpOptions?.context7Enabled ?? true,
@@ -320,7 +356,11 @@ async function runSingleSession(
 
   let sessionResult: SessionResult;
   try {
-    sessionResult = await runAgentSession(sessionConfig, { onEvent: relayEvents(phase) });
+    sessionResult = await runAgentSession(sessionConfig, {
+      onEvent: relayEvents(phase),
+      askUser: askUserFor(sessionConfig.agentType),
+      onLog: postLog,
+    });
   } catch (error) {
     // Ensure log cleanup happens on failure
     if (logWriter && !skipPhaseLogging) logWriter.endPhase(phase, false);
@@ -415,7 +455,11 @@ async function runDefaultSession(
 
   let result: SessionResult | undefined;
   try {
-    result = await runAgentSession(sessionConfig, { onEvent: relayEvents(defaultPhase) });
+    result = await runAgentSession(sessionConfig, {
+      onEvent: relayEvents(defaultPhase),
+      askUser: askUserFor(sessionConfig.agentType),
+      onLog: postLog,
+    });
   } finally {
     if (logWriter) {
       const success = result?.outcome === 'completed' || result?.outcome === 'max_steps';
@@ -943,7 +987,11 @@ async function runAgenticSpecOrchestrator(
 
   let result: SessionResult | undefined;
   try {
-    result = await runAgentSession(sessionConfig, { onEvent: relayEvents('spec') });
+    result = await runAgentSession(sessionConfig, {
+      onEvent: relayEvents('spec'),
+      askUser: askUserFor(sessionConfig.agentType),
+      onLog: postLog,
+    });
   } finally {
     if (logWriter) {
       const success = result?.outcome === 'completed' || result?.outcome === 'max_steps';

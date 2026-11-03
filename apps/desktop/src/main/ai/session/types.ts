@@ -14,6 +14,7 @@
 import type { AgentDefinition, SdkPluginConfig, SettingSource } from '@anthropic-ai/claude-agent-sdk';
 import type { ZodSchema } from 'zod';
 
+import type { BundledTools } from '../claude-code/bundled-tools';
 import type { AgentType, McpServerResolveOptions } from '../config/agent-configs';
 import type { ModelShorthand, Phase, ThinkingLevel } from '../config/types';
 import type { ToolContext } from '../tools/types';
@@ -71,6 +72,8 @@ export interface SessionConfig {
    * Defaults to ['project'] so the target repo's .claude/ setup applies.
    */
   settingSources?: SettingSource[];
+  /** Tools shipped with the app (Claude Code binary, Superpowers, CodeGraph) */
+  bundled?: BundledTools;
   /** Claude Code config directory (defaults to ~/.vibe-teamlead/claude-code) */
   claudeConfigDir?: string;
   /** Spec directory for the current task */

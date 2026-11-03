@@ -22,9 +22,12 @@ import type {
   WorkerConfig,
   WorkerMessage,
   AgentExecutorConfig,
+  MainToWorkerMessage,
 } from './types';
 import type { SessionResult } from '../session/types';
 import { ProgressTracker } from '../session/progress-tracker';
+import { resolveBundledTools } from '../claude-code/bundled-tools';
+import type { AgentAnswers } from '../claude-code/user-questions';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -91,7 +94,7 @@ export class WorkerBridge extends EventEmitter {
       taskId: config.taskId,
       projectId: config.projectId,
       processType: config.processType,
-      session: config.session,
+      session: { ...config.session, bundled: config.session.bundled ?? resolveBundledTools() },
     };
 
     const workerPath = resolveWorkerPath();
@@ -189,7 +192,23 @@ export class WorkerBridge extends EventEmitter {
       case 'result':
         this.handleResult(message.taskId, message.data, message.projectId);
         break;
+
+      case 'user-question':
+        // No UI listening (e.g. headless run): answer "no answer" so the agent
+        // proceeds on a stated assumption instead of waiting forever.
+        if (this.listenerCount('agent-question') === 0) {
+          this.answerQuestion(message.data.questionId, null);
+        } else {
+          this.emitTyped('agent-question', message.taskId, message.data, message.projectId);
+        }
+        break;
     }
+  }
+
+  /** Deliver the user's answers (or null = dismissed) to the waiting agent. */
+  answerQuestion(questionId: string, answers: AgentAnswers | null): void {
+    const message: MainToWorkerMessage = { type: 'user-answer', questionId, answers };
+    this.worker?.postMessage(message);
   }
 
   /**

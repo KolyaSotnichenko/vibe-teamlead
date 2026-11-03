@@ -17,9 +17,12 @@ import { z } from 'zod';
 import { getAgentConfig } from '../config/agent-configs';
 import { ErrorCode } from '../session/error-classifier';
 import type { SessionConfig, SessionEventCallback, SessionResult } from '../session/types';
+import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from './codegraph';
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { buildSecurityHooks } from './security-hooks';
+import { skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
+import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
 /** Claude Code built-in tools Vibe Teamlead agents may be given */
 const CLAUDE_CODE_TOOLS = new Set([
@@ -39,6 +42,10 @@ const CLAUDE_CODE_TOOLS = new Set([
 export interface RunnerOptions {
   /** Callback for streaming events (text, tool calls, progress) */
   onEvent?: SessionEventCallback;
+  /** Shows agent questions to the user; omit for unattended sessions */
+  askUser?: AskUserHandler;
+  /** Diagnostic log lines (indexing, setup) */
+  onLog?: (line: string) => void;
 }
 
 /** Map an agent's configured tool list onto Claude Code tool names. */
@@ -54,6 +61,7 @@ export function resolveBuiltinTools(configTools: readonly string[], hasSubagents
   if (tools.has('Write') || tools.has('Edit')) tools.add('TodoWrite');
   if (hasSubagents) tools.add('Agent');
   tools.add('Skill');
+  tools.add('AskUserQuestion');
   return [...tools];
 }
 
@@ -114,25 +122,53 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   return env;
 }
 
-export function buildQueryOptions(config: SessionConfig, abortController: AbortController): Options {
+export interface QueryExtras {
+  askUser?: AskUserHandler;
+  /** CodeGraph index is ready for this session's working directory */
+  codegraphReady?: boolean;
+}
+
+export function buildQueryOptions(
+  config: SessionConfig,
+  abortController: AbortController,
+  extras: QueryExtras = {},
+): Options {
   const agentConfig = getAgentConfig(config.agentType);
   const hasSubagents = !!config.agents && Object.keys(config.agents).length > 0;
+  const bundled = config.bundled ?? {};
+  const tools = resolveBuiltinTools(agentConfig.tools, hasSubagents);
+
+  const mcpServers = buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
+    specDir: config.specDir,
+    memoryMcpUrl: config.memoryMcpUrl,
+    linearApiKey: config.linearApiKey,
+  });
+  if (bundled.codegraphBin && extras.codegraphReady && tools.includes('Read')) {
+    mcpServers[CODEGRAPH_SERVER_KEY] = codegraphMcpServer(bundled.codegraphBin, config.toolContext.cwd);
+  }
+
+  const plugins = [...(config.plugins ?? [])];
+  const skills = bundled.superpowersDir ? skillsForAgent(config.agentType) : [];
+  if (bundled.superpowersDir) plugins.push({ type: 'local', path: bundled.superpowersDir });
+
+  const append = [config.systemPrompt, ASK_USER_INSTRUCTIONS, skills.length ? SUPERPOWERS_INSTRUCTIONS : '']
+    .filter(Boolean)
+    .join('\n');
 
   const options: Options = {
     model: config.model,
     cwd: config.toolContext.cwd,
-    systemPrompt: { type: 'preset', preset: 'claude_code', append: config.systemPrompt },
-    tools: resolveBuiltinTools(agentConfig.tools, hasSubagents),
-    mcpServers: buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
-      specDir: config.specDir,
-      memoryMcpUrl: config.memoryMcpUrl,
-      linearApiKey: config.linearApiKey,
-    }),
+    systemPrompt: { type: 'preset', preset: 'claude_code', append },
+    tools,
+    mcpServers,
     // Agents run unattended inside an isolated worktree; safety comes from the
     // PreToolUse hooks (command allowlist + write-path containment).
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
-    hooks: { PreToolUse: buildSecurityHooks(config.toolContext) },
+    hooks: {
+      PreToolUse: [...buildSecurityHooks(config.toolContext), buildAskUserHook(extras.askUser)],
+    },
+    skills,
     maxTurns: config.maxSteps,
     abortController,
     includePartialMessages: true,
@@ -143,7 +179,8 @@ export function buildQueryOptions(config: SessionConfig, abortController: AbortC
 
   if (config.thinkingLevel) options.effort = config.thinkingLevel;
   if (hasSubagents) options.agents = config.agents;
-  if (config.plugins?.length) options.plugins = config.plugins;
+  if (plugins.length) options.plugins = plugins;
+  if (bundled.claudeCodeExecutable) options.pathToClaudeCodeExecutable = bundled.claudeCodeExecutable;
   if (config.outputSchema) {
     options.outputFormat = {
       type: 'json_schema',
@@ -191,11 +228,16 @@ export async function runAgentSession(
   if (config.abortSignal?.aborted) abortController.abort();
   config.abortSignal?.addEventListener('abort', onAbort, { once: true });
 
+  const codegraphBin = config.bundled?.codegraphBin;
+  const codegraphReady = codegraphBin
+    ? ensureCodegraphIndex(codegraphBin, config.toolContext.cwd, options.onLog)
+    : false;
+
   let thrown: unknown;
   try {
     const stream = query({
       prompt: buildPrompt(config),
-      options: buildQueryOptions(config, abortController),
+      options: buildQueryOptions(config, abortController, { askUser: options.askUser, codegraphReady }),
     });
     for await (const message of stream) {
       acc.handle(message);
