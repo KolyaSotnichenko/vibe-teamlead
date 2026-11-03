@@ -12,6 +12,7 @@
     "empty": "Проєктів ще немає",
     "emptyDescription": "Створіть новий проєкт або відкрийте наявний, щоб почати",
     "openFolder": "Відкрити папку",
-    "openProjectAriaLabel": "Відкрити проєкт {{name}}"
+    "openProjectAriaLabel": "Відкрити проєкт {{name}}",
+    "initialized": "Ініціалізовано"
   }
 }

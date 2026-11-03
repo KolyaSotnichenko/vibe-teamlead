@@ -86,7 +86,13 @@
     "pathChangeWarningTitle": "Змінити встановлення CLI?",
     "pathChangeWarningDescription": "Після зміни встановлення CLI використовуватиметься інший бінарний файл Claude Code. Запущені сеанси працюватимуть із попереднім встановленням до перезапуску.",
     "switchInstallationConfirm": "Змінити",
-    "versionUnknown": "версія невідома"
+    "versionUnknown": "версія невідома",
+    "installNotAvailable": "Встановлення недоступне",
+    "installFailed": "Встановлення не вдалося",
+    "versionSwitchNotAvailable": "Перемикання версій недоступне",
+    "switchVersionFailed": "Не вдалося перемкнути версію",
+    "pathSwitchNotAvailable": "Перемикання шляху недоступне",
+    "switchPathFailed": "Не вдалося перемкнути шлях до CLI"
   },
   "teamStatus": {
     "title": "Команда зараз",

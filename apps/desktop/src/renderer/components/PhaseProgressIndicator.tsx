@@ -242,7 +242,7 @@ export const PhaseProgressIndicator = memo(function PhaseProgressIndicator({
                     ? { duration: 1, repeat: Infinity, ease: 'easeOut' }
                     : undefined,
                 }}
-                title={`${subtask.title || subtask.id}: ${subtask.status}`}
+                title={`${subtask.title || subtask.id}: ${t(`workspace.subtaskStatus.${subtask.status}`)}`}
               />
             );
           })}

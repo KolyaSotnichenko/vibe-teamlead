@@ -254,8 +254,10 @@ export function AppUpdateNotification() {
               </div>
               <Progress value={downloadProgress.percent} className="h-2" />
               <p className="text-xs text-muted-foreground text-right">
-                {(downloadProgress.transferred / 1024 / 1024).toFixed(2)} MB /{" "}
-                {(downloadProgress.total / 1024 / 1024).toFixed(2)} MB
+                {t("dialogs:appUpdate.downloadProgress", {
+                  transferred: (downloadProgress.transferred / 1024 / 1024).toFixed(2),
+                  total: (downloadProgress.total / 1024 / 1024).toFixed(2),
+                })}
               </p>
             </div>
           )}

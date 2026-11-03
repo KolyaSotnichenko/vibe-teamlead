@@ -316,7 +316,7 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
                     {t('updates.newVersion')}
                   </p>
                   <p className="text-base font-medium text-foreground">
-                    {appUpdateInfo?.version || 'Unknown'}
+                    {appUpdateInfo?.version || t('updates.unknownVersion')}
                   </p>
                   {appUpdateInfo?.releaseDate && (
                     <p className="text-xs text-muted-foreground mt-1">
@@ -351,7 +351,10 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
                   </div>
                   <Progress value={appDownloadProgress.percent} className="h-2" />
                   <p className="text-xs text-muted-foreground text-right">
-                    {(appDownloadProgress.transferred / 1024 / 1024).toFixed(2)} MB / {(appDownloadProgress.total / 1024 / 1024).toFixed(2)} MB
+                    {t('updates.downloadProgress', {
+                      transferred: (appDownloadProgress.transferred / 1024 / 1024).toFixed(2),
+                      total: (appDownloadProgress.total / 1024 / 1024).toFixed(2),
+                    })}
                   </p>
                 </div>
               )}
@@ -511,7 +514,10 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
                   </div>
                   <Progress value={appDownloadProgress.percent} className="h-2" />
                   <p className="text-xs text-muted-foreground text-right">
-                    {(appDownloadProgress.transferred / 1024 / 1024).toFixed(2)} MB / {(appDownloadProgress.total / 1024 / 1024).toFixed(2)} MB
+                    {t('updates.downloadProgress', {
+                      transferred: (appDownloadProgress.transferred / 1024 / 1024).toFixed(2),
+                      total: (appDownloadProgress.total / 1024 / 1024).toFixed(2),
+                    })}
                   </p>
                 </div>
               )}
@@ -539,7 +545,7 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
                   variant="ghost"
                   onClick={dismissStableDowngrade}
                 >
-                  {t('common:actions.dismiss')}
+                  {t('common:labels.dismiss')}
                 </Button>
               </div>
             </div>

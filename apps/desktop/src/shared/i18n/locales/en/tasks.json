@@ -183,7 +183,17 @@
   },
   "images": {
     "removeImageAriaLabel": "Remove image {{filename}}",
-    "pasteHint": "Tip: Paste screenshots directly with {{shortcut}} to add reference images."
+    "pasteHint": "Tip: Paste screenshots directly with {{shortcut}} to add reference images.",
+    "onlySomeAdded_one": "Only {{count}} more image can be added. Some files were skipped.",
+    "onlySomeAdded_other": "Only {{count}} more images can be added. Some files were skipped.",
+    "invalidType": "\"{{name}}\" is not a valid image type. Allowed: {{types}}",
+    "tooLarge": "\"{{name}}\" is larger than 10MB. Consider compressing it for better performance.",
+    "processFailed": "Failed to process \"{{name}}\"",
+    "dropOrBrowse": "Drop images here or click to browse",
+    "maxReached": "Maximum images reached",
+    "allowedHint": "{{types}} up to 10MB each ({{current}}/{{max}})",
+    "maxCount": "{{max}} images maximum",
+    "largeFileWarning": "Large file - consider compressing"
   },
   "imagePreview": {
     "close": "Close preview",

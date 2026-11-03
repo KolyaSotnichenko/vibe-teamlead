@@ -110,7 +110,10 @@
       "refresh": "Refresh",
       "learnMore": "Learn more",
       "installed": "GitLab CLI installed:"
-    }
+    },
+    "connectedToProject": "Connected to {{project}}",
+    "loadBranchesFailed": "Failed to load branches",
+    "loadProjectsFailed": "Failed to load projects"
   },
   "mergeRequests": {
     "title": "GitLab Merge Requests",

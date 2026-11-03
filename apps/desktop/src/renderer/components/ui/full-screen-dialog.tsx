@@ -1,7 +1,14 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
+
+/** Screen-reader label for the close button (hooks can't run in the forwardRef arrow body). */
+function CloseLabel() {
+  const { t } = useTranslation('common');
+  return <span className="sr-only">{t('buttons.close')}</span>;
+}
 
 const FullScreenDialog = DialogPrimitive.Root;
 
@@ -60,7 +67,7 @@ const FullScreenDialogContent = React.forwardRef<
         )}
       >
         <X className="h-5 w-5" />
-        <span className="sr-only">Close</span>
+        <CloseLabel />
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </FullScreenDialogPortal>

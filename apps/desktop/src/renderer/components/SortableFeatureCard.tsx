@@ -102,7 +102,7 @@ export function SortableFeatureCard({
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Phase: {phaseName}
+                    {t('common:featureCard.phase', { phase: phaseName })}
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -117,7 +117,7 @@ export function SortableFeatureCard({
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
-                    This feature addresses competitor pain points
+                    {t('common:featureCard.competitorInsight')}
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -212,7 +212,7 @@ export function SortableFeatureCard({
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>
-                {feature.votes} votes from user feedback
+                {t('common:featureCard.votes', { count: feature.votes })}
               </TooltipContent>
             </Tooltip>
           )}
@@ -224,11 +224,11 @@ export function SortableFeatureCard({
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 text-orange-500 border-orange-500/30"
                 >
-                  {feature.source?.provider === 'canny' ? 'Canny' : 'External'}
+                  {feature.source?.provider === 'canny' ? 'Canny' : t('common:featureCard.external')}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>
-                Imported from {feature.source?.provider}
+                {t('common:featureCard.importedFrom', { provider: feature.source?.provider })}
               </TooltipContent>
             </Tooltip>
           )}

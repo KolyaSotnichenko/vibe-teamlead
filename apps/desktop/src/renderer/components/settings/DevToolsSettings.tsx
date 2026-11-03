@@ -110,14 +110,14 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
       if (result.success && result.data) {
         setDetectedTools(result.data as DetectedTools);
       } else {
-        setDetectError(result.error || 'Failed to detect tools');
+        setDetectError(result.error || t('devtools.detectFailed'));
       }
     } catch (err) {
-      setDetectError(err instanceof Error ? err.message : 'Failed to detect tools');
+      setDetectError(err instanceof Error ? err.message : t('devtools.detectFailed'));
     } finally {
       setIsDetecting(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     detectTools();
@@ -197,7 +197,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
   }
 
   // Add custom option last
-  ideOptions.push({ value: 'custom', label: 'Custom...', detected: false });
+  ideOptions.push({ value: 'custom', label: t('devtools.custom'), detected: false });
 
   // Build Terminal options with detection status
   const terminalOptions: Array<{ value: SupportedTerminal; label: string; detected: boolean }> = [];
@@ -205,7 +205,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
   // Always add system terminal first
   terminalOptions.push({
     value: 'system',
-    label: TERMINAL_NAMES.system || 'System Terminal',
+    label: t('devtools.systemTerminal'),
     detected: true
   });
 
@@ -236,7 +236,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
   }
 
   // Add custom option last
-  terminalOptions.push({ value: 'custom', label: 'Custom...', detected: false });
+  terminalOptions.push({ value: 'custom', label: t('devtools.custom'), detected: false });
 
   // Build CLI options with detection status
   const cliOptions: Array<{ value: SupportedCLI; label: string; detected: boolean }> = [];
@@ -262,7 +262,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
     }
   }
 
-  cliOptions.push({ value: 'custom', label: 'Custom...', detected: false });
+  cliOptions.push({ value: 'custom', label: t('devtools.custom'), detected: false });
 
   return (
     <SettingsSection

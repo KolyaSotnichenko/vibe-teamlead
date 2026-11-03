@@ -54,5 +54,9 @@
     "detached": "(від’єднано)",
     "remotePushFailed": "Відстеження віддаленої гілки не налаштовано",
     "remotePushFailedDescription": "Worktree створено, але гілку не вдалося надіслати у віддалений репозиторій. Можливо, доведеться вручну виконати git push -u."
-  }
+  },
+  "dropToInsertPath": "Відпустіть, щоб вставити шлях",
+  "openIdeFailed": "Не вдалося відкрити IDE",
+  "couldNotLaunchIde": "Не вдалося запустити IDE",
+  "defaultTitle": "Термінал"
 }

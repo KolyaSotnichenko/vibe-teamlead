@@ -86,7 +86,13 @@
     "pathChangeWarningTitle": "Switch CLI installation?",
     "pathChangeWarningDescription": "Switching CLI installations will use a different Claude Code binary. Any running sessions will continue using the previous installation until restarted.",
     "switchInstallationConfirm": "Switch",
-    "versionUnknown": "version unknown"
+    "versionUnknown": "version unknown",
+    "installNotAvailable": "Installation not available",
+    "installFailed": "Installation failed",
+    "versionSwitchNotAvailable": "Version switching not available",
+    "switchVersionFailed": "Failed to switch version",
+    "pathSwitchNotAvailable": "Path switching not available",
+    "switchPathFailed": "Failed to switch CLI path"
   },
   "teamStatus": {
     "title": "Team now",

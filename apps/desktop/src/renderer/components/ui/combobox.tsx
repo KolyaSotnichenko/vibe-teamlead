@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { ScrollArea } from './scroll-area';
@@ -50,9 +51,9 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
       value,
       onValueChange,
       options,
-      placeholder = 'Select...',
-      searchPlaceholder = 'Search...',
-      emptyMessage = 'No results found',
+      placeholder: placeholderProp,
+      searchPlaceholder: searchPlaceholderProp,
+      emptyMessage: emptyMessageProp,
       disabled = false,
       className,
       id,
@@ -61,6 +62,10 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
     },
     ref
   ) => {
+    const { t } = useTranslation('common');
+    const placeholder = placeholderProp ?? t('combobox.placeholder');
+    const searchPlaceholder = searchPlaceholderProp ?? t('combobox.searchPlaceholder');
+    const emptyMessage = emptyMessageProp ?? t('combobox.emptyMessage');
     const [open, setOpen] = React.useState(false);
     const [search, setSearch] = React.useState('');
     const [focusedIndex, setFocusedIndex] = React.useState(-1);

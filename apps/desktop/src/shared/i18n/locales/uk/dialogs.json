@@ -23,7 +23,11 @@
     "settingUp": "Налаштування Git",
     "initializingRepo": "Ініціалізація git-репозиторію та створення початкового коміту...",
     "success": "Git ініціалізовано",
-    "readyToUse": "Ваш проєкт готовий до роботи з Vibe Teamlead!"
+    "readyToUse": "Ваш проєкт готовий до роботи з Vibe Teamlead!",
+    "manualInstructions": "Відкрийте термінал у теці проєкту й виконайте:",
+    "skipForNow": "Пропустити поки що",
+    "initializeGit": "Ініціалізувати Git",
+    "initFailed": "Не вдалося ініціалізувати git"
   },
   "githubSetup": {
     "connectTitle": "Підключіть GitHub",
@@ -46,7 +50,59 @@
     "goBackAriaLabel": "Повернутися до вибору репозиторію",
     "selectOwnerAriaLabel": "Вибрати {{owner}} власником репозиторію",
     "selectOrgAriaLabel": "Вибрати {{org}} власником репозиторію",
-    "selectVisibilityAriaLabel": "Встановити видимість репозиторію: {{visibility}}"
+    "selectVisibilityAriaLabel": "Встановити видимість репозиторію: {{visibility}}",
+    "errors": {
+      "detectRepoFailed": "Не вдалося визначити репозиторій",
+      "loadBranchesFailed": "Не вдалося завантажити гілки",
+      "repoNameRequired": "Введіть назву репозиторію",
+      "ownerRequired": "Виберіть власника репозиторію",
+      "createRepoFailed": "Не вдалося створити репозиторій",
+      "existingRepoRequired": "Введіть назву репозиторію (у форматі owner/repo)",
+      "invalidRepoFormat": "Неправильний формат. Використовуйте owner/repo (наприклад, username/my-project)",
+      "addRemoteFailed": "Не вдалося додати remote"
+    },
+    "confirmRepoTitle": "Підтвердьте репозиторій",
+    "confirmRepoDescription": "Ми знайшли репозиторій GitHub для цього проєкту. Підтвердьте його або змініть.",
+    "repoDetected": "Репозиторій знайдено",
+    "useDifferentRepo": "Використати інший репозиторій",
+    "confirmAndContinue": "Підтвердити й продовжити",
+    "repoNeededDescription": "Вашому проєкту потрібен репозиторій GitHub. Створіть новий або прив’яжіть наявний.",
+    "createNewRepo": "Створити репозиторій",
+    "createNewRepoDescription": "Створити новий репозиторій на GitHub",
+    "linkExisting": "Прив’язати наявний",
+    "linkExistingDescription": "Підключитися до наявного репозиторію",
+    "createRepoHeading": "Створення нового репозиторію",
+    "owner": "Власник",
+    "loadingAccounts": "Завантаження облікових записів...",
+    "ownerHint": "Виберіть особистий обліковий запис або організацію",
+    "repoName": "Назва репозиторію",
+    "repoNamePlaceholder": "my-project",
+    "visibility": "Видимість",
+    "private": "Приватний",
+    "public": "Публічний",
+    "linkRepoHeading": "Прив’язка наявного репозиторію",
+    "repository": "Репозиторій",
+    "existingRepoPlaceholder": "username/repository",
+    "existingRepoHint": "Введіть повний шлях до репозиторію (наприклад, octocat/hello-world)",
+    "createRepo": "Створити репозиторій",
+    "linking": "Прив’язування...",
+    "linkRepo": "Прив’язати репозиторій",
+    "checking": "Перевірка...",
+    "retryDetection": "Повторити пошук",
+    "repositoryLabel": "Репозиторій:",
+    "baseBranch": "Базова гілка",
+    "loadingBranches": "Завантаження гілок...",
+    "selectBranchPlaceholder": "Виберіть гілку",
+    "recommended": "Рекомендовано",
+    "branchHint": "Усі задачі створюватимуться з гілок на кшталт <code>{{pattern}}</code>",
+    "branchHintWithBase": "Усі задачі створюватимуться з гілок на кшталт <code>{{pattern}}</code> на основі <code>{{branch}}</code>",
+    "completeSetup": "Завершити налаштування",
+    "setupComplete": "Налаштування завершено",
+    "readyWithBranch": "Vibe Teamlead готовий до роботи! Тепер можна створювати задачі, які автоматично базуватимуться на <code>{{branchName}}</code>.",
+    "steps": {
+      "authenticate": "Автентифікація",
+      "configure": "Налаштування"
+    }
   },
   "worktrees": {
     "title": "Worktree",
@@ -107,7 +163,8 @@
     "cancel": "Скасувати",
     "adding": "Додавання...",
     "addFeature": "Додати функцію",
-    "failedToAdd": "Не вдалося додати функцію. Спробуйте ще раз."
+    "failedToAdd": "Не вдалося додати функцію. Спробуйте ще раз.",
+    "saveRoadmapFailed": "Не вдалося зберегти дорожню карту"
   },
   "addProject": {
     "title": "Додати проєкт",
@@ -134,7 +191,8 @@
     "failedToOpen": "Не вдалося відкрити проєкт",
     "failedToCreate": "Не вдалося створити проєкт",
     "openExistingAriaLabel": "Відкрити наявну папку проєкту",
-    "createNewAriaLabel": "Створити новий проєкт"
+    "createNewAriaLabel": "Створити новий проєкт",
+    "createFolderFailed": "Не вдалося створити теку проєкту"
   },
   "customModel": {
     "title": "Налаштування моделі",
@@ -166,7 +224,8 @@
     "claudeCodeChangelog": "Журнал змін Claude Code",
     "claudeCodeChangelogAriaLabel": "Журнал змін Claude Code (відкриється в новому вікні)",
     "readOnlyVolumeTitle": "Неможливо встановити з образу диска",
-    "readOnlyVolumeDescription": "Перш ніж оновлювати, перемістіть Vibe Teamlead у папку «Програми»."
+    "readOnlyVolumeDescription": "Перш ніж оновлювати, перемістіть Vibe Teamlead у папку «Програми».",
+    "downloadProgress": "{{transferred}} МБ / {{total}} МБ"
   },
   "addCompetitor": {
     "title": "Додати конкурента",
