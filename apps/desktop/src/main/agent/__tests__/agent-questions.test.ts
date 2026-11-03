@@ -4,7 +4,8 @@ import {
   addPendingQuestion,
   answerPendingQuestion,
   clearPendingQuestions,
-  dropTaskQuestions,
+  cancelPendingQuestion,
+  dropQuestionsFrom,
   listPendingQuestions,
 } from '../agent-questions';
 
@@ -32,10 +33,20 @@ describe('pending agent questions', () => {
     expect(answerPendingQuestion('q1', null)).toBeNull();
   });
 
-  it('drops questions of a finished task', () => {
-    addPendingQuestion(q('q1', 't1', 1), { answerQuestion: vi.fn() });
-    addPendingQuestion(q('q2', 't2', 2), { answerQuestion: vi.fn() });
-    expect(dropTaskQuestions('t1').map((x) => x.questionId)).toEqual(['q1']);
+  it('drops only the questions of the worker that ended, even for the same task', () => {
+    const oldWorker = { answerQuestion: vi.fn() };
+    const restarted = { answerQuestion: vi.fn() };
+    addPendingQuestion(q('q1', 't1', 1), oldWorker);
+    addPendingQuestion(q('q2', 't1', 2), restarted);
+    expect(dropQuestionsFrom(oldWorker).map((x) => x.questionId)).toEqual(['q1']);
     expect(listPendingQuestions().map((x) => x.questionId)).toEqual(['q2']);
+  });
+
+  it('cancels a question the agent stopped waiting for, without answering it', () => {
+    const bridge = { answerQuestion: vi.fn() };
+    addPendingQuestion(q('q1', 't1', 1), bridge);
+    expect(cancelPendingQuestion('q1')?.questionId).toBe('q1');
+    expect(cancelPendingQuestion('q1')).toBeNull();
+    expect(bridge.answerQuestion).not.toHaveBeenCalled();
   });
 });

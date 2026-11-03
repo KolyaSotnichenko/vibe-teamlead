@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { addPendingQuestion, dropTaskQuestions } from './agent-questions';
+import { addPendingQuestion, cancelPendingQuestion, dropQuestionsFrom } from './agent-questions';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
@@ -890,11 +890,14 @@ export class AgentProcessManager {
       this.emitter.emit('agent-question', tId, request, pId);
     });
 
+    bridge.on('agent-question-cancelled', (tId: string, questionId: string, pId?: string) => {
+      if (cancelPendingQuestion(questionId)) this.emitter.emit('agent-question-resolved', tId, questionId, pId);
+    });
+
     bridge.on('exit', (tId: string, code: number | null, pType: ProcessType, pId?: string) => {
-      this.state.deleteProcess(tId);
-      for (const question of dropTaskQuestions(tId)) {
-        this.emitter.emit('agent-question-resolved', tId, question.questionId, pId);
-      }
+      // A late exit from an old worker must not remove a restarted task's process.
+      if (this.state.getProcess(tId)?.worker === bridge) this.state.deleteProcess(tId);
+      this.dropQuestionsOf(bridge, tId, pId);
 
       if (this.state.wasSpawnKilled(spawnId)) {
         this.state.clearKilledSpawn(spawnId);
@@ -927,7 +930,7 @@ export class AgentProcessManager {
     }
 
     // Store the worker reference for kill support
-    this.state.updateProcess(taskId, { worker: bridge.workerInstance });
+    this.state.updateProcess(taskId, { worker: bridge, projectId });
 
     // Check if killed during bridge setup
     const currentSpawnId = this.state.getProcess(taskId)?.spawnId ?? spawnId;
@@ -945,6 +948,13 @@ export class AgentProcessManager {
       overallProgress: 0,
       message: 'Starting AI agent session...',
     }, projectId);
+  }
+
+  /** Remove the questions a worker asked and tell the UI they are gone. */
+  private dropQuestionsOf(bridge: WorkerBridge, taskId: string, projectId?: string): void {
+    for (const question of dropQuestionsFrom(bridge)) {
+      this.emitter.emit('agent-question-resolved', taskId, question.questionId, projectId);
+    }
   }
 
   /**
@@ -965,13 +975,11 @@ export class AgentProcessManager {
       return true;
     }
 
-    // Handle worker thread termination
+    // Handle worker thread termination (abort, grace period, then force)
     if (agentProcess.worker) {
-      try {
-        agentProcess.worker.terminate();
-      } catch {
-        // Worker may already be terminated
-      }
+      const bridge = agentProcess.worker;
+      this.dropQuestionsOf(bridge, taskId, agentProcess.projectId);
+      void bridge.terminate().catch(() => {});
       this.state.deleteProcess(taskId);
       return true;
     }

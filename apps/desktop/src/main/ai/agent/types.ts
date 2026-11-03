@@ -113,7 +113,15 @@ export type WorkerMessage =
   | WorkerResultMessage
   | WorkerTaskEventMessage
   | WorkerQuestionMessage
+  | WorkerQuestionCancelledMessage
   | WorkerRenderDiagramMessage;
+
+/** A question the agent stopped waiting for (timeout or abort): remove it from the UI. */
+export interface WorkerQuestionCancelledMessage {
+  type: 'user-question-cancelled';
+  taskId: string;
+  questionId: string;
+}
 
 /** The architect asked the main process to render a .drawio file. */
 export interface WorkerRenderDiagramMessage {

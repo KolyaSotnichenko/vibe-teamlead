@@ -32,11 +32,22 @@ export function answerPendingQuestion(questionId: string, answers: AgentAnswers 
   return entry.question;
 }
 
-/** Forget every question of a task (its agent finished or was stopped). */
-export function dropTaskQuestions(taskId: string): PendingAgentQuestion[] {
+/** Forget one question without answering it (the agent stopped waiting). */
+export function cancelPendingQuestion(questionId: string): PendingAgentQuestion | null {
+  const entry = pending.get(questionId);
+  if (!entry) return null;
+  pending.delete(questionId);
+  return entry.question;
+}
+
+/**
+ * Forget every question asked through one worker (it finished or was stopped).
+ * Keyed by asker, not task, so a restarted task keeps its new questions.
+ */
+export function dropQuestionsFrom(target: Answerable): PendingAgentQuestion[] {
   const dropped: PendingAgentQuestion[] = [];
   for (const [id, entry] of pending) {
-    if (entry.question.taskId === taskId) {
+    if (entry.target === target) {
       pending.delete(id);
       dropped.push(entry.question);
     }

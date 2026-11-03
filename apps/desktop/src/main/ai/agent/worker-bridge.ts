@@ -36,6 +36,11 @@ import type { AgentAnswers } from '../claude-code/user-questions';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** How long a stopping worker gets to abort cleanly before it is terminated. */
+const TERMINATE_GRACE_MS = 5000;
+/** Emit buffered agent text once it grows past this without a newline. */
+const TEXT_FLUSH_CHARS = 2000;
+
 // =============================================================================
 // Worker Path Resolution
 // =============================================================================
@@ -77,6 +82,9 @@ export class WorkerBridge extends EventEmitter {
   private projectId: string | undefined;
   private processType: ProcessType = 'task-execution';
   private viewerScript: string | undefined;
+  private finished = false;
+  private lastProgressKey = '';
+  private textBuffer = '';
 
   /**
    * Spawn a worker thread with the given configuration.
@@ -93,6 +101,9 @@ export class WorkerBridge extends EventEmitter {
     this.projectId = config.projectId;
     this.processType = config.processType;
     this.progressTracker = new ProgressTracker();
+    this.finished = false;
+    this.lastProgressKey = '';
+    this.textBuffer = '';
 
     const bundled = config.session.bundled ?? resolveBundledTools();
     this.viewerScript = bundled.drawioViewerScript;
@@ -121,43 +132,56 @@ export class WorkerBridge extends EventEmitter {
     });
 
     this.worker.on('error', (error: Error) => {
+      // An uncaught exception in the worker: report it and end the task (the
+      // following 'exit' event is then ignored).
       this.emitTyped('error', this.taskId, error.message, this.projectId);
-      this.cleanup();
+      this.finish(1);
     });
 
     this.worker.on('exit', (code: number) => {
-      // Code 0 = clean exit; non-zero = crash/error
-      // Only emit exit if we haven't already emitted from a 'result' message
-      if (this.worker) {
-        this.emitTyped('exit', this.taskId, code === 0 ? 0 : code, this.processType, this.projectId);
-        this.cleanup();
-      }
+      this.finish(code === 0 ? 0 : code);
     });
   }
 
   /**
-   * Terminate the worker thread.
-   * Sends an abort message first for graceful shutdown, then terminates.
+   * Stop the task: ask the worker to abort (so the SDK can shut down Claude
+   * Code and its MCP servers), wait up to the grace period, then force it.
+   * Does not emit 'exit' — the caller owns the stopped task's state.
    */
   async terminate(): Promise<void> {
-    if (!this.worker) return;
+    const worker = this.worker;
+    if (!worker) return;
+    this.finished = true;
+    this.cleanup();
 
-    // Try graceful abort first
+    const exited = new Promise<void>((resolve) => worker.once('exit', () => resolve()));
     try {
-      this.worker.postMessage({ type: 'abort' });
+      worker.postMessage({ type: 'abort' });
     } catch {
       // Worker may already be dead
     }
+    const timedOut = await Promise.race([
+      exited.then(() => false),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(true), TERMINATE_GRACE_MS).unref?.()),
+    ]);
+    if (timedOut) {
+      try {
+        await worker.terminate();
+      } catch {
+        // Already terminated
+      }
+    }
+  }
 
-    // Force terminate after a short grace period
+  /** Emit 'exit' exactly once and release the worker thread. */
+  private finish(exitCode: number): void {
+    if (this.finished) return;
+    this.finished = true;
+    this.flushText();
     const worker = this.worker;
     this.cleanup();
-
-    try {
-      await worker.terminate();
-    } catch {
-      // Already terminated
-    }
+    this.emitTyped('exit', this.taskId, exitCode, this.processType, this.projectId);
+    void worker?.terminate().catch(() => {});
   }
 
   /** Whether the worker is currently active */
@@ -189,12 +213,14 @@ export class WorkerBridge extends EventEmitter {
         break;
 
       case 'stream-event':
-        // Feed the progress tracker and emit progress updates
+        // Feed the progress tracker; progress is emitted only when it changes.
         this.progressTracker.processEvent(message.data);
         this.emitProgressFromTracker(message.taskId, message.projectId);
-        // Also forward raw log for text events
+        // Agent text goes to the log line by line, not per token.
         if (message.data.type === 'text-delta') {
-          this.emitTyped('log', message.taskId, message.data.text, message.projectId);
+          this.bufferText(message.data.text);
+        } else if (message.data.type === 'step-finish') {
+          this.flushText();
         }
         break;
 
@@ -204,6 +230,10 @@ export class WorkerBridge extends EventEmitter {
 
       case 'result':
         this.handleResult(message.taskId, message.data, message.projectId);
+        break;
+
+      case 'user-question-cancelled':
+        this.emitTyped('agent-question-cancelled', message.taskId, message.questionId, this.projectId);
         break;
 
       case 'render-diagram':
@@ -248,6 +278,9 @@ export class WorkerBridge extends EventEmitter {
    */
   private emitProgressFromTracker(taskId: string, projectId?: string): void {
     const state = this.progressTracker.state;
+    const key = `${state.currentPhase}|${state.currentSubtask ?? ''}|${state.currentMessage ?? ''}|${state.completedPhases.length}`;
+    if (key === this.lastProgressKey) return;
+    this.lastProgressKey = key;
     const progressData: ExecutionProgressData = {
       phase: state.currentPhase,
       phaseProgress: 0, // Detailed progress calculated by UI from phase
@@ -275,9 +308,26 @@ export class WorkerBridge extends EventEmitter {
       this.emitTyped('error', taskId, result.error.message, projectId);
     }
 
-    // Emit exit and cleanup
-    this.emitTyped('exit', taskId, exitCode, this.processType, projectId);
-    this.cleanup();
+    this.finish(exitCode);
+  }
+
+  /** Collect streamed agent text and emit it to the log in whole lines. */
+  private bufferText(text: string): void {
+    this.textBuffer += text;
+    const lastNewline = this.textBuffer.lastIndexOf('\n');
+    if (lastNewline !== -1) {
+      const complete = this.textBuffer.slice(0, lastNewline + 1);
+      this.textBuffer = this.textBuffer.slice(lastNewline + 1);
+      this.emitTyped('log', this.taskId, complete, this.projectId);
+    }
+    if (this.textBuffer.length > TEXT_FLUSH_CHARS) this.flushText();
+  }
+
+  private flushText(): void {
+    if (!this.textBuffer) return;
+    const text = this.textBuffer;
+    this.textBuffer = '';
+    this.emitTyped('log', this.taskId, text, this.projectId);
   }
 
   // ===========================================================================

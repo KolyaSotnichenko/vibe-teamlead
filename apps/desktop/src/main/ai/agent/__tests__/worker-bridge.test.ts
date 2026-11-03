@@ -182,11 +182,16 @@ describe('WorkerBridge', () => {
       bridge.on('log', handler);
       bridge.spawn(createConfig());
 
-      const streamEvent = { type: 'text-delta' as const, text: 'some output' };
-      const msg: WorkerMessage = { type: 'stream-event', taskId: 'task-123', data: streamEvent as never };
-      getWorker().emit('message', msg);
+      const send = (data: unknown) =>
+        getWorker().emit('message', { type: 'stream-event', taskId: 'task-123', data: data as never } as WorkerMessage);
+      send({ type: 'text-delta', text: 'some ' });
+      send({ type: 'text-delta', text: 'output\nnext' });
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenLastCalledWith('task-123', 'some output\n', 'proj-456');
 
-      expect(handler).toHaveBeenCalledWith('task-123', 'some output', undefined);
+      // The rest of the line is flushed at the end of the step.
+      send({ type: 'step-finish', stepNumber: 1, usage: {} });
+      expect(handler).toHaveBeenLastCalledWith('task-123', 'next', 'proj-456');
     });
   });
 
@@ -216,7 +221,7 @@ describe('WorkerBridge', () => {
       const result = createSessionResult({ outcome: 'max_steps' });
       getWorker().emit('message', { type: 'result', taskId: 'task-123', data: result });
 
-      expect(exitHandler).toHaveBeenCalledWith('task-123', 0, 'task-execution', undefined);
+      expect(exitHandler).toHaveBeenCalledWith('task-123', 0, 'task-execution', 'proj-456');
     });
 
     it('maps error outcome to exit code 1', () => {
@@ -229,7 +234,32 @@ describe('WorkerBridge', () => {
       const result = createSessionResult({ outcome: 'error', error: { message: 'boom', code: 'unknown', retryable: false } });
       getWorker().emit('message', { type: 'result', taskId: 'task-123', data: result });
 
-      expect(exitHandler).toHaveBeenCalledWith('task-123', 1, 'task-execution', undefined);
+      expect(exitHandler).toHaveBeenCalledWith('task-123', 1, 'task-execution', 'proj-456');
+    });
+
+    it('releases the worker thread after the result and emits exit only once', () => {
+      const exitHandler = vi.fn();
+      bridge.on('exit', exitHandler);
+      bridge.on('log', vi.fn());
+      bridge.spawn(createConfig());
+      const worker = getWorker();
+      worker.emit('message', { type: 'result', taskId: 'task-123', data: createSessionResult() });
+      worker.emit('exit', 0);
+      expect(worker.terminate).toHaveBeenCalled();
+      expect(exitHandler).toHaveBeenCalledTimes(1);
+    });
+
+    it('still emits exit when the worker crashes (error, then exit)', () => {
+      const exitHandler = vi.fn();
+      bridge.on('exit', exitHandler);
+      bridge.on('error', vi.fn());
+      bridge.spawn(createConfig());
+      const worker = getWorker();
+      worker.emit('error', new Error('uncaught'));
+      worker.emit('exit', 1);
+      expect(exitHandler).toHaveBeenCalledTimes(1);
+      expect(exitHandler).toHaveBeenCalledWith('task-123', 1, 'task-execution', 'proj-456');
+      expect(bridge.isActive).toBe(false);
     });
 
     it('emits error event when result has an error', () => {
@@ -308,15 +338,29 @@ describe('WorkerBridge', () => {
   // ---------------------------------------------------------------------------
 
   describe('terminate', () => {
-    it('posts abort message and terminates worker', async () => {
+    it('asks the worker to abort and lets it exit on its own', async () => {
       bridge.spawn(createConfig());
       const worker = getWorker();
+      worker.postMessage.mockImplementation((m: { type: string }) => {
+        if (m.type === 'abort') setImmediate(() => worker.emit('exit', 0));
+      });
 
       await bridge.terminate();
 
       expect(worker.postMessage).toHaveBeenCalledWith({ type: 'abort' });
-      expect(worker.terminate).toHaveBeenCalled();
+      expect(worker.terminate).not.toHaveBeenCalled();
       expect(bridge.isActive).toBe(false);
+    });
+
+    it('force-terminates a worker that does not stop within the grace period', async () => {
+      vi.useFakeTimers();
+      bridge.spawn(createConfig());
+      const worker = getWorker();
+      const stopping = bridge.terminate();
+      await vi.advanceTimersByTimeAsync(5000);
+      await stopping;
+      expect(worker.terminate).toHaveBeenCalled();
+      vi.useRealTimers();
     });
 
     it('handles termination when no worker is active', async () => {
@@ -324,12 +368,16 @@ describe('WorkerBridge', () => {
     });
 
     it('handles postMessage failure on dead worker', async () => {
+      vi.useFakeTimers();
       bridge.spawn(createConfig());
       getWorker().postMessage.mockImplementation(() => {
         throw new Error('Worker already dead');
       });
 
-      await expect(bridge.terminate()).resolves.toBeUndefined();
+      const stopping = bridge.terminate();
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(stopping).resolves.toBeUndefined();
+      vi.useRealTimers();
     });
   });
 });

@@ -1,6 +1,6 @@
 import { ChildProcess } from 'child_process';
-import type { Worker } from 'worker_threads';
 import type { CompletablePhase, ExecutionPhase } from '../../shared/constants/phase-protocol';
+import type { WorkerBridge } from '../ai/agent/worker-bridge';
 import type { TaskEventPayload } from './task-event-schema';
 
 /**
@@ -16,8 +16,9 @@ export interface AgentProcess {
   projectPath?: string; // For ideation processes to load session on completion
   spawnId: number; // Unique ID to identify this specific spawn
   queueProcessType?: QueueProcessType; // Type of queue process (ideation or roadmap)
-  /** Worker thread instance for TypeScript AI SDK agent execution */
-  worker?: Worker | null;
+  /** Bridge to the worker thread running the agent session (stop it with terminate()) */
+  worker?: WorkerBridge | null;
+  projectId?: string;
 }
 
 export interface ExecutionProgressData {
@@ -40,6 +41,7 @@ export interface AgentManagerEvents {
   'task-event': (taskId: string, event: TaskEventPayload, projectId?: string) => void;
   /** An agent is waiting for the user's answer (see agent/agent-questions.ts) */
   'agent-question': (taskId: string, question: AgentQuestionRequest, projectId?: string) => void;
+  'agent-question-cancelled': (taskId: string, questionId: string, projectId?: string) => void;
   /** A pending question was answered, dismissed, or its task ended */
   'agent-question-resolved': (taskId: string, questionId: string, projectId?: string) => void;
 }

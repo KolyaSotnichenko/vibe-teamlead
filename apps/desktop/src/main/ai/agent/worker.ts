@@ -14,6 +14,7 @@
 import { parentPort, workerData } from 'worker_threads';
 import { readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 
 import { toClaudeAuth } from '../claude-code/auth';
@@ -125,7 +126,6 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
     pendingQuestions.delete(msg.questionId);
   } else if (msg.type === 'render-result') {
     pendingRenders.get(msg.requestId)?.(msg);
-    pendingRenders.delete(msg.requestId);
   }
 });
 
@@ -135,18 +135,27 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 
 type RenderReply = Extract<MainToWorkerMessage, { type: 'render-result' }>;
 const pendingRenders = new Map<string, (reply: RenderReply) => void>();
-let renderCounter = 0;
+/** A render that takes longer than this is reported as failed to the architect. */
+const RENDER_TIMEOUT_MS = 60_000;
 
 function renderDiagramViaMain(path: string): Promise<{ pngPath: string; width: number; height: number }> {
   return new Promise((resolve, reject) => {
-    const requestId = `${config.taskId}-r${++renderCounter}`;
-    pendingRenders.set(requestId, (reply) => {
+    const requestId = randomUUID();
+    const settle = (reply: RenderReply) => {
+      clearTimeout(timer);
+      abortController.signal.removeEventListener('abort', onAbort);
+      pendingRenders.delete(requestId);
       if (reply.ok && reply.pngPath) {
         resolve({ pngPath: reply.pngPath, width: reply.width ?? 0, height: reply.height ?? 0 });
       } else {
         reject(new Error(reply.error ?? 'Render failed'));
       }
-    });
+    };
+    const fail = (error: string) => settle({ type: 'render-result', requestId, ok: false, error });
+    const onAbort = () => fail('Cancelled');
+    const timer = setTimeout(() => fail('Rendering timed out'), RENDER_TIMEOUT_MS);
+    abortController.signal.addEventListener('abort', onAbort, { once: true });
+    pendingRenders.set(requestId, settle);
     postMessage({ type: 'render-diagram', taskId: config.taskId, requestId, path });
   });
 }
@@ -156,20 +165,24 @@ function renderDiagramViaMain(path: string): Promise<{ pngPath: string; width: n
 // =============================================================================
 
 const pendingQuestions = new Map<string, (answers: AgentAnswers | null) => void>();
-let questionCounter = 0;
 
 /** Ask the user through the main process; resolves null when dismissed or aborted. */
 function askUserFor(agentType: AgentType): AskUserHandler {
   return (questions, signal) =>
     new Promise((resolve) => {
-      const questionId = `${config.taskId}-q${++questionCounter}`;
+      const questionId = randomUUID();
       const finish = (answers: AgentAnswers | null) => {
         signal.removeEventListener('abort', onAbort);
         abortController.signal.removeEventListener('abort', onAbort);
         pendingQuestions.delete(questionId);
         resolve(answers);
       };
-      const onAbort = () => finish(null);
+      // The agent stopped waiting (hook timeout or abort): take the question off the UI.
+      const onAbort = () => {
+        if (!pendingQuestions.has(questionId)) return;
+        postMessage({ type: 'user-question-cancelled', taskId: config.taskId, questionId });
+        finish(null);
+      };
       signal.addEventListener('abort', onAbort, { once: true });
       abortController.signal.addEventListener('abort', onAbort, { once: true });
       pendingQuestions.set(questionId, finish);
@@ -273,16 +286,25 @@ function claudeSessionBase(session: SerializableSessionConfig): Pick<
   };
 }
 
+/** Tool output larger than this is summarised before it crosses to the main thread. */
+const MAX_RELAYED_RESULT_CHARS = 4000;
+
+/** Keep big tool results (file dumps, base64 images) out of the per-event IPC. */
+function compactForRelay(event: StreamEvent): StreamEvent {
+  if (event.type !== 'tool-result') return event;
+  const text = typeof event.result === 'string' ? event.result : JSON.stringify(event.result ?? null);
+  if (!text || text.length <= MAX_RELAYED_RESULT_CHARS) return event;
+  return { ...event, result: `${text.slice(0, MAX_RELAYED_RESULT_CHARS)}… [${text.length - MAX_RELAYED_RESULT_CHARS} more characters]` };
+}
+
 /** Event sink: task_logs.json + live relay to the main thread. */
 function relayEvents(phase: Phase) {
   return (event: StreamEvent) => {
-    if (logWriter) {
-      logWriter.processEvent(event, phase);
-    }
+    logWriter?.processEvent(event, phase);
     postMessage({
       type: 'stream-event',
       taskId: config.taskId,
-      data: event,
+      data: compactForRelay(event),
       projectId: config.projectId,
     });
   };
