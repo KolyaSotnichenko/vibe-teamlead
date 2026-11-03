@@ -512,7 +512,7 @@ export interface ElectronAPI {
     options?: { draft?: boolean; prerelease?: boolean }
   ) => Promise<IPCResult<{ url: string }>>;
 
-  // GitHub OAuth operations (gh CLI)
+  // GitHub sign-in (GitHub App device flow)
   checkGitHubCli: () => Promise<IPCResult<{ installed: boolean; version?: string }>>;
   checkGitHubAuth: () => Promise<IPCResult<{ authenticated: boolean; username?: string }>>;
   startGitHubAuth: () => Promise<IPCResult<{
@@ -523,11 +523,13 @@ export interface ElectronAPI {
     browserOpened?: boolean;
     fallbackUrl?: string;
   }>>;
+  cancelGitHubAuth: () => Promise<IPCResult>;
+  signOutGitHub: () => Promise<IPCResult>;
   getGitHubToken: () => Promise<IPCResult<{ token: string }>>;
   getGitHubUser: () => Promise<IPCResult<{ username: string; name?: string }>>;
   listGitHubUserRepos: () => Promise<IPCResult<{ repos: Array<{ fullName: string; description: string | null; isPrivate: boolean }> }>>;
   detectGitHubRepo: (projectPath: string) => Promise<IPCResult<string>>;
-  getGitHubBranches: (repo: string, token: string) => Promise<IPCResult<string[]>>;
+  getGitHubBranches: (repo: string) => Promise<IPCResult<string[]>>;
   createGitHubRepo: (
     repoName: string,
     options: { description?: string; isPrivate?: boolean; projectPath: string; owner?: string }

@@ -235,5 +235,22 @@
     "step3": "Click \"Re-authenticate\" on your profile",
     "gotIt": "Got It",
     "goToSettings": "Go to Settings"
+  },
+  "githubSignIn": {
+    "title": "Sign in to GitHub",
+    "body": "Vibe Teamlead signs in with its own GitHub App. You choose which repositories it can use, and the access expires on its own; nothing to install.",
+    "start": "Sign in with GitHub",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "checking": "Checking GitHub sign-in…",
+    "signedIn": "Signed in to GitHub",
+    "requesting": "Getting a sign-in code from GitHub…",
+    "enterCode": "GitHub opened in your browser. Enter this code there:",
+    "openAndEnterCode": "Open GitHub and enter this code:",
+    "copy": "Copy code",
+    "copied": "Copied",
+    "openGitHub": "Open GitHub",
+    "waiting": "Waiting for you to approve on GitHub…",
+    "failed": "GitHub sign-in failed"
   }
 }

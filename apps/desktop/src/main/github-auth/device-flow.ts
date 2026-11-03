@@ -47,11 +47,17 @@ export class DeviceFlowError extends Error {
   }
 }
 
-async function postForm(fetchImpl: FetchLike, url: string, body: Record<string, string>): Promise<Record<string, unknown>> {
+async function postForm(
+  fetchImpl: FetchLike,
+  url: string,
+  body: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
   const response = await fetchImpl(url, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(body).toString(),
+    signal,
   });
   if (!response.ok) {
     throw new DeviceFlowError('bad_response', `GitHub returned HTTP ${response.status}`);
@@ -90,15 +96,15 @@ export async function requestDeviceCode(fetchImpl: FetchLike = fetch): Promise<D
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(new DeviceFlowError('aborted', 'Sign-in cancelled'));
-      },
-      { once: true },
-    );
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DeviceFlowError('aborted', 'Sign-in cancelled'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 
 /**
@@ -116,11 +122,23 @@ export async function pollForToken(
   while (now() < deadline) {
     if (signal?.aborted) throw new DeviceFlowError('aborted', 'Sign-in cancelled');
     await sleep(intervalMs, signal);
-    const data = await postForm(fetchImpl, TOKEN_URL, {
-      client_id: GITHUB_APP.clientId,
-      device_code: code.deviceCode,
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-    });
+    let data: Record<string, unknown>;
+    try {
+      data = await postForm(
+        fetchImpl,
+        TOKEN_URL,
+        {
+          client_id: GITHUB_APP.clientId,
+          device_code: code.deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        },
+        signal,
+      );
+    } catch (error) {
+      if (signal?.aborted) throw new DeviceFlowError('aborted', 'Sign-in cancelled');
+      throw error;
+    }
+    if (signal?.aborted) throw new DeviceFlowError('aborted', 'Sign-in cancelled');
     if (typeof data.access_token === 'string') return toTokens(data, now());
     switch (data.error) {
       case 'authorization_pending':

@@ -4,6 +4,7 @@
 // which is only available in CommonJS. Without this, node-pty native module
 // loading fails with "ReferenceError: require is not defined".
 import Module, { createRequire } from 'module';
+import { initGitHubAuth } from './github-auth/token-store';
 const require = createRequire(import.meta.url);
 // Make require globally available for Sentry's require-in-the-middle hooks
 globalThis.require = require;
@@ -406,7 +407,10 @@ if (isWindows()) {
 // Initialize the application
 app.whenReady().then(() => {
   // Set app user model id for Windows
-  electronApp.setAppUserModelId('com.aperant.app');
+  electronApp.setAppUserModelId('com.vibeteamlead.app');
+
+  // GitHub App token: subprocess token provider + refresh schedule
+  initGitHubAuth();
 
   // Clear cache on Windows to prevent permission errors from stale cache
   if (isWindows()) {

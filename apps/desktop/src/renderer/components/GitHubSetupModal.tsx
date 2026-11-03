@@ -208,7 +208,7 @@ export function GitHubSetupModal({
 
     try {
       // Get branches from GitHub API
-      const result = await window.electronAPI.getGitHubBranches(repo, githubToken!);
+      const result = await window.electronAPI.getGitHubBranches(repo);
       if (result.success && result.data) {
         setBranches(result.data);
 

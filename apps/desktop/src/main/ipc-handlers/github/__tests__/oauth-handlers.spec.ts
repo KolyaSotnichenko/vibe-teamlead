@@ -16,6 +16,7 @@ vi.mock('../../../github-auth/token-store', () => ({
   getStoredAccessTokenSync: vi.fn(() => null),
   loadGitHubAuth: vi.fn(() => null),
   saveGitHubAuth: vi.fn(),
+  clearGitHubAuth: vi.fn(),
 }));
 
 vi.mock('../../../github-auth/device-flow', () => ({
@@ -178,12 +179,9 @@ describe('GitHub OAuth Handlers', () => {
       // Mock findExecutable to return gh path
       mockFindExecutable.mockReturnValue('/usr/local/bin/gh');
 
-      // Mock execFileSync for version check
-      mockExecFileSync.mockImplementation((_cmd: string, args?: string[]) => {
-        if (args && args[0] === '--version') {
-          return 'gh version 2.65.0 (2024-01-15)\n';
-        }
-        return '';
+      // Version check runs asynchronously (execFile)
+      mockExecFile.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: (e: Error | null, r?: unknown) => void) => {
+        cb(null, { stdout: args[0] === '--version' ? 'gh version 2.65.0 (2024-01-15)\n' : '', stderr: '' });
       });
 
       const { registerCheckGhCli } = await import('../oauth-handlers');
@@ -232,16 +230,24 @@ describe('GitHub OAuth Handlers', () => {
     });
 
     it('should accept valid repository format', async () => {
-      mockExecFileSync.mockReturnValue('main\nfeature-branch\n');
+      const tokenStore = await import('../../../github-auth/token-store');
+      vi.mocked(tokenStore.getValidAccessToken).mockResolvedValueOnce('ghu_test');
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => [{ name: 'main' }, { name: 'feature-branch' }],
+      }));
+      vi.stubGlobal('fetch', fetchMock);
 
       const { registerGetGitHubBranches } = await import('../oauth-handlers');
       registerGetGitHubBranches();
 
-      const result = await ipcMain.invokeHandler(
-        'github:getBranches',
-        {},
-        'valid-owner/valid-repo',
-        'token'
+      const result = await ipcMain.invokeHandler('github:getBranches', {}, 'valid-owner/valid-repo');
+      vi.unstubAllGlobals();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.github.com/repos/valid-owner/valid-repo/branches?per_page=100',
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer ghu_test' }) }),
       );
 
       expect(result).toHaveProperty('success', true);

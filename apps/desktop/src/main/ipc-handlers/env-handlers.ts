@@ -63,8 +63,14 @@ export function registerEnvHandlers(
     if (config.linearRealtimeSync !== undefined) {
       existingVars['LINEAR_REALTIME_SYNC'] = config.linearRealtimeSync ? 'true' : 'false';
     }
-    // GitHub Integration
-    if (config.githubToken !== undefined) {
+    // GitHub Integration. With the GitHub App sign-in the token is short-lived and
+    // lives in the app's encrypted store; only a personal access token goes in .env.
+    if (config.githubAuthMethod !== undefined) {
+      existingVars['GITHUB_AUTH_METHOD'] = config.githubAuthMethod;
+    }
+    if (config.githubAuthMethod === 'oauth') {
+      delete existingVars['GITHUB_TOKEN'];
+    } else if (config.githubToken !== undefined) {
       existingVars['GITHUB_TOKEN'] = config.githubToken;
     }
     if (config.githubRepo !== undefined) {
@@ -200,6 +206,7 @@ ${existingVars['LINEAR_REALTIME_SYNC'] !== undefined ? `LINEAR_REALTIME_SYNC=${e
 # =============================================================================
 # GITHUB INTEGRATION (OPTIONAL)
 # =============================================================================
+${existingVars['GITHUB_AUTH_METHOD'] ? `GITHUB_AUTH_METHOD=${existingVars['GITHUB_AUTH_METHOD']}` : '# GITHUB_AUTH_METHOD=oauth'}
 ${existingVars['GITHUB_TOKEN'] ? `GITHUB_TOKEN=${existingVars['GITHUB_TOKEN']}` : '# GITHUB_TOKEN='}
 ${existingVars['GITHUB_REPO'] ? `GITHUB_REPO=${existingVars['GITHUB_REPO']}` : '# GITHUB_REPO=owner/repo'}
 ${existingVars['GITHUB_AUTO_SYNC'] !== undefined ? `GITHUB_AUTO_SYNC=${existingVars['GITHUB_AUTO_SYNC']}` : '# GITHUB_AUTO_SYNC=false'}
@@ -359,9 +366,14 @@ ${existingVars['GRAPHITI_DB_PATH'] ? `GRAPHITI_DB_PATH=${existingVars['GRAPHITI_
       }
 
       // GitHub config
-      if (vars['GITHUB_TOKEN']) {
+      if (vars['GITHUB_AUTH_METHOD'] === 'oauth' || vars['GITHUB_AUTH_METHOD'] === 'pat') {
+        config.githubAuthMethod = vars['GITHUB_AUTH_METHOD'];
+      }
+      if (vars['GITHUB_TOKEN'] && config.githubAuthMethod !== 'oauth') {
         config.githubEnabled = true;
         config.githubToken = vars['GITHUB_TOKEN'];
+      } else if (config.githubAuthMethod === 'oauth' && vars['GITHUB_REPO']) {
+        config.githubEnabled = true;
       }
       if (vars['GITHUB_REPO']) {
         config.githubRepo = vars['GITHUB_REPO'];

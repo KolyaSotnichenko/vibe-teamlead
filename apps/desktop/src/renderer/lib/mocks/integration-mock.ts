@@ -119,6 +119,10 @@ export const integrationMock = {
     error: 'Not available in browser mock'
   }),
 
+  cancelGitHubAuth: async () => ({ success: true }),
+
+  signOutGitHub: async () => ({ success: true }),
+
   getGitHubToken: async () => ({
     success: false,
     error: 'Not available in browser mock'

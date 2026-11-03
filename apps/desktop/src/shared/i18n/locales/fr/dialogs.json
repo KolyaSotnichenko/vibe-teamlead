@@ -235,5 +235,22 @@
     "step3": "Cliquez sur « Réauthentifier » sur votre profil",
     "gotIt": "Compris",
     "goToSettings": "Aller aux paramètres"
+  },
+  "githubSignIn": {
+    "title": "Se connecter à GitHub",
+    "body": "Vibe Teamlead se connecte avec sa propre application GitHub. Vous choisissez les dépôts auxquels elle a accès, et l'accès expire de lui-même ; rien à installer.",
+    "start": "Se connecter avec GitHub",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "checking": "Vérification de la connexion GitHub…",
+    "signedIn": "Connecté à GitHub",
+    "requesting": "Obtention d'un code de connexion auprès de GitHub…",
+    "enterCode": "GitHub s'est ouvert dans votre navigateur. Saisissez-y ce code :",
+    "openAndEnterCode": "Ouvrez GitHub et saisissez ce code :",
+    "copy": "Copier le code",
+    "copied": "Copié",
+    "openGitHub": "Ouvrir GitHub",
+    "waiting": "En attente de votre approbation sur GitHub…",
+    "failed": "La connexion à GitHub a échoué"
   }
 }

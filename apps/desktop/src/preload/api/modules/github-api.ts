@@ -178,10 +178,12 @@ export interface GitHubAPI {
   /** AI-powered version suggestion based on commits since last release */
   suggestReleaseVersion: (projectId: string) => Promise<IPCResult<VersionSuggestion>>;
 
-  // OAuth operations (gh CLI)
+  // GitHub sign-in (GitHub App device flow)
   checkGitHubCli: () => Promise<IPCResult<{ installed: boolean; version?: string }>>;
   checkGitHubAuth: () => Promise<IPCResult<{ authenticated: boolean; username?: string }>>;
   startGitHubAuth: () => Promise<IPCResult<{ success: boolean; message?: string }>>;
+  cancelGitHubAuth: () => Promise<IPCResult>;
+  signOutGitHub: () => Promise<IPCResult>;
   getGitHubToken: () => Promise<IPCResult<{ token: string }>>;
   getGitHubUser: () => Promise<IPCResult<{ username: string; name?: string }>>;
   listGitHubUserRepos: () => Promise<IPCResult<{ repos: Array<{ fullName: string; description: string | null; isPrivate: boolean }> }>>;
@@ -198,7 +200,7 @@ export interface GitHubAPI {
 
   // Repository detection and management
   detectGitHubRepo: (projectPath: string) => Promise<IPCResult<string>>;
-  getGitHubBranches: (repo: string, token: string) => Promise<IPCResult<string[]>>;
+  getGitHubBranches: (repo: string) => Promise<IPCResult<string[]>>;
   createGitHubRepo: (
     repoName: string,
     options: { description?: string; isPrivate?: boolean; projectPath: string; owner?: string }
@@ -571,9 +573,13 @@ export const createGitHubAPI = (): GitHubAPI => ({
   suggestReleaseVersion: (projectId: string): Promise<IPCResult<VersionSuggestion>> =>
     invokeIpc(IPC_CHANNELS.RELEASE_SUGGEST_VERSION, projectId),
 
-  // OAuth operations (gh CLI)
+  // GitHub sign-in (GitHub App device flow)
   checkGitHubCli: (): Promise<IPCResult<{ installed: boolean; version?: string }>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_CHECK_CLI),
+
+  cancelGitHubAuth: (): Promise<IPCResult> => invokeIpc(IPC_CHANNELS.GITHUB_CANCEL_AUTH),
+
+  signOutGitHub: (): Promise<IPCResult> => invokeIpc(IPC_CHANNELS.GITHUB_SIGN_OUT),
 
   checkGitHubAuth: (): Promise<IPCResult<{ authenticated: boolean; username?: string }>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_CHECK_AUTH),
@@ -606,8 +612,8 @@ export const createGitHubAPI = (): GitHubAPI => ({
   detectGitHubRepo: (projectPath: string): Promise<IPCResult<string>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_DETECT_REPO, projectPath),
 
-  getGitHubBranches: (repo: string, token: string): Promise<IPCResult<string[]>> =>
-    invokeIpc(IPC_CHANNELS.GITHUB_GET_BRANCHES, repo, token),
+  getGitHubBranches: (repo: string): Promise<IPCResult<string[]>> =>
+    invokeIpc(IPC_CHANNELS.GITHUB_GET_BRANCHES, repo),
 
   createGitHubRepo: (
     repoName: string,

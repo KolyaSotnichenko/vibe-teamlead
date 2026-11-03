@@ -210,10 +210,13 @@ export function getGitHubConfig(project: Project): GitHubConfig | null {
   try {
     const content = readFileSync(envPath, 'utf-8');
     const vars = parseEnvFile(content);
-    let token: string | undefined = vars['GITHUB_TOKEN'];
     const repo = vars['GITHUB_REPO'];
+    // A personal access token in .env wins; GitHub App tokens (ghu_…) expire and are
+    // never trusted from .env — the live one comes from the app's token store.
+    const envToken = vars['GITHUB_TOKEN'];
+    const usesApp = vars['GITHUB_AUTH_METHOD'] === 'oauth' || envToken?.startsWith('ghu_');
+    let token: string | undefined = usesApp ? undefined : envToken;
 
-    // If no token in .env, try to get it from gh CLI (sync version for sync function)
     if (!token) {
       const ghToken = getTokenFromGhCliSync();
       if (ghToken) {
