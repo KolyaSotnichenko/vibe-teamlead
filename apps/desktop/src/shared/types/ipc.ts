@@ -819,6 +819,7 @@ export interface ElectronAPI {
 
   // Questions agents ask the user
   agentQuestions: import('./agent-questions').AgentQuestionsAPI;
+  brief: import('./brief').BriefAPI;
 }
 
 /** Platform information exposed via contextBridge for platform-specific behavior */

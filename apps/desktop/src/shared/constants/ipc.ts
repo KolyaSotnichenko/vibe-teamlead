@@ -74,6 +74,13 @@ export const IPC_CHANNELS = {
 
   // Task workspace (parsed spec, ACs, plan, timeline, architecture from the spec dir)
   TASK_WORKSPACE_GET: 'task:workspaceGet',
+
+  // Brief import (brief → epics and tasks)
+  BRIEF_PICK_FILE: 'brief:pickFile',
+  BRIEF_ANALYZE: 'brief:analyze',
+  BRIEF_CANCEL: 'brief:cancel',
+  BRIEF_CREATE_TASKS: 'brief:createTasks',
+  BRIEF_PROGRESS: 'brief:progress',  // Event: analyst progress line (main -> renderer)
   TASK_WORKSPACE_GET_IMAGE: 'task:workspaceGetImage',  // A diagram PNG of the spec dir as a data URL
   TASK_WORKSPACE_OPEN_FILE: 'task:workspaceOpenFile',  // Open a .drawio inside the spec dir with the default app
 

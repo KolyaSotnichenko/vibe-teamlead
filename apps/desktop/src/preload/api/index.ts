@@ -14,6 +14,7 @@ import { ClaudeCodeAPI, createClaudeCodeAPI } from './modules/claude-code-api';
 import { McpAPI, createMcpAPI } from './modules/mcp-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { type AgentQuestionsAPI, createAgentQuestionsAPI } from './agent-questions-api';
+import { type BriefAPI, createBriefAPI } from './brief-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -33,6 +34,8 @@ export interface ElectronAPI extends
   github: GitHubAPI;
   /** Questions agents ask the user */
   agentQuestions: AgentQuestionsAPI;
+  /** Brief import: brief → epics and tasks */
+  brief: BriefAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -48,7 +51,8 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createMcpAPI(),
   ...createScreenshotAPI(),
   github: createGitHubAPI(),
-  agentQuestions: createAgentQuestionsAPI()
+  agentQuestions: createAgentQuestionsAPI(),
+  brief: createBriefAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts

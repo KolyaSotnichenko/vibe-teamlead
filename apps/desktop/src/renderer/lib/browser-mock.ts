@@ -6,6 +6,7 @@
  * for better code organization and maintainability.
  */
 
+import { briefMock } from './mocks/brief-mock';
 import type { ElectronAPI } from '../../shared/types';
 import {
   projectMock,
@@ -204,6 +205,9 @@ const browserMockAPI: ElectronAPI = {
     getPollingMetadata: async () => null,
     onPRStatusUpdate: () => () => {}
   },
+
+  // Brief import
+  brief: briefMock,
 
   // Agent questions (browser preview: one sample question)
   agentQuestions: {
