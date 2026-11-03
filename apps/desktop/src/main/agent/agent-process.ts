@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { addPendingQuestion, dropTaskQuestions } from './agent-questions';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
@@ -10,7 +11,7 @@ const __dirname = path.dirname(__filename);
 import { EventEmitter } from 'events';
 import { AgentState } from './agent-state';
 import { AgentEvents } from './agent-events';
-import { ProcessType, ExecutionProgressData } from './types';
+import { ProcessType, ExecutionProgressData, type AgentQuestionRequest } from './types';
 import type { AgentExecutorConfig } from '../ai/agent/types';
 import { WorkerBridge } from '../ai/agent/worker-bridge';
 import type { CompletablePhase } from '../../shared/constants/phase-protocol';
@@ -884,8 +885,16 @@ export class AgentProcessManager {
       this.emitter.emit('task-event', tId, event, pId);
     });
 
+    bridge.on('agent-question', (tId: string, request: AgentQuestionRequest, pId?: string) => {
+      addPendingQuestion({ ...request, taskId: tId, projectId: pId, askedAt: Date.now() }, bridge);
+      this.emitter.emit('agent-question', tId, request, pId);
+    });
+
     bridge.on('exit', (tId: string, code: number | null, pType: ProcessType, pId?: string) => {
       this.state.deleteProcess(tId);
+      for (const question of dropTaskQuestions(tId)) {
+        this.emitter.emit('agent-question-resolved', tId, question.questionId, pId);
+      }
 
       if (this.state.wasSpawnKilled(spawnId)) {
         this.state.clearKilledSpawn(spawnId);

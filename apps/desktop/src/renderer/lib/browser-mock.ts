@@ -321,6 +321,43 @@ const browserMockAPI: ElectronAPI = {
     onPRStatusUpdate: () => () => {}
   },
 
+  // Agent questions (browser preview: one sample question)
+  agentQuestions: {
+    getPending: async () => [
+      {
+        questionId: 'mock-q1',
+        taskId: 'task-1',
+        projectId: 'mock-project-1',
+        agentType: 'spec_gatherer',
+        askedAt: Date.now() - 60_000,
+        questions: [
+          {
+            question: 'Which sign-in methods should the first version support?',
+            header: 'Auth',
+            multiSelect: true,
+            options: [
+              { label: 'Email + password', description: 'Classic form with password reset' },
+              { label: 'GitHub OAuth', description: 'One click for developers' },
+              { label: 'Magic link', description: 'Passwordless email link' },
+            ],
+          },
+          {
+            question: 'Where should sessions be stored?',
+            header: 'Sessions',
+            multiSelect: false,
+            options: [
+              { label: 'JWT (stateless)', description: 'Recommended: no server-side session store' },
+              { label: 'Server sessions', description: 'Redis-backed, easy to revoke' },
+            ],
+          },
+        ],
+      },
+    ],
+    answer: async () => ({ success: true }),
+    onAsked: () => () => {},
+    onResolved: () => () => {},
+  },
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),

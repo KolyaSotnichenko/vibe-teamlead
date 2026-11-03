@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { selectTaskQuestion, useAgentQuestionsStore } from '../stores/agent-questions-store';
 import { useTranslation } from 'react-i18next';
 import { Play, Square, Clock, Zap, Target, Shield, Gauge, Palette, FileCode, Bug, Wrench, Loader2, AlertTriangle, RotateCcw, Archive, GitPullRequest, MoreVertical } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
@@ -134,6 +135,8 @@ export const TaskCard = memo(function TaskCard({
   onToggleSelect
 }: TaskCardProps) {
   const { t } = useTranslation(['tasks', 'errors']);
+  const pendingQuestion = useAgentQuestionsStore(selectTaskQuestion(task.id));
+  const openQuestion = useAgentQuestionsStore((s) => s.open);
   const { toast } = useToast();
   const [isStuck, setIsStuck] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -361,6 +364,21 @@ export const TaskCard = memo(function TaskCard({
             >
               {displayTitle}
             </h3>
+
+            {/* An agent of this task is waiting for the user's answer */}
+            {pendingQuestion && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openQuestion(pendingQuestion.questionId);
+                }}
+                className="mt-2 inline-flex min-h-7 items-center gap-1.5 bg-[var(--vt-signal-text)] px-2 text-[11px] font-medium uppercase tracking-wide text-[var(--vt-paper)]"
+              >
+                <span aria-hidden className="h-2 w-2 bg-[var(--vt-paper)] animate-pulse-subtle" />
+                {t('agentQuestions.waiting')} · {t('agentQuestions.openQuestion')}
+              </button>
+            )}
 
         {/* Description - sanitized to handle markdown content (memoized) */}
         {sanitizedDescription && (

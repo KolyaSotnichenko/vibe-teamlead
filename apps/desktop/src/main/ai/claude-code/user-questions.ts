@@ -13,21 +13,9 @@
 
 import type { HookCallbackMatcher, HookJSONOutput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 
-export interface AgentQuestionOption {
-  label: string;
-  description: string;
-  preview?: string;
-}
+import type { AgentAnswers, AgentQuestion } from '../../../shared/types/agent-questions';
 
-export interface AgentQuestion {
-  question: string;
-  header: string;
-  options: AgentQuestionOption[];
-  multiSelect: boolean;
-}
-
-/** Answers keyed by question text; multi-select answers are comma-separated labels or free text. */
-export type AgentAnswers = Record<string, string>;
+export type { AgentAnswers, AgentQuestion, AgentQuestionOption } from '../../../shared/types/agent-questions';
 
 /**
  * Ask the user. Resolve with answers, or `null` if the user dismissed the

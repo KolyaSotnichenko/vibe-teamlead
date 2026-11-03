@@ -1,4 +1,4 @@
-import type { BrowserWindow } from "electron";
+import { app, ipcMain, type BrowserWindow } from "electron";
 import path from "path";
 import { existsSync, readFileSync } from "fs";
 import { safeParseJson } from "../utils/json-repair";
@@ -20,6 +20,9 @@ import { findTaskAndProject } from "./task/shared";
 import { safeSendToRenderer } from "./utils";
 import { getClaudeProfileManager } from "../claude-profile-manager";
 import { taskStateManager } from "../task-state-manager";
+import { answerPendingQuestion, listPendingQuestions } from "../agent/agent-questions";
+import { isMacOS } from "../platform";
+import type { AgentAnswers } from "../../shared/types/agent-questions";
 
 // Timeout for fallback safety net to check if task is still stuck after process exit
 const STUCK_TASK_FALLBACK_TIMEOUT_MS = 500;
@@ -246,6 +249,39 @@ export function registerAgenteventsHandlers(
       notificationService.notifyTaskFailed(taskTitle, project.id, taskId);
     }
   });
+
+  // Agent questions: show in the UI, notify, badge the dock; answers go back to the agent.
+  const updateQuestionBadge = () => {
+    const count = listPendingQuestions().length;
+    if (isMacOS()) app.dock?.setBadge(count > 0 ? String(count) : "");
+  };
+
+  agentManager.on("agent-question", (taskId: string, _request, projectId?: string) => {
+    const question = listPendingQuestions().find((q) => q.taskId === taskId && q.questionId === _request.questionId);
+    if (!question) return;
+    safeSendToRenderer(getMainWindow, IPC_CHANNELS.AGENT_QUESTION_ASKED, question);
+    updateQuestionBadge();
+    const { task } = findTaskAndProject(taskId, projectId);
+    notificationService.notifyAgentQuestion(task?.title || task?.specId || taskId, question.questions[0]?.question ?? "", projectId, taskId);
+  });
+
+  agentManager.on("agent-question-resolved", (taskId: string, questionId: string) => {
+    safeSendToRenderer(getMainWindow, IPC_CHANNELS.AGENT_QUESTION_RESOLVED, questionId, taskId);
+    updateQuestionBadge();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AGENT_QUESTION_PENDING, () => listPendingQuestions());
+
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_QUESTION_ANSWER,
+    (_event, questionId: string, answers: AgentAnswers | null) => {
+      const question = answerPendingQuestion(questionId, answers);
+      if (!question) return { success: false, error: "This question is no longer waiting for an answer." };
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.AGENT_QUESTION_RESOLVED, questionId, question.taskId);
+      updateQuestionBadge();
+      return { success: true };
+    }
+  );
 
   agentManager.on("task-event", (taskId: string, event, projectId?: string) => {
     console.debug(`[agent-events-handlers] Received task-event for ${taskId}:`, event.type, event);

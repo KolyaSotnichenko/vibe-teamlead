@@ -353,5 +353,28 @@
   "referenceImages": {
     "title": "Reference Images (optional)",
     "description": "Add visual references like screenshots or designs to help the AI understand your requirements."
+  },
+  "agentQuestions": {
+    "title": "{{role}} is asking",
+    "intro": "The agent is paused until you answer. Pick an option or write your own; skipping lets it decide and note the assumption.",
+    "chooseSeveral": "Choose one or more",
+    "other": "Other",
+    "otherPlaceholder": "Your own answer…",
+    "skip": "Skip — let the agent decide",
+    "send": "Send answers",
+    "sending": "Sending…",
+    "hide": "Hide",
+    "previous": "Previous question",
+    "next": "Next question",
+    "waiting": "Waiting for you",
+    "openQuestion": "Answer",
+    "roles": {
+      "spec": "Spec writer",
+      "planner": "Planner",
+      "coder": "Coder",
+      "qa": "QA reviewer",
+      "qaFixer": "QA fixer",
+      "agent": "Agent"
+    }
   }
 }

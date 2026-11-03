@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { AgentQuestionPanel } from './components/agent-questions/AgentQuestionPanel';
+import { initAgentQuestions } from './stores/agent-questions-store';
 import { useTranslation } from 'react-i18next';
 import { Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { debugLog } from '../shared/utils/debug-logger';
@@ -190,10 +192,13 @@ export function App() {
     initializeGitHubListeners();
     // Initialize global download progress listener for Ollama model downloads
     const cleanupDownloadListener = initDownloadProgressListener();
+    // Questions agents ask the user
+    const cleanupAgentQuestions = initAgentQuestions();
 
     return () => {
       cleanupDownloadListener();
       cleanupGitHubListeners();
+      cleanupAgentQuestions();
     };
   }, []);
 
@@ -1174,6 +1179,9 @@ export function App() {
 
         {/* Global Download Indicator - shows Ollama model download progress */}
         <GlobalDownloadIndicator />
+
+        {/* Questions agents are waiting on */}
+        <AgentQuestionPanel />
 
         {/* Toast notifications */}
         <Toaster />

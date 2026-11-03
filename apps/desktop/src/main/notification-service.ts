@@ -2,7 +2,7 @@ import { Notification, shell } from 'electron';
 import type { BrowserWindow } from 'electron';
 import { projectStore } from './project-store';
 
-export type NotificationType = 'task-complete' | 'task-failed' | 'review-needed';
+export type NotificationType = 'task-complete' | 'task-failed' | 'review-needed' | 'agent-question';
 
 interface NotificationOptions {
   title: string;
@@ -55,6 +55,19 @@ class NotificationService {
     this.sendNotification('review-needed', {
       title: 'Review Needed',
       body: `"${taskTitle}" is ready for your review`,
+      projectId,
+      taskId
+    });
+  }
+
+  /**
+   * An agent is waiting for the user's answer.
+   * Shares the "review needed" switch: both mean "the team is waiting for you".
+   */
+  notifyAgentQuestion(taskTitle: string, question: string, projectId: string | undefined, taskId: string): void {
+    this.sendNotification('agent-question', {
+      title: `Question from the team: ${taskTitle}`,
+      body: question,
       projectId,
       taskId
     });
@@ -153,6 +166,7 @@ class NotificationService {
       case 'task-failed':
         return settings.onTaskFailed;
       case 'review-needed':
+      case 'agent-question':
         return settings.onReviewNeeded;
       default:
         return false;

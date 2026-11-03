@@ -56,6 +56,11 @@ export const IPC_CHANNELS = {
   TASK_PROGRESS: 'task:progress',
   TASK_ERROR: 'task:error',
   TASK_LOG: 'task:log',
+  // Agent questions (Claude Code AskUserQuestion → user → agent)
+  AGENT_QUESTION_ASKED: 'agentQuestion:asked',
+  AGENT_QUESTION_RESOLVED: 'agentQuestion:resolved',
+  AGENT_QUESTION_ANSWER: 'agentQuestion:answer',
+  AGENT_QUESTION_PENDING: 'agentQuestion:pending',
   TASK_STATUS_CHANGE: 'task:statusChange',
   TASK_EXECUTION_PROGRESS: 'task:executionProgress',
 

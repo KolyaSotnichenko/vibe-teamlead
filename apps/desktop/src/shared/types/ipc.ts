@@ -932,6 +932,9 @@ export interface ElectronAPI {
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+
+  // Questions agents ask the user
+  agentQuestions: import('./agent-questions').AgentQuestionsAPI;
 }
 
 /** Platform information exposed via contextBridge for platform-specific behavior */
