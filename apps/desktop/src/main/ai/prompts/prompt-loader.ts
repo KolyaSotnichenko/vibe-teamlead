@@ -42,59 +42,47 @@ const EXPECTED_PROMPT_FILES = [
 let _resolvedPromptsDir: string | null = null;
 
 /**
- * Resolve the prompts directory path.
- *
- * In production (app.isPackaged), prompts are bundled into process.resourcesPath.
- * In dev, they live in apps/desktop/prompts/ relative to the frontend root.
- *
- * The worker thread's __dirname is in out/main/ (or src/main/ in dev),
- * so we traverse upward to find the frontend root.
+ * Use this prompts directory (worker threads get it from the main process,
+ * which can tell a packaged app from a dev run).
+ */
+export function setPromptsDir(dir: string): void {
+  _resolvedPromptsDir = dir;
+}
+
+/**
+ * Resolve the prompts directory (main process).
+ * Packaged: <Resources>/prompts. Dev: <app path>/prompts (apps/desktop/prompts).
+ * Outside Electron (tests, scripts): apps/desktop/prompts relative to this file.
  */
 export function resolvePromptsDir(): string {
   if (_resolvedPromptsDir) return _resolvedPromptsDir;
 
-  // Production: Electron bundles prompts into resources
   try {
-    // Dynamically import electron to avoid issues in worker threads
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { app } = require('electron') as typeof import('electron');
     if (app?.isPackaged) {
-      const prodPath = join(process.resourcesPath, 'prompts');
-      _resolvedPromptsDir = prodPath;
-      return prodPath;
+      _resolvedPromptsDir = join(process.resourcesPath, 'prompts');
+      return _resolvedPromptsDir;
+    }
+    if (app?.getAppPath) {
+      const devPath = join(app.getAppPath(), 'prompts');
+      if (existsSync(join(devPath, 'planner.md'))) {
+        _resolvedPromptsDir = devPath;
+        return devPath;
+      }
     }
   } catch {
-    // Not in Electron main process (e.g., worker thread or test environment)
+    // Not running under Electron
   }
 
-  // Dev: traverse from __dirname up to find apps/desktop/prompts/
-  const candidateBases = [
-    // Worker thread: __dirname = out/main/ai/agent/ → traverse up to frontend root
-    join(__dirname, '..', '..', '..', '..', 'prompts'),
-    // Worker thread in dev: __dirname = src/main/ai/agent/
-    join(__dirname, '..', '..', '..', 'prompts'),
-    // Direct: 2 levels up from src/main/ai/prompts/
-    join(__dirname, '..', '..', 'prompts'),
-    // From out/main/ → ../../prompts
-    join(__dirname, '..', 'prompts'),
-    // Local prompts dir
-    join(__dirname, 'prompts'),
-    // Repo root traversal: up to repo root, then apps/desktop/prompts/
-    join(__dirname, '..', '..', '..', '..', '..', 'apps', 'desktop', 'prompts'),
-    join(__dirname, '..', '..', '..', '..', 'apps', 'desktop', 'prompts'),
+  const candidates = [
+    join(__dirname, '..', '..', '..', '..', 'prompts'), // src/main/ai/prompts → apps/desktop/prompts
+    join(__dirname, '..', '..', 'prompts'), // out/main → apps/desktop/prompts
+    join(process.cwd(), 'prompts'),
+    join(process.cwd(), 'apps', 'desktop', 'prompts'),
   ];
-
-  for (const candidate of candidateBases) {
-    if (existsSync(join(candidate, 'planner.md'))) {
-      _resolvedPromptsDir = candidate;
-      return candidate;
-    }
-  }
-
-  // Fallback to first candidate even if not found — errors will surface on use
-  const fallback = candidateBases[0];
-  _resolvedPromptsDir = fallback;
-  return fallback;
+  _resolvedPromptsDir = candidates.find((c) => existsSync(join(c, 'planner.md'))) ?? candidates[0];
+  return _resolvedPromptsDir;
 }
 
 // =============================================================================

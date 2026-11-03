@@ -30,6 +30,8 @@ export interface WorkerConfig {
   processType: ProcessType;
   /** Serializable session config (model resolved in worker from these params) */
   session: SerializableSessionConfig;
+  /** Agent role prompts directory, resolved in the main process (dev: apps/desktop/prompts, packaged: Resources/prompts) */
+  promptsDir: string;
 }
 
 /**

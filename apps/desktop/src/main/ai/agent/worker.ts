@@ -12,7 +12,7 @@
  */
 
 import { parentPort, workerData } from 'worker_threads';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 
@@ -41,7 +41,16 @@ import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking } from '../config/phase-config';
 import { TaskLogWriter } from '../logging/task-log-writer';
-import { loadProjectInstructions, injectContext } from '../prompts/prompt-loader';
+import {
+  detectProjectCapabilities,
+  getQaToolsSection,
+  injectContext,
+  loadProjectIndex,
+  loadProjectInstructions,
+  setPromptsDir,
+  tryLoadPrompt,
+} from '../prompts/prompt-loader';
+import type { ProjectCapabilities } from '../prompts/types';
 import { runProjectIndexer } from '../project/project-indexer';
 
 // =============================================================================
@@ -53,9 +62,10 @@ if (!parentPort) {
 }
 
 const config = workerData as WorkerConfig;
-if (!config?.taskId || !config?.session) {
+if (!config?.taskId || !config?.session || !config.promptsDir) {
   throw new Error('worker.ts requires valid WorkerConfig via workerData');
 }
+setPromptsDir(config.promptsDir);
 
 // =============================================================================
 // Task Log Writer
@@ -215,43 +225,30 @@ function buildToolContext(session: SerializableSessionConfig, securityProfile: S
 
 
 /**
- * Load a prompt file from the prompts directory.
- * The prompts dir is expected relative to the worker file's location.
- * In dev and production, the worker sits in the main/ output folder.
+ * Load an agent role prompt from the prompts directory the main process
+ * resolved for this worker. A missing prompt is a packaging bug: it is logged
+ * loudly and the caller falls back to a minimal prompt.
  */
-function loadPrompt(promptName: string): string | null {
-  // Try to find the prompts directory relative to common locations
-  const candidateBases: string[] = [
-    // Standard: apps/desktop/prompts/ relative to project root
-    // The worker runs in the Electron main process — __dirname is in out/main/
-    // We need to traverse up to find apps/desktop/prompts/
-    join(__dirname, '..', '..', 'prompts'),
-    join(__dirname, '..', '..', '..', 'apps', 'desktop', 'prompts'),
-    join(__dirname, '..', '..', '..', '..', 'apps', 'desktop', 'prompts'),
-    join(__dirname, 'prompts'),
-  ];
-
-  for (const base of candidateBases) {
-    const promptPath = join(base, `${promptName}.md`);
-    try {
-      if (existsSync(promptPath)) {
-        return readFileSync(promptPath, 'utf-8');
-      }
-    } catch {
-      // Try next
-    }
+function loadRolePrompt(promptName: string): string | null {
+  const prompt = tryLoadPrompt(promptName);
+  if (prompt === null) {
+    postLog(`ERROR: prompt "${promptName}" not found in ${config.promptsDir}; using a minimal fallback prompt`);
   }
-  return null;
+  return prompt;
 }
-
-// =============================================================================
-// MCP Clients (module-scope for worker lifetime)
-// =============================================================================
 
 
 // =============================================================================
 // Claude Code session plumbing
 // =============================================================================
+
+let cachedCapabilities: ProjectCapabilities | undefined;
+
+/** What kind of app the project is (web frontend, Electron, …), from its project index. */
+function projectCapabilities(session: SerializableSessionConfig): ProjectCapabilities {
+  cachedCapabilities ??= detectProjectCapabilities(loadProjectIndex(session.projectDir));
+  return cachedCapabilities;
+}
 
 /** Fields every Claude Code session shares, derived from the worker config. */
 function claudeSessionBase(session: SerializableSessionConfig): Pick<
@@ -267,7 +264,7 @@ function claudeSessionBase(session: SerializableSessionConfig): Pick<
       linearEnabled: session.mcpOptions?.linearEnabled ?? false,
       electronMcpEnabled: session.mcpOptions?.electronMcpEnabled ?? false,
       browserMcpEnabled: session.mcpOptions?.browserMcpEnabled ?? true,
-      projectCapabilities: session.mcpOptions?.projectCapabilities,
+      projectCapabilities: session.mcpOptions?.projectCapabilities ?? projectCapabilities(session),
       agentMcpAdd: session.mcpOptions?.agentMcpAdd,
       agentMcpRemove: session.mcpOptions?.agentMcpRemove,
     },
@@ -296,25 +293,23 @@ function relayEvents(phase: Phase) {
 // =============================================================================
 
 let cachedProjectInstructions: string | null | undefined;
-let cachedProjectInstructionsSource: string | null = null;
 
 /**
- * Assemble a full system prompt by loading the base prompt and injecting
- * project instructions (AGENTS.md or CLAUDE.md fallback). Provider-agnostic —
- * injected for ALL AI providers, not just Anthropic.
+ * Assemble a full system prompt: the role prompt plus spec location and the
+ * project's instructions (AGENTS.md, or CLAUDE.md as a fallback).
  */
 async function assemblePrompt(
   promptName: string,
   session: SerializableSessionConfig,
 ): Promise<string> {
-  const basePrompt = loadPrompt(promptName)
+  const basePrompt = loadRolePrompt(promptName)
     ?? buildFallbackPrompt(promptName as AgentType, session.specDir, session.projectDir);
 
-  // Load project instructions once per worker lifetime
+  // Load project instructions once per worker lifetime. CLAUDE.md is loaded by
+  // Claude Code itself (settingSources: project), so only AGENTS.md is injected.
   if (cachedProjectInstructions === undefined) {
     const result = await loadProjectInstructions(session.projectDir);
-    cachedProjectInstructions = result?.content ?? null;
-    cachedProjectInstructionsSource = result?.source ?? null;
+    cachedProjectInstructions = result && !/^claude\.md$/i.test(result.source) ? result.content : null;
     if (result) {
       postLog(`Project instructions loaded from ${result.source} (${(result.content.length / 1024).toFixed(1)}KB)`);
     } else {
@@ -322,7 +317,11 @@ async function assemblePrompt(
     }
   }
 
-  return injectContext(basePrompt, {
+  // QA agents get the validation guide for this kind of app (browser, Electron, API, DB).
+  const qaTools =
+    promptName === 'qa_reviewer' || promptName === 'qa_fixer' ? getQaToolsSection(projectCapabilities(session)) : '';
+
+  return injectContext(qaTools ? `${basePrompt}\n\n${qaTools}` : basePrompt, {
     specDir: session.specDir,
     projectDir: session.projectDir,
     projectInstructions: cachedProjectInstructions,

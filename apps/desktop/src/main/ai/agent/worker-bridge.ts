@@ -29,6 +29,7 @@ import { ProgressTracker } from '../session/progress-tracker';
 import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import { readStrixSettings } from '../security/strix-setting';
+import { resolvePromptsDir } from '../prompts/prompt-loader';
 import type { AgentAnswers } from '../claude-code/user-questions';
 
 // ESM-compatible __dirname
@@ -106,6 +107,7 @@ export class WorkerBridge extends EventEmitter {
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
         securityQa: config.session.securityQa ?? readStrixSettings(),
       },
+      promptsDir: resolvePromptsDir(),
     };
 
     const workerPath = resolveWorkerPath();
