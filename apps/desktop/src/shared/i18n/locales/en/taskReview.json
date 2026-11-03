@@ -140,7 +140,8 @@
       "worktreeDeletedButStatusFailed": "Worktree deleted but failed to update task status: {{error}}",
       "failedToMarkAsDone": "Failed to mark as done",
       "failedToResetStagedState": "Failed to reset staged state"
-    }
+    },
+    "and": "and"
   },
   "bulkPR": {
     "title": "Create Pull Requests",
@@ -158,5 +159,79 @@
     "alreadyExisted": "already existed",
     "noWorktree": "No worktree found for this task",
     "resultsDescriptionWithSkipped": "{{success}} succeeded, {{skipped}} skipped, {{failed}} failed"
+  },
+  "conflicts": {
+    "title": "Merge Conflicts Preview",
+    "detected_one": "{{count}} potential conflict detected.",
+    "detected_other": "{{count}} potential conflicts detected.",
+    "canAutoMerge_one": "{{count}} can be auto-merged.",
+    "canAutoMerge_other": "{{count}} can be auto-merged.",
+    "severity": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high",
+      "critical": "critical"
+    },
+    "autoMergeBadge": "auto-merge",
+    "location": "Location:",
+    "reason": "Reason:",
+    "strategy": "Strategy:",
+    "none": "No conflicts detected"
+  },
+  "discard": {
+    "title": "Discard Build",
+    "confirmMessage": "Are you sure you want to discard all changes for",
+    "warning": "This will permanently delete the isolated workspace and all uncommitted changes. The task will be moved back to Planning status.",
+    "filesChanged": "Files changed:",
+    "lines": "Lines:",
+    "discarding": "Discarding..."
+  },
+  "diff": {
+    "title": "Changed Files",
+    "noChanges": "No changes found",
+    "noFiles": "No changed files found",
+    "status": {
+      "added": "added",
+      "modified": "modified",
+      "deleted": "deleted",
+      "renamed": "renamed"
+    }
+  },
+  "mergePreview": {
+    "branchDivergedTitle": "Branch Diverged - AI Will Resolve",
+    "noConflicts": "No Conflicts Detected",
+    "conflictsFound_one": "{{count}} Conflict Found",
+    "conflictsFound_other": "{{count}} Conflicts Found",
+    "viewDetails": "View Details",
+    "branchDiverged": "Branch has diverged - AI will resolve",
+    "aiWillMergeHint": "AI will automatically merge these conflicts when you click Stage Changes.",
+    "filesToMerge": "Files to merge: {{count}}",
+    "aiWillResolve": "AI will resolve conflicts",
+    "autoMergeable": "Auto-mergeable: {{count}}",
+    "aiResolved": "AI resolved: {{count}}",
+    "manualReview": "Manual review: {{count}}"
+  },
+  "workspace": {
+    "humanReviewRequired": "Human Review Required",
+    "humanReviewRequiredBody": "Human review required prior to coding. Review your spec.md for any necessary changes.",
+    "noWorkspaceTitle": "No Workspace Found",
+    "noWorkspaceBody": "No isolated workspace was found for this task. The changes may have been made directly in your project.",
+    "updating": "Updating...",
+    "proceedToCoding": "Proceed to Coding",
+    "stagedTitle": "Changes Staged in Project",
+    "stagedBody": "This task's changes have been staged in your main project.",
+    "stagedBodyWithDate": "This task's changes have been staged in your main project on {{date}}."
+  },
+  "workspaceStatus": {
+    "buildReady": "Build Ready for Review",
+    "view": "View",
+    "commitsLabel_one": "commit",
+    "commitsLabel_other": "commits",
+    "openIn": "Open in {{app}}",
+    "uncommittedChanges_one": "{{count}} uncommitted change in main project",
+    "uncommittedChanges_other": "{{count}} uncommitted changes in main project",
+    "uncommittedHint": "Commit or stash them in your terminal before staging to avoid conflicts.",
+    "checkingConflicts": "Checking for conflicts...",
+    "checkConflicts": "Check for Conflicts"
   }
 }

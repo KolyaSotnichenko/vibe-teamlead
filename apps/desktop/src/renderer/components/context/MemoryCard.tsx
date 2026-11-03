@@ -118,11 +118,12 @@ function ListItem({
 }
 
 function ConfidenceBar({ confidence }: { confidence: number }) {
+  const { t } = useTranslation('common');
   const pct = Math.round(confidence * 100);
   const color =
     pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
   return (
-    <div className="flex items-center gap-1.5" title={`Confidence: ${pct}%`}>
+    <div className="flex items-center gap-1.5" title={t('memory.badges.confidencePercent', { percent: pct })}>
       <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
         <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
       </div>
@@ -662,7 +663,7 @@ export function MemoryCard({ memory, onVerify, onPin, onDeprecate }: MemoryCardP
 
         {/* If no expandable content, show content inline for simple text-only memories */}
         {!hasContent && !memory.content && expanded && (
-          <p className="mt-4 text-xs text-muted-foreground italic">No additional details available.</p>
+          <p className="mt-4 text-xs text-muted-foreground italic">{t('memory.noDetails')}</p>
         )}
       </CardContent>
     </Card>

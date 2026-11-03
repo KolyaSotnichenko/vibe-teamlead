@@ -147,7 +147,9 @@
       "reviewing": "Reviewing",
       "fixing": "Fixing",
       "complete": "Complete",
-      "failed": "Failed"
+      "failed": "Failed",
+      "qa_review": "AI Review",
+      "qa_fixing": "Fixing Issues"
     },
     "labels": {
       "interrupted": "Interrupted",
@@ -221,7 +223,9 @@
       "pushNewBranchesLabel": "Automatically push new branch",
       "pushNewBranchesDescription": "Publish this task branch to GitHub and set upstream tracking automatically. Disable to keep it local-only.",
       "useWorktreeLabel": "Use isolated workspace (recommended)",
-      "useWorktreeDescription": "Creates changes in a separate git worktree for safe review before merging. Disable to build directly in your project (faster but riskier)."
+      "useWorktreeDescription": "Creates changes in a separate git worktree for safe review before merging. Disable to build directly in your project (faster but riskier).",
+      "on": "On",
+      "off": "Off"
     },
     "errors": {
       "createFailed": "Failed to create task. Please try again.",
@@ -310,7 +314,11 @@
   "subtasks": {
     "untitled": "Untitled subtask",
     "expandAll": "Expand all",
-    "collapseAll": "Collapse all"
+    "collapseAll": "Collapse all",
+    "emptyTitle": "No subtasks defined",
+    "emptyBody": "Implementation subtasks will appear here after planning",
+    "completedOf": "{{done}} of {{total}} completed",
+    "verification": "Verification:"
   },
   "bulkPR": {
     "selectAllInColumn": "Select all tasks in column",
@@ -722,6 +730,27 @@
       "incompleteTitle": "Task did not finish",
       "incompleteBody": "It has a spec and a plan, but {{done}} of {{total}} subtasks are done. Resume to continue the implementation.",
       "recoverRestart": "Recover and restart"
+    },
+    "completedSuccessfully": "Task completed successfully",
+    "currentSubtask": "Subtask: {{subtask}}",
+    "subtasksCompleted": "{{done}}/{{total}} subtasks completed",
+    "noSubtasksYet": "No subtasks yet",
+    "phaseSegments": {
+      "planning": "Planning (0-20%)",
+      "coding": "Coding (20-80%)",
+      "aiReview": "AI Review (80-95%)",
+      "complete": "Complete (95-100%)"
+    },
+    "changesStaged": "Changes staged in main project",
+    "mergeFailed": "Failed to merge changes",
+    "mergeUnknownError": "Unknown error during merge",
+    "discardFailed": "Failed to discard changes",
+    "workspaceErrors": {
+      "mergePreview": "Merge preview: {{error}}",
+      "mergePreviewFailed": "Failed to load merge preview",
+      "worktreeStatus": "Worktree status: {{error}}",
+      "worktreeStatusFailed": "Failed to load worktree status",
+      "unexpected": "An unexpected error occurred while loading workspace information"
     }
   },
   "briefImport": {
@@ -845,5 +874,37 @@
       "afterAria": "Starts after {{list}}"
     },
     "menu": "Import brief…"
+  },
+  "logs": {
+    "phases": {
+      "planning": "Planning",
+      "coding": "Coding",
+      "validation": "Validation"
+    },
+    "thinkingShort": {
+      "low": "Low",
+      "medium": "Med",
+      "high": "High",
+      "xhigh": "XHigh"
+    },
+    "empty": "No logs yet",
+    "emptyHint": "Logs will appear here when the task runs",
+    "entryCount_one": "({{count}} entry)",
+    "entryCount_other": "({{count}} entries)",
+    "modelTitle": "Model: {{model}}",
+    "thinkingTitle": "Thinking: {{thinking}}",
+    "tools": {
+      "reading": "Reading",
+      "searchingFiles": "Searching files",
+      "searchingCode": "Searching code",
+      "editing": "Editing",
+      "writing": "Writing",
+      "running": "Running"
+    },
+    "done": "Done",
+    "hideOutput": "Hide output",
+    "showOutput": "Show output",
+    "less": "Less",
+    "more": "More"
   }
 }

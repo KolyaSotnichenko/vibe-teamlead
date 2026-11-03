@@ -42,14 +42,15 @@ export const STATUS_COLORS: Record<TerminalStatus, string> = {
   exited: 'bg-destructive',
 };
 
-export const PHASE_CONFIG: Record<ExecutionPhase, { label: string; color: string; icon: React.ElementType }> = {
-  idle: { label: 'Ready', color: 'bg-muted text-muted-foreground', icon: Circle },
-  planning: { label: 'Planning', color: 'bg-info/20 text-info', icon: Search },
-  coding: { label: 'Coding', color: 'bg-primary/20 text-primary', icon: Code2 },
-  rate_limit_paused: { label: 'Rate Limited', color: 'bg-orange-500/20 text-orange-400', icon: PauseCircle },
-  auth_failure_paused: { label: 'Auth Required', color: 'bg-red-500/20 text-red-400', icon: KeyRound },
-  qa_review: { label: 'QA Review', color: 'bg-warning/20 text-warning', icon: Search },
-  qa_fixing: { label: 'Fixing', color: 'bg-warning/20 text-warning', icon: Wrench },
-  complete: { label: 'Complete', color: 'bg-success/20 text-success', icon: CheckCircle2 },
-  failed: { label: 'Failed', color: 'bg-destructive/20 text-destructive', icon: AlertCircle },
+// labelKey is an i18n key (terminal namespace), translated at render time
+export const PHASE_CONFIG: Record<ExecutionPhase, { labelKey: string; color: string; icon: React.ElementType }> = {
+  idle: { labelKey: 'terminal:taskPhase.idle', color: 'bg-muted text-muted-foreground', icon: Circle },
+  planning: { labelKey: 'terminal:taskPhase.planning', color: 'bg-info/20 text-info', icon: Search },
+  coding: { labelKey: 'terminal:taskPhase.coding', color: 'bg-primary/20 text-primary', icon: Code2 },
+  rate_limit_paused: { labelKey: 'terminal:taskPhase.rateLimitPaused', color: 'bg-orange-500/20 text-orange-400', icon: PauseCircle },
+  auth_failure_paused: { labelKey: 'terminal:taskPhase.authFailurePaused', color: 'bg-red-500/20 text-red-400', icon: KeyRound },
+  qa_review: { labelKey: 'terminal:taskPhase.qaReview', color: 'bg-warning/20 text-warning', icon: Search },
+  qa_fixing: { labelKey: 'terminal:taskPhase.qaFixing', color: 'bg-warning/20 text-warning', icon: Wrench },
+  complete: { labelKey: 'terminal:taskPhase.complete', color: 'bg-success/20 text-success', icon: CheckCircle2 },
+  failed: { labelKey: 'terminal:taskPhase.failed', color: 'bg-destructive/20 text-destructive', icon: AlertCircle },
 };

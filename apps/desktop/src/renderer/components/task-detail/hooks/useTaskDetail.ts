@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../stores/project-store';
 import { useSettingsStore } from '../../../stores/settings-store';
 import { checkTaskRunning, isIncompleteHumanReview, getTaskProgress, useTaskStore, loadTasks, hasRecentActivity } from '../../../stores/task-store';
@@ -50,6 +51,7 @@ export interface UseTaskDetailOptions {
 }
 
 export function useTaskDetail({ task }: UseTaskDetailOptions) {
+  const { t } = useTranslation(['tasks']);
   const [feedback, setFeedback] = useState('');
   const [feedbackImages, setFeedbackImages] = useState<ImageAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -343,11 +345,11 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
         if (result.success && result.data?.preview) {
           setMergePreview(result.data.preview);
         } else if (!result.success && result.error) {
-          errors.push(`Merge preview: ${result.error}`);
+          errors.push(t('tasks:taskDetail.workspaceErrors.mergePreview', { error: result.error }));
         }
       } else {
         console.error('[useTaskDetail] Failed to load merge preview:', previewResult.reason);
-        errors.push('Failed to load merge preview');
+        errors.push(t('tasks:taskDetail.workspaceErrors.mergePreviewFailed'));
       }
 
       // Update worktree status with fresh branch information if fulfilled
@@ -356,11 +358,11 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
         if (result.success && result.data) {
           setWorktreeStatus(result.data);
         } else if (!result.success && result.error) {
-          errors.push(`Worktree status: ${result.error}`);
+          errors.push(t('tasks:taskDetail.workspaceErrors.worktreeStatus', { error: result.error }));
         }
       } else {
         console.error('[useTaskDetail] Failed to load worktree status:', statusResult.reason);
-        errors.push('Failed to load worktree status');
+        errors.push(t('tasks:taskDetail.workspaceErrors.worktreeStatusFailed'));
       }
 
       // Set workspace error if any API calls failed
@@ -369,12 +371,12 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
       }
     } catch (err) {
       console.error('[useTaskDetail] Unexpected error in loadMergePreview:', err);
-      setWorkspaceError('An unexpected error occurred while loading workspace information');
+      setWorkspaceError(t('tasks:taskDetail.workspaceErrors.unexpected'));
     } finally {
       hasLoadedPreviewRef.current = task.id;
       setIsLoadingPreview(false);
     }
-  }, [task.id]);
+  }, [task.id, t]);
 
   // Handle "Review Again" - clears staged state and reloads worktree info
   const handleReviewAgain = useCallback(async () => {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Layers } from 'lucide-react';
 import {
   Dialog,
@@ -63,14 +64,15 @@ interface SelectedProject {
   role: ProjectRole;
 }
 
-const ROLE_OPTIONS: { value: ProjectRole; label: string; description: string }[] = [
-  { value: 'backend', label: 'Backend', description: 'API server, services' },
-  { value: 'frontend', label: 'Frontend', description: 'Web application' },
-  { value: 'mobile', label: 'Mobile', description: 'Mobile app' },
-  { value: 'shared', label: 'Shared', description: 'Shared types/utils' },
-  { value: 'api', label: 'API Gateway', description: 'Gateway, BFF' },
-  { value: 'worker', label: 'Worker', description: 'Background jobs' },
-  { value: 'other', label: 'Other', description: 'Other project type' },
+// labelKey/descriptionKey are i18n keys (dialogs namespace), translated at render time
+const ROLE_OPTIONS: { value: ProjectRole; labelKey: string; descriptionKey: string }[] = [
+  { value: 'backend', labelKey: 'dialogs:addWorkspace.roles.backend.label', descriptionKey: 'dialogs:addWorkspace.roles.backend.description' },
+  { value: 'frontend', labelKey: 'dialogs:addWorkspace.roles.frontend.label', descriptionKey: 'dialogs:addWorkspace.roles.frontend.description' },
+  { value: 'mobile', labelKey: 'dialogs:addWorkspace.roles.mobile.label', descriptionKey: 'dialogs:addWorkspace.roles.mobile.description' },
+  { value: 'shared', labelKey: 'dialogs:addWorkspace.roles.shared.label', descriptionKey: 'dialogs:addWorkspace.roles.shared.description' },
+  { value: 'api', labelKey: 'dialogs:addWorkspace.roles.api.label', descriptionKey: 'dialogs:addWorkspace.roles.api.description' },
+  { value: 'worker', labelKey: 'dialogs:addWorkspace.roles.worker.label', descriptionKey: 'dialogs:addWorkspace.roles.worker.description' },
+  { value: 'other', labelKey: 'dialogs:addWorkspace.roles.other.label', descriptionKey: 'dialogs:addWorkspace.roles.other.description' },
 ];
 
 export function AddWorkspaceModal({
@@ -79,6 +81,7 @@ export function AddWorkspaceModal({
   projects,
   onCreated,
 }: AddWorkspaceModalProps) {
+  const { t } = useTranslation(['dialogs', 'common']);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedProjects, setSelectedProjects] = useState<SelectedProject[]>([]);
@@ -113,13 +116,13 @@ export function AddWorkspaceModal({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      setError('Workspace name is required');
+      setError(t('dialogs:addWorkspace.errors.nameRequired'));
       return;
     }
 
     const workspaceApi = window.electronAPI as unknown as Partial<WorkspaceApi>;
     if (!workspaceApi.createWorkspace || !workspaceApi.addProjectToWorkspace || !workspaceApi.getWorkspace) {
-      setError('Workspace API not available');
+      setError(t('dialogs:addWorkspace.errors.apiUnavailable'));
       return;
     }
 
@@ -138,7 +141,7 @@ export function AddWorkspaceModal({
       );
 
       if (!result.success || !result.data) {
-        throw new Error(result.error || 'Failed to create workspace');
+        throw new Error(result.error || t('dialogs:addWorkspace.errors.createFailed'));
       }
 
       const workspace = result.data;
@@ -183,20 +186,20 @@ export function AddWorkspaceModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5" />
-            Create Workspace
+            {t('dialogs:addWorkspace.title')}
           </DialogTitle>
           <DialogDescription>
-            Group related projects together for cross-repo specs and validation.
+            {t('dialogs:addWorkspace.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           {/* Name */}
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t('dialogs:addWorkspace.name')}</Label>
             <Input
               id="name"
-              placeholder="My App Workspace"
+              placeholder={t('dialogs:addWorkspace.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -204,10 +207,10 @@ export function AddWorkspaceModal({
 
           {/* Description */}
           <div className="grid gap-2">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="description">{t('dialogs:addWorkspace.descriptionLabel')}</Label>
             <Textarea
               id="description"
-              placeholder="Backend, frontend, and mobile apps for My App"
+              placeholder={t('dialogs:addWorkspace.descriptionPlaceholder')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
@@ -216,11 +219,11 @@ export function AddWorkspaceModal({
 
           {/* Add projects */}
           <div className="grid gap-2">
-            <Label>Projects</Label>
+            <Label>{t('dialogs:addWorkspace.projects')}</Label>
             {availableProjects.length > 0 ? (
               <Select onValueChange={handleAddProject}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Add a project..." />
+                  <SelectValue placeholder={t('dialogs:addWorkspace.addProject')} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableProjects.map((project) => (
@@ -233,8 +236,8 @@ export function AddWorkspaceModal({
             ) : (
               <p className="text-sm text-muted-foreground">
                 {selectedProjects.length > 0
-                  ? 'All projects have been added'
-                  : 'No projects available'}
+                  ? t('dialogs:addWorkspace.allProjectsAdded')
+                  : t('dialogs:addWorkspace.noProjects')}
               </p>
             )}
           </div>
@@ -262,7 +265,7 @@ export function AddWorkspaceModal({
                     <SelectContent>
                       {ROLE_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
-                          {option.label}
+                          {t(option.labelKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -288,10 +291,10 @@ export function AddWorkspaceModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
-            Cancel
+            {t('common:buttons.cancel')}
           </Button>
           <Button onClick={handleCreate} disabled={isCreating || !name.trim()}>
-            {isCreating ? 'Creating...' : 'Create Workspace'}
+            {isCreating ? t('common:labels.creating') : t('dialogs:addWorkspace.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

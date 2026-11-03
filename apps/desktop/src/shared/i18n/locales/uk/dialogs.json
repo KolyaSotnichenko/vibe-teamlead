@@ -60,7 +60,35 @@
     "bulkDeleteTitle": "Видалити worktree ({{count}})?",
     "bulkDeleteDescription": "Вибрані worktree і всі їхні незакомічені зміни буде видалено назавжди. Цю дію не можна скасувати.",
     "deleting": "Видалення...",
-    "deleteSelected": "Видалити вибрані"
+    "deleteSelected": "Видалити вибрані",
+    "errors": {
+      "loadTaskWorktrees": "Не вдалося завантажити worktree задач",
+      "loadWorktrees": "Не вдалося завантажити worktree",
+      "taskNotFound": "Для цього worktree не знайдено задачі",
+      "mergeFailed": "Не вдалося виконати злиття",
+      "deleteFailed": "Не вдалося видалити worktree",
+      "deleteTerminalFailed": "Не вдалося видалити worktree термінала"
+    },
+    "selectProject": "Виберіть проєкт, щоб переглянути worktree",
+    "emptyDescriptionWithTerminals": "Worktree створюються автоматично, коли Vibe Teamlead будує функції. Також можна створювати worktree для терміналів на вкладці «Термінали агентів».",
+    "filesChanged_one": "Змінено {{count}} файл",
+    "filesChanged_few": "Змінено {{count}} файли",
+    "filesChanged_many": "Змінено {{count}} файлів",
+    "filesChanged_other": "Змінено {{count}} файлу",
+    "commitsAhead_one": "На {{count}} коміт попереду",
+    "commitsAhead_few": "На {{count}} коміти попереду",
+    "commitsAhead_many": "На {{count}} комітів попереду",
+    "commitsAhead_other": "На {{count}} коміту попереду",
+    "mergeTo": "Злити в {{branch}}",
+    "copyPath": "Скопіювати шлях",
+    "createdOn": "Створено {{date}}",
+    "changesSummary": "Комітів: {{commits}}, файлів: {{files}}",
+    "mergeSuccessful": "Злиття виконано",
+    "mergeFailedTitle": "Злиття не вдалося",
+    "conflictingFiles": "Файли з конфліктами:",
+    "deleteWarning": "Worktree і всі незакомічені зміни буде остаточно видалено.",
+    "cannotBeUndone": "Цю дію не можна скасувати.",
+    "deleteTerminal": "Видалити worktree термінала?"
   },
   "worktreeCleanup": {
     "title": "Завершити задачу",
@@ -238,5 +266,53 @@
     "openGitHub": "Відкрити GitHub",
     "waiting": "Очікуємо на ваше підтвердження в GitHub…",
     "failed": "Не вдалося увійти в GitHub"
+  },
+  "addWorkspace": {
+    "roles": {
+      "backend": {
+        "label": "Бекенд",
+        "description": "API-сервер, сервіси"
+      },
+      "frontend": {
+        "label": "Фронтенд",
+        "description": "Вебзастосунок"
+      },
+      "mobile": {
+        "label": "Мобільний",
+        "description": "Мобільний застосунок"
+      },
+      "shared": {
+        "label": "Спільний",
+        "description": "Спільні типи й утиліти"
+      },
+      "api": {
+        "label": "API-шлюз",
+        "description": "Шлюз, BFF"
+      },
+      "worker": {
+        "label": "Воркер",
+        "description": "Фонові задачі"
+      },
+      "other": {
+        "label": "Інше",
+        "description": "Інший тип проєкту"
+      }
+    },
+    "errors": {
+      "nameRequired": "Вкажіть назву робочого простору",
+      "apiUnavailable": "API робочих просторів недоступний",
+      "createFailed": "Не вдалося створити робочий простір"
+    },
+    "title": "Створити робочий простір",
+    "description": "Об’єднайте пов’язані проєкти для спільних специфікацій і перевірок у кількох репозиторіях.",
+    "name": "Назва",
+    "namePlaceholder": "Робочий простір мого застосунку",
+    "descriptionLabel": "Опис (необов’язково)",
+    "descriptionPlaceholder": "Бекенд, фронтенд і мобільні застосунки мого продукту",
+    "projects": "Проєкти",
+    "addProject": "Додайте проєкт...",
+    "allProjectsAdded": "Усі проєкти додано",
+    "noProjects": "Немає доступних проєктів",
+    "create": "Створити робочий простір"
   }
 }

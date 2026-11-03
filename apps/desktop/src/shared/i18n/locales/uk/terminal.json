@@ -54,5 +54,47 @@
     "detached": "(від’єднано)",
     "remotePushFailed": "Відстеження віддаленої гілки не налаштовано",
     "remotePushFailedDescription": "Worktree створено, але гілку не вдалося надіслати у віддалений репозиторій. Можливо, доведеться вручну виконати git push -u."
+  },
+  "taskPhase": {
+    "idle": "Готово",
+    "planning": "Планування",
+    "coding": "Розробка",
+    "rateLimitPaused": "Ліміт запитів",
+    "authFailurePaused": "Потрібен вхід",
+    "qaReview": "Перевірка QA",
+    "qaFixing": "Виправлення",
+    "complete": "Виконано",
+    "failed": "Помилка"
+  },
+  "taskSelector": {
+    "currentTask": "Поточна задача",
+    "switchTo": "Перейти до...",
+    "clearTask": "Відв’язати задачу",
+    "selectTask": "Виберіть задачу...",
+    "availableTasks": "Доступні задачі",
+    "addNewTask": "Додати нову задачу",
+    "noTasks": "Немає доступних задач",
+    "createInKanban": "Створюйте задачі на дошці Kanban"
+  },
+  "pty": {
+    "restoreFailed": "Помилка відновлення сеансу: {{error}}"
+  },
+  "title": {
+    "doubleClickToRename": "Двічі клацніть, щоб перейменувати"
+  },
+  "grid": {
+    "title": "Термінали агентів",
+    "emptyBody": "Запускайте кілька терміналів, щоб агенти Claude працювали паралельно. Натисніть <kbd>Ctrl+T</kbd>, щоб створити новий термінал.",
+    "newTerminal": "Новий термінал",
+    "count": "Терміналів: {{count}} / {{max}}",
+    "history": "Історія",
+    "restoreFrom": "Відновити сеанси за...",
+    "sessionCount_one": "{{count}} сеанс",
+    "sessionCount_few": "{{count}} сеанси",
+    "sessionCount_many": "{{count}} сеансів",
+    "sessionCount_other": "{{count}} сеансу",
+    "invokeClaudeAll": "Запустити Claude в усіх",
+    "files": "Файли",
+    "terminalFallback": "Термінал"
   }
 }

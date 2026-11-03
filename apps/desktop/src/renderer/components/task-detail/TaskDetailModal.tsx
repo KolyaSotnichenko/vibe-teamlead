@@ -158,17 +158,17 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       if (result.success && result.data?.success) {
         if (state.stageOnly && result.data.staged) {
           state.setWorkspaceError(null);
-          state.setStagedSuccess(result.data.message || 'Changes staged in main project');
+          state.setStagedSuccess(result.data.message || t('tasks:taskDetail.changesStaged'));
           state.setStagedProjectPath(result.data.projectPath);
           state.setSuggestedCommitMessage(result.data.suggestedCommitMessage);
         } else {
           onOpenChange(false);
         }
       } else {
-        state.setWorkspaceError(result.data?.message || result.error || 'Failed to merge changes');
+        state.setWorkspaceError(result.data?.message || result.error || t('tasks:taskDetail.mergeFailed'));
       }
     } catch (error) {
-      state.setWorkspaceError(error instanceof Error ? error.message : 'Unknown error during merge');
+      state.setWorkspaceError(error instanceof Error ? error.message : t('tasks:taskDetail.mergeUnknownError'));
     } finally {
       state.setIsMerging(false);
     }
@@ -182,7 +182,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       state.setShowDiscardDialog(false);
       onOpenChange(false);
     } else {
-      state.setWorkspaceError(result.data?.message || result.error || 'Failed to discard changes');
+      state.setWorkspaceError(result.data?.message || result.error || t('tasks:taskDetail.discardFailed'));
     }
     state.setIsDiscarding(false);
   };

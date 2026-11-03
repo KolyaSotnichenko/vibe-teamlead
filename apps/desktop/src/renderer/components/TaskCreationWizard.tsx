@@ -781,7 +781,7 @@ export function TaskCreationWizard({
                 onClick={() => setPushNewBranches((current) => !current)}
                 disabled={isCreating}
               >
-                {pushNewBranches ? 'On' : 'Off'}
+                {pushNewBranches ? t('tasks:wizard.gitOptions.on') : t('tasks:wizard.gitOptions.off')}
               </Button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState, type RefObject } from 'react';
 import { useTerminalStore } from '../../stores/terminal-store';
 import { debugLog, debugError } from '../../../shared/utils/debug-logger';
+import i18n from '../../../shared/i18n';
 
 // Maximum retry attempts for recreation when dimensions aren't ready
 // Increased from 10 to 30 (3 seconds total) to handle slow app startup scenarios
@@ -198,7 +199,7 @@ export function usePtyProcess({
           store.updateTerminal(terminalId, { isRestored: false });
           onCreated?.();
         } else {
-          const errorMsg = `Error restoring session: ${result.data?.error || result.error}`;
+          const errorMsg = i18n.t('terminal:pty.restoreFailed', { error: result.data?.error || result.error });
           debugError(`[usePtyProcess] Failed to restore PTY session for terminal: ${terminalId}, error: ${errorMsg}`);
           handleError(errorMsg);
         }
@@ -224,7 +225,7 @@ export function usePtyProcess({
           }
           onCreated?.();
         } else {
-          const errorMsg = result.error || 'Unknown error';
+          const errorMsg = result.error || i18n.t('common:errors.unknownError');
           debugError(`[usePtyProcess] Failed to create PTY for terminal: ${terminalId}, error: ${errorMsg}`);
           handleError(errorMsg);
         }
