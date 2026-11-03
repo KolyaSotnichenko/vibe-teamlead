@@ -70,7 +70,7 @@
     "enabled": false
   },
   "files": {
-    "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.json"],
+    "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.json", "!vendor/**", "!vendor-bin/**"],
     "ignoreUnknown": true
   }
 }
