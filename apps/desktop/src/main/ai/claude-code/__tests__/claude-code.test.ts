@@ -147,6 +147,12 @@ describe('runAgentSession', () => {
     expect(result.outcome).toBe('auth_failure');
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
   });
+
+  it('refuses claude.ai subscription (OAuth) tokens', async () => {
+    const result = await runAgentSession(baseConfig({ auth: { apiKey: 'sk-ant-oat01-abc' } }));
+    expect(result.outcome).toBe('auth_failure');
+    expect(result.error?.message).toMatch(/subscription/);
+  });
 });
 
 describe('evaluatePreToolUse', () => {

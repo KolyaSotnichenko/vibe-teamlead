@@ -215,10 +215,15 @@ export async function runAgentSession(
   const emit = options.onEvent ?? (() => undefined);
   const acc = new SessionAccumulator(emit, config.initialMessages);
 
-  if (!config.auth.apiKey) {
+  const authProblem = !config.auth.apiKey
+    ? 'No Anthropic API key configured. Add an API key (Claude Console) in Settings.'
+    : config.auth.apiKey.startsWith('sk-ant-oat')
+      ? 'A Claude subscription login cannot run agents. Add an Anthropic API key (Claude Console) in Settings.'
+      : undefined;
+  if (authProblem) {
     const error = {
       code: ErrorCode.AUTH_FAILURE,
-      message: 'No Anthropic API key configured. Add one in Settings → Claude account.',
+      message: authProblem,
       retryable: false,
     };
     emit({ type: 'error', error });
