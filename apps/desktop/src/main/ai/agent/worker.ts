@@ -30,8 +30,8 @@ import type {
   WorkerTaskEventMessage,
 } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
-import { BuildOrchestrator } from '../orchestration/build-orchestrator';
-import { QALoop, type QAOutcome } from '../orchestration/qa-loop';
+import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
+import { DEFAULT_QA_ITERATIONS, QALoop, type QAOutcome } from '../orchestration/qa-loop';
 import { resolveBaseRef, runSecurityGates } from '../security/gates';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
@@ -567,6 +567,8 @@ async function runBuildOrchestrator(
         runConfig.outputSchema,
       );
     },
+
+    runQA: (hooks) => runQualityAssurance(session, toolContext, hooks),
   });
 
   orchestrator.on('phase-change', (phase: ExecutionPhase, message: string) => {
@@ -581,7 +583,7 @@ async function runBuildOrchestrator(
     if (phase === 'coding') {
       postTaskEvent('CODING_STARTED', { subtaskId: '', subtaskDescription: 'Starting coding phase' });
     } else if (phase === 'qa_review') {
-      postTaskEvent('QA_STARTED', { iteration: 0, maxIterations: 3 });
+      postTaskEvent('QA_STARTED', { iteration: 0, maxIterations: DEFAULT_QA_ITERATIONS });
     } else if (phase === 'qa_fixing') {
       postTaskEvent('QA_FIXING_STARTED', { iteration: 0 });
     }
@@ -675,47 +677,31 @@ async function runBuildOrchestrator(
     // generic CODING_FAILED which would be misleading.
     postTaskEvent('QA_MAX_ITERATIONS', {
       iteration: outcome.totalIterations,
-      maxIterations: 3,
+      maxIterations: DEFAULT_QA_ITERATIONS,
     });
   } else {
     // Pre-QA failure (planning or coding phase)
     postTaskEvent('CODING_FAILED', { error: outcome.error });
   }
 
-  // Map outcome to a SessionResult-compatible result for the bridge
-  const result: SessionResult = {
-    outcome: outcome.success ? 'completed' : 'error',
-    stepsExecuted: outcome.totalIterations,
-    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    messages: [],
-    toolCallCount: 0,
-    durationMs: outcome.durationMs,
-    error: outcome.error
-      ? { code: 'error', message: outcome.error, retryable: false }
-      : undefined,
-  };
-
-  postMessage({
-    type: 'result',
-    taskId: config.taskId,
-    data: result,
-    projectId: config.projectId,
-  });
+  postFinalResult(outcome.success, outcome.totalIterations, outcome.durationMs, outcome.error);
 }
 
 /**
- * Run the QA validation loop: qa_reviewer → qa_fixer → re-review
+ * QA for a finished build: security gates → reviewer ⇄ fixer (QALoop), then
+ * the optional Strix Security QA. Shared by the build pipeline and by a
+ * re-review after human feedback. Returns the outcome; posts nothing.
  */
-async function runQALoop(
+async function runQualityAssurance(
   session: SerializableSessionConfig,
   toolContext: ToolContext,
-): Promise<void> {
-  postLog('Starting QA validation loop');
-
+  hooks?: QAPhaseHooks,
+): Promise<QAOutcome> {
   const qaLoop = new QALoop({
     specDir: session.specDir,
     projectDir: session.projectDir,
     abortSignal: abortController.signal,
+    maxIterations: DEFAULT_QA_ITERATIONS,
 
     runGates: () =>
       runSecurityGates({
@@ -725,14 +711,10 @@ async function runQALoop(
         osvScannerBin: session.bundled?.osvScannerBin,
       }),
 
-    generatePrompt: async (agentType, _context) => {
-      const promptName = agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer';
-      return assemblePrompt(promptName, session);
-    },
+    generatePrompt: (agentType) => assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session),
 
-    runSession: async (runConfig) => {
+    runSession: (runConfig) => {
       postLog(`Running ${runConfig.agentType} session (session=${runConfig.sessionNumber})`);
-      const kickoffMessage = buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir);
       return runSingleSession(
         runConfig.agentType,
         runConfig.phase,
@@ -743,33 +725,50 @@ async function runQALoop(
         undefined,
         session,
         toolContext,
-        kickoffMessage,
-        true, // skipPhaseLogging — QA loop manages phase start/end
+        buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir),
+        true, // skipPhaseLogging — the caller manages QA phase logging
       );
     },
   });
 
-  qaLoop.on('log', (message: string) => {
-    postLog(message);
-  });
-
-  // Start QA validation phase logging at the loop level
-  if (logWriter) {
-    logWriter.startPhase('qa');
+  qaLoop.on('log', (message: string) => postLog(message));
+  if (hooks) {
+    qaLoop.on('qa-iteration-start', hooks.onReview);
+    qaLoop.on('qa-fix-start', hooks.onFix);
   }
 
-  let outcome = await qaLoop.run();
-  if (outcome.approved && session.securityQa?.enabled) {
-    outcome = await runSecurityQa(session, qaLoop, outcome);
-  }
+  const outcome = await qaLoop.run();
+  return outcome.approved && session.securityQa?.enabled ? runSecurityQa(session, qaLoop, outcome) : outcome;
+}
 
-  // End QA validation phase and flush any remaining accumulated log entries
+/** The final result message every pipeline sends back to the bridge. */
+function postFinalResult(success: boolean, steps: number, durationMs: number, error?: string): void {
+  const result: SessionResult = {
+    outcome: success ? 'completed' : 'error',
+    stepsExecuted: steps,
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    messages: [],
+    toolCallCount: 0,
+    durationMs,
+    error: error ? { code: 'generic_error', message: error, retryable: false } : undefined,
+  };
+  postMessage({ type: 'result', taskId: config.taskId, data: result, projectId: config.projectId });
+}
+
+/**
+ * Re-run QA on an existing build (e.g. after the user rejected it in review).
+ */
+async function runQALoop(session: SerializableSessionConfig, toolContext: ToolContext): Promise<void> {
+  postLog('Starting QA validation loop');
+  logWriter?.startPhase('qa');
+
+  const outcome = await runQualityAssurance(session, toolContext);
+
   if (logWriter) {
     logWriter.endPhase('qa', outcome.approved);
     logWriter.flush();
   }
 
-  // Emit task events so XState machine transitions correctly.
   if (outcome.approved) {
     postTaskEvent('QA_PASSED');
   } else if (outcome.reason === 'max_iterations' || outcome.reason === 'security_findings') {
@@ -779,24 +778,7 @@ async function runQALoop(
     postTaskEvent('QA_AGENT_ERROR', { error: outcome.error });
   }
 
-  const result: SessionResult = {
-    outcome: outcome.approved ? 'completed' : 'error',
-    stepsExecuted: outcome.totalIterations,
-    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    messages: [],
-    toolCallCount: 0,
-    durationMs: outcome.durationMs,
-    error: outcome.error
-      ? { code: 'error', message: outcome.error, retryable: false }
-      : undefined,
-  };
-
-  postMessage({
-    type: 'result',
-    taskId: config.taskId,
-    data: result,
-    projectId: config.projectId,
-  });
+  postFinalResult(outcome.approved, outcome.totalIterations, outcome.durationMs, outcome.error);
 }
 
 /** Strix rounds before unresolved findings go to human review. */

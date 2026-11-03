@@ -95,10 +95,21 @@ export interface BuildOrchestratorConfig {
   generatePrompt: (agentType: AgentType, phase: BuildPhase, context: PromptContext) => Promise<string>;
   /** Callback to run an agent session */
   runSession: (config: SessionRunConfig) => Promise<SessionResult>;
+  /**
+   * Run QA (QALoop: security gates → reviewer ⇄ fixer, then optional Security
+   * QA). The hooks report when a review or a fix round starts so the build's
+   * phase follows along.
+   */
+  runQA: (hooks: QAPhaseHooks) => Promise<{ approved: boolean; error?: string }>;
   /** Optional callback for syncing spec to source (worktree mode) */
   syncSpecToSource?: (specDir: string, sourceSpecDir: string) => Promise<boolean>;
   /** Optional callback to get a resolved LanguageModel for lightweight repair calls */
   getModel?: (agentType: AgentType) => Promise<import('ai').LanguageModel | undefined>;
+}
+
+export interface QAPhaseHooks {
+  onReview: () => void;
+  onFix: () => void;
 }
 
 /** Context passed to prompt generation */
@@ -542,98 +553,33 @@ export class BuildOrchestrator extends EventEmitter {
   }
 
   /**
-   * Run QA review and optional QA fixing loop.
+   * QA: delegated to the shared QA loop (the same one used when a task is
+   * re-reviewed), so every build goes through the security gates and the
+   * qa_signoff contract.
    */
   private async runQAPhase(): Promise<{ success: boolean; error?: string }> {
-    // QA review
     this.transitionPhase('qa_review', 'Running QA review');
-
-    const maxQACycles = 3;
-    for (let cycle = 0; cycle < maxQACycles; cycle++) {
-      if (this.aborted) {
-        return { success: false, error: 'Build cancelled' };
-      }
-
-      this.iteration++;
-      this.emitTyped('iteration-start', this.iteration, 'qa_review');
-
-      const reviewPrompt = await this.config.generatePrompt('qa_reviewer', 'qa_review', {
-        iteration: this.iteration,
-        attemptCount: cycle,
-      });
-
-      const reviewResult = await this.config.runSession({
-        agentType: 'qa_reviewer',
-        phase: 'qa',
-        systemPrompt: reviewPrompt,
-        specDir: this.config.specDir,
-        projectDir: this.config.projectDir,
-        sessionNumber: this.iteration,
-        abortSignal: this.config.abortSignal,
-        cliModel: this.config.cliModel,
-        cliThinking: this.config.cliThinking,
-      });
-
-      this.emitTyped('session-complete', reviewResult, 'qa_review');
-
-      if (reviewResult.outcome === 'cancelled') {
-        return { success: false, error: 'Build cancelled' };
-      }
-
-      // Check QA result
-      const qaStatus = await this.readQAStatus();
-
-      if (qaStatus === 'passed') {
-        this.markPhaseCompleted('qa_review');
-        this.transitionPhase('complete', 'Build complete - QA passed');
-        return { success: true };
-      }
-
-      if ((qaStatus === 'failed' || qaStatus === 'unknown') && cycle < maxQACycles - 1) {
-        // Run QA fixer — mark qa_review completed BEFORE transitioning to qa_fixing
-        // (the phase protocol requires qa_review in completedPhases for the transition)
+    const outcome = await this.config.runQA({
+      onReview: () => {
+        if (this.currentPhase === 'qa_fixing') {
+          this.markPhaseCompleted('qa_fixing');
+          this.transitionPhase('qa_review', 'Re-running QA review after fixes');
+        }
+      },
+      onFix: () => {
         this.markPhaseCompleted('qa_review');
         this.transitionPhase('qa_fixing', 'Fixing QA issues');
-
-        this.iteration++;
-        this.emitTyped('iteration-start', this.iteration, 'qa_fixing');
-
-        const fixPrompt = await this.config.generatePrompt('qa_fixer', 'qa_fixing', {
-          iteration: this.iteration,
-          attemptCount: cycle,
-        });
-
-        const fixResult = await this.config.runSession({
-          agentType: 'qa_fixer',
-          phase: 'qa',
-          systemPrompt: fixPrompt,
-          specDir: this.config.specDir,
-          projectDir: this.config.projectDir,
-          sessionNumber: this.iteration,
-          abortSignal: this.config.abortSignal,
-          cliModel: this.config.cliModel,
-          cliThinking: this.config.cliThinking,
-        });
-
-        this.emitTyped('session-complete', fixResult, 'qa_fixing');
-        this.markPhaseCompleted('qa_fixing');
-
-        // Delete qa_report.md before re-review so the reviewer writes a clean verdict.
-        // The fixer often edits qa_report.md (changing status to "FIXES_APPLIED" etc.)
-        // which corrupts the verdict detection. Deleting ensures a fresh report each cycle.
-        await this.resetQAReport();
-
-        // Loop back to QA review
-        this.transitionPhase('qa_review', 'Re-running QA review after fixes');
-        continue;
-      }
-
-      // QA failed and no more cycles
-      this.transitionPhase('failed', 'QA review failed after maximum fix cycles');
-      return { success: false, error: 'QA review failed after maximum fix cycles' };
+      },
+    });
+    if (this.aborted) return { success: false, error: 'Build cancelled' };
+    if (outcome.approved) {
+      this.markPhaseCompleted(this.currentPhase === 'qa_fixing' ? 'qa_fixing' : 'qa_review');
+      this.transitionPhase('complete', 'Build complete - QA passed');
+      return { success: true };
     }
-
-    return { success: false, error: 'QA exhausted all cycles' };
+    const error = outcome.error ?? 'QA did not approve the build';
+    this.transitionPhase('failed', error);
+    return { success: false, error };
   }
 
   // ===========================================================================
@@ -758,53 +704,6 @@ export class BuildOrchestrator extends EventEmitter {
       return true;
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * Read QA status from the spec directory.
-   * Returns 'passed', 'failed', or 'unknown'.
-   */
-  private async readQAStatus(): Promise<'passed' | 'failed' | 'unknown'> {
-    const qaReportPath = join(this.config.specDir, 'qa_report.md');
-    try {
-      const content = await readFile(qaReportPath, 'utf-8');
-      const lower = content.toLowerCase();
-      if (lower.includes('status: passed') || lower.includes('status: approved')) {
-        return 'passed';
-      }
-      // Explicitly detect failure patterns so intermediate states don't short-circuit.
-      // The QA fixer may write "FIXES_APPLIED" — that's an intermediate state that
-      // should NOT count as a verdict. Only the reviewer writes the final verdict.
-      if (
-        lower.includes('status: failed') ||
-        lower.includes('status: rejected') ||
-        lower.includes('status: needs changes')
-      ) {
-        return 'failed';
-      }
-      // If the report has content but no recognizable verdict, treat as unknown
-      // so the orchestrator can retry rather than permanently failing.
-      if (content.trim().length > 0) {
-        return 'unknown';
-      }
-      return 'unknown';
-    } catch {
-      return 'unknown';
-    }
-  }
-
-  /**
-   * Delete qa_report.md so the next QA review cycle writes a fresh verdict.
-   * The QA fixer often edits qa_report.md (adding "FIXES_APPLIED" etc.),
-   * which corrupts verdict detection. Resetting ensures clean state.
-   */
-  private async resetQAReport(): Promise<void> {
-    const qaReportPath = join(this.config.specDir, 'qa_report.md');
-    try {
-      await unlink(qaReportPath);
-    } catch {
-      // File may not exist — that's fine
     }
   }
 

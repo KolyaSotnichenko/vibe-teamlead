@@ -26,6 +26,7 @@ vi.mock('../../utils/json-repair', () => ({
 }));
 
 vi.mock('../qa-reports', () => ({
+  DEFAULT_QA_ITERATIONS: 5,
   generateQAReport: vi.fn(() => '# QA Report'),
   generateEscalationReport: vi.fn(() => '# Escalation Report'),
   generateManualTestPlan: vi.fn().mockResolvedValue('# Manual Test Plan'),

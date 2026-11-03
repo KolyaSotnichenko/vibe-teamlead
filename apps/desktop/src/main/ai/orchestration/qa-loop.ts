@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { EventEmitter } from 'events';
 
 import {
+  DEFAULT_QA_ITERATIONS,
   generateEscalationReport,
   generateManualTestPlan,
   generateQAReport,
@@ -38,7 +39,7 @@ import type { GateReport } from '../security/gates';
 // =============================================================================
 
 /** Maximum QA review/fix iterations before escalating to human */
-const MAX_QA_ITERATIONS = 50;
+export { DEFAULT_QA_ITERATIONS };
 
 /** Stop after this many consecutive errors without progress */
 const MAX_CONSECUTIVE_ERRORS = 3;
@@ -81,7 +82,7 @@ export interface QALoopConfig {
   cliModel?: string;
   /** CLI thinking level override */
   cliThinking?: string;
-  /** Maximum iterations override (default: MAX_QA_ITERATIONS) */
+  /** Maximum iterations override (default: DEFAULT_QA_ITERATIONS) */
   maxIterations?: number;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
@@ -200,7 +201,7 @@ export class QALoop extends EventEmitter {
    */
   async run(): Promise<QAOutcome> {
     const startTime = Date.now();
-    const maxIterations = this.config.maxIterations ?? MAX_QA_ITERATIONS;
+    const maxIterations = this.config.maxIterations ?? DEFAULT_QA_ITERATIONS;
 
     try {
       // Verify build is complete
@@ -240,7 +241,9 @@ export class QALoop extends EventEmitter {
         // Security gates first, so the reviewer and fixer see their findings
         const gateIssues = await this.runGates();
 
-        // Run QA reviewer
+        // Run QA reviewer. The previous verdict is cleared first so a reviewer that
+        // fails to write one can never be read as approving.
+        await this.clearQASignoff();
         this.sessionNumber++;
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', {
           iteration,
@@ -427,6 +430,19 @@ export class QALoop extends EventEmitter {
     }
   }
 
+  /** Remove qa_signoff from implementation_plan.json (no-op when absent). */
+  private async clearQASignoff(): Promise<void> {
+    const planPath = join(this.config.specDir, 'implementation_plan.json');
+    try {
+      const plan = safeParseJson<Record<string, unknown>>(await readFile(planPath, 'utf-8'));
+      if (!plan || !('qa_signoff' in plan)) return;
+      delete plan.qa_signoff;
+      await writeFile(planPath, JSON.stringify(plan, null, 2), 'utf-8');
+    } catch {
+      // Unreadable plan: the reviewer's own write decides.
+    }
+  }
+
   /**
    * Resolve QA status from signoff data.
    */
@@ -487,7 +503,7 @@ export class QALoop extends EventEmitter {
 
     const fixPrompt = await this.config.generatePrompt('qa_fixer', {
       iteration: 0,
-      maxIterations: this.config.maxIterations ?? MAX_QA_ITERATIONS,
+      maxIterations: this.config.maxIterations ?? DEFAULT_QA_ITERATIONS,
       isHumanFeedback: true,
     });
 
