@@ -5,12 +5,9 @@ import {
   Settings,
   LayoutGrid,
   Terminal,
-  Map,
+  Map as MapIcon,
   BookOpen,
   Lightbulb,
-  AlertCircle,
-  Download,
-  RefreshCw,
   Github,
   GitlabIcon,
   GitPullRequest,
@@ -23,7 +20,6 @@ import {
   PanelLeft,
   PanelLeftClose
 } from 'lucide-react';
-import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import {
   Tooltip,
@@ -31,19 +27,9 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from './ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from './ui/dialog';
 import { cn } from '../lib/utils';
 import {
   useProjectStore,
-  removeProject,
-  initializeProject
 } from '../stores/project-store';
 import { useSettingsStore, saveSettings } from '../stores/settings-store';
 import {
@@ -51,13 +37,12 @@ import {
   loadProjectEnvConfig,
   clearProjectEnvConfig
 } from '../stores/project-env-store';
-import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 
 import { UpdateBanner } from './UpdateBanner';
 import { TeamStatus } from './sidebar/TeamStatus';
-import type { Project, GitStatus } from '../../shared/types';
+import type { GitStatus } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools';
 
@@ -83,7 +68,7 @@ const baseNavItems: NavItem[] = [
   { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K', group: 'build' },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A', group: 'build' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W', group: 'build' },
-  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: Map, shortcut: 'D', group: 'plan' },
+  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D', group: 'plan' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I', group: 'plan' },
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C', group: 'knowledge' },
@@ -126,12 +111,8 @@ export function Sidebar({
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const settings = useSettingsStore((state) => state.settings);
 
-  const [showAddProjectModal, setShowAddProjectModal] = useState(false);
-  const [showInitDialog, setShowInitDialog] = useState(false);
   const [showGitSetupModal, setShowGitSetupModal] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
-  const [pendingProject, setPendingProject] = useState<Project | null>(null);
-  const [isInitializing, setIsInitializing] = useState(false);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -205,6 +186,9 @@ export function Sidebar({
         return;
       }
 
+      // Not behind an open dialog, and not when another handler took the key
+      if (e.defaultPrevented || document.querySelector('[role="dialog"]')) return;
+
       // Only handle shortcuts when a project is selected
       if (!selectedProjectId) return;
 
@@ -226,58 +210,27 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedProjectId, onViewChange, visibleNavItems]);
 
-  // Check git status when project changes
+  // Check git status when the selected project (not just the project list) changes
+  const selectedProjectPath = selectedProject?.path;
   useEffect(() => {
-    const checkGit = async () => {
-      if (selectedProject) {
-        try {
-          const result = await window.electronAPI.checkGitStatus(selectedProject.path);
-          if (result.success && result.data) {
-            setGitStatus(result.data);
-            // Show git setup modal if project is not a git repo or has no commits
-            if (!result.data.isGitRepo || !result.data.hasCommits) {
-              setShowGitSetupModal(true);
-            }
-          }
-        } catch (error) {
-          console.error('Failed to check git status:', error);
-        }
-      } else {
-        setGitStatus(null);
-      }
+    if (!selectedProjectPath) {
+      setGitStatus(null);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI
+      .checkGitStatus(selectedProjectPath)
+      .then((result) => {
+        if (cancelled || !result.success || !result.data) return;
+        setGitStatus(result.data);
+        // Offer git setup if the project is not a git repo or has no commits
+        if (!result.data.isGitRepo || !result.data.hasCommits) setShowGitSetupModal(true);
+      })
+      .catch((error) => console.error('Failed to check git status:', error));
+    return () => {
+      cancelled = true;
     };
-    checkGit();
-  }, [selectedProject]);
-
-  const handleProjectAdded = (project: Project, needsInit: boolean) => {
-    if (needsInit) {
-      setPendingProject(project);
-      setShowInitDialog(true);
-    }
-  };
-
-  const handleInitialize = async () => {
-    if (!pendingProject) return;
-
-    const projectId = pendingProject.id;
-    setIsInitializing(true);
-    try {
-      const result = await initializeProject(projectId);
-      if (result?.success) {
-        // Clear pendingProject FIRST before closing dialog
-        // This prevents onOpenChange from triggering skip logic
-        setPendingProject(null);
-        setShowInitDialog(false);
-      }
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
-  const handleSkipInit = () => {
-    setShowInitDialog(false);
-    setPendingProject(null);
-  };
+  }, [selectedProjectPath]);
 
   const handleGitInitialized = async () => {
     // Refresh git status after initialization
@@ -293,11 +246,6 @@ export function Sidebar({
     }
   };
 
-  const _handleRemoveProject = async (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    await removeProject(projectId);
-  };
 
 
   const handleNavClick = (view: SidebarView) => {
@@ -480,77 +428,6 @@ export function Sidebar({
           )}
         </div>
       </div>
-
-      {/* Initialize Vibe Teamlead Dialog */}
-      <Dialog open={showInitDialog} onOpenChange={(open) => {
-        // Only allow closing if user manually closes (not during initialization)
-        if (!open && !isInitializing) {
-          handleSkipInit();
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Download className="h-5 w-5" />
-              {t('dialogs:initialize.title')}
-            </DialogTitle>
-            <DialogDescription>
-              {t('dialogs:initialize.description')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="rounded-lg bg-muted p-4 text-sm">
-              <p className="font-medium mb-2">{t('dialogs:initialize.willDo')}</p>
-              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>{t('dialogs:initialize.createFolder')}</li>
-                <li>{t('dialogs:initialize.copyFramework')}</li>
-                <li>{t('dialogs:initialize.setupSpecs')}</li>
-              </ul>
-            </div>
-            {!settings.autoBuildPath && (
-              <div className="mt-4 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-warning">{t('dialogs:initialize.sourcePathNotConfigured')}</p>
-                    <p className="text-muted-foreground mt-1">
-                      {t('dialogs:initialize.sourcePathNotConfiguredDescription')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleSkipInit} disabled={isInitializing}>
-              {t('common:buttons.skip')}
-            </Button>
-            <Button
-              onClick={handleInitialize}
-              disabled={isInitializing || !settings.autoBuildPath}
-            >
-              {isInitializing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  {t('common:labels.initializing')}
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  {t('common:buttons.initialize')}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Project Modal */}
-      <AddProjectModal
-        open={showAddProjectModal}
-        onOpenChange={setShowAddProjectModal}
-        onProjectAdded={handleProjectAdded}
-      />
 
       {/* Git Setup Modal */}
       <GitSetupModal

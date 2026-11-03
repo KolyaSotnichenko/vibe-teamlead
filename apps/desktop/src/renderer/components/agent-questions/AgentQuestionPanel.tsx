@@ -134,10 +134,12 @@ export function AgentQuestionPanel() {
   const openQuestionId = useAgentQuestionsStore((s) => s.openQuestionId);
   const open = useAgentQuestionsStore((s) => s.open);
   const answer = useAgentQuestionsStore((s) => s.answer);
-  const tasks = useTaskStore((s) => s.tasks);
-
   const index = pending.findIndex((q) => q.questionId === openQuestionId);
   const current: PendingAgentQuestion | undefined = index >= 0 ? pending[index] : undefined;
+  // Only the asking task's title: the panel must not re-render on every progress tick.
+  const taskTitle = useTaskStore((s) =>
+    current ? s.tasks.find((t) => t.id === current.taskId || t.specId === current.taskId)?.title : undefined
+  );
   const [draft, setDraft] = useState<Draft>({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,13 +154,17 @@ export function AgentQuestionPanel() {
 
   if (!current) return null;
 
-  const task = tasks.find((t) => t.id === current.taskId || t.specId === current.taskId);
   const submit = async (value: AgentAnswers | null) => {
     setSending(true);
     setError(null);
-    const result = await answer(current.questionId, value);
-    setSending(false);
-    if (!result.success && result.error) setError(result.error);
+    try {
+      const result = await answer(current.questionId, value);
+      if (!result.success && result.error) setError(result.error);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -172,7 +178,7 @@ export function AgentQuestionPanel() {
             {t('agentQuestions.title', { role: t(`agentQuestions.roles.${roleKey(current.agentType)}`) })}
           </p>
           <h2 id="agent-question-title" className="mt-0.5 text-sm font-semibold text-foreground">
-            {task?.title ?? current.taskId}
+            {taskTitle ?? current.taskId}
           </h2>
         </div>
         {pending.length > 1 && (

@@ -4,6 +4,7 @@
  * vermilion is "waiting for you", and only when it is non-zero.
  */
 
+import { useShallow } from 'zustand/react/shallow';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../lib/utils';
@@ -31,12 +32,13 @@ export function countTeam(statuses: string[]): TeamCounts {
 
 export function TeamStatus({ projectId, collapsed }: { projectId: string | null; collapsed: boolean }) {
   const { t } = useTranslation('navigation');
-  const tasks = useTaskStore((s) => s.tasks);
+  // Subscribe to the counts only (stable values), not to every task update.
+  const counts = useTaskStore(
+    useShallow((s) => countTeam(projectId ? s.tasks.filter((task) => task.projectId === projectId).map((task) => task.status) : []))
+  );
   const pending = useAgentQuestionsStore((s) => s.pending);
   const openQuestion = useAgentQuestionsStore((s) => s.open);
 
-  const projectTasks = projectId ? tasks.filter((task) => task.projectId === projectId) : [];
-  const counts = countTeam(projectTasks.map((task) => task.status));
   const waiting = pending.filter((q) => !projectId || !q.projectId || q.projectId === projectId);
 
   if (collapsed) {
@@ -78,7 +80,7 @@ export function TeamStatus({ projectId, collapsed }: { projectId: string | null;
             const content = (
               <>
                 <span className="flex items-center gap-2">
-                  {row.alert && <span aria-hidden className="h-2 w-2 bg-[var(--vt-signal-on-dark)] animate-pulse-subtle" />}
+                  {row.alert && <span aria-hidden className="h-2 w-2 bg-[var(--vt-signal-on-dark)] vt-breathe" />}
                   {row.label}
                 </span>
                 <span className="font-mono tabular-nums">{row.value}</span>
