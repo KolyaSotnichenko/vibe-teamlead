@@ -1,4 +1,5 @@
 import { CheckCircle2, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Switch } from '../ui/switch';
 import {
@@ -9,11 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog';
-import {
-  IDEATION_TYPE_LABELS,
-  IDEATION_TYPE_DESCRIPTIONS,
-  IDEATION_TYPE_COLORS
-} from '../../../shared/constants';
+import { IDEATION_TYPE_COLORS } from '../../../shared/constants';
 import type { IdeationType, IdeationConfig } from '../../../shared/types';
 import { TypeIcon } from './TypeIcon';
 import { ALL_IDEATION_TYPES } from './constants';
@@ -45,20 +42,21 @@ export function IdeationDialogs({
   onCloseAddMoreDialog,
   onConfirmAddMore
 }: IdeationDialogsProps) {
+  const { t } = useTranslation('common');
   return (
     <>
       {/* Configuration Dialog */}
       <Dialog open={showConfigDialog} onOpenChange={onCloseConfigDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Ideation Configuration</DialogTitle>
+            <DialogTitle>{t('ideation.dialogs.configTitle')}</DialogTitle>
             <DialogDescription>
-              Configure which types of ideas to generate
+              {t('ideation.dialogs.configDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">Ideation Types</h4>
+              <h4 className="text-sm font-medium">{t('ideation.dialogs.ideationTypes')}</h4>
               {ALL_IDEATION_TYPES.map((type) => (
                 <div
                   key={type}
@@ -69,9 +67,9 @@ export function IdeationDialogs({
                       <TypeIcon type={type} />
                     </div>
                     <div>
-                      <div className="font-medium text-sm">{IDEATION_TYPE_LABELS[type]}</div>
+                      <div className="font-medium text-sm">{t(`ideation.types.${type}.label`)}</div>
                       <div className="text-xs text-muted-foreground">
-                        {IDEATION_TYPE_DESCRIPTIONS[type]}
+                        {t(`ideation.types.${type}.description`)}
                       </div>
                     </div>
                   </div>
@@ -84,16 +82,16 @@ export function IdeationDialogs({
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">Context Sources</h4>
+              <h4 className="text-sm font-medium">{t('ideation.dialogs.contextSources')}</h4>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Include Roadmap Context</span>
+                <span className="text-sm">{t('ideation.dialogs.includeRoadmapContext')}</span>
                 <Switch
                   checked={config.includeRoadmapContext}
                   onCheckedChange={(checked) => onSetConfig({ includeRoadmapContext: checked })}
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Include Kanban Context</span>
+                <span className="text-sm">{t('ideation.dialogs.includeKanbanContext')}</span>
                 <Switch
                   checked={config.includeKanbanContext}
                   onCheckedChange={(checked) => onSetConfig({ includeKanbanContext: checked })}
@@ -103,7 +101,7 @@ export function IdeationDialogs({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={onCloseConfigDialog}>
-              Close
+              {t('buttons.close')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -113,17 +111,17 @@ export function IdeationDialogs({
       <Dialog open={showAddMoreDialog} onOpenChange={onCloseAddMoreDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add More Ideas</DialogTitle>
+            <DialogTitle>{t('ideation.dialogs.addMoreTitle')}</DialogTitle>
             <DialogDescription>
-              Select additional ideation types to generate. Your existing ideas will be preserved.
+              {t('ideation.dialogs.addMoreDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3 max-h-96 overflow-y-auto">
             {availableTypesToAdd.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
                 <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-success" />
-                <p>You've already generated all ideation types!</p>
-                <p className="text-sm mt-1">Use "Regenerate" to refresh existing ideas.</p>
+                <p>{t('ideation.dialogs.allGenerated')}</p>
+                <p className="text-sm mt-1">{t('ideation.dialogs.useRegenerate')}</p>
               </div>
             ) : (
               availableTypesToAdd.map((type) => (
@@ -141,9 +139,9 @@ export function IdeationDialogs({
                       <TypeIcon type={type} />
                     </div>
                     <div>
-                      <div className="font-medium text-sm">{IDEATION_TYPE_LABELS[type]}</div>
+                      <div className="font-medium text-sm">{t(`ideation.types.${type}.label`)}</div>
                       <div className="text-xs text-muted-foreground">
-                        {IDEATION_TYPE_DESCRIPTIONS[type]}
+                        {t(`ideation.types.${type}.description`)}
                       </div>
                     </div>
                   </div>
@@ -162,18 +160,20 @@ export function IdeationDialogs({
           </div>
           <DialogFooter className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {typesToAdd.length > 0 && `${typesToAdd.length} selected`}
+              {typesToAdd.length > 0 && t('selection.selected', { count: typesToAdd.length })}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onCloseAddMoreDialog}>
-                Cancel
+                {t('buttons.cancel')}
               </Button>
               <Button
                 onClick={onConfirmAddMore}
                 disabled={typesToAdd.length === 0}
               >
                 <Plus className="h-4 w-4 mr-1" />
-                Generate {typesToAdd.length > 0 ? `${typesToAdd.length} Types` : 'Ideas'}
+                {typesToAdd.length > 0
+                  ? t('ideation.dialogs.generateTypes', { count: typesToAdd.length })
+                  : t('ideation.dialogs.generateIdeas')}
               </Button>
             </div>
           </DialogFooter>

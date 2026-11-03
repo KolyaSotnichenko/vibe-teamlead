@@ -3,6 +3,7 @@
  */
 
 import { CheckCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '../../ui/badge';
 import { Checkbox } from '../../ui/checkbox';
 import { cn } from '../../../lib/utils';
@@ -17,6 +18,7 @@ interface FindingItemProps {
 }
 
 export function FindingItem({ finding, selected, posted = false, onToggle }: FindingItemProps) {
+  const { t } = useTranslation('gitlab');
   const CategoryIcon = getCategoryIcon(finding.category);
 
   return (
@@ -43,11 +45,11 @@ export function FindingItem({ finding, selected, posted = false, onToggle }: Fin
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="text-xs shrink-0">
               <CategoryIcon className="h-3 w-3 mr-1" />
-              {finding.category}
+              {t(`findings.category.${finding.category}`, { defaultValue: finding.category })}
             </Badge>
             {posted && (
               <Badge variant="outline" className="text-xs shrink-0 text-success border-success/50">
-                Posted
+                {t('findings.posted')}
               </Badge>
             )}
             <span className="font-medium text-sm break-words">
@@ -69,7 +71,7 @@ export function FindingItem({ finding, selected, posted = false, onToggle }: Fin
       {/* Suggested Fix */}
       {finding.suggestedFix && (
         <div className="ml-7 text-xs">
-          <span className="text-muted-foreground font-medium">Suggested fix:</span>
+          <span className="text-muted-foreground font-medium">{t('findings.suggestedFix')}</span>
           <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto max-w-full whitespace-pre-wrap break-words">
             {finding.suggestedFix}
           </pre>

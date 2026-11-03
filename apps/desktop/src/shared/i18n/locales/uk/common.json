@@ -382,8 +382,53 @@
     "logs": {
       "agentActivity": "Активність агентів",
       "showMore": "Показати ще {{count}}",
-      "hideMore": "Сховати ще {{count}}"
-    }
+      "hideMore": "Сховати ще {{count}}",
+      "prNumber": "PR #{{number}}",
+      "live": "Наживо",
+      "waiting": "Очікування логів...",
+      "reviewStarting": "Рев’ю запускається",
+      "noLogsAvailable": "Логів немає",
+      "runReviewHint": "Запустіть рев’ю, щоб отримати логи",
+      "streaming": "Трансляція",
+      "running": "Виконується",
+      "pending": "Очікує",
+      "complete": "Готово",
+      "failed": "Помилка",
+      "entries_one": "({{count}} запис)",
+      "entries_few": "({{count}} записи)",
+      "entries_many": "({{count}} записів)",
+      "entries_other": "({{count}} запису)",
+      "noLogsYet": "Логів ще немає",
+      "less": "Менше",
+      "more": "Більше",
+      "phases": {
+        "context": "Збір контексту",
+        "analysis": "AI-аналіз",
+        "synthesis": "Узагальнення"
+      }
+    },
+    "fileStatus": {
+      "added": "додано",
+      "removed": "видалено",
+      "modified": "змінено",
+      "renamed": "перейменовано",
+      "copied": "скопійовано",
+      "changed": "змінено",
+      "unchanged": "без змін"
+    },
+    "errors": {
+      "checkConnection": "Не вдалося перевірити підключення",
+      "fetchPRs": "Не вдалося отримати PR",
+      "loadMore": "Не вдалося завантажити більше PR",
+      "checkNewCommits": "Не вдалося перевірити нові коміти",
+      "cancelReview": "Не вдалося скасувати рев’ю",
+      "postReview": "Не вдалося опублікувати рев’ю",
+      "postComment": "Не вдалося опублікувати коментар",
+      "mergePR": "Не вдалося злити PR",
+      "assignUser": "Не вдалося призначити користувача"
+    },
+    "verdictOutdated": "Вердикт AI може бути застарілим",
+    "rerunReviewSuggestion": "Після усунення цих проблем варто запустити рев’ю ще раз."
   },
   "downloads": {
     "toggleExpand": "Показати або сховати подробиці завантаження",
@@ -444,6 +489,33 @@
       "analysisUnsupported": "Примітка: аналіз зображень поки що не підтримується. Зображення зберігаються для довідки, але модель їх не аналізує.",
       "screenshotTooLarge": "Знімок екрана завеликий ({{size}} МБ). Максимальний розмір — {{max}} МБ. Спробуйте захопити меншу область.",
       "notAnalyzed": "Зображення збережено для довідки, але модель їх не аналізувала."
+    },
+    "title": "Аналітика",
+    "subtitle": "Ставте запитання про свою кодову базу",
+    "hideSidebar": "Сховати бічну панель",
+    "showSidebar": "Показати бічну панель",
+    "newChat": "Новий чат",
+    "emptyTitle": "Почніть розмову",
+    "emptyDescription": "Ставте запитання про кодову базу, отримуйте пропозиції щодо покращень або обговорюйте функції, які хочете реалізувати.",
+    "suggestions": {
+      "architecture": "Яка архітектура цього проєкту?",
+      "codeQuality": "Запропонуй покращення якості коду",
+      "features": "Які функції можна додати далі?",
+      "security": "Чи є проблеми з безпекою?"
+    },
+    "you": "Ви",
+    "assistant": "Асистент",
+    "thinking": "Думаю...",
+    "inputPlaceholder": "Запитайте про свою кодову базу...",
+    "sendHint": "Enter — надіслати, Shift+Enter — новий рядок",
+    "toolsUsed_one": "Використано {{count}} інструмент",
+    "toolsUsed_few": "Використано {{count}} інструменти",
+    "toolsUsed_many": "Використано {{count}} інструментів",
+    "toolsUsed_other": "Використано {{count}} інструмента",
+    "tools": {
+      "readingFile": "Читання файлу",
+      "searchingFiles": "Пошук файлів",
+      "searchingCode": "Пошук у коді"
     }
   },
   "ideation": {
@@ -457,12 +529,310 @@
     "conversionFailedDescription": "Не вдалося перетворити ідею на задачу",
     "conversionError": "Помилка перетворення",
     "conversionErrorDescription": "Під час перетворення ідеї сталася помилка",
-    "noClaudeCredential": "API-ключа Claude ще немає. Додайте його в Налаштування → Claude, щоб генерувати ідеї."
+    "noClaudeCredential": "API-ключа Claude ще немає. Додайте його в Налаштування → Claude, щоб генерувати ідеї.",
+    "ideaCount_one": "{{count}} ідея",
+    "ideaCount_few": "{{count}} ідеї",
+    "ideaCount_many": "{{count}} ідей",
+    "ideaCount_other": "{{count}} ідеї",
+    "noIdeasToDisplay": "Немає ідей для показу",
+    "impactBadge": "вплив: {{level}}",
+    "types": {
+      "code_improvements": {
+        "label": "Покращення коду",
+        "description": "Можливості, виявлені в коді: аналіз патернів, архітектури та інфраструктури"
+      },
+      "ui_ux_improvements": {
+        "label": "Покращення UI/UX",
+        "description": "Візуальні покращення та покращення взаємодії, виявлені під час аналізу застосунку"
+      },
+      "documentation_gaps": {
+        "label": "Документація",
+        "description": "Відсутня або застаріла документація, що потребує уваги"
+      },
+      "security_hardening": {
+        "label": "Безпека",
+        "description": "Вразливості та можливості посилити безпеку"
+      },
+      "performance_optimizations": {
+        "label": "Продуктивність",
+        "description": "Вузькі місця продуктивності та можливості оптимізації"
+      },
+      "code_quality": {
+        "label": "Якість коду",
+        "description": "Можливості рефакторингу, великі файли, «запахи» коду й порушення найкращих практик"
+      }
+    },
+    "status": {
+      "draft": "чернетка",
+      "selected": "вибрано",
+      "converted": "перетворено",
+      "dismissed": "відхилено",
+      "archived": "архівовано"
+    },
+    "effort": {
+      "trivial": "мінімальні",
+      "small": "невеликі",
+      "medium": "середні",
+      "large": "великі",
+      "complex": "складні"
+    },
+    "level": {
+      "low": "низький",
+      "medium": "середній",
+      "high": "високий",
+      "critical": "критичний"
+    },
+    "codeQualitySeverity": {
+      "suggestion": "пропозиція",
+      "minor": "незначна",
+      "major": "суттєва",
+      "critical": "критична"
+    },
+    "audience": {
+      "developers": "розробники",
+      "users": "користувачі",
+      "contributors": "контриб’ютори",
+      "maintainers": "мейнтейнери"
+    },
+    "categories": {
+      "uiux": {
+        "usability": "Зручність використання",
+        "accessibility": "Доступність",
+        "performance": "Продуктивність",
+        "visual": "Візуальний дизайн",
+        "interaction": "Взаємодія"
+      },
+      "documentation": {
+        "readme": "README",
+        "api_docs": "Документація API",
+        "inline_comments": "Коментарі в коді",
+        "examples": "Приклади й посібники",
+        "architecture": "Документація архітектури",
+        "troubleshooting": "Посібник з усунення проблем"
+      },
+      "security": {
+        "authentication": "Автентифікація",
+        "authorization": "Авторизація",
+        "input_validation": "Перевірка вхідних даних",
+        "data_protection": "Захист даних",
+        "dependencies": "Залежності",
+        "configuration": "Конфігурація",
+        "secrets_management": "Керування секретами"
+      },
+      "performance": {
+        "bundle_size": "Розмір бандла",
+        "runtime": "Продуктивність виконання",
+        "memory": "Використання пам’яті",
+        "database": "Запити до бази даних",
+        "network": "Мережеві запити",
+        "rendering": "Рендеринг",
+        "caching": "Кешування"
+      },
+      "codeQuality": {
+        "large_files": "Великі файли",
+        "code_smells": "«Запахи» коду",
+        "complexity": "Висока складність",
+        "duplication": "Дублювання коду",
+        "naming": "Угоди щодо іменування",
+        "structure": "Структура файлів",
+        "linting": "Проблеми лінтингу",
+        "testing": "Покриття тестами",
+        "types": "Типобезпека",
+        "dependencies": "Проблеми із залежностями",
+        "dead_code": "Мертвий код",
+        "git_hygiene": "Гігієна Git"
+      }
+    },
+    "details": {
+      "severity": "Серйозність",
+      "effort": "Зусилля",
+      "category": "Категорія",
+      "files": "Файли",
+      "breakingChange": "Несумісна зміна",
+      "breakingChangeHint": "Цей рефакторинг може зламати наявний код або тести.",
+      "currentState": "Поточний стан",
+      "proposedChange": "Запропонована зміна",
+      "codeExample": "Приклад коду",
+      "metrics": "Метрики",
+      "lines": "Рядки",
+      "complexity": "Складність",
+      "duplicateLines": "Дубльовані рядки",
+      "testCoverage": "Покриття тестами",
+      "affectedFiles": "Зачеплені файли",
+      "bestPractice": "Найкраща практика",
+      "prerequisites": "Передумови",
+      "buildsUpon": "Ґрунтується на",
+      "implementationApproach": "Підхід до реалізації",
+      "patternsToFollow": "Патерни, яких варто дотримуватися",
+      "targetAudience": "Цільова аудиторія",
+      "currentDocumentation": "Поточна документація",
+      "proposedContent": "Запропонований вміст",
+      "affectedAreas": "Зачеплені області",
+      "priority": "Пріоритет",
+      "impact": "Вплив",
+      "expectedImprovement": "Очікуване покращення",
+      "implementation": "Реалізація",
+      "tradeoffs": "Компроміси",
+      "vulnerability": "Вразливість",
+      "currentRisk": "Поточний ризик",
+      "remediation": "Усунення",
+      "references": "Посилання",
+      "compliance": "Відповідність стандартам",
+      "userBenefit": "Користь для користувача",
+      "affectedComponents": "Зачеплені компоненти"
+    },
+    "generation": {
+      "title": "Генерація ідей",
+      "completeCount": "Готово: {{completed}}/{{total}}",
+      "showLogs": "Показати логи",
+      "hideLogs": "Сховати логи",
+      "waiting": "Очікування запуску...",
+      "failed": "Не вдалося згенерувати ідеї для цієї категорії",
+      "noIdeas": "Для цієї категорії ідей не згенеровано"
+    },
+    "dialogs": {
+      "configTitle": "Налаштування ідей",
+      "configDescription": "Виберіть, які типи ідей генерувати",
+      "ideationTypes": "Типи ідей",
+      "contextSources": "Джерела контексту",
+      "includeRoadmapContext": "Враховувати контекст дорожньої карти",
+      "includeKanbanContext": "Враховувати контекст Kanban",
+      "addMoreTitle": "Додати ще ідей",
+      "addMoreDescription": "Виберіть додаткові типи ідей для генерації. Наявні ідеї буде збережено.",
+      "allGenerated": "Ви вже згенерували ідеї всіх типів!",
+      "useRegenerate": "Скористайтеся «Згенерувати знову», щоб оновити наявні ідеї.",
+      "generateTypes_one": "Згенерувати {{count}} тип",
+      "generateTypes_few": "Згенерувати {{count}} типи",
+      "generateTypes_many": "Згенерувати {{count}} типів",
+      "generateTypes_other": "Згенерувати {{count}} типу",
+      "generateIdeas": "Згенерувати ідеї"
+    },
+    "empty": {
+      "title": "Ідей ще немає",
+      "description": "Генеруйте ідеї функцій за допомогою AI на основі контексту проєкту, наявних патернів і цільової аудиторії.",
+      "enabledTypes": "Увімкнені типи ідей"
+    },
+    "filters": {
+      "all": "Усі",
+      "code": "Код",
+      "uiux": "UI/UX",
+      "docs": "Документація",
+      "security": "Безпека",
+      "performance": "Продуктивність"
+    },
+    "header": {
+      "title": "Ідеї",
+      "subtitle": "Згенеровані AI ідеї функцій для вашого проєкту",
+      "addMore": "Додати ще"
+    }
   },
   "issues": {
     "loadingMore": "Завантаження...",
     "scrollForMore": "Прокрутіть, щоб побачити більше",
-    "allLoaded": "Усі issues завантажено"
+    "allLoaded": "Усі issues завантажено",
+    "noMatch": "Жодна issue не відповідає пошуку",
+    "noIssuesFound": "Issue не знайдено",
+    "selectIssue": "Виберіть issue, щоб переглянути подробиці",
+    "notConnectedDescription": "Налаштуйте токен GitHub і репозиторій у параметрах проєкту, щоб синхронізувати issue.",
+    "complexity": {
+      "simple": "Проста",
+      "standard": "Звичайна",
+      "complex": "Складна"
+    },
+    "header": {
+      "title": "GitHub Issues",
+      "openCount": "Відкритих: {{count}}",
+      "analyzeTooltip": "Проаналізувати до 200 відкритих issue, згрупувати схожі й переглянути запропоновані пакети перед створенням задач.",
+      "autoFixNew": "Автовиправлення нових",
+      "autoFixTooltip": "Автоматично виправляти нові issue, щойно вони з’являються.",
+      "processingIssues_one": "Обробка {{count}} issue...",
+      "processingIssues_few": "Обробка {{count}} issue...",
+      "processingIssues_many": "Обробка {{count}} issue...",
+      "processingIssues_other": "Обробка {{count}} issue...",
+      "searchPlaceholder": "Пошук issue...",
+      "filterAll": "Усі"
+    },
+    "detail": {
+      "comments_one": "{{count}} коментар",
+      "comments_few": "{{count}} коментарі",
+      "comments_many": "{{count}} коментарів",
+      "comments_other": "{{count}} коментаря",
+      "taskLinked": "Задачу пов’язано",
+      "taskId": "ID задачі: {{id}}",
+      "assignees": "Виконавці",
+      "milestone": "Віха"
+    },
+    "autoFix": {
+      "specCreated": "Специфікацію створено з issue",
+      "failed": "Автовиправлення не вдалося",
+      "retry": "Повторити автовиправлення",
+      "processing": "Обробка...",
+      "button": "Автовиправлення"
+    },
+    "investigation": {
+      "title": "Створити задачу з issue",
+      "issueHeading": "Issue #{{number}}: {{title}}",
+      "description": "Створіть задачу з цього issue на GitHub. Задачу буде додано до колонки «Беклог» на Kanban-дошці.",
+      "failedToLoadComments": "Не вдалося завантажити коментарі",
+      "selectComments": "Виберіть коментарі для включення ({{selected}}/{{total}})",
+      "willInclude": "Задача міститиме:",
+      "includeTitle": "Назву й опис issue",
+      "includeLink": "Посилання на issue на GitHub",
+      "includeLabels": "Мітки й метадані issue",
+      "noComments": "Без коментарів (в issue немає коментарів)",
+      "taskCreated": "Задачу створено! Перегляньте її на Kanban-дошці."
+    },
+    "batchReview": {
+      "title": "Проаналізувати й згрупувати issue",
+      "introDescription": "Буде проаналізовано до 200 відкритих issue, схожі буде згруповано, і ви зможете переглянути запропоновані пакети перед створенням задач.",
+      "startAnalysis": "Почати аналіз",
+      "analyzing": "Аналіз issue...",
+      "computingSimilarity": "Обчислення схожості й перевірка пакетів...",
+      "percentComplete": "Виконано {{percent}}%",
+      "issuesAnalyzed_one": "issue проаналізовано",
+      "issuesAnalyzed_few": "issue проаналізовано",
+      "issuesAnalyzed_many": "issue проаналізовано",
+      "issuesAnalyzed_other": "issue проаналізовано",
+      "batchesProposed_one": "пакет запропоновано",
+      "batchesProposed_few": "пакети запропоновано",
+      "batchesProposed_many": "пакетів запропоновано",
+      "batchesProposed_other": "пакета запропоновано",
+      "singleIssues_one": "окрема issue",
+      "singleIssues_few": "окремі issue",
+      "singleIssues_many": "окремих issue",
+      "singleIssues_other": "окремої issue",
+      "deselectAll": "Зняти вибір з усіх",
+      "singleIssuesNotGrouped": "Окремі issue (не згруповані)",
+      "andMore": "...і ще {{count}}",
+      "issueCount_one": "{{count}} issue",
+      "issueCount_few": "{{count}} issue",
+      "issueCount_many": "{{count}} issue",
+      "issueCount_other": "{{count}} issue",
+      "selectionSummary_one": "Вибрано {{count}} пакет ({{issues}})",
+      "selectionSummary_few": "Вибрано {{count}} пакети ({{issues}})",
+      "selectionSummary_many": "Вибрано {{count}} пакетів ({{issues}})",
+      "selectionSummary_other": "Вибрано {{count}} пакета ({{issues}})",
+      "plusSingleIssues_one": "+ {{count}} окрема issue",
+      "plusSingleIssues_few": "+ {{count}} окремі issue",
+      "plusSingleIssues_many": "+ {{count}} окремих issue",
+      "plusSingleIssues_other": "+ {{count}} окремої issue",
+      "creatingBatches": "Створення пакетів...",
+      "creatingBatchesDescription": "Підготовка схвалених пакетів issue до обробки.",
+      "batchesCreated": "Пакети створено",
+      "batchesCreatedDescription": "Вибрані пакети issue готові до обробки.",
+      "stepIntro": "Проаналізуйте відкриті issue й згрупуйте схожі для пакетної обробки.",
+      "stepAnalyzing": "Аналіз семантичної схожості issue...",
+      "stepReview": "Перегляньте й схваліть запропоновані пакети issue.",
+      "stepApproving": "Створення схвалених пакетів...",
+      "stepDone": "Пакети успішно створено.",
+      "approveCreate_one": "Схвалити й створити ({{count}} пакет)",
+      "approveCreate_few": "Схвалити й створити ({{count}} пакети)",
+      "approveCreate_many": "Схвалити й створити ({{count}} пакетів)",
+      "approveCreate_other": "Схвалити й створити ({{count}} пакета)",
+      "batchNumber": "Пакет {{number}}",
+      "percentSimilar": "Схожість {{percent}}%",
+      "approveFailed": "Не вдалося схвалити пакети"
+    }
   },
   "roadmap": {
     "taskCompleted": "Завершено",
@@ -478,7 +848,97 @@
     "convertToTask": "Перетворити на задачу Auto-Build",
     "build": "Розробити",
     "task": "Задача",
-    "viewTask": "Переглянути задачу"
+    "viewTask": "Переглянути задачу",
+    "impactBadge": "вплив: {{level}}",
+    "competitorInsight": "Висновок про конкурентів",
+    "competitorInsightTooltip": "Ця функція закриває болі користувачів конкурентів",
+    "insight": "Висновок",
+    "featureCount_one": "{{count}} функція",
+    "featureCount_few": "{{count}} функції",
+    "featureCount_many": "{{count}} функцій",
+    "featureCount_other": "{{count}} функції",
+    "priority": {
+      "must": "Обов’язково",
+      "should": "Бажано",
+      "could": "Можливо",
+      "wont": "Не буде"
+    },
+    "level": {
+      "low": "низький",
+      "medium": "середній",
+      "high": "високий"
+    },
+    "roadmapStatus": {
+      "draft": "чернетка",
+      "active": "активна",
+      "archived": "архівована"
+    },
+    "phaseStatus": {
+      "planned": "заплановано",
+      "in_progress": "у роботі",
+      "completed": "завершено"
+    },
+    "columns": {
+      "under_review": "На розгляді",
+      "planned": "Заплановано",
+      "in_progress": "У роботі",
+      "done": "Готово"
+    },
+    "header": {
+      "competitorAnalysis": "Аналіз конкурентів",
+      "clickToViewAnalysis": "Натисніть, щоб переглянути детальний аналіз",
+      "analysisSummary": "Проаналізовано конкурентів: {{competitors}}, виявлено болів користувачів: {{painPoints}}",
+      "addFeature": "Додати функцію",
+      "addFeatureTooltip": "Додати нову функцію до дорожньої карти",
+      "regenerate": "Створити дорожню карту заново",
+      "target": "Аудиторія:",
+      "morePersonas_one": "+{{count}} персона",
+      "morePersonas_few": "+{{count}} персони",
+      "morePersonas_many": "+{{count}} персон",
+      "morePersonas_other": "+{{count}} персони",
+      "secondaryPersonas": "Додаткові персони:",
+      "featuresUnit_one": "функція",
+      "featuresUnit_few": "функції",
+      "featuresUnit_many": "функцій",
+      "featuresUnit_other": "функції",
+      "phasesUnit_one": "етап",
+      "phasesUnit_few": "етапи",
+      "phasesUnit_many": "етапів",
+      "phasesUnit_other": "етапу"
+    },
+    "empty": {
+      "title": "Дорожньої карти ще немає",
+      "description": "Згенеруйте дорожню карту за допомогою AI: вона врахує цільову аудиторію проєкту й сформує стратегічний план функцій.",
+      "generate": "Згенерувати дорожню карту"
+    },
+    "phase": {
+      "featuresProgress": "Функцій: {{completed}}/{{total}}",
+      "milestones": "Віхи",
+      "featuresCount": "Функції ({{count}})"
+    },
+    "tabs": {
+      "kanban": "Kanban",
+      "phases": "Етапи",
+      "allFeatures": "Усі функції",
+      "byPriority": "За пріоритетом"
+    },
+    "detail": {
+      "complexity": "Складність",
+      "impact": "Вплив",
+      "dependencies": "Залежності",
+      "userStories": "Історії користувачів",
+      "acceptanceCriteria": "Критерії приймання",
+      "addressesPainPoints": "Закриває болі користувачів конкурентів",
+      "severityBadge": "серйозність: {{level}}",
+      "deleteTitle": "Видалити функцію?",
+      "deleteDescription": "«{{title}}» буде остаточно видалено з дорожньої карти."
+    },
+    "kanban": {
+      "dropHere": "Перетягніть сюди",
+      "noFeatures": "Немає функцій",
+      "dragHere": "Перетягніть сюди функції",
+      "unknownStatus": "Невідомий стан"
+    }
   },
   "roadmapGeneration": {
     "progress": "Прогрес",
@@ -734,5 +1194,275 @@
     "region": "Сповіщення",
     "error": "Помилка",
     "dismiss": "Закрити"
+  },
+  "changelog": {
+    "noProjectSelected": "Проєкт не вибрано",
+    "selectProjectHint": "Виберіть проєкт на бічній панелі, щоб створювати журнали змін.",
+    "generationFailed": "Не вдалося згенерувати",
+    "header": {
+      "title": "Генератор журналу змін",
+      "step1": "Крок 1: виберіть завершені задачі",
+      "step2": "Крок 2: налаштуйте й згенеруйте журнал змін",
+      "step3": "Крок 3: випуск і архівування задач",
+      "stepSelect": "Вибір",
+      "stepGenerate": "Генерація",
+      "stepRelease": "Випуск"
+    },
+    "sourceModes": {
+      "title": "Джерело журналу змін",
+      "tasks": {
+        "label": "Завершені задачі",
+        "description": "Згенерувати із завершених задач зі специфікаціями"
+      },
+      "git-history": {
+        "label": "Історія Git",
+        "description": "Згенерувати з останніх комітів або діапазону тегів"
+      },
+      "branch-diff": {
+        "label": "Порівняння гілок",
+        "description": "Згенерувати з комітів між двома гілками"
+      }
+    },
+    "gitHistory": {
+      "title": "Параметри історії Git",
+      "historyType": "Тип історії",
+      "sinceVersion": "Від версії",
+      "recentCommits": "Останні коміти",
+      "sinceDate": "Від дати",
+      "tagRange": "Діапазон тегів",
+      "numberOfCommits": "Кількість комітів",
+      "fromTag": "Від тегу",
+      "selectTag": "Виберіть тег...",
+      "toTag": "До тегу (необов’язково)",
+      "headLatest": "HEAD (останній)",
+      "lastVersion": "Остання версія",
+      "selectVersion": "Виберіть версію...",
+      "sinceVersionHint": "Буде включено всі коміти після цієї версії",
+      "includeMergeCommits": "Включати merge-коміти",
+      "loadCommits": "Завантажити коміти"
+    },
+    "branchDiff": {
+      "title": "Порівняння гілок",
+      "baseBranch": "Базова гілка",
+      "selectBaseBranch": "Виберіть базову гілку...",
+      "defaultBadge": "за замовчуванням",
+      "baseBranchHint": "Гілка, у яку ви зливаєте зміни",
+      "compareBranch": "Гілка для порівняння",
+      "selectCompareBranch": "Виберіть гілку для порівняння...",
+      "currentBadge": "поточна",
+      "compareBranchHint": "Гілка з вашими змінами",
+      "mustDiffer": "Гілки мають відрізнятися"
+    },
+    "list": {
+      "tasksSelected": "Вибрано задач: {{selected}} з {{total}}",
+      "clear": "Очистити",
+      "noCompletedTasks": "Немає завершених задач",
+      "noCompletedTasksHint": "Завершіть задачі на Kanban-дошці й позначте їх як «Готово», щоб включити до журналу змін.",
+      "commitsFound_one": "Знайдено {{count}} коміт",
+      "commitsFound_few": "Знайдено {{count}} коміти",
+      "commitsFound_many": "Знайдено {{count}} комітів",
+      "commitsFound_other": "Знайдено {{count}} коміту",
+      "loadingCommits": "Завантаження комітів...",
+      "noCommitsFound": "Комітів не знайдено",
+      "noCommitsGitHistoryHint": "Налаштуйте параметри історії й натисніть «Завантажити коміти», щоб переглянути.",
+      "noCommitsBranchDiffHint": "Виберіть обидві гілки й натисніть «Завантажити коміти», щоб побачити зміни."
+    },
+    "summary": {
+      "task_one": "{{count}} задачу",
+      "task_few": "{{count}} задачі",
+      "task_many": "{{count}} задач",
+      "task_other": "{{count}} задачі",
+      "commit_one": "{{count}} коміт",
+      "commit_few": "{{count}} коміти",
+      "commit_many": "{{count}} комітів",
+      "commit_other": "{{count}} коміту",
+      "item_one": "{{count}} елемент",
+      "item_few": "{{count}} елементи",
+      "item_many": "{{count}} елементів",
+      "item_other": "{{count}} елемента",
+      "more": "+{{count}} ще",
+      "including": "Включено {{items}}"
+    },
+    "config": {
+      "backToSelection": "Назад до вибору",
+      "releaseInfo": "Інформація про випуск",
+      "version": "Версія",
+      "date": "Дата",
+      "previous": "Попередня: {{version}}",
+      "outputStyle": "Стиль результату",
+      "format": "Формат",
+      "audience": "Аудиторія",
+      "emojis": "Емодзі",
+      "advancedOptions": "Додаткові параметри",
+      "customInstructions": "Власні інструкції",
+      "customInstructionsPlaceholder": "Додайте особливі інструкції для AI...",
+      "customInstructionsHint": "Необов’язково. Підкажіть AI тон, конкретні деталі, які варто включити, тощо.",
+      "generating": "Генерація...",
+      "generate": "Згенерувати журнал змін"
+    },
+    "versionBump": {
+      "major": "Підвищення мажорної версії (виявлено несумісні зміни)",
+      "minor": "Підвищення мінорної версії (виявлено нові функції)",
+      "patch": "Підвищення патч-версії (виправлення/покращення)"
+    },
+    "formats": {
+      "keep-a-changelog": {
+        "label": "Keep a Changelog",
+        "description": "Структурований формат із розділами Added/Changed/Fixed/Removed"
+      },
+      "simple-list": {
+        "label": "Простий список",
+        "description": "Охайний маркований список за категоріями"
+      },
+      "github-release": {
+        "label": "GitHub Release",
+        "description": "Примітки до випуску в стилі GitHub"
+      }
+    },
+    "audiences": {
+      "technical": {
+        "label": "Технічна",
+        "description": "Детальні технічні зміни для розробників"
+      },
+      "user-facing": {
+        "label": "Для користувачів",
+        "description": "Зрозумілі нетехнічні описи для кінцевих користувачів"
+      },
+      "marketing": {
+        "label": "Маркетинг",
+        "description": "Текст про цінність із наголосом на перевагах"
+      }
+    },
+    "emojiLevels": {
+      "none": {
+        "label": "Без емодзі",
+        "description": "Жодних емодзі"
+      },
+      "little": {
+        "label": "Лише заголовки",
+        "description": "Емодзі лише в заголовках розділів"
+      },
+      "medium": {
+        "label": "Заголовки й ключове",
+        "description": "Емодзі в заголовках і ключових пунктах"
+      },
+      "high": {
+        "label": "Усюди",
+        "description": "Емодзі в заголовках і в кожному рядку"
+      }
+    },
+    "stages": {
+      "loading_specs": "Завантаження специфікацій...",
+      "loading_commits": "Завантаження комітів...",
+      "generating": "Генерація журналу змін...",
+      "formatting": "Форматування результату...",
+      "complete": "Готово",
+      "error": "Помилка"
+    },
+    "preview": {
+      "title": "Попередній перегляд",
+      "markdown": "Markdown",
+      "copy": "Копіювати",
+      "copied": "Скопійовано!",
+      "copyTooltip": "Копіювати в буфер обміну",
+      "save": "Зберегти в CHANGELOG.md",
+      "saved": "Збережено!",
+      "saveTooltip": "Додати на початок CHANGELOG.md у корені проєкту",
+      "dropImages": "Перетягніть сюди зображення, щоб додати їх до журналу змін",
+      "pasteImagesHint": "Вставляйте зображення в опис, щоб зберегти їх у журналі змін",
+      "placeholder": "Тут з’явиться згенерований журнал змін...",
+      "emptyHint": "Натисніть «Згенерувати журнал змін», щоб створити примітки до випуску.",
+      "loadingImage": "Завантаження зображення...",
+      "imageNotFound": "Зображення не знайдено",
+      "noProjectPath": "Не вдається завантажити локальне зображення: немає шляху до проєкту",
+      "failedToLoadImage": "Не вдалося завантажити зображення"
+    },
+    "images": {
+      "invalidType": "Недопустимий тип зображення. Дозволено: {{types}}",
+      "failedToSave": "Не вдалося зберегти зображення",
+      "failedToProcess": "Не вдалося обробити зображення"
+    },
+    "success": {
+      "title": "Журнал змін збережено!",
+      "versionAdded": "Версію {{tag}} додано до CHANGELOG.md",
+      "done": "Готово"
+    },
+    "release": {
+      "title": "Створити випуск на GitHub",
+      "created": "Випуск успішно створено!",
+      "view": "Переглянути випуск на GitHub",
+      "description": "Створити новий випуск {{tag}} на GitHub із журналом змін як примітками до випуску.",
+      "creating": "Створення випуску...",
+      "create": "Створити випуск {{tag}}",
+      "failed": "Не вдалося створити випуск"
+    },
+    "archive": {
+      "title": "Архівувати завершені задачі",
+      "archived_one": "{{count}} задачу архівовано!",
+      "archived_few": "{{count}} задачі архівовано!",
+      "archived_many": "{{count}} задач архівовано!",
+      "archived_other": "{{count}} задачі архівовано!",
+      "description_one": "Архівуйте {{count}} задачу, щоб розчистити Kanban-дошку. Архівовані задачі можна переглянути за допомогою перемикача «Показати архівовані».",
+      "description_few": "Архівуйте {{count}} задачі, щоб розчистити Kanban-дошку. Архівовані задачі можна переглянути за допомогою перемикача «Показати архівовані».",
+      "description_many": "Архівуйте {{count}} задач, щоб розчистити Kanban-дошку. Архівовані задачі можна переглянути за допомогою перемикача «Показати архівовані».",
+      "description_other": "Архівуйте {{count}} задачі, щоб розчистити Kanban-дошку. Архівовані задачі можна переглянути за допомогою перемикача «Показати архівовані».",
+      "archiving": "Архівування...",
+      "button_one": "Архівувати {{count}} задачу",
+      "button_few": "Архівувати {{count}} задачі",
+      "button_many": "Архівувати {{count}} задач",
+      "button_other": "Архівувати {{count}} задачі",
+      "failed": "Не вдалося архівувати задачі"
+    },
+    "entry": {
+      "hasSpecs": "Є специфікації",
+      "files_one": "{{count}} файл",
+      "files_few": "{{count}} файли",
+      "files_many": "{{count}} файлів",
+      "files_other": "{{count}} файлу"
+    }
+  },
+  "linearImport": {
+    "title": "Імпорт задач із Linear",
+    "description": "Виберіть задачі з Linear для імпорту в AutoBuild",
+    "importing": "Імпорт...",
+    "importTasks_one": "Імпортувати {{count}} задачу",
+    "importTasks_few": "Імпортувати {{count}} задачі",
+    "importTasks_many": "Імпортувати {{count}} задач",
+    "importTasks_other": "Імпортувати {{count}} задачі",
+    "importedTasks_one": "Успішно імпортовано {{count}} задачу",
+    "importedTasks_few": "Успішно імпортовано {{count}} задачі",
+    "importedTasks_many": "Успішно імпортовано {{count}} задач",
+    "importedTasks_other": "Успішно імпортовано {{count}} задачі",
+    "processingHint": "Задачі обробляються. Стежте за прогресом на Kanban-дошці.",
+    "selectAll": "Вибрати всі",
+    "deselectAll": "Зняти вибір з усіх",
+    "team": "Команда",
+    "selectTeam": "Виберіть команду",
+    "projectOptional": "Проєкт (необов’язково)",
+    "allProjects": "Усі проєкти",
+    "searchPlaceholder": "Пошук задач...",
+    "allStates": "Усі стани",
+    "stateTypes": {
+      "backlog": "Беклог",
+      "unstarted": "Не розпочато",
+      "started": "Розпочато",
+      "completed": "Завершено",
+      "canceled": "Скасовано",
+      "triage": "Сортування"
+    },
+    "moreLabels": "+{{count}} ще",
+    "hideDescription": "Сховати опис",
+    "showDescription": "Показати опис",
+    "assignedTo": "Виконавець: {{name}}",
+    "projectName": "Проєкт: {{name}}",
+    "viewInLinear": "Відкрити в Linear",
+    "selectTeamHint": "Виберіть команду, щоб переглянути issue",
+    "noIssuesMatchFilters": "Жодна issue не відповідає фільтрам",
+    "errors": {
+      "failedImport": "Не вдалося імпортувати issue",
+      "failedLoadIssues": "Не вдалося завантажити issue",
+      "failedLoadProjects": "Не вдалося завантажити проєкти",
+      "failedLoadTeams": "Не вдалося завантажити команди"
+    }
   }
 }

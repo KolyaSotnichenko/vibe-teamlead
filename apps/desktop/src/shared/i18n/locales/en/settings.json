@@ -405,7 +405,9 @@
         "name": "Quick Edits",
         "description": "Fast iterations for simple changes and quick fixes"
       }
-    }
+    },
+    "customMenuItem": "Custom...",
+    "customMenuHint": "Choose model & thinking level"
   },
   "workspace": {
     "roles": {

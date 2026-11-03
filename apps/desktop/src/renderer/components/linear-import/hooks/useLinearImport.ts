@@ -3,12 +3,14 @@
  */
 
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { LinearImportResult } from '../types';
 
 export function useLinearImport(
   projectId: string,
   onImportComplete?: (result: LinearImportResult) => void
 ) {
+  const { t } = useTranslation('common');
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<LinearImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,15 +35,15 @@ export function useLinearImport(
             onImportComplete?.(result.data);
           }
         } else {
-          setError(result.error || 'Failed to import issues');
+          setError(result.error || t('linearImport.errors.failedImport'));
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : t('errors.unknownError'));
       } finally {
         setIsImporting(false);
       }
     },
-    [projectId, onImportComplete]
+    [projectId, onImportComplete, t]
   );
 
   return {

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { ConfigurationPanel } from './ConfigurationPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { Step3SuccessScreen } from './Step3SuccessScreen';
@@ -59,12 +60,14 @@ export function Step2ConfigureGenerate(props: Step2ConfigureGenerateProps) {
     onChangelogEdit
   } = props;
 
+  const { t } = useTranslation('common');
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const projects = useProjectStore((state) => state.projects);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const selectedTasks = doneTasks.filter((t) => selectedTaskIds.includes(t.id));
 
   const summaryInfo = getSummaryInfo(
+    t,
     sourceMode,
     selectedTaskIds,
     selectedTasks,

@@ -144,6 +144,7 @@ function groupEntriesByAgent(entries: PRLogEntry[]): {
 }
 
 export function PRLogs({ prNumber, logs, isLoading, isStreaming = false }: PRLogsProps) {
+  const { t } = useTranslation(['common']);
   const [expandedPhases, setExpandedPhases] = useState<Set<PRLogPhase>>(new Set(['analysis']));
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
 
@@ -183,12 +184,12 @@ export function PRLogs({ prNumber, logs, isLoading, isStreaming = false }: PRLog
             {/* Logs header */}
             <div className="flex items-center justify-between mb-4">
               <div className="text-sm text-muted-foreground flex items-center gap-2">
-                PR #{prNumber}
-                {logs.is_followup && <Badge variant="outline" className="text-xs">Follow-up</Badge>}
+                {t('common:prReview.logs.prNumber', { number: prNumber })}
+                {logs.is_followup && <Badge variant="outline" className="text-xs">{t('common:prReview.followup')}</Badge>}
                 {isStreaming && (
                   <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30 flex items-center gap-1">
                     <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                    Live
+                    {t('common:prReview.logs.live')}
                   </Badge>
                 )}
               </div>
@@ -215,14 +216,14 @@ export function PRLogs({ prNumber, logs, isLoading, isStreaming = false }: PRLog
         ) : isStreaming ? (
           <div className="text-center text-sm text-muted-foreground py-8">
             <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-blue-500" />
-            <p>Waiting for logs...</p>
-            <p className="text-xs mt-1">Review is starting</p>
+            <p>{t('common:prReview.logs.waiting')}</p>
+            <p className="text-xs mt-1">{t('common:prReview.logs.reviewStarting')}</p>
           </div>
         ) : (
           <div className="text-center text-sm text-muted-foreground py-8">
             <Terminal className="mx-auto mb-2 h-8 w-8 opacity-50" />
-            <p>No logs available</p>
-            <p className="text-xs mt-1">Run a review to generate logs</p>
+            <p>{t('common:prReview.logs.noLogsAvailable')}</p>
+            <p className="text-xs mt-1">{t('common:prReview.logs.runReviewHint')}</p>
           </div>
         )}
       </div>
@@ -242,6 +243,7 @@ interface PhaseLogSectionProps {
 }
 
 function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = false, expandedAgents, onToggleAgent }: PhaseLogSectionProps) {
+  const { t } = useTranslation(['common']);
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
   const hasEntries = (phaseLog?.entries.length || 0) > 0;
@@ -252,7 +254,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = 
       return (
         <Badge variant="outline" className="text-xs bg-info/10 text-info border-info/30 flex items-center gap-1">
           <Loader2 className="h-3 w-3 animate-spin" />
-          {isStreaming ? 'Streaming' : 'Running'}
+          {isStreaming ? t('common:prReview.logs.streaming') : t('common:prReview.logs.running')}
         </Badge>
       );
     }
@@ -262,7 +264,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = 
     if (isStreaming && status === 'completed' && !hasEntries) {
       return (
         <Badge variant="secondary" className="text-xs text-muted-foreground">
-          Pending
+          {t('common:prReview.logs.pending')}
         </Badge>
       );
     }
@@ -272,20 +274,20 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = 
         return (
           <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/30 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
-            Complete
+            {t('common:prReview.logs.complete')}
           </Badge>
         );
       case 'failed':
         return (
           <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30 flex items-center gap-1">
             <XCircle className="h-3 w-3" />
-            Failed
+            {t('common:prReview.logs.failed')}
           </Badge>
         );
       default:
         return (
           <Badge variant="secondary" className="text-xs text-muted-foreground">
-            Pending
+            {t('common:prReview.logs.pending')}
           </Badge>
         );
     }
@@ -311,10 +313,10 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = 
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             )}
             <Icon className={cn('h-4 w-4', status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
-            <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
+            <span className="font-medium text-sm">{t(`common:prReview.logs.phases.${phase}`, { defaultValue: PHASE_LABELS[phase] })}</span>
             {hasEntries && (
               <span className="text-xs text-muted-foreground">
-                ({phaseLog?.entries.length} entries)
+                {t('common:prReview.logs.entries', { count: phaseLog?.entries.length ?? 0 })}
               </span>
             )}
           </div>
@@ -326,7 +328,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = 
       <CollapsibleContent>
         <div className="mt-1 ml-6 border-l-2 border-border pl-4 py-2 space-y-2">
           {!hasEntries ? (
-            <p className="text-xs text-muted-foreground italic">No logs yet</p>
+            <p className="text-xs text-muted-foreground italic">{t('common:prReview.logs.noLogsYet')}</p>
           ) : (
             <GroupedLogEntries
               entries={phaseLog?.entries || []}
@@ -583,6 +585,7 @@ interface LogEntryProps {
 }
 
 function LogEntry({ entry }: LogEntryProps) {
+  const { t } = useTranslation(['common']);
   const [isExpanded, setIsExpanded] = useState(false);
   const hasDetail = Boolean(entry.detail);
 
@@ -673,12 +676,12 @@ function LogEntry({ entry }: LogEntryProps) {
             {isExpanded ? (
               <>
                 <ChevronDown className="h-2.5 w-2.5" />
-                <span>Less</span>
+                <span>{t('common:prReview.logs.less')}</span>
               </>
             ) : (
               <>
                 <ChevronRight className="h-2.5 w-2.5" />
-                <span>More</span>
+                <span>{t('common:prReview.logs.more')}</span>
               </>
             )}
           </button>

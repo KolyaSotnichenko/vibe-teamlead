@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { LinearIssue } from '../types';
 
 export function useLinearIssues(
@@ -11,6 +12,7 @@ export function useLinearIssues(
   selectedProjectId: string,
   onIssuesChange?: () => void
 ) {
+  const { t } = useTranslation('common');
   const [issues, setIssues] = useState<LinearIssue[]>([]);
   const [isLoadingIssues, setIsLoadingIssues] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,17 +41,17 @@ export function useLinearIssues(
           setIssues(result.data);
           onIssuesChangeRef.current?.();
         } else {
-          setError(result.error || 'Failed to load issues');
+          setError(result.error || t('linearImport.errors.failedLoadIssues'));
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : t('errors.unknownError'));
       } finally {
         setIsLoadingIssues(false);
       }
     };
 
     loadIssues();
-  }, [projectId, selectedTeamId, selectedProjectId]);
+  }, [projectId, selectedTeamId, selectedProjectId, t]);
 
   return { issues, isLoadingIssues, error, setError };
 }

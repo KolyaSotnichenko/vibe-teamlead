@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createTask } from '../../../stores/task-store';
 import type {
   AnalyzePreviewResult,
@@ -28,6 +29,7 @@ interface UseAnalyzePreviewReturn {
 }
 
 export function useAnalyzePreview({ projectId }: UseAnalyzePreviewProps): UseAnalyzePreviewReturn {
+  const { t } = useTranslation('common');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -110,7 +112,7 @@ export function useAnalyzePreview({ projectId }: UseAnalyzePreviewProps): UseAna
     try {
       const result = await window.electronAPI.github.approveBatches(projectId, batches);
       if (!result.success) {
-        throw new Error(result.error || 'Failed to approve batches');
+        throw new Error(result.error || t('issues.batchReview.approveFailed'));
       }
 
       // Create tasks for each approved batch
@@ -145,7 +147,7 @@ export function useAnalyzePreview({ projectId }: UseAnalyzePreviewProps): UseAna
         await createTask(projectId, title, description, metadata);
       }
     } catch (error) {
-      setAnalysisError(error instanceof Error ? error.message : 'Failed to approve batches');
+      setAnalysisError(error instanceof Error ? error.message : t('issues.batchReview.approveFailed'));
       throw error;
     } finally {
       setIsApproving(false);

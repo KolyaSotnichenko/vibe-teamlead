@@ -125,9 +125,9 @@ export function InsightsModelSelector({
           >
             <Sliders className="h-4 w-4 shrink-0" />
             <div className="flex-1">
-              <div className="font-medium">Custom...</div>
+              <div className="font-medium">{t('settings:agentProfile.customMenuItem')}</div>
               <div className="text-xs text-muted-foreground">
-                Choose model & thinking level
+                {t('settings:agentProfile.customMenuHint')}
               </div>
             </div>
             {selectedProfileId === 'custom' && (

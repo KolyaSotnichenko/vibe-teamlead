@@ -148,7 +148,7 @@ export function PRHeader({ pr, isLoadingFiles = false }: PRHeaderProps) {
                     variant="outline"
                     className={cn("text-[10px] px-1.5 py-0 shrink-0", getFileStatusStyle(file.status))}
                   >
-                    {file.status}
+                    {t(`prReview.fileStatus.${file.status}`, { defaultValue: file.status })}
                   </Badge>
                   <div className="flex items-center gap-1.5 text-xs font-mono shrink-0">
                     <span className="text-emerald-500 flex items-center gap-0.5">

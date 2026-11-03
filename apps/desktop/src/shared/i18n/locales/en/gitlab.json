@@ -20,7 +20,8 @@
   },
   "empty": {
     "noMatch": "No issues match your search",
-    "selectIssue": "Select an issue to view details"
+    "selectIssue": "Select an issue to view details",
+    "noIssues": "No issues found"
   },
   "notConnected": {
     "title": "GitLab Not Connected",
@@ -55,7 +56,8 @@
     "creating": "Creating...",
     "cancel": "Cancel",
     "done": "Done",
-    "close": "Close"
+    "close": "Close",
+    "investigateIssue": "Investigate issue"
   },
   "settings": {
     "enableIssues": "Enable GitLab Issues",
@@ -127,7 +129,37 @@
       "closed": "Closed",
       "merged": "Merged",
       "all": "All"
-    }
+    },
+    "tryAgain": "Try Again",
+    "listTitle": "Merge Requests",
+    "searchPlaceholder": "Search merge requests...",
+    "noMatching": "No matching merge requests",
+    "noneFound": "No merge requests found",
+    "byAuthor": "by {{author}}",
+    "create": {
+      "title": "Create Merge Request",
+      "description": "Create a new merge request in GitLab",
+      "titleLabel": "Title",
+      "titlePlaceholder": "Merge request title",
+      "sourceBranch": "Source Branch",
+      "targetBranch": "Target Branch",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Describe the changes in this merge request...",
+      "requiredFields": "Title, source branch, and target branch are required",
+      "failed": "Failed to create merge request"
+    },
+    "errors": {
+      "checkConnection": "Failed to check connection",
+      "fetchMRs": "Failed to fetch MRs",
+      "checkNewCommits": "Failed to check for new commits",
+      "cancelReview": "Failed to cancel review",
+      "postReview": "Failed to post review",
+      "postNote": "Failed to post note",
+      "mergeMR": "Failed to merge MR",
+      "assignUsers": "Failed to assign users",
+      "approveMR": "Failed to approve MR"
+    },
+    "reviewCancelled": "Review cancelled by user"
   },
   "mrReview": {
     "runReview": "Run AI Review",
@@ -174,6 +206,52 @@
       "stillOpen": "still open",
       "newIssue": "new issue",
       "newIssues": "new issues"
+    },
+    "followupReviewWithCommits_one": "Follow-up Review ({{count}} new commit)",
+    "followupReviewWithCommits_other": "Follow-up Review ({{count}} new commits)",
+    "postFindingsCount_one": "Post {{count}} Finding",
+    "postFindingsCount_other": "Post {{count}} Findings",
+    "postedFindingsToGitLab_one": "Posted {{count}} finding to GitLab",
+    "postedFindingsToGitLab_other": "Posted {{count}} findings to GitLab",
+    "runFollowupReview": "Run Follow-up Review",
+    "newCommitsCount_one": "{{count}} new commit",
+    "newCommitsCount_other": "{{count}} new commits",
+    "resolvedCount": "{{count}} resolved",
+    "stillOpenCount": "{{count}} still open",
+    "newIssuesCount_one": "{{count}} new issue",
+    "newIssuesCount_other": "{{count}} new issues",
+    "reviewedAt": "Reviewed: {{date}}",
+    "atCommit": "at commit {{sha}}",
+    "reviewFailed": "Review failed",
+    "statusDesc": {
+      "newCommitsSinceFollowup_one": "{{count}} new commit since follow-up. Run another follow-up review.",
+      "newCommitsSinceFollowup_other": "{{count}} new commits since follow-up. Run another follow-up review.",
+      "allIssuesResolved_one": "All {{count}} issue resolved. This MR can be merged.",
+      "allIssuesResolved_other": "All {{count}} issues resolved. This MR can be merged.",
+      "nonBlockingSuggestions_one": "{{resolved}} resolved. {{count}} non-blocking suggestion remain.",
+      "nonBlockingSuggestions_other": "{{resolved}} resolved. {{count}} non-blocking suggestions remain.",
+      "blockingIssues_one": "{{resolved}} resolved, {{count}} blocking issue still open.",
+      "blockingIssues_other": "{{resolved}} resolved, {{count}} blocking issues still open.",
+      "newCommitsSinceReview_one": "{{count}} new commit since review. Run follow-up to check if issues are resolved.",
+      "newCommitsSinceReview_other": "{{count}} new commits since review. Run follow-up to check if issues are resolved.",
+      "findingsPostedWaiting_one": "{{count}} finding posted. Waiting for contributor to address issues.",
+      "findingsPostedWaiting_other": "{{count}} findings posted. Waiting for contributor to address issues.",
+      "findingsPostedNoBlockers_one": "{{count}} finding posted. No blocking issues remain.",
+      "findingsPostedNoBlockers_other": "{{count}} findings posted. No blocking issues remain.",
+      "findingsNeedPosting_one": "{{count}} finding need to be posted to GitLab.",
+      "findingsNeedPosting_other": "{{count}} findings need to be posted to GitLab.",
+      "findingsFoundSelectPost_one": "{{count}} finding found. Select and post to GitLab.",
+      "findingsFoundSelectPost_other": "{{count}} findings found. Select and post to GitLab."
+    },
+    "severity": {
+      "critical": "Blocker",
+      "criticalDesc": "Must fix",
+      "high": "Required",
+      "highDesc": "Should fix",
+      "medium": "Recommended",
+      "mediumDesc": "Improve quality",
+      "low": "Suggestion",
+      "lowDesc": "Consider"
     }
   },
   "findings": {
@@ -203,6 +281,14 @@
       "pattern": "Pattern",
       "performance": "Performance",
       "logic": "Logic"
+    },
+    "selectCriticalHighCount": "Select Critical/High ({{count}})",
+    "selectedOfTotal": "{{selected}}/{{total}} selected",
+    "summaryCounts": {
+      "critical": "{{count}} Critical",
+      "high": "{{count}} High",
+      "medium": "{{count}} Medium",
+      "low": "{{count}} Low"
     }
   }
 }
