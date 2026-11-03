@@ -7,7 +7,7 @@
   "sections": {
     "appearance": {
       "title": "Apparence",
-      "description": "Personnalisez l'apparence de Aperant"
+      "description": "Personnalisez l'apparence de Vibe Teamlead"
     },
     "display": {
       "title": "Affichage",
@@ -35,7 +35,7 @@
     },
     "updates": {
       "title": "Mises à jour",
-      "description": "Mises à jour Aperant"
+      "description": "Mises à jour Vibe Teamlead"
     },
     "notifications": {
       "title": "Notifications",
@@ -209,7 +209,7 @@
     "otherAgentSettingsDescription": "Options de configuration supplémentaires de l'agent",
     "agentFramework": "Framework de l'agent",
     "agentFrameworkDescription": "Le framework de codage utilisé pour les tâches autonomes",
-    "agentFrameworkAutoClaude": "Aperant",
+    "agentFrameworkAutoClaude": "Vibe Teamlead",
     "aiTerminalNaming": "Nommage IA des terminaux",
     "aiTerminalNamingDescription": "Nommer automatiquement les terminaux en fonction des commandes (utilise le modèle de nommage IA)",
     "featureModelSettings": "Paramètres du modèle de fonctionnalité",
@@ -244,7 +244,7 @@
     "sourceBundled": "Intégré",
     "sourceFallback": "Valeur par défaut",
     "notDetected": "Non détecté",
-    "autoClaudePath": "Chemin Aperant",
+    "autoClaudePath": "Chemin Vibe Teamlead",
     "autoClaudePathDescription": "Chemin relatif vers le répertoire auto-claude dans les projets",
     "autoClaudePathPlaceholder": "auto-claude (par défaut)",
     "autoNameTerminals": "Nommer automatiquement les terminaux",
@@ -252,7 +252,7 @@
   },
   "theme": {
     "title": "Apparence",
-    "description": "Personnalisez l'apparence de Aperant",
+    "description": "Personnalisez l'apparence de Vibe Teamlead",
     "mode": "Mode",
     "modeDescription": "Choisir entre les thèmes clair et sombre",
     "light": "Clair",
@@ -270,14 +270,14 @@
     "tabTerminalFonts": "Polices de terminal",
     "ide": {
       "label": "IDE préféré",
-      "description": "Aperant ouvrira les worktrees dans cet éditeur",
+      "description": "Vibe Teamlead ouvrira les worktrees dans cet éditeur",
       "placeholder": "Sélectionner un IDE...",
       "customPath": "Chemin IDE personnalisé",
       "customPathPlaceholder": "/chemin/vers/votre/ide"
     },
     "terminal": {
       "label": "Terminal préféré",
-      "description": "Aperant ouvrira les sessions terminal ici",
+      "description": "Vibe Teamlead ouvrira les sessions terminal ici",
       "placeholder": "Sélectionner un terminal...",
       "customPath": "Chemin terminal personnalisé",
       "customPathPlaceholder": "/chemin/vers/votre/terminal"
@@ -305,7 +305,7 @@
   },
   "updates": {
     "title": "Mises à jour",
-    "description": "Gérer les mises à jour de Aperant",
+    "description": "Gérer les mises à jour de Vibe Teamlead",
     "appUpdateReady": "Mise à jour de l'app prête",
     "newVersion": "Nouvelle version",
     "released": "Publiée le",
@@ -322,7 +322,7 @@
     "unableToCheck": "Impossible de vérifier les mises à jour",
     "checkForUpdates": "Vérifier les mises à jour",
     "autoUpdateProjects": "Mise à jour automatique des projets",
-    "autoUpdateProjectsDescription": "Mettre à jour automatiquement Aperant dans les projets quand une nouvelle version est disponible",
+    "autoUpdateProjectsDescription": "Mettre à jour automatiquement Vibe Teamlead dans les projets quand une nouvelle version est disponible",
     "betaUpdates": "Mises à jour bêta",
     "betaUpdatesDescription": "Recevoir les versions bêta pré-release avec de nouvelles fonctionnalités (peut être moins stable)",
     "stableDowngradeAvailable": "Version stable disponible",
@@ -330,7 +330,7 @@
     "stableVersion": "Version stable",
     "downloadStableVersion": "Télécharger la version stable",
     "readOnlyVolumeTitle": "Impossible d'installer depuis l'image disque",
-    "readOnlyVolumeDescription": "Aperant s'exécute depuis une image disque en lecture seule (DMG). Veuillez glisser l'application dans votre dossier Applications et la relancer depuis cet emplacement pour installer les mises à jour.",
+    "readOnlyVolumeDescription": "Vibe Teamlead s'exécute depuis une image disque en lecture seule (DMG). Veuillez glisser l'application dans votre dossier Applications et la relancer depuis cet emplacement pour installer les mises à jour.",
     "downloadError": "Échec du téléchargement de la mise à jour"
   },
   "notifications": {
@@ -855,7 +855,7 @@
     "description": "Accédez aux logs et informations de débogage pour le dépannage",
     "errorReporting": {
       "label": "Rapports d'erreurs anonymes",
-      "description": "Envoyer des rapports de crash pour améliorer Aperant. Aucune donnée personnelle ni code n'est collecté."
+      "description": "Envoyer des rapports de crash pour améliorer Vibe Teamlead. Aucune donnée personnelle ni code n'est collecté."
     },
     "openLogsFolder": "Ouvrir le dossier des logs",
     "copyDebugInfo": "Copier les infos de débogage",
@@ -885,7 +885,7 @@
     "noProjectSelected": "Aucun projet sélectionné",
     "noProjectSelectedDescription": "Sélectionnez un projet dans le menu déroulant pour voir et configurer les serveurs MCP.",
     "projectNotInitialized": "Projet non initialisé",
-    "projectNotInitializedDescription": "Initialisez Aperant pour ce projet pour configurer les serveurs MCP.",
+    "projectNotInitializedDescription": "Initialisez Vibe Teamlead pour ce projet pour configurer les serveurs MCP.",
     "browserAutomation": "Automatisation du navigateur (agents QA uniquement)",
     "alwaysEnabled": "toujours activé",
     "addServer": "Ajouter un serveur",
@@ -922,7 +922,7 @@
         "description": "Automatisation du navigateur web pour les tests"
       },
       "autoClaude": {
-        "name": "Outils Aperant",
+        "name": "Outils Vibe Teamlead",
         "description": "Suivi de la progression du build"
       }
     },
