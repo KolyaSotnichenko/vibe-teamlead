@@ -3,7 +3,7 @@
  * =========================
  *
  * Runs in an isolated worker_thread. Receives configuration via `workerData`,
- * executes `runAgentSession()`, and posts structured messages back to the
+ * executes Claude Code sessions via `runAgentSession()`, and posts structured messages back to the
  * main thread via `parentPort.postMessage()`.
  *
  * Path handling:
@@ -15,15 +15,8 @@ import { parentPort, workerData } from 'worker_threads';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
-import { runAgentSession } from '../session/runner';
-import { runContinuableSession } from '../session/continuation';
-import { createProvider } from '../providers/factory';
-import type { SupportedProvider } from '../providers/types';
-import { getModelContextWindow } from '../../../shared/constants/models';
-import { refreshOAuthTokenReactive } from '../auth/resolver';
-import { buildToolRegistry } from '../tools/build-registry';
-import type { ToolRegistry } from '../tools/registry';
-import { SubagentExecutorImpl } from '../orchestration/subagent-executor';
+import { runAgentSession } from '../claude-code/runner';
+import { buildSubagents, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
 import type {
@@ -33,7 +26,6 @@ import type {
   SerializableSessionConfig,
   WorkerTaskEventMessage,
 } from './types';
-import type { Tool as AITool } from 'ai';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator } from '../orchestration/build-orchestrator';
 import { QALoop } from '../orchestration/qa-loop';
@@ -45,8 +37,6 @@ import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking } from '../config/phase-config';
 import { TaskLogWriter } from '../logging/task-log-writer';
 import { loadProjectInstructions, injectContext } from '../prompts/prompt-loader';
-import { createMcpClientsForAgent, mergeMcpTools, closeAllMcpClients } from '../mcp/client';
-import type { McpClientResult } from '../mcp/types';
 import { runProjectIndexer } from '../project/project-indexer';
 
 // =============================================================================
@@ -193,7 +183,47 @@ function loadPrompt(promptName: string): string | null {
 // MCP Clients (module-scope for worker lifetime)
 // =============================================================================
 
-let mcpClients: McpClientResult[] = [];
+
+// =============================================================================
+// Claude Code session plumbing
+// =============================================================================
+
+/** Fields every Claude Code session shares, derived from the worker config. */
+function claudeSessionBase(session: SerializableSessionConfig): Pick<
+  SessionConfig,
+  'auth' | 'mcpOptions' | 'memoryMcpUrl' | 'linearApiKey'
+> {
+  return {
+    auth: { apiKey: session.apiKey, baseURL: session.baseURL },
+    mcpOptions: {
+      context7Enabled: session.mcpOptions?.context7Enabled ?? true,
+      memoryEnabled: session.mcpOptions?.memoryEnabled ?? false,
+      linearEnabled: session.mcpOptions?.linearEnabled ?? false,
+      electronMcpEnabled: session.mcpOptions?.electronMcpEnabled ?? false,
+      puppeteerMcpEnabled: session.mcpOptions?.puppeteerMcpEnabled ?? false,
+      projectCapabilities: session.mcpOptions?.projectCapabilities,
+      agentMcpAdd: session.mcpOptions?.agentMcpAdd,
+      agentMcpRemove: session.mcpOptions?.agentMcpRemove,
+    },
+    memoryMcpUrl: process.env.GRAPHITI_MCP_URL,
+    linearApiKey: process.env.LINEAR_API_KEY,
+  };
+}
+
+/** Event sink: task_logs.json + live relay to the main thread. */
+function relayEvents(phase: Phase) {
+  return (event: StreamEvent) => {
+    if (logWriter) {
+      logWriter.processEvent(event, phase);
+    }
+    postMessage({
+      type: 'stream-event',
+      taskId: config.taskId,
+      data: event,
+      projectId: config.projectId,
+    });
+  };
+}
 
 // =============================================================================
 // Prompt Assembly (provider-agnostic context injection)
@@ -251,44 +281,21 @@ async function runSingleSession(
   subtaskId: string | undefined,
   baseSession: SerializableSessionConfig,
   toolContext: ToolContext,
-  registry: ToolRegistry,
   initialUserMessage?: string,
   skipPhaseLogging = false,
   outputSchema?: import('zod').ZodSchema,
 ): Promise<SessionResult> {
-  // Use queue-resolved model ID from baseSession (already mapped to the correct
-  // provider-specific model, e.g., 'gpt-5.3-codex' for OpenAI Codex).
-  // getPhaseModel() only knows local shorthands (opus → claude-opus-4-6) and
-  // would create a mismatch when the provider queue selected a non-Anthropic account.
-  const phaseModelId = baseSession.modelId;
   const phaseThinking = await getPhaseThinking(specDir, phase);
-
-  const model = createProvider({
-    config: {
-      provider: baseSession.provider as SupportedProvider,
-      apiKey: baseSession.apiKey,
-      baseURL: baseSession.baseURL,
-      oauthTokenFilePath: baseSession.oauthTokenFilePath,
-    },
-    modelId: phaseModelId,
-  });
-
-  const tools: Record<string, AITool> = {
-    ...registry.getToolsForAgent(agentType, toolContext),
-    ...(mergeMcpTools(mcpClients) as Record<string, AITool>),
-  };
 
   // Build initial messages: use provided kickoff message, or fall back to session messages
   const initialMessages = initialUserMessage
     ? [{ role: 'user' as const, content: initialUserMessage }]
     : baseSession.initialMessages;
 
-  // Resolve context window limit from model metadata
-  const contextWindowLimit = getModelContextWindow(phaseModelId);
-
   const sessionConfig: SessionConfig = {
+    ...claudeSessionBase(baseSession),
     agentType,
-    model,
+    model: baseSession.modelId,
     systemPrompt,
     initialMessages,
     toolContext,
@@ -298,10 +305,8 @@ async function runSingleSession(
     specDir,
     projectDir,
     phase,
-    modelShorthand: undefined,
     sessionNumber,
     subtaskId,
-    contextWindowLimit,
     outputSchema,
   };
 
@@ -313,44 +318,9 @@ async function runSingleSession(
     logWriter.setSubtask(subtaskId);
   }
 
-  const runnerOptions = {
-    tools,
-    onEvent: (event: StreamEvent) => {
-      // Write stream events to task_logs.json for UI log display
-      if (logWriter) {
-        logWriter.processEvent(event, phase);
-      }
-      // Also relay to main thread for real-time progress updates
-      postMessage({
-        type: 'stream-event',
-        taskId: config.taskId,
-        data: event,
-        projectId: config.projectId,
-      });
-    },
-    onAuthRefresh: baseSession.configDir
-      ? () => refreshOAuthTokenReactive(baseSession.configDir as string)
-      : undefined,
-    onModelRefresh: baseSession.configDir
-      ? (newToken: string) => createProvider({
-          config: {
-            provider: baseSession.provider as SupportedProvider,
-            apiKey: newToken,
-            baseURL: baseSession.baseURL,
-          },
-          modelId: phaseModelId,
-        })
-      : undefined,
-  };
-
   let sessionResult: SessionResult;
   try {
-    sessionResult = await runContinuableSession(sessionConfig, runnerOptions, {
-      contextWindowLimit,
-      apiKey: baseSession.apiKey,
-      baseURL: baseSession.baseURL,
-      oauthTokenFilePath: baseSession.oauthTokenFilePath,
-    });
+    sessionResult = await runAgentSession(sessionConfig, { onEvent: relayEvents(phase) });
   } catch (error) {
     // Ensure log cleanup happens on failure
     if (logWriter && !skipPhaseLogging) logWriter.endPhase(phase, false);
@@ -360,7 +330,7 @@ async function runSingleSession(
 
   // End phase logging — mark as completed or failed based on outcome (skip when orchestrator manages phases)
   if (logWriter && !skipPhaseLogging) {
-    const success = sessionResult.outcome === 'completed' || sessionResult.outcome === 'max_steps' || sessionResult.outcome === 'context_window';
+    const success = sessionResult.outcome === 'completed' || sessionResult.outcome === 'max_steps';
     logWriter.endPhase(phase, success);
   }
   if (logWriter) {
@@ -382,59 +352,33 @@ async function run(): Promise<void> {
   try {
     const securityProfile = buildSecurityProfile(session);
     const toolContext = buildToolContext(session, securityProfile);
-    const registry = buildToolRegistry();
-
-    // Initialize MCP clients from session config
-    try {
-      mcpClients = await createMcpClientsForAgent(session.agentType, {
-        context7Enabled: session.mcpOptions?.context7Enabled ?? true,
-        memoryEnabled: session.mcpOptions?.memoryEnabled ?? false,
-        linearEnabled: session.mcpOptions?.linearEnabled ?? false,
-        electronMcpEnabled: session.mcpOptions?.electronMcpEnabled ?? false,
-        puppeteerMcpEnabled: session.mcpOptions?.puppeteerMcpEnabled ?? false,
-        projectCapabilities: session.mcpOptions?.projectCapabilities,
-        agentMcpAdd: session.mcpOptions?.agentMcpAdd,
-        agentMcpRemove: session.mcpOptions?.agentMcpRemove,
-      });
-      if (mcpClients.length > 0) {
-        postLog(`MCP initialized: ${mcpClients.map(c => c.serverId).join(', ')}`);
-      }
-    } catch (error) {
-      postLog(`MCP init failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`);
-    }
-
     // Route to orchestrator for build_orchestrator agent type
     if (session.agentType === 'build_orchestrator') {
-      await runBuildOrchestrator(session, toolContext, registry);
+      await runBuildOrchestrator(session, toolContext);
       return;
     }
 
     // Route to QA loop for qa_reviewer agent type
     if (session.agentType === 'qa_reviewer') {
-      await runQALoop(session, toolContext, registry);
+      await runQALoop(session, toolContext);
       return;
     }
 
     // Route to spec orchestrator for spec_orchestrator agent type
     if (session.agentType === 'spec_orchestrator') {
       if (session.useAgenticOrchestration) {
-        await runAgenticSpecOrchestrator(session, toolContext, registry);
+        await runAgenticSpecOrchestrator(session, toolContext);
       } else {
-        await runSpecOrchestrator(session, toolContext, registry);
+        await runSpecOrchestrator(session, toolContext);
       }
       return;
     }
 
     // Default: single session for all other agent types
-    await runDefaultSession(session, toolContext, registry);
+    await runDefaultSession(session, toolContext);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     postError(`Agent session failed: ${message}`);
-  } finally {
-    // Cleanup MCP clients
-    if (mcpClients.length > 0) {
-      await closeAllMcpClients(mcpClients);
-    }
   }
 }
 
@@ -444,29 +388,11 @@ async function run(): Promise<void> {
 async function runDefaultSession(
   session: SerializableSessionConfig,
   toolContext: ToolContext,
-  registry: ToolRegistry,
 ): Promise<void> {
-  const model = createProvider({
-    config: {
-      provider: session.provider as SupportedProvider,
-      apiKey: session.apiKey,
-      baseURL: session.baseURL,
-      oauthTokenFilePath: session.oauthTokenFilePath,
-    },
-    modelId: session.modelId,
-  });
-
-  const tools: Record<string, AITool> = {
-    ...registry.getToolsForAgent(session.agentType, toolContext),
-    ...(mergeMcpTools(mcpClients) as Record<string, AITool>),
-  };
-
-  // Resolve context window limit from model metadata
-  const contextWindowLimit = getModelContextWindow(session.modelId);
-
   const sessionConfig: SessionConfig = {
+    ...claudeSessionBase(session),
     agentType: session.agentType,
-    model,
+    model: session.modelId,
     systemPrompt: session.systemPrompt,
     initialMessages: session.initialMessages,
     toolContext,
@@ -479,7 +405,6 @@ async function runDefaultSession(
     modelShorthand: session.modelShorthand,
     sessionNumber: session.sessionNumber,
     subtaskId: session.subtaskId,
-    contextWindowLimit,
   };
 
   // Start phase logging for default session
@@ -490,42 +415,10 @@ async function runDefaultSession(
 
   let result: SessionResult | undefined;
   try {
-    result = await runContinuableSession(sessionConfig, {
-      tools,
-      onEvent: (event: StreamEvent) => {
-        // Write stream events to task_logs.json for UI log display
-        if (logWriter) {
-          logWriter.processEvent(event, defaultPhase);
-        }
-        postMessage({
-          type: 'stream-event',
-          taskId: config.taskId,
-          data: event,
-          projectId: config.projectId,
-        });
-      },
-      onAuthRefresh: session.configDir
-        ? () => refreshOAuthTokenReactive(session.configDir as string)
-        : undefined,
-      onModelRefresh: session.configDir
-        ? (newToken: string) => createProvider({
-            config: {
-              provider: session.provider as SupportedProvider,
-              apiKey: newToken,
-              baseURL: session.baseURL,
-            },
-            modelId: session.modelId,
-          })
-        : undefined,
-    }, {
-      contextWindowLimit,
-      apiKey: session.apiKey,
-      baseURL: session.baseURL,
-      oauthTokenFilePath: session.oauthTokenFilePath,
-    });
+    result = await runAgentSession(sessionConfig, { onEvent: relayEvents(defaultPhase) });
   } finally {
     if (logWriter) {
-      const success = result?.outcome === 'completed' || result?.outcome === 'max_steps' || result?.outcome === 'context_window';
+      const success = result?.outcome === 'completed' || result?.outcome === 'max_steps';
       logWriter.endPhase(defaultPhase, success ?? false);
     }
   }
@@ -556,7 +449,6 @@ function mapExecutionPhaseToPhase(executionPhase: ExecutionPhase): Phase | undef
 async function runBuildOrchestrator(
   session: SerializableSessionConfig,
   toolContext: ToolContext,
-  registry: ToolRegistry,
 ): Promise<void> {
   postLog('Starting BuildOrchestrator pipeline (planning → coding → QA)');
 
@@ -592,7 +484,6 @@ async function runBuildOrchestrator(
         runConfig.subtaskId,
         session,
         toolContext,
-        registry,
         kickoffMessage,
         true, // skipPhaseLogging — orchestrator manages phase start/end
         runConfig.outputSchema,
@@ -740,7 +631,6 @@ async function runBuildOrchestrator(
 async function runQALoop(
   session: SerializableSessionConfig,
   toolContext: ToolContext,
-  registry: ToolRegistry,
 ): Promise<void> {
   postLog('Starting QA validation loop');
 
@@ -767,7 +657,6 @@ async function runQALoop(
         undefined,
         session,
         toolContext,
-        registry,
         kickoffMessage,
         true, // skipPhaseLogging — QA loop manages phase start/end
       );
@@ -826,7 +715,6 @@ async function runQALoop(
 async function runSpecOrchestrator(
   session: SerializableSessionConfig,
   toolContext: ToolContext,
-  registry: ToolRegistry,
 ): Promise<void> {
   // Extract the task description from the first user message
   const taskDescription = session.initialMessages?.[0]?.content
@@ -894,7 +782,6 @@ async function runSpecOrchestrator(
         undefined,
         session,
         specToolContext,
-        registry,
         kickoffMessage,
         true, // skipPhaseLogging — orchestrator manages phase start/end
         runConfig.outputSchema,
@@ -983,7 +870,6 @@ async function runSpecOrchestrator(
 async function runAgenticSpecOrchestrator(
   session: SerializableSessionConfig,
   toolContext: ToolContext,
-  registry: ToolRegistry,
 ): Promise<void> {
   // Extract task description
   const taskDescription = session.initialMessages?.[0]?.content
@@ -1006,36 +892,13 @@ async function runAgenticSpecOrchestrator(
     postLog(`Project index generation failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // Create the SubagentExecutor
-  const model = createProvider({
-    config: {
-      provider: session.provider as SupportedProvider,
-      apiKey: session.apiKey,
-      baseURL: session.baseURL,
-      oauthTokenFilePath: session.oauthTokenFilePath,
-    },
-    modelId: session.modelId,
-  });
+  // Spec specialists become Claude Code subagents (delegated via the Agent tool)
+  const agents = await buildSubagents(SPEC_SPECIALISTS, (promptName) => assemblePrompt(promptName, session));
+  postLog(`Registered ${Object.keys(agents).length} spec subagents`);
 
-  const executor = new SubagentExecutorImpl({
-    model,
-    registry,
-    baseToolContext: {
-      ...toolContext,
-      allowedWritePaths: [session.specDir],
-    },
-    loadPrompt: async (promptName: string) => assemblePrompt(promptName, session),
-    abortSignal: abortController.signal,
-    onSubagentEvent: (agentType: string, event: string) => {
-      postLog(`Subagent ${agentType}: ${event}`);
-    },
-  });
-
-  // Create an extended tool context with the executor
-  const orchestratorToolContext: ToolContext & { subagentExecutor: SubagentExecutorImpl } = {
+  const orchestratorToolContext: ToolContext = {
     ...toolContext,
     allowedWritePaths: [session.specDir],
-    subagentExecutor: executor,
   };
 
   // Load the agentic orchestrator prompt
@@ -1054,19 +917,13 @@ async function runAgenticSpecOrchestrator(
 
   const kickoffMessage = kickoffParts.join('');
 
-  // Resolve context window and tools
-  const contextWindowLimit = getModelContextWindow(session.modelId);
   const phaseThinking = await getPhaseThinking(session.specDir, 'spec');
 
-  // Get tools for the orchestrator (includes SpawnSubagent since it's in AGENT_CONFIGS)
-  const tools: Record<string, AITool> = {
-    ...registry.getToolsForAgent('spec_orchestrator', orchestratorToolContext),
-    ...(mergeMcpTools(mcpClients) as Record<string, AITool>),
-  };
-
   const sessionConfig: SessionConfig = {
+    ...claudeSessionBase(session),
     agentType: 'spec_orchestrator',
-    model,
+    model: session.modelId,
+    agents,
     systemPrompt,
     initialMessages: [{ role: 'user' as const, content: kickoffMessage }],
     toolContext: orchestratorToolContext,
@@ -1077,7 +934,6 @@ async function runAgenticSpecOrchestrator(
     projectDir: session.projectDir,
     phase: 'spec',
     sessionNumber: 1,
-    contextWindowLimit,
   };
 
   // Start phase logging
@@ -1087,41 +943,10 @@ async function runAgenticSpecOrchestrator(
 
   let result: SessionResult | undefined;
   try {
-    result = await runContinuableSession(sessionConfig, {
-      tools,
-      onEvent: (event: StreamEvent) => {
-        if (logWriter) {
-          logWriter.processEvent(event, 'spec');
-        }
-        postMessage({
-          type: 'stream-event',
-          taskId: config.taskId,
-          data: event,
-          projectId: config.projectId,
-        });
-      },
-      onAuthRefresh: session.configDir
-        ? () => refreshOAuthTokenReactive(session.configDir as string)
-        : undefined,
-      onModelRefresh: session.configDir
-        ? (newToken: string) => createProvider({
-            config: {
-              provider: session.provider as SupportedProvider,
-              apiKey: newToken,
-              baseURL: session.baseURL,
-            },
-            modelId: session.modelId,
-          })
-        : undefined,
-    }, {
-      contextWindowLimit,
-      apiKey: session.apiKey,
-      baseURL: session.baseURL,
-      oauthTokenFilePath: session.oauthTokenFilePath,
-    });
+    result = await runAgentSession(sessionConfig, { onEvent: relayEvents('spec') });
   } finally {
     if (logWriter) {
-      const success = result?.outcome === 'completed' || result?.outcome === 'max_steps' || result?.outcome === 'context_window';
+      const success = result?.outcome === 'completed' || result?.outcome === 'max_steps';
       logWriter.endPhase('spec', success ?? false);
       logWriter.flush();
     }

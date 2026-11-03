@@ -215,7 +215,7 @@ export class WorkerBridge extends EventEmitter {
    */
   private handleResult(taskId: string, result: SessionResult, projectId?: string): void {
     // Map outcome to exit code
-    const exitCode = result.outcome === 'completed' || result.outcome === 'max_steps' || result.outcome === 'context_window' ? 0 : 1;
+    const exitCode = result.outcome === 'completed' || result.outcome === 'max_steps' ? 0 : 1;
 
     // Log the result summary
     const summary = `Session complete: outcome=${result.outcome}, steps=${result.stepsExecuted}, tools=${result.toolCallCount}, duration=${result.durationMs}ms`;

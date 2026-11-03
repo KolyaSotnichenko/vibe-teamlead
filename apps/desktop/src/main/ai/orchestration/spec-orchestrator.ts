@@ -470,7 +470,7 @@ export class SpecOrchestrator extends EventEmitter {
         return { phase, success: false, errors: ['Cancelled'], retries: attempt };
       }
 
-      if (result.outcome === 'completed' || result.outcome === 'max_steps' || result.outcome === 'context_window') {
+      if (result.outcome === 'completed' || result.outcome === 'max_steps') {
         // If the provider returned structured output (via constrained decoding),
         // write it to implementation_plan.json — this is guaranteed to match the
         // schema, overriding whatever the agent wrote via the Write tool.

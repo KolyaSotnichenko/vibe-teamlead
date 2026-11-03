@@ -9,7 +9,6 @@
 
 import type { ExecutionProgressData, ProcessType } from '../../../main/agent/types';
 import type { SessionConfig, SessionResult, StreamEvent } from '../session/types';
-import type { RunnerOptions } from '../session/runner';
 
 // =============================================================================
 // Worker Configuration
@@ -187,6 +186,4 @@ export interface AgentExecutorConfig {
   processType: ProcessType;
   /** Session configuration (serializable parts) */
   session: SerializableSessionConfig;
-  /** Optional auth refresh callback (runs in main thread) */
-  onAuthRefresh?: RunnerOptions['onAuthRefresh'];
 }

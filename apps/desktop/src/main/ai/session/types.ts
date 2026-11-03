@@ -11,13 +11,23 @@
  * - ProgressState: Tracks subtask progress within a session
  */
 
-import type { LanguageModel } from 'ai';
+import type { AgentDefinition, SdkPluginConfig, SettingSource } from '@anthropic-ai/claude-agent-sdk';
 import type { ZodSchema } from 'zod';
 
-import type { AgentType } from '../config/agent-configs';
+import type { AgentType, McpServerResolveOptions } from '../config/agent-configs';
 import type { ModelShorthand, Phase, ThinkingLevel } from '../config/types';
-import type { McpClientResult } from '../mcp/types';
 import type { ToolContext } from '../tools/types';
+
+/**
+ * Credentials for the Claude Code engine.
+ * Vibe Teamlead uses Anthropic API keys (Claude Console) — not claude.ai logins.
+ */
+export interface ClaudeAuth {
+  /** Anthropic API key */
+  apiKey?: string;
+  /** Optional Anthropic-compatible endpoint (e.g. a gateway or proxy) */
+  baseURL?: string;
+}
 
 // =============================================================================
 // Session Configuration
@@ -30,22 +40,39 @@ import type { ToolContext } from '../tools/types';
 export interface SessionConfig {
   /** The agent type determines tools, MCP servers, and thinking defaults */
   agentType: AgentType;
-  /** Resolved language model instance from the provider layer */
-  model: LanguageModel;
+  /** Claude model id or alias (e.g. 'claude-opus-4-6', 'sonnet') */
+  model: string;
+  /** Credentials passed to the Claude Code engine */
+  auth: ClaudeAuth;
   /** System prompt for the session */
   systemPrompt: string;
   /** Initial user message(s) to start the conversation */
   initialMessages: SessionMessage[];
   /** Tool context (cwd, projectDir, specDir, securityProfile) */
   toolContext: ToolContext;
-  /** Maximum number of agentic steps (maps to AI SDK `stopWhen: stepCountIs(N)`) */
+  /** Maximum number of agentic turns (Claude Code `maxTurns`) */
   maxSteps: number;
   /** Thinking level override (defaults to agent config) */
   thinkingLevel?: ThinkingLevel;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
-  /** Pre-initialized MCP client results (tools from MCP servers) */
-  mcpClients?: McpClientResult[];
+  /** Which optional MCP servers to attach (Context7, memory, Linear, browser...) */
+  mcpOptions?: McpServerResolveOptions;
+  /** Memory MCP URL (Graphiti sidecar), when memory is enabled */
+  memoryMcpUrl?: string;
+  /** Linear API key, when Linear is enabled */
+  linearApiKey?: string;
+  /** Programmatic subagents Claude Code may delegate to via its Agent tool */
+  agents?: Record<string, AgentDefinition>;
+  /** Claude Code plugins to load (e.g. Superpowers), by local path */
+  plugins?: SdkPluginConfig[];
+  /**
+   * Filesystem settings to load (CLAUDE.md, skills, hooks, MCP).
+   * Defaults to ['project'] so the target repo's .claude/ setup applies.
+   */
+  settingSources?: SettingSource[];
+  /** Claude Code config directory (defaults to ~/.vibe-teamlead/claude-code) */
+  claudeConfigDir?: string;
   /** Spec directory for the current task */
   specDir: string;
   /** Project directory root */
@@ -58,22 +85,9 @@ export interface SessionConfig {
   sessionNumber?: number;
   /** Subtask ID being worked on (if applicable) */
   subtaskId?: string;
-  /** Context window limit in tokens for reactive compaction guard */
-  contextWindowLimit?: number;
   /**
-   * Optional Zod schema for structured output.
-   *
-   * Behavior depends on whether the session has tools:
-   *
-   * - **Without tools**: Uses AI SDK `Output.object()` for provider-level
-   *   constrained decoding (OpenAI, Anthropic enforce server-side).
-   *
-   * - **With tools**: `Output.object()` is intentionally SKIPPED to avoid
-   *   a known AI SDK conflict where structured output suppresses tool calling
-   *   (GitHub #8354, #8984, #12016). Instead, the runner attempts to parse
-   *   the model's response text as JSON and validate against the schema
-   *   after the stream completes. Callers should still use file-based
-   *   validation (validateAndNormalizeJsonFile) as the primary path.
+   * Optional Zod schema for structured output. Passed to Claude Code as a
+   * JSON Schema `outputFormat`; the result is validated before it is returned.
    */
   outputSchema?: ZodSchema;
 }
@@ -102,8 +116,7 @@ export type SessionOutcome =
   | 'rate_limited'     // Hit provider rate limit (429)
   | 'auth_failure'     // Authentication error (401)
   | 'cancelled'        // Aborted via AbortSignal
-  | 'max_steps'        // Reached maxSteps limit
-  | 'context_window';  // Approaching context window limit (90%), eligible for continuation
+  | 'max_steps';       // Reached maxSteps limit
 
 /**
  * Result returned when a session finishes (success or failure).
@@ -128,6 +141,10 @@ export interface SessionResult {
    * Null if no schema was provided or if structured output extraction failed.
    */
   structuredOutput?: Record<string, unknown>;
+  /** Total cost reported by Claude Code (USD) */
+  costUsd?: number;
+  /** Claude Code session id (for resume/debugging) */
+  claudeSessionId?: string;
 }
 
 /** Token usage breakdown */
