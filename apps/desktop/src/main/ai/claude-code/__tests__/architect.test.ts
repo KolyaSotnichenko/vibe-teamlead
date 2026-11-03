@@ -97,3 +97,17 @@ describe('diagram renderer helpers', () => {
     expect(script).toContain("toolbar: ''");
   });
 });
+
+describe('diagram capture helpers', () => {
+  it('treats a flat frame as blank and a frame with drawing as content', async () => {
+    const { isBlankImage, pngPathFor, buildMermaidRenderScript } = await import('../../../diagram-renderer');
+    const white = Buffer.alloc(4 * 400 * 300, 255);
+    expect(isBlankImage(white)).toBe(true);
+    const drawn = Buffer.from(white);
+    for (let i = 0; i < drawn.length; i += 4 * 7) drawn.fill(0, i, i + 3); // dark pixels across the frame
+    expect(isBlankImage(drawn)).toBe(false);
+    expect(pngPathFor('/s/architecture/diagrams/ci.mmd')).toBe('/s/architecture/diagrams/ci.png');
+    expect(pngPathFor('/s/architecture/diagrams/context.drawio')).toBe('/s/architecture/diagrams/context.png');
+    expect(buildMermaidRenderScript('flowchart LR\n a-->b')).toContain(JSON.stringify('flowchart LR\n a-->b'));
+  });
+});

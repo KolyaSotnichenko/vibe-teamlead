@@ -695,6 +695,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
  * status events that never reached this window — the same data the refresh
  * button shows, without its reset.
  */
+const RUNNING_STATUSES = new Set<string>(['in_progress', 'ai_review']);
+
 export async function syncTasksFromDisk(projectId: string): Promise<void> {
   let result: Awaited<ReturnType<typeof window.electronAPI.getTasks>>;
   try {
@@ -716,6 +718,10 @@ export async function syncTasksFromDisk(projectId: string): Promise<void> {
     const known = current.get(task.id);
     if (!known) continue;
     if (known.status !== task.status || known.reviewReason !== task.reviewReason) {
+      // An agent rewriting implementation_plan.json drops its status fields for a
+      // moment, and a plan without them reads as "backlog". Never move a task
+      // back while its agent is still running; the status events cover it.
+      if (RUNNING_STATUSES.has(known.status) && task.status === 'backlog' && (await checkTaskRunning(task.id))) continue;
       store.updateTaskStatus(task.id, task.status, task.reviewReason);
     }
     if (JSON.stringify(known.subtasks) !== JSON.stringify(task.subtasks)) {

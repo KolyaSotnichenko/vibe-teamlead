@@ -7,6 +7,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MermaidConfig } from 'mermaid';
+import { cleanMermaidSource, mermaidErrorText } from '../../../../shared/utils/mermaid-source';
 
 type MermaidModule = typeof import('mermaid')['default'];
 
@@ -129,7 +130,7 @@ export default function MermaidDiagram({ source, label }: { source: string; labe
   const { t } = useTranslation(['tasks']);
   const reactId = useId();
   const dark = useIsDark();
-  const [state, setState] = useState<{ svg?: string; error?: boolean }>({});
+  const [state, setState] = useState<{ svg?: string; error?: string }>({});
   const [showSource, setShowSource] = useState(false);
 
   useEffect(() => {
@@ -139,12 +140,12 @@ export default function MermaidDiagram({ source, label }: { source: string; labe
       const mermaid = await loadMermaid();
       mermaid.initialize(buildMermaidConfig());
       try {
-        const { svg } = await mermaid.render(id, source);
+        const { svg } = await mermaid.render(id, cleanMermaidSource(source));
         if (!cancelled) setState({ svg });
-      } catch {
+      } catch (error) {
         // mermaid leaves an error node behind on failure
         document.getElementById(`d${id}`)?.remove();
-        if (!cancelled) setState({ error: true });
+        if (!cancelled) setState({ error: mermaidErrorText(error) });
       }
     });
     renderQueue = job.catch(() => undefined);
@@ -156,7 +157,10 @@ export default function MermaidDiagram({ source, label }: { source: string; labe
   return (
     <figure className="not-prose mx-0 mb-0 border border-border bg-background">
       {state.error ? (
-        <div className="px-4 py-3 text-sm text-destructive">{t('tasks:workspace.architecture.mermaidError')}</div>
+        <div className="px-4 py-3 text-sm">
+          <p className="text-destructive">{t('tasks:workspace.architecture.mermaidError')}</p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre font-mono text-xs text-muted-foreground">{state.error}</pre>
+        </div>
       ) : state.svg ? (
         <div
           role="img"

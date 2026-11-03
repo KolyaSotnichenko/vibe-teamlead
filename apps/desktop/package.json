@@ -214,6 +214,13 @@
         "to": "drawio-viewer"
       },
       {
+        "from": "../../node_modules/mermaid/dist",
+        "to": "mermaid",
+        "filter": [
+          "mermaid.min.js"
+        ]
+      },
+      {
         "from": "vendor-bin",
         "to": "scanners",
         "filter": [

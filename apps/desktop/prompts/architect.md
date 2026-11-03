@@ -32,6 +32,7 @@ Scale to the task: a small change gets a short document and one or two diagrams;
 ## Quality bar
 
 - **Visual review is mandatory.** After writing each `.drawio`, call `mcp__auto-claude__render_diagram` with its path, look at the returned image, and fix overlaps, crossings, cut-off text, unlabeled edges and misalignment. Repeat until it is clean.
+- **Mermaid must parse.** Call `mcp__auto-claude__render_diagram` on every `.mmd` too: it returns the image, or the exact syntax error to fix. Write `.mmd` files as plain Mermaid (no ```` ``` ```` fence). Quote every label that has spaces or punctuation — `api["NestJS (api)"]`, `A -->|"git push"| B` — since unquoted `(`, `)`, `:` or `/` break the parser. Keep Mermaid embedded in `architecture.md` to simple flows written the same way; put anything larger in a `.mmd` file and check it.
 - **Names match the code.** Components, modules, tables and endpoints use the real names in the repository (or the names the spec introduces for new things).
 - **Every edge carries meaning:** verb phrase + protocol/format.
 - **Decisions are justified** against the spec's requirements and the project's existing patterns, with honest trade-offs.

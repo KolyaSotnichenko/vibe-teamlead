@@ -83,6 +83,7 @@ export class WorkerBridge extends EventEmitter {
   private projectId: string | undefined;
   private processType: ProcessType = 'task-execution';
   private viewerScript: string | undefined;
+  private mermaidScript: string | undefined;
   private finished = false;
   private lastProgressKey = '';
   private textBuffer = '';
@@ -108,6 +109,7 @@ export class WorkerBridge extends EventEmitter {
 
     const bundled = config.session.bundled ?? resolveBundledTools();
     this.viewerScript = bundled.drawioViewerScript;
+    this.mermaidScript = bundled.mermaidScript;
 
     const workerConfig: WorkerConfig = {
       taskId: config.taskId,
@@ -261,9 +263,15 @@ export class WorkerBridge extends EventEmitter {
   private async renderDiagram(requestId: string, path: string): Promise<void> {
     let reply: MainToWorkerMessage;
     try {
-      if (!this.viewerScript) throw new Error('The draw.io viewer is not bundled in this build');
-      const { renderDrawioToPng } = await import('../../diagram-renderer');
-      const rendered = await renderDrawioToPng(path, this.viewerScript);
+      const renderer = await import('../../diagram-renderer');
+      let rendered: Awaited<ReturnType<typeof renderer.renderDrawioToPng>>;
+      if (/\.(mmd|mermaid)$/i.test(path)) {
+        if (!this.mermaidScript) throw new Error('Mermaid is not bundled in this build');
+        rendered = await renderer.renderMermaidToPng(path, this.mermaidScript);
+      } else {
+        if (!this.viewerScript) throw new Error('The draw.io viewer is not bundled in this build');
+        rendered = await renderer.renderDrawioToPng(path, this.viewerScript);
+      }
       reply = { type: 'render-result', requestId, ok: true, ...rendered };
     } catch (error) {
       reply = { type: 'render-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };

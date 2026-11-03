@@ -36,6 +36,8 @@ export interface BundledTools {
   vibeSkillsDir?: string;
   /** draw.io offline viewer script, used to render diagrams for review */
   drawioViewerScript?: string;
+  /** mermaid.min.js, to check and render .mmd diagrams for the architect */
+  mermaidScript?: string;
   /** Absolute path to the CodeGraph launcher */
   codegraphBin?: string;
   /** Playwright MCP entry point (@playwright/mcp cli.js) */
@@ -78,6 +80,7 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     drawioPluginDir: firstExisting([join(resourcesPath, 'plugins', 'drawio')]),
     vibeSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'vibe-teamlead-skills')]),
     drawioViewerScript: firstExisting([join(resourcesPath, 'drawio-viewer', 'viewer-static.min.js')]),
+    mermaidScript: firstExisting([join(resourcesPath, 'mermaid', 'mermaid.min.js')]),
     codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', 'codegraph')]),
     playwrightMcpCli: firstExisting([join(resourcesPath, 'browser-mcp', 'node_modules', '@playwright', 'mcp', PLAYWRIGHT_CLI)]),
     chromeDevtoolsMcpCli: firstExisting([join(resourcesPath, 'browser-mcp', 'node_modules', 'chrome-devtools-mcp', DEVTOOLS_CLI)]),
@@ -100,6 +103,9 @@ export function resolveDevTools(appRoot: string): BundledTools {
     drawioPluginDir: firstExisting([join(appRoot, 'vendor', 'drawio')]),
     vibeSkillsDir: firstExisting([join(appRoot, 'vendor', 'vibe-teamlead-skills')]),
     drawioViewerScript: firstExisting([join(appRoot, 'vendor', 'drawio-viewer', 'viewer-static.min.js')]),
+    mermaidScript: firstExisting(
+      [resolveFromPackage('mermaid', join('dist', 'mermaid.min.js'))].filter((p): p is string => !!p),
+    ),
     codegraphBin: firstExisting(
       [resolveFromPackage(`@colbymchenry/codegraph-${target}`, join('bin', 'codegraph'))].filter(
         (p): p is string => !!p,

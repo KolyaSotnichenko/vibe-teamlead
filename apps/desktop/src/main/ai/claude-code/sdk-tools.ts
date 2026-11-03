@@ -43,15 +43,16 @@ export const REMEMBER_TOOL = `${TOOL_PREFIX}remember`;
 function renderDiagramTool(context: ToolContext) {
   return tool(
     'render_diagram',
-    'Render a .drawio diagram file to PNG and return the image so you can review the layout. ' +
-      'Saves <name>.png next to the .drawio file. Use after every change to a diagram.',
-    { path: z4.string().describe('Path to the .drawio file (relative to the working directory or absolute)') },
+    'Render a diagram file (.drawio, or Mermaid .mmd) to PNG and return the image so you can review the layout. ' +
+      'Saves <name>.png next to the file. For Mermaid it reports the exact syntax error if the diagram does not parse. ' +
+      'Use after every change to a diagram.',
+    { path: z4.string().describe('Path to the .drawio or .mmd file (relative to the working directory or absolute)') },
     async ({ path }) => {
       const target = isAbsolute(path) ? resolve(path) : resolve(context.cwd, path);
       const roots = [context.specDir, context.cwd, ...(context.allowedWritePaths ?? [])];
-      if (!/\.drawio$/i.test(target) || !roots.some((root) => isPathContained(target, root).contained)) {
+      if (!/\.(drawio|mmd|mermaid)$/i.test(target) || !roots.some((root) => isPathContained(target, root).contained)) {
         return {
-          content: [{ type: 'text' as const, text: `Error: ${path} is not a .drawio file inside the project or spec directory` }],
+          content: [{ type: 'text' as const, text: `Error: ${path} is not a .drawio or .mmd file inside the project or spec directory` }],
           isError: true,
         };
       }

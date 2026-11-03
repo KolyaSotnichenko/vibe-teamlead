@@ -36,6 +36,21 @@ describe('syncTasksFromDisk', () => {
     expect(tasks.find((t) => t.id === 'a')?.logs).toEqual(['streamed']);
   });
 
+  it('does not move a running task back to the backlog (plan file rewritten without status)', async () => {
+    (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
+      ...(window as any).electronAPI,
+      getTasks: vi.fn().mockResolvedValue({ success: true, data: [task('a', 'backlog'), task('b', 'queue')] }),
+      checkTaskRunning: vi.fn().mockResolvedValue({ success: true, data: true }),
+    };
+    await syncTasksFromDisk('p');
+    expect(useTaskStore.getState().tasks.find((t) => t.id === 'a')?.status).toBe('in_progress');
+
+    // Once its agent has stopped, the file is right
+    (window as any).electronAPI.checkTaskRunning = vi.fn().mockResolvedValue({ success: true, data: false });
+    await syncTasksFromDisk('p');
+    expect(useTaskStore.getState().tasks.find((t) => t.id === 'a')?.status).toBe('backlog');
+  });
+
   it('leaves the board alone when the read fails', async () => {
     (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { ...(window as any).electronAPI, getTasks: vi.fn().mockResolvedValue({ success: false, error: 'x' }) };
     await syncTasksFromDisk('p');
