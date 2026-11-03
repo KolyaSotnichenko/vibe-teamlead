@@ -147,7 +147,9 @@
       "reviewing": "Перевірка",
       "fixing": "Виправлення",
       "complete": "Виконано",
-      "failed": "Помилка"
+      "failed": "Помилка",
+      "qa_review": "AI-перевірка",
+      "qa_fixing": "Виправлення проблем"
     },
     "labels": {
       "interrupted": "Перервано",
@@ -221,7 +223,9 @@
       "pushNewBranchesLabel": "Автоматично надіслати нову гілку",
       "pushNewBranchesDescription": "Опублікувати гілку задачі на GitHub і автоматично налаштувати відстеження upstream. Вимкніть, щоб залишити гілку лише локальною.",
       "useWorktreeLabel": "Ізольований робочий простір (рекомендовано)",
-      "useWorktreeDescription": "Зміни створюються в окремому git worktree, щоб їх можна було безпечно переглянути перед злиттям. Вимкніть, щоб працювати безпосередньо в проєкті (швидше, але ризиковіше)."
+      "useWorktreeDescription": "Зміни створюються в окремому git worktree, щоб їх можна було безпечно переглянути перед злиттям. Вимкніть, щоб працювати безпосередньо в проєкті (швидше, але ризиковіше).",
+      "on": "Увімк.",
+      "off": "Вимк."
     },
     "errors": {
       "createFailed": "Не вдалося створити задачу. Спробуйте ще раз.",
@@ -310,7 +314,11 @@
   "subtasks": {
     "untitled": "Підзадача без назви",
     "expandAll": "Розгорнути всі",
-    "collapseAll": "Згорнути всі"
+    "collapseAll": "Згорнути всі",
+    "emptyTitle": "Підзадач не визначено",
+    "emptyBody": "Підзадачі реалізації з’являться тут після планування",
+    "completedOf": "Виконано {{done}} з {{total}}",
+    "verification": "Перевірка:"
   },
   "bulkPR": {
     "selectAllInColumn": "Вибрати всі задачі в колонці",
@@ -734,6 +742,27 @@
       "incompleteTitle": "Задачу не завершено",
       "incompleteBody": "Є специфікація і план, але виконано лише {{done}} з {{total}} підзадач. Продовжте, щоб завершити реалізацію.",
       "recoverRestart": "Відновити й перезапустити"
+    },
+    "completedSuccessfully": "Задачу успішно виконано",
+    "currentSubtask": "Підзадача: {{subtask}}",
+    "subtasksCompleted": "Виконано підзадач: {{done}}/{{total}}",
+    "noSubtasksYet": "Підзадач ще немає",
+    "phaseSegments": {
+      "planning": "Планування (0–20%)",
+      "coding": "Розробка (20–80%)",
+      "aiReview": "AI-перевірка (80–95%)",
+      "complete": "Завершення (95–100%)"
+    },
+    "changesStaged": "Зміни проіндексовано в основному проєкті",
+    "mergeFailed": "Не вдалося злити зміни",
+    "mergeUnknownError": "Невідома помилка під час злиття",
+    "discardFailed": "Не вдалося відхилити зміни",
+    "workspaceErrors": {
+      "mergePreview": "Попередній перегляд злиття: {{error}}",
+      "mergePreviewFailed": "Не вдалося завантажити попередній перегляд злиття",
+      "worktreeStatus": "Стан worktree: {{error}}",
+      "worktreeStatusFailed": "Не вдалося завантажити стан worktree",
+      "unexpected": "Під час завантаження даних робочого простору сталася неочікувана помилка"
     }
   },
   "briefImport": {
@@ -875,5 +904,39 @@
       "afterAria": "Почнеться після {{list}}"
     },
     "menu": "Імпорт брифу…"
+  },
+  "logs": {
+    "phases": {
+      "planning": "Планування",
+      "coding": "Розробка",
+      "validation": "Валідація"
+    },
+    "thinkingShort": {
+      "low": "Низький",
+      "medium": "Сер.",
+      "high": "Високий",
+      "xhigh": "Макс."
+    },
+    "empty": "Журналу ще немає",
+    "emptyHint": "Записи з’являться тут, коли задача запуститься",
+    "entryCount_one": "({{count}} запис)",
+    "entryCount_few": "({{count}} записи)",
+    "entryCount_many": "({{count}} записів)",
+    "entryCount_other": "({{count}} запису)",
+    "modelTitle": "Модель: {{model}}",
+    "thinkingTitle": "Мислення: {{thinking}}",
+    "tools": {
+      "reading": "Читання",
+      "searchingFiles": "Пошук файлів",
+      "searchingCode": "Пошук у коді",
+      "editing": "Редагування",
+      "writing": "Запис",
+      "running": "Виконання"
+    },
+    "done": "Готово",
+    "hideOutput": "Сховати вивід",
+    "showOutput": "Показати вивід",
+    "less": "Менше",
+    "more": "Більше"
   }
 }

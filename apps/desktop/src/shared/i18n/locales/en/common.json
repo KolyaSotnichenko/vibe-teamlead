@@ -628,7 +628,8 @@
       "needsReview": "Needs Review",
       "verified": "Verified",
       "pinned": "Pinned",
-      "confidence": "Confidence"
+      "confidence": "Confidence",
+      "confidencePercent": "Confidence: {{percent}}%"
     },
     "sources": {
       "agent_explicit": "Agent",
@@ -660,7 +661,8 @@
       "title": "Search Memories",
       "placeholder": "Search memories...",
       "resultsCount": "{{count}} result found",
-      "resultsCount_plural": "{{count}} results found"
+      "resultsCount_plural": "{{count}} results found",
+      "score": "Score: {{score}}"
     },
     "browser": {
       "title": "Memory Browser",
@@ -693,12 +695,79 @@
       "pin": "Pin",
       "unpin": "Unpin",
       "deprecate": "Remove"
+    },
+    "noDetails": "No additional details available.",
+    "prReviewCard": {
+      "title": "PR Review",
+      "prNumber": "PR #{{number}}",
+      "findings_one": "{{count}} finding",
+      "findings_other": "{{count}} findings",
+      "details": "Details",
+      "keyFindings": "Key Findings",
+      "moreFindings_one": "+{{count}} more finding",
+      "moreFindings_other": "+{{count}} more findings",
+      "gotchas": "Gotchas Discovered",
+      "patterns": "Patterns Identified",
+      "viewOnGitHub": "View PR on GitHub",
+      "severity": {
+        "critical": "critical",
+        "high": "high",
+        "medium": "medium",
+        "low": "low"
+      }
     }
   },
   "context": {
     "tabs": {
       "projectIndex": "Project Index",
       "memories": "Memories"
+    },
+    "projectIndex": {
+      "title": "Project Structure",
+      "subtitle": "AI-discovered knowledge about your codebase",
+      "refreshTooltip": "Re-analyze project structure",
+      "loadFailed": "Failed to load project index",
+      "emptyTitle": "No Project Index Found",
+      "emptyBody": "Click the Refresh button to analyze your project structure and create an index.",
+      "analyze": "Analyze Project",
+      "overview": "Overview",
+      "serviceCount_one": "{{count}} service",
+      "serviceCount_other": "{{count}} services",
+      "services": "Services",
+      "infrastructure": "Infrastructure",
+      "deployment": "Deployment",
+      "dockerServices": "Docker Services",
+      "conventions": "Conventions",
+      "pythonLinting": "Python Linting",
+      "jsLinting": "JS Linting",
+      "formatting": "Formatting",
+      "gitHooks": "Git Hooks",
+      "enabled": "Enabled"
+    },
+    "service": {
+      "testing": "Testing: {{value}}",
+      "orm": "ORM: {{value}}",
+      "port": "Port: {{value}}",
+      "styling": "Styling: {{value}}",
+      "state": "State: {{value}}",
+      "appleFrameworks": "Apple Frameworks",
+      "spmDependencies": "SPM Dependencies",
+      "keyDirectories": "Key Directories",
+      "apiRoutes": "API Routes ({{count}})",
+      "databaseModels": "Database Models ({{count}})",
+      "fieldCount_one": "{{count}} field",
+      "fieldCount_other": "{{count}} fields",
+      "dependencies": "Dependencies ({{count}})",
+      "more": "+{{count}} more",
+      "envVars": "Environment Variables ({{count}})",
+      "externalServices": "External Services",
+      "databases": "Databases",
+      "email": "Email",
+      "payments": "Payments",
+      "cache": "Cache",
+      "monitoring": "Monitoring",
+      "metrics": "Metrics:",
+      "health": "Health: {{value}}"
     }
   },
   "prStatus": {

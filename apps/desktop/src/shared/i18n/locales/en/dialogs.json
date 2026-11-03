@@ -60,7 +60,31 @@
     "bulkDeleteTitle": "Delete {{count}} Worktrees?",
     "bulkDeleteDescription": "This will permanently delete the selected worktrees and all their uncommitted changes. This action cannot be undone.",
     "deleting": "Deleting...",
-    "deleteSelected": "Delete Selected"
+    "deleteSelected": "Delete Selected",
+    "errors": {
+      "loadTaskWorktrees": "Failed to load task worktrees",
+      "loadWorktrees": "Failed to load worktrees",
+      "taskNotFound": "Task not found for this worktree",
+      "mergeFailed": "Merge failed",
+      "deleteFailed": "Failed to delete worktree",
+      "deleteTerminalFailed": "Failed to delete terminal worktree"
+    },
+    "selectProject": "Select a project to view worktrees",
+    "emptyDescriptionWithTerminals": "Worktrees are created automatically when Vibe Teamlead builds features. You can also create terminal worktrees from the Agent Terminals tab.",
+    "filesChanged_one": "{{count}} file changed",
+    "filesChanged_other": "{{count}} files changed",
+    "commitsAhead_one": "{{count}} commit ahead",
+    "commitsAhead_other": "{{count}} commits ahead",
+    "mergeTo": "Merge to {{branch}}",
+    "copyPath": "Copy Path",
+    "createdOn": "Created {{date}}",
+    "changesSummary": "{{commits}} commits, {{files}} files",
+    "mergeSuccessful": "Merge Successful",
+    "mergeFailedTitle": "Merge Failed",
+    "conflictingFiles": "Conflicting files:",
+    "deleteWarning": "This will permanently delete the worktree and all uncommitted changes.",
+    "cannotBeUndone": "This action cannot be undone.",
+    "deleteTerminal": "Delete Terminal Worktree?"
   },
   "worktreeCleanup": {
     "title": "Complete Task",
@@ -238,5 +262,53 @@
     "openGitHub": "Open GitHub",
     "waiting": "Waiting for you to approve on GitHub…",
     "failed": "GitHub sign-in failed"
+  },
+  "addWorkspace": {
+    "roles": {
+      "backend": {
+        "label": "Backend",
+        "description": "API server, services"
+      },
+      "frontend": {
+        "label": "Frontend",
+        "description": "Web application"
+      },
+      "mobile": {
+        "label": "Mobile",
+        "description": "Mobile app"
+      },
+      "shared": {
+        "label": "Shared",
+        "description": "Shared types/utils"
+      },
+      "api": {
+        "label": "API Gateway",
+        "description": "Gateway, BFF"
+      },
+      "worker": {
+        "label": "Worker",
+        "description": "Background jobs"
+      },
+      "other": {
+        "label": "Other",
+        "description": "Other project type"
+      }
+    },
+    "errors": {
+      "nameRequired": "Workspace name is required",
+      "apiUnavailable": "Workspace API not available",
+      "createFailed": "Failed to create workspace"
+    },
+    "title": "Create Workspace",
+    "description": "Group related projects together for cross-repo specs and validation.",
+    "name": "Name",
+    "namePlaceholder": "My App Workspace",
+    "descriptionLabel": "Description (optional)",
+    "descriptionPlaceholder": "Backend, frontend, and mobile apps for My App",
+    "projects": "Projects",
+    "addProject": "Add a project...",
+    "allProjectsAdded": "All projects have been added",
+    "noProjects": "No projects available",
+    "create": "Create Workspace"
   }
 }

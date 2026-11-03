@@ -54,5 +54,45 @@
     "detached": "(detached)",
     "remotePushFailed": "Remote Tracking Not Set Up",
     "remotePushFailedDescription": "Worktree created but the branch could not be pushed to remote. You may need to run git push -u manually."
+  },
+  "taskPhase": {
+    "idle": "Ready",
+    "planning": "Planning",
+    "coding": "Coding",
+    "rateLimitPaused": "Rate Limited",
+    "authFailurePaused": "Auth Required",
+    "qaReview": "QA Review",
+    "qaFixing": "Fixing",
+    "complete": "Complete",
+    "failed": "Failed"
+  },
+  "taskSelector": {
+    "currentTask": "Current task",
+    "switchTo": "Switch to...",
+    "clearTask": "Clear task",
+    "selectTask": "Select task...",
+    "availableTasks": "Available tasks",
+    "addNewTask": "Add new task",
+    "noTasks": "No tasks available",
+    "createInKanban": "Create tasks in the Kanban board"
+  },
+  "pty": {
+    "restoreFailed": "Error restoring session: {{error}}"
+  },
+  "title": {
+    "doubleClickToRename": "Double-click to rename"
+  },
+  "grid": {
+    "title": "Agent Terminals",
+    "emptyBody": "Spawn multiple terminals to run Claude agents in parallel. Use <kbd>Ctrl+T</kbd> to create a new terminal.",
+    "newTerminal": "New Terminal",
+    "count": "{{count}} / {{max}} terminals",
+    "history": "History",
+    "restoreFrom": "Restore sessions from...",
+    "sessionCount_one": "{{count}} session",
+    "sessionCount_other": "{{count}} sessions",
+    "invokeClaudeAll": "Invoke Claude All",
+    "files": "Files",
+    "terminalFallback": "Terminal"
   }
 }

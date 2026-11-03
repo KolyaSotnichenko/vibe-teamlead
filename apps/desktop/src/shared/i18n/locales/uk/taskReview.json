@@ -164,7 +164,8 @@
       "worktreeDeletedButStatusFailed": "Worktree видалено, але не вдалося оновити стан задачі: {{error}}",
       "failedToMarkAsDone": "Не вдалося позначити як виконану",
       "failedToResetStagedState": "Не вдалося скинути стан індексування"
-    }
+    },
+    "and": "та"
   },
   "bulkPR": {
     "title": "Створити pull request",
@@ -182,5 +183,89 @@
     "alreadyExisted": "уже існував",
     "noWorktree": "Для цієї задачі не знайдено worktree",
     "resultsDescriptionWithSkipped": "Успішно: {{success}}, пропущено: {{skipped}}, з помилкою: {{failed}}"
+  },
+  "conflicts": {
+    "title": "Попередній перегляд конфліктів злиття",
+    "detected_one": "Виявлено {{count}} можливий конфлікт.",
+    "detected_few": "Виявлено {{count}} можливі конфлікти.",
+    "detected_many": "Виявлено {{count}} можливих конфліктів.",
+    "detected_other": "Виявлено {{count}} можливого конфлікту.",
+    "canAutoMerge_one": "{{count}} можна злити автоматично.",
+    "canAutoMerge_few": "{{count}} можна злити автоматично.",
+    "canAutoMerge_many": "{{count}} можна злити автоматично.",
+    "canAutoMerge_other": "{{count}} можна злити автоматично.",
+    "severity": {
+      "low": "низька",
+      "medium": "середня",
+      "high": "висока",
+      "critical": "критична"
+    },
+    "autoMergeBadge": "автозлиття",
+    "location": "Розташування:",
+    "reason": "Причина:",
+    "strategy": "Стратегія:",
+    "none": "Конфліктів не виявлено"
+  },
+  "discard": {
+    "title": "Відхилити збірку",
+    "confirmMessage": "Відхилити всі зміни задачі",
+    "warning": "Ізольований робочий простір і всі незакомічені зміни буде остаточно видалено. Задачу буде повернуто в стан «Планування».",
+    "filesChanged": "Змінено файлів:",
+    "lines": "Рядки:",
+    "discarding": "Відхилення..."
+  },
+  "diff": {
+    "title": "Змінені файли",
+    "noChanges": "Змін не знайдено",
+    "noFiles": "Змінених файлів не знайдено",
+    "status": {
+      "added": "додано",
+      "modified": "змінено",
+      "deleted": "видалено",
+      "renamed": "перейменовано"
+    }
+  },
+  "mergePreview": {
+    "branchDivergedTitle": "Гілки розійшлися — AI розв’яже",
+    "noConflicts": "Конфліктів не виявлено",
+    "conflictsFound_one": "Знайдено {{count}} конфлікт",
+    "conflictsFound_few": "Знайдено {{count}} конфлікти",
+    "conflictsFound_many": "Знайдено {{count}} конфліктів",
+    "conflictsFound_other": "Знайдено {{count}} конфлікту",
+    "viewDetails": "Подробиці",
+    "branchDiverged": "Гілки розійшлися — AI розв’яже конфлікти",
+    "aiWillMergeHint": "AI автоматично зіллє ці конфлікти, коли ви натиснете «Проіндексувати зміни».",
+    "filesToMerge": "Файлів для злиття: {{count}}",
+    "aiWillResolve": "AI розв’яже конфлікти",
+    "autoMergeable": "Можна злити автоматично: {{count}}",
+    "aiResolved": "Розв’язано AI: {{count}}",
+    "manualReview": "Ручна перевірка: {{count}}"
+  },
+  "workspace": {
+    "humanReviewRequired": "Потрібна перевірка людиною",
+    "humanReviewRequiredBody": "Перед розробкою потрібна перевірка людиною. Перегляньте spec.md і внесіть потрібні зміни.",
+    "noWorkspaceTitle": "Робочий простір не знайдено",
+    "noWorkspaceBody": "Для цієї задачі не знайдено ізольованого робочого простору. Можливо, зміни внесено безпосередньо у ваш проєкт.",
+    "updating": "Оновлення...",
+    "proceedToCoding": "Перейти до розробки",
+    "stagedTitle": "Зміни проіндексовано в проєкті",
+    "stagedBody": "Зміни цієї задачі проіндексовано в основному проєкті.",
+    "stagedBodyWithDate": "Зміни цієї задачі проіндексовано в основному проєкті {{date}}."
+  },
+  "workspaceStatus": {
+    "buildReady": "Збірка готова до перевірки",
+    "view": "Переглянути",
+    "commitsLabel_one": "коміт",
+    "commitsLabel_few": "коміти",
+    "commitsLabel_many": "комітів",
+    "commitsLabel_other": "коміту",
+    "openIn": "Відкрити в {{app}}",
+    "uncommittedChanges_one": "{{count}} незакомічена зміна в основному проєкті",
+    "uncommittedChanges_few": "{{count}} незакомічені зміни в основному проєкті",
+    "uncommittedChanges_many": "{{count}} незакомічених змін в основному проєкті",
+    "uncommittedChanges_other": "{{count}} незакоміченої зміни в основному проєкті",
+    "uncommittedHint": "Закомітьте їх або сховайте (stash) у терміналі перед індексуванням, щоб уникнути конфліктів.",
+    "checkingConflicts": "Перевірка конфліктів...",
+    "checkConflicts": "Перевірити конфлікти"
   }
 }

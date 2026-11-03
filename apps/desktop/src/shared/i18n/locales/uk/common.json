@@ -631,7 +631,8 @@
       "needsReview": "Потребує перевірки",
       "verified": "Перевірено",
       "pinned": "Закріплено",
-      "confidence": "Впевненість"
+      "confidence": "Впевненість",
+      "confidencePercent": "Впевненість: {{percent}}%"
     },
     "sources": {
       "agent_explicit": "Агент",
@@ -663,7 +664,8 @@
       "title": "Пошук у пам’яті",
       "placeholder": "Пошук спогадів...",
       "resultsCount": "Знайдено результатів: {{count}}",
-      "resultsCount_plural": "Знайдено результатів: {{count}}"
+      "resultsCount_plural": "Знайдено результатів: {{count}}",
+      "score": "Оцінка: {{score}}"
     },
     "browser": {
       "title": "Огляд пам’яті",
@@ -696,12 +698,87 @@
       "pin": "Закріпити",
       "unpin": "Відкріпити",
       "deprecate": "Вилучити"
+    },
+    "noDetails": "Додаткових подробиць немає.",
+    "prReviewCard": {
+      "title": "Перевірка PR",
+      "prNumber": "PR #{{number}}",
+      "findings_one": "{{count}} зауваження",
+      "findings_few": "{{count}} зауваження",
+      "findings_many": "{{count}} зауважень",
+      "findings_other": "{{count}} зауваження",
+      "details": "Подробиці",
+      "keyFindings": "Основні зауваження",
+      "moreFindings_one": "ще {{count}} зауваження",
+      "moreFindings_few": "ще {{count}} зауваження",
+      "moreFindings_many": "ще {{count}} зауважень",
+      "moreFindings_other": "ще {{count}} зауваження",
+      "gotchas": "Виявлені підводні камені",
+      "patterns": "Виявлені патерни",
+      "viewOnGitHub": "Переглянути PR на GitHub",
+      "severity": {
+        "critical": "критичне",
+        "high": "високе",
+        "medium": "середнє",
+        "low": "низьке"
+      }
     }
   },
   "context": {
     "tabs": {
       "projectIndex": "Індекс проєкту",
       "memories": "Спогади"
+    },
+    "projectIndex": {
+      "title": "Структура проєкту",
+      "subtitle": "Знання про вашу кодову базу, зібрані AI",
+      "refreshTooltip": "Повторно проаналізувати структуру проєкту",
+      "loadFailed": "Не вдалося завантажити індекс проєкту",
+      "emptyTitle": "Індекс проєкту не знайдено",
+      "emptyBody": "Натисніть «Оновити», щоб проаналізувати структуру проєкту й створити індекс.",
+      "analyze": "Проаналізувати проєкт",
+      "overview": "Огляд",
+      "serviceCount_one": "{{count}} сервіс",
+      "serviceCount_few": "{{count}} сервіси",
+      "serviceCount_many": "{{count}} сервісів",
+      "serviceCount_other": "{{count}} сервісу",
+      "services": "Сервіси",
+      "infrastructure": "Інфраструктура",
+      "deployment": "Розгортання",
+      "dockerServices": "Сервіси Docker",
+      "conventions": "Домовленості",
+      "pythonLinting": "Лінтинг Python",
+      "jsLinting": "Лінтинг JS",
+      "formatting": "Форматування",
+      "gitHooks": "Git-хуки",
+      "enabled": "Увімкнено"
+    },
+    "service": {
+      "testing": "Тестування: {{value}}",
+      "orm": "ORM: {{value}}",
+      "port": "Порт: {{value}}",
+      "styling": "Стилі: {{value}}",
+      "state": "Стан: {{value}}",
+      "appleFrameworks": "Фреймворки Apple",
+      "spmDependencies": "Залежності SPM",
+      "keyDirectories": "Ключові каталоги",
+      "apiRoutes": "Маршрути API ({{count}})",
+      "databaseModels": "Моделі бази даних ({{count}})",
+      "fieldCount_one": "{{count}} поле",
+      "fieldCount_few": "{{count}} поля",
+      "fieldCount_many": "{{count}} полів",
+      "fieldCount_other": "{{count}} поля",
+      "dependencies": "Залежності ({{count}})",
+      "more": "ще {{count}}",
+      "envVars": "Змінні середовища ({{count}})",
+      "externalServices": "Зовнішні сервіси",
+      "databases": "Бази даних",
+      "email": "Електронна пошта",
+      "payments": "Платежі",
+      "cache": "Кеш",
+      "monitoring": "Моніторинг",
+      "metrics": "Метрики:",
+      "health": "Стан: {{value}}"
     }
   },
   "prStatus": {

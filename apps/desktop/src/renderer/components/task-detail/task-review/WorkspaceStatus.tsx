@@ -287,7 +287,7 @@ export function WorkspaceStatus({
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium text-sm text-foreground flex items-center gap-2">
             <GitBranch className="h-4 w-4 text-purple-400" />
-            Build Ready for Review
+            {t('taskReview:workspaceStatus.buildReady')}
           </h3>
           <Button
             variant="ghost"
@@ -296,7 +296,7 @@ export function WorkspaceStatus({
             className="h-7 px-2 text-xs"
           >
             <Eye className="h-3.5 w-3.5 mr-1" />
-            View
+            {t('taskReview:workspaceStatus.view')}
           </Button>
         </div>
 
@@ -308,7 +308,7 @@ export function WorkspaceStatus({
           </span>
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <GitCommit className="h-3.5 w-3.5" />
-            <span className="font-medium text-foreground">{worktreeStatus.commitCount || 0}</span> commits
+            <span className="font-medium text-foreground">{worktreeStatus.commitCount || 0}</span> {t('taskReview:workspaceStatus.commitsLabel', { count: worktreeStatus.commitCount || 0 })}
           </span>
           <span className="flex items-center gap-1 text-success">
             <Plus className="h-3.5 w-3.5" />
@@ -346,7 +346,7 @@ export function WorkspaceStatus({
               className="h-7 px-2 text-xs"
             >
               <Code className="h-3.5 w-3.5 mr-1" />
-              Open in {IDE_LABELS[preferredIDE]}
+              {t('taskReview:workspaceStatus.openIn', { app: IDE_LABELS[preferredIDE] })}
             </Button>
             <Button
               variant="outline"
@@ -355,7 +355,7 @@ export function WorkspaceStatus({
               className="h-7 px-2 text-xs"
             >
               <Terminal className="h-3.5 w-3.5 mr-1" />
-              Open in {TERMINAL_LABELS[preferredTerminal]}
+              {t('taskReview:workspaceStatus.openIn', { app: TERMINAL_LABELS[preferredTerminal] })}
             </Button>
           </div>
         )}
@@ -377,10 +377,10 @@ export function WorkspaceStatus({
             <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-warning">
-                {uncommittedCount} uncommitted {uncommittedCount === 1 ? 'change' : 'changes'} in main project
+                {t('taskReview:workspaceStatus.uncommittedChanges', { count: uncommittedCount })}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Commit or stash them in your terminal before staging to avoid conflicts.
+                {t('taskReview:workspaceStatus.uncommittedHint')}
               </p>
             </div>
           </div>
@@ -390,7 +390,7 @@ export function WorkspaceStatus({
         {isLoadingPreview && !mergePreview && (
           <div className="flex items-center gap-2 text-muted-foreground text-sm py-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Checking for conflicts...
+            {t('taskReview:workspaceStatus.checkingConflicts')}
           </div>
         )}
 
@@ -573,7 +573,7 @@ export function WorkspaceStatus({
               className="flex-1"
             >
               <GitMerge className="mr-2 h-4 w-4" />
-              Check for Conflicts
+              {t('taskReview:workspaceStatus.checkConflicts')}
             </Button>
           )}
 
@@ -585,7 +585,7 @@ export function WorkspaceStatus({
               className="flex-1"
             >
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Checking for conflicts...
+              {t('taskReview:workspaceStatus.checkingConflicts')}
             </Button>
           )}
 
