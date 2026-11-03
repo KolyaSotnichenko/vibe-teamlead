@@ -2,6 +2,7 @@
  * GitHub utility functions
  */
 
+import { getStoredAccessTokenSync, getValidAccessToken } from '../../github-auth/token-store';
 import { existsSync, readFileSync } from 'fs';
 import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
@@ -154,6 +155,9 @@ export function extractRateLimitInfo(response: Response): RateLimitInfo | null {
  * Uses augmented PATH to find gh CLI in common locations (e.g., Homebrew on macOS)
  */
 async function getTokenFromGhCliAsync(): Promise<string | null> {
+  // Prefer the Vibe Teamlead GitHub App token; gh CLI is only a fallback.
+  const appToken = await getValidAccessToken();
+  if (appToken) return appToken;
   try {
     const { stdout } = await execFileAsync(getToolPath('gh'), ['auth', 'token'], {
       encoding: 'utf-8',
@@ -171,6 +175,8 @@ async function getTokenFromGhCliAsync(): Promise<string | null> {
  * Uses augmented PATH to find gh CLI in common locations (e.g., Homebrew on macOS)
  */
 function getTokenFromGhCliSync(): string | null {
+  const appToken = getStoredAccessTokenSync();
+  if (appToken) return appToken;
   try {
     const token = execFileSync(getToolPath('gh'), ['auth', 'token'], {
       encoding: 'utf-8',

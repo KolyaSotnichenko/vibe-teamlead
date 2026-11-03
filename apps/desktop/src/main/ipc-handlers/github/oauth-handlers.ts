@@ -10,6 +10,8 @@ import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult } from '../../../shared/types';
 import { getAugmentedEnv, findExecutable } from '../../env-utils';
 import { getToolPath } from '../../cli-tool-manager';
+import { pollForToken, requestDeviceCode } from '../../github-auth/device-flow';
+import { getValidAccessToken, loadGitHubAuth, saveGitHubAuth } from '../../github-auth/token-store';
 
 const execFileAsync = promisify(execFile);
 
@@ -62,15 +64,21 @@ function sendAuthChangedToRenderer(oldUsername: string | null, newUsername: stri
  * Returns null if not authenticated or on error
  */
 async function getCurrentGitHubUsername(): Promise<string | null> {
+  const token = await getValidAccessToken();
+  if (!token) return null;
+  return (await fetchGitHubUser(token))?.login ?? null;
+}
+
+/** GET /user with the app's user token. */
+async function fetchGitHubUser(token: string): Promise<{ login: string; name?: string } | null> {
   try {
-    const { stdout } = await execFileAsync(getToolPath('gh'), ['api', 'user', '--jq', '.login'], {
-      encoding: 'utf-8',
-      env: getAugmentedEnv()
+    const response = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
     });
-    const username = stdout.trim();
-    return username || null;
+    if (!response.ok) return null;
+    const user = (await response.json()) as { login: string; name?: string };
+    return { login: user.login, name: user.name ?? undefined };
   } catch {
-    // Not authenticated or gh CLI error
     return null;
   }
 }
@@ -219,42 +227,10 @@ export function registerCheckGhAuth(): void {
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_CHECK_AUTH,
     async (): Promise<IPCResult<{ authenticated: boolean; username?: string }>> => {
-      debugLog('checkGitHubAuth handler called');
-      const env = getAugmentedEnv();
-      try {
-        // Check auth status
-        debugLog('Running: gh auth status');
-        const authStatus = execFileSync(getToolPath('gh'), ['auth', 'status'], { encoding: 'utf-8', stdio: 'pipe', env });
-        debugLog('Auth status output:', authStatus);
-
-        // Get username if authenticated
-        try {
-          debugLog('Getting username via: gh api user --jq .login');
-          const username = execFileSync(getToolPath('gh'), ['api', 'user', '--jq', '.login'], {
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            env
-          }).trim();
-          debugLog('Username:', username);
-
-          return {
-            success: true,
-            data: { authenticated: true, username }
-          };
-        } catch (usernameError) {
-          debugLog('Could not get username:', usernameError instanceof Error ? usernameError.message : usernameError);
-          return {
-            success: true,
-            data: { authenticated: true }
-          };
-        }
-      } catch (error) {
-        debugLog('Auth check failed (not authenticated):', error instanceof Error ? error.message : error);
-        return {
-          success: true,
-          data: { authenticated: false }
-        };
-      }
+      const token = await getValidAccessToken();
+      if (!token) return { success: true, data: { authenticated: false } };
+      const user = await fetchGitHubUser(token);
+      return { success: true, data: { authenticated: true, username: user?.login ?? loadGitHubAuth()?.login } };
     }
   );
 }
@@ -283,182 +259,64 @@ interface GitHubAuthStartResult {
  * Detects account changes and emits GITHUB_AUTH_CHANGED event when the authenticated
  * account differs from the previous one (or when going from unauthenticated to authenticated).
  */
+let activeSignIn: AbortController | null = null;
+
 export function registerStartGhAuth(): void {
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_START_AUTH,
     async (): Promise<IPCResult<GitHubAuthStartResult>> => {
-      debugLog('startGitHubAuth handler called');
+      const usernameBeforeAuth = loadGitHubAuth()?.login ?? null;
+      activeSignIn?.abort();
+      const controller = new AbortController();
+      activeSignIn = controller;
 
-      // Capture current username before auth to detect account changes (async to avoid blocking main thread)
-      const usernameBeforeAuth = await getCurrentGitHubUsername();
-      debugLog('Username before auth:', usernameBeforeAuth || '(not authenticated)');
-
-      return new Promise((resolve) => {
+      let code: Awaited<ReturnType<typeof requestDeviceCode>> | undefined;
+      let browserOpened = false;
+      try {
+        code = await requestDeviceCode();
         try {
-          // Use gh auth login with web flow and repo scope
-          const args = ['auth', 'login', '--web', '--scopes', 'repo'];
-          debugLog('Spawning: gh', args);
-
-          const ghProcess = spawn('gh', args, {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env: getAugmentedEnv()
-          });
-
-          let output = '';
-          let errorOutput = '';
-          let deviceCodeExtracted = false;
-          let extractedDeviceCode: string | null = null;
-          let extractedAuthUrl: string = GITHUB_DEVICE_URL;
-          let browserOpenedSuccessfully = false;
-          let extractionInProgress = false;
-
-          // Function to attempt device code extraction and browser opening
-          // Uses mutex pattern to prevent race conditions from concurrent data handlers
-          const tryExtractAndOpenBrowser = async () => {
-            if (deviceCodeExtracted || extractionInProgress) return;
-            extractionInProgress = true;
-
-            const deviceFlowInfo = parseDeviceFlowOutput(output, errorOutput);
-
-            if (deviceFlowInfo.deviceCode) {
-              deviceCodeExtracted = true;
-              extractedDeviceCode = deviceFlowInfo.deviceCode;
-              extractedAuthUrl = deviceFlowInfo.authUrl;
-
-              debugLog('Device code extracted successfully (code redacted for security)');
-              debugLog('Auth URL:', extractedAuthUrl);
-
-              // Open browser using Electron's shell.openExternal
-              // This bypasses macOS child process restrictions that block gh CLI's browser launch
-              try {
-                await shell.openExternal(extractedAuthUrl);
-                browserOpenedSuccessfully = true;
-                debugLog('Browser opened successfully via shell.openExternal');
-              } catch (browserError) {
-                debugLog('Failed to open browser:', browserError instanceof Error ? browserError.message : browserError);
-                browserOpenedSuccessfully = false;
-                // Don't fail here - we'll return the device code so user can manually navigate
-              }
-
-              // IMMEDIATELY send device code to renderer so user can see it while auth is in progress
-              // This is critical - the frontend needs to display the code while the gh process is still running
-              sendDeviceCodeToRenderer(extractedDeviceCode, extractedAuthUrl, browserOpenedSuccessfully);
-
-              // Extraction complete - mutex flag stays true to prevent re-extraction
-              // The deviceCodeExtracted flag will prevent future attempts
-              extractionInProgress = false;
-            } else {
-              // No device code found yet, allow next data chunk to try again
-              extractionInProgress = false;
-            }
-          };
-
-          ghProcess.stdout?.on('data', (data) => {
-            const chunk = data.toString('utf-8');
-            output += chunk;
-            debugLog('gh stdout:', chunk);
-            // Try to extract device code as data comes in
-            // Use void to explicitly ignore promise
-            void tryExtractAndOpenBrowser();
-          });
-
-          ghProcess.stderr?.on('data', (data) => {
-            const chunk = data.toString('utf-8');
-            errorOutput += chunk;
-            debugLog('gh stderr:', chunk);
-            // gh often outputs to stderr, so check there too
-            void tryExtractAndOpenBrowser();
-          });
-
-          ghProcess.on('close', async (code) => {
-            debugLog('gh process exited with code:', code);
-            debugLog('Full stdout:', output);
-            debugLog('Full stderr:', errorOutput);
-
-            if (code === 0) {
-              // Check for auth change after successful authentication (async to avoid blocking main thread)
-              const usernameAfterAuth = await getCurrentGitHubUsername();
-              debugLog('Username after auth:', usernameAfterAuth || '(unknown)');
-
-              // Emit auth changed event if account changed (or went from unauthenticated to authenticated)
-              if (usernameAfterAuth && usernameAfterAuth !== usernameBeforeAuth) {
-                debugLog('GitHub account changed detected', {
-                  from: usernameBeforeAuth || '(none)',
-                  to: usernameAfterAuth
-                });
-                sendAuthChangedToRenderer(usernameBeforeAuth, usernameAfterAuth);
-              } else if (!usernameAfterAuth) {
-                // Auth succeeded (exit code 0) but username fetch failed - log warning
-                // This edge case means we can't detect account changes, but auth is still valid
-                debugLog('WARNING: Auth succeeded but could not fetch username to detect account change');
-              }
-
-              // Success case - include fallbackUrl if browser failed to open
-              // so the user can manually navigate if needed
-              resolve({
-                success: true,
-                data: {
-                  success: true,
-                  message: browserOpenedSuccessfully
-                    ? 'Successfully authenticated with GitHub'
-                    : 'Authentication successful. Browser could not be opened automatically.',
-                  deviceCode: extractedDeviceCode || undefined,
-                  authUrl: extractedAuthUrl,
-                  browserOpened: browserOpenedSuccessfully,
-                  // Provide fallback URL when browser failed to open
-                  fallbackUrl: !browserOpenedSuccessfully ? extractedAuthUrl : undefined
-                }
-              });
-            } else {
-              // Even if auth failed, return device code info if we extracted it
-              // This allows user to retry manually with the fallback URL
-              const fallbackUrlForManualAuth = extractedDeviceCode ? extractedAuthUrl : GITHUB_DEVICE_URL;
-
-              resolve({
-                success: false,
-                error: errorOutput || `Authentication failed with exit code ${code}`,
-                data: {
-                  success: false,
-                  deviceCode: extractedDeviceCode || undefined,
-                  authUrl: extractedAuthUrl,
-                  browserOpened: browserOpenedSuccessfully,
-                  // Always provide fallback URL on failure for manual recovery
-                  fallbackUrl: fallbackUrlForManualAuth,
-                  message: 'Authentication failed. Please visit the URL manually to complete authentication.'
-                }
-              });
-            }
-          });
-
-          ghProcess.on('error', (error) => {
-            debugLog('gh process error:', error.message);
-            resolve({
-              success: false,
-              error: error.message,
-              data: {
-                success: false,
-                browserOpened: false,
-                // Provide fallback URL so user can attempt manual auth
-                fallbackUrl: GITHUB_DEVICE_URL,
-                message: 'Failed to start GitHub CLI. Please visit the URL manually to authenticate.'
-              }
-            });
-          });
-        } catch (error) {
-          debugLog('Exception in startGitHubAuth:', error instanceof Error ? error.message : error);
-          resolve({
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            data: {
-              success: false,
-              browserOpened: false,
-              // Provide fallback URL for manual authentication recovery
-              fallbackUrl: GITHUB_DEVICE_URL,
-              message: 'An unexpected error occurred. Please visit the URL manually to authenticate.'
-            }
-          });
+          await shell.openExternal(code.verificationUri);
+          browserOpened = true;
+        } catch {
+          browserOpened = false;
         }
-      });
+        sendDeviceCodeToRenderer(code.userCode, code.verificationUri, browserOpened);
+
+        const tokens = await pollForToken(code, { signal: controller.signal });
+        const user = await fetchGitHubUser(tokens.accessToken);
+        saveGitHubAuth({ ...tokens, login: user?.login });
+
+        if (user?.login && user.login !== usernameBeforeAuth) {
+          sendAuthChangedToRenderer(usernameBeforeAuth, user.login);
+        }
+        return {
+          success: true,
+          data: {
+            success: true,
+            message: 'Signed in to GitHub',
+            deviceCode: code.userCode,
+            authUrl: code.verificationUri,
+            browserOpened,
+            fallbackUrl: browserOpened ? undefined : code.verificationUri,
+          },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'GitHub sign-in failed';
+        return {
+          success: false,
+          error: message,
+          data: {
+            success: false,
+            message,
+            deviceCode: code?.userCode,
+            authUrl: code?.verificationUri ?? GITHUB_DEVICE_URL,
+            browserOpened,
+            fallbackUrl: code?.verificationUri ?? GITHUB_DEVICE_URL,
+          },
+        };
+      } finally {
+        if (activeSignIn === controller) activeSignIn = null;
+      }
     }
   );
 }
@@ -470,35 +328,10 @@ export function registerGetGhToken(): void {
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_GET_TOKEN,
     async (): Promise<IPCResult<{ token: string }>> => {
-      debugLog('getGitHubToken handler called');
-      try {
-        debugLog('Running: gh auth token');
-        const token = execFileSync(getToolPath('gh'), ['auth', 'token'], {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-          env: getAugmentedEnv()
-        }).trim();
-
-        if (!token) {
-          debugLog('No token returned (empty string)');
-          return {
-            success: false,
-            error: 'No token found. Please authenticate first.'
-          };
-        }
-
-        debugLog('Token retrieved successfully, length:', token.length);
-        return {
-          success: true,
-          data: { token }
-        };
-      } catch (error) {
-        debugLog('Failed to get token:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get token'
-        };
-      }
+      const token = await getValidAccessToken();
+      return token
+        ? { success: true, data: { token } }
+        : { success: false, error: 'Not signed in to GitHub. Please sign in first.' };
     }
   );
 }
@@ -510,33 +343,11 @@ export function registerGetGhUser(): void {
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_GET_USER,
     async (): Promise<IPCResult<{ username: string; name?: string }>> => {
-      debugLog('getGitHubUser handler called');
-      try {
-        debugLog('Running: gh api user');
-        const userJson = execFileSync(getToolPath('gh'), ['api', 'user'], {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-          env: getAugmentedEnv()
-        });
-
-        debugLog('User API response received');
-        const user = JSON.parse(userJson);
-        debugLog('Parsed user:', { login: user.login, name: user.name });
-
-        return {
-          success: true,
-          data: {
-            username: user.login,
-            name: user.name
-          }
-        };
-      } catch (error) {
-        debugLog('Failed to get user info:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get user info'
-        };
-      }
+      const token = await getValidAccessToken();
+      const user = token ? await fetchGitHubUser(token) : null;
+      return user
+        ? { success: true, data: { username: user.login, name: user.name } }
+        : { success: false, error: 'Not signed in to GitHub. Please sign in first.' };
     }
   );
 }

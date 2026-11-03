@@ -232,6 +232,27 @@ function buildPathsToAdd(
  * @param additionalPaths - Optional array of additional paths to include
  * @returns Environment object with augmented PATH
  */
+/**
+ * Authenticate gh/git subprocesses as the Vibe Teamlead GitHub App user
+ * (GH_TOKEN) when signed in. The provider is registered by the main process
+ * (github-auth/token-store); workers and tests never set one.
+ */
+let gitHubTokenProvider: (() => string | null) | null = null;
+
+export function setGitHubTokenProvider(provider: (() => string | null) | null): void {
+  gitHubTokenProvider = provider;
+}
+
+function applyGitHubAppToken(env: Record<string, string>): void {
+  if (env.GH_TOKEN || !gitHubTokenProvider) return;
+  try {
+    const token = gitHubTokenProvider();
+    if (token) env.GH_TOKEN = token;
+  } catch {
+    // Token unavailable — leave gh to its own auth.
+  }
+}
+
 export function getAugmentedEnv(additionalPaths?: string[]): Record<string, string> {
   const env = { ...process.env } as Record<string, string>;
   const pathSeparator = getPathDelimiter();
@@ -280,6 +301,8 @@ export function getAugmentedEnv(additionalPaths?: string[]): Record<string, stri
   // These are embedded at build time and need to be passed explicitly
   const sentryEnv = getSentryEnvForSubprocess();
   Object.assign(env, sentryEnv);
+
+  applyGitHubAppToken(env);
 
   return env;
 }
@@ -456,6 +479,8 @@ export async function getAugmentedEnvAsync(additionalPaths?: string[]): Promise<
   // These are embedded at build time and need to be passed explicitly
   const sentryEnv = getSentryEnvForSubprocess();
   Object.assign(env, sentryEnv);
+
+  applyGitHubAppToken(env);
 
   return env;
 }
