@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
 import path from 'path';
+import { ensureTaskModels, hasTaskModels, withDefaultTaskModels } from './task-models';
+import { readSettingsFile } from '../settings-utils';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { AgentState } from './agent-state';
 import { AgentEvents } from './agent-events';
@@ -162,10 +164,13 @@ export class AgentManager extends EventEmitter {
       }
     }
 
-    // Resolve model and thinking level for the spec phase
-    const specModelShorthand = metadata?.phaseModels?.spec
-      ? metadata.phaseModels.spec
-      : (metadata?.model ?? 'sonnet');
+    // Tasks without chosen models get the user's defaults (agent profile +
+    // custom phase models), written into their metadata for the later phases
+    ensureTaskModels(specDir);
+    const models = hasTaskModels(metadata as never)
+      ? metadata
+      : withDefaultTaskModels({ ...(metadata ?? {}) }, readSettingsFile() as never);
+    const specModelShorthand = models?.phaseModels?.spec || models?.model || 'sonnet';
 
     const specModelId = resolveModelId(isUsableModel(specModelShorthand) ? specModelShorthand : 'sonnet');
 
@@ -512,6 +517,7 @@ export class AgentManager extends EventEmitter {
    * @param phase - The execution phase ('planning', 'coding', 'qa', 'spec')
    */
   private async resolveTaskModelId(specDir: string, phase: 'planning' | 'coding' | 'qa' | 'spec'): Promise<string> {
+    ensureTaskModels(specDir);
     try {
       const metadataPath = path.join(specDir, 'task_metadata.json');
       if (existsSync(metadataPath)) {

@@ -15,6 +15,8 @@ import { BriefError, analyzeBrief, briefsRoot, taskDescription } from '../ai/run
 import { projectStore } from '../project-store';
 import { persistPlanStatus } from './task/plan-file-utils';
 import { createTaskInProject } from './task/crud-handlers';
+import { resolveDefaultTaskModels } from '../../shared/utils/task-models';
+import { readSettingsFile } from '../settings-utils';
 
 const BRIEF_FILE_EXTENSIONS = ['md', 'markdown', 'txt', 'pdf', 'docx', 'doc', 'rtf', 'odt', 'html', 'htm'];
 
@@ -110,6 +112,8 @@ export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null)
         for (const draft of orderByDependencies(tasks)) {
           const dependencies = draft.dependsOn.map((key) => specIdByKey.get(key)).filter((id): id is string => !!id);
           const task = await createTaskInProject(project, draft.title, taskDescription(draft, briefRelPath), {
+            // The user's default models (agent profile + custom phase models), as the task wizard sets them
+            ...resolveDefaultTaskModels(readSettingsFile() as never),
             sourceType: 'brief',
             briefId,
             briefTaskKey: draft.key,

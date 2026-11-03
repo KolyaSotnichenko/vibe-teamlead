@@ -688,6 +688,42 @@ export const useTaskStore = create<TaskState>((set, get) => ({
  * @param options - Optional parameters
  * @param options.forceRefresh - If true, invalidates server-side cache before fetching (for refresh button)
  */
+/**
+ * Bring the board in line with the task files without a loading state: status
+ * changes are applied through updateTaskStatus (so queue listeners fire), new or
+ * removed tasks replace the list, subtask progress is copied. A safety net for
+ * status events that never reached this window — the same data the refresh
+ * button shows, without its reset.
+ */
+export async function syncTasksFromDisk(projectId: string): Promise<void> {
+  let result: Awaited<ReturnType<typeof window.electronAPI.getTasks>>;
+  try {
+    result = await window.electronAPI.getTasks(projectId);
+  } catch {
+    return;
+  }
+  if (!result.success || !result.data) return;
+  const store = useTaskStore.getState();
+  const current = new Map(store.tasks.map((t) => [t.id, t]));
+  const fresh = result.data;
+  const sameSet = fresh.length === store.tasks.length && fresh.every((t) => current.has(t.id));
+  if (!sameSet) {
+    // Keep the logs already streamed into memory
+    store.setTasks(fresh.map((t) => ({ ...t, logs: current.get(t.id)?.logs ?? t.logs })));
+    return;
+  }
+  for (const task of fresh) {
+    const known = current.get(task.id);
+    if (!known) continue;
+    if (known.status !== task.status || known.reviewReason !== task.reviewReason) {
+      store.updateTaskStatus(task.id, task.status, task.reviewReason);
+    }
+    if (JSON.stringify(known.subtasks) !== JSON.stringify(task.subtasks)) {
+      store.updateTask(task.id, { subtasks: task.subtasks });
+    }
+  }
+}
+
 export async function loadTasks(projectId: string, options?: { forceRefresh?: boolean }): Promise<void> {
   const store = useTaskStore.getState();
   store.setLoading(true);

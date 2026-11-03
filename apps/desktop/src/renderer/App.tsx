@@ -55,7 +55,7 @@ import { OnboardingWizard } from './components/onboarding';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
-import { useTaskStore, loadTasks } from './stores/task-store';
+import { useTaskStore, loadTasks, syncTasksFromDisk } from './stores/task-store';
 import { useSettingsStore, loadSettings } from './stores/settings-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
 import { initializeGitHubListeners, cleanupGitHubListeners } from './stores/github';
@@ -69,6 +69,9 @@ import type { Task, Project, ColorTheme } from '../shared/types';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider } from './contexts/ViewStateContext';
+
+/** How often the board re-reads task statuses while agents are working */
+const TASK_SYNC_INTERVAL_MS = 4000;
 
 // Wrapper component for ProjectTabBar
 interface ProjectTabBarWithContextProps {
@@ -373,6 +376,25 @@ export function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeView, openProjectTab]);
+
+  // While agents are working, keep the board in step with the task files: a
+  // status event lost on the way would otherwise show only after Refresh.
+  const hasActiveTasks = useTaskStore((state) =>
+    state.tasks.some((t) => ['in_progress', 'ai_review', 'queue'].includes(t.status) && !t.metadata?.archivedAt)
+  );
+  useEffect(() => {
+    const currentProjectId = activeProjectId || selectedProjectId;
+    if (!currentProjectId || !hasActiveTasks) return;
+    const sync = () => {
+      if (document.visibilityState === 'visible') void syncTasksFromDisk(currentProjectId);
+    };
+    const timer = window.setInterval(sync, TASK_SYNC_INTERVAL_MS);
+    window.addEventListener('focus', sync);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', sync);
+    };
+  }, [activeProjectId, selectedProjectId, hasActiveTasks]);
 
   // Load tasks when project changes
   useEffect(() => {
