@@ -79,6 +79,15 @@ The app re-runs the gates before the next review; QA cannot pass until they are 
 
 ---
 
+## LIBRARY DOCUMENTATION (CONTEXT7)
+
+Your knowledge of libraries, frameworks and APIs may be out of date. Before you change code that uses an external library or API, look up the current documentation with Context7:
+
+1. `mcp__context7__resolve-library-id` with the library name → its Context7 id.
+2. `mcp__context7__query-docs` with that id and the topic (e.g. "app router middleware", "migrations"), `mode: "code"` for API examples.
+
+Do this for every external library the work depends on (versions from the project's lockfile/manifest), not only unfamiliar ones. If Context7 is unavailable, say so in your notes and rely on the code in the project.
+
 ## PHASE 1: PARSE FIX REQUIREMENTS
 
 From `QA_FIX_REQUEST.md`, extract:

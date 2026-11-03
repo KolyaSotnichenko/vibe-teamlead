@@ -89,6 +89,24 @@ export class TaskStateManager {
     } satisfies TaskEvent);
   }
 
+  /**
+   * The user pressed Stop. The state machine decides where the task goes; when
+   * it cannot (its state had drifted from the task files, e.g. it thought the
+   * task was not running), the task still leaves "in progress": to review when
+   * it has a plan, back to the backlog when not.
+   */
+  stopTask(taskId: string, task: Task, project: Project, hasPlan: boolean): void {
+    this.setTaskContext(taskId, task, project);
+    const before = String(this.getOrCreateActor(taskId).getSnapshot().value);
+    this.handleUiEvent(taskId, { type: 'USER_STOPPED', hasPlan }, task, project);
+    const after = this.getCurrentState(taskId);
+    if (after !== before && (after === 'human_review' || after === 'backlog')) return;
+    const status: TaskStatus = hasPlan ? 'human_review' : 'backlog';
+    const reviewReason: ReviewReason | undefined = hasPlan ? 'stopped' : undefined;
+    this.persistStatus(task, project, status, reviewReason, hasPlan ? 'human_review' : 'backlog', 'idle');
+    this.emitStatus(taskId, status, reviewReason, project.id);
+  }
+
   handleUiEvent(taskId: string, event: TaskEvent, task: Task, project: Project): void {
     console.debug(`[TaskStateManager] handleUiEvent: ${event.type} for task ${taskId}`);
     this.setTaskContext(taskId, task, project);

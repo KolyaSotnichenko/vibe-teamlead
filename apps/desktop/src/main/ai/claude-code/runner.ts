@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
+import { searchPath } from '../../platform/exec';
 import { getAgentConfig } from '../config/agent-configs';
 import { MODEL_ID_MAP } from '../config/types';
 import { ErrorCode } from '../session/error-classifier';
@@ -125,6 +126,10 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   for (const key of INHERITED_ENV) {
     if (process.env[key]) env[key] = process.env[key];
   }
+  // An app started from Finder gets a bare PATH: add Homebrew, Docker Desktop,
+  // nvm/volta/pnpm and friends so agents' Bash (docker, pnpm, node) and stdio
+  // MCP servers (npx) find what the user has installed.
+  env.PATH = searchPath();
   if (config.auth.oauthToken) {
     // Personal mode: the owner's own Claude subscription.
     env.CLAUDE_CODE_OAUTH_TOKEN = config.auth.oauthToken;

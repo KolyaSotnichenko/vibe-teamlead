@@ -146,7 +146,9 @@ describe('buildEnv', () => {
       expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
       expect(env.ANTHROPIC_API_KEY).toBe('sk-ant-test');
       expect(env.CLAUDE_CONFIG_DIR).toBe('/tmp/vtl');
-      expect(env.PATH).toBe(process.env.PATH);
+      // The host PATH first, then the usual install locations a Finder-launched app lacks
+      expect(env.PATH?.startsWith(process.env.PATH ?? '')).toBe(true);
+      expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/opt/homebrew/bin', '/usr/local/bin']));
     } finally {
       delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       delete process.env.ANTHROPIC_AUTH_TOKEN;

@@ -5,7 +5,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
@@ -42,12 +42,43 @@ const EXTRA_PATHS = [
   join(homedir(), '.docker', 'bin'),
   '/Applications/Docker.app/Contents/Resources/bin',
   join(homedir(), '.orbstack', 'bin'),
+  // Node and package managers installed per user
+  join(homedir(), '.volta', 'bin'),
+  join(homedir(), '.bun', 'bin'),
+  join(homedir(), 'Library', 'pnpm'),
+  join(homedir(), '.npm-global', 'bin'),
+  join(homedir(), '.cargo', 'bin'),
+  '/opt/homebrew/sbin',
+  // Always present on macOS, sometimes missing from a GUI app's PATH
+  '/usr/bin',
+  '/bin',
+  '/usr/sbin',
+  '/sbin',
 ];
+
+/** bin of the newest Node installed with nvm (nvm only puts it on PATH in shells). */
+function nvmNodeBin(): string[] {
+  const root = join(homedir(), '.nvm', 'versions', 'node');
+  try {
+    const versions = readdirSync(root).filter((v) => /^v\d+/.test(v));
+    const newest = versions.sort((a, b) => compareVersions(b, a))[0];
+    return newest ? [join(root, newest, 'bin')] : [];
+  } catch {
+    return [];
+  }
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.replace(/^v/, '').split('.').map(Number);
+  const pb = b.replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  return 0;
+}
 
 /** PATH plus the usual Homebrew / user install directories. */
 export function searchPath(extra: string[] = []): string {
   const parts = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
-  for (const dir of [...EXTRA_PATHS, ...extra]) if (!parts.includes(dir)) parts.push(dir);
+  for (const dir of [...EXTRA_PATHS, ...nvmNodeBin(), ...extra]) if (!parts.includes(dir)) parts.push(dir);
   return parts.join(delimiter);
 }
 

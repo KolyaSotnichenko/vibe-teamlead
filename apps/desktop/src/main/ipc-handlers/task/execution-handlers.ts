@@ -336,12 +336,7 @@ export function registerTaskExecutionHandlers(
     // Use shared utility to determine if a valid implementation plan exists
     const hasPlan = hasPlanWithSubtasks(project, task);
 
-    taskStateManager.handleUiEvent(
-      taskId,
-      { type: 'USER_STOPPED', hasPlan },
-      task,
-      project
-    );
+    taskStateManager.stopTask(taskId, task, project, hasPlan);
 
     // Clear stale tracking state so a subsequent restart works correctly
     taskStateManager.prepareForRestart(taskId);

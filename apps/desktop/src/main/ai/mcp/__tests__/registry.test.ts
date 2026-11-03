@@ -21,12 +21,14 @@ describe('getMcpServerConfig', () => {
       expect(config?.enabledByDefault).toBe(true);
     });
 
-    it('uses stdio transport with npx', () => {
+    it("uses Context7's hosted HTTP server (no npx needed)", () => {
       const config = getMcpServerConfig('context7');
-      expect(config?.transport.type).toBe('stdio');
-      if (config?.transport.type === 'stdio') {
-        expect(config.transport.command).toBe('npx');
-      }
+      expect(config?.transport).toEqual({ type: 'streamable-http', url: 'https://mcp.context7.com/mcp' });
+    });
+
+    it('sends the key as a bearer token when there is one', () => {
+      const config = getMcpServerConfig('context7', { context7ApiKey: 'ctx7-key' });
+      expect(config?.transport.type === 'streamable-http' && config.transport.headers).toEqual({ Authorization: 'Bearer ctx7-key' });
     });
   });
 

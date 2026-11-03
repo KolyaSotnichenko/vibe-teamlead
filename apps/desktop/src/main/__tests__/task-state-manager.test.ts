@@ -519,3 +519,39 @@ describe('TaskStateManager', () => {
     });
   });
 });
+
+describe('TaskStateManager.stopTask', () => {
+  it('moves a task whose machine state drifted (thought it was in the backlog) out of in progress', async () => {
+    const { safeSendToRenderer } = await import('../ipc-handlers/utils');
+    const { persistPlanStatusAndReasonSync } = await import('../ipc-handlers/task/plan-file-utils');
+    const manager = new TaskStateManager();
+    manager.configure(() => ({}) as never);
+    // The board shows it running, but the machine is built from a backlog snapshot
+    const task = createMockTask({ status: 'backlog' });
+    vi.clearAllMocks();
+
+    manager.stopTask(task.id, task, createMockProject(), true);
+
+    expect(persistPlanStatusAndReasonSync).toHaveBeenCalledWith(
+      '/mock/path/implementation_plan.json', 'human_review', 'stopped', 'test-project-id', 'human_review', 'idle',
+    );
+    expect(safeSendToRenderer).toHaveBeenCalledWith(expect.anything(), expect.any(String), task.id, 'human_review', 'test-project-id', 'stopped');
+    manager.clearAllTasks();
+  });
+
+  it('lets the machine decide when it can (coding → review, stopped)', async () => {
+    const { safeSendToRenderer } = await import('../ipc-handlers/utils');
+    const manager = new TaskStateManager();
+    manager.configure(() => ({}) as never);
+    const task = createMockTask({ status: 'in_progress', executionProgress: { phase: 'coding' } as Task['executionProgress'] });
+    vi.clearAllMocks();
+
+    manager.stopTask(task.id, task, createMockProject(), true);
+
+    const statuses = (safeSendToRenderer as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[3]);
+    expect(statuses.at(-1)).toBe('human_review');
+    expect(statuses.filter((s) => s === 'human_review')).toHaveLength(1);
+    expect(manager.getCurrentState(task.id)).toBe('human_review');
+    manager.clearAllTasks();
+  });
+});

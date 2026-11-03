@@ -23,12 +23,21 @@ const CONTEXT7_SERVER: McpServerConfig = {
   name: 'Context7',
   description: 'Documentation lookup for libraries and frameworks',
   enabledByDefault: true,
+  // Context7's hosted server: Claude Code connects over HTTP, so nothing has to
+  // be installed (the npx-launched server failed whenever the app, started from
+  // Finder, had no npx on its PATH). A key only raises the rate limits.
   transport: {
-    type: 'stdio',
-    command: 'npx',
-    args: ['-y', '@upstash/context7-mcp@4.4.4'],
+    type: 'streamable-http',
+    url: 'https://mcp.context7.com/mcp',
   },
 };
+
+/** Context7 with the user's key, when there is one (CONTEXT7_API_KEY) */
+function context7Server(options: McpRegistryOptions): McpServerConfig {
+  const key = (options.context7ApiKey ?? options.env?.CONTEXT7_API_KEY ?? process.env.CONTEXT7_API_KEY)?.trim();
+  if (!key || CONTEXT7_SERVER.transport.type !== 'streamable-http') return CONTEXT7_SERVER;
+  return { ...CONTEXT7_SERVER, transport: { ...CONTEXT7_SERVER.transport, headers: { Authorization: `Bearer ${key}` } } };
+}
 
 /**
  * Linear MCP server - project management.
@@ -142,6 +151,8 @@ export interface McpRegistryOptions {
   memoryMcpUrl?: string;
   /** Linear API key (if available) */
   linearApiKey?: string;
+  /** Context7 API key (optional; higher rate limits) */
+  context7ApiKey?: string;
   /** Environment variables for server processes */
   env?: Record<string, string>;
   /** Bundled MCP server entry points (browser servers are skipped when absent) */
@@ -163,7 +174,7 @@ export function getMcpServerConfig(
 ): McpServerConfig | null {
   switch (serverId) {
     case 'context7':
-      return CONTEXT7_SERVER;
+      return context7Server(options);
 
     case 'linear': {
       if (!options.linearApiKey && !options.env?.LINEAR_API_KEY) return null;

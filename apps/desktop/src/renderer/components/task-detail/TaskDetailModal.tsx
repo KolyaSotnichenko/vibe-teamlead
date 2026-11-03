@@ -86,7 +86,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
   // Event Handlers
   const handleStartStop = async () => {
-    if (state.isRunning && !state.isStuck) {
+    // Stop also when the task looks stuck (its process is gone but it still says running)
+    if (state.isRunning) {
       stopTask(task.id);
     } else {
       // If task is incomplete, validate and reload plan before starting
