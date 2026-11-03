@@ -82,11 +82,12 @@ describe('runSecurityGates', () => {
   it('reports secrets and only newly introduced vulnerabilities, and writes the report', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    // dir mode: report config.ts if it is in the scanned tree; git mode: nothing.
     const gitleaks = fakeScanner(
       bin,
       'gitleaks',
-      `while [ $# -gt 0 ]; do case "$1" in --report-path) out="$2"; shift;; esac; last="$1"; shift; done
-case "$last" in *config.ts) echo '[{"RuleID":"generic-api-key","Description":"Generic API Key","File":"'$last'","StartLine":1}]' > "$out";; *) echo '[]' > "$out";; esac`,
+      `mode="$1"; while [ $# -gt 0 ]; do case "$1" in --report-path) out="$2"; shift;; esac; last="$1"; shift; done
+if [ "$mode" = dir ] && [ -f "$last/config.ts" ]; then echo '[{"RuleID":"generic-api-key","Description":"Generic API Key","File":"'$last'/config.ts","StartLine":1}]' > "$out"; else echo '[]' > "$out"; fi`,
     );
     // Base lockfile ({"v":1}) has GHSA-old; the new one has GHSA-old and GHSA-new.
     const osv = fakeScanner(
@@ -115,5 +116,18 @@ echo "{\\"results\\":[{\\"packages\\":[$pkg}]}]}"`,
     expect(report.ran).toEqual([]);
     expect(report.findings).toEqual([]);
     expect(report.skipped.map((s) => s.gate)).toEqual(['gitleaks', 'osv-scanner']);
+  });
+});
+
+describe('scanner failures', () => {
+  it('records a crashing scanner as failed instead of reporting it clean', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const broken = fakeScanner(bin, 'gitleaks', 'echo "config error" >&2; exit 2');
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const report = await runSecurityGates({ projectDir: dir, specDir, gitleaksBin: broken });
+    expect(report.ran).not.toContain('gitleaks');
+    expect(report.skipped).toContainEqual({ gate: 'gitleaks', reason: 'failed — gitleaks exited with code 2: config error' });
+    expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('Skipped gitleaks: failed');
   });
 });

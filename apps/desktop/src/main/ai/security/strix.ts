@@ -11,11 +11,13 @@
  * token cannot drive Strix), the stage is skipped with a clear reason.
  */
 
-import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { delimiter, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
+
+import { findOnPath, runProcess, searchPath } from '../../platform/exec';
+import { isSubscriptionToken } from '../claude-code/auth';
 
 export type StrixScanMode = 'quick' | 'standard' | 'deep';
 export type StrixSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -28,6 +30,12 @@ export interface StrixSettings {
   /** Maximum LLM spend per scan, USD */
   maxBudgetUsd: number;
 }
+
+const STRIX_TIMEOUT_MS: Record<StrixScanMode, number> = {
+  quick: 60 * 60 * 1000,
+  standard: 3 * 60 * 60 * 1000,
+  deep: 8 * 60 * 60 * 1000,
+};
 
 export const DEFAULT_STRIX_SETTINGS: StrixSettings = {
   enabled: false,
@@ -70,42 +78,17 @@ export interface StrixRunOptions {
   onLog?: (line: string) => void;
 }
 
-/** Common install locations; GUI apps on macOS don't inherit the shell PATH. */
-const EXTRA_PATHS = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin'), join(homedir(), '.strix', 'bin')];
-
-export function searchPath(): string {
-  const parts = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
-  for (const extra of EXTRA_PATHS) if (!parts.includes(extra)) parts.push(extra);
-  return parts.join(delimiter);
+/** Where Strix's own installer puts the binary, besides the usual PATH locations. */
+function strixPath(): string {
+  return searchPath([join(homedir(), '.strix', 'bin')]);
 }
 
-export function findExecutable(name: string, path = searchPath()): string | undefined {
-  for (const dir of path.split(delimiter)) {
-    const candidate = join(dir, name);
-    if (dir && existsSync(candidate)) return candidate;
-  }
-  return undefined;
-}
-
-function exec(cmd: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number): Promise<number> {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { env, stdio: 'ignore' });
-    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
-    child.on('error', () => {
-      clearTimeout(timer);
-      resolve(-1);
-    });
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      resolve(code ?? -1);
-    });
-  });
-}
-
-export async function dockerAvailable(path = searchPath()): Promise<boolean> {
-  const docker = findExecutable('docker', path);
+export async function dockerAvailable(signal?: AbortSignal): Promise<boolean> {
+  const path = strixPath();
+  const docker = findOnPath('docker', path);
   if (!docker) return false;
-  return (await exec(docker, ['info'], { ...process.env, PATH: path }, 15_000)) === 0;
+  const result = await runProcess(docker, ['info'], { env: { ...process.env, PATH: path }, timeoutMs: 15_000, signal });
+  return result.code === 0;
 }
 
 export function buildStrixArgs(options: Pick<StrixRunOptions, 'projectDir' | 'settings' | 'diffBase'>, instructionFile: string): string[] {
@@ -276,8 +259,7 @@ export function formatFixRequest(result: StrixResult, settings: StrixSettings, s
 // ---------------------------------------------------------------------------
 
 export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
-  const { settings, specDir } = options;
-  const path = searchPath();
+  const { settings, specDir, signal } = options;
   const workDir = join(specDir, 'security');
   const finish = async (result: StrixResult): Promise<StrixResult> => {
     try {
@@ -289,16 +271,18 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     return result;
   };
 
-  if (!options.apiKey || options.apiKey.startsWith('sk-ant-oat')) {
+  if (!options.apiKey || isSubscriptionToken(options.apiKey)) {
     return finish({ status: 'skipped', reason: 'Strix needs an Anthropic API key (a Claude subscription cannot be used for it)', findings: [] });
   }
-  const strix = options.strixBin ?? findExecutable('strix', path);
+  const strix = options.strixBin ?? findOnPath('strix', strixPath());
   if (!strix) {
     return finish({ status: 'skipped', reason: 'Strix is not installed (uv tool install strix-agent)', findings: [] });
   }
-  if (!(await dockerAvailable(path))) {
+  if (!(await dockerAvailable(signal))) {
+    if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
     return finish({ status: 'skipped', reason: 'Docker is not running', findings: [] });
   }
+  if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
 
   mkdirSync(workDir, { recursive: true });
   const instructionFile = join(workDir, 'instructions.md');
@@ -313,7 +297,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   );
 
   const env: NodeJS.ProcessEnv = {
-    PATH: path,
+    PATH: strixPath(),
     HOME: process.env.HOME ?? homedir(),
     TMPDIR: process.env.TMPDIR,
     LANG: process.env.LANG ?? 'en_US.UTF-8',
@@ -325,25 +309,16 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   };
 
   options.onLog?.(`Security QA: Strix ${settings.scanMode} scan of changed code (budget $${settings.maxBudgetUsd})`);
-  const code = await new Promise<number | 'cancelled'>((resolve) => {
-    const child = spawn(strix, buildStrixArgs(options, instructionFile), { cwd: workDir, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    const onAbort = () => child.kill('SIGTERM');
-    options.signal?.addEventListener('abort', onAbort, { once: true });
-    let buffered = '';
-    const relay = (chunk: Buffer) => {
-      buffered += chunk.toString();
-      const lines = buffered.split('\n');
-      buffered = lines.pop() ?? '';
-      for (const line of lines) if (line.trim()) options.onLog?.(`[strix] ${line.trim()}`);
-    };
-    child.stdout.on('data', relay);
-    child.stderr.on('data', relay);
-    child.on('error', () => resolve(-1));
-    child.on('exit', (exitCode) => {
-      options.signal?.removeEventListener('abort', onAbort);
-      resolve(options.signal?.aborted ? 'cancelled' : (exitCode ?? -1));
-    });
+  const run = await runProcess(strix, buildStrixArgs(options, instructionFile), {
+    cwd: workDir,
+    env,
+    signal,
+    // A deep scan can take hours; the budget cap is the real limit.
+    timeoutMs: STRIX_TIMEOUT_MS[settings.scanMode],
+    maxOutput: 1024 * 1024,
+    onLine: (line) => options.onLog?.(`[strix] ${line.trim()}`),
   });
+  const code: number | 'cancelled' = run.aborted ? 'cancelled' : run.timedOut ? -2 : run.code;
 
   if (code === 'cancelled') return finish({ status: 'cancelled', findings: [] });
 
@@ -363,5 +338,6 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
       costUsd,
     });
   }
-  return finish({ status: 'error', reason: `Strix exited with code ${code}`, findings, runDir, costUsd });
+  const reason = code === -2 ? 'Strix timed out' : run.error ? `Strix could not start: ${run.error}` : `Strix exited with code ${code}`;
+  return finish({ status: 'error', reason, findings, runDir, costUsd });
 }

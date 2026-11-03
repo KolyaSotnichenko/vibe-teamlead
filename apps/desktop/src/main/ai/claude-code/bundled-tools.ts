@@ -21,7 +21,9 @@
 
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { delimiter, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
+
+import { findOnPath } from '../../platform/exec';
 
 export interface BundledTools {
   /** Absolute path to the Claude Code executable */
@@ -46,16 +48,6 @@ export interface BundledTools {
   gitleaksBin?: string;
   /** OSV-Scanner binary (vulnerable dependency gate) */
   osvScannerBin?: string;
-}
-
-/** Find an executable on PATH (development fallback for the scanners). */
-function onPath(name: string): string | undefined {
-  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
-    if (!dir) continue;
-    const candidate = join(dir, name);
-    if (existsSync(candidate)) return candidate;
-  }
-  return undefined;
 }
 
 const PLAYWRIGHT_CLI = 'cli.js';
@@ -120,8 +112,8 @@ export function resolveDevTools(appRoot: string): BundledTools {
       [resolveFromPackage('chrome-devtools-mcp', DEVTOOLS_CLI)].filter((p): p is string => !!p),
     ),
     nodeRuntime: process.execPath,
-    gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', 'gitleaks')]) ?? onPath('gitleaks'),
-    osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', 'osv-scanner')]) ?? onPath('osv-scanner'),
+    gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', 'gitleaks')]) ?? findOnPath('gitleaks'),
+    osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', 'osv-scanner')]) ?? findOnPath('osv-scanner'),
   };
 }
 

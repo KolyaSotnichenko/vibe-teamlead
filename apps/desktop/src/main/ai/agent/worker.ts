@@ -731,6 +731,7 @@ async function runQualityAssurance(
         specDir: session.specDir,
         gitleaksBin: session.bundled?.gitleaksBin,
         osvScannerBin: session.bundled?.osvScannerBin,
+        signal: abortController.signal,
       }),
 
     generatePrompt: (agentType) => assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session),
