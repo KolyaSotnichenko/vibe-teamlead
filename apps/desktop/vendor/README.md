@@ -16,3 +16,12 @@ For `drawio/` only the skill plugin is kept; the app loads it with MCP discovery
 To update: clone the upstream repo at the new tag, copy the same paths over, update this table.
 
 CodeGraph is not vendored here — it comes from npm (`@colbymchenry/codegraph-<platform>-<arch>`, MIT) and is copied into the app's resources at packaging time.
+
+Also bundled from npm at packaging time (pinned, see package.json), run on Electron's own Node:
+
+- `@playwright/mcp` (Apache-2.0): browser validation for QA, headless and isolated, using the installed Chrome.
+- `chrome-devtools-mcp` (Apache-2.0): console, network and performance debugging for the QA fixer; started with usage statistics and CrUX lookups off.
+
+Security-gate scanners are downloaded by `scripts/fetch-scanners.cjs` in the release workflow (pinned versions, SHA-256 checked) into `vendor-bin/`, packaged as `Resources/scanners/`:
+
+- gitleaks (MIT), OSV-Scanner (Apache-2.0).

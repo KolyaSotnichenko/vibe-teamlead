@@ -49,6 +49,8 @@ export function buildMermaidConfig(): MermaidConfig {
     securityLevel: 'strict',
     theme: 'base',
     fontFamily: "'Archivo', 'Inter Tight', system-ui, sans-serif",
+    // Root fontSize overrides the per-diagram sizes (actorFontSize etc.), so set it here
+    fontSize: 13,
     themeVariables: {
       darkMode: dark,
       background: dark ? ink : ground,
@@ -92,8 +94,24 @@ export function buildMermaidConfig(): MermaidConfig {
     },
     // Radius 0, no shadows — the design system is square
     themeCSS: 'rect, .basic.label-container, .node rect, .cluster rect { rx: 0 !important; ry: 0 !important; } * { filter: none !important; }',
-    flowchart: { curve: 'linear', htmlLabels: false },
-    sequence: { mirrorActors: false, showSequenceNumbers: false },
+    // Natural size (13px text) instead of stretching to the container; wide diagrams scroll
+    flowchart: { curve: 'linear', htmlLabels: false, useMaxWidth: false },
+    sequence: {
+      mirrorActors: false,
+      showSequenceNumbers: false,
+      useMaxWidth: false,
+      actorFontSize: 13,
+      messageFontSize: 13,
+      noteFontSize: 12,
+      actorFontFamily: "'Archivo', 'Inter Tight', system-ui, sans-serif",
+      messageFontFamily: "'Archivo', 'Inter Tight', system-ui, sans-serif",
+      noteFontFamily: "'Archivo', 'Inter Tight', system-ui, sans-serif",
+      boxMargin: 8,
+      height: 44,
+    },
+    er: { useMaxWidth: false, fontSize: 13 },
+    class: { useMaxWidth: false },
+    state: { useMaxWidth: false },
   };
 }
 
@@ -136,14 +154,14 @@ export default function MermaidDiagram({ source, label }: { source: string; labe
   }, [source, dark, reactId]);
 
   return (
-    <figure className="not-prose m-0 border border-border bg-background">
+    <figure className="not-prose mx-0 mb-0 border border-border bg-background">
       {state.error ? (
         <div className="px-4 py-3 text-sm text-destructive">{t('tasks:workspace.architecture.mermaidError')}</div>
       ) : state.svg ? (
         <div
           role="img"
           aria-label={label}
-          className="flex justify-center overflow-x-auto p-4 [&_svg]:h-auto [&_svg]:max-w-full"
+          className="flex overflow-x-auto p-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:shrink-0"
           // Output of mermaid.render with securityLevel 'strict' (DOMPurify-sanitized, no scripts or click handlers)
           // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized by mermaid (securityLevel strict)
           dangerouslySetInnerHTML={{ __html: state.svg }}

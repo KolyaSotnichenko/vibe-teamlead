@@ -67,7 +67,8 @@ const SubtaskNode = memo(function SubtaskNode({ data, selected }: NodeProps<Subt
         s === 'pending' && 'border border-dashed border-muted-foreground/60 bg-background text-foreground',
         s === 'blocked' && 'border border-border bg-accent text-foreground',
         s === 'failed' && 'border border-destructive bg-card text-foreground',
-        selected && 'outline outline-2 outline-offset-2 outline-ring',
+        // Selection is not an attention signal: ink/paper outline, never vermilion
+        selected && 'outline outline-2 outline-offset-2 outline-foreground',
         dimmed && 'opacity-40'
       )}
     >

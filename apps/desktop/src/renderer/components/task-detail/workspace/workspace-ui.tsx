@@ -114,9 +114,11 @@ const markdownComponents: Components = {
     const language = /language-(\w+)/.exec(className ?? '')?.[1];
     if (language === 'mermaid') {
       return (
-        <Suspense fallback={null}>
-          <MermaidDiagram source={String(children).replace(/\n$/, '')} />
-        </Suspense>
+        <div className="not-prose my-5">
+          <Suspense fallback={null}>
+            <MermaidDiagram source={String(children).replace(/\n$/, '')} />
+          </Suspense>
+        </div>
       );
     }
     return (

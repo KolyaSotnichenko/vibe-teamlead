@@ -79,7 +79,7 @@ function CriterionRow({
 
       <div className="min-w-0 space-y-2">
         <p className="text-sm leading-relaxed text-foreground">
-          {criterion.text}
+          <InlineCode text={criterion.text} />
           {criterion.testLevel && (
             <span className="ml-2 inline-flex h-5 items-center border border-border px-1.5 align-[1px] font-mono text-[11px] text-muted-foreground">
               {t(`tasks:workspace.spec.testLevel.${criterion.testLevel}`)}
@@ -134,5 +134,24 @@ function CriterionRow({
         <AcStatusChip status={criterion.status} />
       </div>
     </li>
+  );
+}
+
+/** Render `code` spans in criterion text without a full markdown pass. */
+function InlineCode({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('`') && part.endsWith('`') && part.length > 2 ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static split of one string
+          <code key={i} className="font-mono text-[12.5px]">
+            {part.slice(1, -1)}
+          </code>
+        ) : (
+          part
+        )
+      )}
+    </>
   );
 }

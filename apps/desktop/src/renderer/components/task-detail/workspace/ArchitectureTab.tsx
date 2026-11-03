@@ -29,7 +29,7 @@ export function ArchitectureTab({ workspace, taskId, projectId }: ArchitectureTa
         {diagrams.length === 0 ? (
           <EmptyState compact title={t('tasks:workspace.architecture.diagramsTitle')} body={t('tasks:workspace.architecture.noDiagrams')} />
         ) : (
-          <div className="space-y-6">
+          <div className="flex flex-col gap-8">
             {diagrams.map((d) => (
               <DiagramCard key={`${d.kind}:${d.name}`} diagram={d} taskId={taskId} projectId={projectId} />
             ))}
@@ -114,7 +114,7 @@ function DiagramCard({ diagram, taskId, projectId }: { diagram: WorkspaceDiagram
   };
 
   return (
-    <figure className="m-0 space-y-2">
+    <figure className="mx-0 mb-0 space-y-2">
       <figcaption className="flex min-h-11 items-center justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-sm font-semibold text-foreground">{diagram.name}</span>

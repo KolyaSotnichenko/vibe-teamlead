@@ -94,6 +94,22 @@ const SEQUENCE_MMD = `sequenceDiagram
   B-->>U: invoices.csv
 `;
 
+/** Stand-in for the PNG draw.io renders next to containers.drawio (any image data URL works in <img>) */
+const CONTAINERS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="230" viewBox="0 0 760 230" font-family="Helvetica, Arial, sans-serif" font-size="13">
+<rect width="760" height="230" fill="#ffffff"/>
+<g fill="#ffffff" stroke="#1C1D19" stroke-width="1.5">
+<rect x="20" y="70" width="170" height="80"/><rect x="295" y="70" width="170" height="80"/><rect x="570" y="70" width="170" height="80"/></g>
+<g fill="#1C1D19" text-anchor="middle">
+<text x="105" y="104" font-weight="bold">Web app</text><text x="105" y="124" font-size="11">[React, InvoiceTable]</text>
+<text x="380" y="104" font-weight="bold">Billing API</text><text x="380" y="124" font-size="11">[Node, /invoices/export]</text>
+<text x="655" y="104" font-weight="bold">Postgres</text><text x="655" y="124" font-size="11">[invoices]</text>
+<text x="242" y="100" font-size="11">GET export</text><text x="242" y="114" font-size="11">HTTPS, CSV stream</text>
+<text x="517" y="100" font-size="11">cursor reads</text><text x="517" y="114" font-size="11">SQL</text></g>
+<g stroke="#1C1D19" stroke-width="1.5"><line x1="190" y1="125" x2="287" y2="125"/><line x1="465" y1="125" x2="562" y2="125"/></g>
+<g fill="#1C1D19"><path d="M295 125 l-9 -5 v10z"/><path d="M570 125 l-9 -5 v10z"/></g>
+<text x="20" y="30" font-size="14" font-weight="bold" fill="#1C1D19">Containers — invoice export</text>
+</svg>`;
+
 const iso = (hhmm: string, day = '2026-11-02') => `${day}T${hhmm}:00.000Z`;
 
 export const sampleTaskWorkspace: TaskWorkspace = {
@@ -242,16 +258,34 @@ export const sampleTaskWorkspace: TaskWorkspace = {
     markdown: ARCHITECTURE_MD,
     adrs: [{ fileName: '0001-stream-csv-from-cursor.md', title: 'Stream CSV from a database cursor', status: 'accepted', markdown: ADR_MD }],
     diagrams: [
-      { name: 'containers', kind: 'drawio', drawioPath: 'architecture/diagrams/containers.drawio' },
+      {
+        name: 'containers',
+        kind: 'drawio',
+        drawioPath: 'architecture/diagrams/containers.drawio',
+        pngDataUrl: `data:image/svg+xml;utf8,${encodeURIComponent(CONTAINERS_SVG)}`,
+      },
+      { name: 'deployment', kind: 'drawio', drawioPath: 'architecture/diagrams/deployment.drawio' },
       { name: 'export-sequence', kind: 'mermaid', mermaidSource: SEQUENCE_MMD },
     ],
   },
 };
 
+/** Early-stage task: the spec exists, nothing else has been written yet (shows the empty states). */
+export const earlyTaskWorkspace: TaskWorkspace = {
+  specDir: '/Users/demo/projects/billing/.auto-claude/specs/002-dashboard',
+  hasQaCoverage: false,
+  spec: {
+    markdown: SPEC_MD,
+    criteria: (sampleTaskWorkspace.spec?.criteria ?? []).map((c) => ({ ...c, status: 'untested' as const, tests: [], coveredBy: [] })),
+  },
+  timeline: [],
+  architecture: { adrs: [], diagrams: [] },
+};
+
 export const taskWorkspaceMock = {
-  getTaskWorkspace: async (_taskId: string, _projectId?: string): Promise<IPCResult<TaskWorkspace | null>> => ({
+  getTaskWorkspace: async (taskId: string, _projectId?: string): Promise<IPCResult<TaskWorkspace | null>> => ({
     success: true,
-    data: sampleTaskWorkspace,
+    data: taskId === 'task-1' ? sampleTaskWorkspace : earlyTaskWorkspace,
   }),
   openTaskWorkspaceFile: async (_taskId: string, relativePath: string): Promise<IPCResult> => {
     console.warn('[Browser Mock] openTaskWorkspaceFile:', relativePath);

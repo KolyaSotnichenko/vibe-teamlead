@@ -112,7 +112,7 @@ function bundledNodeServer(
 
 /** Playwright MCP (Microsoft, Apache-2.0): drive the app under test as a user would. */
 function createPlaywrightServer(cli: string, runtime: string, outputDir?: string): McpServerConfig {
-  const args = ['--headless', '--isolated', '--browser', 'chrome'];
+  const args = ['--headless', '--isolated', '--browser', 'chrome', '--caps', 'testing'];
   if (outputDir) args.push('--output-dir', outputDir);
   return bundledNodeServer('playwright', 'Playwright', 'Browser automation for end-to-end validation', cli, args, runtime);
 }
