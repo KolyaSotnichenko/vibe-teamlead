@@ -4,7 +4,7 @@
  * IBM Plex Mono for data (ids, paths, times).
  */
 
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -109,6 +109,98 @@ const PROSE =
   'prose-table:text-[13px] prose-th:border-b prose-th:border-foreground prose-th:text-foreground prose-td:border-b prose-td:border-border prose-hr:border-border ' +
   '[overflow-wrap:anywhere]';
 
+/**
+ * Where relative image paths in a spec-dir markdown file point: the task, and the
+ * file's folder relative to the spec dir (e.g. "architecture" for architecture.md).
+ */
+export interface MarkdownAssets {
+  taskId: string;
+  projectId: string;
+  baseDir: string;
+}
+
+const isRelativePath = (href: string | undefined): href is string =>
+  !!href && !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('#') && !href.startsWith('/');
+
+/** `baseDir` + a relative path, normalised ("./", "../"), without query or hash. Pure — tested directly. */
+export function joinSpecPath(baseDir: string, relative: string): string {
+  const parts: string[] = [];
+  for (const seg of `${baseDir}/${relative.split(/[?#]/)[0]}`.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') parts.pop();
+    else parts.push(decodeURIComponent(seg));
+  }
+  return parts.join('/');
+}
+
+/** The PNG to show for a diagram reference: the PNG itself, or the PNG render_diagram saves next to a .drawio/.mmd. */
+export function diagramImagePath(specPath: string): string | null {
+  if (/\.png$/i.test(specPath)) return specPath;
+  if (/\.(drawio|mmd)$/i.test(specPath)) return specPath.replace(/\.(drawio|mmd)$/i, '.png');
+  return null;
+}
+
+const specImageCache = new Map<string, string>();
+
+/** A PNG from the task's spec folder (the renderer can't read files by path). */
+function SpecImage({ assets, path, alt }: { assets: MarkdownAssets; path: string; alt: string }) {
+  const key = `${assets.taskId}:${path}`;
+  const [src, setSrc] = useState(() => specImageCache.get(key));
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    const cached = specImageCache.get(key);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI
+      ?.getTaskWorkspaceImage?.(assets.taskId, path, assets.projectId)
+      .then((result) => {
+        if (cancelled) return;
+        if (result?.success && result.data) {
+          specImageCache.set(key, result.data);
+          setSrc(result.data);
+        } else setMissing(true);
+      })
+      .catch(() => !cancelled && setMissing(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [key, path, assets.taskId, assets.projectId]);
+  if (missing) return <span className="font-mono text-xs text-muted-foreground">{path}</span>;
+  if (!src) return <span className="block h-24 border border-dashed border-border" aria-busy="true" />;
+  return (
+    <span className="not-prose my-4 block border border-border bg-white p-3">
+      <img src={src} alt={alt} className="mx-auto h-auto max-w-full" />
+    </span>
+  );
+}
+
+function createMarkdownComponents(assets?: MarkdownAssets): Components {
+  if (!assets) return markdownComponents;
+  return {
+    ...markdownComponents,
+    img({ src, alt, node: _node, ...props }) {
+      const source = typeof src === 'string' ? src : undefined;
+      const image = isRelativePath(source) ? diagramImagePath(joinSpecPath(assets.baseDir, source)) : null;
+      if (image) return <SpecImage assets={assets} path={image} alt={alt ?? ''} />;
+      return <img src={source} alt={alt} {...props} />;
+    },
+    a({ href, children, node, ...props }) {
+      // "link diagrams/context.png" in agent docs: show the diagram itself
+      const image = isRelativePath(href) ? diagramImagePath(joinSpecPath(assets.baseDir, href)) : null;
+      if (image) return <SpecImage assets={assets} path={image} alt={typeof children === 'string' ? children : image} />;
+      void node;
+      return (
+        <a {...props} href={href} target="_blank" rel="noreferrer noopener">
+          {children}
+        </a>
+      );
+    },
+  };
+}
+
 const markdownComponents: Components = {
   // Links in agent-written markdown open in the browser, never inside the app window.
   a({ href, children, node: _node, ...props }) {
@@ -148,10 +240,11 @@ const markdownComponents: Components = {
 };
 
 /** Markdown in the design system's datasheet style; ```mermaid fences render as diagrams. */
-export function WorkspaceMarkdown({ markdown, className }: { markdown: string; className?: string }) {
+export function WorkspaceMarkdown({ markdown, className, assets }: { markdown: string; className?: string; assets?: MarkdownAssets }) {
+  const components = useMemo(() => createMarkdownComponents(assets), [assets?.taskId, assets?.projectId, assets?.baseDir]);
   return (
     <div className={cn(PROSE, className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {markdown}
       </ReactMarkdown>
     </div>

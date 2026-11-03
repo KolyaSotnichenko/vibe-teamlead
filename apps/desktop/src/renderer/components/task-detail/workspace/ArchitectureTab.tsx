@@ -55,7 +55,7 @@ export function ArchitectureTab({ workspace, taskId, projectId }: ArchitectureTa
         {markdown === undefined ? (
           <EmptyState compact title={t('tasks:workspace.architecture.noDocTitle')} body={t('tasks:workspace.architecture.noDocBody')} />
         ) : (
-          <WorkspaceMarkdown markdown={markdown} />
+          <WorkspaceMarkdown markdown={markdown} assets={{ taskId, projectId, baseDir: 'architecture' }} />
         )}
       </section>
     </div>
