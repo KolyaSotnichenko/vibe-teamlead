@@ -513,6 +513,14 @@ Use the Task tool to spawn a subagent:
 
 **Note:** For simple subtasks, sequential implementation is usually sufficient. Subagents add value when there's genuinely parallel work to be done.
 
+### Test First (MANDATORY)
+
+The subtask description lists the acceptance criteria it covers (`[AC-2, AC-3]`) and the tests to write first. Work in red → green → refactor:
+1. **Red** — write the failing test(s) for those criteria first, following the project's existing test conventions. Run them and confirm they fail *for the expected reason* (missing behavior, not a typo or import error).
+2. **Green** — write the minimal code that makes them pass. Run them again.
+3. **Refactor** — clean up with the tests green; run the subtask's verification and the nearby existing tests.
+Never edit a test to make it pass unless the test itself was wrong — and if so, say why in your notes. If a criterion truly cannot be tested automatically, record why and how you verified it instead.
+
 ### Implementation Rules
 
 1. **Match patterns exactly** - Use the same style as patterns_from files

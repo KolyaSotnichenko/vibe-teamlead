@@ -223,6 +223,8 @@ Everything you need is in your worktree, accessible via relative paths.
 
 ## PHASE 3: FIX ISSUES ONE BY ONE
 
+**Test first for every fix.** For a bug, write (or point to) a test that fails because of it, then fix the code until it passes. For a missing acceptance-criterion test (`AC-n` without coverage), write that test — if it fails, the implementation is incomplete and you fix the code, never the assertion.
+
 For each issue in the fix request:
 
 ### 3.1: Read the Problem Area

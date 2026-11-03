@@ -52,7 +52,7 @@ Use the **Write tool** to create `spec.md` in the spec directory:
 [Brief description of the change - a few sentences max]
 
 ## Verification
-- [ ] [How to verify the change works]
+- [ ] **AC-1** Given [state], when [action], then [observable result] — proved by [test file::test name, or the manual check if the change cannot be tested automatically, e.g. a pure style tweak]
 
 ## Notes
 [Any gotchas or considerations - optional]

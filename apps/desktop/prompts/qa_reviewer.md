@@ -73,6 +73,15 @@ Wait for all services to be healthy before proceeding.
 
 ## PHASE 3: RUN AUTOMATED TESTS
 
+### 3.0: Acceptance Criteria Coverage (MANDATORY)
+
+Build a table of every acceptance criterion in spec.md (`AC-1` … `AC-n`): the test that proves it, and whether it passes. A criterion with **no test**, a test that **does not actually assert the criterion's observable result**, or a **failing** test is a QA issue — list it in the report with its AC ID. Criteria the spec marks as not automatable must have the documented manual verification instead.
+
+| AC | Test (file::name) | Asserts the criterion? | Result |
+|----|-------------------|------------------------|--------|
+| AC-1 | `tests/test_x.py::test_y` | yes | PASS |
+
+
 ### 3.1: Unit Tests
 
 Run all unit tests for affected services:

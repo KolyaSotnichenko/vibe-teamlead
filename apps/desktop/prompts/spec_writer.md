@@ -152,11 +152,21 @@ From `[reference file path]`:
 
 1. **[Requirement Name from requirements.json]**
    - Description: [What it does]
-   - Acceptance: [How to verify - from acceptance_criteria]
+   - Acceptance:
+     - **AC-1** Given [state], when [action], then [observable result]. — Test: unit | integration | e2e
+     - **AC-2** Given ..., when ..., then .... — Test: ...
 
 2. **[Requirement Name]**
    - Description: [What it does]
-   - Acceptance: [How to verify]
+   - Acceptance:
+     - **AC-3** Given ..., when ..., then .... — Test: ...
+
+**Acceptance criteria are the contract for test-driven development.** Every criterion:
+- has a stable ID (`AC-1`, `AC-2`, ... numbered across the whole spec),
+- is phrased Given / When / Then with a concrete, observable result (a value, a response, an element on screen, a row in the DB) — never "works correctly" or "is fast",
+- names the test level that will prove it (unit, integration, or e2e),
+- is small enough for one test to prove it.
+The planner turns each AC into a failing test first; the coder makes it pass; QA checks every AC has a passing test.
 
 ### Edge Cases
 
@@ -192,8 +202,8 @@ From `[reference file path]`:
 
 The task is complete when:
 
-1. [ ] [From requirements.json acceptance_criteria]
-2. [ ] [From requirements.json acceptance_criteria]
+1. [ ] Every acceptance criterion (AC-1 … AC-n) has an automated test, and all of them pass
+2. [ ] [Any criterion that cannot be automated, with how it is verified instead]
 3. [ ] No console errors
 4. [ ] Existing tests still pass
 5. [ ] New functionality verified via browser/API
@@ -203,9 +213,9 @@ The task is complete when:
 **CRITICAL**: These criteria must be verified by the QA Agent before sign-off.
 
 ### Unit Tests
-| Test | File | What to Verify |
-|------|------|----------------|
-| [Test Name] | `[path/to/test]` | [What this test should verify] |
+| AC | Test | File | What to Verify |
+|----|------|------|----------------|
+| AC-1 | [Test Name] | `[path/to/test]` | [What this test should verify] |
 
 ### Integration Tests
 | Test | Services | What to Verify |
