@@ -378,39 +378,6 @@ export function registerMemoryHandlers(): void {
     // ============================================
 
     /**
-    * List all available Ollama models (LLMs and embeddings).
-    * Queries Ollama API to get model names, sizes, and metadata.
-    *
-    * @async
-    * @param {string} [baseUrl] - Optional custom Ollama base URL
-    * @returns {Promise<IPCResult<{ models, count }>>} Array of models with metadata
-    */
-   ipcMain.handle(
-     IPC_CHANNELS.OLLAMA_LIST_MODELS,
-     async (_, baseUrl?: string): Promise<IPCResult<{ models: OllamaModel[]; count: number }>> => {
-      try {
-        const result = await cachedOllamaRequest(
-          `list-models:${baseUrl || 'default'}`,
-          async () => {
-            const models = await listOllamaModelsNative(baseUrl);
-            return { success: true, data: { models, count: models.length } };
-          }
-        );
-        if (!result.success) {
-          return { success: false, error: result.error || 'Failed to list Ollama models' };
-        }
-        const data = result.data as { models: OllamaModel[]; count: number };
-        return { success: true, data };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to list Ollama models',
-        };
-      }
-    }
-  );
-
-   /**
     * List only embedding models from Ollama.
     * Filters the model list to show only models suitable for semantic search.
     * Includes dimension info for model compatibility verification.

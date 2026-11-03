@@ -12,18 +12,9 @@ vi.mock('electron', () => ({
   }
 }));
 
-vi.mock('../rate-limit-detector', () => ({
-  getBestAvailableProfileEnv: () => ({
-    env: { CLAUDE_CODE_OAUTH_TOKEN: 'oauth-token' },
-    profileId: 'default',
-    profileName: 'Default',
-    wasSwapped: false
-  })
-}));
-
-const mockGetApiProfileEnv = vi.fn();
-vi.mock('../services/profile', () => ({
-  getAPIProfileEnv: (...args: unknown[]) => mockGetApiProfileEnv(...args)
+const mockGetClaudeCredentialEnv = vi.fn();
+vi.mock('../ai/claude-code/credential', () => ({
+  getClaudeCredentialEnv: (...args: unknown[]) => mockGetClaudeCredentialEnv(...args)
 }));
 
 describe('InsightsConfig', () => {
@@ -31,9 +22,9 @@ describe('InsightsConfig', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv, TEST_ENV: 'ok' };
-    mockGetApiProfileEnv.mockResolvedValue({
-      ANTHROPIC_BASE_URL: 'https://api.z.ai',
-      ANTHROPIC_AUTH_TOKEN: 'key'
+    mockGetClaudeCredentialEnv.mockReturnValue({
+      ANTHROPIC_API_KEY: 'sk-ant-api03-key',
+      ANTHROPIC_BASE_URL: 'https://gateway.example.com'
     });
   });
 
@@ -43,7 +34,7 @@ describe('InsightsConfig', () => {
     vi.restoreAllMocks();
   });
 
-  it('should build process env with profile settings', async () => {
+  it('should build process env with the Claude credential', async () => {
     const config = new InsightsConfig();
     vi.spyOn(config, 'loadAutoBuildEnv').mockReturnValue({ CUSTOM_ENV: '1' });
 
@@ -51,23 +42,15 @@ describe('InsightsConfig', () => {
 
     expect(env.TEST_ENV).toBe('ok');
     expect(env.CUSTOM_ENV).toBe('1');
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
-    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.z.ai');
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('key');
+    expect(env.ANTHROPIC_API_KEY).toBe('sk-ant-api03-key');
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://gateway.example.com');
   });
 
-  it('should clear ANTHROPIC env vars in OAuth mode when no API profile is set', async () => {
-    const config = new InsightsConfig();
-    mockGetApiProfileEnv.mockResolvedValue({});
-    process.env = {
-      ...originalEnv,
-      ANTHROPIC_AUTH_TOKEN: 'stale-token',
-      ANTHROPIC_BASE_URL: 'https://stale.example'
-    };
+  it('should let the credential override a stale key from the environment', async () => {
+    process.env = { ...originalEnv, ANTHROPIC_API_KEY: 'stale-key' };
 
-    const env = await config.getProcessEnv();
+    const env = await new InsightsConfig().getProcessEnv();
 
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('');
-    expect(env.ANTHROPIC_BASE_URL).toBe('');
+    expect(env.ANTHROPIC_API_KEY).toBe('sk-ant-api03-key');
   });
 });

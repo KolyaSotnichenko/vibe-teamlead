@@ -7,10 +7,8 @@
  *
  * Used in TaskCreationWizard and TaskEditDialog.
  */
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useActiveProvider } from '../hooks/useActiveProvider';
-import { getProviderModelLabel } from '../../shared/utils/model-display';
 import { Brain, Scale, Zap, Sliders, Sparkles, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { Label } from './ui/label';
 import {
@@ -24,7 +22,6 @@ import { ThinkingLevelSelect } from './settings/ThinkingLevelSelect';
 import {
   DEFAULT_AGENT_PROFILES,
   AVAILABLE_MODELS,
-  ALL_AVAILABLE_MODELS,
   DEFAULT_PHASE_MODELS,
   DEFAULT_PHASE_THINKING,
 } from '../../shared/constants';
@@ -86,36 +83,7 @@ export function AgentProfileSelector({
   disabled
 }: AgentProfileSelectorProps) {
   const { t } = useTranslation('settings');
-  const { provider: activeProvider } = useActiveProvider();
   const [showPhaseDetails, setShowPhaseDetails] = useState(false);
-
-  // Ollama models are user-installed — fetch dynamically from the local server
-  const [ollamaModels, setOllamaModels] = useState<Array<{ value: string; label: string }>>([]);
-
-  const fetchOllamaModels = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const result = await window.electronAPI.listOllamaModels();
-      if (signal?.aborted) return;
-      if (result?.success && Array.isArray(result?.data?.models)) {
-        const llmModels = (result.data.models as Array<{ name: string; is_embedding: boolean }>)
-          .filter(m => !m.is_embedding)
-          .map(m => ({ value: m.name, label: m.name }));
-        setOllamaModels(llmModels);
-      }
-    } catch {
-      // Ollama not available — leave empty
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeProvider !== 'ollama') {
-      setOllamaModels([]);
-      return;
-    }
-    const controller = new AbortController();
-    fetchOllamaModels(controller.signal);
-    return () => { controller.abort(); };
-  }, [activeProvider, fetchOllamaModels]);
 
   const isCustom = profileId === 'custom';
   const _isAuto = profileId === 'auto';
@@ -124,21 +92,7 @@ export function AgentProfileSelector({
   const currentPhaseModels = phaseModels || DEFAULT_PHASE_MODELS;
   const currentPhaseThinking = phaseThinking || DEFAULT_PHASE_THINKING;
 
-  // Build model options filtered to the active provider (falls back to Anthropic models)
-  const phaseModelOptions = useMemo(() => {
-    if (!activeProvider || activeProvider === 'anthropic') {
-      return AVAILABLE_MODELS.map(m => ({ value: m.value, label: m.label }));
-    }
-    // Ollama: use dynamically fetched installed models
-    if (activeProvider === 'ollama' && ollamaModels.length > 0) {
-      return ollamaModels;
-    }
-    const providerModels = ALL_AVAILABLE_MODELS.filter(m => m.provider === activeProvider);
-    if (providerModels.length === 0) {
-      return AVAILABLE_MODELS.map(m => ({ value: m.value, label: m.label }));
-    }
-    return providerModels.map(m => ({ value: m.value, label: m.label }));
-  }, [activeProvider, ollamaModels]);
+  const phaseModelOptions = AVAILABLE_MODELS.map(m => ({ value: m.value, label: m.label }));
 
   const handleProfileSelect = (selectedId: string) => {
     if (selectedId === 'custom') {
@@ -228,9 +182,7 @@ export function AgentProfileSelector({
           <SelectContent>
             {DEFAULT_AGENT_PROFILES.map((profile) => {
               const ProfileIcon = iconMap[profile.icon || 'Scale'] || Scale;
-              const modelLabel = activeProvider
-                ? getProviderModelLabel(profile.model, activeProvider)
-                : AVAILABLE_MODELS.find(m => m.value === profile.model)?.label;
+              const modelLabel = AVAILABLE_MODELS.find(m => m.value === profile.model)?.label;
               return (
                 <SelectItem key={profile.id} value={profile.id}>
                   <div className="flex items-center gap-2">
@@ -298,9 +250,7 @@ export function AgentProfileSelector({
             <div className="px-4 pb-4 -mt-1">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {(Object.keys(PHASE_LABEL_KEYS) as Array<keyof PhaseModelConfig>).map((phase) => {
-                  const modelLabel = activeProvider
-                    ? getProviderModelLabel(currentPhaseModels[phase], activeProvider)
-                    : (AVAILABLE_MODELS.find(m => m.value === currentPhaseModels[phase])?.label?.replace('Claude ', '') || currentPhaseModels[phase]);
+                  const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentPhaseModels[phase])?.label?.replace('Claude ', '') || currentPhaseModels[phase];
                   return (
                     <div key={phase} className="flex items-center justify-between rounded bg-background/50 px-2 py-1">
                       <span className="text-muted-foreground">{t(PHASE_LABEL_KEYS[phase].label)}:</span>
@@ -349,7 +299,6 @@ export function AgentProfileSelector({
                       value={currentPhaseThinking[phase]}
                       onChange={(value) => handlePhaseThinkingChange(phase, value as ThinkingLevel)}
                       modelValue={currentPhaseModels[phase]}
-                      provider={activeProvider ?? 'anthropic'}
                       disabled={disabled}
                     />
                   </div>
@@ -391,7 +340,6 @@ export function AgentProfileSelector({
             value={thinkingLevel || 'low'}
             onChange={(value) => onThinkingLevelChange(value as ThinkingLevel)}
             modelValue={model || 'sonnet'}
-            provider={activeProvider ?? 'anthropic'}
             disabled={disabled}
           />
         </div>

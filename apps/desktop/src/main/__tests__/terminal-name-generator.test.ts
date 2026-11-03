@@ -15,7 +15,7 @@ vi.mock('../ai/claude-code/task', () => {
 });
 
 vi.mock('../ipc-handlers/feature-settings-helper', () => ({
-  getActiveProviderFeatureSettings: () => ({ model: 'sonnet', thinkingLevel: 'medium' }),
+  getFeatureSettings: () => ({ model: 'sonnet', thinkingLevel: 'medium' }),
 }));
 
 import { ClaudeTaskError } from '../ai/claude-code/task';

@@ -7,7 +7,6 @@ export { projectMock } from './project-mock';
 export { taskMock } from './task-mock';
 export { workspaceMock } from './workspace-mock';
 export { terminalMock } from './terminal-mock';
-export { claudeProfileMock } from './claude-profile-mock';
 export { roadmapMock } from './roadmap-mock';
 export { contextMock } from './context-mock';
 export { integrationMock } from './integration-mock';

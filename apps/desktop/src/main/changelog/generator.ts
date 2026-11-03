@@ -11,7 +11,8 @@ import type {
 import { buildChangelogPrompt, buildGitPrompt, createGenerationScript } from './formatter';
 import { extractChangelog } from './parser';
 import { getCommits, getBranchDiffCommits } from './git-integration';
-import { detectRateLimit, createSDKRateLimitInfo, getBestAvailableProfileEnv } from '../rate-limit-detector';
+import { detectRateLimit, createSDKRateLimitInfo } from '../rate-limit-detector';
+import { getClaudeCredentialEnv } from '../ai/claude-code/credential';
 
 import { getAugmentedEnv } from '../env-utils';
 import { isWindows } from '../platform';
@@ -251,8 +252,7 @@ export class ChangelogGenerator extends EventEmitter {
         if (rateLimitDetection.isRateLimited) {
           this.debug('Rate limit detected in changelog generation', {
             resetTime: rateLimitDetection.resetTime,
-            limitType: rateLimitDetection.limitType,
-            suggestedProfile: rateLimitDetection.suggestedProfile?.name
+            limitType: rateLimitDetection.limitType
           });
 
           // Emit rate limit event
@@ -293,21 +293,10 @@ export class ChangelogGenerator extends EventEmitter {
     // even when app is launched from Finder/Dock
     const augmentedEnv = getAugmentedEnv();
 
-    // Get best available Claude profile environment (automatically handles rate limits)
-    const profileResult = getBestAvailableProfileEnv();
-    const profileEnv = profileResult.env;
-    this.debug('Active profile environment', {
-      hasOAuthToken: !!profileEnv.CLAUDE_CODE_OAUTH_TOKEN,
-      hasConfigDir: !!profileEnv.CLAUDE_CONFIG_DIR,
-      authMethod: profileEnv.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth-token' : (profileEnv.CLAUDE_CONFIG_DIR ? 'config-dir' : 'default'),
-      wasSwapped: profileResult.wasSwapped,
-      selectedProfile: profileResult.profileName
-    });
-
     const spawnEnv: Record<string, string> = {
       ...augmentedEnv,
       ...this.autoBuildEnv,
-      ...profileEnv, // Include active Claude profile config
+      ...getClaudeCredentialEnv(), // The app's Claude credential
       // Ensure critical env vars are set for claude CLI
       // Use USERPROFILE on Windows, HOME on Unix
       ...(isWindows() ? { USERPROFILE: homeDir } : { HOME: homeDir }),
@@ -321,7 +310,7 @@ export class ChangelogGenerator extends EventEmitter {
       HOME: spawnEnv.HOME,
       USER: spawnEnv.USER,
       pathDirs: spawnEnv.PATH?.split(path.delimiter).length,
-      authMethod: spawnEnv.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth-token' : (spawnEnv.CLAUDE_CONFIG_DIR ? `config-dir:${spawnEnv.CLAUDE_CONFIG_DIR}` : 'default')
+      authMethod: spawnEnv.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth-token' : (spawnEnv.ANTHROPIC_API_KEY ? 'api-key' : 'none')
     });
 
     return spawnEnv;

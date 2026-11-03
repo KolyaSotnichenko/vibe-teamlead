@@ -16,7 +16,6 @@ mocks/
 ├── task-mock.ts               # Task operations and lifecycle
 ├── workspace-mock.ts          # Git worktree management
 ├── terminal-mock.ts           # Terminal and session management
-├── claude-profile-mock.ts     # Claude profile and rate limiting
 ├── roadmap-mock.ts            # Roadmap generation and features
 ├── context-mock.ts            # Project context and memory
 ├── integration-mock.ts        # External integrations (Linear, GitHub)

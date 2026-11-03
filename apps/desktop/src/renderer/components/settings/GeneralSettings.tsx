@@ -5,7 +5,8 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
-import { ProviderAgentTabs } from './ProviderAgentTabs';
+import { AgentProfileSettings } from './AgentProfileSettings';
+import { FeatureModelSettings } from './FeatureModelSettings';
 import type {
   AppSettings,
   ToolDetectionResult
@@ -113,8 +114,16 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
   if (section === 'agent') {
     return (
       <div className="space-y-8">
-        {/* Provider-tabbed agent settings (profiles, features, model overrides) */}
-        <ProviderAgentTabs />
+        {/* Agent profiles (per-phase Claude models and thinking) and feature models */}
+        <SettingsSection
+          title={t('agentProfile.title')}
+          description={t('agentProfile.sectionDescription')}
+        >
+          <div className="space-y-8">
+            <AgentProfileSettings />
+            <FeatureModelSettings />
+          </div>
+        </SettingsSection>
 
         {/* Other Agent Settings */}
         <SettingsSection
@@ -151,21 +160,6 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                   id="autoNameTerminals"
                   checked={settings.autoNameTerminals}
                   onCheckedChange={(checked) => onSettingsChange({ ...settings, autoNameTerminals: checked })}
-                />
-              </div>
-              <div className="flex items-center justify-between max-w-md">
-                <div className="space-y-1">
-                  <Label htmlFor="useClaudeSubscription" className="text-sm font-medium text-foreground">
-                    {t('general.useClaudeSubscription')}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t('general.useClaudeSubscriptionDescription')}
-                  </p>
-                </div>
-                <Switch
-                  id="useClaudeSubscription"
-                  checked={settings.useClaudeSubscription === true}
-                  onCheckedChange={(checked) => onSettingsChange({ ...settings, useClaudeSubscription: checked })}
                 />
               </div>
               <div className="flex items-center justify-between max-w-md">

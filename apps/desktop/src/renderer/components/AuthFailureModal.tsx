@@ -16,16 +16,14 @@ interface AuthFailureModalProps {
 }
 
 /**
- * Modal displayed when Claude CLI encounters an authentication failure (401 error).
- * Prompts the user to re-authenticate via Settings > Claude Profiles.
+ * Modal displayed when a Claude session fails to authenticate (401 error).
+ * Points the user to Settings > Claude to check the API key.
  */
 export function AuthFailureModal({ onOpenSettings }: AuthFailureModalProps) {
   const { isModalOpen, authFailureInfo, hideAuthFailureModal, clearAuthFailure } = useAuthFailureStore();
   const { t } = useTranslation('common');
 
   if (!authFailureInfo) return null;
-
-  const profileName = authFailureInfo.profileName || t('auth.failure.unknownProfile', 'Unknown Profile');
 
   // Get user-friendly message for the auth failure type
   const getFailureMessage = () => {
@@ -57,15 +55,15 @@ export function AuthFailureModal({ onOpenSettings }: AuthFailureModalProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="rounded-full bg-amber-100 dark:bg-amber-900/30 p-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <div className="border border-border p-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
             </div>
             <div>
               <DialogTitle className="text-lg">
                 {t('auth.failure.title', 'Authentication Required')}
               </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground">
-                {t('auth.failure.profileLabel', 'Profile')}: {profileName}
+                {failureMessage}
               </DialogDescription>
             </div>
           </div>
@@ -73,14 +71,11 @@ export function AuthFailureModal({ onOpenSettings }: AuthFailureModalProps) {
 
         <div className="space-y-4 py-4">
           <p className="text-sm text-foreground">
-            {failureMessage}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {t('auth.failure.description', 'Please re-authenticate your Claude profile to continue using Vibe Teamlead.')}
+            {t('auth.failure.description')}
           </p>
 
           {authFailureInfo.taskId && (
-            <div className="rounded-md bg-muted p-3 text-xs">
+            <div className="border border-border p-3 text-xs">
               <p className="text-muted-foreground">
                 {t('auth.failure.taskAffected', 'Task affected')}: <span className="font-mono">{authFailureInfo.taskId}</span>
               </p>
@@ -92,7 +87,7 @@ export function AuthFailureModal({ onOpenSettings }: AuthFailureModalProps) {
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                 {t('auth.failure.technicalDetails', 'Technical details')}
               </summary>
-              <pre className="mt-2 rounded-md bg-muted p-2 overflow-x-auto whitespace-pre-wrap break-all">
+              <pre className="mt-2 border border-border p-2 font-mono overflow-x-auto whitespace-pre-wrap break-all">
                 {authFailureInfo.originalError}
               </pre>
             </details>

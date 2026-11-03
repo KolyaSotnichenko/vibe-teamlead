@@ -15,7 +15,6 @@ export interface TerminalProcess {
   projectPath?: string;
   cwd: string;
   claudeSessionId?: string;
-  claudeProfileId?: string;
   outputBuffer: string;
   title: string;
   /** Associated worktree configuration (persisted across restarts) */
@@ -29,32 +28,6 @@ export interface TerminalProcess {
   /** Whether PTY has emitted exit; used to avoid writes/resizes on dead PTYs */
   hasExited?: boolean;
 }
-
-/**
- * Rate limit event data
- */
-export interface RateLimitEvent {
-  terminalId: string;
-  resetTime: string;
-  detectedAt: string;
-  profileId: string;
-  suggestedProfileId?: string;
-  suggestedProfileName?: string;
-  autoSwitchEnabled: boolean;
-}
-
-/**
- * OAuth token event data
- */
-export interface OAuthTokenEvent {
-  terminalId: string;
-  profileId?: string;
-  email?: string;
-  success: boolean;
-  message?: string;
-  detectedAt: string;
-}
-
 
 /**
  * Session capture result
@@ -77,16 +50,3 @@ export interface TerminalOperationResult {
  * Window getter function type
  */
 export type WindowGetter = () => BrowserWindow | null;
-
-/**
- * Terminal info for profile change operations
- */
-export interface TerminalProfileChangeInfo {
-  id: string;
-  cwd: string;
-  projectPath?: string;
-  claudeSessionId?: string;
-  claudeProfileId?: string;
-  isCLIMode: boolean;
-  dangerouslySkipPermissions?: boolean;
-}

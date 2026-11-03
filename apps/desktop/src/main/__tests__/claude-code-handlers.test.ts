@@ -44,20 +44,6 @@ vi.mock('../utils/windows-paths', () => ({
   isSecurePath: vi.fn(() => true),
 }));
 
-// Mock utils/config-path-validator
-vi.mock('../utils/config-path-validator', () => ({
-  isValidConfigDir: vi.fn(() => true),
-}));
-
-// Mock claude-profile-manager
-vi.mock('../claude-profile-manager', () => ({
-  getClaudeProfileManager: vi.fn(() => ({
-    getProfile: vi.fn(),
-    saveProfile: vi.fn(),
-    setProfileToken: vi.fn(),
-  })),
-}));
-
 // Mock fs and child_process
 vi.mock('fs', () => ({
   existsSync: vi.fn(() => false),

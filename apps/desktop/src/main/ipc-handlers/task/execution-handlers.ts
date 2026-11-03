@@ -9,7 +9,7 @@ import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
 import { checkGitStatus } from '../../project-initializer';
-import { initializeClaudeProfileManager, type ClaudeProfileManager } from '../../claude-profile-manager';
+import { resolveClaudeCredential } from '../../ai/claude-code/credential';
 import { taskStateManager } from '../../task-state-manager';
 import {
   getPlanPath,
@@ -23,18 +23,13 @@ import { findTaskWorktree } from '../../worktree-paths';
 import { projectStore } from '../../project-store';
 import { getIsolatedGitEnv, detectWorktreeBranch } from '../../utils/git-isolation';
 import { cancelFallbackTimer } from '../agent-events-handlers';
-import { readSettingsFile } from '../../settings-utils';
-import type { ProviderAccount } from '../../../shared/types/provider-account';
 
-/**
- * Check if any provider account is configured (API key or OAuth).
- * Used to bypass the legacy hasValidAuth() check for non-Anthropic providers.
- */
-function hasAnyProviderAccount(): boolean {
-  const settings = readSettingsFile();
-  const accounts = (settings?.providerAccounts as ProviderAccount[] | undefined) ?? [];
-  return accounts.length > 0;
+/** Whether the app's Claude credential (API key or personal-mode token) is available */
+function hasClaudeCredential(): boolean {
+  return !!resolveClaudeCredential().key;
 }
+
+const MISSING_CREDENTIAL_MESSAGE = 'No Claude credentials configured. Add an Anthropic API key in Settings > Claude before starting tasks.';
 
 /**
  * Safe file read that handles missing files without TOCTOU issues.
@@ -69,30 +64,6 @@ function checkSubtasksCompletion(plan: Record<string, unknown> | null): {
   const allCompleted = totalCount > 0 && completedCount === totalCount;
 
   return { allSubtasks, completedCount, totalCount, allCompleted };
-}
-
-/**
- * Helper function to ensure profile manager is initialized.
- * Returns a discriminated union for type-safe error handling.
- *
- * @returns Success with profile manager, or failure with error message
- */
-async function ensureProfileManagerInitialized(): Promise<
-  | { success: true; profileManager: ClaudeProfileManager }
-  | { success: false; error: string }
-> {
-  try {
-    const profileManager = await initializeClaudeProfileManager();
-    return { success: true, profileManager };
-  } catch (error) {
-    console.error('[ensureProfileManagerInitialized] Failed to initialize:', error);
-    // Include actual error details for debugging while providing actionable guidance
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      error: `Failed to initialize profile manager. Please check file permissions and disk space. (${errorMessage})`
-    };
-  }
 }
 
 /**
@@ -136,19 +107,6 @@ export function registerTaskExecutionHandlers(
         return;
       }
 
-      // Ensure profile manager is initialized before checking auth
-      // This prevents race condition where auth check runs before profile data loads from disk
-      const initResult = await ensureProfileManagerInitialized();
-      if (!initResult.success) {
-        mainWindow.webContents.send(
-          IPC_CHANNELS.TASK_ERROR,
-          taskId,
-          initResult.error
-        );
-        return;
-      }
-      const profileManager = initResult.profileManager;
-
       // Find task and project
       // First search all projects to find the task, then verify the project matches
       // task.projectId to prevent cross-project contamination when multiple projects
@@ -191,13 +149,13 @@ export function registerTaskExecutionHandlers(
         return;
       }
 
-      // Check authentication - requires valid legacy profile OR provider account
-      if (!profileManager.hasValidAuth() && !hasAnyProviderAccount()) {
-        console.warn('[TASK_START] No valid authentication for active profile or provider accounts');
+      // Check the Claude credential
+      if (!hasClaudeCredential()) {
+        console.warn('[TASK_START] No Claude credential configured');
         mainWindow.webContents.send(
           IPC_CHANNELS.TASK_ERROR,
           taskId,
-          'Authentication required. Please add an account in Settings > Accounts before starting tasks.'
+          MISSING_CREDENTIAL_MESSAGE
         );
         return;
       }
@@ -755,27 +713,14 @@ export function registerTaskExecutionHandlers(
             return { success: false, error: gitStatusCheck.error || 'Git repository required' };
           }
 
-          // Check authentication before auto-starting
-          // Ensure profile manager is initialized to prevent race condition
-          const initResult = await ensureProfileManagerInitialized();
-          if (!initResult.success) {
+          // Check the Claude credential before auto-starting
+          if (!hasClaudeCredential()) {
+            console.warn('[TASK_UPDATE_STATUS] No Claude credential configured');
             if (mainWindow) {
               mainWindow.webContents.send(
                 IPC_CHANNELS.TASK_ERROR,
                 taskId,
-                initResult.error
-              );
-            }
-            return { success: false, error: initResult.error };
-          }
-          const profileManager = initResult.profileManager;
-          if (!profileManager.hasValidAuth() && !hasAnyProviderAccount()) {
-            console.warn('[TASK_UPDATE_STATUS] No valid authentication for active profile or provider accounts');
-            if (mainWindow) {
-              mainWindow.webContents.send(
-                IPC_CHANNELS.TASK_ERROR,
-                taskId,
-                'Authentication required. Please add an account in Settings > Accounts before starting tasks.'
+                MISSING_CREDENTIAL_MESSAGE
               );
             }
             return { success: false, error: 'Authentication required' };
@@ -1255,24 +1200,8 @@ export function registerTaskExecutionHandlers(
             };
           }
 
-          // Check authentication before auto-restarting
-          // Ensure profile manager is initialized to prevent race condition
-          const initResult = await ensureProfileManagerInitialized();
-          if (!initResult.success) {
-            // Recovery succeeded but we can't restart without profile manager
-            return {
-              success: true,
-              data: {
-                taskId,
-                recovered: true,
-                newStatus,
-                message: `Task recovered but cannot restart: ${initResult.error}`,
-                autoRestarted: false
-              }
-            };
-          }
-          const profileManager = initResult.profileManager;
-          if (!profileManager.hasValidAuth() && !hasAnyProviderAccount()) {
+          // Check the Claude credential before auto-restarting
+          if (!hasClaudeCredential()) {
             console.warn('[Recovery] Auth check failed, cannot auto-restart task');
             // Recovery succeeded but we can't restart without auth
             return {
@@ -1281,7 +1210,7 @@ export function registerTaskExecutionHandlers(
                 taskId,
                 recovered: true,
                 newStatus,
-                message: 'Task recovered but cannot restart: authentication required. Please add an account in Settings > Accounts.',
+                message: 'Task recovered but cannot restart: add an Anthropic API key in Settings > Claude.',
                 autoRestarted: false
               }
             };

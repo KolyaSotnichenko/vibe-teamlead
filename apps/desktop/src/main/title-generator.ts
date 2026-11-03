@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { ClaudeTaskError, runClaudeTask } from './ai/claude-code/task';
 import type { ThinkingLevel } from './ai/config/types';
-import { getActiveProviderFeatureSettings } from './ipc-handlers/feature-settings-helper';
+import { getFeatureSettings } from './ipc-handlers/feature-settings-helper';
 import { safeBreadcrumb, safeCaptureException } from './sentry';
 
 /**
@@ -58,7 +58,7 @@ export class TitleGenerator extends EventEmitter {
 
     try {
       // Read the user's configured naming model
-      const namingSettings = getActiveProviderFeatureSettings('naming');
+      const namingSettings = getFeatureSettings('naming');
       debug('Using naming settings:', namingSettings.model, namingSettings.thinkingLevel);
 
       const result = await runClaudeTask({

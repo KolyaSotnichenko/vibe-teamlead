@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { BuiltinProvider } from '@shared/types/provider-account';
 import {
-  getReasoningConfigForModel,
+  getReasoningTypeForModel,
   REASONING_TYPE_BADGES,
   THINKING_LEVELS,
 } from '@shared/constants/models';
@@ -20,28 +19,24 @@ interface ThinkingLevelSelectProps {
   value: string;
   onChange: (value: string) => void;
   modelValue: string;
-  provider: BuiltinProvider;
   disabled?: boolean;
 }
 
 /**
- * Provider-aware thinking level selector.
- * Renders different controls based on the model's reasoning type:
+ * Model-aware thinking level selector.
+ * Renders different controls based on the Claude model's reasoning type:
  *   - 'none': disabled select showing "(No thinking)"
- *   - 'thinking_toggle': On/Off toggle appearance via Select (low = Off, high = On)
- *   - all others: standard Low / Medium / High dropdown
+ *   - others: Low / Medium / High dropdown
  */
 export function ThinkingLevelSelect({
   value,
   onChange,
   modelValue,
-  provider,
   disabled,
 }: ThinkingLevelSelectProps) {
   const { t } = useTranslation('settings');
 
-  const config = getReasoningConfigForModel(modelValue, provider);
-  const reasoningType: ReasoningType = config.type;
+  const reasoningType: ReasoningType = getReasoningTypeForModel(modelValue);
 
   const badgeConfig = REASONING_TYPE_BADGES[reasoningType];
 
@@ -96,43 +91,8 @@ export function ThinkingLevelSelect({
     );
   }
 
-  // ── Toggle style (Google Gemini thinking on/off) ──────────────────────────
-  if (reasoningType === 'thinking_toggle') {
-    const isOn = value === 'high';
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">
-            {t('agentProfile.thinkingLevel')}
-          </span>
-          {renderBadge()}
-        </div>
-        <Select
-          value={isOn ? 'high' : 'low'}
-          onValueChange={onChange}
-          disabled={disabled}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="low">
-              {t('agentProfile.reasoning.toggle.off')}
-            </SelectItem>
-            <SelectItem value="high">
-              {t('agentProfile.reasoning.toggle.on')}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    );
-  }
-
-  // ── Standard Low / Medium / High / Extra High dropdown ───────────────────
-  // Only show 'xhigh' (Extra High) for reasoning_effort models (OpenAI, xAI)
-  const levels = reasoningType === 'reasoning_effort'
-    ? THINKING_LEVELS
-    : THINKING_LEVELS.filter((l) => l.value !== 'xhigh');
+  // ── Standard Low / Medium / High dropdown ────────────────────────────────
+  const levels = THINKING_LEVELS.filter((l) => l.value !== 'xhigh');
 
   return (
     <div className="space-y-1">

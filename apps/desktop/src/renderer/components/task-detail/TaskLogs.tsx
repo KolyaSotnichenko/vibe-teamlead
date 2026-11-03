@@ -24,8 +24,7 @@ import { cn } from '../../lib/utils';
 import { useSettingsStore } from '../../stores/settings-store';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
 import type { PhaseModelConfig, ThinkingLevel } from '../../../shared/types/settings';
-import type { BuiltinProvider } from '../../../shared/types/provider-account';
-import { getProviderModelLabel } from '@shared/utils/model-display';
+import { getModelLabel } from '@shared/utils/model-display';
 
 interface TaskLogsProps {
   task: Task;
@@ -73,13 +72,9 @@ const THINKING_SHORT_LABELS: Record<ThinkingLevel, string> = {
   xhigh: 'XHigh'
 };
 
-// Resolve a model shorthand to a display label, using provider context when available
-function resolveModelLabel(model: string, provider?: string): string {
-  if (provider) {
-    return getProviderModelLabel(model, provider as BuiltinProvider);
-  }
-  // No provider stored (legacy tasks) — fall back to raw shorthand
-  return model;
+// Resolve a model shorthand to a display label
+function resolveModelLabel(model: string): string {
+  return getModelLabel(model);
 }
 
 // Helper to get model and thinking info for a log phase
@@ -95,10 +90,8 @@ function getPhaseConfig(
   if (metadata.isAutoProfile && metadata.phaseModels && metadata.phaseThinking) {
     const model = metadata.phaseModels[configPhase];
     const thinking = metadata.phaseThinking[configPhase];
-    // Use per-phase provider if available (cross-provider mode), otherwise task-level provider
-    const provider = metadata.phaseProviders?.[configPhase] ?? metadata.provider;
     return {
-      model: resolveModelLabel(model, provider),
+      model: resolveModelLabel(model),
       thinking: THINKING_SHORT_LABELS[thinking] || thinking
     };
   }
@@ -106,7 +99,7 @@ function getPhaseConfig(
   // Non-auto profile with single model/thinking
   if (metadata.model && metadata.thinkingLevel) {
     return {
-      model: resolveModelLabel(metadata.model, metadata.provider),
+      model: resolveModelLabel(metadata.model),
       thinking: THINKING_SHORT_LABELS[metadata.thinkingLevel] || metadata.thinkingLevel
     };
   }

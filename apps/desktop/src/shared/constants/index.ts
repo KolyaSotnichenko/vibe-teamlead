@@ -31,7 +31,6 @@ export * from './themes';
 export * from './github';
 
 // API profile presets
-export * from './api-profiles';
 
 // Configuration and paths
 export * from './config';

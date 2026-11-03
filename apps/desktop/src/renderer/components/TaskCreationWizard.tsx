@@ -32,11 +32,9 @@ import {
   DEFAULT_PHASE_MODELS,
   DEFAULT_PHASE_THINKING,
   FAST_MODE_MODELS,
-  PHASE_KEYS,
-  getProviderPreset
+  PHASE_KEYS
 } from '../../shared/constants';
 import { useSettingsStore } from '../stores/settings-store';
-import { useActiveProvider } from '../hooks/useActiveProvider';
 
 interface TaskCreationWizardProps {
   projectId: string;
@@ -54,24 +52,16 @@ export function TaskCreationWizard({
 }: TaskCreationWizardProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const { settings } = useSettingsStore();
-  const { isAnthropic, provider: activeProvider } = useActiveProvider();
 
-  // Resolve per-provider settings (same chain as AgentProfileSettings)
-  const providerConfig = activeProvider ? settings.providerAgentConfig?.[activeProvider] : undefined;
-  const resolvedProfileId = providerConfig?.selectedAgentProfile ?? settings.selectedAgentProfile ?? 'auto';
+  // Resolve the agent profile (same chain as AgentProfileSettings)
+  const resolvedProfileId = settings.selectedAgentProfile ?? 'auto';
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === resolvedProfileId
   ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
-  const providerPreset = activeProvider ? getProviderPreset(activeProvider, resolvedProfileId) : null;
-  const profilePhaseModels = providerPreset?.phaseModels ?? selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
-  const profilePhaseThinking = providerPreset?.phaseThinking ?? selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
-  // When a provider is active, use provider-specific config or preset defaults (skip global fallback)
-  const resolvedPhaseModels = activeProvider
-    ? (providerConfig?.customPhaseModels ?? profilePhaseModels)
-    : (settings.customPhaseModels ?? profilePhaseModels);
-  const resolvedPhaseThinking = activeProvider
-    ? (providerConfig?.customPhaseThinking ?? profilePhaseThinking)
-    : (settings.customPhaseThinking ?? profilePhaseThinking);
+  const profilePhaseModels = selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
+  const profilePhaseThinking = selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
+  const resolvedPhaseModels = settings.customPhaseModels ?? profilePhaseModels;
+  const resolvedPhaseThinking = settings.customPhaseThinking ?? profilePhaseThinking;
 
   // Form state
   const [title, setTitle] = useState('');
@@ -148,10 +138,9 @@ export function TaskCreationWizard({
 
   // Show Fast Mode toggle when any phase uses an Opus model
   const showFastModeToggle = useMemo(() => {
-    if (!isAnthropic) return false;
     if (!phaseModels) return false;
     return PHASE_KEYS.some(phase => FAST_MODE_MODELS.includes(phaseModels[phase]));
-  }, [isAnthropic, phaseModels]);
+  }, [phaseModels]);
 
   // Draft state
   const [isDraftRestored, setIsDraftRestored] = useState(false);
@@ -457,37 +446,12 @@ export function TaskCreationWizard({
       if (impact) metadata.impact = impact;
       if (model) metadata.model = model;
       if (thinkingLevel) metadata.thinkingLevel = thinkingLevel;
-      if (activeProvider) metadata.provider = activeProvider;
       if (phaseModels && phaseThinking) {
         metadata.isAutoProfile = true;
         metadata.phaseModels = phaseModels;
         metadata.phaseThinking = phaseThinking;
       }
 
-      // Cross-provider mode: override phaseModels/phaseThinking from mixed config
-      // and add phaseProviders to metadata
-      if (settings.customMixedProfileActive && settings.customMixedPhaseConfig) {
-        const mixed = settings.customMixedPhaseConfig;
-        metadata.phaseModels = {
-          spec: mixed.spec.modelId,
-          planning: mixed.planning.modelId,
-          coding: mixed.coding.modelId,
-          qa: mixed.qa.modelId,
-        };
-        metadata.phaseThinking = {
-          spec: mixed.spec.thinkingLevel,
-          planning: mixed.planning.thinkingLevel,
-          coding: mixed.coding.thinkingLevel,
-          qa: mixed.qa.thinkingLevel,
-        };
-        metadata.phaseProviders = {
-          spec: mixed.spec.provider,
-          planning: mixed.planning.provider,
-          coding: mixed.coding.provider,
-          qa: mixed.qa.provider,
-        };
-        metadata.isAutoProfile = true; // Ensure per-phase resolution is used
-      }
 
       if (images.length > 0) metadata.attachedImages = images;
       if (allReferencedFiles.length > 0) metadata.referencedFiles = allReferencedFiles;

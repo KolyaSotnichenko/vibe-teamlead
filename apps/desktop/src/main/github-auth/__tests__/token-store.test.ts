@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const userData = mkdtempSync(join(tmpdir(), 'vtl-gh-'));
 vi.mock('electron', () => ({ app: { getPath: () => userData } }));
-vi.mock('../../claude-profile/token-encryption', () => ({
+vi.mock('../../utils/token-encryption', () => ({
   encryptToken: (s: string) => s,
   decryptToken: (s: string) => s,
 }));

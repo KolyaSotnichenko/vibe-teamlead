@@ -5,8 +5,6 @@
 import type { NotificationSettings, MemoryEmbeddingProvider } from './project';
 import type { ChangelogFormat, ChangelogAudience, ChangelogEmojiLevel } from './changelog';
 import type { SupportedLanguage } from '../constants/i18n';
-import type { ProviderAccount, BuiltinProvider } from './provider-account';
-import type { ProviderModelSpec } from '../constants/models';
 
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
@@ -179,7 +177,7 @@ export type ModelSelection = ModelTypeShort | (string & {});
 
 // Phase-based model configuration for Auto profile
 // Each phase can use a different model optimized for that task type
-// Values can be Claude shorthands ('opus', 'sonnet') or concrete model IDs ('gpt-5.3-codex', 'gemini-2.5-pro')
+// Values are Claude shorthands ('opus', 'sonnet', 'haiku') or full Claude model IDs
 export interface PhaseModelConfig {
   spec: string;       // Spec creation (discovery, requirements, context)
   planning: string;   // Implementation planning
@@ -196,7 +194,7 @@ export interface PhaseThinkingConfig {
 }
 
 // Feature-specific model configuration (for non-pipeline features)
-// Values can be Claude shorthands or concrete model IDs
+// Values are Claude shorthands or full Claude model IDs
 export interface FeatureModelConfig {
   insights: string;    // Insights chat feature
   ideation: string;    // Ideation generation
@@ -234,30 +232,8 @@ export interface AgentProfile {
   isAutoProfile?: boolean;
 }
 
-// Per-provider agent configuration
-export interface PerProviderAgentConfig {
-  selectedAgentProfile?: string;         // 'auto' | 'complex' | 'balanced' | 'quick'
-  customPhaseModels?: PhaseModelConfig;
-  customPhaseThinking?: PhaseThinkingConfig;
-  featureModels?: FeatureModelConfig;
-  featureThinking?: FeatureThinkingConfig;
-}
-
-// Cross-provider phase entry for Custom profile
-export interface MixedPhaseEntry {
-  provider: BuiltinProvider;
-  modelId: string;           // Model value from ALL_AVAILABLE_MODELS
-  thinkingLevel: ThinkingLevel;
-}
-
 // Pipeline phase key type (distinct from task.ts Phase interface which is for plan phases)
 export type PipelinePhase = 'spec' | 'planning' | 'coding' | 'qa';
-
-// Cross-provider phase config
-export type MixedPhaseConfig = Record<PipelinePhase, MixedPhaseEntry>;
-
-// Cross-provider feature config
-export type MixedFeatureConfig = Record<keyof FeatureModelConfig, MixedPhaseEntry>;
 
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
@@ -280,6 +256,12 @@ export interface AppSettings {
    */
   useClaudeSubscription?: boolean;
   /**
+   * Optional Anthropic-compatible endpoint (gateway or proxy) for every
+   * Claude session. The API key itself is stored encrypted outside settings
+   * (see main/ai/claude-code/credential.ts).
+   */
+  anthropicBaseUrl?: string;
+  /**
    * Security QA: run a Strix penetration test after QA approves (needs Docker,
    * Strix and an API key). Off by default — it spends LLM budget.
    */
@@ -288,26 +270,9 @@ export interface AppSettings {
   securityQaFailOn?: 'critical' | 'high' | 'medium' | 'low';
   /** Spend cap per scan, USD */
   securityQaMaxBudgetUsd?: number;
-  // Global API keys (used as defaults for all projects)
+  // API keys used by memory embeddings (OpenAI, Google)
   globalOpenAIApiKey?: string;
-  globalAnthropicApiKey?: string;
   globalGoogleApiKey?: string;
-  globalGroqApiKey?: string;
-  globalOpenRouterApiKey?: string;
-  globalMistralApiKey?: string;
-  globalXAIApiKey?: string;
-  globalAzureApiKey?: string;
-  globalAzureBaseUrl?: string;
-  globalBedrockRegion?: string;
-  // Unified provider accounts (multi-provider)
-  providerAccounts?: ProviderAccount[];
-  /** Global priority order — array of ProviderAccount IDs. First = highest priority. */
-  globalPriorityOrder?: string[];
-  /** Cross-provider priority order — array of ProviderAccount IDs for cross-provider mode. */
-  crossProviderPriorityOrder?: string[];
-  /** User overrides for model equivalence mapping per provider */
-  modelOverrides?: Record<string, Partial<Record<BuiltinProvider, ProviderModelSpec>>>;
-  _migratedProviderAccounts?: boolean;
   ollamaBaseUrl?: string;
   // Memory configuration (app-wide, set during onboarding)
   memoryEnabled?: boolean;
@@ -342,16 +307,10 @@ export interface AppSettings {
   logOrder?: 'chronological' | 'reverse-chronological';
   // Beta updates opt-in (receive pre-release updates)
   betaUpdates?: boolean;
-  // Per-provider agent configuration
-  providerAgentConfig?: Partial<Record<BuiltinProvider, PerProviderAgentConfig>>;
-  customMixedProfileActive?: boolean;
-  customMixedPhaseConfig?: MixedPhaseConfig;
-  customMixedFeatureConfig?: MixedFeatureConfig;
   // Migration flags (internal use)
   _migratedAgentProfileToAuto?: boolean;
   _migratedDefaultModelSync?: boolean;
   _migratedUltrathinkToHigh?: boolean;
-  _migratedToPerProviderConfig?: boolean;
   // Language preference for UI (i18n)
   language?: SupportedLanguage;
   // Developer tools preferences
@@ -367,8 +326,6 @@ export interface AppSettings {
   sentryEnabled?: boolean;
   // Auto-name Claude terminals based on initial message (only triggers once per session)
   autoNameClaudeTerminals?: boolean;
-  // Track which version warnings have been shown (e.g., ["2.7.5"])
-  seenVersionWarnings?: string[];
   // Sidebar collapsed state (icons only when true)
   sidebarCollapsed?: boolean;
   // GPU acceleration for terminal rendering (WebGL)

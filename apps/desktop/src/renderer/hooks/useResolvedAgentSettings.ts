@@ -1,18 +1,15 @@
 /**
  * Agent Settings Resolution Hook
  *
- * Provides centralized logic for resolving agent model and thinking settings
- * based on the selected agent profile, custom overrides, provider-specific config,
- * and cross-provider mixed config.
+ * Resolves Claude model and thinking settings for agents from the selected
+ * agent profile and the user's custom overrides.
  *
  * Resolution order for phase settings:
- * 1. Cross-provider mode active (customMixedProfileActive) → extract from mixed config entries
- * 2. Provider-specific config exists (providerAgentConfig[provider]) → use its overrides or profile defaults
- * 3. Get provider preset via getProviderPresetOrFallback(provider, profileId) for defaults
- * 4. Apply user's custom phase overrides on top of preset defaults
- * 5. Fallback to global settings
+ * 1. Custom phase overrides (customPhaseModels / customPhaseThinking)
+ * 2. Selected agent profile's phase configuration
+ * 3. Default phase configuration
  *
- * Feature settings follow the same provider-aware resolution order.
+ * Feature settings: featureModels / featureThinking, then defaults.
  */
 
 import { useMemo } from 'react';
@@ -22,7 +19,6 @@ import {
   DEFAULT_PHASE_THINKING,
   DEFAULT_FEATURE_MODELS,
   DEFAULT_FEATURE_THINKING,
-  getProviderPresetOrFallback,
 } from '../../shared/constants/models';
 import type {
   AppSettings,
@@ -32,7 +28,6 @@ import type {
   FeatureThinkingConfig,
   ThinkingLevel,
 } from '../../shared/types/settings';
-import type { BuiltinProvider } from '../../shared/types/provider-account';
 
 /**
  * Resolved agent settings configuration
@@ -67,100 +62,33 @@ export interface AgentModelConfig {
 }
 
 /**
- * Hook to resolve agent settings based on provider, mixed config, profile, and custom overrides
+ * Hook to resolve agent settings from the selected profile and custom overrides
  *
  * @param settings - The application settings containing selected profile and custom overrides
- * @param provider - Optional provider to use for provider-specific resolution
- * @returns Resolved agent settings with proper provider-aware profile resolution
+ * @returns Resolved agent settings
  *
  * @example
  * ```tsx
- * const { phaseModels, phaseThinking, featureModels, featureThinking } = useResolvedAgentSettings(settings, 'anthropic');
+ * const { phaseModels, phaseThinking, featureModels, featureThinking } = useResolvedAgentSettings(settings);
  * ```
  */
-export function useResolvedAgentSettings(
-  settings: AppSettings,
-  provider?: BuiltinProvider,
-): ResolvedAgentSettings {
+export function useResolvedAgentSettings(settings: AppSettings): ResolvedAgentSettings {
   return useMemo(() => {
-    // 1. Cross-provider mode: extract from mixed config
-    if (settings.customMixedProfileActive && settings.customMixedPhaseConfig) {
-      const mixed = settings.customMixedPhaseConfig;
-      const phaseModels: PhaseModelConfig = {
-        spec: mixed.spec.modelId,
-        planning: mixed.planning.modelId,
-        coding: mixed.coding.modelId,
-        qa: mixed.qa.modelId,
-      };
-      const phaseThinking: PhaseThinkingConfig = {
-        spec: mixed.spec.thinkingLevel,
-        planning: mixed.planning.thinkingLevel,
-        coding: mixed.coding.thinkingLevel,
-        qa: mixed.qa.thinkingLevel,
-      };
-
-      // Feature models from mixed feature config or defaults
-      const mixedFeature = settings.customMixedFeatureConfig;
-      const featureModels: FeatureModelConfig = mixedFeature
-        ? {
-            insights: mixedFeature.insights.modelId,
-            ideation: mixedFeature.ideation.modelId,
-            roadmap: mixedFeature.roadmap.modelId,
-            githubIssues: mixedFeature.githubIssues.modelId,
-            githubPrs: mixedFeature.githubPrs.modelId,
-            utility: mixedFeature.utility.modelId,
-            naming: mixedFeature.naming?.modelId ?? 'haiku',
-          }
-        : settings.featureModels || DEFAULT_FEATURE_MODELS;
-      const featureThinking: FeatureThinkingConfig = mixedFeature
-        ? {
-            insights: mixedFeature.insights.thinkingLevel,
-            ideation: mixedFeature.ideation.thinkingLevel,
-            roadmap: mixedFeature.roadmap.thinkingLevel,
-            githubIssues: mixedFeature.githubIssues.thinkingLevel,
-            githubPrs: mixedFeature.githubPrs.thinkingLevel,
-            utility: mixedFeature.utility.thinkingLevel,
-            naming: mixedFeature.naming?.thinkingLevel ?? 'low',
-          }
-        : settings.featureThinking || DEFAULT_FEATURE_THINKING;
-
-      return { phaseModels, phaseThinking, featureModels, featureThinking };
-    }
-
-    // 2. Provider-specific config
-    const providerConfig = provider ? settings.providerAgentConfig?.[provider] : undefined;
-    const selectedProfileId = providerConfig?.selectedAgentProfile ?? settings.selectedAgentProfile ?? 'auto';
-
-    // 3. Resolve defaults from provider preset
-    const presetDefaults = provider
-      ? getProviderPresetOrFallback(provider, selectedProfileId)
-      : null;
-
-    // Profile fallback (for when no provider-specific preset exists)
+    const selectedProfileId = settings.selectedAgentProfile ?? 'auto';
     const selectedProfile = DEFAULT_AGENT_PROFILES.find((p) => p.id === selectedProfileId) || DEFAULT_AGENT_PROFILES[0];
-    const profilePhaseModels = presetDefaults?.phaseModels ?? selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
-    const profilePhaseThinking = presetDefaults?.phaseThinking ?? selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
 
-    // 4. Custom overrides take priority
-    const phaseModels = providerConfig?.customPhaseModels ?? settings.customPhaseModels ?? profilePhaseModels;
-    const phaseThinking = providerConfig?.customPhaseThinking ?? settings.customPhaseThinking ?? profilePhaseThinking;
-
-    // Feature settings
-    const featureModels = providerConfig?.featureModels ?? settings.featureModels ?? DEFAULT_FEATURE_MODELS;
-    const featureThinking = providerConfig?.featureThinking ?? settings.featureThinking ?? DEFAULT_FEATURE_THINKING;
+    const phaseModels = settings.customPhaseModels ?? selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
+    const phaseThinking = settings.customPhaseThinking ?? selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
+    const featureModels = settings.featureModels ?? DEFAULT_FEATURE_MODELS;
+    const featureThinking = settings.featureThinking ?? DEFAULT_FEATURE_THINKING;
 
     return { phaseModels, phaseThinking, featureModels, featureThinking };
   }, [
-    settings.customMixedProfileActive,
-    settings.customMixedPhaseConfig,
-    settings.customMixedFeatureConfig,
     settings.selectedAgentProfile,
     settings.customPhaseModels,
     settings.customPhaseThinking,
     settings.featureModels,
     settings.featureThinking,
-    settings.providerAgentConfig,
-    provider,
   ]);
 }
 
@@ -173,7 +101,7 @@ export function useResolvedAgentSettings(
  *
  * @example
  * ```tsx
- * const resolvedSettings = useResolvedAgentSettings(settings, 'anthropic');
+ * const resolvedSettings = useResolvedAgentSettings(settings);
  * const { model, thinking } = resolveAgentSettings(agentConfig.settingsSource, resolvedSettings);
  * ```
  */

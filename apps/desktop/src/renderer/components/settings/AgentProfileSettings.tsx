@@ -1,7 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useActiveProvider } from '../../hooks/useActiveProvider';
-import { getProviderModelLabel } from '../../../shared/utils/model-display';
 import { Brain, Scale, Zap, Check, Sparkles, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
@@ -10,16 +8,14 @@ import {
   THINKING_LEVELS,
   DEFAULT_PHASE_MODELS,
   DEFAULT_PHASE_THINKING,
-  PHASE_KEYS,
-  getProviderPreset
+  PHASE_KEYS
 } from '../../../shared/constants';
-import { useSettingsStore, saveSettings, saveProviderAgentConfig } from '../../stores/settings-store';
-import { MultiProviderModelSelect } from './MultiProviderModelSelect';
+import { useSettingsStore, saveSettings } from '../../stores/settings-store';
+import { ClaudeModelSelect } from './ClaudeModelSelect';
 import { ThinkingLevelSelect } from './ThinkingLevelSelect';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import type { AgentProfile, PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel } from '../../../shared/types/settings';
-import type { BuiltinProvider } from '../../../shared/types/provider-account';
 
 /**
  * Icon mapping for agent profile icons
@@ -36,17 +32,10 @@ const iconMap: Record<string, React.ElementType> = {
  * Displays preset agent profiles for quick model/thinking level configuration
  * All presets show phase configuration for full customization
  */
-interface AgentProfileSettingsProps {
-  provider?: BuiltinProvider;
-}
-
-export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
+export function AgentProfileSettings() {
   const { t } = useTranslation('settings');
   const settings = useSettingsStore((state) => state.settings);
-  const { provider: activeProvider } = useActiveProvider();
-  // Read per-provider config with fallback to global
-  const providerConfig = provider ? settings.providerAgentConfig?.[provider] : undefined;
-  const selectedProfileId = providerConfig?.selectedAgentProfile ?? settings.selectedAgentProfile ?? 'auto';
+  const selectedProfileId = settings.selectedAgentProfile ?? 'auto';
   const [showPhaseConfig, setShowPhaseConfig] = useState(true);
 
   // Find the selected profile
@@ -55,29 +44,19 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
     [selectedProfileId]
   );
 
-  // Get profile's default phase config - provider-aware
-  const providerPreset = provider
-    ? getProviderPreset(provider, selectedProfileId)
-    : null;
-  const profilePhaseModels = providerPreset?.phaseModels ?? selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
-  const profilePhaseThinking = providerPreset?.phaseThinking ?? selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
+  // Profile's default phase config
+  const profilePhaseModels = selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
+  const profilePhaseThinking = selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
 
-  // Get current phase config from settings (custom) or fall back to profile defaults
-  // When viewing a provider tab, skip global fallback — use provider-specific config or preset defaults
-  const currentPhaseModels: PhaseModelConfig = provider
-    ? (providerConfig?.customPhaseModels ?? profilePhaseModels)
-    : (settings.customPhaseModels ?? profilePhaseModels);
-  const currentPhaseThinking: PhaseThinkingConfig = provider
-    ? (providerConfig?.customPhaseThinking ?? profilePhaseThinking)
-    : (settings.customPhaseThinking ?? profilePhaseThinking);
+  // Current phase config from settings (custom) or the profile defaults
+  const currentPhaseModels: PhaseModelConfig = settings.customPhaseModels ?? profilePhaseModels;
+  const currentPhaseThinking: PhaseThinkingConfig = settings.customPhaseThinking ?? profilePhaseThinking;
 
   /**
    * Check if current config differs from the selected profile's defaults
    */
   const hasCustomConfig = useMemo((): boolean => {
-    const customModels = provider ? providerConfig?.customPhaseModels : settings.customPhaseModels;
-    const customThinking = provider ? providerConfig?.customPhaseThinking : settings.customPhaseThinking;
-    if (!customModels && !customThinking) {
+    if (!settings.customPhaseModels && !settings.customPhaseThinking) {
       return false; // No custom settings, using profile defaults
     }
     return PHASE_KEYS.some(
@@ -85,76 +64,43 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
         currentPhaseModels[phase] !== profilePhaseModels[phase] ||
         currentPhaseThinking[phase] !== profilePhaseThinking[phase]
     );
-  }, [provider, providerConfig, settings.customPhaseModels, settings.customPhaseThinking, currentPhaseModels, currentPhaseThinking, profilePhaseModels, profilePhaseThinking]);
+  }, [settings.customPhaseModels, settings.customPhaseThinking, currentPhaseModels, currentPhaseThinking, profilePhaseModels, profilePhaseThinking]);
 
   const handleSelectProfile = async (profileId: string) => {
     const profile = DEFAULT_AGENT_PROFILES.find(p => p.id === profileId);
     if (!profile) return;
 
-    if (provider) {
-      // When selecting on a provider tab, deactivate cross-provider mode
-      await saveProviderAgentConfig(provider, {
-        selectedAgentProfile: profileId,
-        customPhaseModels: undefined,
-        customPhaseThinking: undefined,
-      });
-      // Deactivate cross-provider mode when a provider profile is selected
-      if (settings.customMixedProfileActive) {
-        await saveSettings({ customMixedProfileActive: false });
-      }
-    } else {
-      await saveSettings({
-        selectedAgentProfile: profileId,
-        customMixedProfileActive: false,
-        customPhaseModels: undefined,
-        customPhaseThinking: undefined,
-      });
-    }
+    await saveSettings({
+      selectedAgentProfile: profileId,
+      customPhaseModels: undefined,
+      customPhaseThinking: undefined,
+    });
   };
 
   const handlePhaseModelChange = async (phase: keyof PhaseModelConfig, value: string) => {
     // Save as custom config (deviating from preset)
     const newPhaseModels = { ...currentPhaseModels, [phase]: value };
-    if (provider) {
-      await saveProviderAgentConfig(provider, { customPhaseModels: newPhaseModels });
-    } else {
-      await saveSettings({ customPhaseModels: newPhaseModels });
-    }
+    await saveSettings({ customPhaseModels: newPhaseModels });
   };
 
   const handlePhaseThinkingChange = async (phase: keyof PhaseThinkingConfig, value: ThinkingLevel) => {
     // Save as custom config (deviating from preset)
     const newPhaseThinking = { ...currentPhaseThinking, [phase]: value };
-    if (provider) {
-      await saveProviderAgentConfig(provider, { customPhaseThinking: newPhaseThinking });
-    } else {
-      await saveSettings({ customPhaseThinking: newPhaseThinking });
-    }
+    await saveSettings({ customPhaseThinking: newPhaseThinking });
   };
 
   const handleResetToProfileDefaults = async () => {
     // Reset to the selected profile's defaults
-    if (provider) {
-      await saveProviderAgentConfig(provider, {
-        customPhaseModels: undefined,
-        customPhaseThinking: undefined,
-      });
-    } else {
-      await saveSettings({
-        customPhaseModels: undefined,
-        customPhaseThinking: undefined,
-      });
-    }
+    await saveSettings({
+      customPhaseModels: undefined,
+      customPhaseThinking: undefined,
+    });
   };
 
   /**
    * Get human-readable model label
    */
   const getModelLabel = (modelValue: string): string => {
-    const resolvedProvider = provider ?? activeProvider;
-    if (resolvedProvider) {
-      return getProviderModelLabel(modelValue, resolvedProvider);
-    }
     const model = AVAILABLE_MODELS.find((m) => m.value === modelValue);
     return model?.label || modelValue;
   };
@@ -175,10 +121,8 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
     const isCustomized = isSelected && hasCustomConfig;
     const Icon = iconMap[profile.icon || 'Brain'] || Brain;
 
-    // Get provider-specific preset for badge display
-    const cardProviderPreset = provider ? getProviderPreset(provider, profile.id) : null;
-    const displayModel = cardProviderPreset?.primaryModel ?? profile.model;
-    const displayThinking = cardProviderPreset?.primaryThinking ?? profile.thinkingLevel;
+    const displayModel = profile.model;
+    const displayThinking = profile.thinkingLevel;
 
     return (
       <button
@@ -219,7 +163,7 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-sm text-foreground">{profile.name}</h3>
               {isCustomized && (
-                <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-600 dark:text-amber-400">
+                <span className="inline-flex items-center border border-foreground px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] text-foreground">
                   {t('agentProfile.customized')}
                 </span>
               )}
@@ -230,22 +174,9 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
 
             {/* Model and thinking level badges */}
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {displayModel === '' ? (
-                <span className="inline-flex items-center rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                  {(() => {
-                    const customModels = providerConfig?.customPhaseModels;
-                    if (customModels) {
-                      const firstConfigured = PHASE_KEYS.find(k => customModels[k]);
-                      if (firstConfigured) return customModels[firstConfigured];
-                    }
-                    return t('agentProfile.ollamaNotConfigured');
-                  })()}
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  {getModelLabel(displayModel)}
-                </span>
-              )}
+              <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {getModelLabel(displayModel)}
+              </span>
               <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                 {getThinkingLabel(displayThinking)} {t('agentProfile.thinking')}
               </span>
@@ -309,7 +240,7 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
                 </div>
               )}
 
-              {/* Standard per-provider phase config */}
+              {/* Per-phase config */}
               <div className="space-y-4">
                 {PHASE_KEYS.map((phase) => (
                   <div key={phase} className="space-y-2">
@@ -325,18 +256,16 @@ export function AgentProfileSettings({ provider }: AgentProfileSettingsProps) {
                       {/* Model Select */}
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">{t('agentProfile.model')}</Label>
-                        <MultiProviderModelSelect
+                        <ClaudeModelSelect
                           value={currentPhaseModels[phase]}
                           onChange={(value) => handlePhaseModelChange(phase, value)}
-                          filterProvider={provider}
                         />
                       </div>
-                      {/* Thinking Level Select (provider-aware) */}
+                      {/* Thinking Level Select (model-aware) */}
                       <ThinkingLevelSelect
                         value={currentPhaseThinking[phase]}
                         onChange={(value) => handlePhaseThinkingChange(phase, value as ThinkingLevel)}
                         modelValue={currentPhaseModels[phase]}
-                        provider={provider ?? 'anthropic'}
                       />
                     </div>
                   </div>

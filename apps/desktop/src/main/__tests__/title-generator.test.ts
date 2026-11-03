@@ -15,7 +15,7 @@ vi.mock('../ai/claude-code/task', () => {
 });
 
 vi.mock('../ipc-handlers/feature-settings-helper', () => ({
-  getActiveProviderFeatureSettings: () => ({ model: 'haiku', thinkingLevel: 'low' }),
+  getFeatureSettings: () => ({ model: 'haiku', thinkingLevel: 'low' }),
 }));
 
 vi.mock('../sentry', () => ({ safeBreadcrumb: vi.fn(), safeCaptureException: vi.fn() }));

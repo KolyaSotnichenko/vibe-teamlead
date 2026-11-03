@@ -5,9 +5,6 @@ import { AgentState } from './agent-state';
 import { AgentEvents } from './agent-events';
 import { AgentProcessManager } from './agent-process';
 import { AgentQueueManager } from './agent-queue';
-import { getClaudeProfileManager, initializeClaudeProfileManager } from '../claude-profile-manager';
-import type { ClaudeProfileManager } from '../claude-profile-manager';
-import { getOperationRegistry } from '../claude-profile/operation-registry';
 import {
   SpecCreationMetadata,
   TaskExecutionOptions,
@@ -17,17 +14,12 @@ import type { IdeationConfig } from '../../shared/types';
 import { resetStuckSubtasks } from '../ipc-handlers/task/plan-file-utils';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../shared/constants';
 import { projectStore } from '../project-store';
-import { resolveAuth, resolveAuthFromQueue } from '../ai/auth/resolver';
-import { resolveModelId } from '../ai/config/phase-config';
-import { detectProviderFromModel } from '../ai/providers/factory';
-import { resolveModelEquivalent } from '../../shared/constants/models';
-import type { BuiltinProvider } from '../../shared/types/provider-account';
+import { type ResolvedClaudeCredential, resolveClaudeCredential } from '../ai/claude-code/credential';
+import { isClaudeModel, resolveModelId } from '../ai/config/phase-config';
 import type { AgentExecutorConfig, SerializableSessionConfig, SerializedSecurityProfile } from '../ai/agent/types';
 import { getSecurityProfile } from '../ai/security/security-profile';
 import { createOrGetWorktree } from '../ai/worktree';
 import { findTaskWorktree } from '../worktree-paths';
-import { readSettingsFile } from '../settings-utils';
-import type { ProviderAccount } from '../../shared/types/provider-account';
 import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
 
 /**
@@ -39,21 +31,6 @@ export class AgentManager extends EventEmitter {
   private events: AgentEvents;
   private processManager: AgentProcessManager;
   private queueManager: AgentQueueManager;
-  private taskExecutionContext: Map<string, {
-    projectPath: string;
-    specId: string;
-    options: TaskExecutionOptions;
-    isSpecCreation?: boolean;
-    taskDescription?: string;
-    specDir?: string;
-    metadata?: SpecCreationMetadata;
-    baseBranch?: string;
-    swapCount: number;
-    projectId?: string;
-    /** Generation counter to prevent stale cleanup after restart */
-    generation: number;
-  }> = new Map();
-
   constructor() {
     super();
 
@@ -62,53 +39,6 @@ export class AgentManager extends EventEmitter {
     this.events = new AgentEvents();
     this.processManager = new AgentProcessManager(this.state, this.events, this);
     this.queueManager = new AgentQueueManager(this.state, this.events, this.processManager, this);
-
-    // Listen for auto-swap restart events
-    this.on('auto-swap-restart-task', (taskId: string, newProfileId: string) => {
-      console.log('[AgentManager] Received auto-swap-restart-task event:', { taskId, newProfileId });
-      const success = this.restartTask(taskId, newProfileId);
-      console.log('[AgentManager] Task restart result:', success ? 'SUCCESS' : 'FAILED');
-    });
-
-    // Listen for task completion to clean up context (prevent memory leak)
-    this.on('exit', (taskId: string, code: number | null, _processType?: string, _projectId?: string) => {
-      // Clean up context when:
-      // 1. Task completed successfully (code === 0), or
-      // 2. Task failed and won't be restarted (handled by auto-swap logic)
-
-      // Capture generation at exit time to prevent race conditions with restarts
-      const contextAtExit = this.taskExecutionContext.get(taskId);
-      const generationAtExit = contextAtExit?.generation;
-
-      // Note: Auto-swap restart happens BEFORE this exit event is processed,
-      // so we need a small delay to allow restart to preserve context
-      setTimeout(() => {
-        const context = this.taskExecutionContext.get(taskId);
-        if (!context) return; // Already cleaned up or restarted
-
-        // Check if the context's generation matches - if not, a restart incremented it
-        // and this cleanup is for a stale exit event that shouldn't affect the new task
-        if (generationAtExit !== undefined && context.generation !== generationAtExit) {
-          return; // Stale exit event - task was restarted, don't clean up new context
-        }
-
-        // If task completed successfully, always clean up
-        if (code === 0) {
-          this.taskExecutionContext.delete(taskId);
-          // Unregister from OperationRegistry
-          getOperationRegistry().unregisterOperation(taskId);
-          return;
-        }
-
-        // If task failed and hit max retries, clean up
-        if (context.swapCount >= 2) {
-          this.taskExecutionContext.delete(taskId);
-          // Unregister from OperationRegistry
-          getOperationRegistry().unregisterOperation(taskId);
-        }
-        // Otherwise keep context for potential restart
-      }, 1000); // Delay to allow restart logic to run first
-    });
   }
 
   /**
@@ -119,80 +49,16 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Check if any provider account is configured (API key or OAuth).
-   * Used to bypass the legacy hasValidAuth() check for non-Anthropic providers.
+   * The app's Claude credential for a new session. Emits a task error and
+   * returns null when none is configured.
    */
-  private hasAnyProviderAccount(): boolean {
-    const settings = readSettingsFile();
-    const accounts = (settings?.providerAccounts as ProviderAccount[] | undefined) ?? [];
-    return accounts.length > 0;
-  }
-
-  /**
-   * Resolve auth using the provider accounts priority queue.
-   * Falls back to legacy Claude profile if no provider accounts exist.
-   */
-  private async resolveAuthFromProviderQueue(
-    requestedModel: string,
-    preferredProvider?: string | null,
-  ): Promise<{
-    auth: { apiKey?: string; baseURL?: string; oauthTokenFilePath?: string } | null;
-    provider: string;
-    modelId: string;
-    configDir?: string;
-  }> {
-    // Read provider accounts and priority order from settings
-    const settings = readSettingsFile();
-    const accounts = (settings?.providerAccounts as ProviderAccount[] | undefined) ?? [];
-    const priorityOrder = (settings?.globalPriorityOrder as string[] | undefined) ?? [];
-
-    if (accounts.length > 0 && priorityOrder.length > 0) {
-      // Sort accounts by priority order
-      const orderedQueue = priorityOrder
-        .map(id => accounts.find(a => a.id === id))
-        .filter((a): a is ProviderAccount => a != null);
-
-      // Add any accounts not in the priority order at the end
-      for (const account of accounts) {
-        if (!priorityOrder.includes(account.id)) {
-          orderedQueue.push(account);
-        }
-      }
-
-      // If a preferred provider is specified, reorder queue to try that provider first
-      if (preferredProvider) {
-        const preferred: ProviderAccount[] = [];
-        const rest: ProviderAccount[] = [];
-        for (const acct of orderedQueue) {
-          if (acct.provider === preferredProvider) {
-            preferred.push(acct);
-          } else {
-            rest.push(acct);
-          }
-        }
-        orderedQueue.splice(0, orderedQueue.length, ...preferred, ...rest);
-      }
-
-      const resolved = await resolveAuthFromQueue(requestedModel, orderedQueue);
-      if (resolved) {
-        console.warn(`[AgentManager] Resolved auth from provider queue: account=${resolved.accountId} provider=${resolved.resolvedProvider} model=${resolved.resolvedModelId}`);
-        return {
-          auth: resolved,
-          provider: resolved.resolvedProvider,
-          modelId: resolved.resolvedModelId,
-          configDir: undefined, // Queue-based auth handles its own token refresh
-        };
-      }
-      console.warn('[AgentManager] No available account in provider queue, falling back to legacy profile');
+  private requireClaudeAuth(taskId: string): ResolvedClaudeCredential | null {
+    const auth = resolveClaudeCredential();
+    if (!auth.key) {
+      this.emit('error', taskId, 'No Claude credentials configured. Add an Anthropic API key in Settings > Claude before starting tasks.');
+      return null;
     }
-
-    // Fallback: legacy Claude profile system
-    const profileManager = getClaudeProfileManager();
-    const activeProfile = profileManager?.getActiveProfile();
-    const configDir = activeProfile?.configDir;
-    const auth = await resolveAuth({ provider: 'anthropic', configDir });
-    const provider = detectProviderFromModel(requestedModel) ?? 'anthropic';
-    return { auth, provider, modelId: requestedModel, configDir };
+    return auth;
   }
 
   /**
@@ -268,46 +134,6 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Register a task with the unified OperationRegistry for proactive swap support.
-   * Extracted helper to avoid code duplication between spec creation and task execution.
-   * @private
-   */
-  private registerTaskWithOperationRegistry(
-    taskId: string,
-    operationType: 'spec-creation' | 'task-execution',
-    metadata: Record<string, unknown>
-  ): void {
-    const profileManager = getClaudeProfileManager();
-    const activeProfile = profileManager.getActiveProfile();
-    if (!activeProfile) {
-      return;
-    }
-
-    // Keep internal state tracking for backward compatibility
-    this.assignProfileToTask(taskId, activeProfile.id, activeProfile.name, 'proactive');
-
-    // Register with unified registry for proactive swap
-    // Note: We don't provide a stopFn because restartTask() already handles stopping
-    // the task internally via killTask() before restarting. Providing a separate
-    // stopFn would cause a redundant double-kill during profile swaps.
-    const operationRegistry = getOperationRegistry();
-    operationRegistry.registerOperation(
-      taskId,
-      operationType,
-      activeProfile.id,
-      activeProfile.name,
-      (newProfileId: string) => this.restartTask(taskId, newProfileId),
-      { metadata }
-    );
-    console.log('[AgentManager] Task registered with OperationRegistry:', {
-      taskId,
-      profileId: activeProfile.id,
-      profileName: activeProfile.name,
-      type: operationType
-    });
-  }
-
-  /**
    * Start spec creation process
    */
   async startSpecCreation(
@@ -319,20 +145,8 @@ export class AgentManager extends EventEmitter {
     baseBranch?: string,
     projectId?: string
   ): Promise<void> {
-    // Pre-flight auth check: Verify active profile has valid authentication
-    // Ensure profile manager is initialized to prevent race condition
-    let profileManager: ClaudeProfileManager;
-    try {
-      profileManager = await initializeClaudeProfileManager();
-    } catch (error) {
-      console.error('[AgentManager] Failed to initialize profile manager:', error);
-      this.emit('error', taskId, 'Failed to initialize profile manager. Please check file permissions and disk space.');
-      return;
-    }
-    if (!profileManager.hasValidAuth() && !this.hasAnyProviderAccount()) {
-      this.emit('error', taskId, 'Authentication required. Please add an account in Settings > Accounts before starting tasks.');
-      return;
-    }
+    const auth = this.requireClaudeAuth(taskId);
+    if (!auth) return;
 
     // Reset stuck subtasks if restarting an existing spec creation task
     if (specDir) {
@@ -353,26 +167,10 @@ export class AgentManager extends EventEmitter {
       ? metadata.phaseModels.spec
       : (metadata?.model ?? 'sonnet');
 
-    // Determine the preferred provider (from metadata or task_metadata.json)
-    const preferredProvider = (
-      specDir ? this.resolveTaskPhaseProvider(specDir, 'spec') : null
-    ) ?? (metadata?.provider as string | undefined) ?? null;
-
-    // Resolve the model ID, translating to the target provider's equivalent if needed
-    let specModelId: string;
-    if (preferredProvider && preferredProvider !== 'anthropic') {
-      const equiv = resolveModelEquivalent(specModelShorthand, preferredProvider as BuiltinProvider)
-        ?? resolveModelEquivalent(resolveModelId(specModelShorthand), preferredProvider as BuiltinProvider);
-      specModelId = equiv?.modelId ?? specModelShorthand;
-    } else {
-      specModelId = resolveModelId(specModelShorthand);
-    }
+    const specModelId = resolveModelId(isClaudeModel(specModelShorthand) ? specModelShorthand : 'sonnet');
 
     // Load system prompt from prompts directory
     const systemPrompt = this.loadPrompt('spec_orchestrator') ?? this.buildDefaultSpecPrompt(taskDescription, specDir);
-
-    // Resolve auth from provider accounts priority queue (falls back to legacy profile)
-    const resolved = await this.resolveAuthFromProviderQueue(specModelId, preferredProvider);
 
     // Build the serializable session config for the worker
     const resolvedSpecDir = specDir ?? path.join(projectPath, '.auto-claude', 'specs', taskId);
@@ -389,12 +187,8 @@ export class AgentManager extends EventEmitter {
       maxSteps: 1000,
       specDir: resolvedSpecDir,
       projectDir: projectPath,
-      provider: resolved.provider,
-      modelId: resolved.modelId,
-      apiKey: resolved.auth?.apiKey,
-      baseURL: resolved.auth?.baseURL,
-      configDir: resolved.configDir,
-      oauthTokenFilePath: resolved.auth?.oauthTokenFilePath,
+      modelId: specModelId,
+      ...this.sessionAuth(auth),
       mcpOptions: {
         context7Enabled: true,
         memoryEnabled: !!process.env.GRAPHITI_MCP_URL,
@@ -415,12 +209,6 @@ export class AgentManager extends EventEmitter {
       session: sessionConfig,
     };
 
-    // Store context for potential restart
-    this.storeTaskContext(taskId, projectPath, '', {}, true, taskDescription, specDir, metadata, baseBranch, projectId);
-
-    // Register with unified OperationRegistry for proactive swap support
-    this.registerTaskWithOperationRegistry(taskId, 'spec-creation', { projectPath, taskDescription, specDir });
-
     await this.processManager.spawnWorkerProcess(taskId, executorConfig, {}, 'spec-creation', projectId);
 
     // Note (Python fallback preserved for reference):
@@ -439,20 +227,8 @@ export class AgentManager extends EventEmitter {
     options: TaskExecutionOptions = {},
     projectId?: string
   ): Promise<void> {
-    // Pre-flight auth check: Verify active profile has valid authentication
-    // Ensure profile manager is initialized to prevent race condition
-    let profileManager: ClaudeProfileManager;
-    try {
-      profileManager = await initializeClaudeProfileManager();
-    } catch (error) {
-      console.error('[AgentManager] Failed to initialize profile manager:', error);
-      this.emit('error', taskId, 'Failed to initialize profile manager. Please check file permissions and disk space.');
-      return;
-    }
-    if (!profileManager.hasValidAuth() && !this.hasAnyProviderAccount()) {
-      this.emit('error', taskId, 'Authentication required. Please add an account in Settings > Accounts before starting tasks.');
-      return;
-    }
+    const auth = this.requireClaudeAuth(taskId);
+    if (!auth) return;
 
     // Resolve the spec directory from specId
     const project = projectStore.getProjects().find((p) => p.id === projectId || p.path === projectPath);
@@ -461,13 +237,9 @@ export class AgentManager extends EventEmitter {
 
     // Load model configuration from task_metadata.json if available
     const modelId = await this.resolveTaskModelId(specDir, 'planning');
-    const preferredProvider = this.resolveTaskPhaseProvider(specDir, 'planning');
 
     // Load system prompt (planner prompt for build orchestrator entry point)
     const systemPrompt = this.loadPrompt('planner') ?? this.buildDefaultPlannerPrompt(specId, projectPath);
-
-    // Resolve auth from provider accounts priority queue (falls back to legacy profile)
-    const resolved = await this.resolveAuthFromProviderQueue(modelId, preferredProvider);
 
     // Create or get existing git worktree for task isolation
     // This matches the Python backend's WorktreeManager.create_worktree() behavior
@@ -513,12 +285,8 @@ export class AgentManager extends EventEmitter {
       // When running in a worktree, sourceSpecDir points to the main project spec dir
       // so the subtask iterator can sync phase updates in real time (not just on exit).
       sourceSpecDir: worktreePath ? specDir : undefined,
-      provider: resolved.provider,
-      modelId: resolved.modelId,
-      apiKey: resolved.auth?.apiKey,
-      baseURL: resolved.auth?.baseURL,
-      configDir: resolved.configDir,
-      oauthTokenFilePath: resolved.auth?.oauthTokenFilePath,
+      modelId,
+      ...this.sessionAuth(auth),
       mcpOptions: {
         context7Enabled: true,
         memoryEnabled: !!process.env.GRAPHITI_MCP_URL,
@@ -539,12 +307,6 @@ export class AgentManager extends EventEmitter {
       session: sessionConfig,
     };
 
-    // Store context for potential restart
-    this.storeTaskContext(taskId, projectPath, specId, options, false, undefined, undefined, undefined, undefined, projectId);
-
-    // Register with unified OperationRegistry for proactive swap support
-    this.registerTaskWithOperationRegistry(taskId, 'task-execution', { projectPath, specId, options });
-
     await this.processManager.spawnWorkerProcess(taskId, executorConfig, {}, 'task-execution', projectId);
 
     // Note (Python fallback preserved for reference):
@@ -562,19 +324,8 @@ export class AgentManager extends EventEmitter {
     specId: string,
     projectId?: string
   ): Promise<void> {
-    // Ensure profile manager is initialized for auth resolution
-    let profileManager: ClaudeProfileManager;
-    try {
-      profileManager = await initializeClaudeProfileManager();
-    } catch (error) {
-      console.error('[AgentManager] Failed to initialize profile manager:', error);
-      this.emit('error', taskId, 'Failed to initialize profile manager. Please check file permissions and disk space.');
-      return;
-    }
-    if (!profileManager.hasValidAuth() && !this.hasAnyProviderAccount()) {
-      this.emit('error', taskId, 'Authentication required. Please add an account in Settings > Accounts before starting tasks.');
-      return;
-    }
+    const auth = this.requireClaudeAuth(taskId);
+    if (!auth) return;
 
     // Resolve the spec directory from specId
     const project = projectStore.getProjects().find((p) => p.id === projectId || p.path === projectPath);
@@ -583,13 +334,9 @@ export class AgentManager extends EventEmitter {
 
     // Load model configuration from task_metadata.json if available
     const modelId = await this.resolveTaskModelId(specDir, 'qa');
-    const preferredProvider = this.resolveTaskPhaseProvider(specDir, 'qa');
 
     // Load system prompt for QA reviewer
     const systemPrompt = this.loadPrompt('qa_reviewer') ?? this.buildDefaultQAPrompt(specId, projectPath);
-
-    // Resolve auth from provider accounts priority queue (falls back to legacy profile)
-    const resolved = await this.resolveAuthFromProviderQueue(modelId, preferredProvider);
 
     // Find existing worktree for QA (created during task execution)
     const worktreePath = findTaskWorktree(projectPath, specId);
@@ -616,12 +363,8 @@ export class AgentManager extends EventEmitter {
       maxSteps: 1000,
       specDir: effectiveSpecDir,
       projectDir: effectiveProjectDir,
-      provider: resolved.provider,
-      modelId: resolved.modelId,
-      apiKey: resolved.auth?.apiKey,
-      baseURL: resolved.auth?.baseURL,
-      configDir: resolved.configDir,
-      oauthTokenFilePath: resolved.auth?.oauthTokenFilePath,
+      modelId,
+      ...this.sessionAuth(auth),
       mcpOptions: {
         context7Enabled: true,
         memoryEnabled: !!process.env.GRAPHITI_MCP_URL,
@@ -732,188 +475,17 @@ export class AgentManager extends EventEmitter {
     return this.state.getRunningTaskIds();
   }
 
-  /**
-   * Store task execution context for potential restarts
-   */
-  private storeTaskContext(
-    taskId: string,
-    projectPath: string,
-    specId: string,
-    options: TaskExecutionOptions,
-    isSpecCreation?: boolean,
-    taskDescription?: string,
-    specDir?: string,
-    metadata?: SpecCreationMetadata,
-    baseBranch?: string,
-    projectId?: string
-  ): void {
-    // Preserve swapCount if context already exists (for restarts)
-    const existingContext = this.taskExecutionContext.get(taskId);
-    const swapCount = existingContext?.swapCount ?? 0;
-    // Increment generation on each store (restarts) to invalidate pending cleanup callbacks
-    const generation = (existingContext?.generation ?? 0) + 1;
-
-    this.taskExecutionContext.set(taskId, {
-      projectPath,
-      specId,
-      options,
-      isSpecCreation,
-      taskDescription,
-      specDir,
-      metadata,
-      baseBranch,
-      swapCount, // Preserve existing count instead of resetting
-      projectId,
-      generation, // Incremented to prevent stale exit cleanup
-    });
-  }
-
-  /**
-   * Restart task after profile swap
-   * @param taskId - The task to restart
-   * @param newProfileId - Optional new profile ID to apply (from auto-swap)
-   */
-  restartTask(taskId: string, newProfileId?: string): boolean {
-    console.log('[AgentManager] restartTask called for:', taskId, 'with newProfileId:', newProfileId);
-
-    const context = this.taskExecutionContext.get(taskId);
-    if (!context) {
-      console.error('[AgentManager] No context for task:', taskId);
-      console.log('[AgentManager] Available task contexts:', Array.from(this.taskExecutionContext.keys()));
-      return false;
-    }
-
-    console.log('[AgentManager] Task context found:', {
-      taskId,
-      projectPath: context.projectPath,
-      specId: context.specId,
-      isSpecCreation: context.isSpecCreation,
-      swapCount: context.swapCount
-    });
-
-    // Prevent infinite swap loops
-    if (context.swapCount >= 2) {
-      console.error('[AgentManager] Max swap count reached for task:', taskId, '- stopping restart loop');
-      return false;
-    }
-
-    context.swapCount++;
-    console.log('[AgentManager] Incremented swap count to:', context.swapCount);
-
-    // If a new profile was specified, ensure it's set as active before restart
-    if (newProfileId) {
-      const profileManager = getClaudeProfileManager();
-      const currentActiveId = profileManager.getActiveProfile()?.id;
-      if (currentActiveId !== newProfileId) {
-        console.log('[AgentManager] Setting active profile to:', newProfileId);
-        profileManager.setActiveProfile(newProfileId);
-      }
-    }
-
-    // Kill current process
-    console.log('[AgentManager] Killing current process for task:', taskId);
-    this.killTask(taskId);
-
-    // Wait for cleanup, then reset stuck subtasks and restart
-    console.log('[AgentManager] Scheduling task restart in 500ms');
-    setTimeout(async () => {
-      // Reset stuck subtasks before restart to avoid picking up stale in-progress states
-      if (context.specId || context.specDir) {
-        const planPath = context.specDir
-          ? path.join(context.specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN)
-          : path.join(context.projectPath, AUTO_BUILD_PATHS.SPECS_DIR, context.specId, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-
-        console.log('[AgentManager] Resetting stuck subtasks before restart:', planPath);
-        try {
-          const { success, resetCount } = await resetStuckSubtasks(planPath);
-          if (success && resetCount > 0) {
-            console.log(`[AgentManager] Successfully reset ${resetCount} stuck subtask(s)`);
-          }
-        } catch (err) {
-          console.warn('[AgentManager] Failed to reset stuck subtasks:', err);
-        }
-      }
-
-      console.log('[AgentManager] Restarting task now:', taskId);
-      if (context.isSpecCreation) {
-        console.log('[AgentManager] Restarting as spec creation');
-        if (!context.taskDescription) {
-          console.error('[AgentManager] Cannot restart spec creation: taskDescription is missing');
-          return;
-        }
-        this.startSpecCreation(
-          taskId,
-          context.projectPath,
-          context.taskDescription,
-          context.specDir,
-          context.metadata,
-          context.baseBranch,
-          context.projectId
-        );
-      } else {
-        console.log('[AgentManager] Restarting as task execution');
-        this.startTaskExecution(
-          taskId,
-          context.projectPath,
-          context.specId,
-          context.options,
-          context.projectId
-        );
-      }
-    }, 500);
-
-    return true;
-  }
-
-  // ============================================
-  // Queue Routing Methods (Rate Limit Recovery)
-  // ============================================
-
-  /**
-   * Get running tasks grouped by profile
-   * Used by queue routing to determine profile load
-   */
-  getRunningTasksByProfile(): { byProfile: Record<string, string[]>; totalRunning: number } {
-    return this.state.getRunningTasksByProfile();
-  }
-
-  /**
-   * Assign a profile to a task
-   * Records which profile is being used for a task
-   */
-  assignProfileToTask(
-    taskId: string,
-    profileId: string,
-    profileName: string,
-    reason: 'proactive' | 'reactive' | 'manual'
-  ): void {
-    this.state.assignProfileToTask(taskId, profileId, profileName, reason);
-  }
-
-  /**
-   * Get the profile assignment for a task
-   */
-  getTaskProfileAssignment(taskId: string): { profileId: string; profileName: string; reason: string } | undefined {
-    return this.state.getTaskProfileAssignment(taskId);
-  }
-
-  /**
-   * Update the session ID for a task (for session resume)
-   */
-  updateTaskSession(taskId: string, sessionId: string): void {
-    this.state.updateTaskSession(taskId, sessionId);
-  }
-
-  /**
-   * Get the session ID for a task
-   */
-  getTaskSessionId(taskId: string): string | undefined {
-    return this.state.getTaskSessionId(taskId);
-  }
-
   // ============================================
   // Private helpers for TypeScript agent path
   // ============================================
+
+  /**
+   * Credential fields of the worker session config. The worker turns them
+   * into session auth (subscription tokens only in personal mode).
+   */
+  private sessionAuth(auth: ResolvedClaudeCredential): Pick<SerializableSessionConfig, 'apiKey' | 'baseURL'> {
+    return { apiKey: auth.key, baseURL: auth.baseURL };
+  }
 
   /**
    * Serialize a project's SecurityProfile (Sets) into a SerializedSecurityProfile (arrays)
@@ -933,7 +505,7 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Resolve the model ID for a task by reading task_metadata.json.
+   * Resolve the Claude model ID for a task by reading task_metadata.json.
    * Falls back to the default sonnet model if metadata is not available.
    *
    * @param specDir - The spec directory path
@@ -945,89 +517,18 @@ export class AgentManager extends EventEmitter {
       if (existsSync(metadataPath)) {
         const raw = readFileSync(metadataPath, 'utf-8');
         const metadata = JSON.parse(raw) as {
-          isAutoProfile?: boolean;
           phaseModels?: Record<string, string>;
-          phaseProviders?: Record<string, string>;
-          provider?: string;
           model?: string;
         };
-
-        // Determine the target provider for this phase
-        const targetProvider = (metadata.phaseProviders?.[phase] ?? metadata.provider ?? null) as BuiltinProvider | null;
-
-        let shorthand: string | undefined;
-        if (metadata.phaseModels?.[phase]) {
-          shorthand = metadata.phaseModels[phase];
-        } else if (metadata.model) {
-          shorthand = metadata.model;
-        }
-
-        // If shorthand is empty (e.g., Ollama presets use '' because models are dynamic),
-        // try reading the user's per-provider phase config from settings
-        if (!shorthand && targetProvider) {
-          const settings = readSettingsFile();
-          const providerPhaseModels = (settings?.providerAgentConfig as Record<string, Record<string, unknown>> | undefined)?.[targetProvider]?.customPhaseModels as Record<string, string> | undefined;
-          if (providerPhaseModels?.[phase]) {
-            shorthand = providerPhaseModels[phase];
-          }
-        }
-
-        if (shorthand) {
-          // First resolve to a full model ID (handles Anthropic shorthands like 'opus' → 'claude-opus-4-6')
-          const baseModelId = resolveModelId(shorthand);
-
-          // If the target provider is non-Anthropic, translate the model ID to the
-          // target provider's equivalent. This ensures the queue resolution succeeds
-          // when the user has swapped away from Anthropic.
-          if (targetProvider && targetProvider !== 'anthropic') {
-            const equiv = resolveModelEquivalent(shorthand, targetProvider)
-              ?? resolveModelEquivalent(baseModelId, targetProvider);
-            if (equiv) {
-              return equiv.modelId;
-            }
-            // If no equivalence found and the model is already a raw model name
-            // (e.g., user-configured Ollama model), pass it through unchanged
-            return shorthand;
-          }
-
-          return baseModelId;
-        }
-
-        // Still no model but have a target provider — resolve 'sonnet' equivalent
-        if (targetProvider && targetProvider !== 'anthropic') {
-          const equiv = resolveModelEquivalent('sonnet', targetProvider);
-          if (equiv) return equiv.modelId;
-        }
+        const model = metadata.phaseModels?.[phase] || metadata.model;
+        // Tasks created with a model of a removed provider fall back to the default
+        if (isClaudeModel(model)) return resolveModelId(model);
       }
     } catch {
       // Fall through to default
     }
 
-    // Default: resolve 'sonnet' (Anthropic fallback)
     return resolveModelId('sonnet');
-  }
-
-  /**
-   * Resolve the provider override for a phase from task_metadata.json.
-   * Returns null if no per-phase provider is specified (use default queue).
-   */
-  private resolveTaskPhaseProvider(specDir: string, phase: 'planning' | 'coding' | 'qa' | 'spec'): string | null {
-    try {
-      const metadataPath = path.join(specDir, 'task_metadata.json');
-      if (existsSync(metadataPath)) {
-        const raw = readFileSync(metadataPath, 'utf-8');
-        const metadata = JSON.parse(raw) as {
-          phaseProviders?: Record<string, string>;
-          provider?: string;
-        };
-        // Per-phase provider (cross-provider mode) takes precedence,
-        // then fall back to the single task-level provider (e.g. 'ollama')
-        return metadata.phaseProviders?.[phase] ?? metadata.provider ?? null;
-      }
-    } catch {
-      // Fall through
-    }
-    return null;
   }
 
   /**

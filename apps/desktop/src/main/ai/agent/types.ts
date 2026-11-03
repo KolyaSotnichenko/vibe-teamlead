@@ -36,8 +36,7 @@ export interface WorkerConfig {
 
 /**
  * Serializable version of SessionConfig.
- * The LanguageModel instance cannot cross worker boundaries,
- * so we pass provider/model identifiers and reconstruct in the worker.
+ * Only plain data crosses the worker boundary.
  */
 export interface SerializableSessionConfig {
   agentType: SessionConfig['agentType'];
@@ -53,9 +52,7 @@ export interface SerializableSessionConfig {
   thinkingLevel?: SessionConfig['thinkingLevel'];
   sessionNumber?: SessionConfig['sessionNumber'];
   subtaskId?: SessionConfig['subtaskId'];
-  /** Provider identifier for model reconstruction */
-  provider: string;
-  /** Model ID for model reconstruction */
+  /** Claude model ID */
   modelId: string;
   /** Tools shipped with the app, resolved in the main process */
   bundled?: BundledTools;
@@ -63,14 +60,10 @@ export interface SerializableSessionConfig {
   allowSubscriptionLogin?: boolean;
   /** Security QA (Strix) settings, resolved in the main process */
   securityQa?: import('../security/strix').StrixSettings;
-  /** API key or token for auth */
+  /** The app's Claude credential: an API key, or a subscription token (personal mode only) */
   apiKey?: string;
-  /** Base URL override for the provider */
+  /** Optional Anthropic-compatible endpoint */
   baseURL?: string;
-  /** Config directory for OAuth profile (used for reactive token refresh on 401) */
-  configDir?: string;
-  /** Pre-resolved path to OAuth token file for file-based OAuth providers (e.g., Codex). Worker-safe. */
-  oauthTokenFilePath?: string;
   /** MCP options resolved from project settings (serialized for worker) */
   mcpOptions?: {
     context7Enabled?: boolean;

@@ -24,14 +24,7 @@ import { debugLog, debugError } from "../../shared/utils/debug-logger";
 import { safeSendToRenderer } from "./utils";
 import { writeFileWithRetry, readFileWithRetry } from "../utils/atomic-file";
 import { withFileLock } from "../utils/file-lock";
-import { getActiveProviderFeatureSettings } from "./feature-settings-helper";
-
-/**
- * Read roadmap feature settings using per-provider resolution
- */
-function getFeatureSettings(): { model?: string; thinkingLevel?: string } {
-  return getActiveProviderFeatureSettings('roadmap');
-}
+import { getFeatureSettings } from "./feature-settings-helper";
 
 /**
  * Register all roadmap-related IPC handlers
@@ -213,7 +206,7 @@ export function registerRoadmapHandlers(
       refreshCompetitorAnalysis?: boolean
     ) => {
       // Get feature settings for roadmap
-      const featureSettings = getFeatureSettings();
+      const featureSettings = getFeatureSettings('roadmap');
       const config: RoadmapConfig = {
         model: featureSettings.model,
         thinkingLevel: featureSettings.thinkingLevel,
@@ -275,7 +268,7 @@ export function registerRoadmapHandlers(
       refreshCompetitorAnalysis?: boolean
     ) => {
       // Get feature settings for roadmap
-      const featureSettings = getFeatureSettings();
+      const featureSettings = getFeatureSettings('roadmap');
       const config: RoadmapConfig = {
         model: featureSettings.model,
         thinkingLevel: featureSettings.thinkingLevel,

@@ -4,7 +4,9 @@ import type {
   AppSettings,
   IPCResult,
   ToolDetectionResult,
-  ProviderAccount
+  ClaudeCredentialStatus,
+  ClaudeConnectionTestInput,
+  ClaudeConnectionTestResult
 } from '../../shared/types';
 
 export interface SettingsAPI {
@@ -34,21 +36,11 @@ export interface SettingsAPI {
   // Spell check
   setSpellCheckLanguages: (language: string) => Promise<IPCResult<{ success: boolean }>>;
 
-  // Provider Account management (unified multi-provider)
-  getProviderAccounts: () => Promise<IPCResult<{ accounts: ProviderAccount[] }>>;
-  saveProviderAccount: (account: any) => Promise<IPCResult<any>>;
-  updateProviderAccount: (id: string, updates: any) => Promise<IPCResult<any>>;
-  deleteProviderAccount: (id: string) => Promise<IPCResult>;
-  setProviderAccountQueueOrder: (order: string[]) => Promise<IPCResult>;
-  setCrossProviderQueueOrder: (order: string[]) => Promise<IPCResult>;
-  saveModelOverrides: (overrides: Record<string, unknown>) => Promise<IPCResult>;
-  testProviderConnection: (provider: string, config: any) => Promise<IPCResult<{ success: boolean; error?: string }>>;
-  checkEnvCredentials: () => Promise<IPCResult<Record<string, boolean>>>;
-
-  // Codex OAuth authentication
-  codexAuthLogin: () => Promise<{ success: boolean; data?: { accessToken: string; refreshToken: string; expiresAt: number; email?: string }; error?: string }>;
-  codexAuthStatus: () => Promise<{ success: boolean; data?: { isAuthenticated: boolean; expiresAt?: number }; error?: string }>;
-  codexAuthLogout: () => Promise<{ success: boolean; error?: string }>;
+  // Claude credential (the key is write-only from the renderer)
+  getClaudeCredentialStatus: () => Promise<IPCResult<ClaudeCredentialStatus>>;
+  saveClaudeApiKey: (apiKey: string) => Promise<IPCResult<ClaudeCredentialStatus>>;
+  clearClaudeApiKey: () => Promise<IPCResult<ClaudeCredentialStatus>>;
+  testClaudeConnection: (input?: ClaudeConnectionTestInput) => Promise<IPCResult<ClaudeConnectionTestResult>>;
 }
 
 export const createSettingsAPI = (): SettingsAPI => ({
@@ -92,31 +84,13 @@ export const createSettingsAPI = (): SettingsAPI => ({
   setSpellCheckLanguages: (language: string): Promise<IPCResult<{ success: boolean }>> =>
     ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, language),
 
-  // Provider Account management (unified multi-provider)
-  getProviderAccounts: (): Promise<IPCResult<{ accounts: ProviderAccount[] }>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_GET),
-  saveProviderAccount: (account: any): Promise<IPCResult<any>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_SAVE, account),
-  updateProviderAccount: (id: string, updates: any): Promise<IPCResult<any>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_UPDATE, id, updates),
-  deleteProviderAccount: (id: string): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_DELETE, id),
-  setProviderAccountQueueOrder: (order: string[]): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_SET_QUEUE_ORDER, order),
-  setCrossProviderQueueOrder: (order: string[]): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_SET_CROSS_PROVIDER_QUEUE_ORDER, order),
-  saveModelOverrides: (overrides: Record<string, unknown>): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.MODEL_OVERRIDES_SAVE, overrides),
-  testProviderConnection: (provider: string, config: any): Promise<IPCResult<{ success: boolean; error?: string }>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_TEST_CONNECTION, provider, config),
-  checkEnvCredentials: (): Promise<IPCResult<Record<string, boolean>>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_ACCOUNTS_CHECK_ENV),
-
-  // Codex OAuth authentication
-  codexAuthLogin: () =>
-    ipcRenderer.invoke('codex-auth-login'),
-  codexAuthStatus: () =>
-    ipcRenderer.invoke('codex-auth-status'),
-  codexAuthLogout: () =>
-    ipcRenderer.invoke('codex-auth-logout'),
+  // Claude credential
+  getClaudeCredentialStatus: (): Promise<IPCResult<ClaudeCredentialStatus>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_GET_STATUS),
+  saveClaudeApiKey: (apiKey: string): Promise<IPCResult<ClaudeCredentialStatus>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_SAVE, apiKey),
+  clearClaudeApiKey: (): Promise<IPCResult<ClaudeCredentialStatus>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_CLEAR),
+  testClaudeConnection: (input?: ClaudeConnectionTestInput): Promise<IPCResult<ClaudeConnectionTestResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_TEST, input),
 });

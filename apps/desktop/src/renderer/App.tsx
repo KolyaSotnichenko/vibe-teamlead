@@ -49,33 +49,25 @@ import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
 import { WelcomeScreen } from './components/WelcomeScreen';
-import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
 import { AuthFailureModal } from './components/AuthFailureModal';
-import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
-import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
 import { useTaskStore, loadTasks } from './stores/task-store';
-import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
-import { useClaudeProfileStore, loadClaudeProfiles } from './stores/claude-profile-store';
+import { useSettingsStore, loadSettings } from './stores/settings-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
 import { initializeGitHubListeners, cleanupGitHubListeners } from './stores/github';
 import { initDownloadProgressListener } from './stores/download-store';
 import { GlobalDownloadIndicator } from './components/GlobalDownloadIndicator';
 import { useIpcListeners } from './hooks/useIpc';
 import { useGlobalTerminalListeners } from './hooks/useGlobalTerminalListeners';
-import { useTerminalProfileChange } from './hooks/useTerminalProfileChange';
 import { COLOR_THEMES, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_DEFAULT } from '../shared/constants';
 import type { Task, Project, ColorTheme } from '../shared/types';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider } from './contexts/ViewStateContext';
-
-// Version constant for version-specific warnings (e.g., reauthentication notices)
-const VERSION_WARNING_275 = '2.7.5';
 
 // Wrapper component for ProjectTabBar
 interface ProjectTabBarWithContextProps {
@@ -115,9 +107,6 @@ export function App() {
   // This ensures terminal output is captured even when the terminal component is not rendered
   useGlobalTerminalListeners();
 
-  // Handle terminal profile change events (recreate terminals on profile switch)
-  useTerminalProfileChange();
-
   // Stores
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
@@ -131,12 +120,6 @@ export function App() {
   const settings = useSettingsStore((state) => state.settings);
   const settingsLoading = useSettingsStore((state) => state.isLoading);
 
-  // API Profile state
-  const profiles = useSettingsStore((state) => state.profiles);
-
-  // Claude Profile state (OAuth)
-  const claudeProfiles = useClaudeProfileStore((state) => state.profiles);
-
   // UI State
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
@@ -145,7 +128,6 @@ export function App() {
   const [settingsInitialProjectSection, setSettingsInitialProjectSection] = useState<ProjectSettingsSection | undefined>(undefined);
   const [activeView, setActiveView] = useState<SidebarView>('kanban');
   const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
-  const [isVersionWarningModalOpen, setIsVersionWarningModalOpen] = useState(false);
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
 
   // Initialize dialog state
@@ -186,8 +168,6 @@ export function App() {
   useEffect(() => {
     loadProjects();
     loadSettings();
-    loadProfiles();
-    loadClaudeProfiles();
     // Initialize global GitHub listeners (PR reviews, etc.) so they persist across navigation
     initializeGitHubListeners();
     // Initialize global download progress listener for Ollama model downloads
@@ -265,54 +245,10 @@ export function App() {
   // First-run detection - show onboarding wizard if not completed
   // Only check AFTER settings have been loaded from disk to avoid race condition
   useEffect(() => {
-    // Check if either auth method is configured
-    // API profiles: if profiles exist, auth is configured (user has gone through setup)
-    const hasAPIProfileConfigured = profiles.length > 0;
-    const hasOAuthConfigured = claudeProfiles.some(p =>
-      p.oauthToken || (p.isDefault && p.configDir)
-    );
-    const hasAnyAuth = hasAPIProfileConfigured || hasOAuthConfigured;
-
-    // Only show wizard if onboarding not completed AND no auth is configured
-    if (settingsHaveLoaded &&
-        settings.onboardingCompleted === false &&
-        !hasAnyAuth) {
+    if (settingsHaveLoaded && settings.onboardingCompleted === false) {
       setIsOnboardingWizardOpen(true);
     }
-  }, [settingsHaveLoaded, settings.onboardingCompleted, profiles, claudeProfiles]);
-
-  // Version 2.7.5 warning - show once to notify users about reauthentication requirement
-  useEffect(() => {
-    const checkVersionWarning = async () => {
-      if (!settingsHaveLoaded) return;
-
-      try {
-        const version = await window.electronAPI.getAppVersion();
-        const seenWarnings = settings.seenVersionWarnings || [];
-
-        // Show warning for 2.7.5 if not already seen
-        if (version === VERSION_WARNING_275 && !seenWarnings.includes(VERSION_WARNING_275)) {
-          setIsVersionWarningModalOpen(true);
-        }
-      } catch (error) {
-        console.error('Failed to check version warning:', error);
-      }
-    };
-
-    checkVersionWarning();
-  }, [settingsHaveLoaded, settings.seenVersionWarnings]);
-
-  // Handle version warning dismissal
-  const handleVersionWarningClose = () => {
-    setIsVersionWarningModalOpen(false);
-    // Persist that user has seen this warning (to disk, not just in-memory)
-    const seenWarnings = settings.seenVersionWarnings || [];
-    if (!seenWarnings.includes(VERSION_WARNING_275)) {
-      saveSettings({
-        seenVersionWarnings: [...seenWarnings, VERSION_WARNING_275]
-      });
-    }
-  };
+  }, [settingsHaveLoaded, settings.onboardingCompleted]);
 
   // Sync i18n language with settings
   const { t, i18n } = useTranslation('dialogs');
@@ -832,7 +768,6 @@ export function App() {
   return (
     <ViewStateProvider>
       <TooltipProvider>
-        <ProactiveSwapListener />
       <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <Sidebar
@@ -1137,28 +1072,14 @@ export function App() {
           </DialogContent>
         </Dialog>
 
-        {/* Rate Limit Modal - shows when Claude Code hits usage limits (terminal) */}
-        <RateLimitModal />
-
         {/* SDK Rate Limit Modal - shows when SDK/CLI operations hit limits (changelog, tasks, etc.) */}
         <SDKRateLimitModal />
 
         {/* Auth Failure Modal - shows when Claude CLI encounters 401/auth errors */}
         <AuthFailureModal onOpenSettings={() => {
-          setSettingsInitialSection('accounts');
+          setSettingsInitialSection('claude');
           setIsSettingsDialogOpen(true);
         }} />
-
-        {/* Version Warning Modal - one-time notice for 2.7.5 re-authentication */}
-        <VersionWarningModal
-          isOpen={isVersionWarningModalOpen}
-          onClose={handleVersionWarningClose}
-          onOpenSettings={() => {
-            handleVersionWarningClose();
-            setSettingsInitialSection('accounts');
-            setIsSettingsDialogOpen(true);
-          }}
-        />
 
         {/* Onboarding Wizard - shows on first launch when onboardingCompleted is false */}
         <OnboardingWizard

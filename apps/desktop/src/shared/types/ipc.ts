@@ -56,23 +56,13 @@ import type {
   TerminalRestoreResult,
   SessionDateInfo,
   SessionDateRestoreResult,
-  RateLimitInfo,
   SDKRateLimitInfo,
   AuthFailureInfo,
-  RetryWithProfileRequest,
   CreateTerminalWorktreeRequest,
   TerminalWorktreeConfig,
   TerminalWorktreeResult,
   OtherWorktreeInfo,
 } from './terminal';
-import type {
-  ClaudeProfileSettings,
-  ClaudeProfile,
-  ClaudeAutoSwitchSettings,
-  ClaudeUsageSnapshot,
-  AllProfilesUsage,
-  TerminalProfileChangedEvent
-} from './agent';
 import type { AppSettings } from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent, AppUpdateErrorEvent } from './app-update';
 import type {
@@ -139,8 +129,7 @@ import type {
   GitLabMRReviewProgress,
   GitLabNewCommitsCheck
 } from './integrations';
-import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
-import type { ProviderAccount } from './provider-account';
+import type { ClaudeCredentialStatus, ClaudeConnectionTestInput, ClaudeConnectionTestResult } from './claude-credential';
 
 // ============================================
 // Branch Types
@@ -254,7 +243,7 @@ export interface ElectronAPI {
   getTerminalSessions: (projectPath: string) => Promise<IPCResult<TerminalSession[]>>;
   restoreTerminalSession: (session: TerminalSession, cols?: number, rows?: number) => Promise<IPCResult<TerminalRestoreResult>>;
   clearTerminalSessions: (projectPath: string) => Promise<IPCResult>;
-  resumeClaudeInTerminal: (id: string, sessionId?: string, options?: { migratedSession?: boolean }) => void;
+  resumeClaudeInTerminal: (id: string, sessionId?: string) => void;
   activateDeferredClaudeResume: (id: string) => void;
   getTerminalSessionDates: (projectPath?: string) => Promise<IPCResult<SessionDateInfo[]>>;
   getTerminalSessionsForDate: (date: string, projectPath: string) => Promise<IPCResult<TerminalSession[]>>;
@@ -279,96 +268,18 @@ export interface ElectronAPI {
   /** Listen for worktree config changes (synced from main process during restoration) */
   onTerminalWorktreeConfigChange: (callback: (id: string, config: TerminalWorktreeConfig | undefined) => void) => () => void;
   onTerminalClaudeSession: (callback: (id: string, sessionId: string) => void) => () => void;
-  onTerminalRateLimit: (callback: (info: RateLimitInfo) => void) => () => void;
-  /** Listen for OAuth authentication completion (token is auto-saved to profile, never exposed to frontend) */
-  onTerminalOAuthToken: (callback: (info: {
-    terminalId: string;
-    profileId?: string;
-    email?: string;
-    success: boolean;
-    message?: string;
-    detectedAt: string;
-  }) => void) => () => void;
-  /** Listen for auth terminal creation - allows UI to display the OAuth terminal */
-  onTerminalAuthCreated: (callback: (info: {
-    terminalId: string;
-    profileId: string;
-    profileName: string
-  }) => void) => () => void;
   /** Listen for Claude busy state changes (for visual indicator: red=busy, green=idle) */
   onTerminalClaudeBusy: (callback: (id: string, isBusy: boolean) => void) => () => void;
   /** Listen for Claude exit (user closed Claude within terminal, returned to shell) */
   onTerminalClaudeExit: (callback: (id: string) => void) => () => void;
   /** Listen for pending Claude resume notifications (for deferred resume on tab activation) */
   onTerminalPendingResume: (callback: (id: string, sessionId?: string) => void) => () => void;
-  /** Listen for profile change events - terminals need to be recreated with new profile env vars */
-  onTerminalProfileChanged: (callback: (event: TerminalProfileChangedEvent) => void) => () => void;
-  /** Listen for OAuth code input requests (manual OAuth flow) */
-  onTerminalOAuthCodeNeeded: (callback: (info: {
-    terminalId: string;
-    profileId: string;
-    profileName: string
-  }) => void) => () => void;
-  /** Submit OAuth code from user (for manual OAuth flow) */
-  submitOAuthCode: (terminalId: string, code: string) => Promise<IPCResult>;
 
-  // Claude profile management (multi-account support)
-  getClaudeProfiles: () => Promise<IPCResult<ClaudeProfileSettings>>;
-  saveClaudeProfile: (profile: ClaudeProfile) => Promise<IPCResult<ClaudeProfile>>;
-  deleteClaudeProfile: (profileId: string) => Promise<IPCResult>;
-  renameClaudeProfile: (profileId: string, newName: string) => Promise<IPCResult>;
-  setActiveClaudeProfile: (profileId: string) => Promise<IPCResult>;
-  /** Switch terminal to use a different Claude profile (restarts Claude with new config) */
-  switchClaudeProfile: (terminalId: string, profileId: string) => Promise<IPCResult>;
-  /** Initialize authentication for a Claude profile (legacy - uses hidden terminal) */
-  initializeClaudeProfile: (profileId: string) => Promise<IPCResult>;
-  /** Set OAuth token for a profile (used when capturing from terminal) */
-  setClaudeProfileToken: (profileId: string, token: string, email?: string) => Promise<IPCResult>;
-  /** Prepare authentication for a Claude profile - returns terminal config for embedded terminal */
-  authenticateClaudeProfile: (profileId: string) => Promise<IPCResult<{ terminalId: string; configDir: string }>>;
-  /** Check if a profile has been authenticated (by checking .claude.json) */
-  verifyClaudeProfileAuth: (profileId: string) => Promise<IPCResult<{ authenticated: boolean; email?: string }>>;
-  /** Run `claude auth login` as a subprocess (no terminal needed) */
-  claudeAuthLoginSubprocess: (profileId: string) => Promise<IPCResult<{ authenticated: boolean; email?: string }>>;
-  /** Listen for OAuth subprocess progress events */
-  onClaudeAuthLoginProgress: (callback: (data: { status: string; message?: string }) => void) => () => void;
-  /** Get auto-switch settings */
-  getAutoSwitchSettings: () => Promise<IPCResult<ClaudeAutoSwitchSettings>>;
-  /** Update auto-switch settings */
-  updateAutoSwitchSettings: (settings: Partial<ClaudeAutoSwitchSettings>) => Promise<IPCResult>;
-  /** Get unified account priority order (both OAuth and API profiles) */
-  getAccountPriorityOrder: () => Promise<IPCResult<string[]>>;
-  /** Set unified account priority order */
-  setAccountPriorityOrder: (order: string[]) => Promise<IPCResult>;
-  /** Request usage fetch from a terminal (sends /usage command) */
-  fetchClaudeUsage: (terminalId: string) => Promise<IPCResult>;
-  /** Get the best available profile (for manual switching) */
-  getBestAvailableProfile: (excludeProfileId?: string) => Promise<IPCResult<ClaudeProfile | null>>;
+  // Claude session events (non-terminal)
   /** Listen for SDK/CLI rate limit events (non-terminal) */
   onSDKRateLimit: (callback: (info: SDKRateLimitInfo) => void) => () => void;
   /** Listen for auth failure events (401 errors requiring re-authentication) */
   onAuthFailure: (callback: (info: AuthFailureInfo) => void) => () => void;
-  /** Retry a rate-limited operation with a different profile */
-  retryWithProfile: (request: RetryWithProfileRequest) => Promise<IPCResult>;
-
-  // Usage Monitoring (Proactive Account Switching)
-  /** Request current usage snapshot */
-  requestUsageUpdate: () => Promise<IPCResult<ClaudeUsageSnapshot | null>>;
-  /** Request all profiles usage immediately (for startup/refresh)
-   * @param forceRefresh - If true, bypasses cache to get fresh data for all profiles
-   */
-  requestAllProfilesUsage: (forceRefresh?: boolean) => Promise<IPCResult<AllProfilesUsage | null>>;
-  /** Listen for usage data updates */
-  onUsageUpdated: (callback: (usage: ClaudeUsageSnapshot) => void) => () => void;
-  /** Listen for proactive swap notifications */
-  onProactiveSwapNotification: (callback: (notification: {
-    fromProfile: { id: string; name: string };
-    toProfile: { id: string; name: string };
-    reason: string;
-    usageSnapshot: ClaudeUsageSnapshot;
-  }) => void) => () => void;
-  /** Listen for all profiles usage updates (for multi-profile display) */
-  onAllProfilesUsageUpdated?: (callback: (allProfilesUsage: AllProfilesUsage) => void) => () => void;
 
   // App settings
   getSettings: () => Promise<IPCResult<AppSettings>>;
@@ -392,31 +303,11 @@ export interface ElectronAPI {
   /** Check if Claude Code onboarding is complete (reads ~/.claude.json) */
   getClaudeCodeOnboardingStatus: () => Promise<IPCResult<{ hasCompletedOnboarding: boolean }>>;
 
-  // API Profile management (custom Anthropic-compatible endpoints)
-  getAPIProfiles: () => Promise<IPCResult<ProfilesFile>>;
-  saveAPIProfile: (profile: Omit<APIProfile, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<APIProfile>>;
-  updateAPIProfile: (profile: APIProfile) => Promise<IPCResult<APIProfile>>;
-  deleteAPIProfile: (profileId: string) => Promise<IPCResult>;
-  setActiveAPIProfile: (profileId: string | null) => Promise<IPCResult>;
-  // Note: AbortSignal is handled in preload via separate cancel IPC channels, not passed through IPC
-  testConnection: (baseUrl: string, apiKey: string, signal?: AbortSignal) => Promise<IPCResult<TestConnectionResult>>;
-  discoverModels: (baseUrl: string, apiKey: string, signal?: AbortSignal) => Promise<IPCResult<DiscoverModelsResult>>;
-
-  // Provider Account management (unified multi-provider credentials)
-  getProviderAccounts: () => Promise<IPCResult<{ accounts: ProviderAccount[] }>>;
-  saveProviderAccount: (account: Omit<ProviderAccount, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<ProviderAccount>>;
-  updateProviderAccount: (id: string, updates: Partial<ProviderAccount>) => Promise<IPCResult<ProviderAccount>>;
-  deleteProviderAccount: (id: string) => Promise<IPCResult>;
-  setProviderAccountQueueOrder: (order: string[]) => Promise<IPCResult>;
-  setCrossProviderQueueOrder: (order: string[]) => Promise<IPCResult>;
-  saveModelOverrides: (overrides: Record<string, unknown>) => Promise<IPCResult>;
-  testProviderConnection: (provider: string, config: { apiKey?: string; baseUrl?: string; region?: string }) => Promise<IPCResult<{ success: boolean; error?: string }>>;
-  checkEnvCredentials: () => Promise<IPCResult<Record<string, boolean>>>;
-
-  // Codex OAuth authentication
-  codexAuthLogin: () => Promise<{ success: boolean; data?: { accessToken: string; refreshToken: string; expiresAt: number; email?: string }; error?: string }>;
-  codexAuthStatus: () => Promise<{ success: boolean; data?: { isAuthenticated: boolean; expiresAt?: number }; error?: string }>;
-  codexAuthLogout: () => Promise<{ success: boolean; error?: string }>;
+  // Claude credential (the key is write-only from the renderer)
+  getClaudeCredentialStatus: () => Promise<IPCResult<ClaudeCredentialStatus>>;
+  saveClaudeApiKey: (apiKey: string) => Promise<IPCResult<ClaudeCredentialStatus>>;
+  clearClaudeApiKey: () => Promise<IPCResult<ClaudeCredentialStatus>>;
+  testClaudeConnection: (input?: ClaudeConnectionTestInput) => Promise<IPCResult<ClaudeConnectionTestResult>>;
 
   // Dialog operations
   selectDirectory: () => Promise<string | null>;
@@ -863,18 +754,6 @@ export interface ElectronAPI {
     version?: string;
   }>>;
   installOllama: () => Promise<IPCResult<{ command: string }>>;
-  listOllamaModels: (baseUrl?: string) => Promise<IPCResult<{
-    models: Array<{
-      name: string;
-      size_bytes: number;
-      size_gb: number;
-      modified_at: string;
-      is_embedding: boolean;
-      embedding_dim?: number | null;
-      description?: string;
-    }>;
-    count: number;
-  }>>;
   listOllamaEmbeddingModels: (baseUrl?: string) => Promise<IPCResult<{
     embedding_models: Array<{
       name: string;
@@ -937,9 +816,6 @@ export interface ElectronAPI {
   // Screenshot capture operations
   getSources: () => Promise<IPCResult<ScreenshotSource[]> & { devMode?: boolean }>;
   capture: (options: { sourceId: string }) => Promise<IPCResult<string>>;
-
-  // Queue Routing API (rate limit recovery)
-  queue: import('../../preload/api/queue-api').QueueAPI;
 
   // Questions agents ask the user
   agentQuestions: import('./agent-questions').AgentQuestionsAPI;

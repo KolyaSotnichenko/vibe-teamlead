@@ -108,13 +108,11 @@ if (typeof window !== 'undefined') {
       data: { openProjectIds: [], activeProjectId: null, tabOrder: [] }
     }),
     saveTabState: vi.fn().mockResolvedValue({ success: true }),
-    // Profile-related API methods (API Profile feature)
-    getAPIProfiles: vi.fn(),
-    saveAPIProfile: vi.fn(),
-    updateAPIProfile: vi.fn(),
-    deleteAPIProfile: vi.fn(),
-    setActiveAPIProfile: vi.fn(),
-    testConnection: vi.fn()
+    // Claude credential
+    getClaudeCredentialStatus: vi.fn().mockResolvedValue({ success: true, data: { configured: false, source: 'none' } }),
+    saveClaudeApiKey: vi.fn(),
+    clearClaudeApiKey: vi.fn(),
+    testClaudeConnection: vi.fn()
   };
 }
 

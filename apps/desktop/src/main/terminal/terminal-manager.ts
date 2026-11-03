@@ -1,6 +1,6 @@
 /**
  * Terminal Manager
- * Main orchestrator for terminal lifecycle, Claude integration, and profile management
+ * Main orchestrator for terminal lifecycle and Claude integration
  */
 
 import type { TerminalCreateOptions } from '../../shared/types';
@@ -11,7 +11,6 @@ import type {
   TerminalProcess,
   WindowGetter,
   TerminalOperationResult,
-  TerminalProfileChangeInfo,
 } from './types';
 import * as PtyManager from './pty-manager';
 import * as SessionHandler from './session-handler';
@@ -24,22 +23,13 @@ export class TerminalManager {
   private terminals: Map<string, TerminalProcess> = new Map();
   private getWindow: WindowGetter;
   private saveTimer: NodeJS.Timeout | null = null;
-  private lastNotifiedRateLimitReset: Map<string, string> = new Map();
   private eventCallbacks: TerminalEventHandler.EventHandlerCallbacks;
-  /** Server-side storage for YOLO mode flags during profile migration (sessionId → flag) */
-  private migratedSessionFlags: Map<string, boolean> = new Map();
 
   constructor(getWindow: WindowGetter) {
     this.getWindow = getWindow;
 
     // Create event callbacks with bound context
-    this.eventCallbacks = TerminalEventHandler.createEventCallbacks(
-      this.getWindow,
-      this.lastNotifiedRateLimitReset,
-      async (terminalId, profileId) => {
-        await this.switchClaudeProfile(terminalId, profileId);
-      }
-    );
+    this.eventCallbacks = TerminalEventHandler.createEventCallbacks(this.getWindow);
 
     // Periodically save session data (every 30 seconds)
     this.saveTimer = setInterval(() => {
@@ -105,10 +95,7 @@ export class TerminalManager {
   async destroy(id: string): Promise<TerminalOperationResult> {
     return TerminalLifecycle.destroyTerminal(
       id,
-      this.terminals,
-      (terminalId) => {
-        this.lastNotifiedRateLimitReset.delete(terminalId);
-      }
+      this.terminals
     );
   }
 
@@ -116,7 +103,6 @@ export class TerminalManager {
    * Kill all terminal processes
    */
   async killAll(): Promise<void> {
-    this.migratedSessionFlags.clear();
     this.saveTimer = await TerminalLifecycle.destroyAllTerminals(
       this.terminals,
       this.saveTimer
@@ -151,9 +137,9 @@ export class TerminalManager {
   }
 
   /**
-   * Invoke Claude in a terminal with optional profile override (async - non-blocking)
+   * Invoke the preferred CLI in a terminal (async - non-blocking)
    */
-  async invokeCLIAsync(id: string, cwd?: string, profileId?: string, dangerouslySkipPermissions?: boolean): Promise<void> {
+  async invokeCLIAsync(id: string, cwd?: string, dangerouslySkipPermissions?: boolean): Promise<void> {
     const terminal = this.terminals.get(id);
     if (!terminal) {
       return;
@@ -162,7 +148,6 @@ export class TerminalManager {
     await ClaudeIntegration.invokeCLIAsync(
       terminal,
       cwd,
-      profileId,
       this.getWindow,
       (terminalId, projectPath, startTime) => {
         SessionHandler.captureClaudeSessionId(
@@ -178,10 +163,10 @@ export class TerminalManager {
   }
 
   /**
-   * Invoke Claude in a terminal with optional profile override
+   * Invoke Claude in a terminal
    * @deprecated Use invokeCLIAsync for non-blocking behavior
    */
-  invokeClaude(id: string, cwd?: string, profileId?: string, dangerouslySkipPermissions?: boolean): void {
+  invokeClaude(id: string, cwd?: string, dangerouslySkipPermissions?: boolean): void {
     const terminal = this.terminals.get(id);
     if (!terminal) {
       return;
@@ -190,7 +175,6 @@ export class TerminalManager {
     ClaudeIntegration.invokeClaude(
       terminal,
       cwd,
-      profileId,
       this.getWindow,
       (terminalId, projectPath, startTime) => {
         SessionHandler.captureClaudeSessionId(
@@ -206,56 +190,15 @@ export class TerminalManager {
   }
 
   /**
-   * Switch a terminal to a different Claude profile
-   */
-  async switchClaudeProfile(id: string, profileId: string): Promise<TerminalOperationResult> {
-    const terminal = this.terminals.get(id);
-    if (!terminal) {
-      return { success: false, error: 'Terminal not found' };
-    }
-
-    return ClaudeIntegration.switchClaudeProfile(
-      terminal,
-      profileId,
-      this.getWindow,
-      async (terminalId, cwd, profileId, dangerouslySkipPermissions) => this.invokeCLIAsync(terminalId, cwd, profileId, dangerouslySkipPermissions),
-      (terminalId) => this.lastNotifiedRateLimitReset.delete(terminalId)
-    );
-  }
-
-  /**
    * Resume Claude in a terminal asynchronously (non-blocking)
    */
-  async resumeClaudeAsync(id: string, sessionId?: string, options?: { migratedSession?: boolean }): Promise<void> {
+  async resumeClaudeAsync(id: string, sessionId?: string): Promise<void> {
     const terminal = this.terminals.get(id);
     if (!terminal) {
-      // Clean up stale migratedSessionFlags if terminal no longer exists
-      if (options?.migratedSession && sessionId) {
-        this.migratedSessionFlags.delete(sessionId);
-      }
       return;
     }
 
-    // For migrated sessions, restore YOLO mode from server-side storage
-    // (set during profile change in storeMigratedSessionFlag)
-    if (options?.migratedSession && sessionId) {
-      const storedFlag = this.migratedSessionFlags.get(sessionId);
-      if (storedFlag !== undefined) {
-        terminal.dangerouslySkipPermissions = storedFlag;
-        this.migratedSessionFlags.delete(sessionId);
-      }
-    }
-
-    await ClaudeIntegration.resumeClaudeAsync(terminal, sessionId, this.getWindow, options);
-  }
-
-  /**
-   * Store YOLO mode flag for a session being migrated during profile swap.
-   * Called from the profile change handler before the renderer recreates terminals.
-   * The flag is consumed by resumeClaudeAsync when the new terminal resumes.
-   */
-  storeMigratedSessionFlag(sessionId: string, dangerouslySkipPermissions: boolean): void {
-    this.migratedSessionFlags.set(sessionId, dangerouslySkipPermissions);
+    await ClaudeIntegration.resumeClaudeAsync(terminal, sessionId, this.getWindow);
   }
 
   /**
@@ -397,28 +340,6 @@ export class TerminalManager {
   getClaudeSessionId(id: string): string | undefined {
     const terminal = this.terminals.get(id);
     return terminal?.claudeSessionId;
-  }
-
-  /**
-   * Get info about all terminals for profile change operations.
-   * Returns info needed to migrate sessions and notify frontend.
-   */
-  getTerminalsForProfileChange(): TerminalProfileChangeInfo[] {
-    const result: TerminalProfileChangeInfo[] = [];
-
-    for (const [id, terminal] of this.terminals) {
-      result.push({
-        id,
-        cwd: terminal.cwd,
-        projectPath: terminal.projectPath,
-        claudeSessionId: terminal.claudeSessionId,
-        claudeProfileId: terminal.claudeProfileId,
-        isCLIMode: terminal.isCLIMode,
-        dangerouslySkipPermissions: terminal.dangerouslySkipPermissions
-      });
-    }
-
-    return result;
   }
 
   /**

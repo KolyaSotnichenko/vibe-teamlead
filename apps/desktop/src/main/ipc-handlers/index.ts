@@ -30,10 +30,9 @@ import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
 import { registerMcpHandlers } from './mcp-handlers';
-import { registerProfileHandlers } from './profile-handlers';
 import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
-import { registerCodexAuthHandlers } from './codex-auth-handlers';
+import { registerClaudeCredentialHandlers } from './claude-credential-handlers';
 import { notificationService } from '../notification-service';
 import { setAgentManagerRef } from './utils';
 
@@ -61,8 +60,8 @@ export function setupIpcHandlers(
   // Task handlers
   registerTaskHandlers(agentManager, getMainWindow);
 
-  // Terminal and Claude profile handlers
-  registerTerminalHandlers(terminalManager, getMainWindow);
+  // Terminal handlers
+  registerTerminalHandlers(terminalManager);
 
   // Terminal worktree handlers (isolated development in worktrees)
   registerTerminalWorktreeIpcHandlers();
@@ -118,14 +117,11 @@ export function setupIpcHandlers(
   // MCP server health check handlers
   registerMcpHandlers();
 
-  // API Profile handlers (custom Anthropic-compatible endpoints)
-  registerProfileHandlers();
+  // Claude credential (API key, base URL test)
+  registerClaudeCredentialHandlers();
 
   // Screenshot capture handlers
   registerScreenshotHandlers();
-
-  // Codex OAuth authentication handlers
-  registerCodexAuthHandlers();
 
   console.warn('[IPC] All handler modules registered successfully');
 }
@@ -153,7 +149,6 @@ export {
   registerDebugHandlers,
   registerClaudeCodeHandlers,
   registerMcpHandlers,
-  registerProfileHandlers,
-  registerScreenshotHandlers,
-  registerCodexAuthHandlers
+  registerClaudeCredentialHandlers,
+  registerScreenshotHandlers
 };

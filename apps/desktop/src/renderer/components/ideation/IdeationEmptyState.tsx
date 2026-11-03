@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Lightbulb, Settings2, AlertCircle, Sparkles } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -26,6 +27,7 @@ export function IdeationEmptyState({
   onOpenConfig,
   onToggleIdeationType
 }: IdeationEmptyStateProps) {
+  const { t } = useTranslation('common');
   return (
     <div className="flex h-full items-center justify-center">
       <Card className="w-full max-w-lg p-8 text-center">
@@ -72,11 +74,11 @@ export function IdeationEmptyState({
           Generate Ideas
         </Button>
 
-        {/* Show warning if no provider is configured */}
+        {/* Show warning if no Claude credential is configured */}
         {hasToken === false && !isCheckingToken && (
           <p className="mt-3 text-sm text-muted-foreground">
             <AlertCircle className="h-4 w-4 inline-block mr-1 text-warning" />
-            No AI provider configured. Add a provider account in Settings to generate ideas.
+            {t('ideation.noClaudeCredential')}
           </p>
         )}
       </Card>

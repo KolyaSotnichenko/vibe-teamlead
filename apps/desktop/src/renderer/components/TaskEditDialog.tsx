@@ -41,12 +41,10 @@ import {
   DEFAULT_PHASE_MODELS,
   DEFAULT_PHASE_THINKING,
   FAST_MODE_MODELS,
-  PHASE_KEYS,
-  getProviderPreset
+  PHASE_KEYS
 } from '../../shared/constants';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import { useSettingsStore } from '../stores/settings-store';
-import { useActiveProvider } from '../hooks/useActiveProvider';
 
 /**
  * Props for the TaskEditDialog component
@@ -66,17 +64,14 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   const { t } = useTranslation(['tasks', 'common']);
   // Get selected agent profile from settings for defaults
   const { settings } = useSettingsStore();
-  const { isAnthropic, provider: activeProvider } = useActiveProvider();
 
-  // Resolve per-provider settings (same chain as AgentProfileSettings)
-  const providerConfig = activeProvider ? settings.providerAgentConfig?.[activeProvider] : undefined;
-  const resolvedProfileId = providerConfig?.selectedAgentProfile ?? settings.selectedAgentProfile ?? 'auto';
+  // Resolve the agent profile (same chain as AgentProfileSettings)
+  const resolvedProfileId = settings.selectedAgentProfile ?? 'auto';
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === resolvedProfileId
   ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
-  const providerPreset = activeProvider ? getProviderPreset(activeProvider, resolvedProfileId) : null;
-  const profilePhaseModels = providerPreset?.phaseModels ?? selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
-  const profilePhaseThinking = providerPreset?.phaseThinking ?? selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
+  const profilePhaseModels = selectedProfile.phaseModels ?? DEFAULT_PHASE_MODELS;
+  const profilePhaseThinking = selectedProfile.phaseThinking ?? DEFAULT_PHASE_THINKING;
 
   // Get project path for loading image thumbnails from disk
   const projects = useProjectStore((state) => state.projects);
@@ -137,10 +132,9 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
 
   // Show Fast Mode toggle when any phase uses an Opus model
   const showFastModeToggle = useMemo(() => {
-    if (!isAnthropic) return false;
     if (!phaseModels) return false;
     return PHASE_KEYS.some(phase => FAST_MODE_MODELS.includes(phaseModels[phase]));
-  }, [isAnthropic, phaseModels]);
+  }, [phaseModels]);
 
   // Disable fast mode toggle for tasks that have moved past backlog
   const isFastModeEditable = task.status === 'backlog';
@@ -251,7 +245,6 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     if (impact) metadataUpdates.impact = impact;
     if (model) metadataUpdates.model = model as ModelType;
     if (thinkingLevel) metadataUpdates.thinkingLevel = thinkingLevel as ThinkingLevel;
-    if (activeProvider) metadataUpdates.provider = activeProvider;
     if (phaseModels && phaseThinking) {
       metadataUpdates.isAutoProfile = profileId === 'auto';
       metadataUpdates.phaseModels = phaseModels;

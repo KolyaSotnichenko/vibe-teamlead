@@ -28,57 +28,15 @@
       }
     }
   },
-  "oauth": {
-    "title": "Authentification Claude",
-    "description": "Connectez votre compte Claude pour activer les fonctionnalités IA",
-    "configureTitle": "Configurer l'authentification Claude",
-    "addAccountsDesc": "Ajoutez vos comptes Claude pour activer les fonctionnalités IA",
-    "multiAccountInfo": "Ajoutez plusieurs abonnements Claude pour basculer automatiquement entre eux lorsque vous atteignez les limites.",
-    "noAccountsYet": "Aucun compte configuré",
-    "badges": {
-      "default": "Par défaut",
-      "active": "Actif",
-      "authenticated": "Authentifié",
-      "needsAuth": "Auth requise"
-    },
+  "claude": {
+    "title": "Connecter Claude",
+    "description": "Les agents s’exécutent sur Claude Code avec votre clé API Anthropic. Vous pourrez la modifier plus tard dans Paramètres → Claude.",
+    "whereToGetKey": "Créez une clé sur console.anthropic.com → API keys. L’usage est facturé à ce compte.",
+    "personalMode": "Sur votre propre machine, vous pouvez utiliser un abonnement Claude Pro/Max : collez un jeton obtenu avec `claude setup-token` et activez le mode personnel dans Paramètres → Claude.",
     "buttons": {
-      "authenticate": "Authentifier",
-      "setActive": "Définir actif",
-      "rename": "Renommer",
-      "delete": "Supprimer",
-      "add": "Ajouter",
-      "adding": "Ajout...",
-      "showToken": "Afficher le jeton",
-      "hideToken": "Masquer le jeton",
-      "copyToken": "Copier le jeton",
       "back": "Retour",
       "continue": "Continuer",
-      "skip": "Passer"
-    },
-    "labels": {
-      "accountName": "Nom du compte",
-      "namePlaceholder": "Nom du profil (ex: Travail, Personnel)",
-      "tokenLabel": "Jeton OAuth",
-      "tokenPlaceholder": "Entrez le jeton ici",
-      "tokenHint": "Collez le jeton affiché dans votre terminal après la connexion OAuth."
-    },
-    "keychainTitle": "Stockage sécurisé",
-    "keychainDescription": "Vos jetons sont chiffrés à l'aide du trousseau de clés de votre système. Une demande de mot de passe macOS peut apparaître — cliquez sur « Toujours autoriser » pour ne plus la revoir.",
-    "toast": {
-      "authSuccess": "Profil authentifié avec succès",
-      "authSuccessWithEmail": "Compte : {{email}}",
-      "authSuccessGeneric": "Authentification terminée. Vous pouvez maintenant utiliser ce profil.",
-      "authStartFailed": "Échec du démarrage de l'authentification",
-      "addProfileFailed": "Échec de l'ajout du profil",
-      "tokenSaved": "Jeton enregistré",
-      "tokenSavedDescription": "Votre jeton a été enregistré avec succès.",
-      "tokenSaveFailed": "Échec de l'enregistrement du jeton",
-      "tryAgain": "Veuillez réessayer."
-    },
-    "alerts": {
-      "profileCreatedAuthFailed": "Profil créé mais échec de la préparation de l'authentification : {{error}}",
-      "authPrepareFailed": "Échec de la préparation de l'authentification : {{error}}",
-      "authStartFailedMessage": "Échec du démarrage de l'authentification. Veuillez réessayer."
+      "skip": "Passer pour l’instant"
     }
   },
   "memory": {
@@ -151,7 +109,7 @@
   },
   "steps": {
     "welcome": "Bienvenue",
-    "accounts": "Comptes",
+    "claude": "Claude",
     "devtools": "Outils dev",
     "privacy": "Confidentialité",
     "memory": "Mémoire",
@@ -177,32 +135,6 @@
       "label": "Envoyer des rapports d'erreurs anonymes",
       "description": "Aidez-nous à identifier et corriger les problèmes"
     }
-  },
-  "claudeCode": {
-    "title": "Claude Code CLI",
-    "description": "Installez ou mettez à jour le CLI Claude Code pour activer les fonctionnalités IA",
-    "detecting": "Vérification de l'installation de Claude Code...",
-    "info": {
-      "title": "Qu'est-ce que Claude Code ?",
-      "description": "Claude Code est le CLI officiel d'Anthropic qui alimente les fonctionnalités IA d'Vibe Teamlead. Il fournit une authentification sécurisée et un accès direct aux modèles Claude."
-    },
-    "status": {
-      "installed": "Installé",
-      "outdated": "Mise à jour disponible",
-      "notFound": "Non installé"
-    },
-    "version": {
-      "current": "Version actuelle",
-      "latest": "Dernière version"
-    },
-    "install": {
-      "button": "Installer Claude Code",
-      "updating": "Mettre à jour Claude Code",
-      "inProgress": "Installation...",
-      "success": "Commande d'installation envoyée au terminal. Veuillez terminer l'installation là-bas.",
-      "instructions": "L'installateur s'ouvrira dans votre terminal. Suivez les instructions pour terminer l'installation."
-    },
-    "learnMore": "En savoir plus sur Claude Code"
   },
   "devtools": {
     "title": "Outils de développement",
@@ -230,15 +162,6 @@
     "noToolsDetected": "Aucun outil supplémentaire détecté (VS Code et le terminal système seront utilisés)",
     "custom": "Personnalisé...",
     "saveAndContinue": "Enregistrer et continuer"
-  },
-  "accounts": {
-    "title": "Ajoutez vos comptes IA",
-    "description": "Connectez vos comptes de fournisseurs IA. Vous pouvez en ajouter d'autres plus tard dans les paramètres.",
-    "buttons": {
-      "back": "Retour",
-      "continue": "Continuer",
-      "skip": "Passer pour le moment"
-    }
   },
   "ollama": {
     "notInstalled": {
