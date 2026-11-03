@@ -1,0 +1,58 @@
+{
+  "expand": {
+    "expand": "Розгорнути термінал",
+    "collapse": "Згорнути термінал"
+  },
+  "resume": {
+    "pending": "Можна відновити",
+    "pendingTooltip": "Натисніть, щоб відновити попередній сеанс Claude",
+    "resumeAllSessions": "Відновити всі"
+  },
+  "auth": {
+    "terminalTitle": "Автентифікація: {{profileName}}",
+    "maxTerminalsReached": "Не вдається відкрити термінал автентифікації: досягнуто максимальної кількості терміналів. Спершу закрийте один із терміналів."
+  },
+  "swap": {
+    "inProgress": "Перемикання профілю...",
+    "resumingSession": "Відновлення сеансу Claude...",
+    "sessionResumed": "Сеанс відновлено з новим профілем",
+    "resumeFailed": "Не вдалося відновити сеанс. Можна почати новий.",
+    "noSession": "Профіль перемкнено. Активного сеансу для відновлення немає.",
+    "migrationFailed": "Профіль перемкнено, але перенести сеанс не вдалося. Відкриваємо новий термінал."
+  },
+  "worktree": {
+    "create": "Worktree",
+    "createNew": "Новий worktree",
+    "existing": "Worktree терміналів",
+    "taskWorktrees": "Worktree задач",
+    "otherWorktrees": "Інші",
+    "createTitle": "Створити worktree для термінала",
+    "createDescription": "Створіть ізольований робочий простір для цього термінала. Уся робота відбуватиметься в каталозі worktree.",
+    "name": "Назва worktree",
+    "namePlaceholder": "my-feature",
+    "nameRequired": "Вкажіть назву worktree",
+    "nameInvalid": "Назва має починатися й закінчуватися літерою або цифрою",
+    "nameHelp": "Малі латинські літери, цифри, дефіси та підкреслення (пробіли стають дефісами)",
+    "associateTask": "Прив’язати до задачі",
+    "selectTask": "Виберіть задачу...",
+    "noTask": "Без задачі (окремий worktree)",
+    "createBranch": "Створити гілку Git",
+    "branchHelp": "Буде створено гілку: {{branch}}",
+    "baseBranch": "Базова гілка",
+    "selectBaseBranch": "Виберіть базову гілку...",
+    "searchBranch": "Пошук гілок...",
+    "noBranchFound": "Гілку не знайдено",
+    "useProjectDefault": "Типова для проєкту ({{branch}})",
+    "baseBranchHelp": "Гілка, від якої буде створено worktree",
+    "openInIDE": "Відкрити в IDE",
+    "maxReached": "Досягнуто максимуму — 12 worktree для терміналів",
+    "alreadyExists": "Worktree з такою назвою вже існує",
+    "searchPlaceholder": "Пошук worktree...",
+    "noResults": "Worktree не знайдено",
+    "deleteTitle": "Видалити worktree?",
+    "deleteDescription": "Worktree і його гілку буде видалено назавжди. Усі незакомічені зміни буде втрачено.",
+    "detached": "(від’єднано)",
+    "remotePushFailed": "Відстеження віддаленої гілки не налаштовано",
+    "remotePushFailedDescription": "Worktree створено, але гілку не вдалося надіслати у віддалений репозиторій. Можливо, доведеться вручну виконати git push -u."
+  }
+}

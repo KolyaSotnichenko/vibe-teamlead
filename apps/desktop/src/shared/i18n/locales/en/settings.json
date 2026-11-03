@@ -2,7 +2,8 @@
   "title": "Settings",
   "tabs": {
     "app": "App Settings",
-    "project": "Project Settings"
+    "project": "Project Settings",
+    "subtitle": "App & project"
   },
   "sections": {
     "appearance": {

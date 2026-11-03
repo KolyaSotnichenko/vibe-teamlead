@@ -1,0 +1,99 @@
+{
+  "sections": {
+    "project": "Проєкт",
+    "tools": "Інструменти",
+    "build": "Розробка",
+    "plan": "Планування",
+    "knowledge": "Знання"
+  },
+  "items": {
+    "kanban": "Канбан-дошка",
+    "terminals": "Термінали агентів",
+    "insights": "Аналітика",
+    "roadmap": "Дорожня карта",
+    "ideation": "Ідеї",
+    "changelog": "Журнал змін",
+    "context": "Контекст",
+    "githubIssues": "GitHub Issues",
+    "githubPRs": "GitHub PR",
+    "gitlabIssues": "GitLab Issues",
+    "gitlabMRs": "GitLab MR",
+    "worktrees": "Worktree",
+    "agentTools": "Огляд MCP"
+  },
+  "actions": {
+    "settings": "Налаштування",
+    "help": "Довідка та відгуки",
+    "newTask": "Створити",
+    "collapseSidebar": "Згорнути бічну панель",
+    "expandSidebar": "Розгорнути бічну панель",
+    "sponsor": "Підтримати нас",
+    "importBrief": "Імпортувати бриф"
+  },
+  "tooltips": {
+    "settings": "Налаштування застосунку",
+    "help": "Довідка та відгуки"
+  },
+  "messages": {
+    "initializeToCreateTasks": "Ініціалізуйте Vibe Teamlead, щоб створювати задачі"
+  },
+  "updateBanner": {
+    "title": "Доступне оновлення",
+    "version": "Версія {{version}} готова",
+    "updateAndRestart": "Оновити й перезапустити",
+    "installAndRestart": "Встановити й перезапустити",
+    "downloading": "Завантаження...",
+    "dismiss": "Закрити",
+    "downloadError": "Не вдалося завантажити оновлення",
+    "readOnlyVolumeWarning": "Перемістіть застосунок у папку «Програми», щоб оновити"
+  },
+  "claudeCode": {
+    "checking": "Перевірка Claude Code...",
+    "upToDate": "Claude Code актуальний",
+    "updateAvailable": "Доступне оновлення Claude Code",
+    "notInstalled": "Claude Code не встановлено",
+    "error": "Помилка перевірки Claude Code",
+    "installed": "Встановлено",
+    "outdated": "Є оновлення",
+    "missing": "Не встановлено",
+    "current": "Поточна",
+    "latest": "Остання",
+    "path": "Шлях",
+    "lastChecked": "Остання перевірка",
+    "learnMore": "Докладніше про Claude Code",
+    "learnMoreAriaLabel": "Докладніше про Claude Code (відкриється в новому вікні)",
+    "viewChangelog": "Журнал змін Claude Code",
+    "viewChangelogAriaLabel": "Журнал змін Claude Code (відкриється в новому вікні)",
+    "updateWarningTitle": "Оновити Claude Code?",
+    "updateWarningDescription": "Оновлення закриє всі запущені сеанси Claude Code. Незбережену роботу в цих сеансах може бути втрачено. Збережіть роботу, перш ніж продовжити.",
+    "updateWarningTerminalNote": "Відкриється вікно термінала з командою встановлення. Дочекайтеся завершення встановлення, перш ніж продовжити.",
+    "updateAnyway": "Відкрити термінал і оновити",
+    "switchVersion": "Змінити версію",
+    "selectVersion": "Виберіть версію",
+    "loadingVersions": "Завантаження версій...",
+    "failedToLoadVersions": "Не вдалося завантажити версії",
+    "installingVersion": "Встановлення версії {{version}}...",
+    "rollbackWarningTitle": "Перейти на версію {{version}}?",
+    "rollbackWarningDescription": "Зміна версії закриє всі запущені сеанси Claude Code. Незбережену роботу в цих сеансах може бути втрачено. Збережіть роботу, перш ніж продовжити.",
+    "rollbackWarningTerminalNote": "Відкриється вікно термінала з командою встановлення. Дочекайтеся завершення встановлення, перш ніж продовжити.",
+    "switchAnyway": "Відкрити термінал і змінити",
+    "currentVersion": "Поточна",
+    "switchInstallation": "Змінити встановлення",
+    "selectInstallation": "Виберіть встановлення",
+    "loadingInstallations": "Завантаження встановлень...",
+    "failedToLoadInstallations": "Не вдалося завантажити встановлення",
+    "activeInstallation": "Активне",
+    "pathChangeWarningTitle": "Змінити встановлення CLI?",
+    "pathChangeWarningDescription": "Після зміни встановлення CLI використовуватиметься інший бінарний файл Claude Code. Запущені сеанси працюватимуть із попереднім встановленням до перезапуску.",
+    "switchInstallationConfirm": "Змінити",
+    "versionUnknown": "версія невідома"
+  },
+  "teamStatus": {
+    "title": "Команда зараз",
+    "working": "Працюють",
+    "waiting": "Чекають на вас",
+    "review": "Готово до перевірки",
+    "queued": "У черзі",
+    "idle": "Простій — запустіть задачу, щоб команда взялася до роботи"
+  }
+}

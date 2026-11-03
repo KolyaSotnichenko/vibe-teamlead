@@ -8,6 +8,7 @@
  */
 
 import { app } from 'electron';
+import { resolveSupportedLanguage } from '../shared/constants/i18n';
 
 // Current app language, defaults to 'en'
 // Updated via setAppLanguage() when renderer notifies of language change
@@ -26,7 +27,7 @@ export function getAppLanguage(): string {
  * Called by IPC handler when renderer changes language.
  */
 export function setAppLanguage(language: string): void {
-  currentAppLanguage = language;
+  currentAppLanguage = resolveSupportedLanguage(language);
 }
 
 /**
@@ -37,8 +38,8 @@ export function initAppLanguage(): void {
   try {
     // app.getLocale() may not be available in test environments
     const osLocale = app?.getLocale?.() || 'en';
-    // Extract base language (e.g., 'en-US' -> 'en')
-    currentAppLanguage = osLocale.split('-')[0] || 'en';
+    // Base language of the OS locale ('uk-UA' -> 'uk') when the app ships it, otherwise English
+    currentAppLanguage = resolveSupportedLanguage(undefined, osLocale);
   } catch {
     currentAppLanguage = 'en';
   }

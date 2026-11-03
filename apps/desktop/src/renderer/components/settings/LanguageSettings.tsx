@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 import { Label } from '../ui/label';
 import { SettingsSection } from './SettingsSection';
 import { useSettingsStore } from '../../stores/settings-store';
-import { AVAILABLE_LANGUAGES, type SupportedLanguage } from '../../../shared/constants/i18n';
+import { AVAILABLE_LANGUAGES, resolveSupportedLanguage, type SupportedLanguage } from '../../../shared/constants/i18n';
 import type { AppSettings } from '../../../shared/types';
 
 interface LanguageSettingsProps {
@@ -20,7 +20,7 @@ export function LanguageSettings({ settings, onSettingsChange }: LanguageSetting
   const { t, i18n } = useTranslation('settings');
   const updateStoreSettings = useSettingsStore((state) => state.updateSettings);
 
-  const currentLanguage = settings.language ?? 'en';
+  const currentLanguage = resolveSupportedLanguage(settings.language, navigator.language);
 
   const handleLanguageChange = (newLanguage: SupportedLanguage) => {
     // Update local draft state

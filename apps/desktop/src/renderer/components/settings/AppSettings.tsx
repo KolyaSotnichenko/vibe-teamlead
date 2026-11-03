@@ -245,7 +245,7 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
             {t('title')}
           </FullScreenDialogTitle>
           <FullScreenDialogDescription>
-            {t('tabs.app')} & {t('tabs.project')}
+            {t('tabs.subtitle')}
           </FullScreenDialogDescription>
         </FullScreenDialogHeader>
 

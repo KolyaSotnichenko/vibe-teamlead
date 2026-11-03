@@ -14,18 +14,18 @@ import enTaskReview from './locales/en/taskReview.json';
 import enTerminal from './locales/en/terminal.json';
 import enErrors from './locales/en/errors.json';
 
-// Import French translation resources
-import frCommon from './locales/fr/common.json';
-import frNavigation from './locales/fr/navigation.json';
-import frSettings from './locales/fr/settings.json';
-import frTasks from './locales/fr/tasks.json';
-import frWelcome from './locales/fr/welcome.json';
-import frOnboarding from './locales/fr/onboarding.json';
-import frDialogs from './locales/fr/dialogs.json';
-import frGitlab from './locales/fr/gitlab.json';
-import frTaskReview from './locales/fr/taskReview.json';
-import frTerminal from './locales/fr/terminal.json';
-import frErrors from './locales/fr/errors.json';
+// Import Ukrainian translation resources
+import ukCommon from './locales/uk/common.json';
+import ukNavigation from './locales/uk/navigation.json';
+import ukSettings from './locales/uk/settings.json';
+import ukTasks from './locales/uk/tasks.json';
+import ukWelcome from './locales/uk/welcome.json';
+import ukOnboarding from './locales/uk/onboarding.json';
+import ukDialogs from './locales/uk/dialogs.json';
+import ukGitlab from './locales/uk/gitlab.json';
+import ukTaskReview from './locales/uk/taskReview.json';
+import ukTerminal from './locales/uk/terminal.json';
+import ukErrors from './locales/uk/errors.json';
 
 export const defaultNS = 'common';
 
@@ -43,18 +43,18 @@ export const resources = {
     terminal: enTerminal,
     errors: enErrors
   },
-  fr: {
-    common: frCommon,
-    navigation: frNavigation,
-    settings: frSettings,
-    tasks: frTasks,
-    welcome: frWelcome,
-    onboarding: frOnboarding,
-    dialogs: frDialogs,
-    gitlab: frGitlab,
-    taskReview: frTaskReview,
-    terminal: frTerminal,
-    errors: frErrors
+  uk: {
+    common: ukCommon,
+    navigation: ukNavigation,
+    settings: ukSettings,
+    tasks: ukTasks,
+    welcome: ukWelcome,
+    onboarding: ukOnboarding,
+    dialogs: ukDialogs,
+    gitlab: ukGitlab,
+    taskReview: ukTaskReview,
+    terminal: ukTerminal,
+    errors: ukErrors
   }
 } as const;
 
@@ -64,6 +64,7 @@ i18n
     resources,
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
+    supportedLngs: ['en', 'uk'],
     defaultNS,
     ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors'],
     interpolation: {

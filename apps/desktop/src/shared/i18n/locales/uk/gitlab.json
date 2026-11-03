@@ -1,0 +1,208 @@
+{
+  "title": "GitLab Issues",
+  "states": {
+    "opened": "Відкрита",
+    "closed": "Закрита"
+  },
+  "complexity": {
+    "simple": "Проста",
+    "standard": "Звичайна",
+    "complex": "Складна"
+  },
+  "header": {
+    "open": "відкритих",
+    "searchPlaceholder": "Пошук issues..."
+  },
+  "filters": {
+    "opened": "Відкриті",
+    "closed": "Закриті",
+    "all": "Усі"
+  },
+  "empty": {
+    "noMatch": "Жодна issue не відповідає пошуку",
+    "selectIssue": "Виберіть issue, щоб переглянути подробиці"
+  },
+  "notConnected": {
+    "title": "GitLab не підключено",
+    "description": "Вкажіть токен GitLab і проєкт у налаштуваннях проєкту, щоб синхронізувати issues.",
+    "openSettings": "Відкрити налаштування"
+  },
+  "detail": {
+    "notes": "коментарів",
+    "viewTask": "Переглянути задачу",
+    "createTask": "Створити задачу",
+    "taskLinked": "Задачу прив’язано",
+    "taskId": "ID задачі",
+    "description": "Опис",
+    "noDescription": "Опису немає.",
+    "assignees": "Виконавці",
+    "milestone": "Віха"
+  },
+  "investigation": {
+    "title": "Створити задачу з issue",
+    "issuePrefix": "Issue",
+    "description": "Створіть задачу з цієї issue GitLab. Задачу буде додано на канбан-дошку в колонку «Беклог».",
+    "selectNotes": "Виберіть коментарі для включення",
+    "deselectAll": "Зняти вибір",
+    "selectAll": "Вибрати всі",
+    "willInclude": "Задача міститиме:",
+    "includeTitle": "Назву та опис issue",
+    "includeLink": "Посилання на issue в GitLab",
+    "includeLabels": "Мітки й метадані issue",
+    "noNotes": "Коментарів немає (у цій issue немає коментарів)",
+    "failedToLoadNotes": "Не вдалося завантажити коментарі",
+    "taskCreated": "Задачу створено! Її видно на канбан-дошці.",
+    "creating": "Створення...",
+    "cancel": "Скасувати",
+    "done": "Готово",
+    "close": "Закрити"
+  },
+  "settings": {
+    "enableIssues": "Увімкнути GitLab Issues",
+    "enableIssuesDescription": "Синхронізувати issues з GitLab і автоматично створювати задачі",
+    "instance": "Інстанс GitLab",
+    "instanceDescription": "Використовуйте https://gitlab.com або URL-адресу власного інстансу",
+    "connectedVia": "Підключено через GitLab CLI",
+    "authenticatedAs": "Ви ввійшли як",
+    "useDifferentToken": "Використати інший токен",
+    "authentication": "Автентифікація GitLab",
+    "useManualToken": "Ввести токен вручну",
+    "authenticating": "Автентифікація через glab CLI...",
+    "browserWindow": "Має відкритися вікно браузера для входу.",
+    "personalAccessToken": "Персональний токен доступу",
+    "useOAuth": "Використати OAuth",
+    "tokenScope": "Створіть токен з областю",
+    "scopeApi": "api",
+    "scopeFrom": "на сторінці",
+    "gitlabSettings": "Налаштування GitLab",
+    "project": "Проєкт",
+    "enterManually": "Ввести вручну",
+    "loadingProjects": "Завантаження проєктів...",
+    "selectProject": "Виберіть проєкт...",
+    "searchProjects": "Пошук проєктів...",
+    "noMatchingProjects": "Немає відповідних проєктів",
+    "noProjectsFound": "Проєктів не знайдено",
+    "selected": "Вибрано",
+    "projectFormat": "Формат:",
+    "projectFormatExample": "(наприклад, gitlab-org/gitlab)",
+    "connectionStatus": "Стан підключення",
+    "checking": "Перевірка...",
+    "connectedTo": "Підключено до",
+    "notConnected": "Не підключено",
+    "issuesAvailable": "Issues доступні",
+    "issuesAvailableDescription": "Відкрийте GitLab Issues на бічній панелі, щоб переглядати, досліджувати issues і створювати з них задачі.",
+    "defaultBranch": "Типова гілка",
+    "defaultBranchDescription": "Базова гілка для створення worktree задач",
+    "loadingBranches": "Завантаження гілок...",
+    "autoDetect": "Визначати автоматично (main/master)",
+    "searchBranches": "Пошук гілок...",
+    "noMatchingBranches": "Немає відповідних гілок",
+    "noBranchesFound": "Гілок не знайдено",
+    "branchFromNote": "Усі нові задачі відгалужуватимуться від",
+    "autoSyncOnLoad": "Автосинхронізація під час завантаження",
+    "autoSyncDescription": "Автоматично отримувати issues, коли відкривається проєкт",
+    "cli": {
+      "required": "Потрібен GitLab CLI",
+      "notInstalled": "Для автентифікації через OAuth потрібен GitLab CLI (glab). Встановіть його, щоб скористатися варіантом «Використати OAuth».",
+      "installButton": "Встановити glab",
+      "installing": "Встановлення...",
+      "installSuccess": "Встановлення запущено в терміналі. Завершіть його й натисніть «Оновити».",
+      "refresh": "Оновити",
+      "learnMore": "Докладніше",
+      "installed": "GitLab CLI встановлено:"
+    }
+  },
+  "mergeRequests": {
+    "title": "GitLab Merge Requests",
+    "newMR": "Новий merge request",
+    "selectMR": "Виберіть merge request, щоб переглянути подробиці",
+    "states": {
+      "opened": "Відкритий",
+      "closed": "Закритий",
+      "merged": "Злитий",
+      "locked": "Заблокований"
+    },
+    "filters": {
+      "opened": "Відкриті",
+      "closed": "Закриті",
+      "merged": "Злиті",
+      "all": "Усі"
+    }
+  },
+  "mrReview": {
+    "runReview": "Запустити AI-рев’ю",
+    "reviewing": "Перевірка...",
+    "followupReview": "Повторне рев’ю",
+    "newCommits": "новий коміт",
+    "newCommitsPlural": "нових комітів",
+    "cancel": "Скасувати",
+    "postFindings": "Опублікувати зауваження",
+    "posting": "Публікація...",
+    "postedTo": "Опубліковано в GitLab",
+    "approve": "Схвалити",
+    "approving": "Схвалення...",
+    "merge": "Злити MR",
+    "merging": "Злиття...",
+    "aiReviewResult": "Результат AI-рев’ю",
+    "followupReviewResult": "Повторне рев’ю",
+    "description": "Опис",
+    "noDescription": "Опису немає.",
+    "labels": "Мітки",
+    "status": {
+      "notReviewed": "Не перевірено",
+      "notReviewedDesc": "Запустіть AI-рев’ю, щоб проаналізувати цей MR",
+      "reviewComplete": "Рев’ю завершено",
+      "reviewCompleteDesc": "зауважень знайдено. Виберіть і опублікуйте їх у GitLab.",
+      "waitingForChanges": "Очікує змін",
+      "waitingForChangesDesc": "зауважень опубліковано. Очікуємо, поки автор усуне проблеми.",
+      "readyToMerge": "Готово до злиття",
+      "readyToMergeDesc": "Блокувальних проблем не знайдено. Цей MR можна злити.",
+      "needsAttention": "Потребує уваги",
+      "needsAttentionDesc": "зауважень потрібно опублікувати в GitLab.",
+      "readyForFollowup": "Готово до повторного рев’ю",
+      "readyForFollowupDesc": "з моменту рев’ю. Запустіть повторне рев’ю, щоб перевірити, чи проблеми усунено.",
+      "blockingIssues": "Блокувальні проблеми",
+      "blockingIssuesDesc": "блокувальних проблем досі відкрито."
+    },
+    "overallStatus": {
+      "approve": "Схвалено",
+      "requestChanges": "Потрібні зміни",
+      "comment": "Коментар"
+    },
+    "resolution": {
+      "resolved": "усунено",
+      "stillOpen": "досі відкрито",
+      "newIssue": "нова проблема",
+      "newIssues": "нові проблеми"
+    }
+  },
+  "findings": {
+    "summary": "вибрано",
+    "selectCriticalHigh": "Вибрати блокувальні/обов’язкові",
+    "selectAll": "Вибрати всі",
+    "clear": "Очистити",
+    "noIssues": "Проблем не знайдено! Код має гарний вигляд.",
+    "suggestedFix": "Запропоноване виправлення:",
+    "posted": "Опубліковано",
+    "severity": {
+      "critical": "Блокувальне",
+      "criticalDesc": "Обов’язково виправити",
+      "high": "Обов’язкове",
+      "highDesc": "Варто виправити",
+      "medium": "Рекомендоване",
+      "mediumDesc": "Покращить якість",
+      "low": "Пропозиція",
+      "lowDesc": "На розгляд"
+    },
+    "category": {
+      "security": "Безпека",
+      "quality": "Якість",
+      "style": "Стиль",
+      "test": "Тести",
+      "docs": "Документація",
+      "pattern": "Патерн",
+      "performance": "Продуктивність",
+      "logic": "Логіка"
+    }
+  }
+}

@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, DEFAULT_AGENT_PROFILES, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, sanitizeThinkingLevel, VALID_THINKING_LEVELS } from '../../shared/constants';
 import { setAppLanguage } from '../app-language';
+import { isSupportedLanguage, resolveSupportedLanguage } from '../../shared/constants/i18n';
 import type {
   AppSettings,
   IPCResult
@@ -166,6 +167,13 @@ export function registerSettingsHandlers(
           }
         }
         settings._migratedUltrathinkToHigh = true;
+        needsSave = true;
+      }
+
+      // Migration: A UI language that is no longer shipped (French was replaced by
+      // Ukrainian) falls back to the OS language when available, otherwise English
+      if (settings.language !== undefined && !isSupportedLanguage(settings.language)) {
+        settings.language = resolveSupportedLanguage(settings.language, app.getLocale?.());
         needsSave = true;
       }
 
@@ -647,7 +655,7 @@ export function registerSettingsHandlers(
         setAppLanguage(language);
 
         // Get spell check languages for this app language
-        const spellCheckLanguages = SPELL_CHECK_LANGUAGE_MAP[language] || [DEFAULT_SPELL_CHECK_LANGUAGE];
+        const spellCheckLanguages = SPELL_CHECK_LANGUAGE_MAP[resolveSupportedLanguage(language)] || [DEFAULT_SPELL_CHECK_LANGUAGE];
 
         // Get available languages on this system
         const availableLanguages = session.defaultSession.availableSpellCheckerLanguages;

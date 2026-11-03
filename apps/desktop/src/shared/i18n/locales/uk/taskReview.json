@@ -1,0 +1,186 @@
+{
+  "terminal": {
+    "openTerminal": "Відкрити термінал",
+    "openInbuilt": "Відкрити у вбудованому терміналі",
+    "openExternal": "Відкрити в зовнішньому терміналі"
+  },
+  "merge": {
+    "branchHasNewCommits": "У гілці {{branch}} є нових комітів: {{count}}.",
+    "branchHasNewCommits_one": "У гілці {{branch}} є {{count}} новий коміт.",
+    "branchHasNewCommits_few": "У гілці {{branch}} є {{count}} нові коміти.",
+    "branchHasNewCommits_many": "У гілці {{branch}} є {{count}} нових комітів.",
+    "branchHasNewCommits_other": "У гілці {{branch}} є {{count}} нового коміту.",
+    "branchHasNewCommitsSinceWorktree": "Відколи створено цей worktree, у гілці {{branch}} з’явилося нових комітів: {{count}}.",
+    "branchHasNewCommitsSinceWorktree_one": "Відколи створено цей worktree, у гілці {{branch}} з’явився {{count}} новий коміт.",
+    "branchHasNewCommitsSinceWorktree_few": "Відколи створено цей worktree, у гілці {{branch}} з’явилося {{count}} нові коміти.",
+    "branchHasNewCommitsSinceWorktree_many": "Відколи створено цей worktree, у гілці {{branch}} з’явилося {{count}} нових комітів.",
+    "branchHasNewCommitsSinceWorktree_other": "Відколи створено цей worktree, у гілці {{branch}} з’явилося {{count}} нового коміту.",
+    "filesNeedMerging": "Файлів, які потрібно злити: {{count}}.",
+    "filesNeedMerging_one": "{{count}} файл потрібно злити.",
+    "filesNeedMerging_few": "{{count}} файли потрібно злити.",
+    "filesNeedMerging_many": "{{count}} файлів потрібно злити.",
+    "filesNeedMerging_other": "{{count}} файлу потрібно злити.",
+    "filesNeedIntelligentMerging": "Файлів, які потребуватимуть розумного злиття: {{count}}:",
+    "filesNeedIntelligentMerging_one": "{{count}} файл потребуватиме розумного злиття:",
+    "filesNeedIntelligentMerging_few": "{{count}} файли потребуватимуть розумного злиття:",
+    "filesNeedIntelligentMerging_many": "{{count}} файлів потребуватимуть розумного злиття:",
+    "filesNeedIntelligentMerging_other": "{{count}} файлу потребуватимуть розумного злиття:",
+    "branchHasNewCommitsSinceBuild": "Відколи почалася ця збірка, у гілці {{branch}} з’явилося нових комітів: {{count}}.",
+    "branchHasNewCommitsSinceBuild_one": "Відколи почалася ця збірка, у гілці {{branch}} з’явився {{count}} новий коміт.",
+    "branchHasNewCommitsSinceBuild_few": "Відколи почалася ця збірка, у гілці {{branch}} з’явилося {{count}} нові коміти.",
+    "branchHasNewCommitsSinceBuild_many": "Відколи почалася ця збірка, у гілці {{branch}} з’явилося {{count}} нових комітів.",
+    "branchHasNewCommitsSinceBuild_other": "Відколи почалася ця збірка, у гілці {{branch}} з’явилося {{count}} нового коміту.",
+    "filesNeedAIMergeDueToRenames": "Файлів, які потребують злиття з AI через перейменування ({{renameCount}}): {{count}}.",
+    "filesNeedAIMergeDueToRenames_one": "{{count}} файл потребує злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenames_few": "{{count}} файли потребують злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenames_many": "{{count}} файлів потребують злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenames_other": "{{count}} файлу потребують злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenamesPlural": "Файлів, які потребують злиття з AI через перейменування ({{renameCount}}): {{count}}.",
+    "filesNeedAIMergeDueToRenamesPlural_one": "{{count}} файл потребує злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenamesPlural_few": "{{count}} файли потребують злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenamesPlural_many": "{{count}} файлів потребують злиття з AI через перейменування файлів ({{renameCount}}).",
+    "filesNeedAIMergeDueToRenamesPlural_other": "{{count}} файлу потребують злиття з AI через перейменування файлів ({{renameCount}}).",
+    "fileRenamesDetected": "Виявлено перейменувань файлів: {{count}} — AI виконає злиття.",
+    "fileRenamesDetected_one": "Виявлено {{count}} перейменування файлу — AI виконає злиття.",
+    "fileRenamesDetected_few": "Виявлено {{count}} перейменування файлів — AI виконає злиття.",
+    "fileRenamesDetected_many": "Виявлено {{count}} перейменувань файлів — AI виконає злиття.",
+    "fileRenamesDetected_other": "Виявлено {{count}} перейменування файлів — AI виконає злиття.",
+    "filesRenamedOrMoved": "Можливо, файли було перейменовано або переміщено — AI виконає злиття.",
+    "alreadyMergedTitle": "Зміни вже є у вашій гілці",
+    "alreadyMergedDescription": "Схоже, ці зміни вже є у вашій поточній гілці. Задачу можна сміливо позначити як виконану.",
+    "alreadyMergedTooltip": "Зміни задачі вже є у вашій гілці. Позначення як виконаної очистить worktree без злиття.",
+    "matchingFiles": "Збіжні файли",
+    "supersededTitle": "Зміни застаріли",
+    "supersededDescription": "У поточній гілці є новіша версія цих змін. Можна відхилити задачу або переглянути порівняння.",
+    "supersededCompareTooltip": "Переглянути докладне порівняння: чим поточна гілка відрізняється від змін цієї задачі.",
+    "supersededDiscardTooltip": "Видалити worktree цієї задачі, оскільки зміни більше не потрібні.",
+    "status": {
+      "branchDiverged": "Гілки розійшлися",
+      "aiWillResolve": "AI розв’яже",
+      "filesRenamed": "Файли перейменовано",
+      "branchBehind": "Гілка відстає",
+      "readyToMerge": "Готово до злиття",
+      "files": "файлів",
+      "file": "файл",
+      "conflict": "конфлікт",
+      "conflicts": "конфліктів",
+      "details": "Подробиці",
+      "refresh": "Оновити",
+      "stageOnly": "Лише проіндексувати (переглянути в IDE перед комітом)",
+      "discardBuild": "Відхилити збірку"
+    },
+    "buttons": {
+      "stageWithAIMerge": "Проіндексувати зі злиттям AI",
+      "mergeWithAI": "Злити з AI",
+      "stageTo": "Проіндексувати в {{branch}}",
+      "mergeTo": "Злити в {{branch}}",
+      "resolving": "Розв’язання...",
+      "staging": "Індексування...",
+      "merging": "Злиття...",
+      "completing": "Завершення..."
+    },
+    "actions": {
+      "markAsDone": "Позначити як виконану",
+      "discardTask": "Відхилити задачу",
+      "viewComparison": "Переглянути порівняння"
+    }
+  },
+  "pr": {
+    "title": "Створити pull request",
+    "description": "Надіслати гілку й створити pull request для «{{taskTitle}}»",
+    "errors": {
+      "unknown": "Під час створення pull request сталася невідома помилка",
+      "invalidBranchName": "Назва гілки містить недопустимі символи. Використовуйте лише літери, цифри, дефіси (-), підкреслення (_) і скісні риски (/).",
+      "emptyTitle": "Назва pull request не може бути порожньою."
+    },
+    "success": {
+      "created": "Pull request створено!",
+      "alreadyExists": "Для цієї гілки вже існує pull request"
+    },
+    "actions": {
+      "retry": "Повторити",
+      "creating": "Створення PR...",
+      "create": "Створити pull request"
+    },
+    "labels": {
+      "sourceBranch": "Вихідна гілка",
+      "targetBranch": "Цільова гілка",
+      "commits": "Коміти",
+      "changes": "Зміни",
+      "prTitle": "Назва PR (необов’язково)",
+      "draftPR": "Створити як чернетку PR",
+      "unknown": "Невідомо"
+    },
+    "hints": {
+      "targetBranch": "Залиште порожнім, щоб використати типову гілку",
+      "prTitle": "Залиште порожнім, щоб використати назву задачі"
+    }
+  },
+  "mergeProgress": {
+    "stages": {
+      "analyzing": "Аналіз змін",
+      "detectingConflicts": "Пошук конфліктів",
+      "resolving": "Розв’язання конфліктів",
+      "validating": "Перевірка злиття",
+      "complete": "Злиття завершено",
+      "error": "Не вдалося злити",
+      "stalled": "Злиття зупинилося"
+    },
+    "conflictCounter": "Знайдено: {{found}}, розв’язано: {{resolved}}",
+    "currentFile": "Поточний файл",
+    "viewLogs": "Показати журнал",
+    "hideLogs": "Сховати журнал",
+    "logTypes": {
+      "info": "Інформація",
+      "warning": "Попередження",
+      "error": "Помилка",
+      "conflict": "Конфлікт",
+      "resolution": "Розв’язання"
+    },
+    "completionMessage": "Усі зміни успішно злито.",
+    "errorMessage": "Під час злиття сталася помилка."
+  },
+  "stagedSuccess": {
+    "title": "Зміни проіндексовано",
+    "aiCommitMessage": "Повідомлення коміту, згенероване AI",
+    "copied": "Скопійовано!",
+    "copy": "Скопіювати",
+    "editHint": "За потреби відредагуйте, потім скопіюйте й використайте з",
+    "nextSteps": "Наступні кроки:",
+    "reviewChanges": "Перегляньте проіндексовані зміни за допомогою",
+    "commitWhenReady": "Зробіть коміт, коли будете готові:",
+    "pushToRemote": "Надішліть у віддалений репозиторій, коли все влаштовує",
+    "cleaningUp": "Очищення...",
+    "markingDone": "Позначення як виконаної...",
+    "resetting": "Скидання...",
+    "deleteWorktreeAndMarkDone": "Видалити worktree і позначити як виконану",
+    "markDoneOnly": "Лише позначити як виконану",
+    "markAsDone": "Позначити як виконану",
+    "reviewAgain": "Переглянути ще раз",
+    "commitMessagePlaceholder": "Повідомлення коміту...",
+    "worktreeExplanation": "«Видалити worktree і позначити як виконану» очищає ізольований робочий простір. «Лише позначити як виконану» залишає його для довідки.",
+    "errors": {
+      "failedToDeleteWorktree": "Не вдалося видалити worktree",
+      "worktreeDeletedButStatusFailed": "Worktree видалено, але не вдалося оновити стан задачі: {{error}}",
+      "failedToMarkAsDone": "Не вдалося позначити як виконану",
+      "failedToResetStagedState": "Не вдалося скинути стан індексування"
+    }
+  },
+  "bulkPR": {
+    "title": "Створити pull request",
+    "description": "Створити pull request для вибраних задач: {{count}}",
+    "creating": "Створення PR {{current}} з {{total}}...",
+    "creatingPR": "Створення PR {{current}} з {{total}}",
+    "resultsDescription": "Успішно: {{success}}, з помилкою: {{failed}}",
+    "tasksToProcess": "Задачі до обробки",
+    "targetBranchHint": "Залиште порожнім, щоб для кожної задачі використати її типову гілку. Застосовується до всіх PR.",
+    "createAll": "Створити PR: {{count}}",
+    "completed": "завершено",
+    "succeeded": "успішно",
+    "failed": "з помилкою",
+    "skipped": "пропущено",
+    "alreadyExisted": "уже існував",
+    "noWorktree": "Для цієї задачі не знайдено worktree",
+    "resultsDescriptionWithSkipped": "Успішно: {{success}}, пропущено: {{skipped}}, з помилкою: {{failed}}"
+  }
+}

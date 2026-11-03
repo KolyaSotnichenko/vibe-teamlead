@@ -154,7 +154,7 @@ describe('formatSince', () => {
     // Compare with Intl itself: the exact wording depends on the ICU version
     const rtf = (locale: string) => new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'narrow' });
     expect(formatSince(new Date(now - 5 * 60_000), 'en', now)).toBe(rtf('en').format(-5, 'minute'));
-    expect(formatSince(new Date(now - 3 * 3_600_000), 'fr', now)).toBe(rtf('fr').format(-3, 'hour'));
+    expect(formatSince(new Date(now - 3 * 3_600_000), 'uk', now)).toBe(rtf('uk').format(-3, 'hour'));
     expect(formatSince(new Date(now - 10_000), 'en', now)).toBe(rtf('en').format(0, 'second'));
   });
   it('returns null without a valid date', () => {

@@ -1,0 +1,751 @@
+{
+  "title": "Налаштування",
+  "tabs": {
+    "app": "Застосунок",
+    "project": "Проєкт",
+    "subtitle": "Застосунок і проєкт"
+  },
+  "sections": {
+    "appearance": {
+      "title": "Вигляд",
+      "description": "Налаштуйте вигляд Vibe Teamlead"
+    },
+    "display": {
+      "title": "Відображення",
+      "description": "Розмір елементів інтерфейсу"
+    },
+    "language": {
+      "title": "Мова",
+      "description": "Виберіть мову інтерфейсу"
+    },
+    "devtools": {
+      "title": "Інструменти розробника",
+      "description": "IDE і термінал"
+    },
+    "agent": {
+      "title": "Агенти",
+      "description": "Типова модель і фреймворк"
+    },
+    "paths": {
+      "title": "Шляхи",
+      "description": "Шляхи до CLI та фреймворку"
+    },
+    "updates": {
+      "title": "Оновлення",
+      "description": "Оновлення Vibe Teamlead"
+    },
+    "notifications": {
+      "title": "Сповіщення",
+      "description": "Параметри сповіщень"
+    },
+    "debug": {
+      "title": "Діагностика й журнали",
+      "description": "Інструменти для усунення проблем"
+    },
+    "terminal-fonts": {
+      "title": "Шрифти термінала",
+      "description": "Вигляд шрифту в терміналі"
+    },
+    "claude": {
+      "title": "Claude",
+      "description": "API-ключ і базова URL-адреса"
+    },
+    "tools": {
+      "title": "Інструменти",
+      "description": "Сканери, Chrome, Docker, Strix"
+    }
+  },
+  "claude": {
+    "title": "Claude",
+    "description": "Усі агенти й допоміжні задачі працюють на Claude Code з цими єдиними обліковими даними.",
+    "status": {
+      "none": "Ключа ще немає — агенти не запустяться, доки ви його не додасте.",
+      "apiKey": "API-ключ Anthropic",
+      "token": "Токен підписки Claude",
+      "stored": "збережено в застосунку (Keychain)",
+      "fromEnvironment": "зі змінних середовища"
+    },
+    "apiKey": {
+      "label": "API-ключ Anthropic",
+      "replaceLabel": "Замінити API-ключ",
+      "placeholder": "sk-ant-api03-…",
+      "help": "Створіть ключ на console.anthropic.com → API keys. Він зберігається зашифрованим у Keychain macOS і більше ніколи не показується.",
+      "show": "Показати ключ",
+      "hide": "Сховати ключ",
+      "save": "Зберегти ключ",
+      "remove": "Видалити збережений ключ"
+    },
+    "test": {
+      "button": "Перевірити з’єднання",
+      "running": "Перевірка…",
+      "ok": "З’єднання працює — Claude відповів.",
+      "failed": "Claude не відповів"
+    },
+    "errors": {
+      "saveFailed": "Не вдалося зберегти ключ."
+    },
+    "baseUrl": {
+      "label": "Базова URL-адреса (необов’язково)",
+      "help": "Для шлюзу, проксі або локального сервера, що підтримує API Anthropic, як-от Ollama за адресою http://localhost:11434. Залиште порожнім, щоб використовувати api.anthropic.com. Списки вибору моделей показують моделі, які він надає. Зберігається разом з іншими налаштуваннями."
+    },
+    "personalMode": {
+      "label": "Використовувати мою підписку Claude (особистий режим)",
+      "description": "Приймати токен підписки Claude Pro/Max (з `claude setup-token`) замість API-ключа. Лише для власного комп’ютера — ніколи не вмикайте в збірці, якою ділитеся. Ліміти спільні з вашим звичайним використанням Claude.",
+      "tokenNeedsMode": "Збережені облікові дані — це токен підписки Claude. Увімкніть особистий режим нижче або замініть його на API-ключ."
+    }
+  },
+  "language": {
+    "label": "Мова інтерфейсу",
+    "description": "Виберіть мову інтерфейсу застосунку"
+  },
+  "scale": {
+    "presets": "Готові масштаби",
+    "presetsDescription": "Швидкий вибір поширених варіантів масштабу",
+    "fineTune": "Точний масштаб",
+    "fineTuneDescription": "Від 75% до 200% із кроком 5%",
+    "default": "Типовий",
+    "comfortable": "Зручний",
+    "large": "Великий"
+  },
+  "logOrder": {
+    "label": "Порядок журналу",
+    "description": "Як показувати журнал у поданні подробиць задачі",
+    "chronological": "Хронологічний (спершу старіші)",
+    "reverseChronological": "Зворотний (спершу новіші)"
+  },
+  "gpuAcceleration": {
+    "label": "Апаратне прискорення GPU",
+    "description": "Використовувати WebGL для рендерингу термінала (експериментально, швидше з багатьма терміналами)",
+    "auto": "Автоматично (WebGL, якщо підтримується)",
+    "on": "Завжди ввімкнено",
+    "off": "Вимкнено (типово)",
+    "helperText": "Зміни застосовуються лише до нових терміналів"
+  },
+  "general": {
+    "otherAgentSettings": "Інші налаштування агентів",
+    "otherAgentSettingsDescription": "Додаткові параметри конфігурації агентів",
+    "agentFramework": "Фреймворк агентів",
+    "agentFrameworkDescription": "Фреймворк розробки для автономних задач",
+    "agentFrameworkAutoClaude": "Vibe Teamlead",
+    "aiTerminalNaming": "Назви терміналів від AI",
+    "aiTerminalNamingDescription": "Автоматично називати термінали за командами (використовує модель для назв)",
+    "featureModelSettings": "Моделі для функцій",
+    "featureModelSettingsDescription": "Модель і рівень міркування для аналітики, ідей і дорожньої карти",
+    "model": "Модель",
+    "thinkingLevel": "Рівень міркування",
+    "paths": "Шляхи",
+    "pathsDescription": "Налаштуйте шляхи до виконуваних файлів і фреймворку",
+    "pythonPath": "Шлях до Python",
+    "pythonPathDescription": "Шлях до виконуваного файлу Python (залиште порожнім для автовизначення)",
+    "pythonPathPlaceholder": "python3 (типово)",
+    "gitPath": "Шлях до Git",
+    "gitPathDescription": "Шлях до виконуваного файлу Git (залиште порожнім для автовизначення)",
+    "gitPathPlaceholder": "git (типово)",
+    "githubCLIPath": "Шлях до GitHub CLI",
+    "githubCLIPathDescription": "Шлях до виконуваного файлу GitHub CLI (gh) (залиште порожнім для автовизначення)",
+    "githubCLIPathPlaceholder": "gh (типово)",
+    "gitlabCLIPath": "Шлях до GitLab CLI",
+    "gitlabCLIPathDescription": "Шлях до виконуваного файлу GitLab CLI (glab) (залиште порожнім для автовизначення)",
+    "gitlabCLIPathPlaceholder": "glab (типово)",
+    "claudePath": "Шлях до Claude CLI",
+    "claudePathDescription": "Шлях до виконуваного файлу Claude CLI (залиште порожнім для автовизначення)",
+    "claudePathPlaceholder": "claude (типово)",
+    "detectedPath": "Визначено автоматично",
+    "detectedVersion": "Версія",
+    "detectedSource": "Джерело",
+    "sourceUserConfig": "Конфігурація користувача",
+    "sourceVenv": "Віртуальне середовище",
+    "sourceHomebrew": "Homebrew",
+    "sourceNvm": "NVM",
+    "sourceSystemPath": "Системний PATH",
+    "sourceBundled": "Вбудований",
+    "sourceFallback": "Резервний",
+    "notDetected": "Не знайдено",
+    "autoClaudePath": "Шлях до Vibe Teamlead",
+    "autoClaudePathDescription": "Відносний шлях до каталогу auto-claude у проєктах",
+    "autoClaudePathPlaceholder": "auto-claude (типово)",
+    "autoNameTerminals": "Автоматично називати термінали",
+    "autoNameTerminalsDescription": "Генерувати за допомогою AI змістовні назви вкладок термінала на основі їхньої активності",
+    "securityQa": "Security QA (Strix)",
+    "securityQaDescription": "Після схвалення QA тест на проникнення Strix намагається зламати код, змінений задачею. Знахідки повертаються виправнику QA. Потрібні Docker, Strix (uv tool install strix-agent) і API-ключ Anthropic; має власний бюджет LLM.",
+    "securityQaScanMode": "Сканування",
+    "securityQaFailOn": "Блокувати від",
+    "securityQaBudget": "Бюджет на сканування, $",
+    "securityQaMode": {
+      "quick": "Швидке",
+      "standard": "Звичайне",
+      "deep": "Глибоке"
+    },
+    "securityQaSeverity": {
+      "critical": "Критичний",
+      "high": "Високий і вище",
+      "medium": "Середній і вище",
+      "low": "Низький і вище"
+    }
+  },
+  "theme": {
+    "title": "Вигляд",
+    "description": "Налаштуйте вигляд Vibe Teamlead",
+    "mode": "Режим",
+    "modeDescription": "Виберіть світлу або темну тему",
+    "light": "Світла",
+    "dark": "Темна",
+    "system": "Системна",
+    "colorTheme": "Колірна тема",
+    "colorThemeDescription": "Виберіть палітру кольорів"
+  },
+  "devtools": {
+    "title": "Інструменти розробника",
+    "description": "Налаштуйте IDE, термінал і шрифти термінала",
+    "detecting": "Пошук встановлених інструментів...",
+    "detectAgain": "Шукати знову",
+    "tabTools": "Інструменти",
+    "tabTerminalFonts": "Шрифти термінала",
+    "ide": {
+      "label": "IDE",
+      "description": "Vibe Teamlead відкриватиме worktree в цьому редакторі",
+      "placeholder": "Виберіть IDE...",
+      "customPath": "Власний шлях до IDE",
+      "customPathPlaceholder": "/path/to/your/ide"
+    },
+    "terminal": {
+      "label": "Термінал",
+      "description": "Vibe Teamlead відкриватиме сеанси термінала тут",
+      "placeholder": "Виберіть термінал...",
+      "customPath": "Власний шлях до термінала",
+      "customPathPlaceholder": "/path/to/your/terminal"
+    },
+    "cli": {
+      "label": "CLI",
+      "description": "CLI-інструмент для сеансів термінала з AI",
+      "placeholder": "Виберіть CLI...",
+      "customPath": "Власний шлях до CLI",
+      "customPathPlaceholder": "/path/to/your/cli"
+    },
+    "detected": "Знайдено",
+    "notInstalled": "Не встановлено",
+    "detectedSummary": "Знайдено у вашій системі:",
+    "noToolsDetected": "Додаткових інструментів не знайдено (буде використано VS Code і системний термінал)",
+    "autoNameClaude": {
+      "label": "Автоназви терміналів Claude",
+      "description": "Генерувати за допомогою AI змістовну назву термінала Claude на основі вашого першого повідомлення"
+    },
+    "yoloMode": {
+      "label": "Режим YOLO",
+      "description": "Запускати Claude з прапорцем --dangerously-skip-permissions, оминаючи всі запити безпеки. Використовуйте з особливою обережністю.",
+      "warning": "Цей режим оминає систему дозволів Claude. Вмикайте, лише якщо повністю довіряєте коду, що виконується."
+    }
+  },
+  "updates": {
+    "title": "Оновлення",
+    "description": "Керування оновленнями Vibe Teamlead",
+    "appUpdateReady": "Оновлення застосунку готове",
+    "newVersion": "Нова версія",
+    "released": "Випущено",
+    "downloading": "Завантаження...",
+    "updateDownloaded": "Оновлення завантажено! Натисніть «Встановити», щоб перезапустити застосунок і застосувати оновлення.",
+    "installAndRestart": "Встановити й перезапустити",
+    "downloadUpdate": "Завантажити оновлення",
+    "version": "Версія",
+    "loading": "Завантаження...",
+    "checkingForUpdates": "Пошук оновлень...",
+    "newVersionAvailable": "Доступна нова версія:",
+    "latestVersion": "У вас найновіша версія.",
+    "viewRelease": "Переглянути випуск на GitHub",
+    "unableToCheck": "Не вдалося перевірити оновлення",
+    "checkForUpdates": "Перевірити оновлення",
+    "autoUpdateProjects": "Автооновлення проєктів",
+    "autoUpdateProjectsDescription": "Автоматично оновлювати Vibe Teamlead у проєктах, коли виходить нова версія",
+    "betaUpdates": "Бета-оновлення",
+    "betaUpdatesDescription": "Отримувати попередні бета-версії з новими функціями (можуть бути менш стабільними)",
+    "stableDowngradeAvailable": "Доступна стабільна версія",
+    "stableDowngradeDescription": "Зараз у вас бета-версія. Оскільки бета-оновлення вимкнено, можна перейти на останній стабільний випуск.",
+    "stableVersion": "Стабільна версія",
+    "downloadStableVersion": "Завантажити стабільну версію",
+    "readOnlyVolumeTitle": "Неможливо встановити з образу диска",
+    "readOnlyVolumeDescription": "Vibe Teamlead запущено з образу диска лише для читання (DMG). Перетягніть застосунок у папку «Програми» й запустіть його звідти, щоб встановлювати оновлення.",
+    "downloadError": "Не вдалося завантажити оновлення"
+  },
+  "notifications": {
+    "title": "Сповіщення",
+    "description": "Налаштуйте типові параметри сповіщень",
+    "onTaskComplete": "Задачу виконано",
+    "onTaskCompleteDescription": "Сповіщати, коли задачу успішно виконано",
+    "onTaskFailed": "Задача з помилкою",
+    "onTaskFailedDescription": "Сповіщати, коли під час задачі сталася помилка",
+    "onReviewNeeded": "Потрібна перевірка",
+    "onReviewNeededDescription": "Сповіщати, коли QA потребує вашої перевірки",
+    "sound": "Звук",
+    "soundDescription": "Відтворювати звук разом зі сповіщеннями"
+  },
+  "actions": {
+    "save": "Зберегти налаштування",
+    "rerunWizard": "Запустити майстер знову",
+    "rerunWizardDescription": "Ще раз пройти майстер налаштування"
+  },
+  "projectSections": {
+    "general": {
+      "title": "Загальні",
+      "description": "Auto-Build і конфігурація агентів",
+      "useClaudeMd": "Використовувати CLAUDE.md",
+      "useClaudeMdDescription": "Додавати інструкції з CLAUDE.md до контексту агентів"
+    },
+    "claude": {
+      "title": "Автентифікація Claude",
+      "description": "Автентифікація Claude"
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "Інтеграція з Linear",
+      "integrationTitle": "Інтеграція з Linear",
+      "integrationDescription": "Підключіть Linear для відстеження issues та імпорту задач",
+      "syncDescription": "Синхронізація з Linear для відстеження issues"
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "Синхронізація GitHub Issues",
+      "integrationTitle": "Інтеграція з GitHub",
+      "integrationDescription": "Підключіть GitHub для відстеження issues",
+      "syncDescription": "Синхронізація з GitHub Issues",
+      "defaultBranch": {
+        "label": "Типова гілка",
+        "description": "Базова гілка для створення worktree задач",
+        "autoDetect": "Визначати автоматично (main/master)",
+        "searchPlaceholder": "Пошук гілок...",
+        "noBranchesFound": "Гілок не знайдено",
+        "selectedBranchHelp": "Усі нові задачі відгалужуватимуться від {{branch}}"
+      },
+      "pushNewBranches": {
+        "label": "Автоматично надсилати нові гілки",
+        "description": "Надсилати нові гілки задач і worktree на GitHub і автоматично налаштовувати відстеження upstream"
+      }
+    },
+    "gitlab": {
+      "title": "GitLab",
+      "description": "Синхронізація GitLab Issues",
+      "integrationTitle": "Інтеграція з GitLab",
+      "integrationDescription": "Підключіть GitLab для відстеження issues",
+      "syncDescription": "Синхронізація з GitLab Issues"
+    },
+    "memory": {
+      "title": "Пам’ять",
+      "description": "Бекенд пам’яті Graphiti",
+      "integrationTitle": "Пам’ять",
+      "integrationDescription": "Налаштуйте постійну пам’ять агентів між сеансами",
+      "syncDescription": "Налаштування постійної пам’яті"
+    }
+  },
+  "agentProfile": {
+    "label": "Профіль агента",
+    "title": "Типовий профіль агента",
+    "sectionDescription": "Виберіть готову конфігурацію моделі та рівня міркування",
+    "profilesInfo": "Профілі агентів — це готові конфігурації моделі Claude та рівня міркування. Під час створення задачі вони використовуються як типові. Їх завжди можна змінити в майстрі створення задачі.",
+    "custom": "Власний",
+    "customConfiguration": "Власна конфігурація",
+    "customDescription": "Виберіть модель і рівень міркування",
+    "phaseConfiguration": "Конфігурація етапів",
+    "phaseConfigurationDescription": "Налаштуйте модель і рівень міркування для кожного етапу",
+    "clickToCustomize": "Натисніть, щоб налаштувати",
+    "model": "Модель",
+    "thinking": "Міркування",
+    "thinkingLevel": "Рівень міркування",
+    "selectModel": "Виберіть модель",
+    "selectThinkingLevel": "Виберіть рівень міркування",
+    "perPhaseOptimization": "(оптимізація за етапами)",
+    "resetToDefaults": "Скинути до типових",
+    "resetToProfileDefaults": "Скинути до типових для {{profile}}",
+    "customized": "Змінено",
+    "phaseConfigNote": "Ці параметри використовуватимуться як типові для нових задач із цим профілем. Їх можна змінити для окремої задачі в майстрі створення задачі.",
+    "adaptiveThinking": {
+      "badge": "Адаптивне",
+      "tooltip": "Opus використовує адаптивне міркування — сам вирішує, скільки міркувати в межах бюджету, заданого рівнем міркування."
+    },
+    "reasoning": {
+      "adaptive": "Адаптивне",
+      "budget": "Бюджет",
+      "noThinking": "(без міркування)",
+      "badgeTooltip": {
+        "adaptive_effort": "Сам вирішує, скільки міркувати в межах бюджету",
+        "thinking_tokens": "Міркування в межах бюджету з налаштовуваною кількістю токенів",
+        "none": "Розширене міркування не підтримується"
+      }
+    },
+    "phases": {
+      "spec": {
+        "label": "Специфікація",
+        "description": "Дослідження, вимоги, збір контексту"
+      },
+      "planning": {
+        "label": "Планування",
+        "description": "План реалізації та архітектура"
+      },
+      "coding": {
+        "label": "Розробка",
+        "description": "Безпосередня реалізація коду"
+      },
+      "qa": {
+        "label": "Перевірка QA",
+        "description": "Контроль якості та валідація"
+      }
+    }
+  },
+  "workspace": {
+    "roles": {
+      "backend": "Бекенд",
+      "frontend": "Фронтенд",
+      "mobile": "Мобільний",
+      "shared": "Спільний",
+      "apiGateway": "API-шлюз",
+      "worker": "Воркер",
+      "other": "Інше"
+    }
+  },
+  "debug": {
+    "title": "Діагностика й журнали",
+    "description": "Журнали та діагностичні відомості для усунення проблем",
+    "errorReporting": {
+      "label": "Анонімні звіти про помилки",
+      "description": "Надсилати звіти про збої, щоб допомогти покращити Vibe Teamlead. Особисті дані й код не збираються."
+    },
+    "openLogsFolder": "Відкрити папку журналів",
+    "copyDebugInfo": "Скопіювати діагностику",
+    "copied": "Скопійовано!",
+    "loadInfo": "Завантажити діагностику",
+    "systemInfo": "Відомості про систему",
+    "logsLocation": "Розташування журналів",
+    "recentErrors": "Нещодавні помилки",
+    "noRecentErrors": "Нещодавніх помилок немає",
+    "helpTitle": "Повідомлення про проблеми",
+    "helpText": "Повідомляючи про баг, натисніть «Скопіювати діагностику», щоб отримати відомості про систему й нещодавні помилки — це допоможе нам знайти причину."
+  },
+  "projectSettings": {
+    "noProjectSelected": {
+      "title": "Проєкт не вибрано",
+      "description": "Виберіть проєкт на бічній панелі, щоб налаштувати його."
+    }
+  },
+  "mcp": {
+    "title": "Огляд MCP-серверів",
+    "titleWithProject": "Огляд MCP-серверів для {{projectName}}",
+    "description": "Налаштуйте, які MCP-сервери доступні агентам у цьому проєкті",
+    "descriptionNoProject": "Виберіть проєкт, щоб налаштувати MCP-сервери",
+    "serversEnabled": "Увімкнено серверів: {{count}}",
+    "configuration": "Конфігурація MCP-серверів",
+    "configurationHint": "Вимкнені сервери зменшують використання контексту й час запуску",
+    "noProjectSelected": "Проєкт не вибрано",
+    "noProjectSelectedDescription": "Виберіть проєкт у списку, щоб переглянути й налаштувати MCP-сервери.",
+    "projectNotInitialized": "Проєкт не ініціалізовано",
+    "projectNotInitializedDescription": "Ініціалізуйте Vibe Teamlead для цього проєкту, щоб налаштувати MCP-сервери.",
+    "browserAutomation": "Автоматизація браузера (лише агенти QA)",
+    "alwaysEnabled": "завжди ввімкнено",
+    "addServer": "Додати сервер",
+    "addMcpTo": "Додати MCP-сервер до {{agent}}",
+    "addMcpDescription": "Виберіть MCP-сервер, який додати цьому агенту",
+    "allMcpsAdded": "Усі доступні MCP-сервери вже додано",
+    "added": "додано",
+    "removed": "вилучено",
+    "remove": "Вилучити",
+    "restore": "Відновити",
+    "noMcpServers": "Немає MCP-серверів",
+    "cannotRemove": "Не можна вилучити (обов’язковий)",
+    "servers": {
+      "context7": {
+        "name": "Context7",
+        "description": "Пошук документації бібліотек"
+      },
+      "graphiti": {
+        "name": "Пам’ять Graphiti",
+        "description": "Граф знань для контексту між сеансами",
+        "notConfigured": "Потрібно налаштувати пам’ять (див. налаштування пам’яті)"
+      },
+      "linear": {
+        "name": "Linear",
+        "description": "Інтеграція з керуванням проєктами",
+        "notConfigured": "Потрібна інтеграція з Linear (див. налаштування Linear)"
+      },
+      "electron": {
+        "name": "Electron",
+        "description": "Автоматизація десктопних застосунків через Chrome DevTools"
+      },
+      "puppeteer": {
+        "name": "Puppeteer",
+        "description": "Автоматизація браузера для тестування"
+      },
+      "autoClaude": {
+        "name": "Інструменти Vibe Teamlead",
+        "description": "Відстеження прогресу збірки"
+      }
+    },
+    "customServers": "Власні сервери",
+    "addCustomServer": "Додати власний сервер",
+    "editCustomServer": "Редагувати власний сервер",
+    "customServerDescription": "Додайте MCP-сервер на основі команди або HTTP",
+    "serverType": "Тип сервера",
+    "typeCommand": "Команда (npx/npm)",
+    "typeHttp": "HTTP",
+    "serverName": "Назва",
+    "serverNamePlaceholder": "Мій MCP-сервер",
+    "serverDescription": "Опис",
+    "serverDescriptionPlaceholder": "Що робить цей сервер",
+    "command": "Команда",
+    "args": "Аргументи",
+    "argsHint": "Аргументи через пробіл",
+    "url": "URL-адреса",
+    "headers": "Заголовки",
+    "headerName": "Назва заголовка",
+    "headerValue": "Значення заголовка",
+    "noCustomServers": "Власних серверів не налаштовано. Додайте сервер, щоб використовувати його з агентами.",
+    "errorNameRequired": "Вкажіть назву сервера",
+    "errorIdExists": "Сервер із таким ID уже існує",
+    "errorCommandRequired": "Для серверів на основі команди потрібно вказати команду",
+    "errorUrlRequired": "Для HTTP-серверів потрібно вказати URL-адресу",
+    "testConnection": "Перевірити",
+    "testing": "Перевірка...",
+    "authToken": "Токен автентифікації",
+    "authTokenPlaceholder": "Вставте сюди API-токен або PAT",
+    "authTokenHint": "Використовується як Bearer-токен у заголовку Authorization",
+    "advancedHeaders": "Додаткові заголовки",
+    "status": {
+      "healthy": "Сервер відповідає",
+      "unhealthy": "Сервер не відповідає",
+      "needsAuth": "Потрібна автентифікація",
+      "checking": "Перевірка...",
+      "unknown": "Стан невідомий"
+    },
+    "hints": {
+      "github": "Схоже, це MCP-сервер GitHub. Знадобиться персональний токен доступу з відповідними областями.",
+      "createGithubPat": "Створити GitHub PAT",
+      "google": "Схоже, це API Google. Знадобиться токен OAuth або API-ключ.",
+      "createGoogleToken": "Створити облікові дані Google",
+      "anthropic": "Схоже, це API Anthropic. Знадобиться API-ключ.",
+      "createAnthropicKey": "Створити API-ключ Anthropic",
+      "openai": "Схоже, це API OpenAI. Знадобиться API-ключ.",
+      "createOpenaiKey": "Створити API-ключ OpenAI"
+    }
+  },
+  "terminalFonts": {
+    "title": "Шрифти термінала",
+    "description": "Налаштуйте вигляд і поведінку шрифту в терміналі",
+    "configActions": "Конфігурація:",
+    "export": "Експортувати JSON",
+    "import": "Імпортувати JSON",
+    "copy": "Скопіювати в буфер обміну",
+    "fontConfig": {
+      "title": "Конфігурація шрифту",
+      "description": "Налаштуйте гарнітуру, розмір, насиченість, міжрядковий і міжлітерний інтервали",
+      "fontFamily": "Гарнітура",
+      "fontFamilyDescription": "Основний моноширинний шрифт для тексту термінала",
+      "selectFont": "Виберіть шрифт...",
+      "searchFont": "Пошук шрифтів...",
+      "noFonts": "Шрифтів не знайдено",
+      "fontChain": "Ланцюжок шрифтів:",
+      "fontSize": "Розмір шрифту",
+      "fontSizeDescription": "Базовий розмір шрифту в пікселях (10–24 px)",
+      "decreaseFontSize": "Зменшити розмір шрифту на {{step}} px",
+      "increaseFontSize": "Збільшити розмір шрифту на {{step}} px",
+      "pixels": "пікселів",
+      "fontWeight": "Насиченість шрифту",
+      "fontWeightDescription": "Насиченість від 100 (тонкий) до 900 (чорний) із кроком 100",
+      "commonWeights": "Поширені: 400 (звичайний), 600 (напівжирний), 700 (жирний)",
+      "decreaseFontWeight": "Зменшити насиченість на {{step}}",
+      "increaseFontWeight": "Збільшити насиченість на {{step}}",
+      "lineHeight": "Міжрядковий інтервал",
+      "lineHeightDescription": "Висота рядка як множник розміру шрифту (1.0–2.0)",
+      "letterSpacing": "Міжлітерний інтервал",
+      "letterSpacingDescription": "Горизонтальна відстань між символами (від -2 до 5 px)"
+    },
+    "cursorConfig": {
+      "title": "Конфігурація курсора",
+      "description": "Налаштуйте стиль курсора, блимання та акцентний колір",
+      "cursorStyle": "Стиль курсора",
+      "cursorStyleDescription": "Виберіть вигляд курсора термінала",
+      "selectStyle": "Виберіть стиль курсора...",
+      "currentStyle": "Поточний:",
+      "styleBlock": "Блок",
+      "styleBlockDescription": "Курсор-блок",
+      "styleUnderline": "Підкреслення",
+      "styleUnderlineDescription": "Курсор-підкреслення",
+      "styleBar": "Риска",
+      "styleBarDescription": "Курсор — вертикальна риска",
+      "cursorBlink": "Блимання курсора",
+      "cursorBlinkDescription": "Увімкнути або вимкнути анімацію блимання курсора",
+      "blinkStatus": "Стан:",
+      "enabled": "Увімкнено",
+      "disabled": "Вимкнено",
+      "cursorAccentColor": "Акцентний колір курсора",
+      "cursorAccentColorDescription": "Виберіть колір курсора термінала",
+      "cursorColorLabel": "Акцентний колір курсора",
+      "cursorColorDescription": "Поточний колір: {{color}}",
+      "pickColor": "Натисніть, щоб вибрати колір",
+      "resetColor": "Скинути до чорного",
+      "reset": "Скинути",
+      "preview": "Попередній перегляд:"
+    },
+    "performanceConfig": {
+      "title": "Продуктивність",
+      "description": "Налаштуйте ліміт прокрутки та інші параметри продуктивності",
+      "presets": "Швидкі варіанти",
+      "presetsDescription": "Поширені ліміти прокрутки для різних сценаріїв",
+      "scrollback": "Ліміт прокрутки",
+      "scrollbackDescription": "Максимальна кількість рядків в історії термінала",
+      "scrollbackPresets": "Швидкі варіанти",
+      "presetMinimal": "Мінімальний",
+      "presetMinimalDescription": "Мінімальна історія (1 тис. рядків)",
+      "presetStandard": "Звичайний",
+      "presetStandardDescription": "Звичайна історія (10 тис. рядків)",
+      "presetExtended": "Розширений",
+      "presetExtendedDescription": "Розширена історія (50 тис. рядків)",
+      "presetMaximum": "Максимальний",
+      "presetMaximumDescription": "Максимальна історія (100 тис. рядків)",
+      "decreaseScrollback": "Зменшити прокрутку на {{step}}",
+      "increaseScrollback": "Збільшити прокрутку на {{step}}",
+      "lines": "рядків",
+      "kValue": "{{value}} тис.",
+      "scrollbackValue": "Рядків: {{value}}"
+    },
+    "presets": {
+      "title": "Швидкі шаблони",
+      "description": "Застосуйте готові налаштування шрифту термінала або збережіть власні",
+      "builtin": "Вбудовані шаблони",
+      "builtinDescription": "Натисніть, щоб застосувати готовий шаблон",
+      "vscode": "Consolas 14 px, курсор-блок",
+      "vscodeName": "VS Code",
+      "intellij": "JetBrains Mono 13 px, курсор-блок",
+      "intellijName": "IntelliJ IDEA",
+      "macos": "SF Mono 13 px, курсор-блок",
+      "macosName": "Термінал macOS",
+      "ubuntu": "Ubuntu Mono 13 px, курсор-блок",
+      "ubuntuName": "Термінал Ubuntu",
+      "reset": "Скинути до типових",
+      "resetDescription": "Відновити типові налаштування для вашої операційної системи",
+      "resetToOS": "Скинути до типових для {{os}}",
+      "resetButton": "Скинути до типових для ОС",
+      "custom": "Власні шаблони",
+      "customDescription": "Збережіть поточну конфігурацію як власний шаблон",
+      "presetNamePlaceholder": "Назва шаблону...",
+      "savePreset": "Зберегти поточну конфігурацію як шаблон",
+      "applyPreset": "Застосувати цей шаблон",
+      "deletePreset": "Видалити цей шаблон",
+      "noCustomPresets": "Власних шаблонів ще немає. Збережіть поточну конфігурацію, щоб почати.",
+      "duplicateName": "Шаблон із такою назвою вже існує",
+      "saved": "Шаблон «{{name}}» збережено",
+      "deleted": "Шаблон «{{name}}» видалено",
+      "unknownFont": "Невідомий",
+      "applyFailed": "Не вдалося застосувати шаблон «{{name}}»",
+      "presetNameLabel": "Назва шаблону",
+      "summary": "{{font}}, {{size}} px, курсор: {{cursor}}"
+    },
+    "preview": {
+      "title": "Живий перегляд",
+      "description": "Перегляд налаштувань термінала в реальному часі (оновлюється протягом 300 мс)",
+      "ariaLabel": "Попередній перегляд шрифту термінала",
+      "infoText": "Цей перегляд оновлюється протягом 300 мс після будь-якої зміни й показує, як налаштування виглядатимуть у справжніх терміналах."
+    },
+    "importExport": {
+      "exportSuccess": "Налаштування експортовано",
+      "exportFailed": "Не вдалося експортувати налаштування",
+      "importSuccess": "Налаштування імпортовано",
+      "importFailed": "Не вдалося імпортувати налаштування: некоректний формат JSON",
+      "importFailedRange": "Не вдалося імпортувати налаштування: значення поза допустимим діапазоном",
+      "copySuccess": "Налаштування скопійовано в буфер обміну",
+      "copyFailed": "Не вдалося скопіювати в буфер обміну",
+      "fileTooLarge": "Файл імпорту завеликий (максимум 10 КБ)",
+      "readError": "Не вдалося прочитати файл"
+    },
+    "slider": {
+      "decrease": "Зменшити «{{label}}» на {{step}}",
+      "increase": "Збільшити «{{label}}» на {{step}}",
+      "currentValue": "Поточне значення: {{value}}"
+    }
+  },
+  "agents": {
+    "pr_template_filler": {
+      "label": "Заповнювач шаблонів PR",
+      "description": "Заповнює шаблони PR на GitHub за допомогою AI на основі змін у коді"
+    }
+  },
+  "tools": {
+    "title": "Інструменти",
+    "description": "Зовнішні інструменти, які використовує конвеєр, і чи є вони на цьому Mac. Обов’язковий лише Claude Code, і він постачається разом із застосунком.",
+    "checking": "Перевіряємо цей Mac…",
+    "checkingAgain": "Перевіряємо ще раз…",
+    "checkFailed": "Не вдалося перевірити інструменти.",
+    "checkAgain": "Перевірити знову",
+    "optionalNote": "Усі інструменти, крім Claude Code, необов’язкові. Якщо якогось немає, його перевірку пропускають, і звіт про це повідомляє — нічого не ламається.",
+    "status": {
+      "bundled": "Вбудовано",
+      "ready": "Готово",
+      "not_running": "Не запущено",
+      "missing": "Не встановлено"
+    },
+    "areas": {
+      "bundled": {
+        "title": "Постачаються із застосунком",
+        "when": "Нічого не треба встановлювати"
+      },
+      "security_gates": {
+        "title": "Безпекові перевірки",
+        "when": "Перед кожною перевіркою QA"
+      },
+      "browser_qa": {
+        "title": "QA у браузері",
+        "when": "Коли QA тестує вебзастосунок"
+      },
+      "security_qa": {
+        "title": "Security QA",
+        "when": "Після схвалення QA, якщо ввімкнено в налаштуваннях агентів"
+      }
+    },
+    "purpose": {
+      "claude-code": "Запускає всіх агентів.",
+      "codegraph": "Дає агентам карту вашого коду, щоб вони швидше знаходили потрібні файли.",
+      "gitleaks": "Шукає секрети, як-от API-ключі й токени, у змінах задачі.",
+      "osv-scanner": "Перевіряє, чи не додала задача залежностей із відомими вразливостями.",
+      "chrome": "Дає QA змогу відкрити ваш вебзастосунок і протестувати його в справжньому браузері.",
+      "docker": "Запускає ізольовану пісочницю, у якій Strix атакує ваш застосунок.",
+      "strix": "Після схвалення QA намагається зламати код, змінений задачею."
+    },
+    "skippedWithout": {
+      "code_graph": "Без нього агенти шукають у коді без графа. Більше нічого не змінюється.",
+      "security_gates": "Доки його не встановлено, це сканування пропускається перед кожною перевіркою QA, і звіт QA про це повідомляє.",
+      "browser_qa": "Доки його не встановлено, QA у браузері пропускається, і звіт QA про це повідомляє.",
+      "security_qa": "Доки його не встановлено, Security QA пропускається, і звіт про це повідомляє."
+    },
+    "fix": {
+      "startDocker": "Запустіть Docker Desktop і перевірте знову. До того Security QA пропускається, і звіт про це повідомляє.",
+      "reinstall": "Без нього агенти не працюють. Перевстановіть Vibe Teamlead, щоб відновити його."
+    },
+    "copy": "Скопіювати",
+    "copied": "Скопійовано",
+    "copyFailed": "Не вдалося скопіювати",
+    "copyFor": "Скопіювати команду для {{tool}}",
+    "guide": "Інструкція з встановлення",
+    "guideFor": "Інструкція з встановлення {{tool}}",
+    "summary": {
+      "ready": "готово",
+      "needs": "потрібно: {{list}}",
+      "running": "{{tool}} запущено",
+      "securityQaOff": "(вимкнено в налаштуваннях агентів)"
+    },
+    "securityHint": {
+      "install": "Щоб виправити, встановіть {{tool}}:",
+      "start": "Щоб виправити, запустіть Docker Desktop:",
+      "openSettings": "Налаштування → Інструменти"
+    }
+  },
+  "modelPicker": {
+    "builtIn": "Вбудовані",
+    "fromEndpoint": "З {{endpoint}}",
+    "current": "Поточна",
+    "search": "Знайдіть або введіть ID моделі",
+    "empty": "Немає відповідних моделей",
+    "useCustom": "Використати «{{id}}»",
+    "refresh": "Оновити",
+    "loading": "Завантаження моделей…",
+    "error": "Не вдалося завантажити моделі: {{error}}",
+    "count_one": "{{count}} модель з {{endpoint}}",
+    "count_few": "{{count}} моделі з {{endpoint}}",
+    "count_many": "{{count}} моделей з {{endpoint}}",
+    "count_other": "{{count}} моделі з {{endpoint}}"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "hero": {
+    "title": "Вітаємо у Vibe Teamlead",
+    "subtitle": "Створюйте програмне забезпечення автономно разом з AI-агентами"
+  },
+  "actions": {
+    "newProject": "Новий проєкт",
+    "openProject": "Відкрити проєкт"
+  },
+  "recentProjects": {
+    "title": "Нещодавні проєкти",
+    "empty": "Проєктів ще немає",
+    "emptyDescription": "Створіть новий проєкт або відкрийте наявний, щоб почати",
+    "openFolder": "Відкрити папку",
+    "openProjectAriaLabel": "Відкрити проєкт {{name}}"
+  }
+}

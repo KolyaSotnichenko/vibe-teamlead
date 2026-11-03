@@ -15,7 +15,7 @@ Vibe Teamlead 2.0 is a macOS Electron app in which a team of Claude Code agents 
 - **Spec-driven, test-first.** Acceptance criteria carry IDs (`AC-n`); planner subtasks name the failing test first; coder works red → green → refactor; QA checks AC coverage. Keep prompt changes consistent with this (`apps/desktop/prompts/`).
 - **QA checks.** Before every QA review the orchestrator runs hard gates (`ai/security/gates.ts`: gitleaks, OSV-Scanner); QA cannot approve with findings. Optional Security QA (`ai/security/strix.ts`, Settings → Security QA) pentests the changed code with Strix after approval; it is skipped, never failing, when Docker, Strix or an API key is missing.
 - **Design system.** UI follows `apps/desktop/design/DESIGN-SYSTEM.md` exactly (shared with Meter: ink/ground palette, vermilion only as a signal, radius 0, no shadows, Archivo + Inter Tight + IBM Plex Mono).
-- **i18n.** User-facing UI text uses `react-i18next` keys (`apps/desktop/src/shared/i18n/locales/`).
+- **i18n.** User-facing UI text uses `react-i18next` keys (`apps/desktop/src/shared/i18n/locales/`). The locales are `en` and `uk` (Ukrainian); add or change every key in both. `uk` needs all four plural forms (`_one`, `_few`, `_many`, `_other`) wherever `en` has `_one`/`_other`; `src/shared/i18n/__tests__/locale-parity.test.ts` enforces key and placeholder parity.
 - **macOS first.** Release targets are macOS arm64 and x64. Use `apps/desktop/src/main/platform/` helpers instead of `process.platform`.
 - **No `console.log` in production code.**
 

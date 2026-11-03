@@ -1,0 +1,9 @@
+{
+  "task": {
+    "parseImplementationPlan": "Не вдалося розібрати implementation_plan.json для {{specId}}: {{error}}",
+    "jsonError": {
+      "titleSuffix": "(помилка JSON)",
+      "description": "⚠️ Помилка розбору JSON: {{error}}\n\nФайл implementation_plan.json пошкоджено. Запустіть автовиправлення в бекенді або відновіть файл вручну."
+    }
+  }
+}

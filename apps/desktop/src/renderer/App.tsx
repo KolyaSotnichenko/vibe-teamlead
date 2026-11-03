@@ -64,6 +64,7 @@ import { GlobalDownloadIndicator } from './components/GlobalDownloadIndicator';
 import { useIpcListeners } from './hooks/useIpc';
 import { useGlobalTerminalListeners } from './hooks/useGlobalTerminalListeners';
 import { COLOR_THEMES, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_DEFAULT } from '../shared/constants';
+import { resolveSupportedLanguage } from '../shared/constants/i18n';
 import type { Task, Project, ColorTheme } from '../shared/types';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
@@ -253,8 +254,11 @@ export function App() {
   // Sync i18n language with settings
   const { t, i18n } = useTranslation('dialogs');
   useEffect(() => {
-    if (settings.language && settings.language !== i18n.language) {
-      i18n.changeLanguage(settings.language);
+    if (!settings.language) return;
+    // A language that is no longer shipped (e.g. a saved 'fr') falls back to the OS language or English
+    const language = resolveSupportedLanguage(settings.language, navigator.language);
+    if (language !== i18n.language) {
+      i18n.changeLanguage(language);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run when settings.language changes, not on every i18n object change
   }, [settings.language, i18n.language, i18n.changeLanguage]);
