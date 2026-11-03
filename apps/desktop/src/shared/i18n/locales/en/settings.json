@@ -250,7 +250,23 @@
     "autoNameTerminals": "Automatically name terminals",
     "autoNameTerminalsDescription": "Use AI to generate descriptive names for terminal tabs based on their activity",
     "useClaudeSubscription": "Use my Claude subscription (personal use)",
-    "useClaudeSubscriptionDescription": "Run agents on your own Claude Pro/Max subscription instead of an API key. For your own machine only — never enable it in a build you share. Limits are shared with your regular Claude usage."
+    "useClaudeSubscriptionDescription": "Run agents on your own Claude Pro/Max subscription instead of an API key. For your own machine only — never enable it in a build you share. Limits are shared with your regular Claude usage.",
+    "securityQa": "Security QA (Strix)",
+    "securityQaDescription": "After QA approves, a Strix penetration test tries to exploit the code this task changed. Findings go back to the QA fixer. Needs Docker, Strix (uv tool install strix-agent) and an Anthropic API key; uses its own LLM budget.",
+    "securityQaScanMode": "Scan",
+    "securityQaFailOn": "Block at",
+    "securityQaBudget": "Budget per scan, $",
+    "securityQaMode": {
+      "quick": "Quick",
+      "standard": "Standard",
+      "deep": "Deep"
+    },
+    "securityQaSeverity": {
+      "critical": "Critical",
+      "high": "High and above",
+      "medium": "Medium and above",
+      "low": "Low and above"
+    }
   },
   "theme": {
     "title": "Appearance",

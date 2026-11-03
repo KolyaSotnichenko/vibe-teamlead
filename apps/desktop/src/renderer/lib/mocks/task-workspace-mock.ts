@@ -268,6 +268,37 @@ export const sampleTaskWorkspace: TaskWorkspace = {
       { name: 'export-sequence', kind: 'mermaid', mermaidSource: SEQUENCE_MMD },
     ],
   },
+  security: {
+    gates: {
+      ran: ['gitleaks', 'osv-scanner'],
+      skipped: [],
+      findings: [],
+    },
+    pentest: {
+      status: 'findings',
+      scanMode: 'quick',
+      failOn: 'high',
+      costUsd: 1.84,
+      reportPath: 'security/strix_runs/invoice-export-1/penetration_test_report.md',
+      findings: [
+        {
+          source: 'strix',
+          title: 'CSV formula injection in exported invoice notes',
+          severity: 'high',
+          location: 'api/src/export/csv.ts:31',
+          detail: 'A note starting with =HYPERLINK( is written unescaped, so the spreadsheet runs it when the file is opened. PoC: create an invoice with note =HYPERLINK("https://example.test","x") and export.',
+          blocking: true,
+        },
+        {
+          source: 'strix',
+          title: 'Export endpoint has no rate limit',
+          severity: 'low',
+          location: 'api/src/routes/invoices.ts:88',
+          blocking: false,
+        },
+      ],
+    },
+  },
 };
 
 /** Early-stage task: the spec exists, nothing else has been written yet (shows the empty states). */
@@ -280,6 +311,7 @@ export const earlyTaskWorkspace: TaskWorkspace = {
   },
   timeline: [],
   architecture: { adrs: [], diagrams: [] },
+  security: {},
 };
 
 export const taskWorkspaceMock = {

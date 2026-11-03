@@ -11,12 +11,13 @@ import { RefreshCw } from 'lucide-react';
 import type { Task, TaskWorkspace } from '../../../../shared/types';
 import { cn } from '../../../lib/utils';
 import { ArchitectureTab } from './ArchitectureTab';
+import { SecurityTab } from './SecurityTab';
 import { SpecTab } from './SpecTab';
 import { EmptyState } from './workspace-ui';
 
 const PlanTab = lazy(() => import('./PlanTab'));
 
-type Section = 'spec' | 'plan' | 'architecture';
+type Section = 'spec' | 'plan' | 'architecture' | 'security';
 
 function useTaskWorkspace(task: Task) {
   const [workspace, setWorkspace] = useState<TaskWorkspace | null>(null);
@@ -82,18 +83,28 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
         spec: workspace.spec?.criteria.length,
         plan: workspace.plan?.phases.reduce((n, p) => n + p.subtasks.length, 0),
         architecture: workspace.architecture.diagrams.length + workspace.architecture.adrs.length || undefined,
+        security: undefined,
       }
     : {};
   const failing = workspace?.spec?.criteria.filter((c) => c.status === 'fail').length ?? 0;
+  const securityBlocking = workspace
+    ? (workspace.security.gates?.findings.length ?? 0) +
+      (workspace.security.pentest?.status === 'findings' ? workspace.security.pentest.findings.filter((f) => f.blocking).length : 0)
+    : 0;
 
   return (
     <TabsPrimitive.Root value={section} onValueChange={(v) => setSection(v as Section)} className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3">
         <TabsPrimitive.List aria-label={t('tasks:workspace.sections.label')} className="inline-flex border border-foreground">
-          {(['spec', 'plan', 'architecture'] as const).map((key, i) => (
+          {(['spec', 'plan', 'architecture', 'security'] as const).map((key, i) => (
             <TabsPrimitive.Trigger key={key} value={key} className={cn(tabClass, i > 0 && 'border-l border-foreground')}>
               {t(`tasks:workspace.tabs.${key}`)}
               {counts[key] !== undefined && <span className="ml-2 font-mono text-[11px] opacity-70">{counts[key]}</span>}
+              {key === 'security' && securityBlocking > 0 && (
+                <span className="ml-2 inline-flex h-5 items-center bg-destructive px-1.5 font-mono text-[10px] font-semibold text-destructive-foreground">
+                  {securityBlocking}
+                </span>
+              )}
               {key === 'spec' && failing > 0 && (
                 <span className="ml-2 inline-flex h-5 items-center bg-destructive px-1.5 font-mono text-[10px] font-semibold text-destructive-foreground">
                   {failing} {t('tasks:workspace.acStatus.fail').toUpperCase()}
@@ -150,6 +161,9 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
               </TabsPrimitive.Content>
               <TabsPrimitive.Content value="architecture" className="focus-visible:outline-none">
                 <ArchitectureTab workspace={workspace} taskId={task.id} projectId={task.projectId} />
+              </TabsPrimitive.Content>
+              <TabsPrimitive.Content value="security" className="focus-visible:outline-none">
+                <SecurityTab workspace={workspace} />
               </TabsPrimitive.Content>
             </>
           )}

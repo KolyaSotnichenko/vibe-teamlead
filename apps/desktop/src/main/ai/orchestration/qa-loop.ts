@@ -156,7 +156,7 @@ export interface QAOutcome {
   /** Duration in ms */
   durationMs: number;
   /** Reason if not approved */
-  reason?: 'max_iterations' | 'recurring_issues' | 'consecutive_errors' | 'cancelled' | 'error';
+  reason?: 'max_iterations' | 'recurring_issues' | 'consecutive_errors' | 'cancelled' | 'error' | 'security_findings';
   /** Error message if failed */
   error?: string;
 }

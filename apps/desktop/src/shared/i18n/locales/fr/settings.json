@@ -250,7 +250,23 @@
     "autoNameTerminals": "Nommer automatiquement les terminaux",
     "autoNameTerminalsDescription": "Utiliser l'IA pour générer des noms descriptifs pour les onglets de terminal en fonction de leur activité",
     "useClaudeSubscription": "Utiliser mon abonnement Claude (usage personnel)",
-    "useClaudeSubscriptionDescription": "Exécuter les agents avec votre propre abonnement Claude Pro/Max au lieu d'une clé API. Uniquement sur votre propre machine — ne l'activez jamais dans une version partagée. Les limites sont partagées avec votre usage habituel de Claude."
+    "useClaudeSubscriptionDescription": "Exécuter les agents avec votre propre abonnement Claude Pro/Max au lieu d'une clé API. Uniquement sur votre propre machine — ne l'activez jamais dans une version partagée. Les limites sont partagées avec votre usage habituel de Claude.",
+    "securityQa": "QA sécurité (Strix)",
+    "securityQaDescription": "Après l'approbation QA, un test d'intrusion Strix tente d'exploiter le code modifié par cette tâche. Les problèmes trouvés repartent vers le correcteur QA. Nécessite Docker, Strix (uv tool install strix-agent) et une clé API Anthropic ; utilise son propre budget LLM.",
+    "securityQaScanMode": "Analyse",
+    "securityQaFailOn": "Bloquer à partir de",
+    "securityQaBudget": "Budget par analyse, $",
+    "securityQaMode": {
+      "quick": "Rapide",
+      "standard": "Standard",
+      "deep": "Approfondie"
+    },
+    "securityQaSeverity": {
+      "critical": "Critique",
+      "high": "Élevée et plus",
+      "medium": "Moyenne et plus",
+      "low": "Faible et plus"
+    }
   },
   "theme": {
     "title": "Apparence",

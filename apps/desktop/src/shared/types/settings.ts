@@ -279,6 +279,15 @@ export interface AppSettings {
    * own machine only.
    */
   useClaudeSubscription?: boolean;
+  /**
+   * Security QA: run a Strix penetration test after QA approves (needs Docker,
+   * Strix and an API key). Off by default — it spends LLM budget.
+   */
+  securityQaEnabled?: boolean;
+  securityQaScanMode?: 'quick' | 'standard' | 'deep';
+  securityQaFailOn?: 'critical' | 'high' | 'medium' | 'low';
+  /** Spend cap per scan, USD */
+  securityQaMaxBudgetUsd?: number;
   // Global API keys (used as defaults for all projects)
   globalOpenAIApiKey?: string;
   globalAnthropicApiKey?: string;

@@ -17,7 +17,7 @@ describe('loadTaskWorkspace', () => {
 
   it('returns an empty workspace when nothing has been written yet', () => {
     const ws = loadTaskWorkspace(dir);
-    expect(ws).toEqual({ specDir: dir, hasQaCoverage: false, timeline: [], architecture: { adrs: [], diagrams: [] } });
+    expect(ws).toEqual({ specDir: dir, hasQaCoverage: false, timeline: [], architecture: { adrs: [], diagrams: [] }, security: {} });
   });
 
   it('omits invalid files instead of failing', () => {

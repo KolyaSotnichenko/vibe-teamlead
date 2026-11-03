@@ -59,6 +59,8 @@ export interface SerializableSessionConfig {
   bundled?: BundledTools;
   /** Personal mode: accept a Claude subscription token instead of an API key */
   allowSubscriptionLogin?: boolean;
+  /** Security QA (Strix) settings, resolved in the main process */
+  securityQa?: import('../security/strix').StrixSettings;
   /** API key or token for auth */
   apiKey?: string;
   /** Base URL override for the provider */

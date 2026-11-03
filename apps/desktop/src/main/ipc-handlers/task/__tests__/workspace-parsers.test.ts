@@ -266,3 +266,34 @@ describe('parseAdr', () => {
     expect(adr.status).toBeUndefined();
   });
 });
+
+describe('security artifacts', () => {
+  it('reads gate findings as blocking and Strix findings against the threshold', async () => {
+    const { parseSecurityGates, parseSecurityQa } = await import('../workspace-parsers');
+    const gates = parseSecurityGates({
+      ran: ['gitleaks'],
+      skipped: [{ gate: 'osv-scanner', reason: 'no dependency lockfiles changed' }],
+      findings: [{ gate: 'gitleaks', title: 'Secret detected: AWS', file: 'a.ts', line: 3 }],
+    });
+    expect(gates?.findings).toEqual([expect.objectContaining({ source: 'gitleaks', location: 'a.ts:3', blocking: true })]);
+    expect(gates?.skipped[0].gate).toBe('osv-scanner');
+
+    const pentest = parseSecurityQa(
+      {
+        status: 'findings',
+        settings: { scanMode: 'quick', failOn: 'high' },
+        costUsd: 2,
+        runDir: '/spec/security/strix_runs/r1',
+        findings: [
+          { title: 'SQLi', severity: 'critical' },
+          { title: 'Header', severity: 'low' },
+          { title: 'Odd', severity: 'unknown' },
+        ],
+      },
+      '/spec',
+    );
+    expect(pentest?.findings.map((f) => f.blocking)).toEqual([true, false, true]);
+    expect(pentest?.reportPath).toBe('security/strix_runs/r1/penetration_test_report.md');
+    expect(parseSecurityQa('nope', '/spec')).toBeUndefined();
+  });
+});

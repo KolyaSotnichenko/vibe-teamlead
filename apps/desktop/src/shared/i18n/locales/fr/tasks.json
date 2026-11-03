@@ -390,7 +390,8 @@
     "tabs": {
       "spec": "Spécification",
       "plan": "Plan",
-      "architecture": "Architecture"
+      "architecture": "Architecture",
+      "security": "Sécurité"
     },
     "sections": {
       "label": "Sections de l'espace de travail"
@@ -483,6 +484,31 @@
       "noDocBody": "Le récit de l'architecte et les contraintes pour le planificateur apparaissent ici.",
       "noAdrs": "Aucune décision enregistrée. L'architecte ajoute un ADR pour chaque choix difficile à revenir en arrière.",
       "noDiagrams": "Pas encore de diagrammes. L'architecte ajoute les diagrammes avant la planification."
+    },
+    "security": {
+      "gatesTitle": "Contrôles de sécurité",
+      "gatesMeta": "gitleaks · OSV-Scanner · avant chaque revue QA",
+      "gatesClear": "Rien à signaler : aucun secret ni dépendance vulnérable ajoutée dans les modifications de cette tâche.",
+      "gatesBlocked": "{{count}} problème(s) bloquent la QA jusqu'à leur correction.",
+      "skipped": "{{gate}} ignoré : {{reason}}",
+      "pentestTitle": "Test d'intrusion",
+      "pentestMeta": "Strix · analyse {{mode}} · bloque à partir de {{failOn}}",
+      "cost": "dépensé {{cost}} $",
+      "report": "Rapport complet",
+      "status": {
+        "clear": "Rien à signaler",
+        "findings": "Problèmes",
+        "skipped": "Ignoré",
+        "error": "Erreur",
+        "cancelled": "Annulé"
+      },
+      "pentestClear": "Strix n'a rien trouvé d'exploitable au-dessus du seuil dans le code modifié.",
+      "belowThreshold": "sous le seuil",
+      "blocking": "bloquant",
+      "emptyTitle": "Pas encore de résultats de sécurité",
+      "emptyBody": "Les analyses de secrets et de dépendances s'exécutent avant chaque revue QA. Si la QA sécurité est activée dans les réglages, un test d'intrusion Strix s'exécute après l'approbation QA.",
+      "noGates": "Les contrôles s'exécutent avant la première revue QA.",
+      "noPentest": "La QA sécurité (Strix) est désactivée, ou la QA n'a pas encore approuvé. Activez-la dans Réglages → Général."
     }
   }
 }

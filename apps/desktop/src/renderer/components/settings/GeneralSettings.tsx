@@ -168,6 +168,79 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                   onCheckedChange={(checked) => onSettingsChange({ ...settings, useClaudeSubscription: checked })}
                 />
               </div>
+              <div className="flex items-center justify-between max-w-md">
+                <div className="space-y-1">
+                  <Label htmlFor="securityQaEnabled" className="text-sm font-medium text-foreground">
+                    {t('general.securityQa')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{t('general.securityQaDescription')}</p>
+                </div>
+                <Switch
+                  id="securityQaEnabled"
+                  checked={settings.securityQaEnabled === true}
+                  onCheckedChange={(checked) => onSettingsChange({ ...settings, securityQaEnabled: checked })}
+                />
+              </div>
+              {settings.securityQaEnabled === true && (
+                <div className="grid max-w-md grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">{t('general.securityQaScanMode')}</Label>
+                    <Select
+                      value={settings.securityQaScanMode ?? 'quick'}
+                      onValueChange={(value) =>
+                        onSettingsChange({ ...settings, securityQaScanMode: value as AppSettings['securityQaScanMode'] })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(['quick', 'standard', 'deep'] as const).map((mode) => (
+                          <SelectItem key={mode} value={mode}>
+                            {t(`general.securityQaMode.${mode}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">{t('general.securityQaFailOn')}</Label>
+                    <Select
+                      value={settings.securityQaFailOn ?? 'high'}
+                      onValueChange={(value) =>
+                        onSettingsChange({ ...settings, securityQaFailOn: value as AppSettings['securityQaFailOn'] })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(['critical', 'high', 'medium', 'low'] as const).map((severity) => (
+                          <SelectItem key={severity} value={severity}>
+                            {t(`general.securityQaSeverity.${severity}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="securityQaMaxBudgetUsd" className="text-xs text-muted-foreground">
+                      {t('general.securityQaBudget')}
+                    </Label>
+                    <Input
+                      id="securityQaMaxBudgetUsd"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={settings.securityQaMaxBudgetUsd ?? 5}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        if (value > 0) onSettingsChange({ ...settings, securityQaMaxBudgetUsd: value });
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </SettingsSection>

@@ -22,6 +22,8 @@ import {
   parseAdr,
   parsePlan,
   parseQaCoverage,
+  parseSecurityGates,
+  parseSecurityQa,
 } from './workspace-parsers';
 
 /** Markdown/JSON larger than this is skipped rather than shipped over IPC */
@@ -124,6 +126,10 @@ export function loadTaskWorkspace(specDir: string): TaskWorkspace {
     ...(plan ? { plan } : {}),
     timeline,
     architecture: loadArchitecture(specDir),
+    security: {
+      gates: parseSecurityGates(readJson(path.join(specDir, 'security_gates.json'))),
+      pentest: parseSecurityQa(readJson(path.join(specDir, 'security_qa.json')), specDir),
+    },
   };
 }
 

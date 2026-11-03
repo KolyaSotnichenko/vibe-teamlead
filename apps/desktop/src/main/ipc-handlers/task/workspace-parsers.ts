@@ -9,6 +9,7 @@
  * than an exception, because these files are written by LLM agents.
  */
 
+import path from 'path';
 import type { TaskLogs, TaskLogEntry, TaskLogPhase, TaskLogPhaseStatus } from '../../../shared/types/task';
 import type {
   AcStatus,
@@ -20,6 +21,7 @@ import type {
   WorkspacePlanPhase,
   WorkspacePlanSubtask,
   WorkspaceSubtaskStatus,
+  WorkspaceSecurity,
   WorkspaceTimelineItem,
 } from '../../../shared/types/task-workspace';
 
@@ -501,5 +503,61 @@ export function parseAdr(fileName: string, markdown: string): WorkspaceAdr {
     title: heading ? heading[1].trim() : fallbackTitle,
     ...(status ? { status: status.toLowerCase() } : {}),
     markdown: text,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Security (security_gates.json, security_qa.json)
+// ---------------------------------------------------------------------------
+
+const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
+
+function str(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+export function parseSecurityGates(raw: unknown): WorkspaceSecurity['gates'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as { ran?: unknown; skipped?: unknown; findings?: unknown };
+  const findings = Array.isArray(r.findings) ? r.findings : [];
+  return {
+    ran: Array.isArray(r.ran) ? r.ran.filter((x): x is string => typeof x === 'string') : [],
+    skipped: Array.isArray(r.skipped)
+      ? r.skipped.flatMap((s) => (s && typeof s === 'object' && str((s as { gate?: unknown }).gate) ? [{ gate: String((s as { gate: string }).gate), reason: str((s as { reason?: unknown }).reason) ?? '' }] : []))
+      : [],
+    findings: findings.flatMap((f) => {
+      if (!f || typeof f !== 'object') return [];
+      const x = f as Record<string, unknown>;
+      const source = x.gate === 'osv-scanner' ? 'osv-scanner' : 'gitleaks';
+      const file = str(x.file);
+      return [{ source, title: str(x.title) ?? 'Finding', location: file ? `${file}${typeof x.line === 'number' ? `:${x.line}` : ''}` : undefined, detail: str(x.detail), blocking: true }];
+    }),
+  };
+}
+
+export function parseSecurityQa(raw: unknown, specDir: string): WorkspaceSecurity['pentest'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const status = ['clear', 'findings', 'skipped', 'error', 'cancelled'].includes(String(r.status))
+    ? (r.status as NonNullable<WorkspaceSecurity['pentest']>['status'])
+    : 'error';
+  const settings = (r.settings ?? {}) as Record<string, unknown>;
+  const failOn = str(settings.failOn);
+  const threshold = failOn ? SEVERITY_ORDER.indexOf(failOn) : 1;
+  const runDir = str(r.runDir);
+  return {
+    status,
+    reason: str(r.reason),
+    scanMode: str(settings.scanMode),
+    failOn,
+    costUsd: typeof r.costUsd === 'number' ? r.costUsd : undefined,
+    reportPath: runDir ? path.relative(specDir, path.join(runDir, 'penetration_test_report.md')) : undefined,
+    findings: (Array.isArray(r.findings) ? r.findings : []).flatMap((f) => {
+      if (!f || typeof f !== 'object') return [];
+      const x = f as Record<string, unknown>;
+      const severity = str(x.severity) ?? 'unknown';
+      const rank = SEVERITY_ORDER.indexOf(severity);
+      return [{ source: 'strix' as const, title: str(x.title) ?? 'Finding', severity, location: str(x.location), detail: str(x.description), blocking: rank === -1 || rank <= threshold }];
+    }),
   };
 }

@@ -390,7 +390,8 @@
     "tabs": {
       "spec": "Spec",
       "plan": "Plan",
-      "architecture": "Architecture"
+      "architecture": "Architecture",
+      "security": "Security"
     },
     "sections": {
       "label": "Workspace sections"
@@ -483,6 +484,31 @@
       "noDocBody": "The architect's narrative and planner constraints appear here.",
       "noAdrs": "No decisions recorded. The architect adds an ADR for each hard-to-reverse choice.",
       "noDiagrams": "No diagrams yet. The architect adds diagrams before planning."
+    },
+    "security": {
+      "gatesTitle": "Security gates",
+      "gatesMeta": "gitleaks · OSV-Scanner · before every QA review",
+      "gatesClear": "Clear — no secrets or newly introduced vulnerable dependencies in what this task changed.",
+      "gatesBlocked": "{{count}} finding(s) block QA until they are fixed.",
+      "skipped": "Skipped {{gate}}: {{reason}}",
+      "pentestTitle": "Penetration test",
+      "pentestMeta": "Strix · {{mode}} scan · blocks at {{failOn}}",
+      "cost": "spent ${{cost}}",
+      "report": "Full report",
+      "status": {
+        "clear": "Clear",
+        "findings": "Findings",
+        "skipped": "Skipped",
+        "error": "Error",
+        "cancelled": "Cancelled"
+      },
+      "pentestClear": "Strix found nothing exploitable at the threshold in the changed code.",
+      "belowThreshold": "below threshold",
+      "blocking": "blocking",
+      "emptyTitle": "No security results yet",
+      "emptyBody": "Secret and dependency scans run before every QA review. If Security QA is on in Settings, a Strix penetration test runs after QA approves.",
+      "noGates": "The gates run before the first QA review.",
+      "noPentest": "Security QA (Strix) is off, or QA has not approved yet. Turn it on in Settings → General."
     }
   }
 }

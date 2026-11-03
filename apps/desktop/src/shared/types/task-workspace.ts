@@ -113,6 +113,36 @@ export interface WorkspaceArchitecture {
   diagrams: WorkspaceDiagram[];
 }
 
+export interface WorkspaceSecurityFinding {
+  source: 'gitleaks' | 'osv-scanner' | 'strix';
+  title: string;
+  /** Strix severity; gate findings are always blocking */
+  severity?: string;
+  location?: string;
+  detail?: string;
+  blocking: boolean;
+}
+
+export interface WorkspaceSecurity {
+  /** gitleaks + OSV-Scanner, from security_gates.json (runs before every QA review) */
+  gates?: {
+    ran: string[];
+    skipped: { gate: string; reason: string }[];
+    findings: WorkspaceSecurityFinding[];
+  };
+  /** Strix penetration test, from security_qa.json (after QA approval) */
+  pentest?: {
+    status: 'clear' | 'findings' | 'skipped' | 'error' | 'cancelled';
+    reason?: string;
+    scanMode?: string;
+    failOn?: string;
+    costUsd?: number;
+    findings: WorkspaceSecurityFinding[];
+    /** Strix report path relative to the spec directory */
+    reportPath?: string;
+  };
+}
+
 export interface TaskWorkspace {
   /** Absolute spec directory the artifacts were read from */
   specDir: string;
@@ -125,4 +155,5 @@ export interface TaskWorkspace {
   plan?: WorkspacePlan;
   timeline: WorkspaceTimelineItem[];
   architecture: WorkspaceArchitecture;
+  security: WorkspaceSecurity;
 }

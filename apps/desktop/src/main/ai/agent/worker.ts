@@ -14,6 +14,7 @@
 import { parentPort, workerData } from 'worker_threads';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 
 import { toClaudeAuth } from '../claude-code/auth';
 import { runAgentSession } from '../claude-code/runner';
@@ -30,8 +31,9 @@ import type {
 } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator } from '../orchestration/build-orchestrator';
-import { QALoop } from '../orchestration/qa-loop';
-import { runSecurityGates } from '../security/gates';
+import { QALoop, type QAOutcome } from '../orchestration/qa-loop';
+import { resolveBaseRef, runSecurityGates } from '../security/gates';
+import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
@@ -757,7 +759,10 @@ async function runQALoop(
     logWriter.startPhase('qa');
   }
 
-  const outcome = await qaLoop.run();
+  let outcome = await qaLoop.run();
+  if (outcome.approved && session.securityQa?.enabled) {
+    outcome = await runSecurityQa(session, qaLoop, outcome);
+  }
 
   // End QA validation phase and flush any remaining accumulated log entries
   if (logWriter) {
@@ -768,7 +773,8 @@ async function runQALoop(
   // Emit task events so XState machine transitions correctly.
   if (outcome.approved) {
     postTaskEvent('QA_PASSED');
-  } else if (outcome.reason === 'max_iterations') {
+  } else if (outcome.reason === 'max_iterations' || outcome.reason === 'security_findings') {
+    // Both go to human review with the reports attached.
     postTaskEvent('QA_MAX_ITERATIONS');
   } else {
     postTaskEvent('QA_AGENT_ERROR', { error: outcome.error });
@@ -792,6 +798,61 @@ async function runQALoop(
     data: result,
     projectId: config.projectId,
   });
+}
+
+/** Strix rounds before unresolved findings go to human review. */
+const MAX_SECURITY_QA_ROUNDS = 2;
+
+/**
+ * Security QA after QA approval: Strix pentests the changed code; blocking
+ * findings go to the QA fixer (as a fix request) and QA re-reviews. Skipped
+ * or failed scans never block the task — the reason is logged and written
+ * to security_qa.md.
+ */
+async function runSecurityQa(
+  session: SerializableSessionConfig,
+  qaLoop: QALoop,
+  approved: QAOutcome,
+): Promise<QAOutcome> {
+  const settings = session.securityQa!;
+  let outcome = approved;
+  const diffBase = await resolveBaseRef(session.projectDir);
+
+  for (let round = 1; round <= MAX_SECURITY_QA_ROUNDS; round++) {
+    const result = await runStrix({
+      projectDir: session.projectDir,
+      specDir: session.specDir,
+      settings,
+      model: session.modelId,
+      apiKey: session.apiKey,
+      baseURL: session.baseURL,
+      diffBase,
+      signal: abortController.signal,
+      onLog: postLog,
+    });
+
+    if (result.status === 'cancelled') return { ...outcome, approved: false, reason: 'cancelled' };
+    if (result.status !== 'findings') {
+      postLog(
+        result.status === 'clear'
+          ? 'Security QA: no exploitable findings'
+          : `Security QA ${result.status}: ${result.reason ?? 'see security_qa.md'}`,
+      );
+      return outcome;
+    }
+
+    const blocking = result.findings.filter((f) => isBlocking(f, settings.failOn));
+    postLog(`Security QA: ${blocking.length} finding(s) at ${settings.failOn} or above (round ${round}/${MAX_SECURITY_QA_ROUNDS})`);
+    if (round === MAX_SECURITY_QA_ROUNDS) {
+      return { ...outcome, approved: false, reason: 'security_findings', error: 'Security QA findings remain; see security_qa.md' };
+    }
+
+    // Hand the findings to the fixer through the human-feedback path, then re-review.
+    await writeFile(join(session.specDir, 'QA_FIX_REQUEST.md'), formatFixRequest(result, settings, session.specDir), 'utf-8');
+    outcome = await qaLoop.run();
+    if (!outcome.approved) return outcome;
+  }
+  return outcome;
 }
 
 /**

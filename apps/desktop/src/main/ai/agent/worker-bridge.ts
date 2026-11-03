@@ -28,6 +28,7 @@ import type { SessionResult } from '../session/types';
 import { ProgressTracker } from '../session/progress-tracker';
 import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
+import { readStrixSettings } from '../security/strix-setting';
 import type { AgentAnswers } from '../claude-code/user-questions';
 
 // ESM-compatible __dirname
@@ -103,6 +104,7 @@ export class WorkerBridge extends EventEmitter {
         ...config.session,
         bundled,
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
+        securityQa: config.session.securityQa ?? readStrixSettings(),
       },
     };
 
