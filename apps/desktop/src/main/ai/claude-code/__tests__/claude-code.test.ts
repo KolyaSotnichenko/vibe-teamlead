@@ -85,6 +85,20 @@ describe('SessionAccumulator', () => {
     const auth = new SessionAccumulator(() => undefined);
     auth.handle(msg({ type: 'assistant', error: 'authentication_failed', message: { id: 'm', content: [] } }));
     expect(auth.resolveOutcome(false).outcome).toBe('auth_failure');
+    expect(auth.resolveOutcome(false).error?.message).toBe('Authentication failed (authentication_failed)');
+
+    // The endpoint's own reason (e.g. from a gateway) reaches the user
+    const gateway = new SessionAccumulator(() => undefined);
+    gateway.handle(
+      msg({
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: { id: 'm', content: [{ type: 'text', text: 'Failed to authenticate. API Error: 401 Unknown or revoked Meter proxy key.' }] },
+      }),
+    );
+    expect(gateway.resolveOutcome(false).error?.message).toBe(
+      'Authentication failed: API Error: 401 Unknown or revoked Meter proxy key.',
+    );
 
     expect(new SessionAccumulator(() => undefined).resolveOutcome(true).outcome).toBe('cancelled');
   });

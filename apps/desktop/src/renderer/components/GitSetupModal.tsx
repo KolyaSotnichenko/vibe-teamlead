@@ -198,7 +198,7 @@ export function GitSetupModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" dismissible={false}>
         {step === 'info' && renderInfoStep()}
         {step === 'initializing' && renderInitializingStep()}
         {step === 'success' && renderSuccessStep()}

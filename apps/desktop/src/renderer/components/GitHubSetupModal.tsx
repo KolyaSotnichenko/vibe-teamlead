@@ -909,7 +909,11 @@ export function GitHubSetupModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={step === 'claude-auth' ? 'sm:max-w-2xl' : 'sm:max-w-md'}>
+      <DialogContent
+        className={step === 'claude-auth' ? 'sm:max-w-2xl' : 'sm:max-w-md'}
+        // Setup closes through its own buttons (Skip for now, or finishing it)
+        dismissible={step === 'complete' || !onSkip}
+      >
         {renderProgress()}
         {renderStepContent()}
       </DialogContent>

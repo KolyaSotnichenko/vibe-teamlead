@@ -42,6 +42,22 @@ const AUTH_ERRORS = new Set([
   'verification_required',
 ]);
 
+/**
+ * The reason in an error message from Claude Code, e.g. "Failed to authenticate.
+ * API Error: 401 Unknown or revoked Meter proxy key." → "API Error: 401 Unknown
+ * or revoked Meter proxy key." (the endpoint's own message, which says what to fix).
+ */
+export function errorTextOf(content: ContentBlockLike[] | undefined): string | undefined {
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .filter((b) => b.type === 'text' && b.text)
+    .map((b) => b.text)
+    .join(' ')
+    .replace(/^Failed to authenticate\.\s*/, '')
+    .trim();
+  return text ? text.slice(0, 500) : undefined;
+}
+
 export function toTokenUsage(usage: UsageLike | null | undefined): TokenUsage {
   const input = usage?.input_tokens ?? 0;
   const output = usage?.output_tokens ?? 0;
@@ -75,6 +91,8 @@ export class SessionAccumulator {
   readonly messages: SessionMessage[] = [];
 
   private assistantError: string | undefined;
+  /** Text of the message that carried the error: Claude Code puts the API's own reason there */
+  private assistantErrorText: string | undefined;
   private rateLimited = false;
   private currentMessageId: string | undefined;
   private currentText = '';
@@ -105,7 +123,10 @@ export class SessionAccumulator {
       }
 
       case 'assistant': {
-        if (message.error) this.assistantError = message.error;
+        if (message.error) {
+          this.assistantError = message.error;
+          this.assistantErrorText = errorTextOf(message.message.content as ContentBlockLike[]);
+        }
         const id = message.message.id;
         if (id !== this.currentMessageId) {
           this.finishStep();
@@ -185,7 +206,13 @@ export class SessionAccumulator {
     if (this.assistantError && AUTH_ERRORS.has(this.assistantError)) {
       return {
         outcome: 'auth_failure',
-        error: { code: ErrorCode.AUTH_FAILURE, message: `Authentication failed (${this.assistantError})`, retryable: false },
+        error: {
+          code: ErrorCode.AUTH_FAILURE,
+          message: this.assistantErrorText
+            ? `Authentication failed: ${this.assistantErrorText}`
+            : `Authentication failed (${this.assistantError})`,
+          retryable: false,
+        },
       };
     }
     if (this.rateLimited || this.assistantError === 'rate_limit') {

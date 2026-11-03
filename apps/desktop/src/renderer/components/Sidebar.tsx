@@ -19,9 +19,11 @@ import {
   Wrench,
   PanelLeft,
   PanelLeftClose,
-  FileInput
+  FileInput,
+  ChevronDown
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -317,26 +319,46 @@ export function Sidebar({
     return button;
   };
 
-  // Second way to create tasks: a brief → reviewed tasks. Secondary (1px frame) under New Task.
-  const importBriefButton = (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={() => setShowBriefImport(true)}
-          disabled={!canCreateTasks}
-          className={cn(
-            "flex min-h-11 items-center justify-center gap-2 border border-input text-sm font-medium text-foreground hover:bg-accent disabled:opacity-40",
-            isCollapsed ? "w-11" : "w-full px-3"
-          )}
-          aria-label={t('actions.importBrief')}
-        >
-          <FileInput className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-          {!isCollapsed && <span className="truncate">{t('actions.importBrief')}</span>}
-        </button>
-      </TooltipTrigger>
-      {isCollapsed && <TooltipContent side="right">{t('actions.importBrief')}</TooltipContent>}
-    </Tooltip>
+  // "Create" offers both ways to add work: one task, or a spec document (ТЗ) split into tasks.
+  const createMenu = (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              disabled={!canCreateTasks}
+              className={cn(
+                "flex min-h-11 items-center justify-center gap-2 bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40",
+                isCollapsed ? "w-11" : "flex-1 px-3"
+              )}
+              aria-label={t('actions.create')}
+            >
+              <Plus className="h-4 w-4" />
+              {!isCollapsed && t('actions.create')}
+              {!isCollapsed && <ChevronDown className="ml-auto h-4 w-4 opacity-70" aria-hidden="true" />}
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        {isCollapsed && <TooltipContent side="right">{t('actions.create')}</TooltipContent>}
+      </Tooltip>
+      <DropdownMenuContent side={isCollapsed ? 'right' : 'top'} align="start" className="w-72">
+        <DropdownMenuItem onSelect={onNewTaskClick} className="items-start gap-3 py-2">
+          <Plus className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{t('actions.newTaskItem')}</div>
+            <div className="text-xs text-muted-foreground">{t('actions.newTaskHint')}</div>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setShowBriefImport(true)} className="items-start gap-3 py-2">
+          <FileInput className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{t('actions.importBriefItem')}</div>
+            <div className="text-xs text-muted-foreground">{t('actions.importBriefHint')}</div>
+          </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
@@ -402,28 +424,10 @@ export function Sidebar({
         {/* Update Banner - shows when app update is available */}
         <UpdateBanner />
 
-        {/* New task + settings/help; import brief below */}
+        {/* Create (task or spec document) + settings/help */}
         <div className={cn("border-t border-border", isCollapsed ? "space-y-1 p-2" : "space-y-1 p-3")}>
           <div className={cn("flex", isCollapsed ? "flex-col gap-1" : "items-stretch gap-1")}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={onNewTaskClick}
-                  disabled={!canCreateTasks}
-                  className={cn(
-                    "flex min-h-11 items-center justify-center gap-2 bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40",
-                    isCollapsed ? "w-11" : "flex-1 px-3"
-                  )}
-                  aria-label={t('actions.newTask')}
-                >
-                  <Plus className="h-4 w-4" />
-                  {!isCollapsed && t('actions.newTask')}
-                </button>
-              </TooltipTrigger>
-              {isCollapsed && <TooltipContent side="right">{t('actions.newTask')}</TooltipContent>}
-            </Tooltip>
-            {isCollapsed && importBriefButton}
+            {createMenu}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -451,7 +455,6 @@ export function Sidebar({
               <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.help')}</TooltipContent>
             </Tooltip>
           </div>
-          {!isCollapsed && importBriefButton}
           {!isCollapsed && selectedProject && !selectedProject.autoBuildPath && (
             <p className="mt-2 text-xs text-muted-foreground">
               {t('messages.initializeToCreateTasks')}

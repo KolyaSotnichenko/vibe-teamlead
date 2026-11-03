@@ -37,12 +37,38 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   hideCloseButton?: boolean;
+  /**
+   * false: no close button, Escape and clicks outside do nothing — the dialog
+   * closes only through its own buttons (e.g. "Skip" or the action itself).
+   */
+  dismissible?: boolean;
+}
+
+type ContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>;
+
+/** Content props that keep a dialog open on Escape and outside clicks. */
+export function blockDismiss<P extends ContentProps>(props: P): P {
+  return {
+    ...props,
+    onEscapeKeyDown: (e) => {
+      e.preventDefault();
+      props.onEscapeKeyDown?.(e);
+    },
+    onPointerDownOutside: (e) => {
+      e.preventDefault();
+      props.onPointerDownOutside?.(e);
+    },
+    onInteractOutside: (e) => {
+      e.preventDefault();
+      props.onInteractOutside?.(e);
+    },
+  };
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, hideCloseButton, ...props }, ref) => (
+>(({ className, children, hideCloseButton, dismissible = true, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -60,10 +86,10 @@ const DialogContent = React.forwardRef<
         'duration-200 overflow-hidden flex flex-col',
         className
       )}
-      {...props}
+      {...(dismissible ? props : blockDismiss(props))}
     >
       {children}
-      {!hideCloseButton && (
+      {!hideCloseButton && dismissible && (
         <DialogPrimitive.Close
           className={cn(
             'absolute right-4 top-4 rounded-lg p-1 z-10',

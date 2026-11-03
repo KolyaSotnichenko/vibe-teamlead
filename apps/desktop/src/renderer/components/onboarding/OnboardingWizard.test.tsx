@@ -219,6 +219,17 @@ describe('OnboardingWizard Integration Tests', () => {
       });
     });
 
+    it('stays open on Escape and has no close button', async () => {
+      const mockOnOpenChange = vi.fn();
+      render(<OnboardingWizard {...defaultProps} onOpenChange={mockOnOpenChange} />);
+
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+      expect(mockOnOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /Skip Setup/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Close$/ })).not.toBeInTheDocument();
+    });
+
     it('should move on to the Tools step when the Claude step is skipped', async () => {
       render(<OnboardingWizard {...defaultProps} />);
 

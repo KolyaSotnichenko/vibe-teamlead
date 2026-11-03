@@ -28,7 +28,12 @@
     "collapseSidebar": "Collapse Sidebar",
     "expandSidebar": "Expand Sidebar",
     "sponsor": "Sponsor Us",
-    "importBrief": "Import brief"
+    "importBrief": "Import brief",
+    "create": "Create",
+    "newTaskItem": "New task",
+    "newTaskHint": "Describe one task yourself",
+    "importBriefItem": "Upload a spec document",
+    "importBriefHint": ".docx, .md, .pdf, .txt, .rtf — the analyst splits it into tasks"
   },
   "tooltips": {
     "settings": "Application Settings",

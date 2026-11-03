@@ -28,7 +28,12 @@
     "collapseSidebar": "Згорнути бічну панель",
     "expandSidebar": "Розгорнути бічну панель",
     "sponsor": "Підтримати нас",
-    "importBrief": "Імпортувати бриф"
+    "importBrief": "Завантажити ТЗ",
+    "create": "Створити",
+    "newTaskItem": "Нова задача",
+    "newTaskHint": "Опишіть одну задачу самостійно",
+    "importBriefItem": "Завантажити ТЗ",
+    "importBriefHint": ".docx, .md, .pdf, .txt, .rtf — аналітик розіб’є його на задачі"
   },
   "tooltips": {
     "settings": "Налаштування застосунку",

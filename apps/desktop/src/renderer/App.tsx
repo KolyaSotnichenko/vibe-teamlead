@@ -967,7 +967,7 @@ export function App() {
             handleSkipInit();
           }
         }}>
-          <DialogContent>
+          <DialogContent dismissible={false}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Download className="h-5 w-5" />

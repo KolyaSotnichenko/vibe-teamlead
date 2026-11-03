@@ -7,7 +7,7 @@
 import type { BriefEpic, BriefTaskDraft } from '../../../shared/types';
 
 /** File types the brief analyst can read. */
-export const BRIEF_FILE_EXTENSIONS = ['.md', '.markdown', '.txt', '.pdf', '.docx', '.rtf', '.odt'] as const;
+export const BRIEF_FILE_EXTENSIONS = ['.md', '.markdown', '.txt', '.pdf', '.docx', '.doc', '.rtf', '.odt', '.html', '.htm'] as const;
 
 export function isSupportedBriefFile(name: string): boolean {
   const lower = name.toLowerCase();

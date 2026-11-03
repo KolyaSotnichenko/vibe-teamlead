@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
+import { blockDismiss } from './dialog';
 
 /** Screen-reader label for the close button (hooks can't run in the forwardRef arrow body). */
 function CloseLabel() {
@@ -35,10 +36,15 @@ const FullScreenDialogOverlay = React.forwardRef<
 ));
 FullScreenDialogOverlay.displayName = 'FullScreenDialogOverlay';
 
+interface FullScreenDialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+  /** false: no close button, Escape and clicks outside do nothing (see Dialog) */
+  dismissible?: boolean;
+}
+
 const FullScreenDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  FullScreenDialogContentProps
+>(({ className, children, dismissible = true, ...props }, ref) => (
   <FullScreenDialogPortal>
     <FullScreenDialogOverlay />
     <DialogPrimitive.Content
@@ -54,9 +60,10 @@ const FullScreenDialogContent = React.forwardRef<
         'duration-200',
         className
       )}
-      {...props}
+      {...(dismissible ? props : blockDismiss(props))}
     >
       {children}
+      {dismissible && (
       <DialogPrimitive.Close
         className={cn(
           'absolute right-4 top-4 rounded-lg p-2',
@@ -69,6 +76,7 @@ const FullScreenDialogContent = React.forwardRef<
         <X className="h-5 w-5" />
         <CloseLabel />
       </DialogPrimitive.Close>
+      )}
     </DialogPrimitive.Content>
   </FullScreenDialogPortal>
 ));

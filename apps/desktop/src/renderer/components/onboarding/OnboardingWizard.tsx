@@ -200,7 +200,8 @@ export function OnboardingWizard({
 
   return (
     <FullScreenDialog open={open} onOpenChange={handleOpenChange}>
-      <FullScreenDialogContent>
+      {/* Closes only through its buttons: Skip, or finishing the steps */}
+      <FullScreenDialogContent dismissible={false}>
         <FullScreenDialogHeader>
           <FullScreenDialogTitle className="flex items-center gap-3">
             <Wand2 className="h-6 w-6" />
