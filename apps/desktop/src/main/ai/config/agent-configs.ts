@@ -11,7 +11,7 @@
  * - Base tools: Core file operations (Read, Write, Edit, etc.)
  * - Web tools: Documentation and research (WebFetch, WebSearch)
  * - MCP tools: External integrations (Context7, Linear, Memory, etc.)
- * - Auto-Claude tools: Custom build management tools
+ * - Vibe Teamlead tools: Custom build management tools
  */
 
 import type { ThinkingLevel } from './types';
@@ -36,18 +36,18 @@ const ALL_BUILTIN_TOOLS = [...BASE_READ_TOOLS, ...BASE_WRITE_TOOLS, ...WEB_TOOLS
 const SPEC_TOOLS = [...BASE_READ_TOOLS, 'Write', ...WEB_TOOLS] as const;
 
 // =============================================================================
-// Auto-Claude MCP Tools (Custom build management)
+// Vibe Teamlead MCP Tools (Custom build management)
 // =============================================================================
 
-const TOOL_UPDATE_SUBTASK_STATUS = 'mcp__auto-claude__update_subtask_status';
-const TOOL_GET_BUILD_PROGRESS = 'mcp__auto-claude__get_build_progress';
-const TOOL_RECORD_DISCOVERY = 'mcp__auto-claude__record_discovery';
-const TOOL_RECORD_GOTCHA = 'mcp__auto-claude__record_gotcha';
-const TOOL_GET_SESSION_CONTEXT = 'mcp__auto-claude__get_session_context';
-const TOOL_UPDATE_QA_STATUS = 'mcp__auto-claude__update_qa_status';
-const TOOL_RENDER_DIAGRAM = 'mcp__auto-claude__render_diagram';
-const TOOL_SEARCH_MEMORY = 'mcp__auto-claude__search_memory';
-const TOOL_REMEMBER = 'mcp__auto-claude__remember';
+const TOOL_UPDATE_SUBTASK_STATUS = 'mcp__vibe-teamlead__update_subtask_status';
+const TOOL_GET_BUILD_PROGRESS = 'mcp__vibe-teamlead__get_build_progress';
+const TOOL_RECORD_DISCOVERY = 'mcp__vibe-teamlead__record_discovery';
+const TOOL_RECORD_GOTCHA = 'mcp__vibe-teamlead__record_gotcha';
+const TOOL_GET_SESSION_CONTEXT = 'mcp__vibe-teamlead__get_session_context';
+const TOOL_UPDATE_QA_STATUS = 'mcp__vibe-teamlead__update_qa_status';
+const TOOL_RENDER_DIAGRAM = 'mcp__vibe-teamlead__render_diagram';
+const TOOL_SEARCH_MEMORY = 'mcp__vibe-teamlead__search_memory';
+const TOOL_REMEMBER = 'mcp__vibe-teamlead__remember';
 /** Project memory: read what earlier agents learned, keep what the next ones should know */
 const MEMORY_TOOLS = [TOOL_SEARCH_MEMORY, TOOL_REMEMBER] as const;
 
@@ -172,8 +172,8 @@ export interface AgentConfig {
   mcpServers: readonly string[];
   /** Optional MCP servers (conditionally enabled) */
   mcpServersOptional?: readonly string[];
-  /** Auto-Claude MCP tools this agent can use */
-  autoClaudeTools: readonly string[];
+  /** Vibe Teamlead MCP tools this agent can use */
+  appTools: readonly string[];
   /** Default thinking level for this agent */
   thinkingDefault: ThinkingLevel;
 }
@@ -193,49 +193,49 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   spec_gatherer: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   spec_researcher: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   spec_writer: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   spec_critic: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   spec_discovery: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   spec_context: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   spec_validation: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   spec_compaction: {
     tools: [...SPEC_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
 
@@ -247,7 +247,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   spec_orchestrator: {
     tools: [...ALL_BUILTIN_TOOLS, 'SpawnSubagent'],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
 
@@ -258,9 +258,9 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
    */
   build_orchestrator: {
     tools: [...ALL_BUILTIN_TOOLS, 'SpawnSubagent'],
-    mcpServers: ['context7', 'memory', 'auto-claude'],
+    mcpServers: ['context7', 'memory', 'vibe-teamlead'],
     mcpServersOptional: ['linear'],
-    autoClaudeTools: [
+    appTools: [
       TOOL_GET_BUILD_PROGRESS,
       TOOL_GET_SESSION_CONTEXT,
       TOOL_RECORD_DISCOVERY,
@@ -279,15 +279,15 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
    */
   architect: {
     tools: [...ALL_BUILTIN_TOOLS],
-    mcpServers: ['context7', 'memory', 'auto-claude'],
-    autoClaudeTools: [TOOL_GET_SESSION_CONTEXT, TOOL_RECORD_DISCOVERY, TOOL_RENDER_DIAGRAM, ...MEMORY_TOOLS],
+    mcpServers: ['context7', 'memory', 'vibe-teamlead'],
+    appTools: [TOOL_GET_SESSION_CONTEXT, TOOL_RECORD_DISCOVERY, TOOL_RENDER_DIAGRAM, ...MEMORY_TOOLS],
     thinkingDefault: 'high',
   },
   planner: {
     tools: [...ALL_BUILTIN_TOOLS],
-    mcpServers: ['context7', 'memory', 'auto-claude'],
+    mcpServers: ['context7', 'memory', 'vibe-teamlead'],
     mcpServersOptional: ['linear'],
-    autoClaudeTools: [
+    appTools: [
       TOOL_GET_BUILD_PROGRESS,
       TOOL_GET_SESSION_CONTEXT,
       TOOL_RECORD_DISCOVERY,
@@ -297,9 +297,9 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   },
   coder: {
     tools: [...ALL_BUILTIN_TOOLS],
-    mcpServers: ['context7', 'memory', 'auto-claude'],
+    mcpServers: ['context7', 'memory', 'vibe-teamlead'],
     mcpServersOptional: ['linear'],
-    autoClaudeTools: [
+    appTools: [
       TOOL_UPDATE_SUBTASK_STATUS,
       TOOL_GET_BUILD_PROGRESS,
       TOOL_RECORD_DISCOVERY,
@@ -315,9 +315,9 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   // ═══════════════════════════════════════════════════════════════════════
   qa_reviewer: {
     tools: [...ALL_BUILTIN_TOOLS],
-    mcpServers: ['context7', 'memory', 'auto-claude', 'browser'],
+    mcpServers: ['context7', 'memory', 'vibe-teamlead', 'browser'],
     mcpServersOptional: ['linear'],
-    autoClaudeTools: [
+    appTools: [
       TOOL_GET_BUILD_PROGRESS,
       TOOL_UPDATE_QA_STATUS,
       TOOL_GET_SESSION_CONTEXT,
@@ -327,9 +327,9 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   },
   qa_fixer: {
     tools: [...ALL_BUILTIN_TOOLS],
-    mcpServers: ['context7', 'memory', 'auto-claude', 'browser'],
+    mcpServers: ['context7', 'memory', 'vibe-teamlead', 'browser'],
     mcpServersOptional: ['linear'],
-    autoClaudeTools: [
+    appTools: [
       TOOL_UPDATE_SUBTASK_STATUS,
       TOOL_GET_BUILD_PROGRESS,
       TOOL_UPDATE_QA_STATUS,
@@ -346,92 +346,92 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     // Reads the brief and the project; writes nothing (the proposal is structured output).
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   insights: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
   // Insights chat: reads the code, library docs and the project's memory
   insights_chat: {
     tools: [...BASE_READ_TOOLS],
-    mcpServers: ['context7', 'auto-claude'],
-    autoClaudeTools: [...MEMORY_TOOLS],
+    mcpServers: ['context7', 'vibe-teamlead'],
+    appTools: [...MEMORY_TOOLS],
     thinkingDefault: 'medium',
   },
   merge_resolver: {
     tools: [],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
   commit_message: {
     tools: [],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
   pr_template_filler: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
   pr_reviewer: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   pr_orchestrator_parallel: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   pr_followup_parallel: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   pr_followup_extraction: {
     tools: [],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
   pr_finding_validator: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   pr_security_specialist: {
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   pr_quality_specialist: {
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   pr_logic_specialist: {
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   pr_codebase_fit_specialist: {
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
 
@@ -441,19 +441,19 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   analysis: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'medium',
   },
   batch_analysis: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
   batch_validation: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'low',
   },
 
@@ -463,19 +463,19 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   roadmap_discovery: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   competitor_analysis: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7'],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
   ideation: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
-    autoClaudeTools: [],
+    appTools: [],
     thinkingDefault: 'high',
   },
 } as const;
@@ -523,7 +523,9 @@ const MCP_SERVER_NAME_MAP: Record<string, string> = {
   electron: 'electron',
   playwright: 'playwright',
   'chrome-devtools': 'chrome-devtools',
-  'auto-claude': 'auto-claude',
+  'vibe-teamlead': 'vibe-teamlead',
+  // Saved project settings from before the rename
+  'auto-claude': 'vibe-teamlead',
 };
 
 /**
@@ -639,11 +641,11 @@ export function getRequiredMcpServers(
     }
   }
 
-  // Apply per-agent MCP removals (never remove auto-claude)
+  // Apply per-agent MCP removals (never remove the app's own tools)
   if (options.agentMcpRemove) {
     for (const name of options.agentMcpRemove.split(',')) {
       const mapped = mapMcpServerName(name.trim(), options.customServerIds);
-      if (mapped && mapped !== 'auto-claude') {
+      if (mapped && mapped !== 'vibe-teamlead') {
         const idx = servers.indexOf(mapped);
         if (idx !== -1) servers.splice(idx, 1);
       }

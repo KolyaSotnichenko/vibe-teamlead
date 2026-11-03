@@ -130,7 +130,7 @@
     "otherAgentSettingsDescription": "Додаткові параметри конфігурації агентів",
     "agentFramework": "Фреймворк агентів",
     "agentFrameworkDescription": "Фреймворк розробки для автономних задач",
-    "agentFrameworkAutoClaude": "Vibe Teamlead",
+    "agentFrameworkVibeTeamlead": "Vibe Teamlead",
     "aiTerminalNaming": "Назви терміналів від AI",
     "aiTerminalNamingDescription": "Автоматично називати термінали за командами (використовує модель для назв)",
     "featureModelSettings": "Моделі для функцій",
@@ -165,9 +165,9 @@
     "sourceBundled": "Вбудований",
     "sourceFallback": "Резервний",
     "notDetected": "Не знайдено",
-    "autoClaudePath": "Шлях до Vibe Teamlead",
-    "autoClaudePathDescription": "Відносний шлях до каталогу auto-claude у проєктах",
-    "autoClaudePathPlaceholder": "auto-claude (типово)",
+    "dataPath": "Шлях до Vibe Teamlead",
+    "dataPathDescription": "Відносний шлях до теки даних Vibe Teamlead у проєктах",
+    "dataPathPlaceholder": ".vibe-teamlead (типово)",
     "autoNameTerminals": "Автоматично називати термінали",
     "autoNameTerminalsDescription": "Генерувати за допомогою AI змістовні назви вкладок термінала на основі їхньої активності",
     "securityQa": "Security QA (Strix)",
@@ -307,22 +307,22 @@
   "projectSections": {
     "general": {
       "title": "Загальні",
-      "description": "Auto-Build і конфігурація агентів",
+      "description": "Vibe Teamlead і конфігурація агентів",
       "useClaudeMd": "Використовувати CLAUDE.md",
       "useClaudeMdDescription": "Додавати інструкції з CLAUDE.md до контексту агентів",
-      "autoBuildIntegration": "Інтеграція Auto-Build",
+      "autoBuildIntegration": "Інтеграція Vibe Teamlead",
       "notInitializedTitle": "Не ініціалізовано",
-      "notInitializedDescription": "Ініціалізуйте Auto-Build, щоб створювати задачі й запускати робочі процеси агентів.",
+      "notInitializedDescription": "Ініціалізуйте Vibe Teamlead, щоб створювати задачі й запускати робочі процеси агентів.",
       "initializing": "Ініціалізація...",
-      "initializeAutoBuild": "Ініціалізувати Auto-Build",
+      "initializeAutoBuild": "Ініціалізувати Vibe Teamlead",
       "initialized": "Ініціалізовано",
       "notInitialized": "Не ініціалізовано",
       "checkingStatus": "Перевірка стану...",
       "agentConfiguration": "Конфігурація агентів",
       "model": "Модель",
-      "initializeFirst": "Спершу ініціалізуйте Auto-Build, щоб налаштувати: {{feature}}",
+      "initializeFirst": "Спершу ініціалізуйте Vibe Teamlead, щоб налаштувати: {{feature}}",
       "panelTitle": "Загальні",
-      "panelDescription": "Налаштуйте Auto-Build, модель агентів і сповіщення для {{projectName}}"
+      "panelDescription": "Налаштуйте Vibe Teamlead, модель агентів і сповіщення для {{projectName}}"
     },
     "claude": {
       "title": "Автентифікація Claude",
@@ -548,7 +548,7 @@
         "name": "Puppeteer",
         "description": "Автоматизація браузера для тестування"
       },
-      "autoClaude": {
+      "appTools": {
         "name": "Інструменти Vibe Teamlead",
         "description": "Відстеження прогресу збірки"
       },
@@ -606,12 +606,12 @@
     },
     "serverNames": {
       "memory": "Пам’ять",
-      "auto-claude": "Інструменти Vibe Teamlead"
+      "vibe-teamlead": "Інструменти Vibe Teamlead"
     },
     "serverDescriptions": {
       "context7": "Пошук документації бібліотек і фреймворків через @upstash/context7-mcp",
       "memory": "Граф знань для контексту між сеансами. Потрібна змінна середовища GRAPHITI_MCP_URL.",
-      "auto-claude": "Відстеження прогресу збірки, контекст сеансу, запис відкриттів і підводних каменів",
+      "vibe-teamlead": "Відстеження прогресу збірки, контекст сеансу, запис відкриттів і підводних каменів",
       "linear": "Керування проєктами через Linear API. Потрібна змінна середовища LINEAR_API_KEY.",
       "electron": "Автоматизація десктопних застосунків через Chrome DevTools Protocol. Потрібно ELECTRON_MCP_ENABLED=true.",
       "puppeteer": "Автоматизація браузера для вебфронтендів, що не на Electron."

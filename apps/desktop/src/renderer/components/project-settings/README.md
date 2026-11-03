@@ -22,7 +22,7 @@ This directory contains the refactored components from the original 1,445-line `
 project-settings/
 ├── README.md                         # This file
 ├── index.ts                          # Barrel export for all components
-├── AutoBuildIntegration.tsx          # Auto-Build setup and status
+├── AutoBuildIntegration.tsx          # Vibe Teamlead setup and status
 ├── LinearIntegrationSection.tsx      # Linear project management integration
 ├── GitHubIntegrationSection.tsx      # GitHub issues integration
 ├── MemoryBackendSection.tsx          # Graphiti/file-based memory configuration
@@ -49,18 +49,18 @@ hooks/
 ### Section Components (Feature-Specific)
 
 #### AutoBuildIntegration.tsx
-**Purpose**: Manages Auto-Build framework initialization and status.
+**Purpose**: Manages Vibe Teamlead framework initialization and status.
 **Props**:
-- `autoBuildPath`: Current Auto-Build path
+- `autoBuildPath`: Current Vibe Teamlead path
 - `versionInfo`: Version and initialization status
 - `isCheckingVersion`: Loading state
 - `isUpdating`: Update in progress state
-- `onInitialize`: Initialize Auto-Build handler
-- `onUpdate`: Update Auto-Build handler
+- `onInitialize`: Initialize Vibe Teamlead handler
+- `onUpdate`: Update Vibe Teamlead handler
 
 **Responsibilities**:
 - Display initialization status
-- Show Auto-Build version information
+- Show Vibe Teamlead version information
 - Handle initialization and updates
 
 #### LinearIntegrationSection.tsx
@@ -198,7 +198,7 @@ hooks/
 **Returns**:
 - `settings`: Current project settings
 - `setSettings`: Settings updater
-- `versionInfo`: Auto-Build version info
+- `versionInfo`: Vibe Teamlead version info
 - `setVersionInfo`: Version info updater
 - `isCheckingVersion`: Loading state
 

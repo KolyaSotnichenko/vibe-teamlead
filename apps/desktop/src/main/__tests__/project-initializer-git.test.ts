@@ -12,14 +12,14 @@ import { initializeProject } from '../project-initializer';
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim();
 
 describe('initializeProject', () => {
-  it('sets up git with a first commit in a new folder and keeps .auto-claude out of it', () => {
+  it('sets up git with a first commit in a new folder and keeps .vibe-teamlead out of it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'vtl-init-'));
     writeFileSync(join(dir, 'README.md'), '# app\n');
     expect(initializeProject(dir)).toEqual({ success: true });
-    expect(existsSync(join(dir, '.auto-claude', 'specs'))).toBe(true);
+    expect(existsSync(join(dir, '.vibe-teamlead', 'specs'))).toBe(true);
     expect(git(dir, 'rev-list', '--count', 'HEAD')).toBe('1');
-    expect(git(dir, 'ls-files')).not.toContain('.auto-claude');
-    expect(readFileSync(join(dir, '.gitignore'), 'utf-8')).toContain('.auto-claude/');
+    expect(git(dir, 'ls-files')).not.toContain('.vibe-teamlead');
+    expect(readFileSync(join(dir, '.gitignore'), 'utf-8')).toContain('.vibe-teamlead/');
   });
 
   it('is idempotent: running it again succeeds', () => {

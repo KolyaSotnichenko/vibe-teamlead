@@ -218,11 +218,11 @@ export interface MemoryDatabaseDetails {
 export function getMemoryDatabaseDetails(projectEnvVars: EnvironmentVars): MemoryDatabaseDetails {
   const dbPath = projectEnvVars['GRAPHITI_DB_PATH'] ||
                  process.env.GRAPHITI_DB_PATH ||
-                 require('path').join(require('os').homedir(), '.auto-claude', 'memories');
+                 require('path').join(require('os').homedir(), '.vibe-teamlead', 'memories');
 
   const database = projectEnvVars['GRAPHITI_DATABASE'] ||
                    process.env.GRAPHITI_DATABASE ||
-                   'auto_claude_memory';
+                   'vibe_teamlead_memory';
 
   return { dbPath, database };
 }

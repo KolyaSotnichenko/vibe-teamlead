@@ -10,9 +10,9 @@ export const infrastructureMock = {
     data: {
       memory: {
         kuzuInstalled: true,
-        databasePath: '~/.auto-claude/graphs',
+        databasePath: '~/.vibe-teamlead/graphs',
         databaseExists: true,
-        databases: ['auto_claude_memory']
+        databases: ['vibe_teamlead_memory']
       },
       ready: true
     }
@@ -20,7 +20,7 @@ export const infrastructureMock = {
 
   listMemoryDatabases: async () => ({
     success: true,
-    data: ['auto_claude_memory', 'project_memory']
+    data: ['vibe_teamlead_memory', 'project_memory']
   }),
 
   testMemoryConnection: async () => ({

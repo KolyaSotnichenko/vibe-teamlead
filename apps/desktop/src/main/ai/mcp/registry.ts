@@ -145,7 +145,7 @@ function createChromeDevtoolsServer(cli: string, runtime: string): McpServerConf
 
 /** Options for resolving MCP server configurations */
 export interface McpRegistryOptions {
-  /** Spec directory for auto-claude MCP server */
+  /** Spec directory for the app's MCP tools server */
   specDir?: string;
   /** Memory MCP server URL (if enabled) */
   memoryMcpUrl?: string;

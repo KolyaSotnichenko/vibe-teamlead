@@ -379,7 +379,7 @@ export function IntegrationSettings({
                         link: (
                           // biome-ignore lint/a11y/useAnchorContent: Trans injects the link text
                           <a
-                            href="https://github.com/settings/tokens/new?scopes=repo&description=Auto-Build-UI"
+                            href="https://github.com/settings/tokens/new?scopes=repo&description=Vibe-Teamlead"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-info hover:underline"
@@ -522,7 +522,7 @@ export function IntegrationSettings({
                     <p className="text-xs text-muted-foreground">
                       <Trans
                         i18nKey="settings:integrations.github.branchHint"
-                        values={{ pattern: 'auto-claude/task-name', branch: settings.mainBranch }}
+                        values={{ pattern: 'vibe-teamlead/task-name', branch: settings.mainBranch }}
                         components={{ code: <code className="px-1 bg-muted rounded" /> }}
                       />
                     </p>

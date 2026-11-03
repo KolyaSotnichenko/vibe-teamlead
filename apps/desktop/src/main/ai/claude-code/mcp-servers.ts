@@ -20,7 +20,7 @@ import {
 import { getMcpServerConfig, type McpRegistryOptions } from '../mcp/registry';
 import type { McpServerConfig } from '../mcp/types';
 import type { ToolContext } from '../tools/types';
-import { AUTO_CLAUDE_SERVER_KEY, createBuildToolsServer } from './sdk-tools';
+import { APP_TOOLS_SERVER_KEY, createBuildToolsServer } from './sdk-tools';
 
 /** Registry id → key Claude Code uses as the tool prefix */
 const SERVER_KEYS: Record<string, string> = {
@@ -70,10 +70,10 @@ export function buildMcpServers(
   const agentConfig = getAgentConfig(agentType);
 
   for (const id of getRequiredMcpServers(agentType, resolveOptions)) {
-    if (id === 'auto-claude') {
-      servers[AUTO_CLAUDE_SERVER_KEY] = createBuildToolsServer(
+    if (id === 'vibe-teamlead') {
+      servers[APP_TOOLS_SERVER_KEY] = createBuildToolsServer(
         context,
-        agentConfig.autoClaudeTools,
+        agentConfig.appTools,
       );
       continue;
     }

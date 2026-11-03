@@ -47,7 +47,7 @@ export function GeneralSettings({
 
   return (
     <>
-      {/* Auto-Build Integration */}
+      {/* Vibe Teamlead Integration */}
       <section className="space-y-4">
         <h3 className="text-sm font-semibold text-foreground">{t('settings:projectSections.general.autoBuildIntegration')}</h3>
         {!project.autoBuildPath ? (

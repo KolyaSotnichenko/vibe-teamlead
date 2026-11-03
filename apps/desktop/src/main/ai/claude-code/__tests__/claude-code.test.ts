@@ -11,7 +11,7 @@ import type { ToolContext } from '../../tools/types';
 const toolContext: ToolContext = {
   cwd: '/work/tree',
   projectDir: '/work/tree',
-  specDir: '/work/tree/.auto-claude/specs/001-demo',
+  specDir: '/work/tree/.vibe-teamlead/specs/001-demo',
   securityProfile: undefined as never,
 };
 
@@ -131,7 +131,7 @@ describe('buildQueryOptions', () => {
     expect(options.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     expect(options.env?.CLAUDE_CONFIG_DIR).toMatch(/\.vibe-teamlead/);
     expect(options.hooks?.PreToolUse).toHaveLength(2);
-    expect(options.mcpServers).toHaveProperty('auto-claude');
+    expect(options.mcpServers).toHaveProperty('vibe-teamlead');
     expect(options.outputFormat?.type).toBe('json_schema');
   });
 });

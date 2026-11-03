@@ -32,7 +32,7 @@ export const DEFAULT_APP_SETTINGS = {
   theme: 'light' as const,
   colorTheme: 'default' as const,
   defaultModel: 'opus',
-  agentFramework: 'auto-claude',
+  agentFramework: 'vibe-teamlead',
   pythonPath: undefined as string | undefined,
   gitPath: undefined as string | undefined,
   githubCLIPath: undefined as string | undefined,
@@ -97,15 +97,25 @@ export const DEFAULT_PROJECT_SETTINGS = {
 };
 
 // ============================================
-// Auto Build File Paths
+// Vibe Teamlead File Paths
 // ============================================
 
 // File paths relative to project
-// IMPORTANT: All paths use .auto-claude/ (the installed instance), NOT auto-claude/ (source code)
+/** Git branch of a task's worktree: `vibe-teamlead/<specId>` */
+export const TASK_BRANCH_PREFIX = 'vibe-teamlead/';
+/** Branch prefix of tasks created before the rename (local ones are renamed on load) */
+export const LEGACY_TASK_BRANCH_PREFIX = 'auto-claude/';
+
+/** A task branch with a spec id after the prefix (current or legacy prefix). */
+export function isTaskBranch(branch: string): boolean {
+  return [TASK_BRANCH_PREFIX, LEGACY_TASK_BRANCH_PREFIX].some((prefix) => branch.startsWith(prefix) && branch.length > prefix.length);
+}
+
+// IMPORTANT: All paths use .vibe-teamlead/ (the installed instance), never a visible folder
 export const AUTO_BUILD_PATHS = {
-  SPECS_DIR: '.auto-claude/specs',
-  ROADMAP_DIR: '.auto-claude/roadmap',
-  IDEATION_DIR: '.auto-claude/ideation',
+  SPECS_DIR: '.vibe-teamlead/specs',
+  ROADMAP_DIR: '.vibe-teamlead/roadmap',
+  IDEATION_DIR: '.vibe-teamlead/ideation',
   IMPLEMENTATION_PLAN: 'implementation_plan.json',
   SPEC_FILE: 'spec.md',
   QA_REPORT: 'qa_report.md',
@@ -119,15 +129,15 @@ export const AUTO_BUILD_PATHS = {
   MANUAL_COMPETITORS: 'manual_competitors.json',
   IDEATION_FILE: 'ideation.json',
   IDEATION_CONTEXT: 'ideation_context.json',
-  PROJECT_INDEX: '.auto-claude/project_index.json',
+  PROJECT_INDEX: '.vibe-teamlead/project_index.json',
   MEMORY_STATE: '.memory_state.json'
 } as const;
 
 /**
  * Get the specs directory path.
- * All specs go to .auto-claude/specs/ (the project's data directory).
+ * All specs go to .vibe-teamlead/specs/ (the project's data directory).
  */
 export function getSpecsDir(autoBuildPath: string | undefined): string {
-  const basePath = autoBuildPath || '.auto-claude';
+  const basePath = autoBuildPath || '.vibe-teamlead';
   return `${basePath}/specs`;
 }

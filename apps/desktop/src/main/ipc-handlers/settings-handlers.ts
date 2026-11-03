@@ -109,7 +109,7 @@ export function registerSettingsHandlers(
       // Migration: Clear CLI tool paths that are from a different platform
       // Fixes issue where Windows paths persisted on macOS (and vice versa)
       // when settings were synced/transferred between platforms
-      // See: https://github.com/AndyMik90/Auto-Claude/issues/XXX
+      // See: upstream issue #XXX
       const pathFields = ['pythonPath', 'gitPath', 'githubCLIPath', 'gitlabCLIPath', 'claudePath', 'autoBuildPath'] as const;
       for (const field of pathFields) {
         const pathValue = settings[field];
@@ -261,7 +261,7 @@ export function registerSettingsHandlers(
 
   /**
    * Read ~/.claude.json to check if Claude Code onboarding is complete.
-   * This allows Auto-Claude to respect Claude Code's onboarding status and
+   * This allows Vibe Teamlead to respect Claude Code's onboarding status and
    * avoid showing the onboarding wizard to users who have already completed it.
    */
   ipcMain.handle(

@@ -135,14 +135,14 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
               <Label htmlFor="agentFramework" className="text-sm font-medium text-foreground">{t('general.agentFramework')}</Label>
               <p className="text-sm text-muted-foreground">{t('general.agentFrameworkDescription')}</p>
               <Select
-                value={settings.agentFramework}
+                value={settings.agentFramework === 'auto-claude' ? 'vibe-teamlead' : settings.agentFramework}
                 onValueChange={(value) => onSettingsChange({ ...settings, agentFramework: value })}
               >
                 <SelectTrigger id="agentFramework" className="w-full max-w-md">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto-claude">{t('general.agentFrameworkAutoClaude')}</SelectItem>
+                  <SelectItem value="vibe-teamlead">{t('general.agentFrameworkVibeTeamlead')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

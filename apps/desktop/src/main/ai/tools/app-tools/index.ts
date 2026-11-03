@@ -1,12 +1,12 @@
 /**
- * Auto-Claude Custom Tools
+ * Vibe Teamlead Custom Tools
  * ========================
  *
- * Barrel export for all auto-claude builtin tools.
+ * Barrel export for all of the app's builtin tools.
  * These replace the Python tools_pkg/tools/* implementations.
  *
- * Tool names follow the mcp__auto-claude__* convention to match the
- * TOOL_* constants in registry.ts and AGENT_CONFIGS autoClaudeTools arrays.
+ * Tool names follow the mcp__vibe-teamlead__* convention to match the
+ * TOOL_* constants in registry.ts and AGENT_CONFIGS appTools arrays.
  */
 
 export { updateSubtaskStatusTool } from './update-subtask-status';

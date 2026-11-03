@@ -165,8 +165,8 @@ export function MemoriesTab({
             {memoryStatus?.available ? (
               <>
                 <div className="grid gap-3 sm:grid-cols-2 text-sm">
-                  <InfoItem label={t('memory.info.database')} value={memoryStatus.database || 'auto_claude_memory'} />
-                  <InfoItem label={t('memory.info.path')} value={memoryStatus.dbPath || '~/.auto-claude/memories'} />
+                  <InfoItem label={t('memory.info.database')} value={memoryStatus.database || 'vibe_teamlead_memory'} />
+                  <InfoItem label={t('memory.info.path')} value={memoryStatus.dbPath || '~/.vibe-teamlead/memories'} />
                   {memoryStatus.embeddingProvider && (
                     <InfoItem label={t('memory.info.embedding')} value={memoryStatus.embeddingProvider} />
                   )}

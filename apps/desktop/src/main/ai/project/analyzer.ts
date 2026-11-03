@@ -40,8 +40,8 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PROFILE_FILENAME = '.auto-claude-security.json';
-const CUSTOM_ALLOWLIST_FILENAME = '.auto-claude-allowlist';
+const PROFILE_FILENAME = '.vibe-teamlead-security.json';
+const CUSTOM_ALLOWLIST_FILENAME = '.vibe-teamlead-allowlist';
 
 const HASH_FILES = [
   'package.json',

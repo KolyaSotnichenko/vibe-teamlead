@@ -25,9 +25,9 @@ const task = (key: string, dependsOn: string[] = [], epic = 'E1') => ({
 describe('storeBrief', () => {
   it('stores free text as brief.md in the project', async () => {
     const project = mkdtempSync(join(tmpdir(), 'vtl-brief-'));
-    const brief = await storeBrief(project, '.auto-claude', { text: 'Invoicing v1\nCustomers send invoices.' });
+    const brief = await storeBrief(project, '.vibe-teamlead', { text: 'Invoicing v1\nCustomers send invoices.' });
     expect(brief.readPath).toBe(join(brief.dir, 'brief.md'));
-    expect(brief.dir.startsWith(join(project, '.auto-claude', 'briefs'))).toBe(true);
+    expect(brief.dir.startsWith(join(project, '.vibe-teamlead', 'briefs'))).toBe(true);
     expect(brief.briefId).toMatch(/^\d{8}-\d{6}-invoicing-v1$/);
     expect(readFileSync(brief.readPath, 'utf-8')).toContain('Customers send invoices.');
   });
@@ -68,9 +68,9 @@ describe('normalizeProposal', () => {
 
 describe('taskDescription', () => {
   it('carries the draft criteria and a pointer to the brief section', () => {
-    const md = taskDescription({ ...normalizeProposal('b', { title: '', summary: '', epics: [], tasks: [task('T1')], assumptions: [], openQuestions: [] }).tasks[0] }, '.auto-claude/briefs/b/brief.md');
+    const md = taskDescription({ ...normalizeProposal('b', { title: '', summary: '', epics: [], tasks: [task('T1')], assumptions: [], openQuestions: [] }).tasks[0] }, '.vibe-teamlead/briefs/b/brief.md');
     expect(md).toContain('## Acceptance criteria (draft)');
     expect(md).toContain('- Given a, when b, then c.');
-    expect(md).toContain('Source: .auto-claude/briefs/b/brief.md — 2. Invoices');
+    expect(md).toContain('Source: .vibe-teamlead/briefs/b/brief.md — 2. Invoices');
   });
 });

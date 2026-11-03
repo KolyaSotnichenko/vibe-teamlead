@@ -86,8 +86,6 @@ const BLOCKED_PROCESS_NAMES = new Set([
   // -- Self-protection (don't let the agent kill its own host) --
   'electron',
   'Electron',
-  'auto-claude',
-  'Aperant',
   'Vibe Teamlead',
   'vibe-teamlead',
 ]);

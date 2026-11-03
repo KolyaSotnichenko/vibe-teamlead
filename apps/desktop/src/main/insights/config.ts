@@ -18,7 +18,7 @@ export class InsightsConfig {
   }
 
   /**
-   * Get the auto-claude source path (detects automatically if not configured)
+   * Get the prompts path (detects automatically if not configured)
    * Uses getEffectiveSourcePath() which handles userData override for user-updated backend
    */
   getAutoBuildSourcePath(): string | null {
@@ -40,7 +40,7 @@ export class InsightsConfig {
   }
 
   /**
-   * Load environment variables from auto-claude .env file
+   * Load environment variables from the project's .env file
    */
   loadAutoBuildEnv(): Record<string, string> {
     const autoBuildSource = this.getAutoBuildSourcePath();
@@ -80,7 +80,7 @@ export class InsightsConfig {
 
   /**
    * Get complete environment for process execution
-   * Includes system env, auto-claude env, and the app's Claude credential
+   * Includes system env, project env, and the app's Claude credential
    */
   async getProcessEnv(): Promise<Record<string, string>> {
     const autoBuildEnv = this.loadAutoBuildEnv();

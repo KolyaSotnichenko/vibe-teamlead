@@ -11,6 +11,12 @@ import { ensureAbsolutePath } from './utils/path-helpers';
 import { writeFileAtomicSync } from './utils/atomic-file';
 import { updateRoadmapFeatureOutcome, revertRoadmapFeatureOutcome } from './utils/roadmap-utils';
 import { safeParseJson } from './utils/json-repair';
+import { migrateDataPathSetting, migrateProjectData, type ProjectMigrationResult } from './data-dir-migration';
+
+function logMigration(name: string, result: ProjectMigrationResult): void {
+  if (result.steps.length) console.warn(`[ProjectStore] Moved "${name}" to Vibe Teamlead names: ${result.steps.join('; ')}`);
+  if (result.problems.length) console.warn(`[ProjectStore] Could not fully move "${name}": ${result.problems.join('; ')}`);
+}
 
 
 
@@ -71,6 +77,17 @@ export class ProjectStore {
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt)
         }));
+        // Projects from before the rename: move their data to the Vibe Teamlead names
+        let renamed = false;
+        for (const project of data.projects as Project[]) {
+          if (existsSync(project.path)) logMigration(project.name, migrateProjectData(project.path));
+          const dataPath = migrateDataPathSetting(project.autoBuildPath);
+          if (dataPath !== project.autoBuildPath) {
+            project.autoBuildPath = dataPath ?? '';
+            renamed = true;
+          }
+        }
+        if (renamed) writeFileAtomicSync(this.storePath, JSON.stringify(data, null, 2));
         return data;
       } catch {
         return { projects: [], settings: {} };
@@ -94,13 +111,16 @@ export class ProjectStore {
     // This prevents path resolution issues after app restart
     const absolutePath = ensureAbsolutePath(projectPath);
 
+    // A project from before the rename: move its data to the Vibe Teamlead names first
+    if (existsSync(absolutePath)) logMigration(path.basename(absolutePath), migrateProjectData(absolutePath));
+
     // Check if project already exists (using absolute path for comparison)
     const existing = this.data.projects.find((p) => p.path === absolutePath);
     if (existing) {
-      // Validate that .auto-claude folder still exists for existing project
+      // Validate that .vibe-teamlead folder still exists for existing project
       // If manually deleted, reset autoBuildPath so UI prompts for reinitialization
       if (existing.autoBuildPath && !isInitialized(existing.path)) {
-        console.warn(`[ProjectStore] .auto-claude folder was deleted for project "${existing.name}" - resetting autoBuildPath`);
+        console.warn(`[ProjectStore] .vibe-teamlead folder was deleted for project "${existing.name}" - resetting autoBuildPath`);
         existing.autoBuildPath = '';
         existing.updatedAt = new Date();
         this.save();
@@ -111,7 +131,7 @@ export class ProjectStore {
     // Derive name from path if not provided
     const projectName = name || path.basename(absolutePath);
 
-    // Determine auto-claude path (supports both 'auto-claude' and '.auto-claude')
+    // Determine the data folder path (.vibe-teamlead)
     const autoBuildPath = getAutoBuildPath(absolutePath) || '';
 
     const project: Project = {
@@ -213,11 +233,11 @@ export class ProjectStore {
   }
 
   /**
-   * Validate all projects to ensure their .auto-claude folders still exist.
+   * Validate all projects to ensure their .vibe-teamlead folders still exist.
    * If a project has autoBuildPath set but the folder was deleted,
    * reset autoBuildPath to empty string so the UI prompts for reinitialization.
    *
-   * @returns Array of project IDs that were reset due to missing .auto-claude folder
+   * @returns Array of project IDs that were reset due to missing .vibe-teamlead folder
    */
   validateProjects(): string[] {
     const resetProjectIds: string[] = [];
@@ -235,9 +255,9 @@ export class ProjectStore {
         continue; // Don't reset - let user handle this case
       }
 
-      // Check if .auto-claude folder still exists
+      // Check if .vibe-teamlead folder still exists
       if (!isInitialized(project.path)) {
-        console.warn(`[ProjectStore] .auto-claude folder missing for project "${project.name}" at ${project.path}`);
+        console.warn(`[ProjectStore] .vibe-teamlead folder missing for project "${project.name}" at ${project.path}`);
         project.autoBuildPath = '';
         project.updatedAt = new Date();
         resetProjectIds.push(project.id);
@@ -247,7 +267,7 @@ export class ProjectStore {
 
     if (hasChanges) {
       this.save();
-      console.warn(`[ProjectStore] Reset ${resetProjectIds.length} project(s) due to missing .auto-claude folder`);
+      console.warn(`[ProjectStore] Reset ${resetProjectIds.length} project(s) due to missing .vibe-teamlead folder`);
     }
 
     return resetProjectIds;

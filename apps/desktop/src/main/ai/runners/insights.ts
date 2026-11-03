@@ -98,7 +98,7 @@ function loadProjectContext(projectDir: string): string {
   const contextParts: string[] = [];
 
   // Load project index if available
-  const indexPath = join(projectDir, '.auto-claude', 'project_index.json');
+  const indexPath = join(projectDir, '.vibe-teamlead', 'project_index.json');
   if (existsSync(indexPath)) {
     const index = safeParseJson<Record<string, unknown>>(readFileSync(indexPath, 'utf-8'));
     if (index) {
@@ -115,7 +115,7 @@ function loadProjectContext(projectDir: string): string {
   }
 
   // Load roadmap if available
-  const roadmapPath = join(projectDir, '.auto-claude', 'roadmap', 'roadmap.json');
+  const roadmapPath = join(projectDir, '.vibe-teamlead', 'roadmap', 'roadmap.json');
   if (existsSync(roadmapPath)) {
     const roadmap = safeParseJson<Record<string, unknown>>(readFileSync(roadmapPath, 'utf-8'));
     if (roadmap) {
@@ -131,7 +131,7 @@ function loadProjectContext(projectDir: string): string {
   }
 
   // Load existing tasks
-  const tasksPath = join(projectDir, '.auto-claude', 'specs');
+  const tasksPath = join(projectDir, '.vibe-teamlead', 'specs');
   if (existsSync(tasksPath)) {
     try {
       const taskDirs = readdirSync(tasksPath, { withFileTypes: true })
@@ -296,7 +296,7 @@ export async function runInsightsQuery(
       thinkingLevel,
       tools: READ_TOOLS,
       cwd: projectDir,
-      specDir: join(projectDir, '.auto-claude', 'specs'),
+      specDir: join(projectDir, '.vibe-teamlead', 'specs'),
       agentType: 'insights_chat',
       maxTurns: 60,
       abortSignal,

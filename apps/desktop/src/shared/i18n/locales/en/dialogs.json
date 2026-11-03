@@ -3,7 +3,7 @@
     "title": "Initialize Vibe Teamlead",
     "description": "This project doesn't have Vibe Teamlead initialized. Would you like to set it up now?",
     "willDo": "This will:",
-    "createFolder": "Create a .auto-claude folder for specs, plans and reports (kept out of git)",
+    "createFolder": "Create a .vibe-teamlead folder for specs, plans and reports (kept out of git)",
     "setupSpecs": "Nothing in your code changes until you start a task",
     "initFailed": "Initialization Failed",
     "initFailedDescription": "Failed to initialize Vibe Teamlead. Please try again.",

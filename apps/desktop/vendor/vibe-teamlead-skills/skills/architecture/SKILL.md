@@ -64,7 +64,7 @@ Write native draw.io XML (`<mxfile><diagram><mxGraphModel><root>…`). The draw.
 ## Review loop (mandatory for every .drawio file)
 
 1. Write the `.drawio` file.
-2. Call `mcp__auto-claude__render_diagram` with its path. It saves `<name>.png` next to the file and returns the image.
+2. Call `mcp__vibe-teamlead__render_diagram` with its path. It saves `<name>.png` next to the file and returns the image.
 3. Look at the image critically, like a reviewer:
    - any overlapping boxes, labels over lines, or text cut off or overflowing?
    - edges crossing, bending needlessly, or attached to the wrong side?

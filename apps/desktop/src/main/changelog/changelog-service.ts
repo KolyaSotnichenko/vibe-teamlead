@@ -42,7 +42,7 @@ export class ChangelogService extends EventEmitter {
 
   /**
    * Check if debug mode is enabled
-   * Checks DEBUG from auto-claude/.env and DEBUG from process.env
+   * Checks DEBUG from the app's .env and DEBUG from process.env
    */
   private isDebugEnabled(): boolean {
     // Cache the result after first check
@@ -64,7 +64,7 @@ export class ChangelogService extends EventEmitter {
   }
 
   /**
-   * Debug logging - only logs when DEBUG=true in auto-claude/.env or DEBUG is set
+   * Debug logging - only logs when DEBUG=true in the app's .env or DEBUG is set
    */
   private debug(...args: unknown[]): void {
     if (this.isDebugEnabled()) {

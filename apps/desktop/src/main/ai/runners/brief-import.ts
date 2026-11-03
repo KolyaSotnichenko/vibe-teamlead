@@ -38,7 +38,7 @@ export interface StoredBrief {
 }
 
 export function briefsRoot(projectPath: string, autoBuildPath?: string): string {
-  return join(projectPath, autoBuildPath || '.auto-claude', 'briefs');
+  return join(projectPath, autoBuildPath || '.vibe-teamlead', 'briefs');
 }
 
 function slugify(text: string): string {

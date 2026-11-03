@@ -16,7 +16,7 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 function worktree() {
   const root = mkdtempSync(join(scratch, 'wt-'));
-  const specDir = join(root, '.auto-claude', 'specs', '001');
+  const specDir = join(root, '.vibe-teamlead', 'specs', '001');
   mkdirSync(specDir, { recursive: true });
   const context = { cwd: root, projectDir: root, specDir, securityProfile: undefined as never } as ToolContext;
   return { root, specDir, context };

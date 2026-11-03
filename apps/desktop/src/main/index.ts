@@ -5,6 +5,7 @@
 // loading fails with "ReferenceError: require is not defined".
 import Module, { createRequire } from 'module';
 import { initGitHubAuth } from './github-auth/token-store';
+import { migrateGlobalData } from './data-dir-migration';
 const require = createRequire(import.meta.url);
 // Make require globally available for Sentry's require-in-the-middle hooks
 globalThis.require = require;
@@ -51,7 +52,7 @@ for (const envPath of possibleEnvPaths) {
 
 import { app, BrowserWindow, shell, nativeImage, session, screen, Menu, MenuItem } from 'electron';
 import { join } from 'path';
-import { accessSync, readFileSync, writeFileSync, rmSync, cpSync } from 'fs';
+import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
@@ -69,26 +70,6 @@ import { preWarmToolCache } from './cli-tool-manager';
 import { isMacOS, isWindows } from './platform';
 import { ptyDaemonClient } from './terminal/pty-daemon-client';
 import type { AppSettings } from '../shared/types';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Migrate userData from old app name (auto-claude-ui → aperant)
-// Must run before any code accesses app.getPath('userData')
-// ─────────────────────────────────────────────────────────────────────────────
-{
-  const newUserData = app.getPath('userData');
-  const oldUserData = join(dirname(newUserData), 'auto-claude-ui');
-  if (existsSync(oldUserData) && !existsSync(join(newUserData, '.migrated'))) {
-    try {
-      // Copy all files from old location to new (don't move — keeps old as backup)
-      cpSync(oldUserData, newUserData, { recursive: true, force: false, errorOnExist: false });
-      // Mark as migrated so we don't repeat
-      writeFileSync(join(newUserData, '.migrated'), new Date().toISOString());
-      console.warn('[main] Migrated userData from auto-claude-ui to aperant');
-    } catch (err) {
-      console.warn('[main] userData migration failed (non-fatal):', err);
-    }
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Window sizing constants
@@ -132,7 +113,6 @@ function loadSettingsSync(): AppSettings {
 function cleanupStaleUpdateMetadata(): void {
   const userData = app.getPath('userData');
   const stalePaths = [
-    join(userData, 'auto-claude-source'),
     join(userData, 'backend-source'),
   ];
 
@@ -414,6 +394,8 @@ app.whenReady().then(() => {
 
   // GitHub App token: subprocess token provider + refresh schedule
   initGitHubAuth();
+  // ~/.auto-claude/memories from before the rename → ~/.vibe-teamlead/memories
+  migrateGlobalData();
   // runClaudeTask without explicit auth uses the stored Claude credential
   setDefaultClaudeAuthProvider(resolveClaudeAuth);
 
@@ -453,7 +435,7 @@ app.whenReady().then(() => {
   // Initialize agent manager
   agentManager = new AgentManager();
 
-  // Load settings and configure agent manager with Python and auto-claude paths
+  // Load settings and configure agent manager with the prompts path
   // Uses EAFP pattern (try/catch) instead of LBYL (existsSync) to avoid TOCTOU race conditions
   const settingsPath = join(app.getPath('userData'), 'settings.json');
   try {
@@ -474,11 +456,10 @@ app.whenReady().then(() => {
 
       if (!plannerExists) {
         // Migration: Try to fix stale paths from old project structure
-        // Old structure: /path/to/project/auto-claude or apps/backend
+        // Old structure: apps/backend
         // New structure: /path/to/project/apps/desktop/prompts
         let migrated = false;
         const possibleCorrections = [
-          join(validAutoBuildPath.replace(/[/\\]auto-claude[/\\]*$/, ''), 'apps', 'desktop', 'prompts'),
           join(validAutoBuildPath.replace(/[/\\]backend[/\\]*$/, ''), 'desktop', 'prompts'),
         ];
         for (const correctedPath of possibleCorrections) {

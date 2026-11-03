@@ -424,10 +424,10 @@ export function SecuritySettings({
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-foreground">{t('settings:projectSections.memory.databaseName')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('settings:projectSections.memory.databaseNameDescription', { path: '~/.auto-claude/memories/' })}
+                  {t('settings:projectSections.memory.databaseNameDescription', { path: '~/.vibe-teamlead/memories/' })}
                 </p>
                 <Input
-                  placeholder="auto_claude_memory"
+                  placeholder="vibe_teamlead_memory"
                   value={envConfig.memoryDatabase || ''}
                   onChange={(e) => updateEnvConfig({ memoryDatabase: e.target.value })}
                 />
@@ -436,10 +436,10 @@ export function SecuritySettings({
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-foreground">{t('settings:projectSections.memory.databasePath')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('settings:projectSections.memory.databasePathDescription', { path: '~/.auto-claude/memories/' })}
+                  {t('settings:projectSections.memory.databasePathDescription', { path: '~/.vibe-teamlead/memories/' })}
                 </p>
                 <Input
-                  placeholder="~/.auto-claude/memories"
+                  placeholder="~/.vibe-teamlead/memories"
                   value={envConfig.memoryDbPath || ''}
                   onChange={(e) => updateEnvConfig({ memoryDbPath: e.target.value || undefined })}
                 />

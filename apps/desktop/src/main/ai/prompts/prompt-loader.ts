@@ -381,10 +381,10 @@ function validateBranchName(branch: string | null | undefined): string | null {
 // =============================================================================
 
 /**
- * Load project_index.json from the project's .auto-claude directory.
+ * Load project_index.json from the project's .vibe-teamlead directory.
  */
 export function loadProjectIndex(projectDir: string): Record<string, unknown> {
-  const indexPath = join(projectDir, '.auto-claude', 'project_index.json');
+  const indexPath = join(projectDir, '.vibe-teamlead', 'project_index.json');
   if (!existsSync(indexPath)) return {};
   try {
     return JSON.parse(readFileSync(indexPath, 'utf-8')) as Record<string, unknown>;

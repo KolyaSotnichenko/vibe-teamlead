@@ -170,7 +170,7 @@ export function initializeGit(projectPath: string): InitializationResult {
 /**
  * Entries to add to .gitignore when initializing a project
  */
-const GITIGNORE_ENTRIES = ['.auto-claude/'];
+const GITIGNORE_ENTRIES = ['.vibe-teamlead/'];
 
 /**
  * Ensure entries exist in the project's .gitignore file.
@@ -234,7 +234,7 @@ function ensureGitignoreEntries(projectPath: string, entries: string[]): void {
 }
 
 /**
- * Data directories created in .auto-claude for each project
+ * Data directories created in .vibe-teamlead for each project
  */
 const DATA_DIRECTORIES = [
   'specs',
@@ -274,17 +274,17 @@ export function getLocalSourcePath(projectPath: string): string | null {
 }
 
 /**
- * Check if project is initialized (has .auto-claude directory)
+ * Check if project is initialized (has .vibe-teamlead directory)
  */
 export function isInitialized(projectPath: string): boolean {
-  const dotAutoBuildPath = path.join(projectPath, '.auto-claude');
+  const dotAutoBuildPath = path.join(projectPath, '.vibe-teamlead');
   return existsSync(dotAutoBuildPath);
 }
 
 /**
- * Initialize auto-claude data directory in a project.
+ * Initialize the .vibe-teamlead data directory in a project.
  *
- * Creates .auto-claude/ with data directories (specs, ideation, insights, roadmap).
+ * Creates .vibe-teamlead/ with data directories (specs, ideation, insights, roadmap).
  * The framework code runs from the source repo - only data is stored here.
  *
  * Requires:
@@ -298,10 +298,10 @@ export function initializeProject(projectPath: string): InitializationResult {
     return { success: false, error: `Project directory not found: ${projectPath}` };
   }
 
-  const dotAutoBuildPath = path.join(projectPath, '.auto-claude');
+  const dotAutoBuildPath = path.join(projectPath, '.vibe-teamlead');
   try {
-    // Data directories first (idempotent: an existing .auto-claude is fine), and
-    // .gitignore before any initial commit so .auto-claude/ is never committed.
+    // Data directories first (idempotent: an existing .vibe-teamlead is fine), and
+    // .gitignore before any initial commit so .vibe-teamlead/ is never committed.
     for (const dataDir of DATA_DIRECTORIES) {
       const dirPath = path.join(dotAutoBuildPath, dataDir);
       mkdirSync(dirPath, { recursive: true });
@@ -310,7 +310,7 @@ export function initializeProject(projectPath: string): InitializationResult {
     }
     ensureGitignoreEntries(projectPath, GITIGNORE_ENTRIES);
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Could not create the .auto-claude folder' };
+    return { success: false, error: error instanceof Error ? error.message : 'Could not create the .vibe-teamlead folder' };
   }
 
   // Agents build in git worktrees: the project needs a repository with a first commit.
@@ -328,11 +328,11 @@ export function initializeProject(projectPath: string): InitializationResult {
 }
 
 /**
- * Ensure all data directories exist in .auto-claude.
+ * Ensure all data directories exist in .vibe-teamlead.
  * Useful if new directories are added in future versions.
  */
 export function ensureDataDirectories(projectPath: string): InitializationResult {
-  const dotAutoBuildPath = path.join(projectPath, '.auto-claude');
+  const dotAutoBuildPath = path.join(projectPath, '.vibe-teamlead');
 
   if (!existsSync(dotAutoBuildPath)) {
     return {
@@ -360,22 +360,22 @@ export function ensureDataDirectories(projectPath: string): InitializationResult
 }
 
 /**
- * Get the auto-claude folder path for a project.
+ * Get the .vibe-teamlead folder path for a project.
  *
- * IMPORTANT: Only .auto-claude/ is considered a valid "installed" auto-claude.
- * The auto-claude/ folder (if it exists) is the SOURCE CODE being developed,
+ * IMPORTANT: Only .vibe-teamlead/ is considered a valid data folder.
+ * Any other folder (if it exists) belongs to the project itself,
  * not an installation. This allows Vibe Teamlead to be used to develop itself.
  */
 export function getAutoBuildPath(projectPath: string): string | null {
-  const dotAutoBuildPath = path.join(projectPath, '.auto-claude');
+  const dotAutoBuildPath = path.join(projectPath, '.vibe-teamlead');
 
   debug('getAutoBuildPath called', { projectPath, dotAutoBuildPath });
 
   if (existsSync(dotAutoBuildPath)) {
-    debug('Returning .auto-claude (installed version)');
-    return '.auto-claude';
+    debug('Returning .vibe-teamlead (installed version)');
+    return '.vibe-teamlead';
   }
 
-  debug('No .auto-claude folder found - project not initialized');
+  debug('No .vibe-teamlead folder found - project not initialized');
   return null;
 }

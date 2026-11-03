@@ -515,7 +515,7 @@
   },
   "ideation": {
     "converting": "Converting...",
-    "convertToTask": "Convert to Auto-Build Task",
+    "convertToTask": "Convert to task",
     "dismissIdea": "Dismiss Idea",
     "description": "Description",
     "rationale": "Rationale",
@@ -818,7 +818,7 @@
     "archiveFeatureConfirmTitle": "Archive Feature?",
     "archiveFeatureConfirmDescription": "This will remove \"{{title}}\" from your roadmap.",
     "goToTask": "Go to Task",
-    "convertToTask": "Convert to Auto-Build Task",
+    "convertToTask": "Convert to task",
     "build": "Build",
     "task": "Task",
     "viewTask": "View Task",

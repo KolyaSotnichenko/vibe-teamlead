@@ -103,7 +103,7 @@ const VALID_ROADMAP_JSON = JSON.stringify({
 function baseConfig(overrides: Partial<RoadmapConfig> = {}): RoadmapConfig {
   return {
     projectDir: '/project',
-    outputDir: '/project/.auto-claude/roadmap',
+    outputDir: '/project/.vibe-teamlead/roadmap',
     ...overrides,
   };
 }
@@ -255,7 +255,7 @@ describe('runRoadmapGeneration', () => {
     });
     mockRunClaudeTask.mockImplementation(emitting());
 
-    await runRoadmapGeneration(baseConfig({ outputDir: '/project/.auto-claude/roadmap' }));
+    await runRoadmapGeneration(baseConfig({ outputDir: '/project/.vibe-teamlead/roadmap' }));
 
     expect(mockMkdirSync).toHaveBeenCalledWith(
       expect.stringContaining('roadmap'),
@@ -382,10 +382,10 @@ describe('runRoadmapGeneration', () => {
     expect(args.cwd).toBe('/project');
     expect(args.tools).toEqual(['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Write', 'Edit']);
     expect(args.tools).not.toContain('Bash');
-    expect(args.allowedWritePaths).toEqual(['/project/.auto-claude/roadmap']);
+    expect(args.allowedWritePaths).toEqual(['/project/.vibe-teamlead/roadmap']);
     expect(args.maxTurns).toBe(30);
     expect(args.abortSignal).toBe(controller.signal);
-    expect(args.systemPrompt).toContain('/project/.auto-claude/roadmap/roadmap_discovery.json');
+    expect(args.systemPrompt).toContain('/project/.vibe-teamlead/roadmap/roadmap_discovery.json');
   });
 
   it('retries discovery up to 3 times when the file is not created', async () => {
@@ -406,7 +406,7 @@ describe('runRoadmapGeneration', () => {
 
     // mkdirSync should have been called with the default path
     expect(mockMkdirSync).toHaveBeenCalledWith(
-      expect.stringContaining('.auto-claude'),
+      expect.stringContaining('.vibe-teamlead'),
       expect.anything(),
     );
   });

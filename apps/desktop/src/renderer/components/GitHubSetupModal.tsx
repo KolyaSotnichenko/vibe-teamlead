@@ -785,7 +785,7 @@ export function GitHubSetupModal({
                 <p className="text-xs text-muted-foreground">
                   <Trans
                     i18nKey={selectedBranch ? 'dialogs:githubSetup.branchHintWithBase' : 'dialogs:githubSetup.branchHint'}
-                    values={{ pattern: 'auto-claude/task-name', branch: selectedBranch }}
+                    values={{ pattern: 'vibe-teamlead/task-name', branch: selectedBranch }}
                     components={{ code: <code className="px-1 bg-muted rounded" /> }}
                   />
                 </p>

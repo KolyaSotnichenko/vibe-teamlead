@@ -11,12 +11,12 @@ import { resolveSpecDir } from '../workspace-handlers';
 
 describe('resolveSpecDir', () => {
   const project = mkdtempSync(path.join(tmpdir(), 'ws-proj-'));
-  const task = { specId: '001-scaffold', specsPath: path.join(project, '.auto-claude', 'specs', '001-scaffold') };
-  mocks.findTaskAndProject.mockReturnValue({ task, project: { path: project, autoBuildPath: '.auto-claude' } });
+  const task = { specId: '001-scaffold', specsPath: path.join(project, '.vibe-teamlead', 'specs', '001-scaffold') };
+  mocks.findTaskAndProject.mockReturnValue({ task, project: { path: project, autoBuildPath: '.vibe-teamlead' } });
 
   it("reads the worktree's spec dir while the task builds there (QA and Security QA write it)", () => {
-    const worktree = path.join(project, '.auto-claude', 'worktrees', 'tasks', '001-scaffold');
-    const worktreeSpec = path.join(worktree, '.auto-claude', 'specs', '001-scaffold');
+    const worktree = path.join(project, '.vibe-teamlead', 'worktrees', 'tasks', '001-scaffold');
+    const worktreeSpec = path.join(worktree, '.vibe-teamlead', 'specs', '001-scaffold');
     mkdirSync(worktreeSpec, { recursive: true });
     mocks.findTaskWorktree.mockReturnValue(worktree);
     expect(resolveSpecDir('t1')).toBe(worktreeSpec);

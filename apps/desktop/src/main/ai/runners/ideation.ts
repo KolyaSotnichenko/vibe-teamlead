@@ -190,7 +190,7 @@ export async function runIdeation(
       thinkingLevel,
       tools: IDEATION_TOOLS,
       cwd: projectDir,
-      specDir: join(projectDir, '.auto-claude', 'specs'),
+      specDir: join(projectDir, '.vibe-teamlead', 'specs'),
       allowedWritePaths: [outputDir],
       agentType: 'ideation',
       maxTurns: MAX_TURNS,

@@ -253,7 +253,7 @@ Updated Plan:
 - Status: complete -> in_progress
 
 Next Steps:
-Run `python auto-claude/run.py --spec [SPEC_NUMBER]` to continue with new subtasks.
+Vibe Teamlead continues the build with the new subtasks.
 
 === END FOLLOW-UP PLANNING ===
 ```
@@ -272,8 +272,7 @@ Status: Plan updated from 'complete' to 'in_progress'
 
 Next pending subtask: [subtask-id]
 
-To continue building:
-  python auto-claude/run.py --spec [SPEC_NUMBER]
+Vibe Teamlead continues the build automatically.
 
 === END SESSION ===
 ```
@@ -356,8 +355,7 @@ To continue building:
 ```
 ERROR: Cannot perform follow-up - no implementation_plan.json found.
 
-This spec has never been built. Please run:
-  python auto-claude/run.py --spec [NUMBER]
+This spec has never been built. Start the task first.
 
 Follow-up is only available for completed specs.
 ```
@@ -370,10 +368,7 @@ ERROR: Spec is not complete. Cannot add follow-up work.
 Current status: [status]
 Pending subtasks: [count]
 
-Please complete the current build first:
-  python auto-claude/run.py --spec [NUMBER]
-
-Then run --followup after all subtasks are complete.
+Please complete the current build first, then request the follow-up once all subtasks are complete.
 ```
 
 ### If FOLLOWUP_REQUEST.md is Missing

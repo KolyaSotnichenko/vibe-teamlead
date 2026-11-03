@@ -50,7 +50,7 @@ export type McpServerId =
   | 'electron'
   | 'playwright'
   | 'chrome-devtools'
-  | 'auto-claude';
+  | 'vibe-teamlead';
 
 /** Configuration for a single MCP server */
 export interface McpServerConfig {

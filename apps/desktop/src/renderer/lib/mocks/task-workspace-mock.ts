@@ -113,7 +113,7 @@ const CONTAINERS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="760" heig
 const iso = (hhmm: string, day = '2026-11-02') => `${day}T${hhmm}:00.000Z`;
 
 export const sampleTaskWorkspace: TaskWorkspace = {
-  specDir: '/Users/demo/projects/billing/.auto-claude/specs/002-dashboard',
+  specDir: '/Users/demo/projects/billing/.vibe-teamlead/specs/002-dashboard',
   hasQaCoverage: true,
   spec: {
     markdown: SPEC_MD,
@@ -304,7 +304,7 @@ export const sampleTaskWorkspace: TaskWorkspace = {
 
 /** Early-stage task: the spec exists, nothing else has been written yet (shows the empty states). */
 export const earlyTaskWorkspace: TaskWorkspace = {
-  specDir: '/Users/demo/projects/billing/.auto-claude/specs/002-dashboard',
+  specDir: '/Users/demo/projects/billing/.vibe-teamlead/specs/002-dashboard',
   hasQaCoverage: false,
   spec: {
     markdown: SPEC_MD,

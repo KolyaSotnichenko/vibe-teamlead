@@ -88,16 +88,16 @@ describe('ProjectStore', () => {
       expect(project1.id).toBe(project2.id);
     });
 
-    it('should detect auto-claude directory if present', async () => {
-      // Create .auto-claude directory (the data directory, not source code)
-      mkdirSync(path.join(TEST_PROJECT_PATH, '.auto-claude'), { recursive: true });
+    it('should detect the .vibe-teamlead directory if present', async () => {
+      // Create .vibe-teamlead directory (the data directory, not source code)
+      mkdirSync(path.join(TEST_PROJECT_PATH, '.vibe-teamlead'), { recursive: true });
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
-      expect(project.autoBuildPath).toBe('.auto-claude');
+      expect(project.autoBuildPath).toBe('.vibe-teamlead');
     });
 
     it('should set empty autoBuildPath if not present', async () => {
@@ -284,8 +284,8 @@ describe('ProjectStore', () => {
     });
 
     it('should read tasks from filesystem correctly', async () => {
-      // Create spec directory structure in .auto-claude (the data directory)
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '001-test-feature');
+      // Create spec directory structure in .vibe-teamlead (the data directory)
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '001-test-feature');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -332,7 +332,7 @@ describe('ProjectStore', () => {
     });
 
     it('should determine status as backlog when no subtasks completed', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '002-pending');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '002-pending');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -372,7 +372,7 @@ describe('ProjectStore', () => {
     });
 
     it('should determine status as ai_review when all subtasks completed', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '003-complete');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '003-complete');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -412,7 +412,7 @@ describe('ProjectStore', () => {
     });
 
     it('should determine status as human_review when plan status is human_review', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '004-rejected');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '004-rejected');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -452,7 +452,7 @@ describe('ProjectStore', () => {
     });
 
     it('should determine reviewReason from plan when status is human_review', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '005-approved');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '005-approved');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -494,7 +494,7 @@ describe('ProjectStore', () => {
 
     it('should determine status as done when plan status is explicitly done', async () => {
       // User explicitly marking task as done via drag-and-drop sets status to done
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '006-done');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '006-done');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -533,7 +533,7 @@ describe('ProjectStore', () => {
     });
 
     it('should prefer original task description from requirements.json over plan description', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '007-description-priority');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '007-description-priority');
       mkdirSync(specsDir, { recursive: true });
 
       const aiDescription = 'AI-generated implementation plan description';
@@ -633,7 +633,7 @@ describe('ProjectStore', () => {
   describe('archiveTasks - multi-location handling', () => {
     it('should archive task from main specs directory only', async () => {
       // Create spec directory in main location only
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '001-test-task');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '001-test-task');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -666,18 +666,18 @@ describe('ProjectStore', () => {
 
     it('should archive task from BOTH main and worktree locations', async () => {
       // Create spec directory in main location
-      const mainSpecsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '002-multi-location');
+      const mainSpecsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '002-multi-location');
       mkdirSync(mainSpecsDir, { recursive: true });
 
       // Create spec directory in worktree location
-      // Worktree path: .auto-claude/worktrees/tasks/<worktreeName>/.auto-claude/specs/<taskId>
+      // Worktree path: .vibe-teamlead/worktrees/tasks/<worktreeName>/.vibe-teamlead/specs/<taskId>
       const worktreeDir = path.join(
         TEST_PROJECT_PATH,
-        '.auto-claude',
+        '.vibe-teamlead',
         'worktrees',
         'tasks',
         'my-worktree',
-        '.auto-claude',
+        '.vibe-teamlead',
         'specs',
         '002-multi-location'
       );
@@ -724,11 +724,11 @@ describe('ProjectStore', () => {
       // Create spec directory ONLY in worktree location (not in main)
       const worktreeDir = path.join(
         TEST_PROJECT_PATH,
-        '.auto-claude',
+        '.vibe-teamlead',
         'worktrees',
         'tasks',
         'only-worktree',
-        '.auto-claude',
+        '.vibe-teamlead',
         'specs',
         '003-worktree-only'
       );
@@ -765,8 +765,8 @@ describe('ProjectStore', () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
 
-      // Create .auto-claude directory so project is recognized
-      mkdirSync(path.join(TEST_PROJECT_PATH, '.auto-claude'), { recursive: true });
+      // Create .vibe-teamlead directory so project is recognized
+      mkdirSync(path.join(TEST_PROJECT_PATH, '.vibe-teamlead'), { recursive: true });
 
       const project = store.addProject(TEST_PROJECT_PATH);
       // Task doesn't exist anywhere
@@ -778,7 +778,7 @@ describe('ProjectStore', () => {
 
     it('should reject path traversal attempts in taskId', async () => {
       // Create a valid spec dir
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', 'valid-task');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', 'valid-task');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = { feature: 'Test', phases: [] };
@@ -820,16 +820,16 @@ describe('ProjectStore', () => {
   describe('unarchiveTasks - multi-location handling', () => {
     it('should unarchive task from BOTH main and worktree locations', async () => {
       // Create archived task in both locations
-      const mainSpecsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '004-unarchive-test');
+      const mainSpecsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '004-unarchive-test');
       mkdirSync(mainSpecsDir, { recursive: true });
 
       const worktreeDir = path.join(
         TEST_PROJECT_PATH,
-        '.auto-claude',
+        '.vibe-teamlead',
         'worktrees',
         'tasks',
         'unarchive-worktree',
-        '.auto-claude',
+        '.vibe-teamlead',
         'specs',
         '004-unarchive-test'
       );
@@ -874,7 +874,7 @@ describe('ProjectStore', () => {
 
   describe('cache invalidation', () => {
     it('should invalidate cache after archiveTasks', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '005-cache-test');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '005-cache-test');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -915,7 +915,7 @@ describe('ProjectStore', () => {
     });
 
     it('should return fresh data after invalidateTasksCache is called', async () => {
-      const specsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '006-invalidate-test');
+      const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '006-invalidate-test');
       mkdirSync(specsDir, { recursive: true });
 
       const plan = {
@@ -959,16 +959,16 @@ describe('ProjectStore', () => {
   describe('getTasks - worktree deduplication', () => {
     it('should not duplicate tasks that exist in both main and worktree', async () => {
       // Create same task in both main and worktree
-      const mainSpecsDir = path.join(TEST_PROJECT_PATH, '.auto-claude', 'specs', '007-dedupe-test');
+      const mainSpecsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '007-dedupe-test');
       mkdirSync(mainSpecsDir, { recursive: true });
 
       const worktreeDir = path.join(
         TEST_PROJECT_PATH,
-        '.auto-claude',
+        '.vibe-teamlead',
         'worktrees',
         'tasks',
         'dedupe-worktree',
-        '.auto-claude',
+        '.vibe-teamlead',
         'specs',
         '007-dedupe-test'
       );

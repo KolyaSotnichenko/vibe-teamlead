@@ -39,7 +39,7 @@ const ROADMAP_TOOLS = [...RESEARCH_TOOLS, 'Write', 'Edit'] as const;
 export interface RoadmapConfig {
   /** Project directory path */
   projectDir: string;
-  /** Output directory for roadmap files (defaults to .auto-claude/roadmap/) */
+  /** Output directory for roadmap files (defaults to .vibe-teamlead/roadmap/) */
   outputDir?: string;
   /** Model shorthand (defaults to 'sonnet') */
   modelShorthand?: ModelShorthand;
@@ -430,7 +430,7 @@ export async function runRoadmapGeneration(
     abortSignal,
   } = config;
 
-  const outputDir = config.outputDir ?? join(projectDir, '.auto-claude', 'roadmap');
+  const outputDir = config.outputDir ?? join(projectDir, '.vibe-teamlead', 'roadmap');
 
   // Ensure output directory exists
   if (!existsSync(outputDir)) {

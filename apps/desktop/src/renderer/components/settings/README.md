@@ -10,7 +10,7 @@ settings/
 ├── common/                          # Common UI components
 │   ├── EmptyProjectState.tsx        # Empty state when no project selected
 │   ├── ErrorDisplay.tsx             # Error message display
-│   ├── InitializationGuard.tsx      # Guards for Auto-Build requirement
+│   ├── InitializationGuard.tsx      # Guards for Vibe Teamlead requirement
 │   └── index.ts                     # Exports
 ├── integrations/                    # Third-party integrations
 │   ├── LinearIntegration.tsx        # Linear setup (241 lines)
@@ -46,7 +46,7 @@ settings/
 - Returns null when no errors present
 
 **InitializationGuard** (29 lines)
-- Guards features requiring Auto-Build initialization
+- Guards features requiring Vibe Teamlead initialization
 - Shows informative message when not initialized
 - Renders children when guard passes
 

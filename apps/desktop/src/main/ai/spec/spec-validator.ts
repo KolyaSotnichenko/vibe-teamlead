@@ -644,7 +644,7 @@ export class SpecValidator {
 /** Maximum auto-fix retries */
 const MAX_AUTO_FIX_RETRIES = 3;
 
-const VALIDATION_FIXER_SYSTEM_PROMPT = `You are the Validation Fixer Agent in the Auto-Build spec creation pipeline. Your ONLY job is to fix validation errors in spec files so the pipeline can continue.
+const VALIDATION_FIXER_SYSTEM_PROMPT = `You are the Validation Fixer Agent in the Vibe Teamlead spec creation pipeline. Your ONLY job is to fix validation errors in spec files so the pipeline can continue.
 
 Key Principle: Read the error, understand the schema, fix the file. Be surgical.
 

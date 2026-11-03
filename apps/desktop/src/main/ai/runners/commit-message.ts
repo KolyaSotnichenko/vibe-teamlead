@@ -234,10 +234,7 @@ export async function generateCommitMessage(
   } = config;
 
   // Find spec directory
-  let specDir = join(projectDir, '.auto-claude', 'specs', specName);
-  if (!existsSync(specDir)) {
-    specDir = join(projectDir, 'auto-claude', 'specs', specName);
-  }
+  const specDir = join(projectDir, '.vibe-teamlead', 'specs', specName);
 
   // Get context from spec files
   const specContext = existsSync(specDir) ? getSpecContext(specDir) : {

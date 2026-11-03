@@ -53,7 +53,7 @@ function taskArgs() {
 function baseConfig(overrides: Partial<IdeationConfig> = {}): IdeationConfig {
   return {
     projectDir: '/project',
-    outputDir: '/project/.auto-claude/ideation',
+    outputDir: '/project/.vibe-teamlead/ideation',
     promptsDir: '/app/prompts',
     ideationType: 'code_improvements',
     ...overrides,
@@ -144,7 +144,7 @@ describe('runIdeation', () => {
     expect(args.cwd).toBe('/project');
     expect(args.tools).toEqual(['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Write', 'Edit']);
     expect(args.tools).not.toContain('Bash');
-    expect(args.allowedWritePaths).toEqual(['/project/.auto-claude/ideation']);
+    expect(args.allowedWritePaths).toEqual(['/project/.vibe-teamlead/ideation']);
     expect(args.maxTurns).toBe(30);
   });
 
@@ -280,13 +280,13 @@ describe('runIdeation', () => {
 
   it('includes projectDir and outputDir in the system prompt', async () => {
     await runIdeation(
-      baseConfig({ projectDir: '/my/project', outputDir: '/my/project/.auto-claude/ideation' }),
+      baseConfig({ projectDir: '/my/project', outputDir: '/my/project/.vibe-teamlead/ideation' }),
     );
 
     const systemPrompt = taskArgs().systemPrompt as string;
     expect(systemPrompt).toContain('Analyze the codebase for improvements.');
     expect(systemPrompt).toContain('**Project Directory**: /my/project');
-    expect(systemPrompt).toContain('**Output Directory**: /my/project/.auto-claude/ideation');
+    expect(systemPrompt).toContain('**Output Directory**: /my/project/.vibe-teamlead/ideation');
   });
 
   it('injects maxIdeasPerType into the context', async () => {

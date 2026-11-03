@@ -5,7 +5,7 @@
  * The existing tool implementations (`Tool.define(...)`) are reused as-is:
  * each definition's `execute(input, context)` is wrapped in an SDK `tool()`
  * and served from `createSdkMcpServer()`. Claude Code sees them under
- * `mcp__auto-claude__<name>`, matching the names in AGENT_CONFIGS.
+ * `mcp__vibe-teamlead__<name>`, matching the names in AGENT_CONFIGS.
  */
 
 import { readFileSync } from 'node:fs';
@@ -23,14 +23,14 @@ import {
   recordGotchaTool,
   updateQaStatusTool,
   updateSubtaskStatusTool,
-} from '../tools/auto-claude';
+} from '../tools/app-tools';
 import { isPathContained } from '../security/path-containment';
 import type { DefinedTool } from '../tools/define';
 import type { ToolContext } from '../tools/types';
 
-/** MCP server key; tool names become `mcp__auto-claude__<tool>` */
-export const AUTO_CLAUDE_SERVER_KEY = 'auto-claude';
-const TOOL_PREFIX = `mcp__${AUTO_CLAUDE_SERVER_KEY}__`;
+/** MCP server key; tool names become `mcp__vibe-teamlead__<tool>` */
+export const APP_TOOLS_SERVER_KEY = 'vibe-teamlead';
+const TOOL_PREFIX = `mcp__${APP_TOOLS_SERVER_KEY}__`;
 export const RENDER_DIAGRAM_TOOL = `${TOOL_PREFIX}render_diagram`;
 export const SEARCH_MEMORY_TOOL = `${TOOL_PREFIX}search_memory`;
 export const REMEMBER_TOOL = `${TOOL_PREFIX}remember`;
@@ -142,7 +142,7 @@ function toText(output: unknown): string {
  * Build the in-process MCP server for the given agent.
  *
  * @param context - Tool context (cwd, specDir, security profile) bound to every call
- * @param allowedToolNames - Full tool names (`mcp__auto-claude__*`) this agent may use.
+ * @param allowedToolNames - Full tool names (`mcp__vibe-teamlead__*`) this agent may use.
  *   Pass `undefined` to expose all build tools.
  */
 export function createBuildToolsServer(
@@ -187,7 +187,7 @@ export function createBuildToolsServer(
   ];
 
   return createSdkMcpServer({
-    name: AUTO_CLAUDE_SERVER_KEY,
+    name: APP_TOOLS_SERVER_KEY,
     version: '2.0.0',
     tools: allTools,
   });

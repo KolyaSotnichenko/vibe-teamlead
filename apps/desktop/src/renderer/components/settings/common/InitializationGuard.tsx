@@ -9,8 +9,8 @@ interface InitializationGuardProps {
 }
 
 /**
- * Guard component that shows a message when Auto-Build is not initialized.
- * Used to prevent configuration of features that require Auto-Build setup.
+ * Guard component that shows a message when Vibe Teamlead is not initialized.
+ * Used to prevent configuration of features that require Vibe Teamlead setup.
  */
 export function InitializationGuard({
   initialized,

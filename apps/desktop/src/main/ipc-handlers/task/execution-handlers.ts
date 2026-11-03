@@ -128,7 +128,7 @@ export function registerTaskExecutionHandlers(
         ? (projectStore.getProject(task.projectId) ?? foundProject)
         : foundProject;
 
-      // Check git status - Auto Claude requires git for worktree-based builds
+      // Check git status - Vibe Teamlead requires git for worktree-based builds
       const gitStatus = checkGitStatus(project.path);
       if (!gitStatus.isGitRepo) {
         console.warn('[TASK_START] Project is not a git repository:', project.path);
@@ -421,15 +421,15 @@ export function registerTaskExecutionHandlers(
           }
 
           // Step 3: Clean untracked files that came from the merge
-          // IMPORTANT: Exclude .auto-claude directory to preserve specs and worktree data
-          const cleanResult = spawnSync(getToolPath('git'), ['clean', '-fd', '-e', '.auto-claude'], {
+          // IMPORTANT: Exclude .vibe-teamlead directory to preserve specs and worktree data
+          const cleanResult = spawnSync(getToolPath('git'), ['clean', '-fd', '-e', '.vibe-teamlead'], {
             cwd: project.path,
             encoding: 'utf-8',
             stdio: 'pipe',
             env: getIsolatedGitEnv()
           });
           if (cleanResult.status === 0) {
-            console.log('[TASK_REVIEW] Cleaned untracked files in main (excluding .auto-claude)');
+            console.log('[TASK_REVIEW] Cleaned untracked files in main (excluding .vibe-teamlead)');
           }
 
           console.log('[TASK_REVIEW] Main branch restored to pre-merge state');

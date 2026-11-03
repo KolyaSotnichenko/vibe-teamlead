@@ -18,7 +18,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { isLinux } from './platform';
 
-const APP_NAME = 'auto-claude';
+const APP_NAME = 'vibe-teamlead';
 
 /**
  * Get the XDG config home directory
@@ -70,19 +70,18 @@ export function getAppCacheDir(): string {
 
 /**
  * Get the memories storage directory
- * This is where graph databases are stored (previously ~/.auto-claude/memories)
+ * This is where graph databases are stored (~/.vibe-teamlead/memories; moved
+ * from ~/.auto-claude/memories on first start, see data-dir-migration.ts)
  */
 export function getMemoriesDir(): string {
-  // For compatibility, we still support the legacy path
-  const legacyPath = path.join(os.homedir(), '.auto-claude', 'memories');
+  const homePath = path.join(os.homedir(), '.vibe-teamlead', 'memories');
 
   // On Linux with XDG variables set (AppImage, Flatpak, Snap), use XDG path
   if (isLinux() && (process.env.XDG_DATA_HOME || process.env.APPIMAGE || process.env.SNAP || process.env.FLATPAK_ID)) {
     return path.join(getXdgDataHome(), APP_NAME, 'memories');
   }
 
-  // Default to legacy path for backwards compatibility
-  return legacyPath;
+  return homePath;
 }
 
 /**

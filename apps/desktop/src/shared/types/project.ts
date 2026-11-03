@@ -220,8 +220,8 @@ export interface MemoryProviderConfig {
   ollamaEmbeddingDim?: number;
 
   // LadybugDB settings (embedded database - no Docker required)
-  database?: string;  // Database name (default: auto_claude_memory)
-  dbPath?: string;    // Database storage path (default: ~/.auto-claude/memories)
+  database?: string;  // Database name (default: vibe_teamlead_memory)
+  dbPath?: string;    // Database storage path (default: ~/.vibe-teamlead/memories)
 }
 
 export interface MemoryProviderInfo {
@@ -368,7 +368,7 @@ export interface ProjectEnvConfig {
 
 /**
  * Per-agent MCP override configuration.
- * Stored in .auto-claude/.env as AGENT_MCP_<agent>_ADD and AGENT_MCP_<agent>_REMOVE
+ * Stored in .vibe-teamlead/.env as AGENT_MCP_<agent>_ADD and AGENT_MCP_<agent>_REMOVE
  */
 export interface AgentMcpOverride {
   /** MCP servers to add beyond the agent's defaults */
@@ -449,10 +449,10 @@ export interface McpTestConnectionResult {
   responseTime?: number;
 }
 
-// Auto Claude Initialization Types
+// Vibe Teamlead Initialization Types
 export interface AutoBuildVersionInfo {
   isInitialized: boolean;
-  updateAvailable: boolean; // Always false - .auto-claude only contains data, no code to update
+  updateAvailable: boolean; // Always false - .vibe-teamlead only contains data, no code to update
 }
 
 export interface InitializationResult {

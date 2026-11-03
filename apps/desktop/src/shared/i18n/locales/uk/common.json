@@ -522,7 +522,7 @@
   },
   "ideation": {
     "converting": "Перетворення...",
-    "convertToTask": "Перетворити на задачу Auto-Build",
+    "convertToTask": "Перетворити на задачу",
     "dismissIdea": "Відхилити ідею",
     "description": "Опис",
     "rationale": "Обґрунтування",
@@ -847,7 +847,7 @@
     "archiveFeatureConfirmTitle": "Архівувати функцію?",
     "archiveFeatureConfirmDescription": "«{{title}}» буде вилучено з дорожньої карти.",
     "goToTask": "Перейти до задачі",
-    "convertToTask": "Перетворити на задачу Auto-Build",
+    "convertToTask": "Перетворити на задачу",
     "build": "Розробити",
     "task": "Задача",
     "viewTask": "Переглянути задачу",

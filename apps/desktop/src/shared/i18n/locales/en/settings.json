@@ -130,7 +130,7 @@
     "otherAgentSettingsDescription": "Additional agent configuration options",
     "agentFramework": "Agent Framework",
     "agentFrameworkDescription": "The coding framework used for autonomous tasks",
-    "agentFrameworkAutoClaude": "Vibe Teamlead",
+    "agentFrameworkVibeTeamlead": "Vibe Teamlead",
     "aiTerminalNaming": "AI Terminal Naming",
     "aiTerminalNamingDescription": "Automatically name terminals based on commands (uses AI Naming model)",
     "featureModelSettings": "Feature Model Settings",
@@ -165,9 +165,9 @@
     "sourceBundled": "Bundled",
     "sourceFallback": "Fallback",
     "notDetected": "Not detected",
-    "autoClaudePath": "Vibe Teamlead Path",
-    "autoClaudePathDescription": "Relative path to auto-claude directory in projects",
-    "autoClaudePathPlaceholder": "auto-claude (default)",
+    "dataPath": "Vibe Teamlead Path",
+    "dataPathDescription": "Relative path to the Vibe Teamlead data folder in projects",
+    "dataPathPlaceholder": ".vibe-teamlead (default)",
     "autoNameTerminals": "Automatically name terminals",
     "autoNameTerminalsDescription": "Use AI to generate descriptive names for terminal tabs based on their activity",
     "securityQa": "Security QA (Strix)",
@@ -307,22 +307,22 @@
   "projectSections": {
     "general": {
       "title": "General",
-      "description": "Auto-Build and agent config",
+      "description": "Vibe Teamlead and agent config",
       "useClaudeMd": "Use CLAUDE.md",
       "useClaudeMdDescription": "Include CLAUDE.md instructions in agent context",
-      "autoBuildIntegration": "Auto-Build Integration",
+      "autoBuildIntegration": "Vibe Teamlead Integration",
       "notInitializedTitle": "Not Initialized",
-      "notInitializedDescription": "Initialize Auto-Build to enable task creation and agent workflows.",
+      "notInitializedDescription": "Initialize Vibe Teamlead to enable task creation and agent workflows.",
       "initializing": "Initializing...",
-      "initializeAutoBuild": "Initialize Auto-Build",
+      "initializeAutoBuild": "Initialize Vibe Teamlead",
       "initialized": "Initialized",
       "notInitialized": "Not initialized",
       "checkingStatus": "Checking status...",
       "agentConfiguration": "Agent Configuration",
       "model": "Model",
-      "initializeFirst": "Initialize Auto-Build first to configure {{feature}}",
+      "initializeFirst": "Initialize Vibe Teamlead first to configure {{feature}}",
       "panelTitle": "General",
-      "panelDescription": "Configure Auto-Build, agent model, and notifications for {{projectName}}"
+      "panelDescription": "Configure Vibe Teamlead, agent model, and notifications for {{projectName}}"
     },
     "claude": {
       "title": "Claude Auth",
@@ -548,7 +548,7 @@
         "name": "Puppeteer",
         "description": "Web browser automation for testing"
       },
-      "autoClaude": {
+      "appTools": {
         "name": "Vibe Teamlead Tools",
         "description": "Build progress tracking"
       },
@@ -606,12 +606,12 @@
     },
     "serverNames": {
       "memory": "Memory",
-      "auto-claude": "Vibe Teamlead Tools"
+      "vibe-teamlead": "Vibe Teamlead Tools"
     },
     "serverDescriptions": {
       "context7": "Documentation lookup for libraries and frameworks via @upstash/context7-mcp",
       "memory": "Knowledge graph for cross-session context. Requires GRAPHITI_MCP_URL env var.",
-      "auto-claude": "Build progress tracking, session context, discoveries & gotchas recording",
+      "vibe-teamlead": "Build progress tracking, session context, discoveries & gotchas recording",
       "linear": "Project management via Linear API. Requires LINEAR_API_KEY env var.",
       "electron": "Desktop app automation via Chrome DevTools Protocol. Requires ELECTRON_MCP_ENABLED=true.",
       "puppeteer": "Web browser automation for non-Electron web frontends."

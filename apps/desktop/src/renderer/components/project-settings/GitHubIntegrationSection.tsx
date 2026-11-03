@@ -151,7 +151,7 @@ export function GitHubIntegrationSection({
                     link: (
                       // biome-ignore lint/a11y/useAnchorContent: Trans injects the link text
                       <a
-                        href="https://github.com/settings/tokens/new?scopes=repo&description=Auto-Build-UI"
+                        href="https://github.com/settings/tokens/new?scopes=repo&description=Vibe-Teamlead"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-info hover:underline"

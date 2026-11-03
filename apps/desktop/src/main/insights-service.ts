@@ -56,7 +56,7 @@ export class InsightsService extends EventEmitter {
   }
 
   /**
-   * Configure paths for Python and auto-claude source
+   * Configure paths for the prompts
    */
   configure(pythonPath?: string, autoBuildSourcePath?: string): void {
     this.config.configure(pythonPath, autoBuildSourcePath);
