@@ -542,7 +542,7 @@ export function parseSecurityQa(raw: unknown, specDir: string): WorkspaceSecurit
     ? (r.status as NonNullable<WorkspaceSecurity['pentest']>['status'])
     : 'error';
   const settings = (r.settings ?? {}) as Record<string, unknown>;
-  const failOn = str(settings.failOn);
+  const failOn = str(settings.failOn)?.toLowerCase();
   const threshold = failOn ? SEVERITY_ORDER.indexOf(failOn) : 1;
   const runDir = str(r.runDir);
   return {
@@ -555,7 +555,7 @@ export function parseSecurityQa(raw: unknown, specDir: string): WorkspaceSecurit
     findings: (Array.isArray(r.findings) ? r.findings : []).flatMap((f) => {
       if (!f || typeof f !== 'object') return [];
       const x = f as Record<string, unknown>;
-      const severity = str(x.severity) ?? 'unknown';
+      const severity = str(x.severity)?.toLowerCase() ?? 'unknown';
       const rank = SEVERITY_ORDER.indexOf(severity);
       return [{ source: 'strix' as const, title: str(x.title) ?? 'Finding', severity, location: str(x.location), detail: str(x.description), blocking: rank === -1 || rank <= threshold }];
     }),

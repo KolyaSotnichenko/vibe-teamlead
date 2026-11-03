@@ -74,7 +74,8 @@ export const IPC_CHANNELS = {
 
   // Task workspace (parsed spec, ACs, plan, timeline, architecture from the spec dir)
   TASK_WORKSPACE_GET: 'task:workspaceGet',
-  TASK_WORKSPACE_OPEN_FILE: 'task:workspaceOpenFile',  // Open a file inside the spec dir with the default app
+  TASK_WORKSPACE_GET_IMAGE: 'task:workspaceGetImage',  // A diagram PNG of the spec dir as a data URL
+  TASK_WORKSPACE_OPEN_FILE: 'task:workspaceOpenFile',  // Open a .drawio inside the spec dir with the default app
 
   // Terminal operations
   TERMINAL_CREATE: 'terminal:create',

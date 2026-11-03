@@ -1,15 +1,18 @@
 /**
  * Task workspace IPC handlers
  *
- * TASK_WORKSPACE_GET   → parsed view of a task's spec directory (spec, ACs, plan,
- *                        timeline from real log timestamps, architecture docs)
- * TASK_WORKSPACE_OPEN_FILE → open a file inside the spec directory with the
- *                        system default app (e.g. a .drawio in draw.io)
+ * TASK_WORKSPACE_GET        → parsed view of a task's spec directory (spec, ACs,
+ *                             plan, timeline from real log timestamps, architecture,
+ *                             security). Diagram previews are referenced by path and
+ *                             version only, so refreshes stay small.
+ * TASK_WORKSPACE_GET_IMAGE  → one rendered diagram PNG as a data URL.
+ * TASK_WORKSPACE_OPEN_FILE  → open a .drawio file of the spec directory in the
+ *                             system's draw.io app.
  */
 
 import { ipcMain, shell } from 'electron';
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import path from 'path';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import path from 'node:path';
 import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult } from '../../../shared/types';
 import type { TaskWorkspace, WorkspaceAdr, WorkspaceArchitecture, WorkspaceDiagram } from '../../../shared/types/task-workspace';
@@ -30,20 +33,21 @@ import {
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 /** PNG previews larger than this are skipped */
 const MAX_PNG_BYTES = 8 * 1024 * 1024;
+/** Files the "Open in draw.io" action may open */
+const OPENABLE = /\.drawio$/i;
 
-function readText(filePath: string): string | undefined {
+async function readText(filePath: string): Promise<string | undefined> {
   try {
-    if (!existsSync(filePath)) return undefined;
-    const stats = statSync(filePath);
+    const stats = await stat(filePath);
     if (!stats.isFile() || stats.size > MAX_TEXT_BYTES) return undefined;
-    return readFileSync(filePath, 'utf-8');
+    return await readFile(filePath, 'utf-8');
   } catch {
     return undefined;
   }
 }
 
-function readJson(filePath: string): unknown {
-  const text = readText(filePath);
+async function readJson(filePath: string): Promise<unknown> {
+  const text = await readText(filePath);
   if (text === undefined) return undefined;
   try {
     return JSON.parse(text);
@@ -52,10 +56,10 @@ function readJson(filePath: string): unknown {
   }
 }
 
-function listFiles(dir: string): string[] {
+async function listFiles(dir: string): Promise<string[]> {
   try {
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir, { withFileTypes: true })
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries
       .filter((d) => d.isFile())
       .map((d) => d.name)
       .sort((a, b) => a.localeCompare(b));
@@ -64,44 +68,51 @@ function listFiles(dir: string): string[] {
   }
 }
 
-function readPngDataUrl(filePath: string): string | undefined {
-  try {
-    if (!existsSync(filePath)) return undefined;
-    const stats = statSync(filePath);
-    if (!stats.isFile() || stats.size > MAX_PNG_BYTES) return undefined;
-    return `data:image/png;base64,${readFileSync(filePath).toString('base64')}`;
-  } catch {
-    return undefined;
+/** Preview of a .drawio: the PNG the renderer saved next to it, as path + version (mtime). */
+async function pngPreview(diagramDir: string, name: string): Promise<{ pngPath: string; pngVersion: number } | undefined> {
+  for (const fileName of [`${name}.png`, `${name}.drawio.png`]) {
+    try {
+      const stats = await stat(path.join(diagramDir, fileName));
+      if (stats.isFile() && stats.size <= MAX_PNG_BYTES) {
+        return { pngPath: path.posix.join('architecture', 'diagrams', fileName), pngVersion: stats.mtimeMs };
+      }
+    } catch {
+      // try the next name
+    }
   }
+  return undefined;
 }
 
-export function loadArchitecture(specDir: string): WorkspaceArchitecture {
+export async function loadArchitecture(specDir: string): Promise<WorkspaceArchitecture> {
   const archDir = path.join(specDir, 'architecture');
-  const markdown = readText(path.join(archDir, 'architecture.md'));
-
   const adrDir = path.join(archDir, 'adr');
+  const diagramDir = path.join(archDir, 'diagrams');
+  const [markdown, adrFiles, diagramFiles] = await Promise.all([
+    readText(path.join(archDir, 'architecture.md')),
+    listFiles(adrDir),
+    listFiles(diagramDir),
+  ]);
+
   const adrs: WorkspaceAdr[] = [];
-  for (const fileName of listFiles(adrDir)) {
+  for (const fileName of adrFiles) {
     if (!/\.md$/i.test(fileName) || /^(readme|template)/i.test(fileName)) continue;
-    const text = readText(path.join(adrDir, fileName));
+    const text = await readText(path.join(adrDir, fileName));
     if (text !== undefined) adrs.push(parseAdr(fileName, text));
   }
 
-  const diagramDir = path.join(archDir, 'diagrams');
   const diagrams: WorkspaceDiagram[] = [];
-  for (const fileName of listFiles(diagramDir)) {
+  for (const fileName of diagramFiles) {
     const ext = path.extname(fileName).toLowerCase();
     const name = path.basename(fileName, path.extname(fileName));
     if (ext === '.drawio') {
-      const pngDataUrl = readPngDataUrl(path.join(diagramDir, `${name}.png`)) ?? readPngDataUrl(path.join(diagramDir, `${name}.drawio.png`));
       diagrams.push({
         name,
         kind: 'drawio',
         drawioPath: path.posix.join('architecture', 'diagrams', fileName),
-        ...(pngDataUrl ? { pngDataUrl } : {}),
+        ...(await pngPreview(diagramDir, name)),
       });
     } else if (ext === '.mmd' || ext === '.mermaid') {
-      const source = readText(path.join(diagramDir, fileName));
+      const source = await readText(path.join(diagramDir, fileName));
       if (source?.trim()) diagrams.push({ name, kind: 'mermaid', mermaidSource: source });
     }
   }
@@ -110,12 +121,19 @@ export function loadArchitecture(specDir: string): WorkspaceArchitecture {
 }
 
 /** Read and parse every workspace artifact in a spec directory. Never throws. */
-export function loadTaskWorkspace(specDir: string): TaskWorkspace {
-  const specMarkdown = readText(path.join(specDir, 'spec.md'));
-  const plan = parsePlan(readJson(path.join(specDir, 'implementation_plan.json')));
-  const qaMarkdown = readText(path.join(specDir, 'qa_report.md'));
+export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace> {
+  const file = (name: string) => path.join(specDir, name);
+  const [specMarkdown, planRaw, qaMarkdown, logs, architecture, gates, pentest] = await Promise.all([
+    readText(file('spec.md')),
+    readJson(file('implementation_plan.json')),
+    readText(file('qa_report.md')),
+    readJson(file('task_logs.json')),
+    loadArchitecture(specDir),
+    readJson(file('security_gates.json')),
+    readJson(file('security_qa.json')),
+  ]);
+  const plan = parsePlan(planRaw);
   const qaRows = qaMarkdown !== undefined ? parseQaCoverage(qaMarkdown) : null;
-  const timeline = buildTimeline(readJson(path.join(specDir, 'task_logs.json')));
 
   return {
     specDir,
@@ -124,11 +142,11 @@ export function loadTaskWorkspace(specDir: string): TaskWorkspace {
       : {}),
     hasQaCoverage: qaRows !== null,
     ...(plan ? { plan } : {}),
-    timeline,
-    architecture: loadArchitecture(specDir),
+    timeline: buildTimeline(logs),
+    architecture,
     security: {
-      gates: parseSecurityGates(readJson(path.join(specDir, 'security_gates.json'))),
-      pentest: parseSecurityQa(readJson(path.join(specDir, 'security_qa.json')), specDir),
+      gates: parseSecurityGates(gates),
+      pentest: parseSecurityQa(pentest, specDir),
     },
   };
 }
@@ -146,6 +164,20 @@ export function isInside(root: string, target: string): boolean {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+/**
+ * Resolve a renderer-supplied path inside the task's spec directory, following
+ * symlinks, so a link the agents created can't point outside it.
+ */
+export async function resolveSpecFile(specDir: string, relativePath: unknown): Promise<string | null> {
+  if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath)) return null;
+  try {
+    const [root, target] = await Promise.all([realpath(specDir), realpath(path.resolve(specDir, relativePath))]);
+    return isInside(root, target) && (await stat(target)).isFile() ? target : null;
+  } catch {
+    return null;
+  }
+}
+
 export function registerTaskWorkspaceHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TASK_WORKSPACE_GET,
@@ -153,8 +185,12 @@ export function registerTaskWorkspaceHandlers(): void {
       try {
         const specDir = resolveSpecDir(taskId, projectId);
         if (!specDir) return { success: false, error: 'Task not found' };
-        if (!existsSync(specDir)) return { success: true, data: null };
-        return { success: true, data: loadTaskWorkspace(specDir) };
+        try {
+          await stat(specDir);
+        } catch {
+          return { success: true, data: null };
+        }
+        return { success: true, data: await loadTaskWorkspace(specDir) };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Failed to load task workspace' };
       }
@@ -162,23 +198,28 @@ export function registerTaskWorkspaceHandlers(): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.TASK_WORKSPACE_GET_IMAGE,
+    async (_, taskId: string, relativePath: string, projectId?: string): Promise<IPCResult<string>> => {
+      const specDir = resolveSpecDir(taskId, projectId);
+      const target = specDir && /\.png$/i.test(String(relativePath)) ? await resolveSpecFile(specDir, relativePath) : null;
+      if (!target) return { success: false, error: 'Image not found' };
+      try {
+        if ((await stat(target)).size > MAX_PNG_BYTES) return { success: false, error: 'Image too large' };
+        return { success: true, data: `data:image/png;base64,${(await readFile(target)).toString('base64')}` };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to read image' };
+      }
+    }
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.TASK_WORKSPACE_OPEN_FILE,
     async (_, taskId: string, relativePath: string, projectId?: string): Promise<IPCResult> => {
-      try {
-        const specDir = resolveSpecDir(taskId, projectId);
-        if (!specDir) return { success: false, error: 'Task not found' };
-        if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath)) {
-          return { success: false, error: 'Invalid path' };
-        }
-        const target = path.resolve(specDir, relativePath);
-        if (!isInside(specDir, target) || !existsSync(target)) {
-          return { success: false, error: 'File not found' };
-        }
-        const error = await shell.openPath(target);
-        return error ? { success: false, error } : { success: true };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to open file' };
-      }
+      const specDir = resolveSpecDir(taskId, projectId);
+      const target = specDir && OPENABLE.test(String(relativePath)) ? await resolveSpecFile(specDir, relativePath) : null;
+      if (!target || !OPENABLE.test(target)) return { success: false, error: 'File not found' };
+      const error = await shell.openPath(target);
+      return error ? { success: false, error } : { success: true };
     }
   );
 }

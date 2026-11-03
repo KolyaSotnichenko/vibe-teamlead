@@ -262,7 +262,8 @@ export const sampleTaskWorkspace: TaskWorkspace = {
         name: 'containers',
         kind: 'drawio',
         drawioPath: 'architecture/diagrams/containers.drawio',
-        pngDataUrl: `data:image/svg+xml;utf8,${encodeURIComponent(CONTAINERS_SVG)}`,
+        pngPath: 'architecture/diagrams/containers.png',
+        pngVersion: 1,
       },
       { name: 'deployment', kind: 'drawio', drawioPath: 'architecture/diagrams/deployment.drawio' },
       { name: 'export-sequence', kind: 'mermaid', mermaidSource: SEQUENCE_MMD },
@@ -318,6 +319,10 @@ export const taskWorkspaceMock = {
   getTaskWorkspace: async (taskId: string, _projectId?: string): Promise<IPCResult<TaskWorkspace | null>> => ({
     success: true,
     data: ['task-8', 'task-3', 'task-9'].includes(taskId) ? sampleTaskWorkspace : earlyTaskWorkspace,
+  }),
+  getTaskWorkspaceImage: async (_taskId: string, _relativePath: string): Promise<IPCResult<string>> => ({
+    success: true,
+    data: `data:image/svg+xml;utf8,${encodeURIComponent(CONTAINERS_SVG)}`,
   }),
   openTaskWorkspaceFile: async (_taskId: string, relativePath: string): Promise<IPCResult> => {
     console.warn('[Browser Mock] openTaskWorkspaceFile:', relativePath);

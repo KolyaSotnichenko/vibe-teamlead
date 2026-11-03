@@ -110,6 +110,14 @@ const PROSE =
   '[overflow-wrap:anywhere]';
 
 const markdownComponents: Components = {
+  // Links in agent-written markdown open in the browser, never inside the app window.
+  a({ href, children, node: _node, ...props }) {
+    return (
+      <a {...props} href={href} target="_blank" rel="noreferrer noopener">
+        {children}
+      </a>
+    );
+  },
   code({ className, children, ...props }) {
     const language = /language-(\w+)/.exec(className ?? '')?.[1];
     if (language === 'mermaid') {

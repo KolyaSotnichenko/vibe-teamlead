@@ -91,6 +91,7 @@ export interface TaskAPI {
 
   // Task Workspace (parsed spec, ACs, plan, timeline, architecture)
   getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
+  getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult<string>>;
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
   unwatchTaskLogs: (specId: string) => Promise<IPCResult>;
@@ -301,6 +302,9 @@ export const createTaskAPI = (): TaskAPI => ({
   // Task Workspace
   getTaskWorkspace: (taskId: string, projectId?: string): Promise<IPCResult<TaskWorkspace | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_GET, taskId, projectId),
+
+  getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string): Promise<IPCResult<string>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_GET_IMAGE, taskId, relativePath, projectId),
 
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_OPEN_FILE, taskId, relativePath, projectId),

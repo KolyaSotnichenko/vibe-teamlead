@@ -101,8 +101,10 @@ export interface WorkspaceDiagram {
   kind: 'drawio' | 'mermaid';
   /** Path relative to the spec directory, for "Open in draw.io" */
   drawioPath?: string;
-  /** Rendered PNG next to the .drawio file, as a data URL */
-  pngDataUrl?: string;
+  /** Rendered PNG next to the .drawio file, relative to the spec directory (fetch with getTaskWorkspaceImage) */
+  pngPath?: string;
+  /** Changes when the PNG is re-rendered (mtime); cache key for the fetched image */
+  pngVersion?: number;
   /** Mermaid source of a .mmd file */
   mermaidSource?: string;
 }

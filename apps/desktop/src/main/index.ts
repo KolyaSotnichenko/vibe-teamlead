@@ -368,6 +368,19 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  // The app window never navigates away from the app (e.g. a link in agent-written
+  // markdown). External links open in the browser; everything else is ignored.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const current = mainWindow?.webContents.getURL();
+    if (current && new URL(url).origin === new URL(current).origin) return;
+    event.preventDefault();
+    try {
+      if (ALLOWED_URL_SCHEMES.includes(new URL(url).protocol)) void shell.openExternal(url);
+    } catch {
+      // Invalid URL: ignore
+    }
+  });
+
   // Load the renderer
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);

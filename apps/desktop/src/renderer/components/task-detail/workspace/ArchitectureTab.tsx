@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, ExternalLink } from 'lucide-react';
 import type { TaskWorkspace, WorkspaceAdr, WorkspaceDiagram } from '../../../../shared/types';
@@ -31,7 +31,7 @@ export function ArchitectureTab({ workspace, taskId, projectId }: ArchitectureTa
         ) : (
           <div className="flex flex-col gap-8">
             {diagrams.map((d) => (
-              <DiagramCard key={`${d.kind}:${d.name}`} diagram={d} taskId={taskId} projectId={projectId} />
+              <DiagramCard key={d.drawioPath ?? `${d.kind}:${d.name}:${d.mermaidSource?.length ?? 0}`} diagram={d} taskId={taskId} projectId={projectId} />
             ))}
           </div>
         )}
@@ -101,9 +101,36 @@ function AdrRow({ adr }: { adr: WorkspaceAdr }) {
   );
 }
 
+/** Fetched diagram previews, keyed by task, path and version (re-fetched only when re-rendered). */
+const imageCache = new Map<string, string>();
+
+function useDiagramImage(taskId: string, projectId: string, pngPath?: string, version?: number): string | undefined {
+  const key = pngPath ? `${taskId}:${pngPath}@${version ?? 0}` : '';
+  const [src, setSrc] = useState(() => (key ? imageCache.get(key) : undefined));
+  useEffect(() => {
+    if (!key || !pngPath) return;
+    const cached = imageCache.get(key);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI.getTaskWorkspaceImage(taskId, pngPath, projectId).then((result) => {
+      if (cancelled || !result.success || !result.data) return;
+      imageCache.set(key, result.data);
+      setSrc(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, pngPath, taskId, projectId]);
+  return src;
+}
+
 function DiagramCard({ diagram, taskId, projectId }: { diagram: WorkspaceDiagram; taskId: string; projectId: string }) {
   const { t } = useTranslation(['tasks']);
   const { toast } = useToast();
+  const image = useDiagramImage(taskId, projectId, diagram.pngPath, diagram.pngVersion);
 
   const openDrawio = async () => {
     if (!diagram.drawioPath) return;
@@ -133,10 +160,14 @@ function DiagramCard({ diagram, taskId, projectId }: { diagram: WorkspaceDiagram
       </figcaption>
 
       {diagram.kind === 'drawio' ? (
-        diagram.pngDataUrl ? (
+        image ? (
           // draw.io PNGs are drawn on white; keep them on a paper panel in both themes
           <div className="overflow-auto border border-border bg-[var(--vt-paper)] p-4">
-            <img src={diagram.pngDataUrl} alt={diagram.name} className="mx-auto h-auto max-w-full" />
+            <img src={image} alt={diagram.name} className="mx-auto h-auto max-w-full" />
+          </div>
+        ) : diagram.pngPath ? (
+          <div role="status" className="border border-border px-4 py-6 text-sm text-muted-foreground">
+            {t('tasks:workspace.loading')}
           </div>
         ) : (
           <div className="border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
