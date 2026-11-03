@@ -1,40 +1,32 @@
 import { EventEmitter } from 'events';
-import { spawn } from 'child_process';
-import * as path from 'path';
-import * as os from 'os';
 import type {
   ChangelogGenerationRequest,
   ChangelogGenerationResult,
   ChangelogGenerationProgress,
   TaskSpecContent
 } from '../../shared/types';
-import { buildChangelogPrompt, buildGitPrompt, createGenerationScript } from './formatter';
-import { extractChangelog } from './parser';
-import { getCommits, getBranchDiffCommits } from './git-integration';
+import { runClaudeTask } from '../ai/claude-code/task';
+import type { ThinkingLevel } from '../ai/config/types';
+import { getFeatureSettings } from '../ipc-handlers/feature-settings-helper';
 import { detectRateLimit, createSDKRateLimitInfo } from '../rate-limit-detector';
-import { getClaudeCredentialEnv } from '../ai/claude-code/credential';
+import { buildChangelogPrompt, buildGitPrompt } from './formatter';
+import { getBranchDiffCommits, getCommits } from './git-integration';
+import { extractChangelog } from './parser';
 
-import { getAugmentedEnv } from '../env-utils';
-import { isWindows } from '../platform';
+const TIMEOUT_MS = 5 * 60 * 1000;
+
+const CHANGELOG_SYSTEM_PROMPT =
+  'You write release changelogs. Follow the requested format and audience exactly and reply with the changelog only, in Markdown, without any preamble or closing remarks.';
 
 /**
- * Core changelog generation logic
- * Handles AI generation via Claude CLI subprocess
+ * Changelog generation with Claude Code (the app's Claude credential and the
+ * "Utility" feature model). Supports tasks (specs), git history and branch diff.
  */
 export class ChangelogGenerator extends EventEmitter {
-  private generationProcesses: Map<string, ReturnType<typeof spawn>> = new Map();
-  private generationTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private debugEnabled: boolean;
+  private generations = new Map<string, AbortController>();
 
-  constructor(
-    private pythonPath: string,
-    private claudePath: string,
-    private autoBuildSourcePath: string,
-    private autoBuildEnv: Record<string, string>,
-    debugEnabled: boolean
-  ) {
+  constructor(private debugEnabled = false) {
     super();
-    this.debugEnabled = debugEnabled;
   }
 
   private debug(...args: unknown[]): void {
@@ -128,212 +120,68 @@ export class ChangelogGenerator extends EventEmitter {
       promptPreview: prompt.substring(0, 500) + '...'
     });
 
-    // Create Python script
-    const script = createGenerationScript(prompt, this.claudePath);
-    this.debug('Python script created', { scriptLength: script.length });
-
     this.emitProgress(projectId, {
       stage: 'generating',
       progress: 30,
-      message: 'Generating changelog with Claude AI...'
+      message: 'Generating changelog with Claude...'
     });
 
-    const startTime = Date.now();
-    this.debug('Spawning Python process...');
+    const abort = new AbortController();
+    this.generations.set(projectId, abort);
+    const timeout = setTimeout(() => abort.abort(), TIMEOUT_MS);
+    const { model, thinkingLevel } = getFeatureSettings('utility');
 
-    // Build environment with explicit critical variables
-    const spawnEnv = this.buildSpawnEnvironment();
-
-    // Use python3/python as fallback command (Python subprocess path removed in Vercel AI SDK migration)
-    const pythonCommand = this.pythonPath || 'python3';
-    const childProcess = spawn(pythonCommand, ['-c', script], {
-      cwd: this.autoBuildSourcePath,
-      env: spawnEnv
-    });
-
-    this.generationProcesses.set(projectId, childProcess);
-    this.debug('Process spawned with PID:', childProcess.pid);
-
-    // Set 5-minute timeout
-    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-    const timeoutId = setTimeout(() => {
-      this.debug('Process timed out after 5 minutes');
-      this.generationTimeouts.delete(projectId);
-
-      // Kill the process
-      const proc = this.generationProcesses.get(projectId);
-      if (proc) {
-        proc.kill('SIGTERM');
-        this.generationProcesses.delete(projectId);
-      }
-
-      // Emit timeout error
-      this.emitError(projectId, 'Changelog generation timed out after 5 minutes');
-    }, TIMEOUT_MS);
-
-    this.generationTimeouts.set(projectId, timeoutId);
-
-    let output = '';
-    let errorOutput = '';
-
-    childProcess.stdout?.on('data', (data: Buffer) => {
-      const chunk = data.toString('utf-8');
-      output += chunk;
-      this.debug('stdout chunk received', { chunkLength: chunk.length, totalOutput: output.length });
-
-      this.emitProgress(projectId, {
-        stage: 'generating',
-        progress: 50,
-        message: 'Generating changelog content...'
+    try {
+      const result = await runClaudeTask({
+        systemPrompt: CHANGELOG_SYSTEM_PROMPT,
+        prompt,
+        model,
+        thinkingLevel: thinkingLevel as ThinkingLevel,
+        maxTurns: 1,
+        abortSignal: abort.signal,
       });
-    });
+      if (this.generations.get(projectId) !== abort) return; // cancelled or superseded
 
-    childProcess.stderr?.on('data', (data: Buffer) => {
-      const chunk = data.toString('utf-8');
-      errorOutput += chunk;
-      this.debug('stderr chunk received', { chunk: chunk.substring(0, 200) });
-    });
-
-    childProcess.on('exit', (code: number | null) => {
-      const duration = Date.now() - startTime;
-      this.debug('Process exited', {
-        code,
-        duration: `${duration}ms`,
-        outputLength: output.length,
-        errorLength: errorOutput.length
-      });
-
-      // Clear timeout
-      const existingTimeout = this.generationTimeouts.get(projectId);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-        this.generationTimeouts.delete(projectId);
-      }
-
-      // Guard: if process was already removed (e.g. by timeout or cancel), skip
-      if (!this.generationProcesses.delete(projectId)) {
-        this.debug('Process already cleaned up (timeout or cancel), skipping exit handler');
+      this.emitProgress(projectId, { stage: 'formatting', progress: 90, message: 'Formatting changelog...' });
+      const changelog = extractChangelog(result.text.trim());
+      if (!changelog) {
+        this.emitError(projectId, 'Claude returned an empty changelog');
         return;
       }
-
-      if (code === 0 && output.trim()) {
-        this.emitProgress(projectId, {
-          stage: 'formatting',
-          progress: 90,
-          message: 'Formatting changelog...'
-        });
-
-        // Extract changelog from output
-        const changelog = extractChangelog(output.trim());
-        this.debug('Changelog extracted', { changelogLength: changelog.length });
-
-        this.emitProgress(projectId, {
-          stage: 'complete',
-          progress: 100,
-          message: 'Changelog generation complete'
-        });
-
-        const result: ChangelogGenerationResult = {
-          success: true,
-          changelog,
-          version: request.version,
-          tasksIncluded: itemCount
-        };
-
-        this.debug('Generation complete, emitting result');
-        this.emit('generation-complete', projectId, result);
-      } else {
-        // Combine all output for error analysis
-        const combinedOutput = `${output}\n${errorOutput}`;
-        const error = errorOutput || `Generation failed with exit code ${code}`;
-
-        // Check for rate limit
-        const rateLimitDetection = detectRateLimit(combinedOutput);
-        if (rateLimitDetection.isRateLimited) {
-          this.debug('Rate limit detected in changelog generation', {
-            resetTime: rateLimitDetection.resetTime,
-            limitType: rateLimitDetection.limitType
-          });
-
-          // Emit rate limit event
-          const rateLimitInfo = createSDKRateLimitInfo('changelog', rateLimitDetection, { projectId });
-          this.emit('rate-limit', projectId, rateLimitInfo);
-        }
-
-        this.debug('Generation failed', { error: error.substring(0, 500), isRateLimited: rateLimitDetection.isRateLimited });
-        this.emitError(projectId, error);
+      this.emitProgress(projectId, { stage: 'complete', progress: 100, message: 'Changelog generation complete' });
+      const generated: ChangelogGenerationResult = {
+        success: true,
+        changelog,
+        version: request.version,
+        tasksIncluded: itemCount
+      };
+      this.emit('generation-complete', projectId, generated);
+    } catch (error) {
+      if (this.generations.get(projectId) !== abort) return;
+      const message = abort.signal.aborted
+        ? 'Changelog generation timed out after 5 minutes'
+        : error instanceof Error ? error.message : String(error);
+      const rateLimit = detectRateLimit(message);
+      if (rateLimit.isRateLimited) {
+        this.emit('rate-limit', projectId, createSDKRateLimitInfo('changelog', rateLimit, { projectId }));
       }
-    });
-
-    childProcess.on('error', (err: Error) => {
-      this.debug('Process error', { error: err.message });
-
-      // Clear timeout
-      const timeoutId = this.generationTimeouts.get(projectId);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this.generationTimeouts.delete(projectId);
-      }
-
-      if (!this.generationProcesses.delete(projectId)) {
-        this.debug('Process already cleaned up, skipping error handler');
-        return;
-      }
-      this.emitError(projectId, err.message);
-    });
-  }
-
-  /**
-   * Build spawn environment with proper PATH and auth settings
-   */
-  private buildSpawnEnvironment(): Record<string, string> {
-    const homeDir = os.homedir();
-
-    // Use getAugmentedEnv() to ensure common tool paths are available
-    // even when app is launched from Finder/Dock
-    const augmentedEnv = getAugmentedEnv();
-
-    const spawnEnv: Record<string, string> = {
-      ...augmentedEnv,
-      ...this.autoBuildEnv,
-      ...getClaudeCredentialEnv(), // The app's Claude credential
-      // Ensure critical env vars are set for claude CLI
-      // Use USERPROFILE on Windows, HOME on Unix
-      ...(isWindows() ? { USERPROFILE: homeDir } : { HOME: homeDir }),
-      USER: process.env.USER || process.env.USERNAME || 'user',
-      PYTHONUNBUFFERED: '1',
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONUTF8: '1'
-    };
-
-    this.debug('Spawn environment', {
-      HOME: spawnEnv.HOME,
-      USER: spawnEnv.USER,
-      pathDirs: spawnEnv.PATH?.split(path.delimiter).length,
-      authMethod: spawnEnv.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth-token' : (spawnEnv.ANTHROPIC_API_KEY ? 'api-key' : 'none')
-    });
-
-    return spawnEnv;
+      this.debug('Generation failed', { error: message.substring(0, 500) });
+      this.emitError(projectId, message);
+    } finally {
+      clearTimeout(timeout);
+      if (this.generations.get(projectId) === abort) this.generations.delete(projectId);
+    }
   }
 
   /**
    * Cancel ongoing generation
    */
   cancel(projectId: string): boolean {
-    // Clear timeout
-    const timeoutId = this.generationTimeouts.get(projectId);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.generationTimeouts.delete(projectId);
-    }
-
-    const process = this.generationProcesses.get(projectId);
-    if (process) {
-      process.kill('SIGTERM');
-      this.generationProcesses.delete(projectId);
-      return true;
-    }
-    return false;
+    const abort = this.generations.get(projectId);
+    if (!abort) return false;
+    this.generations.delete(projectId);
+    abort.abort();
+    return true;
   }
 
   /**

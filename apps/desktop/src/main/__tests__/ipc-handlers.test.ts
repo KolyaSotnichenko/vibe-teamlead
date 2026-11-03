@@ -552,7 +552,7 @@ describe("IPC Handlers", { timeout: 30000 }, () => {
       expect(data.defaultModel).toBe("opus");
     });
 
-    it("should configure agent manager when paths change", async () => {
+    it("does not reconfigure the agent manager (no Python backend)", async () => {
       const { setupIpcHandlers } = await import("../ipc-handlers");
       setupIpcHandlers(
         mockAgentManager as never,
@@ -562,7 +562,7 @@ describe("IPC Handlers", { timeout: 30000 }, () => {
 
       await ipcMain.invokeHandler("settings:save", {}, { pythonPath: "/usr/bin/python3" });
 
-      expect(mockAgentManager.configure).toHaveBeenCalledWith("/usr/bin/python3", undefined);
+      expect(mockAgentManager.configure).not.toHaveBeenCalled();
     });
   });
 

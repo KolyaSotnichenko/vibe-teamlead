@@ -2,12 +2,7 @@ import { ipcMain, dialog, app, shell, session } from 'electron';
 import { existsSync, writeFileSync, mkdirSync, statSync, readFileSync } from 'fs';
 import { execFileSync } from 'node:child_process';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { is } from '@electron-toolkit/utils';
 
-// ESM-compatible __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, DEFAULT_AGENT_PROFILES, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, sanitizeThinkingLevel, VALID_THINKING_LEVELS } from '../../shared/constants';
 import { setAppLanguage } from '../app-language';
 import { isSupportedLanguage, resolveSupportedLanguage } from '../../shared/constants/i18n';
@@ -26,76 +21,10 @@ import { stripLegacySettings } from '../ai/claude-code/credential-migration';
 const settingsPath = getSettingsPath();
 
 /**
- * Auto-detect the auto-claude prompts path relative to the app location.
- * Works across platforms (macOS, Windows, Linux) in both dev and production modes.
- * Prompts live in apps/desktop/prompts/ (dev) or extraResources/prompts (prod).
- */
-const detectAutoBuildSourcePath = (): string | null => {
-  const possiblePaths: string[] = [];
-
-  // Development mode paths
-  if (is.dev) {
-    // In dev, __dirname is typically apps/desktop/out/main
-    // We need to go up to find apps/desktop/prompts
-    possiblePaths.push(
-      path.resolve(__dirname, '..', '..', 'prompts'),            // From out/main -> apps/desktop/prompts
-      path.resolve(process.cwd(), 'apps', 'desktop', 'prompts') // From cwd (repo root)
-    );
-  } else {
-    // Production mode paths (packaged app)
-    // Prompts are bundled as extraResources/prompts
-    // On all platforms, it should be at process.resourcesPath/prompts
-    possiblePaths.push(
-      path.resolve(process.resourcesPath, 'prompts')             // Primary: extraResources/prompts
-    );
-    // Fallback paths for different app structures
-    const appPath = app.getAppPath();
-    possiblePaths.push(
-      path.resolve(appPath, '..', 'prompts'),                    // Sibling to asar
-      path.resolve(appPath, '..', '..', 'Resources', 'prompts') // macOS bundle structure
-    );
-  }
-
-  // Add process.cwd() as last resort on all platforms
-  possiblePaths.push(path.resolve(process.cwd(), 'apps', 'desktop', 'prompts'));
-
-  // Enable debug logging with DEBUG=1
-  const debug = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
-
-  if (debug) {
-    console.warn('[detectAutoBuildSourcePath] Platform:', process.platform);
-    console.warn('[detectAutoBuildSourcePath] Is dev:', is.dev);
-    console.warn('[detectAutoBuildSourcePath] __dirname:', __dirname);
-    console.warn('[detectAutoBuildSourcePath] app.getAppPath():', app.getAppPath());
-    console.warn('[detectAutoBuildSourcePath] process.cwd():', process.cwd());
-    console.warn('[detectAutoBuildSourcePath] Checking paths:', possiblePaths);
-  }
-
-  for (const p of possiblePaths) {
-    // Use planner.md as marker - this is the file needed for task planning
-    const markerPath = path.join(p, 'planner.md');
-    const exists = existsSync(p) && existsSync(markerPath);
-
-    if (debug) {
-      console.warn(`[detectAutoBuildSourcePath] Checking ${p}: ${exists ? '✓ FOUND' : '✗ not found'}`);
-    }
-
-    if (exists) {
-      console.warn(`[detectAutoBuildSourcePath] Auto-detected prompts path: ${p}`);
-      return p;
-    }
-  }
-
-  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Vibe Teamlead prompts path. Please configure manually in settings.');
-  console.warn('[detectAutoBuildSourcePath] Set DEBUG=1 environment variable for detailed path checking.');
-  return null;
-};
-
-/**
  * Register all settings-related IPC handlers
  */
 export function registerSettingsHandlers(
-  agentManager: AgentManager,
+  _agentManager: AgentManager,
   getMainWindow: () => BrowserWindow | null
 ): void {
   // ============================================
@@ -193,14 +122,6 @@ export function registerSettingsHandlers(
         }
       }
 
-      // If no manual autoBuildPath is set, try to auto-detect
-      if (!settings.autoBuildPath) {
-        const detectedPath = detectAutoBuildSourcePath();
-        if (detectedPath) {
-          settings.autoBuildPath = detectedPath;
-        }
-      }
-
       // Persist migration changes
       if (needsSave) {
         try {
@@ -248,11 +169,6 @@ export function registerSettingsHandlers(
         }
 
         writeFileSync(settingsPath, JSON.stringify(newSettings, null, 2), 'utf-8');
-
-        // Apply Python path if changed
-        if (settings.pythonPath || settings.autoBuildPath) {
-          agentManager.configure(settings.pythonPath, settings.autoBuildPath);
-        }
 
         // Configure CLI tools if any paths changed
         if (

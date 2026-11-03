@@ -34,12 +34,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 }));
 
 /**
- * Check if settings need migration for onboardingCompleted flag.
- * Existing users (with tokens or projects configured) should have
- * onboardingCompleted set to true to skip the onboarding wizard.
- *
- * This function now also checks Claude Code's ~/.claude.json for
- * hasCompletedOnboarding to respect Claude Code's onboarding status.
+ * Settings saved before the onboarding flag existed: someone who already
+ * saved a Claude credential has set the app up and skips the wizard.
+ * Claude Code's own ~/.claude.json is not a sign of that — the app runs
+ * Claude Code with its own config — and neither is the prompts path.
  */
 async function migrateOnboardingCompleted(settings: AppSettings): Promise<AppSettings> {
   // Only migrate if onboardingCompleted is undefined (not explicitly set)
@@ -47,36 +45,13 @@ async function migrateOnboardingCompleted(settings: AppSettings): Promise<AppSet
     return settings;
   }
 
-  // NEW: Check ~/.claude.json for hasCompletedOnboarding
-  // This allows Auto-Claude to respect Claude Code's onboarding status
-  try {
-    const claudeCodeResult = await window.electronAPI.getClaudeCodeOnboardingStatus();
-    if (claudeCodeResult.success && claudeCodeResult.data?.hasCompletedOnboarding) {
-      // Claude Code says onboarding is complete, respect that
-      return { ...settings, onboardingCompleted: true };
-    }
-  } catch (error) {
-    // If checking Claude Code onboarding fails, log and continue with existing logic
-    console.warn('[settings-store] Failed to check Claude Code onboarding status:', error);
-  }
-
-  // Check for signs of an existing user:
-  // - Has a Claude credential configured
-  // - Has the auto-build source path configured
-  let hasClaudeCredential = false;
   try {
     const status = await window.electronAPI.getClaudeCredentialStatus();
-    hasClaudeCredential = status.success && status.data?.configured === true;
+    if (status.success && status.data?.configured === true) {
+      return { ...settings, onboardingCompleted: true };
+    }
   } catch {
     // Treat as not configured
-  }
-  const hasAutoBuildPath = Boolean(settings.autoBuildPath);
-
-  const isExistingUser = hasClaudeCredential || hasAutoBuildPath;
-
-  if (isExistingUser) {
-    // Mark onboarding as completed for existing users
-    return { ...settings, onboardingCompleted: true };
   }
 
   // New user - set to false to trigger onboarding wizard

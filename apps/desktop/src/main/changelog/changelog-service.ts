@@ -1,14 +1,7 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { app } from 'electron';
-
-// ESM-compatible __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 import { AUTO_BUILD_PATHS, DEFAULT_CHANGELOG_PATH } from '../../shared/constants';
-import { getToolPath, getToolInfo } from '../cli-tool-manager';
 import type {
   ChangelogTask,
   TaskSpecContent,
@@ -39,17 +32,12 @@ import {
  * Delegates to specialized modules for specific concerns
  */
 export class ChangelogService extends EventEmitter {
-  private claudePath: string;
-  private autoBuildSourcePath: string = '';
   private debugEnabled: boolean | null = null;
   private generator: ChangelogGenerator | null = null;
   private versionSuggester: VersionSuggester | null = null;
 
   constructor() {
     super();
-    // Use centralized CLI tool manager for Claude detection
-    this.claudePath = getToolPath('claude');
-    this.debug('ChangelogService initialized with Claude CLI:', this.claudePath);
   }
 
   /**
@@ -71,10 +59,8 @@ export class ChangelogService extends EventEmitter {
       return true;
     }
 
-    // Check auto-claude .env file
-    const env = this.loadAutoBuildEnv();
-    this.debugEnabled = env.DEBUG === 'true' || env.DEBUG === '1';
-    return this.debugEnabled;
+    this.debugEnabled = false;
+    return false;
   }
 
   /**
@@ -86,94 +72,9 @@ export class ChangelogService extends EventEmitter {
     }
   }
 
-  configure(_pythonPath?: string, autoBuildSourcePath?: string): void {
-    if (autoBuildSourcePath) {
-      this.autoBuildSourcePath = autoBuildSourcePath;
-    }
-  }
-
-  /**
-   * Get the auto-claude source path (detects automatically if not configured)
-   */
-  private getAutoBuildSourcePath(): string | null {
-    if (this.autoBuildSourcePath && existsSync(this.autoBuildSourcePath)) {
-      return this.autoBuildSourcePath;
-    }
-
-    const possiblePaths = [
-      // Apps structure: from out/main -> apps/desktop/prompts
-      path.resolve(__dirname, '..', '..', 'prompts'),
-      path.resolve(app.getAppPath(), '..', 'prompts'),
-      path.resolve(process.cwd(), 'apps', 'desktop', 'prompts')
-    ];
-
-    for (const p of possiblePaths) {
-      if (existsSync(p) && existsSync(path.join(p, 'planner.md'))) {
-        return p;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Load environment variables from auto-claude .env file
-   */
-  private loadAutoBuildEnv(): Record<string, string> {
-    const autoBuildSource = this.getAutoBuildSourcePath();
-    if (!autoBuildSource) return {};
-
-    const envPath = path.join(autoBuildSource, '.env');
-    if (!existsSync(envPath)) return {};
-
-    try {
-      const envContent = readFileSync(envPath, 'utf-8');
-      const envVars: Record<string, string> = {};
-
-      // Handle both Unix (\n) and Windows (\r\n) line endings
-      for (const line of envContent.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-
-        const eqIndex = trimmed.indexOf('=');
-        if (eqIndex > 0) {
-          const key = trimmed.substring(0, eqIndex).trim();
-          let value = trimmed.substring(eqIndex + 1).trim();
-
-          if ((value.startsWith('"') && value.endsWith('"')) ||
-              (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-          }
-
-          envVars[key] = value;
-        }
-      }
-
-      return envVars;
-    } catch {
-      return {};
-    }
-  }
-
-  /**
-   * Ensure prerequisites are met for changelog generation
-   * Validates auto-build source path and Claude CLI availability
-   * Returns the resolved Claude CLI path to ensure we use the freshly validated path
-   */
-  private ensurePrerequisites(): { autoBuildSource: string; claudePath: string } {
-    const autoBuildSource = this.getAutoBuildSourcePath();
-    if (!autoBuildSource) {
-      throw new Error('Auto-build source path not found');
-    }
-
-    const claudeInfo = getToolInfo('claude');
-    if (!claudeInfo.found || !claudeInfo.path) {
-      // Use claudeInfo.message directly to avoid redundant text
-      throw new Error(claudeInfo.message || 'Claude CLI not found. Install from https://claude.ai/download');
-    }
-
-    // Update cached path with freshly resolved value
-    this.claudePath = claudeInfo.path;
-    return { autoBuildSource, claudePath: claudeInfo.path };
+  /** Kept for the shared configure() call from settings; nothing to configure. */
+  configure(_pythonPath?: string, _autoBuildSourcePath?: string): void {
+    // Nothing to configure: changelog runs on Claude Code
   }
 
   /**
@@ -181,17 +82,7 @@ export class ChangelogService extends EventEmitter {
    */
   private getGenerator(): ChangelogGenerator {
     if (!this.generator) {
-      const { autoBuildSource, claudePath } = this.ensurePrerequisites();
-
-      const autoBuildEnv = this.loadAutoBuildEnv();
-
-      this.generator = new ChangelogGenerator(
-        '',
-        claudePath,
-        autoBuildSource,
-        autoBuildEnv,
-        this.isDebugEnabled()
-      );
+      this.generator = new ChangelogGenerator(this.isDebugEnabled());
 
       // Forward events from generator
       this.generator.on('generation-complete', (projectId, result) => {
@@ -219,14 +110,7 @@ export class ChangelogService extends EventEmitter {
    */
   private getVersionSuggester(): VersionSuggester {
     if (!this.versionSuggester) {
-      const { autoBuildSource, claudePath } = this.ensurePrerequisites();
-
-      this.versionSuggester = new VersionSuggester(
-        '',
-        claudePath,
-        autoBuildSource,
-        this.isDebugEnabled()
-      );
+      this.versionSuggester = new VersionSuggester(this.isDebugEnabled());
     }
 
     return this.versionSuggester;
