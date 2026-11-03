@@ -81,3 +81,16 @@ describe('QA phase', () => {
     expect(o.currentPhase).toBe('failed');
   });
 });
+
+describe('spec pipeline architecture phase', () => {
+  it('designs the architecture before planning for standard and complex tasks, not simple ones', async () => {
+    const { COMPLEXITY_PHASES } = await import('../spec-orchestrator');
+    for (const tier of ['standard', 'complex'] as const) {
+      const phases = COMPLEXITY_PHASES[tier];
+      expect(phases).toContain('architecture');
+      expect(phases.indexOf('architecture')).toBe(phases.indexOf('planning') - 1);
+      expect(phases.indexOf('architecture')).toBeGreaterThan(phases.indexOf('spec_writing'));
+    }
+    expect(COMPLEXITY_PHASES.simple).not.toContain('architecture');
+  });
+});

@@ -41,6 +41,7 @@ export const SPEC_PHASE_THINKING_LEVELS: Record<string, ThinkingLevel> = {
   requirements: 'medium',
   research: 'medium',
   context: 'medium',
+  architecture: 'high',
   planning: 'medium',
   validation: 'medium',
   quick_spec: 'medium',
@@ -206,6 +207,17 @@ export async function getPhaseModel(
   }
 
   return resolveModelId(DEFAULT_PHASE_MODELS[phase]);
+}
+
+/**
+ * The model for one phase of a running task: the task's choice for that phase
+ * (task_metadata.json — what the task's logs show), else `fallback` (the model
+ * the session was started with). Every phase uses its own model.
+ */
+export async function resolvePhaseModel(specDir: string, phase: Phase, fallback: string): Promise<string> {
+  const metadata = specDir ? await loadTaskMetadata(specDir) : null;
+  const chosen = metadata?.isAutoProfile ? metadata.phaseModels?.[phase] : metadata?.model;
+  return isUsableModel(chosen) ? resolveModelId(chosen) : fallback;
 }
 
 /**

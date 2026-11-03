@@ -42,7 +42,7 @@ import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
-import { getPhaseThinking } from '../config/phase-config';
+import { getPhaseThinking, resolvePhaseModel } from '../config/phase-config';
 import { TaskLogWriter } from '../logging/task-log-writer';
 import {
   detectProjectCapabilities,
@@ -435,6 +435,9 @@ async function assemblePrompt(
 // Single Session Runner
 // =============================================================================
 
+/** The model for one phase (see resolvePhaseModel). */
+const phaseModel = resolvePhaseModel;
+
 /**
  * Run a single agent session and return the result.
  * Used as the runSession callback for BuildOrchestrator and QALoop.
@@ -454,6 +457,8 @@ async function runSingleSession(
   outputSchema?: import('zod').ZodSchema,
 ): Promise<SessionResult> {
   const phaseThinking = await getPhaseThinking(specDir, phase);
+  const model = await phaseModel(specDir, phase, baseSession.modelId);
+  postLog(`${agentType} on ${model} (${phase})`);
 
   // Build initial messages: use provided kickoff message, or fall back to session messages
   const initialMessages = initialUserMessage
@@ -463,7 +468,7 @@ async function runSingleSession(
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
     agentType,
-    model: baseSession.modelId,
+    model,
     systemPrompt,
     initialMessages,
     toolContext,
@@ -635,7 +640,7 @@ async function runBuildOrchestrator(
     abortSignal: abortController.signal,
 
     // What each coder session learned goes to the project's memory
-    insightModel: session.modelId,
+    insightModel: await phaseModel(session.specDir, 'coding', session.modelId),
     onInsights: (_subtask, insights) => {
       void memoryRequest({ op: 'insights', insights }).then((reply) => {
         const count = Number(reply.text ?? 0);
@@ -917,7 +922,8 @@ async function runSecurityQa(
       projectDir: session.projectDir,
       specDir: session.specDir,
       settings,
-      model: session.modelId,
+      // Strix tests what QA approved, on the task's QA model
+      model: await phaseModel(session.specDir, 'qa', session.modelId),
       apiKey: session.apiKey,
       baseURL: session.baseURL,
       diffBase,
@@ -1162,7 +1168,7 @@ async function runAgenticSpecOrchestrator(
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(session),
     agentType: 'spec_orchestrator',
-    model: session.modelId,
+    model: await phaseModel(session.specDir, 'spec', session.modelId),
     agents,
     systemPrompt,
     initialMessages: [{ role: 'user' as const, content: kickoffMessage }],
@@ -1218,6 +1224,7 @@ function specPhaseToPromptName(phase: SpecPhase): string {
     case 'historical_context': return 'spec_writer';
     case 'spec_writing': return 'spec_writer';
     case 'self_critique': return 'spec_critic';
+    case 'architecture': return 'architect';
     case 'planning': return 'planner';
     case 'quick_spec': return 'spec_quick';
     case 'validation': return 'spec_writer';
@@ -1258,8 +1265,11 @@ function buildSpecKickoffMessage(
     case 'spec_writer':
       baseMessage = `Write the specification for: ${taskDescription}. Write spec.md to ${specDir}. Project root: ${projectDir}.`;
       break;
+    case 'architect':
+      baseMessage = `Design the architecture for: ${taskDescription}. Read the spec at ${specDir}/spec.md and the project at ${projectDir}, then write ${specDir}/architecture/architecture.md, ADRs under ${specDir}/architecture/adr/ and draw.io diagrams under ${specDir}/architecture/diagrams/, rendering each diagram with render_diagram and fixing layout problems before you finish.`;
+      break;
     case 'planner':
-      baseMessage = `Create a detailed implementation plan for: ${taskDescription}. Read the spec at ${specDir}/spec.md and create ${specDir}/implementation_plan.json with concrete coding subtasks. Project root: ${projectDir}.`;
+      baseMessage = `Create a detailed implementation plan for: ${taskDescription}. Read the spec at ${specDir}/spec.md (and ${specDir}/architecture/ when it exists) and create ${specDir}/implementation_plan.json with concrete coding subtasks. Project root: ${projectDir}.`;
       break;
     case 'spec_critic':
       baseMessage = `Review and critique the specification at ${specDir}/spec.md for completeness, clarity, and technical feasibility. Write your critique findings back to ${specDir}/spec.md with improvements.`;

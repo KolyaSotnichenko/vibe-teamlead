@@ -35,6 +35,7 @@ const PHASE_OUTPUT_FILES: Record<string, string[]> = {
   quick_spec: ['spec.md'],
   spec_writing: ['spec.md'],
   self_critique: ['spec.md', 'critique_notes.md'],
+  architecture: ['architecture/architecture.md'],
   planning: ['implementation_plan.json'],
   validation: [],
 };

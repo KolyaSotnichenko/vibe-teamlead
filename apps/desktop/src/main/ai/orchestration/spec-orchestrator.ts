@@ -60,6 +60,7 @@ export type SpecPhase =
   | 'context'
   | 'spec_writing'
   | 'self_critique'
+  | 'architecture'
   | 'planning'
   | 'validation'
   | 'quick_spec';
@@ -74,6 +75,7 @@ const PHASE_AGENT_MAP: Record<SpecPhase, AgentType> = {
   context: 'spec_context',
   spec_writing: 'spec_writer',
   self_critique: 'spec_critic',
+  architecture: 'architect',
   planning: 'planner',
   validation: 'spec_validation',
   quick_spec: 'spec_writer',
@@ -88,9 +90,10 @@ const PHASE_AGENT_MAP: Record<SpecPhase, AgentType> = {
  *   then spec_writing + planning. 'context' phase removed (redundant with discovery).
  * - COMPLEX: full pipeline including research and self-critique.
  */
-const COMPLEXITY_PHASES: Record<ComplexityTier, SpecPhase[]> = {
+export const COMPLEXITY_PHASES: Record<ComplexityTier, SpecPhase[]> = {
   simple: ['quick_spec', 'validation'],
-  standard: ['discovery', 'requirements', 'spec_writing', 'planning', 'validation'],
+  // The architect designs before the planner so the plan follows the architecture
+  standard: ['discovery', 'requirements', 'spec_writing', 'architecture', 'planning', 'validation'],
   complex: [
     'discovery',
     'requirements',
@@ -98,6 +101,7 @@ const COMPLEXITY_PHASES: Record<ComplexityTier, SpecPhase[]> = {
     'context',
     'spec_writing',
     'self_critique',
+    'architecture',
     'planning',
     'validation',
   ],
@@ -112,6 +116,7 @@ const PHASE_OUTPUTS: Partial<Record<SpecPhase, string[]>> = {
   context: ['context.json'],
   spec_writing: ['spec.md'],
   self_critique: ['spec.md'],
+  architecture: ['architecture/architecture.md'],
   planning: ['implementation_plan.json'],
   quick_spec: ['spec.md', 'implementation_plan.json'],
 };
@@ -353,6 +358,11 @@ export class SpecOrchestrator extends EventEmitter {
         phasesExecuted.push(phase);
 
         if (!result.success) {
+          // Architecture is advice for the planner: without it, plan from the spec alone
+          if (phase === 'architecture') {
+            this.emitTyped('log', `Architecture phase did not complete (${result.errors.join('; ')}); planning from the spec alone`);
+            continue;
+          }
           return this.outcome(false, phasesExecuted, Date.now() - startTime, result.errors.join('; '));
         }
 

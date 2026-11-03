@@ -308,7 +308,10 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     STRIX_TELEMETRY: '0',
   };
 
-  options.onLog?.(`Security QA: Strix ${settings.scanMode} scan of changed code (budget $${settings.maxBudgetUsd})`);
+  options.onLog?.(
+    `Security QA: Strix ${settings.scanMode} scan of changed code on ${strixModel(options.model)} (budget $${settings.maxBudgetUsd}, ` +
+      `up to ${Math.round(STRIX_TIMEOUT_MS[settings.scanMode] / 60_000)} min). It runs in Docker; its progress follows as [strix] lines.`,
+  );
   const run = await runProcess(strix, buildStrixArgs(options, instructionFile), {
     cwd: workDir,
     env,

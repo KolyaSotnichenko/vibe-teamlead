@@ -232,3 +232,20 @@ describe('isUsableModel', () => {
     expect(isUsableModel(undefined)).toBe(false);
   });
 });
+
+describe('resolvePhaseModel', () => {
+  it("uses each phase's own model from the task metadata", async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { resolvePhaseModel } = await import('../phase-config');
+    const dir = mkdtempSync(join(tmpdir(), 'phase-model-'));
+    writeFileSync(
+      join(dir, 'task_metadata.json'),
+      JSON.stringify({ isAutoProfile: true, phaseModels: { spec: 'glm-5.3', planning: 'glm-5.3', coding: 'glm-5.3-flash', qa: 'kimi-k2.7-code' } }),
+    );
+    expect(await resolvePhaseModel(dir, 'coding', 'glm-5.3')).toBe('glm-5.3-flash');
+    expect(await resolvePhaseModel(dir, 'qa', 'glm-5.3')).toBe('kimi-k2.7-code');
+    expect(await resolvePhaseModel(mkdtempSync(join(tmpdir(), 'phase-model-')), 'qa', 'fallback-model')).toBe('fallback-model');
+  });
+});
