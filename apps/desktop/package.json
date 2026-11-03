@@ -204,6 +204,18 @@
         "to": "plugins/superpowers"
       },
       {
+        "from": "vendor/drawio",
+        "to": "plugins/drawio"
+      },
+      {
+        "from": "vendor/vibe-teamlead-skills",
+        "to": "plugins/vibe-teamlead-skills"
+      },
+      {
+        "from": "vendor/drawio-viewer",
+        "to": "drawio-viewer"
+      },
+      {
         "from": "../../node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/claude",
         "to": "claude-code/claude"
       },

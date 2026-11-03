@@ -110,8 +110,33 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
   } else if (msg.type === 'user-answer') {
     pendingQuestions.get(msg.questionId)?.(msg.answers);
     pendingQuestions.delete(msg.questionId);
+  } else if (msg.type === 'render-result') {
+    pendingRenders.get(msg.requestId)?.(msg);
+    pendingRenders.delete(msg.requestId);
   }
 });
+
+// =============================================================================
+// Diagram rendering (architect review loop → main process → PNG)
+// =============================================================================
+
+type RenderReply = Extract<MainToWorkerMessage, { type: 'render-result' }>;
+const pendingRenders = new Map<string, (reply: RenderReply) => void>();
+let renderCounter = 0;
+
+function renderDiagramViaMain(path: string): Promise<{ pngPath: string; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const requestId = `${config.taskId}-r${++renderCounter}`;
+    pendingRenders.set(requestId, (reply) => {
+      if (reply.ok && reply.pngPath) {
+        resolve({ pngPath: reply.pngPath, width: reply.width ?? 0, height: reply.height ?? 0 });
+      } else {
+        reject(new Error(reply.error ?? 'Render failed'));
+      }
+    });
+    postMessage({ type: 'render-diagram', taskId: config.taskId, requestId, path });
+  });
+}
 
 // =============================================================================
 // Agent questions (Claude Code AskUserQuestion → app UI → back)
@@ -181,6 +206,7 @@ function buildToolContext(session: SerializableSessionConfig, securityProfile: S
     specDir: session.toolContext.specDir,
     securityProfile,
     abortSignal: abortController.signal,
+    renderDiagram: renderDiagramViaMain,
   };
 }
 
@@ -517,6 +543,11 @@ async function runBuildOrchestrator(
 
     runSession: async (runConfig) => {
       postLog(`Running ${runConfig.agentType} session (phase=${runConfig.phase}, session=${runConfig.sessionNumber})`);
+      // The architect documents; it writes only inside the spec directory.
+      const sessionToolContext: ToolContext =
+        runConfig.agentType === 'architect'
+          ? { ...toolContext, allowedWritePaths: [runConfig.specDir] }
+          : toolContext;
       // Build a kickoff message for the agent so it has a task to act on
       const kickoffMessage = buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir);
       return runSingleSession(
@@ -528,7 +559,7 @@ async function runBuildOrchestrator(
         runConfig.sessionNumber,
         runConfig.subtaskId,
         session,
-        toolContext,
+        sessionToolContext,
         kickoffMessage,
         true, // skipPhaseLogging — orchestrator manages phase start/end
         runConfig.outputSchema,
@@ -1106,6 +1137,8 @@ function buildKickoffMessage(agentType: AgentType, specDir: string, projectDir: 
   switch (agentType) {
     case 'planner':
       return `Read the spec at ${specDir}/spec.md and create a detailed implementation plan at ${specDir}/implementation_plan.json. Project root: ${projectDir}`;
+    case 'architect':
+      return `Read the spec at ${specDir}/spec.md and the project at ${projectDir}, then design the architecture: write ${specDir}/architecture/architecture.md, ADRs under ${specDir}/architecture/adr/ and draw.io diagrams under ${specDir}/architecture/diagrams/, rendering each diagram with render_diagram and fixing layout problems before you finish.`;
     case 'coder':
       return `Read ${specDir}/implementation_plan.json and implement the next pending subtask. Project root: ${projectDir}. After completing the subtask, update its status to "completed" in implementation_plan.json.`;
     case 'qa_reviewer':
@@ -1124,6 +1157,8 @@ function buildFallbackPrompt(agentType: AgentType, specDir: string, projectDir: 
   switch (agentType) {
     case 'planner':
       return `You are a planning agent. Read spec.md in ${specDir} and create implementation_plan.json with phases and subtasks. Each subtask must have id, description, and status fields. Set all statuses to "pending".`;
+    case 'architect':
+      return `You are a software architect. Read spec.md in ${specDir} and the codebase at ${projectDir}. Write ${specDir}/architecture/architecture.md (context, containers, key decisions, constraints for the planner) and ADRs under ${specDir}/architecture/adr/. Write only inside ${specDir}/architecture/.`;
     case 'coder':
       return `You are a coding agent. Implement the current pending subtask from implementation_plan.json in ${specDir}. Project root: ${projectDir}. After completing the subtask, update its status to "completed" in implementation_plan.json.`;
     case 'qa_reviewer':

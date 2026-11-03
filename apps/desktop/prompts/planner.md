@@ -17,6 +17,17 @@ The spec's acceptance criteria (`AC-1`, `AC-2`, ...) are the contract. When you 
 
 ---
 
+## ARCHITECTURE INPUT
+
+If `architecture/architecture.md` exists in the spec directory, the architect has already designed this change. Read it before planning, together with any ADRs in `architecture/adr/`:
+
+- Follow its **Constraints for the planner** section exactly: component boundaries, file locations, interfaces and ordering are decisions, not suggestions.
+- Use its component list to shape phases and to find subtasks that can run in parallel.
+- Keep its AC mapping: every `AC-n` it assigns to a component should land in a subtask touching that component.
+- If the architecture contradicts the spec, follow the spec, and note the conflict in `build-progress.txt` so QA can see it.
+
+If the file does not exist, plan from the spec alone.
+
 ## WHY SUBTASKS (AND NOT ONLY TESTS)?
 
 Tests verify outcomes. Subtasks define implementation steps — and each step carries the tests for the outcomes it delivers.

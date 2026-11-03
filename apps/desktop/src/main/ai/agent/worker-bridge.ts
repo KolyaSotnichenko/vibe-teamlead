@@ -74,6 +74,7 @@ export class WorkerBridge extends EventEmitter {
   private taskId: string = '';
   private projectId: string | undefined;
   private processType: ProcessType = 'task-execution';
+  private viewerScript: string | undefined;
 
   /**
    * Spawn a worker thread with the given configuration.
@@ -91,13 +92,16 @@ export class WorkerBridge extends EventEmitter {
     this.processType = config.processType;
     this.progressTracker = new ProgressTracker();
 
+    const bundled = config.session.bundled ?? resolveBundledTools();
+    this.viewerScript = bundled.drawioViewerScript;
+
     const workerConfig: WorkerConfig = {
       taskId: config.taskId,
       projectId: config.projectId,
       processType: config.processType,
       session: {
         ...config.session,
-        bundled: config.session.bundled ?? resolveBundledTools(),
+        bundled,
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
       },
     };
@@ -198,6 +202,10 @@ export class WorkerBridge extends EventEmitter {
         this.handleResult(message.taskId, message.data, message.projectId);
         break;
 
+      case 'render-diagram':
+        void this.renderDiagram(message.requestId, message.path);
+        break;
+
       case 'user-question':
         // No UI listening (e.g. headless run): answer "no answer" so the agent
         // proceeds on a stated assumption instead of waiting forever.
@@ -208,6 +216,20 @@ export class WorkerBridge extends EventEmitter {
         }
         break;
     }
+  }
+
+  /** Render a .drawio file for the architect's review loop and reply to the worker. */
+  private async renderDiagram(requestId: string, path: string): Promise<void> {
+    let reply: MainToWorkerMessage;
+    try {
+      if (!this.viewerScript) throw new Error('The draw.io viewer is not bundled in this build');
+      const { renderDrawioToPng } = await import('../../diagram-renderer');
+      const rendered = await renderDrawioToPng(path, this.viewerScript);
+      reply = { type: 'render-result', requestId, ok: true, ...rendered };
+    } catch (error) {
+      reply = { type: 'render-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    this.worker?.postMessage(reply);
   }
 
   /** Deliver the user's answers (or null = dismissed) to the waiting agent. */

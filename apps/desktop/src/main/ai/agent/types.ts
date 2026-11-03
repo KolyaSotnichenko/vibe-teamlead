@@ -108,7 +108,16 @@ export type WorkerMessage =
   | WorkerStreamEventMessage
   | WorkerResultMessage
   | WorkerTaskEventMessage
-  | WorkerQuestionMessage;
+  | WorkerQuestionMessage
+  | WorkerRenderDiagramMessage;
+
+/** The architect asked the main process to render a .drawio file. */
+export interface WorkerRenderDiagramMessage {
+  type: 'render-diagram';
+  taskId: string;
+  requestId: string;
+  path: string;
+}
 
 /** An agent asked the user something; the worker waits for a 'user-answer'. */
 export interface WorkerQuestionMessage {
@@ -167,7 +176,16 @@ export interface WorkerTaskEventMessage {
 /** Messages sent from main thread to worker */
 export type MainToWorkerMessage =
   | { type: 'abort' }
-  | { type: 'user-answer'; questionId: string; answers: AgentAnswers | null };
+  | { type: 'user-answer'; questionId: string; answers: AgentAnswers | null }
+  | {
+      type: 'render-result';
+      requestId: string;
+      ok: boolean;
+      pngPath?: string;
+      width?: number;
+      height?: number;
+      error?: string;
+    };
 
 // =============================================================================
 // Serialized Security Profile

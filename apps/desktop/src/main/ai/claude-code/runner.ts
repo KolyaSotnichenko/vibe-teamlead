@@ -166,10 +166,23 @@ export function buildQueryOptions(
   }
 
   const plugins = [...(config.plugins ?? [])];
-  const skills = bundled.superpowersDir ? skillsForAgent(config.agentType) : [];
-  if (bundled.superpowersDir) plugins.push({ type: 'local', path: bundled.superpowersDir });
+  const availablePlugins = new Set<string>();
+  if (bundled.superpowersDir) {
+    plugins.push({ type: 'local', path: bundled.superpowersDir });
+    availablePlugins.add('superpowers');
+  }
+  if (bundled.vibeSkillsDir) {
+    plugins.push({ type: 'local', path: bundled.vibeSkillsDir });
+    availablePlugins.add('vibe-teamlead');
+  }
+  if (bundled.drawioPluginDir) {
+    // The skill only; its remote MCP server would send diagrams to draw.io's cloud.
+    plugins.push({ type: 'local', path: bundled.drawioPluginDir, skipMcpDiscovery: true });
+    availablePlugins.add('drawio');
+  }
+  const skills = skillsForAgent(config.agentType, availablePlugins);
 
-  const append = [config.systemPrompt, ASK_USER_INSTRUCTIONS, skills.length ? SUPERPOWERS_INSTRUCTIONS : '']
+  const append = [config.systemPrompt, ASK_USER_INSTRUCTIONS, skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '']
     .filter(Boolean)
     .join('\n');
 

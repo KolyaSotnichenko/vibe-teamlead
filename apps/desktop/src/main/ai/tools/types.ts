@@ -31,6 +31,8 @@ export interface ToolContext {
   abortSignal?: AbortSignal;
   /** If set, Write/Edit tools can only write within these directories */
   allowedWritePaths?: string[];
+  /** Render a .drawio file to PNG (main process); available to the architect */
+  renderDiagram?: (drawioPath: string) => Promise<{ pngPath: string; width: number; height: number }>;
 }
 
 // ---------------------------------------------------------------------------

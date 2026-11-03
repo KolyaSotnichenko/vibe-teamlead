@@ -8,7 +8,11 @@
  * `mcp__auto-claude__<name>`, matching the names in AGENT_CONFIGS.
  */
 
+import { readFileSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
+
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+import { z as z4 } from 'zod';
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import type { z } from 'zod/v3';
 
@@ -26,6 +30,53 @@ import type { ToolContext } from '../tools/types';
 /** MCP server key; tool names become `mcp__auto-claude__<tool>` */
 export const AUTO_CLAUDE_SERVER_KEY = 'auto-claude';
 const TOOL_PREFIX = `mcp__${AUTO_CLAUDE_SERVER_KEY}__`;
+export const RENDER_DIAGRAM_TOOL = `${TOOL_PREFIX}render_diagram`;
+
+function isInside(target: string, dir: string): boolean {
+  const rel = relative(resolve(dir), target);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/**
+ * render_diagram: lets the architect see its own draw.io diagram.
+ * Renders in the main process, saves <name>.png next to the file and returns the image.
+ */
+function renderDiagramTool(context: ToolContext) {
+  return tool(
+    'render_diagram',
+    'Render a .drawio diagram file to PNG and return the image so you can review the layout. ' +
+      'Saves <name>.png next to the .drawio file. Use after every change to a diagram.',
+    { path: z4.string().describe('Path to the .drawio file (relative to the working directory or absolute)') },
+    async ({ path }) => {
+      const target = isAbsolute(path) ? resolve(path) : resolve(context.cwd, path);
+      const roots = [context.specDir, context.cwd, ...(context.allowedWritePaths ?? [])];
+      if (!/\.drawio$/i.test(target) || !roots.some((root) => isInside(target, root))) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${path} is not a .drawio file inside the project or spec directory` }],
+          isError: true,
+        };
+      }
+      try {
+        const rendered = await context.renderDiagram!(target);
+        const data = readFileSync(rendered.pngPath).toString('base64');
+        return {
+          content: [
+            { type: 'image' as const, data, mimeType: 'image/png' },
+            {
+              type: 'text' as const,
+              text: `Rendered ${rendered.width}×${rendered.height}px → ${rendered.pngPath}. Check for overlaps, crossings, cut-off text and unlabeled edges.`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error rendering diagram: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+}
 
 const BUILD_TOOLS: readonly DefinedTool[] = [
   updateSubtaskStatusTool,
@@ -85,9 +136,12 @@ export function createBuildToolsServer(
     );
   });
 
+  const wantsRender = !allowedToolNames || allowedToolNames.includes(RENDER_DIAGRAM_TOOL);
+  const allTools = wantsRender && context.renderDiagram ? [...tools, renderDiagramTool(context)] : tools;
+
   return createSdkMcpServer({
     name: AUTO_CLAUDE_SERVER_KEY,
     version: '2.0.0',
-    tools,
+    tools: allTools,
   });
 }

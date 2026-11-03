@@ -11,6 +11,9 @@
  * Packaged layout (electron-builder extraResources, see package.json):
  *   <Resources>/claude-code/claude
  *   <Resources>/plugins/superpowers/
+ *   <Resources>/plugins/drawio/
+ *   <Resources>/plugins/vibe-teamlead-skills/
+ *   <Resources>/drawio-viewer/viewer-static.min.js
  *   <Resources>/codegraph/bin/codegraph
  */
 
@@ -23,6 +26,12 @@ export interface BundledTools {
   claudeCodeExecutable?: string;
   /** Absolute path to the Superpowers plugin root */
   superpowersDir?: string;
+  /** draw.io diagram skill plugin (jgraph/drawio-mcp, Apache-2.0) */
+  drawioPluginDir?: string;
+  /** Vibe Teamlead house skills plugin (architecture, …) */
+  vibeSkillsDir?: string;
+  /** draw.io offline viewer script, used to render diagrams for review */
+  drawioViewerScript?: string;
   /** Absolute path to the CodeGraph launcher */
   codegraphBin?: string;
 }
@@ -49,6 +58,9 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
   return {
     claudeCodeExecutable: firstExisting([join(resourcesPath, 'claude-code', 'claude')]),
     superpowersDir: firstExisting([join(resourcesPath, 'plugins', 'superpowers')]),
+    drawioPluginDir: firstExisting([join(resourcesPath, 'plugins', 'drawio')]),
+    vibeSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'vibe-teamlead-skills')]),
+    drawioViewerScript: firstExisting([join(resourcesPath, 'drawio-viewer', 'viewer-static.min.js')]),
     codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', 'codegraph')]),
   };
 }
@@ -63,6 +75,9 @@ export function resolveDevTools(appRoot: string): BundledTools {
       ),
     ),
     superpowersDir: firstExisting([join(appRoot, 'vendor', 'superpowers')]),
+    drawioPluginDir: firstExisting([join(appRoot, 'vendor', 'drawio')]),
+    vibeSkillsDir: firstExisting([join(appRoot, 'vendor', 'vibe-teamlead-skills')]),
+    drawioViewerScript: firstExisting([join(appRoot, 'vendor', 'drawio-viewer', 'viewer-static.min.js')]),
     codegraphBin: firstExisting(
       [resolveFromPackage(`@colbymchenry/codegraph-${target}`, join('bin', 'codegraph'))].filter(
         (p): p is string => !!p,

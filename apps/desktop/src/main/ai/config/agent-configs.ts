@@ -45,6 +45,7 @@ const TOOL_RECORD_DISCOVERY = 'mcp__auto-claude__record_discovery';
 const TOOL_RECORD_GOTCHA = 'mcp__auto-claude__record_gotcha';
 const TOOL_GET_SESSION_CONTEXT = 'mcp__auto-claude__get_session_context';
 const TOOL_UPDATE_QA_STATUS = 'mcp__auto-claude__update_qa_status';
+const TOOL_RENDER_DIAGRAM = 'mcp__auto-claude__render_diagram';
 
 // =============================================================================
 // External MCP Tools
@@ -128,6 +129,7 @@ export type AgentType =
   | 'spec_compaction'
   | 'spec_orchestrator'
   | 'build_orchestrator'
+  | 'architect'
   | 'planner'
   | 'coder'
   | 'qa_reviewer'
@@ -261,6 +263,16 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   // BUILD PHASES (Full tools + memory)
   // Note: "linear" is conditional on project setting "update_linear_with_tasks"
   // ═══════════════════════════════════════════════════════════════════════
+  /**
+   * Architect — designs the solution between spec and planning:
+   * architecture.md, ADRs, draw.io/Mermaid diagrams (render_diagram review loop).
+   */
+  architect: {
+    tools: [...ALL_BUILTIN_TOOLS],
+    mcpServers: ['context7', 'memory', 'auto-claude'],
+    autoClaudeTools: [TOOL_GET_SESSION_CONTEXT, TOOL_RECORD_DISCOVERY, TOOL_RENDER_DIAGRAM],
+    thinkingDefault: 'high',
+  },
   planner: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7', 'memory', 'auto-claude'],

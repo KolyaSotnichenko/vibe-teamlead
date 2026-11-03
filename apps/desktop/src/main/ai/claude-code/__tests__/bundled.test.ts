@@ -67,7 +67,7 @@ describe('skillsForAgent', () => {
   it('gives brainstorming to the spec stage and TDD to coders, never workflow skills', () => {
     expect(skillsForAgent('spec_gatherer')).toEqual(['superpowers:brainstorming']);
     expect(skillsForAgent('coder')).toContain('superpowers:test-driven-development');
-    const all = (['spec_orchestrator', 'coder', 'qa_reviewer', 'qa_fixer', 'planner'] as const).flatMap(skillsForAgent);
+    const all = (['spec_orchestrator', 'coder', 'qa_reviewer', 'qa_fixer', 'planner'] as const).flatMap((a) => skillsForAgent(a));
     expect(all).not.toContain('superpowers:using-git-worktrees');
     expect(all).not.toContain('superpowers:finishing-a-development-branch');
   });

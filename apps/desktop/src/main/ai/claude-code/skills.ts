@@ -11,11 +11,13 @@
 import type { AgentType } from '../config/agent-configs';
 
 const sp = (name: string) => `superpowers:${name}`;
+const vt = (name: string) => `vibe-teamlead:${name}`;
 
 const AGENT_SKILLS: Partial<Record<AgentType, string[]>> = {
   spec_orchestrator: [sp('brainstorming')],
   spec_gatherer: [sp('brainstorming')],
   spec_discovery: [sp('brainstorming')],
+  architect: [vt('architecture'), 'drawio:drawio'],
   coder: [sp('test-driven-development'), sp('systematic-debugging'), sp('verification-before-completion')],
   qa_reviewer: [sp('verification-before-completion'), sp('requesting-code-review')],
   qa_fixer: [
@@ -26,8 +28,14 @@ const AGENT_SKILLS: Partial<Record<AgentType, string[]>> = {
   ],
 };
 
-export function skillsForAgent(agentType: AgentType): string[] {
-  return AGENT_SKILLS[agentType] ?? [];
+/**
+ * Skills for an agent, limited to plugins that are actually available.
+ * @param availablePlugins plugin names present in this build (e.g. 'superpowers', 'drawio')
+ */
+export function skillsForAgent(agentType: AgentType, availablePlugins?: ReadonlySet<string>): string[] {
+  const skills = AGENT_SKILLS[agentType] ?? [];
+  if (!availablePlugins) return skills;
+  return skills.filter((skill) => availablePlugins.has(skill.split(':')[0]));
 }
 
 export const SUPERPOWERS_INSTRUCTIONS = `

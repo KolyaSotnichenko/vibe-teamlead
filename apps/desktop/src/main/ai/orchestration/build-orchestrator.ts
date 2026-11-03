@@ -246,6 +246,9 @@ export class BuildOrchestrator extends EventEmitter {
       const isFirstRun = await this.isFirstRun();
 
       if (isFirstRun) {
+        // Architecture phase (non-fatal): design and document before planning
+        await this.runArchitecturePhase();
+
         // Planning phase
         const planResult = await this.runPlanningPhase();
         if (!planResult.success) {
@@ -298,6 +301,57 @@ export class BuildOrchestrator extends EventEmitter {
   // ===========================================================================
   // Phase Runners
   // ===========================================================================
+
+  /**
+   * Whether the task needs an architecture pass: skipped for simple tasks and
+   * when the architecture has already been written (resumed builds).
+   */
+  private async needsArchitecture(): Promise<boolean> {
+    try {
+      await readFile(join(this.config.specDir, 'architecture', 'architecture.md'), 'utf-8');
+      return false;
+    } catch {
+      // not written yet
+    }
+    try {
+      const raw = await readFile(join(this.config.specDir, 'complexity_assessment.json'), 'utf-8');
+      const assessment = safeParseJson(raw) as { complexity?: string } | null;
+      if (assessment?.complexity === 'simple') return false;
+    } catch {
+      // no assessment — treat as non-trivial
+    }
+    return true;
+  }
+
+  /**
+   * Run the architecture phase: the architect writes architecture.md, ADRs and
+   * reviewed diagrams under <spec>/architecture/. Failure is logged, never fatal —
+   * the planner can still work from the spec alone.
+   */
+  private async runArchitecturePhase(): Promise<void> {
+    if (!(await this.needsArchitecture())) return;
+    this.transitionPhase('planning', 'Designing the architecture');
+    this.iteration++;
+    try {
+      const prompt = await this.config.generatePrompt('architect', 'planning', { iteration: this.iteration, attemptCount: 0 });
+      const result = await this.config.runSession({
+        agentType: 'architect',
+        phase: 'planning',
+        systemPrompt: prompt,
+        specDir: this.config.specDir,
+        projectDir: this.config.projectDir,
+        sessionNumber: this.iteration,
+        abortSignal: this.config.abortSignal,
+        cliModel: this.config.cliModel,
+        cliThinking: this.config.cliThinking,
+      });
+      if (result.outcome !== 'completed' && result.outcome !== 'max_steps') {
+        this.emitTyped('log', `Architecture phase did not complete (${result.outcome}); planning from the spec alone`);
+      }
+    } catch (error) {
+      this.emitTyped('log', `Architecture phase failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   /**
    * Run the planning phase: invoke planner agent to create implementation_plan.json.

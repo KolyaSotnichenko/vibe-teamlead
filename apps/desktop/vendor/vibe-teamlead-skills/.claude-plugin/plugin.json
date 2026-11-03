@@ -1,0 +1,7 @@
+{
+  "name": "vibe-teamlead",
+  "description": "Vibe Teamlead house skills: professional architecture documentation (C4, ADR, draw.io and Mermaid diagrams with a render-and-review loop).",
+  "version": "1.0.0",
+  "author": { "name": "Vibe Teamlead" },
+  "license": "AGPL-3.0"
+}
