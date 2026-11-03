@@ -151,7 +151,7 @@ describe('runAgentSession', () => {
   it('refuses claude.ai subscription (OAuth) tokens', async () => {
     const result = await runAgentSession(baseConfig({ auth: { apiKey: 'sk-ant-oat01-abc' } }));
     expect(result.outcome).toBe('auth_failure');
-    expect(result.error?.message).toMatch(/subscription/);
+    expect(result.error?.message).toMatch(/subscription mode is off/);
   });
 });
 

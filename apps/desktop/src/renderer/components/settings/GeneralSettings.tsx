@@ -153,6 +153,21 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                   onCheckedChange={(checked) => onSettingsChange({ ...settings, autoNameTerminals: checked })}
                 />
               </div>
+              <div className="flex items-center justify-between max-w-md">
+                <div className="space-y-1">
+                  <Label htmlFor="useClaudeSubscription" className="text-sm font-medium text-foreground">
+                    {t('general.useClaudeSubscription')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('general.useClaudeSubscriptionDescription')}
+                  </p>
+                </div>
+                <Switch
+                  id="useClaudeSubscription"
+                  checked={settings.useClaudeSubscription === true}
+                  onCheckedChange={(checked) => onSettingsChange({ ...settings, useClaudeSubscription: checked })}
+                />
+              </div>
             </div>
           </div>
         </SettingsSection>

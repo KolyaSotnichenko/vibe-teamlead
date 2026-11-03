@@ -248,7 +248,9 @@
     "autoClaudePathDescription": "Relative path to auto-claude directory in projects",
     "autoClaudePathPlaceholder": "auto-claude (default)",
     "autoNameTerminals": "Automatically name terminals",
-    "autoNameTerminalsDescription": "Use AI to generate descriptive names for terminal tabs based on their activity"
+    "autoNameTerminalsDescription": "Use AI to generate descriptive names for terminal tabs based on their activity",
+    "useClaudeSubscription": "Use my Claude subscription (personal use)",
+    "useClaudeSubscriptionDescription": "Run agents on your own Claude Pro/Max subscription instead of an API key. For your own machine only — never enable it in a build you share. Limits are shared with your regular Claude usage."
   },
   "theme": {
     "title": "Appearance",

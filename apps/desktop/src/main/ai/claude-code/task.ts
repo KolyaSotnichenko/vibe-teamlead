@@ -21,8 +21,10 @@ import { resolveModelId } from '../config/phase-config';
 import type { ThinkingLevel } from '../config/types';
 import { getSecurityProfile } from '../security/security-profile';
 import type { ClaudeAuth, SessionEventCallback, SessionResult } from '../session/types';
+import { toClaudeAuth } from './auth';
 import { type BundledTools, resolveBundledTools } from './bundled-tools';
 import { runAgentSession } from './runner';
+import { isSubscriptionModeEnabled } from './subscription-setting';
 import type { AskUserHandler } from './user-questions';
 
 /** Read-only exploration tools */
@@ -86,19 +88,14 @@ export class ClaudeTaskError extends Error {
   }
 }
 
-/** OAuth (subscription) tokens are not accepted for Agent SDK sessions. */
-function isOAuthToken(key: string): boolean {
-  return key.startsWith('sk-ant-oat');
-}
-
 /**
- * Resolve the Anthropic API key for utility tasks.
- * Only API-key credentials qualify — never a claude.ai subscription login.
+ * Resolve Claude credentials for utility tasks: an API key, or — when personal
+ * subscription mode is on — the user's Claude subscription token.
  */
 export async function resolveClaudeAuth(profileId?: string): Promise<ClaudeAuth> {
   const auth = await resolveAuth({ provider: 'anthropic', profileId });
-  if (!auth || auth.source.endsWith('oauth') || isOAuthToken(auth.apiKey)) return {};
-  return { apiKey: auth.apiKey, baseURL: auth.baseURL };
+  if (!auth) return {};
+  return toClaudeAuth(auth.apiKey, auth.baseURL, isSubscriptionModeEnabled());
 }
 
 let scratchDir: string | undefined;

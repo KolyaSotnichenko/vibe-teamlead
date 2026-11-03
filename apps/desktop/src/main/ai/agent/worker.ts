@@ -15,6 +15,7 @@ import { parentPort, workerData } from 'worker_threads';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
+import { toClaudeAuth } from '../claude-code/auth';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import { buildSubagents, SPEC_SPECIALISTS } from '../claude-code/subagents';
@@ -230,7 +231,7 @@ function claudeSessionBase(session: SerializableSessionConfig): Pick<
 > {
   return {
     bundled: session.bundled,
-    auth: { apiKey: session.apiKey, baseURL: session.baseURL },
+    auth: toClaudeAuth(session.apiKey, session.baseURL, session.allowSubscriptionLogin === true),
     mcpOptions: {
       context7Enabled: session.mcpOptions?.context7Enabled ?? true,
       memoryEnabled: session.mcpOptions?.memoryEnabled ?? false,

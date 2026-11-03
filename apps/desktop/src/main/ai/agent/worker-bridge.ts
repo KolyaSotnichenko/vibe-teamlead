@@ -27,6 +27,7 @@ import type {
 import type { SessionResult } from '../session/types';
 import { ProgressTracker } from '../session/progress-tracker';
 import { resolveBundledTools } from '../claude-code/bundled-tools';
+import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import type { AgentAnswers } from '../claude-code/user-questions';
 
 // ESM-compatible __dirname
@@ -94,7 +95,11 @@ export class WorkerBridge extends EventEmitter {
       taskId: config.taskId,
       projectId: config.projectId,
       processType: config.processType,
-      session: { ...config.session, bundled: config.session.bundled ?? resolveBundledTools() },
+      session: {
+        ...config.session,
+        bundled: config.session.bundled ?? resolveBundledTools(),
+        allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
+      },
     };
 
     const workerPath = resolveWorkerPath();

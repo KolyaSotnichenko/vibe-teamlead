@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { getAgentConfig } from '../config/agent-configs';
 import { ErrorCode } from '../session/error-classifier';
 import type { SessionConfig, SessionEventCallback, SessionResult } from '../session/types';
+import { isSubscriptionToken } from './auth';
 import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from './codegraph';
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
@@ -114,8 +115,15 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   for (const key of INHERITED_ENV) {
     if (process.env[key]) env[key] = process.env[key];
   }
-  env.ANTHROPIC_API_KEY = config.auth.apiKey;
-  if (config.auth.baseURL) env.ANTHROPIC_BASE_URL = config.auth.baseURL;
+  if (config.auth.oauthToken) {
+    // Personal mode: the owner's own Claude subscription.
+    env.CLAUDE_CODE_OAUTH_TOKEN = config.auth.oauthToken;
+    // Keep the user's claude.ai connectors out of agent sessions.
+    env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
+  } else {
+    env.ANTHROPIC_API_KEY = config.auth.apiKey;
+    if (config.auth.baseURL) env.ANTHROPIC_BASE_URL = config.auth.baseURL;
+  }
   env.CLAUDE_CONFIG_DIR = config.claudeConfigDir ?? defaultClaudeConfigDir();
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
   env.DISABLE_TELEMETRY = '1';
@@ -215,11 +223,13 @@ export async function runAgentSession(
   const emit = options.onEvent ?? (() => undefined);
   const acc = new SessionAccumulator(emit, config.initialMessages);
 
-  const authProblem = !config.auth.apiKey
-    ? 'No Anthropic API key configured. Add an API key (Claude Console) in Settings.'
-    : config.auth.apiKey.startsWith('sk-ant-oat')
-      ? 'A Claude subscription login cannot run agents. Add an Anthropic API key (Claude Console) in Settings.'
-      : undefined;
+  const { apiKey, oauthToken, rejectedSubscriptionToken } = config.auth;
+  const authProblem =
+    rejectedSubscriptionToken || isSubscriptionToken(apiKey)
+      ? 'Your Claude subscription login is set up, but subscription mode is off. Turn on "Use my Claude subscription" in Settings, or add an Anthropic API key.'
+      : !apiKey && !oauthToken
+        ? 'No Claude credentials configured. Add an Anthropic API key (Claude Console) in Settings, or turn on "Use my Claude subscription".'
+        : undefined;
   if (authProblem) {
     const error = {
       code: ErrorCode.AUTH_FAILURE,

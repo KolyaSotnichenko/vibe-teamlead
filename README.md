@@ -28,7 +28,9 @@ Your spec ─▶ Spec team ─▶ Planner ─▶ Coders (parallel) ─▶ QA rev
 - Git
 - Node.js 24+ (for development)
 
-Vibe Teamlead authenticates with your API key only. It does not use a personal claude.ai login and keeps its own Claude Code configuration in `~/.vibe-teamlead/`, separate from `~/.claude`.
+Vibe Teamlead authenticates with your API key and keeps its own Claude Code configuration in `~/.vibe-teamlead/`, separate from `~/.claude`.
+
+**Personal mode (optional):** Settings → *Use my Claude subscription* runs agents on your own Claude Pro/Max subscription instead of an API key. It is off by default and meant only for your own machine — don't enable it in builds you give to others. Subscription limits are shared with your regular Claude usage.
 
 ## Development
 

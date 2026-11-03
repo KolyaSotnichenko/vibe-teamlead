@@ -273,6 +273,12 @@ export interface AppSettings {
   autoUpdateAutoBuild: boolean;
   autoNameTerminals: boolean;
   notifications: NotificationSettings;
+  /**
+   * Personal mode: run agents on the user's own Claude subscription
+   * (OAuth token) instead of an API key. Off by default; for the owner's
+   * own machine only.
+   */
+  useClaudeSubscription?: boolean;
   // Global API keys (used as defaults for all projects)
   globalOpenAIApiKey?: string;
   globalAnthropicApiKey?: string;

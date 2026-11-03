@@ -28,6 +28,10 @@ export interface ClaudeAuth {
   apiKey?: string;
   /** Optional Anthropic-compatible endpoint (e.g. a gateway or proxy) */
   baseURL?: string;
+  /** Claude subscription OAuth token — personal mode only (see claude-code/auth.ts) */
+  oauthToken?: string;
+  /** A subscription token was found but personal mode is off */
+  rejectedSubscriptionToken?: boolean;
 }
 
 // =============================================================================
