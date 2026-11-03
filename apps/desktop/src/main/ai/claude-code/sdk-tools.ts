@@ -9,7 +9,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z as z4 } from 'zod';
@@ -24,6 +24,7 @@ import {
   updateQaStatusTool,
   updateSubtaskStatusTool,
 } from '../tools/auto-claude';
+import { isPathContained } from '../security/path-containment';
 import type { DefinedTool } from '../tools/define';
 import type { ToolContext } from '../tools/types';
 
@@ -32,10 +33,6 @@ export const AUTO_CLAUDE_SERVER_KEY = 'auto-claude';
 const TOOL_PREFIX = `mcp__${AUTO_CLAUDE_SERVER_KEY}__`;
 export const RENDER_DIAGRAM_TOOL = `${TOOL_PREFIX}render_diagram`;
 
-function isInside(target: string, dir: string): boolean {
-  const rel = relative(resolve(dir), target);
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-}
 
 /**
  * render_diagram: lets the architect see its own draw.io diagram.
@@ -50,7 +47,7 @@ function renderDiagramTool(context: ToolContext) {
     async ({ path }) => {
       const target = isAbsolute(path) ? resolve(path) : resolve(context.cwd, path);
       const roots = [context.specDir, context.cwd, ...(context.allowedWritePaths ?? [])];
-      if (!/\.drawio$/i.test(target) || !roots.some((root) => isInside(target, root))) {
+      if (!/\.drawio$/i.test(target) || !roots.some((root) => isPathContained(target, root).contained)) {
         return {
           content: [{ type: 'text' as const, text: `Error: ${path} is not a .drawio file inside the project or spec directory` }],
           isError: true,

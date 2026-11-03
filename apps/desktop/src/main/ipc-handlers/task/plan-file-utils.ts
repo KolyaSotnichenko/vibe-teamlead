@@ -330,6 +330,13 @@ export function persistPlanPhaseSync(
       };
     }
 
+    // Same phase as stored: nothing to write. Rewriting here on every progress event
+    // would race with the agent's own writes to this file (subtask status, qa_signoff).
+    if (plan.executionPhase === phase) {
+      if (projectId) projectStore.invalidateTasksCache(projectId);
+      return true;
+    }
+
     // Store the execution phase for restoration
     plan.executionPhase = phase;
 
