@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { getMcpServerConfig, resolveMcpServers } from '../registry';
+import { getMcpServerConfig } from '../registry';
 
 // =============================================================================
 // getMcpServerConfig
@@ -117,82 +117,10 @@ describe('getMcpServerConfig', () => {
     });
   });
 
-  describe('auto-claude', () => {
-    it('returns auto-claude config with empty specDir as default', () => {
-      const config = getMcpServerConfig('auto-claude', {});
-      expect(config).not.toBeNull();
-      expect(config?.id).toBe('auto-claude');
-    });
-
-    it('injects SPEC_DIR into transport env', () => {
-      const config = getMcpServerConfig('auto-claude', { specDir: '/project/.auto-claude/specs/001-feature' });
-      expect(config?.transport.type).toBe('stdio');
-      if (config?.transport.type === 'stdio') {
-        expect(config.transport.env?.SPEC_DIR).toBe('/project/.auto-claude/specs/001-feature');
-      }
-    });
-
-    it('uses node command', () => {
-      const config = getMcpServerConfig('auto-claude', {});
-      if (config?.transport.type === 'stdio') {
-        expect(config.transport.command).toBe('node');
-      }
-    });
-  });
-
   describe('unknown server', () => {
     it('returns null for unrecognized server ID', () => {
       const config = getMcpServerConfig('nonexistent-server');
       expect(config).toBeNull();
     });
-  });
-});
-
-// =============================================================================
-// resolveMcpServers
-// =============================================================================
-
-describe('resolveMcpServers', () => {
-  it('returns configs for all recognized server IDs', () => {
-    const bundled = { playwrightMcpCli: '/pw.js', chromeDevtoolsMcpCli: '/cd.js', nodeRuntime: '/node' };
-    const configs = resolveMcpServers(['context7', 'electron', 'playwright', 'chrome-devtools'], { bundled });
-    expect(configs.map((c) => c.id)).toEqual(['context7', 'electron', 'playwright', 'chrome-devtools']);
-  });
-
-  it('filters out servers that cannot be configured (e.g. linear without API key)', () => {
-    const configs = resolveMcpServers(['context7', 'linear'], {});
-    expect(configs).toHaveLength(1);
-    expect(configs[0].id).toBe('context7');
-  });
-
-  it('includes linear when API key option is provided', () => {
-    const configs = resolveMcpServers(['context7', 'linear'], { linearApiKey: 'lin_test' });
-    expect(configs).toHaveLength(2);
-  });
-
-  it('returns empty array for empty input', () => {
-    const configs = resolveMcpServers([]);
-    expect(configs).toEqual([]);
-  });
-
-  it('skips unrecognized server IDs silently', () => {
-    const configs = resolveMcpServers(['context7', 'bogus-server-id']);
-    expect(configs).toHaveLength(1);
-    expect(configs[0].id).toBe('context7');
-  });
-
-  it('includes memory server when memoryMcpUrl is provided', () => {
-    const configs = resolveMcpServers(['memory'], { memoryMcpUrl: 'http://memory.local' });
-    expect(configs).toHaveLength(1);
-    expect(configs[0].id).toBe('memory');
-  });
-
-  it('passes specDir through to auto-claude config', () => {
-    const specDir = '/my-project/.auto-claude/specs/042-auth';
-    const configs = resolveMcpServers(['auto-claude'], { specDir });
-    expect(configs).toHaveLength(1);
-    if (configs[0].transport.type === 'stdio') {
-      expect(configs[0].transport.env?.SPEC_DIR).toBe(specDir);
-    }
   });
 });

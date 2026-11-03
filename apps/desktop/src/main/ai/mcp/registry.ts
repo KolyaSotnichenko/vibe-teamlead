@@ -3,7 +3,6 @@
  * ====================
  *
  * Defines MCP server configurations for all supported integrations.
- * See apps/desktop/src/main/ai/mcp/registry.ts for the TypeScript implementation.
  *
  * Each server config defines how to connect (stdio or StreamableHTTP),
  * and whether it's enabled by default.
@@ -130,24 +129,6 @@ function createChromeDevtoolsServer(cli: string, runtime: string): McpServerConf
   );
 }
 
-/**
- * Auto-Claude MCP server - custom build management tools.
- * Used by planner, coder, and QA agents for build progress tracking.
- */
-function createAutoClaudeServer(specDir: string): McpServerConfig {
-  return {
-    id: 'auto-claude',
-    name: 'Vibe Teamlead',
-    description: 'Build management tools (progress tracking, session context)',
-    enabledByDefault: true,
-    transport: {
-      type: 'stdio',
-      command: 'node',
-      args: ['auto-claude-mcp-server.js'],
-      env: { SPEC_DIR: specDir },
-    },
-  };
-}
 
 // =============================================================================
 // Registry
@@ -219,37 +200,8 @@ export function getMcpServerConfig(
       return createChromeDevtoolsServer(chromeDevtoolsMcpCli, nodeRuntime);
     }
 
-    case 'auto-claude': {
-      const specDir = options.specDir ?? '';
-      return createAutoClaudeServer(specDir);
-    }
 
     default:
       return null;
   }
-}
-
-/**
- * Resolve MCP server configurations for a list of server IDs.
- *
- * Filters out servers that cannot be configured (e.g., missing API keys).
- *
- * @param serverIds - List of server IDs to resolve
- * @param options - Registry options for dynamic server configuration
- * @returns List of resolved server configurations
- */
-export function resolveMcpServers(
-  serverIds: string[],
-  options: McpRegistryOptions = {},
-): McpServerConfig[] {
-  const configs: McpServerConfig[] = [];
-
-  for (const id of serverIds) {
-    const config = getMcpServerConfig(id, options);
-    if (config) {
-      configs.push(config);
-    }
-  }
-
-  return configs;
 }

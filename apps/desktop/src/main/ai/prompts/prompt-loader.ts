@@ -170,15 +170,6 @@ export async function loadProjectInstructions(projectDir: string): Promise<Proje
   return null;
 }
 
-/** @deprecated Use loadProjectInstructions() instead */
-export async function loadClaudeMd(projectDir: string): Promise<string | null> {
-  return tryReadFile(join(projectDir, 'CLAUDE.md'));
-}
-
-/** @deprecated Use loadProjectInstructions() instead */
-export async function loadAgentsMd(projectDir: string): Promise<string | null> {
-  return tryReadFile(join(projectDir, 'agents.md'));
-}
 
 // =============================================================================
 // Context Injection
