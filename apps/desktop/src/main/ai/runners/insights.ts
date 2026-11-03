@@ -35,6 +35,8 @@ export interface InsightsMessage {
 export interface InsightsConfig {
   /** Project directory path */
   projectDir: string;
+  /** For the project's memory (prompt section and tools) */
+  projectId?: string;
   /** User message to process */
   message: string;
   /** Previous conversation history */
@@ -174,6 +176,13 @@ Valid categories: feature, bug_fix, refactoring, documentation, security, perfor
 Valid complexity: trivial, small, medium, large, complex
 Valid impact: low, medium, high, critical
 
+How to work:
+- Answer in the language the user writes in.
+- Be efficient with tools: start from the project structure above and CodeGraph (callers, definitions) before reading files one by one, read only what the question needs, and answer once you know enough — usually within 15–20 tool calls.
+- Check this project's memory ("Project memory" below, and search_memory) for decisions, gotchas and earlier findings; save a durable finding with remember when the user confirms it.
+- Use Context7 for library documentation instead of guessing APIs.
+- Don't narrate every step; give the answer with file paths and lines.
+
 Be conversational and helpful. Focus on providing actionable insights and clear explanations.
 Keep responses concise but informative.`;
 }
@@ -248,14 +257,19 @@ export async function runInsightsQuery(
     onStream?.({ type: 'error', error });
   };
 
+  // Text from separate turns (before and after tool calls) gets a paragraph break
+  let afterTools = false;
   const onEvent = (event: StreamEvent) => {
     switch (event.type) {
       case 'text-delta': {
-        responseText += event.text;
-        onStream?.({ type: 'text-delta', text: event.text });
+        const text = afterTools && responseText && !responseText.endsWith('\n') ? `\n\n${event.text}` : event.text;
+        afterTools = false;
+        responseText += text;
+        onStream?.({ type: 'text-delta', text });
         break;
       }
       case 'tool-call': {
+        afterTools = true;
         const input = extractToolInput(event.args ?? {});
         toolCalls.push({ name: event.toolName, input });
         onStream?.({ type: 'tool-start', name: event.toolName, input });
@@ -272,22 +286,30 @@ export async function runInsightsQuery(
     }
   };
 
+  const memory = config.projectId ? await projectMemory(config.projectId, message) : undefined;
+
   try {
     const result = await runClaudeTask({
-      systemPrompt,
+      systemPrompt: memory?.section ? `${systemPrompt}\n\n${memory.section}` : systemPrompt,
       prompt: fullPrompt,
       model: modelShorthand,
       thinkingLevel,
       tools: READ_TOOLS,
       cwd: projectDir,
       specDir: join(projectDir, '.auto-claude', 'specs'),
-      agentType: 'insights',
-      maxTurns: 30, // Allow sufficient turns for codebase exploration
+      agentType: 'insights_chat',
+      maxTurns: 60,
       abortSignal,
       onEvent,
+      memory: memory?.tools,
     });
     // Fall back to the final assistant message if nothing was streamed
     if (!responseText) responseText = result.text;
+    if (result.session.outcome === 'max_steps') {
+      const note = '\n\n_Stopped at the step limit before finishing. Ask a narrower question, or say "continue"._';
+      responseText += note;
+      onStream?.({ type: 'text-delta', text: note });
+    }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     // Avoid a duplicate when the session already reported this error
@@ -307,6 +329,32 @@ export async function runInsightsQuery(
 // =============================================================================
 // Helpers
 // =============================================================================
+
+/** The project's memory for the chat: relevant memories up front, and the search/remember tools. */
+async function projectMemory(projectId: string, question: string) {
+  try {
+    const memory = await import('../memory/agent-memory');
+    const section = await memory.memoryPromptSection(projectId, question).catch(() => '');
+    return {
+      section,
+      tools: {
+        search: async (query: string, limit?: number) => {
+          const found = await memory.searchProjectMemory(projectId, query, limit);
+          return found.length ? memory.formatMemories(found) : 'No memories match.';
+        },
+        remember: async (memoryType: string, content: string, files?: string[]) => {
+          const type = (memory.AGENT_MEMORY_TYPES as readonly string[]).includes(memoryType)
+            ? (memoryType as (typeof memory.AGENT_MEMORY_TYPES)[number])
+            : 'gotcha';
+          await memory.rememberForAgent({ projectId }, { type, content, files });
+          return 'Saved to project memory.';
+        },
+      },
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Extract a brief description from tool call args for UI display.

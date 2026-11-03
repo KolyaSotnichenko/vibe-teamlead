@@ -401,6 +401,8 @@ export async function createTaskFromSuggestion(
 // IPC listener setup - call this once when the app initializes
 export function setupInsightsListeners(): () => void {
   const store = useInsightsStore.getState;
+  // Tools run in parallel: keep the indicator until the last running one ends
+  let runningTools = 0;
 
   // Listen for streaming chunks
   const unsubStreamChunk = window.electronAPI.onInsightsStreamChunk(
@@ -409,7 +411,7 @@ export function setupInsightsListeners(): () => void {
         case 'text':
           if (chunk.content) {
             store().appendStreamingContent(chunk.content);
-            store().setCurrentTool(null); // Clear tool when receiving text
+            if (runningTools === 0) store().setCurrentTool(null);
             store().setStatus({
               phase: 'streaming',
               message: 'Receiving response...'
@@ -418,6 +420,7 @@ export function setupInsightsListeners(): () => void {
           break;
         case 'tool_start':
           if (chunk.tool) {
+            runningTools++;
             store().setCurrentTool({
               name: chunk.tool.name,
               input: chunk.tool.input
@@ -434,7 +437,8 @@ export function setupInsightsListeners(): () => void {
           }
           break;
         case 'tool_end':
-          store().setCurrentTool(null);
+          runningTools = Math.max(0, runningTools - 1);
+          if (runningTools === 0) store().setCurrentTool(null);
           break;
         case 'task_suggestion':
           // Accumulate task suggestions — they'll be included when 'done' finalizes the message
@@ -445,6 +449,7 @@ export function setupInsightsListeners(): () => void {
           break;
         case 'done':
           // Finalize any remaining content
+          runningTools = 0;
           store().setCurrentTool(null);
           store().finalizeStreamingMessage();
           store().setStatus({
@@ -453,6 +458,7 @@ export function setupInsightsListeners(): () => void {
           });
           break;
         case 'error':
+          runningTools = 0;
           store().setCurrentTool(null);
           store().setStatus({
             phase: 'error',

@@ -60,6 +60,11 @@ export interface ClaudeTaskOptions<T = unknown> {
   abortSignal?: AbortSignal;
   onEvent?: SessionEventCallback;
   askUser?: AskUserHandler;
+  /** Project memory for the search_memory / remember tools (main-process callers) */
+  memory?: {
+    search: (query: string, limit?: number) => Promise<string>;
+    remember: (memoryType: string, content: string, files?: string[]) => Promise<string>;
+  };
   /** Override credentials (tests, or callers that already resolved them) */
   auth?: ClaudeAuth;
   /** Override bundled tool paths (tests) */
@@ -110,6 +115,7 @@ export async function runClaudeTask<T = unknown>(options: ClaudeTaskOptions<T>):
         specDir: options.specDir ?? cwd,
         securityProfile: tools.includes('Bash') ? getSecurityProfile(cwd) : (undefined as never),
         allowedWritePaths: options.allowedWritePaths,
+        ...(options.memory ? { searchMemory: options.memory.search, remember: options.memory.remember } : {}),
       },
       maxSteps: options.maxTurns ?? (tools.length > 0 ? 50 : 3),
       thinkingLevel: options.thinkingLevel,

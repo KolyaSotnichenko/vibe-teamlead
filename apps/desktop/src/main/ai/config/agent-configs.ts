@@ -143,6 +143,7 @@ export type AgentType =
   | 'qa_reviewer'
   | 'qa_fixer'
   | 'insights'
+  | 'insights_chat'
   | 'merge_resolver'
   | 'commit_message'
   | 'pr_template_filler'
@@ -353,6 +354,13 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     mcpServers: [],
     autoClaudeTools: [],
     thinkingDefault: 'low',
+  },
+  // Insights chat: reads the code, library docs and the project's memory
+  insights_chat: {
+    tools: [...BASE_READ_TOOLS],
+    mcpServers: ['context7', 'auto-claude'],
+    autoClaudeTools: [...MEMORY_TOOLS],
+    thinkingDefault: 'medium',
   },
   merge_resolver: {
     tools: [],

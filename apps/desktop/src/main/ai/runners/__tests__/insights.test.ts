@@ -294,10 +294,23 @@ describe('runInsightsQuery', () => {
     const args = taskArgs();
     expect(args.tools).toEqual(['Read', 'Glob', 'Grep']);
     expect(args.cwd).toBe('/project');
-    expect(args.agentType).toBe('insights');
-    expect(args.maxTurns).toBe(30);
+    expect(args.agentType).toBe('insights_chat');
+    expect(args.maxTurns).toBe(60);
     expect(args.allowedWritePaths).toBeUndefined();
     expect(args.systemPrompt).toContain('__TASK_SUGGESTION__');
+  });
+
+  it('separates text from different turns and notes the step limit', async () => {
+    mockRunClaudeTask.mockImplementationOnce(async (opts: { onEvent: (e: unknown) => void }) => {
+      opts.onEvent({ type: 'text-delta', text: 'Looking at the API.' });
+      opts.onEvent({ type: 'tool-call', toolName: 'Read', toolCallId: '1', args: { file_path: 'a.ts' } });
+      opts.onEvent({ type: 'tool-result', toolName: 'Read', toolCallId: '1', result: '' });
+      opts.onEvent({ type: 'text-delta', text: 'Found two bugs.' });
+      return { text: 'Found two bugs.', session: { outcome: 'max_steps' } };
+    });
+    const result = await runInsightsQuery(baseConfig());
+    expect(result.text.startsWith('Looking at the API.\n\nFound two bugs.')).toBe(true);
+    expect(result.text).toContain('step limit');
   });
 
   it('uses sonnet model and medium thinking level by default', async () => {

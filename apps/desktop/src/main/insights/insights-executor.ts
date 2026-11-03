@@ -99,6 +99,7 @@ export class InsightsExecutor extends EventEmitter {
       const result = await runInsightsQuery(
         {
           projectDir: projectPath,
+          projectId,
           message,
           history,
           modelShorthand,
