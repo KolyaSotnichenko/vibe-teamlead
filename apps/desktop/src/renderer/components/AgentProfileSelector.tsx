@@ -29,6 +29,7 @@ import type { ModelType, ThinkingLevel } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import { cn } from '../lib/utils';
 import { ClaudeModelSelect } from './settings/ClaudeModelSelect';
+import { profileDescription, profileName, thinkingLabel } from '../lib/agent-labels';
 
 interface AgentProfileSelectorProps {
   /** Currently selected profile ID ('auto', 'complex', 'balanced', 'quick', or 'custom') */
@@ -144,15 +145,15 @@ export function AgentProfileSelector({
     if (profile) {
       return {
         icon: iconMap[profile.icon || 'Scale'] || Scale,
-        label: profile.name,
-        description: profile.description
+        label: profileName(t, profile),
+        description: profileDescription(t, profile)
       };
     }
     // Default to auto profile (the actual default)
     return {
       icon: Sparkles,
-      label: 'Auto (Optimized)',
-      description: 'Uses Opus across all phases with optimized thinking levels'
+      label: t('agentProfile.profiles.auto.name'),
+      description: t('agentProfile.profiles.auto.description')
     };
   };
 
@@ -187,9 +188,9 @@ export function AgentProfileSelector({
                   <div className="flex items-center gap-2">
                     <ProfileIcon className="h-4 w-4 shrink-0" />
                     <div>
-                      <span className="font-medium">{profile.name}</span>
+                      <span className="font-medium">{profileName(t, profile)}</span>
                       <span className="ml-2 text-xs text-muted-foreground">
-                        ({modelLabel} + {profile.thinkingLevel})
+                        ({modelLabel} · {thinkingLabel(t, profile.thinkingLevel)})
                       </span>
                     </div>
                   </div>

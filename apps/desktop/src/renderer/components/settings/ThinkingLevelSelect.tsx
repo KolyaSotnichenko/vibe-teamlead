@@ -14,6 +14,7 @@ import {
 } from '../ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
+import { thinkingLabel } from '../../lib/agent-labels';
 
 interface ThinkingLevelSelectProps {
   value: string;
@@ -109,7 +110,7 @@ export function ThinkingLevelSelect({
         <SelectContent>
           {levels.map((level) => (
             <SelectItem key={level.value} value={level.value}>
-              {level.label}
+              {thinkingLabel(t, level.value)}
             </SelectItem>
           ))}
         </SelectContent>

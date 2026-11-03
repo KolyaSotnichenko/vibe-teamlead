@@ -12,6 +12,8 @@ import {
 import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
 import type { InsightsModelConfig } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
+import { useTranslation } from 'react-i18next';
+import { profileName, thinkingLabel } from '../lib/agent-labels';
 
 interface InsightsModelSelectorProps {
   currentConfig?: InsightsModelConfig;
@@ -31,6 +33,7 @@ export function InsightsModelSelector({
   onConfigChange,
   disabled
 }: InsightsModelSelectorProps) {
+  const { t } = useTranslation(['settings']);
   const [showCustomModal, setShowCustomModal] = useState(false);
 
   // Default to 'balanced' if no config, or if 'auto' profile was selected (not applicable for insights)
@@ -68,9 +71,9 @@ export function InsightsModelSelector({
   const getDisplayText = () => {
     if (selectedProfileId === 'custom' && currentConfig) {
       const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
-      return `${modelLabel} + ${currentConfig.thinkingLevel}`;
+      return `${modelLabel} · ${thinkingLabel(t, currentConfig.thinkingLevel)}`;
     }
-    return profile?.name || 'Balanced';
+    return profile ? profileName(t, profile) : t('settings:agentProfile.profiles.balanced.name');
   };
 
   return (
@@ -82,7 +85,7 @@ export function InsightsModelSelector({
             size="sm"
             className="h-8 gap-2 px-2"
             disabled={disabled}
-            title={`Model: ${getDisplayText()}`}
+            title={getDisplayText()}
           >
             <Icon className="h-4 w-4" />
             <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -91,7 +94,7 @@ export function InsightsModelSelector({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel>Agent Profile</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('settings:agentProfile.label')}</DropdownMenuLabel>
           {DEFAULT_AGENT_PROFILES.filter(p => !p.isAutoProfile).map((p) => {
             const ProfileIcon = iconMap[p.icon || 'Brain'];
             const isSelected = selectedProfileId === p.id;
@@ -104,9 +107,9 @@ export function InsightsModelSelector({
               >
                 <ProfileIcon className="h-4 w-4 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium">{p.name}</div>
+                  <div className="font-medium">{profileName(t, p)}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {modelLabel} + {p.thinkingLevel}
+                    {modelLabel} · {thinkingLabel(t, p.thinkingLevel)}
                   </div>
                 </div>
                 {isSelected && (

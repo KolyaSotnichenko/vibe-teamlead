@@ -387,6 +387,24 @@
         "label": "QA Review",
         "description": "Quality assurance and validation"
       }
+    },
+    "profiles": {
+      "auto": {
+        "name": "Auto (Optimized)",
+        "description": "Uses Opus across all phases with optimized thinking levels"
+      },
+      "complex": {
+        "name": "Complex Tasks",
+        "description": "For intricate, multi-step implementations requiring deep analysis"
+      },
+      "balanced": {
+        "name": "Balanced",
+        "description": "Good balance of speed and quality for most tasks"
+      },
+      "quick": {
+        "name": "Quick Edits",
+        "description": "Fast iterations for simple changes and quick fixes"
+      }
     }
   },
   "workspace": {
@@ -745,5 +763,57 @@
     "error": "Couldn't load models: {{error}}",
     "count_one": "{{count}} model from {{endpoint}}",
     "count_other": "{{count}} models from {{endpoint}}"
+  },
+  "thinkingLevels": {
+    "low": {
+      "label": "Low",
+      "description": "Brief consideration",
+      "badge": "Low thinking"
+    },
+    "medium": {
+      "label": "Medium",
+      "description": "Moderate analysis",
+      "badge": "Medium thinking"
+    },
+    "high": {
+      "label": "High",
+      "description": "Deep thinking",
+      "badge": "High thinking"
+    },
+    "xhigh": {
+      "label": "Extra High",
+      "description": "Maximum reasoning",
+      "badge": "Extra high thinking"
+    }
+  },
+  "featureModels": {
+    "insights": {
+      "label": "Insights Chat",
+      "description": "Ask questions about your codebase"
+    },
+    "ideation": {
+      "label": "Ideation",
+      "description": "Generate feature ideas and improvements"
+    },
+    "roadmap": {
+      "label": "Roadmap",
+      "description": "Create strategic feature roadmaps"
+    },
+    "githubIssues": {
+      "label": "GitHub Issues",
+      "description": "Automated issue triage and labeling"
+    },
+    "githubPrs": {
+      "label": "GitHub PR Review",
+      "description": "AI-powered pull request reviews"
+    },
+    "utility": {
+      "label": "Utility",
+      "description": "Commit messages and merge conflict resolution"
+    },
+    "naming": {
+      "label": "AI Naming",
+      "description": "Task titles and terminal tab names"
+    }
   }
 }

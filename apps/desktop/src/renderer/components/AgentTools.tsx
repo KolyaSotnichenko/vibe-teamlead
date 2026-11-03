@@ -60,6 +60,7 @@ import {
   type AgentSettingsSource,
 } from '../hooks';
 import type { ThinkingLevel } from '../../shared/types/settings';
+import { thinkingLabel } from '../lib/agent-labels';
 
 // Agent configuration data - mirrors AGENT_CONFIGS from backend
 // Model and thinking are now dynamically read from user settings
@@ -80,11 +81,6 @@ function getModelLabel(modelShort: string): string {
   return model?.label.replace('Claude ', '') || modelShort;
 }
 
-// Helper to get thinking label from level
-function getThinkingLabel(level: ThinkingLevel): string {
-  const thinking = THINKING_LEVELS.find(t => t.value === level);
-  return thinking?.label || level;
-}
 
 const AGENT_CONFIGS: Record<string, AgentConfig> = {
   // Spec Creation Phases - all use 'spec' phase settings
@@ -1357,7 +1353,7 @@ export function AgentTools() {
                           id={id}
                           config={config}
                           modelLabel={getModelLabel(model)}
-                          thinkingLabel={getThinkingLabel(thinking)}
+                          thinkingLabel={thinkingLabel(t, thinking)}
                           overrides={envConfig?.agentMcpOverrides?.[id]}
                           mcpServerStates={envConfig?.mcpServers}
                           customServers={envConfig?.customMcpServers || []}

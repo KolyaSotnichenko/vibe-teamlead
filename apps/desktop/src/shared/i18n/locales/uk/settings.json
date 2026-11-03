@@ -387,6 +387,24 @@
         "label": "Перевірка QA",
         "description": "Контроль якості та валідація"
       }
+    },
+    "profiles": {
+      "auto": {
+        "name": "Авто (оптимізовано)",
+        "description": "Opus на всіх етапах, рівень міркування підібраний під кожен етап"
+      },
+      "complex": {
+        "name": "Складні задачі",
+        "description": "Для заплутаних багатокрокових змін, де потрібен глибокий аналіз"
+      },
+      "balanced": {
+        "name": "Збалансований",
+        "description": "Добрий баланс швидкості та якості для більшості задач"
+      },
+      "quick": {
+        "name": "Швидкі правки",
+        "description": "Швидкі ітерації для простих змін і дрібних виправлень"
+      }
     }
   },
   "workspace": {
@@ -747,5 +765,57 @@
     "count_few": "{{count}} моделі з {{endpoint}}",
     "count_many": "{{count}} моделей з {{endpoint}}",
     "count_other": "{{count}} моделі з {{endpoint}}"
+  },
+  "thinkingLevels": {
+    "low": {
+      "label": "Низький",
+      "description": "Коротке обмірковування",
+      "badge": "Коротке міркування"
+    },
+    "medium": {
+      "label": "Середній",
+      "description": "Помірний аналіз",
+      "badge": "Помірне міркування"
+    },
+    "high": {
+      "label": "Високий",
+      "description": "Глибоке обмірковування",
+      "badge": "Глибоке міркування"
+    },
+    "xhigh": {
+      "label": "Максимальний",
+      "description": "Максимальне міркування",
+      "badge": "Максимальне міркування"
+    }
+  },
+  "featureModels": {
+    "insights": {
+      "label": "Чат аналітики",
+      "description": "Питання про ваш код"
+    },
+    "ideation": {
+      "label": "Ідеї",
+      "description": "Ідеї нових функцій і покращень"
+    },
+    "roadmap": {
+      "label": "Дорожня карта",
+      "description": "Стратегічна дорожня карта функцій"
+    },
+    "githubIssues": {
+      "label": "GitHub Issues",
+      "description": "Автоматичне сортування й мітки для issues"
+    },
+    "githubPrs": {
+      "label": "Рев’ю PR на GitHub",
+      "description": "Рев’ю pull request-ів агентом"
+    },
+    "utility": {
+      "label": "Службові",
+      "description": "Повідомлення комітів і розв’язання конфліктів злиття"
+    },
+    "naming": {
+      "label": "Назви",
+      "description": "Назви задач і вкладок терміналів"
+    }
   }
 }

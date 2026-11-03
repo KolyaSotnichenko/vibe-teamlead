@@ -21,6 +21,7 @@ import { THINKING_LEVELS } from '../../shared/constants';
 import { ClaudeModelSelect } from './settings/ClaudeModelSelect';
 import type { InsightsModelConfig } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
+import { thinkingDescription, thinkingLabel } from '../lib/agent-labels';
 
 interface CustomModelModalProps {
   currentConfig?: InsightsModelConfig;
@@ -80,9 +81,9 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
                 {THINKING_LEVELS.map((level) => (
                   <SelectItem key={level.value} value={level.value}>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{level.label}</span>
+                      <span className="font-medium">{thinkingLabel(t, level.value)}</span>
                       <span className="text-xs text-muted-foreground">
-                        {level.description}
+                        {thinkingDescription(t, level.value)}
                       </span>
                     </div>
                   </SelectItem>

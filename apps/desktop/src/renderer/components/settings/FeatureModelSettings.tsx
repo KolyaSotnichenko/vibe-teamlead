@@ -9,6 +9,7 @@ import {
   FEATURE_LABELS,
 } from '@shared/constants/models';
 import type { FeatureModelConfig, ThinkingLevel } from '@shared/types/settings';
+import { featureDescription, featureLabel } from '../../lib/agent-labels';
 
 /**
  * Feature model configuration component.
@@ -50,10 +51,10 @@ export function FeatureModelSettings() {
           <div key={feature} className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium text-foreground">
-                {FEATURE_LABELS[feature].label}
+                {featureLabel(t, feature)}
               </Label>
               <span className="text-xs text-muted-foreground">
-                {FEATURE_LABELS[feature].description}
+                {featureDescription(t, feature)}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3 max-w-md">

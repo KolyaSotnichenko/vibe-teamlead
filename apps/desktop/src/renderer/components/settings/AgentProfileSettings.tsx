@@ -5,7 +5,6 @@ import { cn } from '../../lib/utils';
 import {
   DEFAULT_AGENT_PROFILES,
   AVAILABLE_MODELS,
-  THINKING_LEVELS,
   DEFAULT_PHASE_MODELS,
   DEFAULT_PHASE_THINKING,
   PHASE_KEYS
@@ -16,6 +15,7 @@ import { ThinkingLevelSelect } from './ThinkingLevelSelect';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import type { AgentProfile, PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel } from '../../../shared/types/settings';
+import { profileDescription, profileName, thinkingBadge } from '../../lib/agent-labels';
 
 /**
  * Icon mapping for agent profile icons
@@ -109,8 +109,7 @@ export function AgentProfileSettings() {
    * Get human-readable thinking level label
    */
   const getThinkingLabel = (thinkingValue: string): string => {
-    const level = THINKING_LEVELS.find((l) => l.value === thinkingValue);
-    return level?.label || thinkingValue;
+    return thinkingBadge(t, thinkingValue);
   };
 
   /**
@@ -161,7 +160,7 @@ export function AgentProfileSettings() {
 
           <div className="flex-1 min-w-0 pr-6">
             <div className="flex items-center gap-2">
-              <h3 className="font-medium text-sm text-foreground">{profile.name}</h3>
+              <h3 className="font-medium text-sm text-foreground">{profileName(t, profile)}</h3>
               {isCustomized && (
                 <span className="inline-flex items-center border border-foreground px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] text-foreground">
                   {t('agentProfile.customized')}
@@ -169,7 +168,7 @@ export function AgentProfileSettings() {
               )}
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-              {profile.description}
+              {profileDescription(t, profile)}
             </p>
 
             {/* Model and thinking level badges */}
@@ -178,7 +177,7 @@ export function AgentProfileSettings() {
                 {getModelLabel(displayModel)}
               </span>
               <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {getThinkingLabel(displayThinking)} {t('agentProfile.thinking')}
+                {getThinkingLabel(displayThinking)}
               </span>
             </div>
           </div>
@@ -235,7 +234,7 @@ export function AgentProfileSettings() {
                     className="text-xs h-7"
                   >
                     <RotateCcw className="h-3 w-3 mr-1.5" />
-                    {t('agentProfile.resetToProfileDefaults', { profile: selectedProfile.name })}
+                    {t('agentProfile.resetToProfileDefaults', { profile: profileName(t, selectedProfile) })}
                   </Button>
                 </div>
               )}
