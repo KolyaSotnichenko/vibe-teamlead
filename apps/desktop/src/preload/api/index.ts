@@ -15,6 +15,8 @@ import { McpAPI, createMcpAPI } from './modules/mcp-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { type AgentQuestionsAPI, createAgentQuestionsAPI } from './agent-questions-api';
 import { type BriefAPI, createBriefAPI } from './brief-api';
+import { createToolsCheckAPI } from './tools-check-api';
+import type { ToolsCheckAPI } from '../../shared/types/tools-check';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -36,6 +38,8 @@ export interface ElectronAPI extends
   agentQuestions: AgentQuestionsAPI;
   /** Brief import: brief → epics and tasks */
   brief: BriefAPI;
+  /** External tools the pipeline uses (gitleaks, OSV-Scanner, Chrome, Docker, Strix) */
+  tools: ToolsCheckAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -52,7 +56,8 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createScreenshotAPI(),
   github: createGitHubAPI(),
   agentQuestions: createAgentQuestionsAPI(),
-  brief: createBriefAPI()
+  brief: createBriefAPI(),
+  tools: createToolsCheckAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts

@@ -75,6 +75,9 @@ export const IPC_CHANNELS = {
   // Task workspace (parsed spec, ACs, plan, timeline, architecture from the spec dir)
   TASK_WORKSPACE_GET: 'task:workspaceGet',
 
+  // External tools check (onboarding, Settings → Tools)
+  TOOLS_CHECK: 'tools:check',
+
   // Brief import (brief → epics and tasks)
   BRIEF_PICK_FILE: 'brief:pickFile',
   BRIEF_ANALYZE: 'brief:analyze',

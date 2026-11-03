@@ -79,7 +79,7 @@ export interface StrixRunOptions {
 }
 
 /** Where Strix's own installer puts the binary, besides the usual PATH locations. */
-function strixPath(): string {
+export function strixPath(): string {
   return searchPath([join(homedir(), '.strix', 'bin')]);
 }
 

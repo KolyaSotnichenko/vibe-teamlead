@@ -5,6 +5,7 @@
  * organized by domain into separate handler modules.
  */
 
+import { registerToolsCheckHandlers } from './tools-check-handlers';
 import type { BrowserWindow } from 'electron';
 import { AgentManager } from '../agent';
 import { TerminalManager } from '../terminal-manager';
@@ -107,6 +108,9 @@ export function setupIpcHandlers(
 
   // App auto-update handlers
   registerAppUpdateHandlers();
+
+  // External tools check (onboarding, Settings → Tools)
+  registerToolsCheckHandlers();
 
   // Debug handlers (logs, debug info, etc.)
   registerDebugHandlers();
