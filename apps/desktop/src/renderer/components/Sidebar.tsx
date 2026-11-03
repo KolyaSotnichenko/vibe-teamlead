@@ -18,7 +18,8 @@ import {
   HelpCircle,
   Wrench,
   PanelLeft,
-  PanelLeftClose
+  PanelLeftClose,
+  FileInput
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import {
@@ -41,6 +42,7 @@ import { GitSetupModal } from './GitSetupModal';
 
 import { UpdateBanner } from './UpdateBanner';
 import { TeamStatus } from './sidebar/TeamStatus';
+import { BriefImportDialog } from './brief-import';
 import type { GitStatus } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools';
@@ -86,15 +88,20 @@ const gitlabNavItems: NavItem[] = [
 ];
 
 /** Brand mark: the team as a grid of agents, drawn in paper on ink. */
+/**
+ * "Raised hand": four agents in a row; the one with its hand up (signal) has a
+ * question for you. Bars use the surface's foreground, so the mark works on the
+ * ink sidebar and on paper.
+ */
 function BrandMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" role="img" aria-label="Vibe Teamlead" className={className}>
+    <svg viewBox="0 0 24 24" role="img" aria-label="Vibe Teamlead" className={cn('text-foreground', className)}>
       <title>Vibe Teamlead</title>
-      <rect x="0" y="0" width="24" height="24" fill="var(--vt-paper)" />
-      <rect x="4" y="4" width="7" height="7" fill="var(--vt-ink)" />
-      <rect x="13" y="4" width="7" height="7" fill="var(--vt-ink)" />
-      <rect x="4" y="13" width="7" height="7" fill="var(--vt-ink)" />
-      <rect x="13" y="13" width="7" height="7" fill="none" stroke="var(--vt-ink)" strokeWidth="1.5" />
+      <rect x="3" y="9" width="3" height="12" fill="currentColor" />
+      <rect x="8" y="9" width="3" height="12" fill="currentColor" />
+      <rect x="13" y="8" width="3" height="13" fill="currentColor" />
+      <rect x="18" y="9" width="3" height="12" fill="currentColor" />
+      <rect x="13" y="3" width="3" height="5" fill="var(--vt-signal-on-dark)" />
     </svg>
   );
 }
@@ -108,12 +115,16 @@ export function Sidebar({
   const { t } = useTranslation(['navigation', 'dialogs', 'common']);
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
+  // The project New Task creates in (App passes the same choice to TaskCreationWizard)
+  const taskProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
   const settings = useSettingsStore((state) => state.settings);
 
   const [showGitSetupModal, setShowGitSetupModal] = useState(false);
+  const [showBriefImport, setShowBriefImport] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const canCreateTasks = !!selectedProjectId && !!selectedProject?.autoBuildPath;
 
   // Sidebar collapsed state from settings
   const isCollapsed = settings.sidebarCollapsed ?? false;
@@ -306,11 +317,33 @@ export function Sidebar({
     return button;
   };
 
+  // Second way to create tasks: a brief → reviewed tasks. Secondary (1px frame) under New Task.
+  const importBriefButton = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => setShowBriefImport(true)}
+          disabled={!canCreateTasks}
+          className={cn(
+            "flex min-h-11 items-center justify-center gap-2 border border-input text-sm font-medium text-foreground hover:bg-accent disabled:opacity-40",
+            isCollapsed ? "w-11" : "w-full px-3"
+          )}
+          aria-label={t('actions.importBrief')}
+        >
+          <FileInput className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+          {!isCollapsed && <span className="truncate">{t('actions.importBrief')}</span>}
+        </button>
+      </TooltipTrigger>
+      {isCollapsed && <TooltipContent side="right">{t('actions.importBrief')}</TooltipContent>}
+    </Tooltip>
+  );
+
   return (
     <TooltipProvider>
       <div className={cn(
         "vt-ink-surface flex h-full flex-col bg-sidebar text-foreground border-r border-border transition-[width] duration-200",
-        isCollapsed ? "w-16" : "w-60"
+        isCollapsed ? "w-[72px]" : "w-60"
       )}>
         {/* Brand + collapse; top padding clears the macOS traffic lights */}
         <div className={cn(
@@ -369,15 +402,15 @@ export function Sidebar({
         {/* Update Banner - shows when app update is available */}
         <UpdateBanner />
 
-        {/* New task + settings/help */}
-        <div className={cn("border-t border-border", isCollapsed ? "space-y-1 p-2" : "p-3")}>
+        {/* New task + settings/help; import brief below */}
+        <div className={cn("border-t border-border", isCollapsed ? "space-y-1 p-2" : "space-y-1 p-3")}>
           <div className={cn("flex", isCollapsed ? "flex-col gap-1" : "items-stretch gap-1")}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   onClick={onNewTaskClick}
-                  disabled={!selectedProjectId || !selectedProject?.autoBuildPath}
+                  disabled={!canCreateTasks}
                   className={cn(
                     "flex min-h-11 items-center justify-center gap-2 bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40",
                     isCollapsed ? "w-11" : "flex-1 px-3"
@@ -390,6 +423,7 @@ export function Sidebar({
               </TooltipTrigger>
               {isCollapsed && <TooltipContent side="right">{t('actions.newTask')}</TooltipContent>}
             </Tooltip>
+            {isCollapsed && importBriefButton}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -417,6 +451,7 @@ export function Sidebar({
               <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.help')}</TooltipContent>
             </Tooltip>
           </div>
+          {!isCollapsed && importBriefButton}
           {!isCollapsed && selectedProject && !selectedProject.autoBuildPath && (
             <p className="mt-2 text-xs text-muted-foreground">
               {t('messages.initializeToCreateTasks')}
@@ -424,6 +459,15 @@ export function Sidebar({
           )}
         </div>
       </div>
+
+      {taskProjectId && (
+        <BriefImportDialog
+          projectId={taskProjectId}
+          open={showBriefImport}
+          onOpenChange={setShowBriefImport}
+          onShowOnBoard={() => onViewChange?.('kanban')}
+        />
+      )}
 
       {/* Git Setup Modal */}
       <GitSetupModal

@@ -18,7 +18,7 @@ const FullScreenDialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-background/95 backdrop-blur-sm',
+      'fixed inset-0 z-50 bg-background/95 backdrop-blur-sm electron-drag',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
@@ -37,9 +37,10 @@ const FullScreenDialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-4 z-50 flex flex-col',
-        'bg-card border border-border rounded-2xl',
-        'shadow-2xl overflow-hidden',
+        // Below the macOS traffic lights (see .vt-below-titlebar); the overlay strip above stays draggable
+        'fixed inset-4 vt-below-titlebar z-50 flex flex-col electron-no-drag',
+        'bg-card border border-border',
+        'overflow-hidden',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         'data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98',

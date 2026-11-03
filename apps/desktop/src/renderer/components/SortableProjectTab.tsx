@@ -55,7 +55,7 @@ export function SortableProjectTab({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative flex items-center min-w-0',
+        'electron-no-drag group relative flex items-center min-w-0',
         // Responsive max-widths: smaller on mobile, larger on desktop
         isActive
           ? 'max-w-[180px] sm:max-w-[220px] md:max-w-[280px]'

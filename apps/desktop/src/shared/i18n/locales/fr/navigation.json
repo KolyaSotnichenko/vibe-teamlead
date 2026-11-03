@@ -27,7 +27,8 @@
     "newTask": "Nouvelle tâche",
     "collapseSidebar": "Réduire la barre latérale",
     "expandSidebar": "Développer la barre latérale",
-    "sponsor": "Nous sponsoriser"
+    "sponsor": "Nous sponsoriser",
+    "importBrief": "Importer un brief"
   },
   "tooltips": {
     "settings": "Paramètres de l'application",

@@ -99,9 +99,15 @@ function taskCardPropsAreEqual(prevProps: TaskCardProps, nextProps: TaskCardProp
     prevTask.metadata?.archivedAt === nextTask.metadata?.archivedAt &&
     prevTask.metadata?.prUrl === nextTask.metadata?.prUrl &&
     prevTask.metadata?.useWorktree === nextTask.metadata?.useWorktree &&
+    (prevTask.metadata?.dependencies ?? []).join(',') === (nextTask.metadata?.dependencies ?? []).join(',') &&
     // Check if any subtask statuses changed (compare all subtasks)
     prevTask.subtasks.every((s, i) => s.status === nextTask.subtasks[i]?.status)
   );
+}
+
+/** Short form of a dependency for the card: the spec number ("012-invoice-api" → "012"). */
+export function shortDependency(dep: string): string {
+  return /^(\d+)(?:-|$)/.exec(dep)?.[1] ?? dep;
 }
 
 type ChipTone = 'attention' | 'outline' | 'low';
@@ -300,6 +306,11 @@ export const TaskCard = memo(function TaskCard({
   })();
   const needsAttention = !!pendingQuestion || chip?.tone === 'attention';
 
+  // Brief import: tasks that wait on others say so until they start
+  const dependencies = task.metadata?.dependencies ?? [];
+  const showDependencies = dependencies.length > 0 && (task.status === 'backlog' || task.status === 'queue');
+  const dependencyList = dependencies.map(shortDependency).join(', ');
+
   const priority = task.metadata?.priority;
   const showPriority = priority === 'urgent' || priority === 'high';
   const showDescription = !stage.current && !stage.finished && counts.total === 0 && !!sanitizedDescription;
@@ -440,6 +451,12 @@ export const TaskCard = memo(function TaskCard({
         <div className="flex min-w-0 flex-1 items-center gap-3 px-3 text-xs text-muted-foreground">
           {task.location === 'worktree' && (
             <span className="truncate font-mono text-[11px] text-foreground">{t('board.worktree')}</span>
+          )}
+          {showDependencies && (
+            <span className="min-w-0 truncate font-mono text-[11px] text-foreground">
+              <span aria-hidden="true">{t('briefImport.card.after', { list: dependencyList })}</span>
+              <span className="sr-only">{t('briefImport.card.afterAria', { list: dependencies.join(', ') })}</span>
+            </span>
           )}
           {showPriority && priority && <span className="shrink-0 text-foreground">{t(`overview.values.priority.${priority}`)}</span>}
           {task.metadata?.fastMode && <span className="shrink-0">{t('metadata.fastMode')}</span>}

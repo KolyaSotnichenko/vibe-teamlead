@@ -6,6 +6,7 @@
 export { OnboardingWizard } from './OnboardingWizard';
 export { WelcomeStep } from './WelcomeStep';
 export { ClaudeStep } from './ClaudeStep';
+export { ToolsStep } from './ToolsStep';
 export { PrivacyStep } from './PrivacyStep';
 export { MemoryStep } from './MemoryStep';
 export { OllamaModelSelector } from './OllamaModelSelector';

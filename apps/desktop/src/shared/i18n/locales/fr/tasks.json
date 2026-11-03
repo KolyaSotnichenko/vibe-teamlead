@@ -508,7 +508,7 @@
       "emptyTitle": "Pas encore de résultats de sécurité",
       "emptyBody": "Les analyses de secrets et de dépendances s'exécutent avant chaque revue QA. Si la QA sécurité est activée dans les réglages, un test d'intrusion Strix s'exécute après l'approbation QA.",
       "noGates": "Les contrôles s'exécutent avant la première revue QA.",
-      "noPentest": "La QA sécurité (Strix) est désactivée, ou la QA n'a pas encore approuvé. Activez-la dans Réglages → Général."
+      "noPentest": "La QA sécurité (Strix) est désactivée, ou la QA n'a pas encore approuvé. Activez-la dans Réglages → Paramètres des agents."
     }
   },
   "board": {
@@ -723,5 +723,127 @@
       "incompleteBody": "Elle a une spec et un plan, mais {{done}} sous-tâches sur {{total}} sont terminées. Reprenez pour continuer l’implémentation.",
       "recoverRestart": "Récupérer et relancer"
     }
+  },
+  "briefImport": {
+    "title": "Importer un brief",
+    "steps": {
+      "label": "Étapes",
+      "input": "Brief",
+      "analysing": "Analyse",
+      "review": "Revue",
+      "done": "Terminé"
+    },
+    "input": {
+      "explain": "L'analyste de brief lit votre brief avec le code du projet et propose des epics et des tâches. Vous les relisez et les modifiez d'abord — rien n'est encore créé.",
+      "fileHeading": "Document du brief",
+      "dropHere": "Déposez une spec ou un brief ici",
+      "dropNow": "Déposez pour utiliser ce fichier",
+      "chooseFile": "Choisir un fichier",
+      "replace": "Remplacer",
+      "removeFile": "Retirer {{name}}",
+      "unsupported": "Ce type de fichier ne peut pas être lu. Utilisez : {{types}}",
+      "pickFailed": "La fenêtre de sélection ne s'est pas ouverte. Réessayez ou déposez le fichier ici.",
+      "noPath": "Ce fichier ne peut pas être lu depuis l'endroit où il a été déposé. Utilisez « Choisir un fichier ».",
+      "or": "ou",
+      "textHeading": "Décrivez ce que vous voulez construire",
+      "textPlaceholder": "Par exemple : les clients créent des factures, les envoient par e-mail en PDF et voient celles qui sont impayées…",
+      "textHint": "Quelques phrases suffisent ; l'analyste complète à partir du code et liste ce qu'il a supposé.",
+      "fileWins": "C'est le fichier qui sera analysé. Retirez-le pour décrire le travail en texte.",
+      "analyse": "Analyser"
+    },
+    "analysing": {
+      "title": "Lecture de {{source}} et du projet",
+      "body": "L'analyste rapproche le brief du code et le découpe en tâches. Un brief long peut prendre quelques minutes.",
+      "yourDescription": "votre description",
+      "elapsed": "Écoulé",
+      "logHeading": "Progression",
+      "lineCount_one": "{{count}} ligne",
+      "lineCount_other": "{{count}} lignes",
+      "waitingForFirst": "Démarrage de l'analyste…",
+      "nothingYet": "Rien n'est créé avant que vous ayez relu la proposition. Annuler arrête l'analyste.",
+      "cancel": "Annuler l'analyse",
+      "cancelling": "Annulation…"
+    },
+    "review": {
+      "counts": "{{tasks}} tâches · {{epics}} epics",
+      "noEpic": "Autres tâches",
+      "includeEpic": "Inclure toutes les tâches de {{title}}",
+      "included": "{{included}}/{{total}} incluses",
+      "includeTask": "Inclure {{key}} : {{title}}",
+      "titleLabel": "Titre de {{key}}",
+      "titleRequired": "Donnez un titre à cette tâche",
+      "complexity": "Complexité",
+      "priority": "Priorité",
+      "category": "Catégorie",
+      "expand": "Afficher la description et les critères de {{key}}",
+      "collapse": "Masquer la description et les critères de {{key}}",
+      "notCreated": "Non créée",
+      "after": "après",
+      "droppedSr": "(retirée, non créée)",
+      "source": "Source",
+      "losesDependency_one": "Sera créée sans sa dépendance à {{keys}}, qui est exclue.",
+      "losesDependency_other": "Sera créée sans ses dépendances à {{keys}}, qui sont exclues.",
+      "dependentsLose_one": "{{keys}} dépend de cette tâche et sera créée sans cette dépendance.",
+      "dependentsLose_other": "{{keys}} dépendent de cette tâche et seront créées sans cette dépendance.",
+      "description": "Description",
+      "acceptanceCriteria": "Critères d'acceptation",
+      "noCriteria": "Aucun critère pour l'instant. Le rédacteur de spec les rédige si vous laissez vide.",
+      "criterionLabel": "Critère d'acceptation {{index}} de {{key}}",
+      "criterionPlaceholder": "Étant donné …, quand …, alors …",
+      "removeCriterion": "Retirer le critère {{index}}",
+      "addCriterion": "Ajouter un critère",
+      "needsAttention": "Attend votre réponse",
+      "openQuestions_one": "{{count}} question ouverte",
+      "openQuestions_other": "{{count}} questions ouvertes",
+      "questionsNote": "Inutile de répondre ici : les agents de spec reposent ces questions pour chaque tâche concernée.",
+      "assumptions": "Hypothèses",
+      "order": "Ordre de démarrage",
+      "waveCount_one": "{{count}} vague",
+      "waveCount_other": "{{count}} vagues",
+      "orderHint": "Les tâches d'une même vague peuvent avancer en parallèle ; une vague démarre quand les tâches dont elle dépend sont terminées.",
+      "wave": "Vague {{index}}",
+      "nothingSelected": "Aucune tâche sélectionnée. Cochez au moins une tâche pour la créer.",
+      "cycleTitle": "Dépendance circulaire.",
+      "cycleBody": "{{keys}} s'attendent mutuellement, aucune ne peut donc démarrer. Décochez-en une ou modifiez le brief.",
+      "back": "Retour",
+      "queue": "Ajouter à la file",
+      "queueOn": "Les tâches démarrent selon la capacité disponible et leurs dépendances.",
+      "queueOff": "Les tâches vont en Planification ; vous les démarrez vous-même.",
+      "on": "activé",
+      "off": "désactivé",
+      "droppedCount_one": "{{count}} dépendance retirée",
+      "droppedCount_other": "{{count}} dépendances retirées",
+      "fixTitles": "Chaque tâche doit avoir un titre",
+      "create_one": "Créer {{count}} tâche",
+      "create_other": "Créer {{count}} tâches",
+      "creating_one": "Création de {{count}} tâche…",
+      "creating_other": "Création de {{count}} tâches…"
+    },
+    "done": {
+      "label": "Créées",
+      "title_one": "{{count}} tâche créée",
+      "title_other": "{{count}} tâches créées",
+      "queued": "Elles sont dans la file et démarrent selon la capacité disponible et leurs dépendances.",
+      "planning": "Elles sont en Planification. Démarrez-les quand vous voulez.",
+      "showOnBoard": "Voir sur le tableau"
+    },
+    "discard": {
+      "title": "Abandonner cette proposition ?",
+      "body": "Vos modifications seront perdues et le brief devra être analysé à nouveau.",
+      "keep": "Continuer la revue",
+      "confirm": "Abandonner"
+    },
+    "errors": {
+      "analyseTitle": "Le brief n'a pas pu être analysé",
+      "analyseUnknown": "L'analyste s'est arrêté sans proposition.",
+      "createTitle": "Les tâches n'ont pas pu être créées",
+      "createUnknown": "Rien n'a été créé. Réessayez.",
+      "retry": "Réessayer"
+    },
+    "card": {
+      "after": "après {{list}}",
+      "afterAria": "Démarre après {{list}}"
+    },
+    "menu": "Importer un brief…"
   }
 }

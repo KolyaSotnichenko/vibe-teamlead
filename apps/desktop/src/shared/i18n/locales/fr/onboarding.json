@@ -2,7 +2,7 @@
   "wizard": {
     "title": "Assistant de configuration",
     "description": "Configurez votre environnement Vibe Teamlead en quelques étapes simples",
-    "helpText": "Cet assistant vous aidera à configurer votre environnement en quelques étapes. Vous pouvez configurer votre token OAuth Claude, activer les fonctionnalités de mémoire et créer votre première tâche."
+    "helpText": "Quelques étapes : connecter Claude, vérifier les outils utilisés par les contrôles QA, configurer la mémoire et créer votre première tâche."
   },
   "welcome": {
     "title": "Bienvenue sur Vibe Teamlead",
@@ -20,7 +20,7 @@
       },
       "memory": {
         "title": "Mémoire & Contexte",
-        "description": "Mémoire persistante entre les sessions avec Graphiti"
+        "description": "Les agents retiennent ce qu'ils ont appris sur votre projet d'une tâche à l'autre"
       },
       "parallel": {
         "title": "Exécution parallèle",
@@ -110,6 +110,7 @@
   "steps": {
     "welcome": "Bienvenue",
     "claude": "Claude",
+    "tools": "Outils",
     "devtools": "Outils dev",
     "privacy": "Confidentialité",
     "memory": "Mémoire",
@@ -179,6 +180,15 @@
       "description": "Ollama est installé mais non démarré. Lancez Ollama pour utiliser les modèles d'embeddings locaux.",
       "retry": "Réessayer",
       "fallbackNote": "La mémoire fonctionnera toujours avec la recherche par mots-clés même sans embeddings."
+    }
+  },
+  "tools": {
+    "title": "Vérifiez vos outils",
+    "description": "Quelques outils facultatifs permettent à la QA d’en vérifier davantage : secrets et dépendances vulnérables, votre app web dans un navigateur, et un test d’intrusion. Installez-les maintenant ou plus tard dans Paramètres → Outils.",
+    "buttons": {
+      "back": "Retour",
+      "continue": "Continuer",
+      "skip": "Passer pour l’instant"
     }
   }
 }

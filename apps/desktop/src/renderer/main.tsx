@@ -29,6 +29,9 @@ import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/latin-600.css';
 import './styles/globals.css';
 
+// macOS draws the window buttons over the top-left corner (hiddenInset title bar)
+if (/Mac/i.test(navigator.userAgent)) document.documentElement.dataset.platform = 'mac';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

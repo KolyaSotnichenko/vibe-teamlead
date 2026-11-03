@@ -23,6 +23,8 @@ export interface BoardColumnProps {
   onStatusChange: (taskId: string, newStatus: TaskStatus) => unknown;
   isOver: boolean;
   onAddClick?: () => void;
+  /** Planning column menu: import a brief */
+  onImportBrief?: () => void;
   onArchiveAll?: () => void;
   onQueueSettings?: () => void;
   onQueueAll?: () => void;
@@ -68,7 +70,7 @@ function tasksAreEquivalent(prevTasks: Task[], nextTasks: Task[]): boolean {
 }
 
 const SHALLOW_KEYS: Array<keyof BoardColumnProps> = [
-  'status', 'isOver', 'onTaskClick', 'onStatusChange', 'onAddClick', 'onArchiveAll', 'onQueueSettings', 'onQueueAll',
+  'status', 'isOver', 'onTaskClick', 'onStatusChange', 'onAddClick', 'onImportBrief', 'onArchiveAll', 'onQueueSettings', 'onQueueAll',
   'maxParallelTasks', 'archivedCount', 'showArchived', 'onToggleArchived', 'onSelectAll', 'onDeselectAll', 'onToggleSelect',
   'isCollapsed', 'onToggleCollapsed', 'columnWidth', 'isResizing', 'onResizeStart', 'onResizeEnd', 'isLocked', 'onToggleLocked',
 ];
@@ -105,6 +107,7 @@ export const BoardColumn = memo(function BoardColumn({
   onStatusChange,
   isOver,
   onAddClick,
+  onImportBrief,
   onArchiveAll,
   onQueueSettings,
   onQueueAll,
@@ -255,6 +258,7 @@ export const BoardColumn = memo(function BoardColumn({
             archivedCount={archivedCount}
             showArchived={showArchived}
             onToggleArchived={onToggleArchived}
+            onImportBrief={status === 'backlog' ? onImportBrief : undefined}
           />
         </header>
 

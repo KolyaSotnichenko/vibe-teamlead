@@ -19,7 +19,8 @@ import {
   Code,
   Bug,
   Terminal,
-  KeyRound
+  KeyRound,
+  Wrench
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -53,6 +54,7 @@ import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { TerminalFontSettings } from './terminal-font-settings/TerminalFontSettings';
 import { ClaudeSettings } from './ClaudeSettings';
+import { ToolsSettings } from './ToolsSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -67,7 +69,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'agent' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'tools' | 'agent' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -81,6 +83,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'devtools', icon: Code },
   { id: 'terminal-fonts', icon: Terminal },
   { id: 'claude', icon: KeyRound },
+  { id: 'tools', icon: Wrench },
   { id: 'agent', icon: Bot },
   { id: 'paths', icon: FolderOpen },
   { id: 'updates', icon: Package },
@@ -196,6 +199,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="paths" />;
       case 'claude':
         return <ClaudeSettings settings={settings} onSettingsChange={setSettings} />;
+      case 'tools':
+        return <ToolsSettings />;
       case 'updates':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':

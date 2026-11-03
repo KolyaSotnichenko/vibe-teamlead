@@ -27,7 +27,8 @@
     "newTask": "New Task",
     "collapseSidebar": "Collapse Sidebar",
     "expandSidebar": "Expand Sidebar",
-    "sponsor": "Sponsor Us"
+    "sponsor": "Sponsor Us",
+    "importBrief": "Import brief"
   },
   "tooltips": {
     "settings": "Application Settings",

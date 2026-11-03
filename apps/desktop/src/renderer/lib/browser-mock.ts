@@ -6,6 +6,7 @@
  * for better code organization and maintainability.
  */
 
+import { toolsMock } from './mocks/tools-mock';
 import { briefMock } from './mocks/brief-mock';
 import type { ElectronAPI } from '../../shared/types';
 import {
@@ -208,6 +209,9 @@ const browserMockAPI: ElectronAPI = {
 
   // Brief import
   brief: briefMock,
+
+  // External tools check
+  tools: toolsMock,
 
   // Agent questions (browser preview: one sample question)
   agentQuestions: {

@@ -2,7 +2,7 @@
   "wizard": {
     "title": "Setup Wizard",
     "description": "Configure your Vibe Teamlead environment in a few simple steps",
-    "helpText": "This wizard will help you set up your environment in just a few steps. You can configure your Claude OAuth token, set up memory features, and create your first task."
+    "helpText": "A few steps: connect Claude, check the tools the QA checks use, set up memory, and create your first task."
   },
   "welcome": {
     "title": "Welcome to Vibe Teamlead",
@@ -20,7 +20,7 @@
       },
       "memory": {
         "title": "Memory & Context",
-        "description": "Persistent memory across sessions with Graphiti"
+        "description": "Agents remember what they learned about your project across tasks"
       },
       "parallel": {
         "title": "Parallel Execution",
@@ -110,6 +110,7 @@
   "steps": {
     "welcome": "Welcome",
     "claude": "Claude",
+    "tools": "Tools",
     "devtools": "Dev Tools",
     "privacy": "Privacy",
     "memory": "Memory",
@@ -179,6 +180,15 @@
       "description": "Ollama is installed but not running. Start Ollama to use local embedding models.",
       "retry": "Retry",
       "fallbackNote": "Memory will still work with keyword search even without embeddings."
+    }
+  },
+  "tools": {
+    "title": "Check your tools",
+    "description": "A few optional tools let QA check more: secrets and vulnerable dependencies, your web app in a browser, and a penetration test. You can install them now or later in Settings → Tools.",
+    "buttons": {
+      "back": "Back",
+      "continue": "Continue",
+      "skip": "Skip for now"
     }
   }
 }

@@ -1,6 +1,6 @@
 /**
- * One menu per column for the rarely used column actions (collapse, width lock,
- * select all, queue all, queue settings, archive). Design system dropdown:
+ * One menu per column for the rarely used column actions (import brief, collapse,
+ * width lock, select all, queue all, queue settings, archive). Design system dropdown:
  * 1px ink frame, rows ≥44px separated by hairlines, checked rows show a tick.
  */
 
@@ -31,6 +31,8 @@ export interface ColumnMenuProps {
   archivedCount?: number;
   showArchived?: boolean;
   onToggleArchived?: () => void;
+  /** Planning column: turn a spec or brief into tasks */
+  onImportBrief?: () => void;
 }
 
 export function ColumnMenu({
@@ -48,6 +50,7 @@ export function ColumnMenu({
   archivedCount,
   showArchived,
   onToggleArchived,
+  onImportBrief,
 }: ColumnMenuProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const allSelected = selectAllState === true;
@@ -64,6 +67,11 @@ export function ColumnMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-60 rounded-none border-foreground p-0">
+        {onImportBrief && (
+          <DropdownMenuItem className={ROW} onSelect={onImportBrief}>
+            {t('tasks:briefImport.menu')}
+          </DropdownMenuItem>
+        )}
         {onQueueAll && taskCount > 0 && (
           <DropdownMenuItem className={ROW} onSelect={onQueueAll}>
             {t('tasks:queue.queueAll')}

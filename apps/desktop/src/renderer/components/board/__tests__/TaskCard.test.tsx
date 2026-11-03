@@ -29,7 +29,7 @@ vi.mock('../../../stores/task-store', () => ({
 vi.mock('../../../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import { useAgentQuestionsStore } from '../../../stores/agent-questions-store';
-import { TaskCard } from '../../TaskCard';
+import { shortDependency, TaskCard } from '../../TaskCard';
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -107,5 +107,22 @@ describe('TaskCard', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     expect(onToggle).toHaveBeenCalled();
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('shows what a not-started task waits on, by spec number', () => {
+    const deps = { dependencies: ['012-invoice-api', '014-pdf'] };
+    const { unmount } = render(
+      <TaskCard task={task({ status: 'queue', subtasks: [], executionProgress: undefined, metadata: deps })} onClick={vi.fn()} />
+    );
+    expect(screen.getByText('briefImport.card.after {"list":"012, 014"}')).toBeInTheDocument();
+    unmount();
+    render(<TaskCard task={task({ status: 'in_progress', metadata: deps })} onClick={vi.fn()} />);
+    expect(screen.queryByText(/briefImport\.card\.after/)).not.toBeInTheDocument();
+  });
+
+  it('shortens spec ids to their number', () => {
+    expect(shortDependency('012-invoice-api')).toBe('012');
+    expect(shortDependency('7')).toBe('7');
+    expect(shortDependency('custom-id')).toBe('custom-id');
   });
 });

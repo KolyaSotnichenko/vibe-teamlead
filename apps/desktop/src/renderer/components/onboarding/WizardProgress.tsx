@@ -19,26 +19,26 @@ interface WizardProgressProps {
  */
 export function WizardProgress({ currentStep, steps }: WizardProgressProps) {
   return (
-    <div className="flex items-center justify-center">
+    <ol className="flex items-center justify-center">
       {steps.map((step, index) => {
         const isCompleted = step.completed;
         const isCurrent = index === currentStep;
         const isUpcoming = index > currentStep;
 
         return (
-          <div key={step.id} className="flex items-center">
+          <li key={step.id} className="flex items-center" aria-current={isCurrent ? 'step' : undefined}>
             {/* Step indicator circle */}
             <div className="flex flex-col items-center">
               <div
                 className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200',
+                  'flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200 motion-reduce:transition-none',
                   isCompleted && 'border-primary bg-primary text-primary-foreground',
                   isCurrent && !isCompleted && 'border-primary bg-background text-primary',
                   isUpcoming && 'border-muted-foreground/40 bg-background text-muted-foreground'
                 )}
               >
                 {isCompleted ? (
-                  <Check className="h-5 w-5" />
+                  <Check className="h-5 w-5" aria-hidden="true" />
                 ) : (
                   <span>{index + 1}</span>
                 )}
@@ -59,15 +59,16 @@ export function WizardProgress({ currentStep, steps }: WizardProgressProps) {
             {/* Connecting line (not after last step) */}
             {index < steps.length - 1 && (
               <div
+                aria-hidden="true"
                 className={cn(
-                  'mx-2 h-0.5 w-12 transition-colors duration-200',
+                  'mx-2 h-0.5 w-10 transition-colors duration-200 motion-reduce:transition-none',
                   step.completed ? 'bg-primary' : 'bg-muted-foreground/40'
                 )}
               />
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }

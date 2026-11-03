@@ -5,6 +5,7 @@
  * organized by domain into separate handler modules.
  */
 
+import { registerBriefHandlers } from './brief-handlers';
 import { registerToolsCheckHandlers } from './tools-check-handlers';
 import type { BrowserWindow } from 'electron';
 import { AgentManager } from '../agent';
@@ -111,6 +112,9 @@ export function setupIpcHandlers(
 
   // External tools check (onboarding, Settings → Tools)
   registerToolsCheckHandlers();
+
+  // Brief import (brief → epics and tasks)
+  registerBriefHandlers(getMainWindow);
 
   // Debug handlers (logs, debug info, etc.)
   registerDebugHandlers();

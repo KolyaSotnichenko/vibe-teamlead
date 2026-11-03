@@ -1,3 +1,4 @@
+import { isReadyToStart } from '../lib/task-dependencies';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
@@ -28,6 +29,7 @@ import { useKanbanSettingsStore, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COL
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
+import { BriefImportDialog } from './brief-import';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,6 +101,10 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Queue settings modal state
   const [showQueueSettings, setShowQueueSettings] = useState(false);
+  // Brief import from the Planning column menu; same project choice as New Task
+  const [briefImportOpen, setBriefImportOpen] = useState(false);
+  const briefProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
+  const openBriefImport = useCallback(() => setBriefImportOpen(true), []);
   // Store projectId when modal opens to prevent modal from disappearing if tasks change
   const queueSettingsProjectIdRef = useRef<string | null>(null);
 
@@ -529,8 +535,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         const inProgressCount = currentTasks.filter((t) =>
           t.status === 'in_progress' && !t.metadata?.archivedAt
         ).length;
+        // Tasks whose dependencies (brief import) are not done yet keep waiting.
         const queuedTasks = currentTasks.filter((t) =>
-          t.status === 'queue' && !t.metadata?.archivedAt && !attemptedTaskIds.has(t.id)
+          t.status === 'queue' && !t.metadata?.archivedAt && !attemptedTaskIds.has(t.id) && isReadyToStart(t, currentTasks)
         );
 
         // Stop if no capacity, no queued tasks, or too many consecutive failures
@@ -581,6 +588,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         // When a task leaves in_progress (e.g., goes to human_review), process the queue
         if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
           console.log(`[Queue] Task ${taskId} left in_progress, processing queue to fill slot`);
+          processQueue();
+        } else if (newStatus === 'done') {
+          // A finished task may unblock queued tasks that depend on it.
           processQueue();
         }
       }
@@ -904,6 +914,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               onStatusChange={handleStatusChange}
               isOver={overColumnId === status}
               onAddClick={status === 'backlog' ? onNewTaskClick : undefined}
+              onImportBrief={status === 'backlog' && briefProjectId ? openBriefImport : undefined}
               onQueueAll={status === 'backlog' ? handleQueueAll : undefined}
               onQueueSettings={status === 'queue' ? () => {
                 // Only open modal if we have a valid projectId
@@ -1038,6 +1049,10 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           currentMaxParallel={maxParallelTasks}
           onSave={handleSaveQueueSettings}
         />
+      )}
+
+      {briefProjectId && (
+        <BriefImportDialog projectId={briefProjectId} open={briefImportOpen} onOpenChange={setBriefImportOpen} />
       )}
 
       {/* Bulk PR creation dialog */}

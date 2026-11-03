@@ -48,6 +48,10 @@
     "claude": {
       "title": "Claude",
       "description": "API key & base URL"
+    },
+    "tools": {
+      "title": "Tools",
+      "description": "Scanners, Chrome, Docker, Strix"
     }
   },
   "claude": {
@@ -657,6 +661,75 @@
     "pr_template_filler": {
       "label": "PR Template Filler",
       "description": "AI-fills GitHub PR templates from code changes"
+    }
+  },
+  "tools": {
+    "title": "Tools",
+    "description": "External tools the pipeline uses and whether this Mac has them. Only Claude Code is required, and it ships with the app.",
+    "checking": "Checking this Mac…",
+    "checkingAgain": "Checking again…",
+    "checkFailed": "Couldn’t check the tools.",
+    "checkAgain": "Check again",
+    "optionalNote": "Every tool except Claude Code is optional. Without one, its check is skipped and the report says so — nothing breaks.",
+    "status": {
+      "bundled": "Bundled",
+      "ready": "Ready",
+      "not_running": "Not running",
+      "missing": "Not installed"
+    },
+    "areas": {
+      "bundled": {
+        "title": "Bundled with the app",
+        "when": "Nothing to install"
+      },
+      "security_gates": {
+        "title": "Security gates",
+        "when": "Before every QA review"
+      },
+      "browser_qa": {
+        "title": "Browser QA",
+        "when": "When QA tests a web app"
+      },
+      "security_qa": {
+        "title": "Security QA",
+        "when": "After QA approves, if on in Agent Settings"
+      }
+    },
+    "purpose": {
+      "claude-code": "Runs every agent.",
+      "codegraph": "Gives agents a map of your code, so they find the right files faster.",
+      "gitleaks": "Looks for secrets, such as API keys and tokens, in what a task changed.",
+      "osv-scanner": "Checks whether a task added dependencies with known vulnerabilities.",
+      "chrome": "Lets QA open your web app and test it in a real browser.",
+      "docker": "Runs the isolated sandbox that Strix attacks your app in.",
+      "strix": "Tries to exploit the code a task changed, after QA approves."
+    },
+    "skippedWithout": {
+      "code_graph": "Without it, agents search the code without the graph. Nothing else changes.",
+      "security_gates": "Until it’s installed, this scan is skipped before each QA review and the QA report says so.",
+      "browser_qa": "Until it’s installed, browser QA is skipped and the QA report says so.",
+      "security_qa": "Until it’s installed, Security QA is skipped and the report says so."
+    },
+    "fix": {
+      "startDocker": "Start Docker Desktop, then check again. Until then, Security QA is skipped and the report says so.",
+      "reinstall": "Agents can’t run without it. Reinstall Vibe Teamlead to restore it."
+    },
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn’t copy",
+    "copyFor": "Copy the command for {{tool}}",
+    "guide": "Installation guide",
+    "guideFor": "Installation guide for {{tool}}",
+    "summary": {
+      "ready": "ready",
+      "needs": "needs {{list}}",
+      "running": "{{tool}} running",
+      "securityQaOff": "(off in Agent Settings)"
+    },
+    "securityHint": {
+      "install": "To fix, install {{tool}}:",
+      "start": "To fix, start Docker Desktop:",
+      "openSettings": "Settings → Tools"
     }
   }
 }

@@ -48,6 +48,10 @@
     "claude": {
       "title": "Claude",
       "description": "Clé API et URL de base"
+    },
+    "tools": {
+      "title": "Outils",
+      "description": "Scanners, Chrome, Docker, Strix"
     }
   },
   "claude": {
@@ -657,6 +661,75 @@
     "pr_template_filler": {
       "label": "Remplisseur de modèle PR",
       "description": "Remplit intelligemment les modèles de PR GitHub à partir des changements de code"
+    }
+  },
+  "tools": {
+    "title": "Outils",
+    "description": "Les outils externes qu’utilise le pipeline, et s’ils sont présents sur ce Mac. Seul Claude Code est requis, et il est fourni avec l’app.",
+    "checking": "Vérification de ce Mac…",
+    "checkingAgain": "Nouvelle vérification…",
+    "checkFailed": "Impossible de vérifier les outils.",
+    "checkAgain": "Vérifier à nouveau",
+    "optionalNote": "Tous les outils sauf Claude Code sont facultatifs. S’il en manque un, sa vérification est ignorée et le rapport le signale — rien ne casse.",
+    "status": {
+      "bundled": "Fourni",
+      "ready": "Prêt",
+      "not_running": "Arrêté",
+      "missing": "Non installé"
+    },
+    "areas": {
+      "bundled": {
+        "title": "Fournis avec l’app",
+        "when": "Rien à installer"
+      },
+      "security_gates": {
+        "title": "Contrôles de sécurité",
+        "when": "Avant chaque revue QA"
+      },
+      "browser_qa": {
+        "title": "QA navigateur",
+        "when": "Quand la QA teste une app web"
+      },
+      "security_qa": {
+        "title": "QA sécurité",
+        "when": "Après validation QA, si activée dans Paramètres de l'agent"
+      }
+    },
+    "purpose": {
+      "claude-code": "Exécute tous les agents.",
+      "codegraph": "Donne aux agents une carte de votre code pour trouver plus vite les bons fichiers.",
+      "gitleaks": "Cherche des secrets, comme des clés d’API et des jetons, dans ce qu’une tâche a modifié.",
+      "osv-scanner": "Vérifie si une tâche a ajouté des dépendances aux vulnérabilités connues.",
+      "chrome": "Permet à la QA d’ouvrir votre app web et de la tester dans un vrai navigateur.",
+      "docker": "Fait tourner le bac à sable isolé dans lequel Strix attaque votre app.",
+      "strix": "Tente d’exploiter le code modifié par une tâche, après validation QA."
+    },
+    "skippedWithout": {
+      "code_graph": "Sans lui, les agents parcourent le code sans le graphe. Rien d’autre ne change.",
+      "security_gates": "Tant qu’il n’est pas installé, cette analyse est ignorée avant chaque revue QA et le rapport QA le signale.",
+      "browser_qa": "Tant qu’il n’est pas installé, la QA navigateur est ignorée et le rapport QA le signale.",
+      "security_qa": "Tant qu’il n’est pas installé, la QA sécurité est ignorée et le rapport le signale."
+    },
+    "fix": {
+      "startDocker": "Lancez Docker Desktop, puis vérifiez à nouveau. D’ici là, la QA sécurité est ignorée et le rapport le signale.",
+      "reinstall": "Les agents ne peuvent pas fonctionner sans lui. Réinstallez Vibe Teamlead pour le restaurer."
+    },
+    "copy": "Copier",
+    "copied": "Copié",
+    "copyFailed": "Échec de la copie",
+    "copyFor": "Copier la commande pour {{tool}}",
+    "guide": "Guide d’installation",
+    "guideFor": "Guide d’installation de {{tool}}",
+    "summary": {
+      "ready": "prêt",
+      "needs": "nécessite {{list}}",
+      "running": "{{tool}} lancé",
+      "securityQaOff": "(désactivée dans Paramètres de l'agent)"
+    },
+    "securityHint": {
+      "install": "Pour corriger, installez {{tool}} :",
+      "start": "Pour corriger, lancez Docker Desktop :",
+      "openSettings": "Paramètres → Outils"
     }
   }
 }

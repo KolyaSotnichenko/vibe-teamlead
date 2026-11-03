@@ -7,8 +7,10 @@ import * as React from 'react';
 
 import type { ToastActionElement, ToastProps } from '../components/ui/toast';
 
-const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+/** The most toasts on screen at once; the oldest goes first. */
+const TOAST_LIMIT = 4;
+/** How long a dismissed toast stays mounted (its exit). */
+const TOAST_REMOVE_DELAY = 300;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -78,7 +80,13 @@ export const reducer = (state: State, action: Action): State => {
     case 'ADD_TOAST':
       return {
         ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+        // The same message twice is one toast, shown afresh — not a stack of copies.
+        toasts: [
+          action.toast,
+          ...state.toasts.filter(
+            (t) => !(t.title === action.toast.title && t.description === action.toast.description && t.variant === action.toast.variant)
+          ),
+        ].slice(0, TOAST_LIMIT),
       };
 
     case 'UPDATE_TOAST':

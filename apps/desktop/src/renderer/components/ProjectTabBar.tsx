@@ -88,7 +88,8 @@ export function ProjectTabBar({
 
   return (
     <div className={cn(
-      'flex items-center border-b border-border bg-background',
+      // The strip is a window drag area (macOS hiddenInset title bar); tabs opt out below
+      'electron-drag flex items-center border-b border-border bg-background',
       'overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent',
       className
     )}>
@@ -118,7 +119,7 @@ export function ProjectTabBar({
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="electron-no-drag h-8 w-8"
           onClick={onAddProject}
           aria-label={t('projectTab.addProjectAriaLabel')}
         >

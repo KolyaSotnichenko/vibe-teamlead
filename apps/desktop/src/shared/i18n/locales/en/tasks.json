@@ -508,7 +508,7 @@
       "emptyTitle": "No security results yet",
       "emptyBody": "Secret and dependency scans run before every QA review. If Security QA is on in Settings, a Strix penetration test runs after QA approves.",
       "noGates": "The gates run before the first QA review.",
-      "noPentest": "Security QA (Strix) is off, or QA has not approved yet. Turn it on in Settings → General."
+      "noPentest": "Security QA (Strix) is off, or QA has not approved yet. Turn it on in Settings → Agent Settings."
     }
   },
   "board": {
@@ -723,5 +723,127 @@
       "incompleteBody": "It has a spec and a plan, but {{done}} of {{total}} subtasks are done. Resume to continue the implementation.",
       "recoverRestart": "Recover and restart"
     }
+  },
+  "briefImport": {
+    "title": "Import brief",
+    "steps": {
+      "label": "Steps",
+      "input": "Brief",
+      "analysing": "Analysing",
+      "review": "Review",
+      "done": "Done"
+    },
+    "input": {
+      "explain": "The brief analyst reads your brief together with the project's code and proposes epics and tasks. You review and edit them first — nothing is created yet.",
+      "fileHeading": "Brief document",
+      "dropHere": "Drop a spec or brief here",
+      "dropNow": "Drop to use this file",
+      "chooseFile": "Choose file",
+      "replace": "Replace",
+      "removeFile": "Remove {{name}}",
+      "unsupported": "This file type can't be read. Use one of: {{types}}",
+      "pickFailed": "The file dialog didn't open. Try again, or drop the file here.",
+      "noPath": "This file can't be read from where it was dropped. Use Choose file instead.",
+      "or": "or",
+      "textHeading": "Describe what you want built",
+      "textPlaceholder": "For example: customers can create invoices, send them by email as PDF and see which ones are unpaid…",
+      "textHint": "A few sentences are enough; the analyst fills in the rest from the code and lists what it assumed.",
+      "fileWins": "The file will be analysed. Remove it to describe the work in text instead.",
+      "analyse": "Analyse"
+    },
+    "analysing": {
+      "title": "Reading {{source}} and the project",
+      "body": "The analyst is matching the brief to the code and splitting it into tasks. Long briefs can take a few minutes.",
+      "yourDescription": "your description",
+      "elapsed": "Elapsed",
+      "logHeading": "Progress",
+      "lineCount_one": "{{count}} line",
+      "lineCount_other": "{{count}} lines",
+      "waitingForFirst": "Starting the analyst…",
+      "nothingYet": "Nothing is created until you review the proposal. Cancelling stops the analyst.",
+      "cancel": "Cancel analysis",
+      "cancelling": "Cancelling…"
+    },
+    "review": {
+      "counts": "{{tasks}} tasks · {{epics}} epics",
+      "noEpic": "Other tasks",
+      "includeEpic": "Include all tasks in {{title}}",
+      "included": "{{included}}/{{total}} included",
+      "includeTask": "Include {{key}}: {{title}}",
+      "titleLabel": "Title of {{key}}",
+      "titleRequired": "Give this task a title",
+      "complexity": "Complexity",
+      "priority": "Priority",
+      "category": "Category",
+      "expand": "Show description and criteria of {{key}}",
+      "collapse": "Hide description and criteria of {{key}}",
+      "notCreated": "Not created",
+      "after": "after",
+      "droppedSr": "(dropped, not created)",
+      "source": "From",
+      "losesDependency_one": "Will be created without its dependency on {{keys}}, which is left out.",
+      "losesDependency_other": "Will be created without its dependencies on {{keys}}, which are left out.",
+      "dependentsLose_one": "{{keys}} depends on this task and will be created without that dependency.",
+      "dependentsLose_other": "{{keys}} depend on this task and will be created without that dependency.",
+      "description": "Description",
+      "acceptanceCriteria": "Acceptance criteria",
+      "noCriteria": "No criteria yet. The spec writer drafts them if you leave this empty.",
+      "criterionLabel": "{{key}} acceptance criterion {{index}}",
+      "criterionPlaceholder": "Given …, when …, then …",
+      "removeCriterion": "Remove criterion {{index}}",
+      "addCriterion": "Add criterion",
+      "needsAttention": "Needs your answer",
+      "openQuestions_one": "{{count}} open question",
+      "openQuestions_other": "{{count}} open questions",
+      "questionsNote": "You don't have to answer here: the spec agents ask these again for each task they affect.",
+      "assumptions": "Assumptions",
+      "order": "Start order",
+      "waveCount_one": "{{count}} wave",
+      "waveCount_other": "{{count}} waves",
+      "orderHint": "Tasks in a wave can run side by side; a wave starts when the tasks it depends on are done.",
+      "wave": "Wave {{index}}",
+      "nothingSelected": "No tasks selected. Check at least one task to create it.",
+      "cycleTitle": "Circular dependency.",
+      "cycleBody": "{{keys}} wait on each other, so none of them can start. Uncheck one or change the brief.",
+      "back": "Back",
+      "queue": "Add to queue",
+      "queueOn": "Tasks start as capacity and their dependencies allow.",
+      "queueOff": "Tasks go to Planning; you start them yourself.",
+      "on": "on",
+      "off": "off",
+      "droppedCount_one": "{{count}} dependency dropped",
+      "droppedCount_other": "{{count}} dependencies dropped",
+      "fixTitles": "Every task needs a title",
+      "create_one": "Create {{count}} task",
+      "create_other": "Create {{count}} tasks",
+      "creating_one": "Creating {{count}} task…",
+      "creating_other": "Creating {{count}} tasks…"
+    },
+    "done": {
+      "label": "Created",
+      "title_one": "{{count}} task created",
+      "title_other": "{{count}} tasks created",
+      "queued": "They are in the queue and start as capacity and their dependencies allow.",
+      "planning": "They are in Planning. Start them when you're ready.",
+      "showOnBoard": "Show on board"
+    },
+    "discard": {
+      "title": "Discard this proposal?",
+      "body": "Your edits are lost and the brief has to be analysed again.",
+      "keep": "Keep reviewing",
+      "confirm": "Discard"
+    },
+    "errors": {
+      "analyseTitle": "The brief couldn't be analysed",
+      "analyseUnknown": "The analyst stopped without a proposal.",
+      "createTitle": "The tasks couldn't be created",
+      "createUnknown": "Nothing was created. Try again.",
+      "retry": "Retry"
+    },
+    "card": {
+      "after": "after {{list}}",
+      "afterAria": "Starts after {{list}}"
+    },
+    "menu": "Import brief…"
   }
 }

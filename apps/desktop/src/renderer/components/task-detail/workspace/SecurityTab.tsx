@@ -6,7 +6,31 @@
 import { useTranslation } from 'react-i18next';
 import type { TaskWorkspace, WorkspaceSecurityFinding } from '../../../../shared/types';
 import { cn } from '../../../lib/utils';
+import { TOOL_NAMES, gateSkipFix, openToolsSettings, pentestSkipFix, type SkipFix } from '../../tools-check';
 import { EmptyState, MonoTag, Notice, SectionHeader } from './workspace-ui';
+
+/** One line under a "skipped" notice: the command that fixes it, and where to check again. */
+function SkipFixHint({ fix }: { fix: SkipFix }) {
+  const { t } = useTranslation(['settings']);
+  return (
+    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-foreground">
+      <span>
+        {fix.kind === 'start' ? t('settings:tools.securityHint.start') : t('settings:tools.securityHint.install', { tool: TOOL_NAMES[fix.tool] })}
+      </span>
+      <code className="select-all font-mono text-xs text-foreground">{fix.command}</code>
+      <span aria-hidden="true" className="text-muted-foreground">
+        ·
+      </span>
+      <button
+        type="button"
+        onClick={openToolsSettings}
+        className="text-sm font-medium text-foreground underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {t('settings:tools.securityHint.openSettings')}
+      </button>
+    </p>
+  );
+}
 
 function FindingRow({ finding }: { finding: WorkspaceSecurityFinding }) {
   const { t } = useTranslation(['tasks']);
@@ -59,6 +83,7 @@ export function SecurityTab({ workspace }: { workspace: TaskWorkspace }) {
 
   const gatesBlocked = (gates?.findings.length ?? 0) > 0;
   const pentestBlocked = pentest?.status === 'findings' && pentest.findings.some((f) => f.blocking);
+  const pentestFix = pentest?.status === 'skipped' ? pentestSkipFix(pentest.reason) : null;
 
   return (
     <div className="space-y-8">
@@ -83,9 +108,15 @@ export function SecurityTab({ workspace }: { workspace: TaskWorkspace }) {
               <p className="text-sm text-muted-foreground">{t('tasks:workspace.security.gatesClear')}</p>
             )}
             {gatesBlocked && <p className="text-sm text-destructive">{t('tasks:workspace.security.gatesBlocked', { count: gates.findings.length })}</p>}
-            {gates.skipped.map((s) => (
-              <Notice key={s.gate}>{t('tasks:workspace.security.skipped', { gate: s.gate, reason: s.reason })}</Notice>
-            ))}
+            {gates.skipped.map((s) => {
+              const fix = gateSkipFix(s.gate, s.reason);
+              return (
+                <Notice key={s.gate}>
+                  {t('tasks:workspace.security.skipped', { gate: s.gate, reason: s.reason })}
+                  {fix && <SkipFixHint fix={fix} />}
+                </Notice>
+              );
+            })}
           </>
         )}
       </section>
@@ -110,7 +141,12 @@ export function SecurityTab({ workspace }: { workspace: TaskWorkspace }) {
           <Notice>{t('tasks:workspace.security.noPentest')}</Notice>
         ) : (
           <>
-            {pentest.reason && <Notice>{pentest.reason}</Notice>}
+            {pentest.reason && (
+              <Notice>
+                {pentest.reason}
+                {pentestFix && <SkipFixHint fix={pentestFix} />}
+              </Notice>
+            )}
             {pentest.findings.length > 0 ? (
               <ul className="border border-foreground">
                 {pentest.findings.map((f, i) => (

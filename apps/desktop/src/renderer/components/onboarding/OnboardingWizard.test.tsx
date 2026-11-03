@@ -40,6 +40,11 @@ vi.mock('react-i18next', () => ({
         'claude.buttons.continue': 'Continue',
         'claude.buttons.skip': 'Skip for now',
         'claude.apiKey.save': 'Save key',
+        'tools.title': 'Check your tools',
+        'tools.buttons.back': 'Back',
+        'tools.buttons.continue': 'Continue',
+        'tools.buttons.skip': 'Skip for now',
+        'steps.tools': 'Tools',
         // Common translations
         'common:actions.close': 'Close'
       };
@@ -70,6 +75,13 @@ vi.mock('../../stores/settings-store', () => ({
 // Mock electronAPI
 const mockSaveSettings = vi.fn().mockResolvedValue({ success: true });
 const mockGetClaudeCredentialStatus = vi.fn();
+const mockToolsCheck = vi.fn().mockResolvedValue({
+  success: true,
+  data: [
+    { id: 'claude-code', status: 'bundled', neededFor: 'agents', optional: false },
+    { id: 'osv-scanner', status: 'missing', installCommand: 'brew install osv-scanner', neededFor: 'security_gates', optional: true },
+  ],
+});
 
 Object.defineProperty(window, 'electronAPI', {
   value: {
@@ -77,6 +89,8 @@ Object.defineProperty(window, 'electronAPI', {
     onAppUpdateDownloaded: vi.fn(),
     getClaudeCredentialStatus: mockGetClaudeCredentialStatus,
     worktreeDetectTools: vi.fn().mockResolvedValue({ success: false }),
+    tools: { check: mockToolsCheck },
+    openExternal: vi.fn(),
   },
   writable: true
 });
@@ -205,7 +219,7 @@ describe('OnboardingWizard Integration Tests', () => {
       });
     });
 
-    it('should move on to the next step when the Claude step is skipped', async () => {
+    it('should move on to the Tools step when the Claude step is skipped', async () => {
       render(<OnboardingWizard {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
@@ -217,8 +231,51 @@ describe('OnboardingWizard Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/Connect Claude/)).not.toBeInTheDocument();
-        expect(screen.getByText('devtools.title')).toBeInTheDocument();
+        expect(screen.getByText('Check your tools')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Tools Step', () => {
+    const goToTools = async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
+      await waitFor(() => expect(screen.getByText(/Connect Claude/)).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /Skip for now/ }));
+      await waitFor(() => expect(screen.getByText('Check your tools')).toBeInTheDocument());
+    };
+
+    it('runs the tools check and lists the tools', async () => {
+      await goToTools();
+      expect(mockToolsCheck).toHaveBeenCalled();
+      await waitFor(() => expect(screen.getByText('brew install osv-scanner')).toBeInTheDocument());
+    });
+
+    it('shows the Tools step in the progress indicator as the current step', async () => {
+      await goToTools();
+      const current = screen.getByRole('listitem', { current: 'step' });
+      expect(current).toHaveTextContent('Tools');
+    });
+
+    it('allows Continue even with missing tools', async () => {
+      await goToTools();
+      await waitFor(() => expect(screen.getByText('brew install osv-scanner')).toBeInTheDocument());
+      const cont = screen.getByRole('button', { name: /^Continue$/ });
+      expect(cont).not.toBeDisabled();
+      fireEvent.click(cont);
+      await waitFor(() => expect(screen.getByText('devtools.title')).toBeInTheDocument());
+    });
+
+    it('allows skipping to the next step', async () => {
+      await goToTools();
+      fireEvent.click(screen.getByRole('button', { name: /Skip for now/ }));
+      await waitFor(() => expect(screen.getByText('devtools.title')).toBeInTheDocument());
+    });
+
+    it('goes back to the Claude step', async () => {
+      await goToTools();
+      fireEvent.click(screen.getByRole('button', { name: /^Back$/ }));
+      await waitFor(() => expect(screen.getByText(/Connect Claude/)).toBeInTheDocument());
     });
   });
 });
