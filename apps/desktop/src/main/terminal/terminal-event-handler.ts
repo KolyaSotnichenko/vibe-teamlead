@@ -14,9 +14,6 @@ import { safeSendToRenderer } from '../ipc-handlers/utils';
  */
 export interface EventHandlerCallbacks {
   onClaudeSessionId: (terminal: TerminalProcess, sessionId: string) => void;
-  onRateLimit: (terminal: TerminalProcess, data: string) => void;
-  onOAuthToken: (terminal: TerminalProcess, data: string) => void;
-  onOnboardingComplete: (terminal: TerminalProcess, data: string) => void;
   onClaudeBusyChange: (terminal: TerminalProcess, isBusy: boolean) => void;
   onClaudeExit: (terminal: TerminalProcess) => void;
 }
@@ -39,17 +36,6 @@ export function handleTerminalData(
       callbacks.onClaudeSessionId(terminal, sessionId);
     }
   }
-
-  // Check for rate limit messages
-  if (terminal.isCLIMode) {
-    callbacks.onRateLimit(terminal, data);
-  }
-
-  // Check for OAuth token
-  callbacks.onOAuthToken(terminal, data);
-
-  // Check for onboarding complete (after login, Claude shows ready state)
-  callbacks.onOnboardingComplete(terminal, data);
 
   // Detect Claude busy state changes (only when in Claude mode)
   if (terminal.isCLIMode) {
@@ -85,29 +71,10 @@ export function clearBusyState(terminalId: string): void {
 /**
  * Create event handler callbacks from TerminalManager context
  */
-export function createEventCallbacks(
-  getWindow: WindowGetter,
-  lastNotifiedRateLimitReset: Map<string, string>,
-  switchProfileCallback: (terminalId: string, profileId: string) => Promise<void>
-): EventHandlerCallbacks {
+export function createEventCallbacks(getWindow: WindowGetter): EventHandlerCallbacks {
   return {
     onClaudeSessionId: (terminal, sessionId) => {
       ClaudeIntegration.handleClaudeSessionId(terminal, sessionId, getWindow);
-    },
-    onRateLimit: (terminal, data) => {
-      ClaudeIntegration.handleRateLimit(
-        terminal,
-        data,
-        lastNotifiedRateLimitReset,
-        getWindow,
-        switchProfileCallback
-      );
-    },
-    onOAuthToken: (terminal, data) => {
-      ClaudeIntegration.handleOAuthToken(terminal, data, getWindow);
-    },
-    onOnboardingComplete: (terminal, data) => {
-      ClaudeIntegration.handleOnboardingComplete(terminal, data, getWindow);
     },
     onClaudeBusyChange: (terminal, isBusy) => {
       safeSendToRenderer(getWindow, IPC_CHANNELS.TERMINAL_CLAUDE_BUSY, terminal.id, isBusy);

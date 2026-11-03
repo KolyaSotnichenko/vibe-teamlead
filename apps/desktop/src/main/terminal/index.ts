@@ -9,8 +9,6 @@ export { TerminalManager } from './terminal-manager';
 // Types
 export type {
   TerminalProcess,
-  RateLimitEvent,
-  OAuthTokenEvent,
   SessionCaptureResult,
   TerminalOperationResult,
   WindowGetter

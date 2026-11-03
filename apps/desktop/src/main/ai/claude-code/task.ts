@@ -15,16 +15,14 @@ import { join } from 'node:path';
 
 import type { ZodSchema } from 'zod';
 
-import { resolveAuth } from '../auth/resolver';
 import type { AgentType } from '../config/agent-configs';
 import { resolveModelId } from '../config/phase-config';
 import type { ThinkingLevel } from '../config/types';
 import { getSecurityProfile } from '../security/security-profile';
 import type { ClaudeAuth, SessionEventCallback, SessionResult } from '../session/types';
-import { toClaudeAuth } from './auth';
 import { type BundledTools, resolveBundledTools } from './bundled-tools';
+import { resolveClaudeAuth } from './credential';
 import { runAgentSession } from './runner';
-import { isSubscriptionModeEnabled } from './subscription-setting';
 import type { AskUserHandler } from './user-questions';
 
 /** Read-only exploration tools */
@@ -62,8 +60,6 @@ export interface ClaudeTaskOptions<T = unknown> {
   abortSignal?: AbortSignal;
   onEvent?: SessionEventCallback;
   askUser?: AskUserHandler;
-  /** Credential profile to use (defaults to the active one) */
-  profileId?: string;
   /** Override credentials (tests, or callers that already resolved them) */
   auth?: ClaudeAuth;
   /** Override bundled tool paths (tests) */
@@ -88,16 +84,6 @@ export class ClaudeTaskError extends Error {
   }
 }
 
-/**
- * Resolve Claude credentials for utility tasks: an API key, or — when personal
- * subscription mode is on — the user's Claude subscription token.
- */
-export async function resolveClaudeAuth(profileId?: string): Promise<ClaudeAuth> {
-  const auth = await resolveAuth({ provider: 'anthropic', profileId });
-  if (!auth) return {};
-  return toClaudeAuth(auth.apiKey, auth.baseURL, isSubscriptionModeEnabled());
-}
-
 let scratchDir: string | undefined;
 function taskScratchDir(): string {
   scratchDir ??= mkdtempSync(join(tmpdir(), 'vibe-teamlead-task-'));
@@ -115,7 +101,7 @@ export async function runClaudeTask<T = unknown>(options: ClaudeTaskOptions<T>):
     {
       agentType: options.agentType ?? 'insights',
       model: resolveModelId(options.model ?? 'sonnet'),
-      auth: options.auth ?? (await resolveClaudeAuth(options.profileId)),
+      auth: options.auth ?? resolveClaudeAuth(),
       systemPrompt: options.systemPrompt,
       initialMessages: [{ role: 'user', content: options.prompt }],
       toolContext: {

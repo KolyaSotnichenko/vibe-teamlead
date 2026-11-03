@@ -16,8 +16,6 @@ export interface TerminalCreateOptions {
   cols?: number;
   rows?: number;
   projectPath?: string;
-  /** Skip injecting OAuth token into terminal environment (used for auth terminals) */
-  skipOAuthToken?: boolean;
   /** Custom environment variables to add to the terminal (merged with defaults) */
   env?: Record<string, string>;
 }
@@ -84,14 +82,6 @@ export interface RateLimitInfo {
   terminalId: string;
   resetTime: string;  // e.g., "Dec 17 at 6am (Europe/Oslo)"
   detectedAt: Date;
-  /** ID of the profile that hit the limit */
-  profileId?: string;
-  /** ID of a suggested alternative profile to switch to */
-  suggestedProfileId?: string;
-  /** Name of the suggested alternative profile */
-  suggestedProfileName?: string;
-  /** Whether auto-switch on rate limit is enabled */
-  autoSwitchEnabled?: boolean;
 }
 
 /**
@@ -109,30 +99,10 @@ export interface SDKRateLimitInfo {
   resetTime?: string;
   /** Type of limit: 'session' (5-hour) or 'weekly' (7-day) */
   limitType?: 'session' | 'weekly';
-  /** Profile that hit the limit */
-  profileId: string;
-  /** Profile name for display */
-  profileName?: string;
-  /** Suggested alternative profile */
-  suggestedProfile?: {
-    id: string;
-    name: string;
-  };
   /** When detected */
   detectedAt: Date;
   /** Original error message */
   originalError?: string;
-
-  // Auto-swap information (NEW)
-  /** Whether this rate limit was automatically handled via account swap */
-  wasAutoSwapped?: boolean;
-  /** Profile that was swapped to (if auto-swapped) */
-  swappedToProfile?: {
-    id: string;
-    name: string;
-  };
-  /** Why the swap occurred: 'proactive' (before limit) or 'reactive' (after limit hit) */
-  swapReason?: 'proactive' | 'reactive';
 }
 
 /**
@@ -141,10 +111,6 @@ export interface SDKRateLimitInfo {
  * indicating the token needs to be refreshed via re-authentication.
  */
 export interface AuthFailureInfo {
-  /** The profile ID that failed to authenticate */
-  profileId: string;
-  /** The profile name for display */
-  profileName?: string;
   /** Type of auth failure */
   failureType: 'missing' | 'invalid' | 'expired' | 'unknown';
   /** User-friendly message describing the failure */
@@ -164,10 +130,6 @@ export interface AuthFailureInfo {
  * exceeded usage limits, or has a billing configuration issue.
  */
 export interface BillingFailureInfo {
-  /** The profile ID that has billing issues */
-  profileId: string;
-  /** The profile name for display */
-  profileName?: string;
   /** Type of billing failure */
   failureType: 'insufficient_credits' | 'payment_required' | 'subscription_inactive' | 'unknown';
   /** User-friendly message describing the failure */
@@ -178,20 +140,6 @@ export interface BillingFailureInfo {
   taskId?: string;
   /** When detected (Note: serialized as ISO string over IPC) */
   detectedAt: Date;
-}
-
-/**
- * Request to retry a rate-limited operation with a different profile
- */
-export interface RetryWithProfileRequest {
-  /** Source of the original operation */
-  source: SDKRateLimitInfo['source'];
-  /** Project ID */
-  projectId: string;
-  /** Task ID if applicable */
-  taskId?: string;
-  /** Profile ID to retry with */
-  profileId: string;
 }
 
 // ============================================================================

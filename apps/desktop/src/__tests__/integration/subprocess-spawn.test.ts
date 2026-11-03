@@ -54,19 +54,17 @@ vi.mock('electron', () => ({
 }));
 
 // =============================================================================
-// Mock auth / model / provider helpers
+// Mock auth / model helpers
 // =============================================================================
 
-vi.mock('../../main/ai/auth/resolver', () => ({
-  resolveAuth: vi.fn().mockResolvedValue({ apiKey: 'mock-api-key', baseURL: undefined }),
+vi.mock('../../main/ai/claude-code/credential', () => ({
+  resolveClaudeCredential: vi.fn(() => ({ key: 'mock-api-key', baseURL: undefined, source: 'stored' })),
+  getClaudeCredentialEnv: vi.fn(() => ({})),
 }));
 
 vi.mock('../../main/ai/config/phase-config', () => ({
   resolveModelId: vi.fn((model: string) => `claude-${model}-20241022`),
-}));
-
-vi.mock('../../main/ai/providers/factory', () => ({
-  detectProviderFromModel: vi.fn(() => 'anthropic'),
+  isClaudeModel: vi.fn(() => true),
 }));
 
 // =============================================================================
@@ -92,47 +90,6 @@ vi.mock('../../main/project-store', () => ({
 }));
 
 // =============================================================================
-// Mock claude-profile-manager
-// =============================================================================
-
-const mockProfile = {
-  id: 'default',
-  name: 'Default',
-  isDefault: true,
-  oauthToken: 'mock-encrypted-token',
-  configDir: undefined,
-};
-
-const mockProfileManager = {
-  hasValidAuth: vi.fn(() => true),
-  getActiveProfile: vi.fn(() => mockProfile),
-  getProfile: vi.fn((_id: string) => mockProfile),
-  getActiveProfileToken: vi.fn(() => 'mock-decrypted-token'),
-  getProfileToken: vi.fn((_id: string) => 'mock-decrypted-token'),
-  getActiveProfileEnv: vi.fn(() => ({})),
-  getProfileEnv: vi.fn((_id: string) => ({})),
-  setActiveProfile: vi.fn(),
-  getAutoSwitchSettings: vi.fn(() => ({ enabled: false, autoSwitchOnRateLimit: false, proactiveSwapEnabled: false, autoSwitchOnAuthFailure: false })),
-  getBestAvailableProfile: vi.fn(() => null),
-};
-
-vi.mock('../../main/claude-profile-manager', () => ({
-  getClaudeProfileManager: vi.fn(() => mockProfileManager),
-  initializeClaudeProfileManager: vi.fn(() => Promise.resolve(mockProfileManager)),
-}));
-
-// =============================================================================
-// Mock OperationRegistry
-// =============================================================================
-
-vi.mock('../../main/claude-profile/operation-registry', () => ({
-  getOperationRegistry: vi.fn(() => ({
-    registerOperation: vi.fn(),
-    unregisterOperation: vi.fn(),
-  })),
-}));
-
-// =============================================================================
 // Mock misc dependencies
 // =============================================================================
 
@@ -141,14 +98,8 @@ vi.mock('../../main/ipc-handlers/task/plan-file-utils', () => ({
 }));
 
 vi.mock('../../main/rate-limit-detector', () => ({
-  getBestAvailableProfileEnv: vi.fn(() => ({ env: {}, profileId: 'default', profileName: 'Default', wasSwapped: false })),
-  getProfileEnv: vi.fn(() => ({})),
   detectRateLimit: vi.fn(() => ({ isRateLimited: false })),
   detectAuthFailure: vi.fn(() => ({ isAuthFailure: false })),
-}));
-
-vi.mock('../../main/services/profile', () => ({
-  getAPIProfileEnv: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('../../main/env-utils', () => ({
@@ -174,7 +125,6 @@ vi.mock('../../main/settings-utils', () => ({
 }));
 
 vi.mock('../../main/agent/env-utils', () => ({
-  getOAuthModeClearVars: vi.fn(() => ({})),
   normalizeEnvPathKey: vi.fn((k: string) => k),
   mergePythonEnvPath: vi.fn(),
 }));

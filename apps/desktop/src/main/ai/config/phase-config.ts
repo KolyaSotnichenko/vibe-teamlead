@@ -88,7 +88,7 @@ const ENV_VAR_MAP: Partial<Record<ModelShorthand, string>> = {
  * If the model is already a full ID, return it unchanged.
  *
  * Priority:
- * 1. Environment variable override (from API Profile)
+ * 1. Environment variable override (ANTHROPIC_DEFAULT_*_MODEL, e.g. for gateways)
  * 2. Hardcoded MODEL_ID_MAP
  * 3. Pass through unchanged (assume full model ID)
  */
@@ -141,8 +141,6 @@ export interface TaskMetadataConfig {
   model?: string;
   thinkingLevel?: string;
   fastMode?: boolean;
-  /** Per-phase provider override for cross-provider (Custom) profile */
-  phaseProviders?: Partial<Record<Phase, string>>;
 }
 
 /**
@@ -166,6 +164,15 @@ export async function loadTaskMetadata(
 // ============================================
 
 /**
+ * Whether a configured model value is a Claude model: a shorthand
+ * (haiku, sonnet, opus...) or a full Claude model ID. Older settings and
+ * tasks may still name models of the removed providers.
+ */
+export function isClaudeModel(model: string | undefined): model is string {
+  return !!model && (model in MODEL_ID_MAP || model.startsWith('claude-'));
+}
+
+/**
  * Get the resolved model ID for a specific execution phase.
  *
  * Priority:
@@ -187,10 +194,10 @@ export async function getPhaseModel(
 
   if (metadata) {
     if (metadata.isAutoProfile && metadata.phaseModels) {
-      const model = metadata.phaseModels[phase] ?? DEFAULT_PHASE_MODELS[phase];
-      return resolveModelId(model);
+      const model = metadata.phaseModels[phase];
+      return resolveModelId(isClaudeModel(model) ? model : DEFAULT_PHASE_MODELS[phase]);
     }
-    if (metadata.model) {
+    if (isClaudeModel(metadata.model)) {
       return resolveModelId(metadata.model);
     }
   }

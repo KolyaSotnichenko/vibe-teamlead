@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { ClaudeTaskError, runClaudeTask } from './ai/claude-code/task';
 import type { ThinkingLevel } from './ai/config/types';
-import { getActiveProviderFeatureSettings } from './ipc-handlers/feature-settings-helper';
+import { getFeatureSettings } from './ipc-handlers/feature-settings-helper';
 
 /**
  * Debug logging - only logs when DEBUG=true or in development mode
@@ -50,7 +50,7 @@ export class TerminalNameGenerator extends EventEmitter {
 
     try {
       // Read the user's configured naming model for their active provider
-      const namingSettings = getActiveProviderFeatureSettings('naming');
+      const namingSettings = getFeatureSettings('naming');
 
       const result = await runClaudeTask({
         systemPrompt: SYSTEM_PROMPT,

@@ -18,7 +18,6 @@ import { persistPlanLastEventSync, getPlanPath, persistPlanPhaseSync, persistPla
 import { findTaskWorktree } from "../worktree-paths";
 import { findTaskAndProject } from "./task/shared";
 import { safeSendToRenderer } from "./utils";
-import { getClaudeProfileManager } from "../claude-profile-manager";
 import { taskStateManager } from "../task-state-manager";
 import { answerPendingQuestion, listPendingQuestions } from "../agent/agent-questions";
 import { isMacOS } from "../platform";
@@ -73,24 +72,15 @@ export function registerAgenteventsHandlers(
 
   // Handle auth failure events (401 errors requiring re-authentication)
   agentManager.on("auth-failure", (taskId: string, authFailure: {
-    profileId?: string;
     failureType?: 'missing' | 'invalid' | 'expired' | 'unknown';
     message?: string;
     originalError?: string;
   }) => {
     console.warn(`[AgentEvents] Auth failure detected for task ${taskId}:`, authFailure);
 
-    // Get profile name for display
-    const profileManager = getClaudeProfileManager();
-    const profile = authFailure.profileId
-      ? profileManager.getProfile(authFailure.profileId)
-      : profileManager.getActiveProfile();
-
     const authFailureInfo: AuthFailureInfo = {
-      profileId: authFailure.profileId || profile?.id || 'unknown',
-      profileName: profile?.name,
       failureType: authFailure.failureType || 'unknown',
-      message: authFailure.message || 'Authentication failed. Please re-authenticate.',
+      message: authFailure.message || 'Claude authentication failed. Check your API key in Settings > Claude.',
       originalError: authFailure.originalError,
       taskId,
       detectedAt: new Date(),

@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 
 import { app } from 'electron';
 
-import { decryptToken, encryptToken } from '../claude-profile/token-encryption';
+import { decryptToken, encryptToken } from '../utils/token-encryption';
 import { setGitHubTokenProvider } from '../env-utils';
 import { type GitHubTokens, refreshTokens } from './device-flow';
 

@@ -19,14 +19,14 @@ import type {
 import { projectStore } from "../project-store";
 import { insightsService } from "../insights-service";
 import { safeSendToRenderer } from "./utils";
-import { getActiveProviderFeatureSettings } from "./feature-settings-helper";
+import { getFeatureSettings } from "./feature-settings-helper";
 import type { ThinkingLevel } from "../../shared/types/settings";
 
 /**
- * Read insights feature settings using per-provider resolution
+ * Read insights feature settings (Claude model + thinking level)
  */
 function getInsightsFeatureSettings(): InsightsModelConfig {
-  const { model, thinkingLevel } = getActiveProviderFeatureSettings('insights');
+  const { model, thinkingLevel } = getFeatureSettings('insights');
   return {
     profileId: "balanced",
     model,

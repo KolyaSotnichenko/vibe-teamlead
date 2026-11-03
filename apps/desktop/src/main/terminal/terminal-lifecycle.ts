@@ -45,9 +45,9 @@ export async function createTerminal(
   getWindow: WindowGetter,
   dataHandler: DataHandlerFn
 ): Promise<TerminalOperationResult> {
-  const { id, cwd, cols = 80, rows = 24, projectPath, skipOAuthToken, env: customEnv } = options;
+  const { id, cwd, cols = 80, rows = 24, projectPath, env: customEnv } = options;
 
-  debugLog('[TerminalLifecycle] Creating terminal:', { id, cwd, cols, rows, projectPath, skipOAuthToken, hasCustomEnv: !!customEnv });
+  debugLog('[TerminalLifecycle] Creating terminal:', { id, cwd, cols, rows, projectPath, hasCustomEnv: !!customEnv });
 
   if (terminals.has(id)) {
     debugLog('[TerminalLifecycle] Terminal already exists, returning success:', id);
@@ -62,9 +62,6 @@ export async function createTerminal(
   SessionHandler.clearPendingDelete(id);
 
   try {
-    // For auth terminals, don't inject existing OAuth token - we want a fresh login
-    const profileEnv = skipOAuthToken ? {} : PtyManager.getActiveProfileEnv();
-
     // Read env vars from Claude Code CLI settings files (.claude/settings.json hierarchy)
     const claudeCodeEnv = getClaudeCodeEnv(projectPath);
     if (Object.keys(claudeCodeEnv).length > 0) {
@@ -73,18 +70,8 @@ export async function createTerminal(
 
     // Merge environment variables (lowest to highest precedence):
     // 1. Claude Code settings env (from settings.json hierarchy)
-    // 2. Profile env (CLAUDE_CONFIG_DIR, CLAUDE_CODE_OAUTH_TOKEN)
-    // 3. Custom env from TerminalCreateOptions
-    const mergedEnv = { ...claudeCodeEnv, ...profileEnv, ...(customEnv || {}) };
-
-    if (mergedEnv.CLAUDE_CODE_OAUTH_TOKEN) {
-      debugLog('[TerminalLifecycle] Injecting OAuth token from active profile');
-    } else if (skipOAuthToken) {
-      debugLog('[TerminalLifecycle] Skipping OAuth token injection (auth terminal)');
-    }
-    if (mergedEnv.CLAUDE_CONFIG_DIR) {
-      debugLog('[TerminalLifecycle] Setting CLAUDE_CONFIG_DIR:', mergedEnv.CLAUDE_CONFIG_DIR);
-    }
+    // 2. Custom env from TerminalCreateOptions
+    const mergedEnv = { ...claudeCodeEnv, ...(customEnv || {}) };
 
     // Validate cwd exists - if the directory doesn't exist (e.g., worktree removed),
     // fall back to project path to prevent shell exit with code 1
@@ -276,8 +263,7 @@ export async function restoreTerminal(
  */
 export async function destroyTerminal(
   id: string,
-  terminals: Map<string, TerminalProcess>,
-  onCleanup: (terminalId: string) => void
+  terminals: Map<string, TerminalProcess>
 ): Promise<TerminalOperationResult> {
   const terminal = terminals.get(id);
   if (!terminal) {
@@ -288,7 +274,6 @@ export async function destroyTerminal(
     SessionHandler.removePersistedSession(terminal);
     // Release any claimed session ID for this terminal
     SessionHandler.releaseSessionId(id);
-    onCleanup(id);
 
     // Delete from map BEFORE killing to prevent race with onExit handler
     terminals.delete(id);

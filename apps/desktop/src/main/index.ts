@@ -55,21 +55,17 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
 import { TerminalManager } from './terminal-manager';
-import { getUsageMonitor } from './claude-profile/usage-monitor';
-import { initializeUsageMonitorForwarding } from './ipc-handlers/terminal-handlers';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
-import { DEFAULT_APP_SETTINGS, IPC_CHANNELS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
+import { DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { readSettingsFile } from './settings-utils';
-import { registerSettingsAccessor } from './ai/auth/resolver';
+import { migrateLegacyClaudeCredential } from './ai/claude-code/credential-migration';
 import { appLog, setupErrorLogging } from './app-logger';
 import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
-import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
-import { isProfileAuthenticated } from './claude-profile/profile-utils';
 import { isMacOS, isWindows } from './platform';
 import { ptyDaemonClient } from './terminal/pty-daemon-client';
-import type { AppSettings, AuthFailureInfo } from '../shared/types';
+import type { AppSettings } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Migrate userData from old app name (auto-claude-ui → aperant)
@@ -113,14 +109,6 @@ setupErrorLogging();
 
 // Initialize Sentry for error tracking (respects user's sentryEnabled setting)
 initSentryMain();
-
-// Wire up settings accessor for the AI auth resolver.
-// This lets resolveAuth() / buildDefaultQueueConfig() read provider accounts
-// and priority order from app settings without a circular dependency on the settings store.
-registerSettingsAccessor((key: string) => {
-  const settings = readSettingsFile();
-  return settings?.[key] as string | undefined;
-});
 
 /**
  * Load app settings synchronously (for use during startup).
@@ -537,6 +525,13 @@ app.whenReady().then(() => {
   // Setup IPC handlers
   setupIpcHandlers(agentManager, terminalManager, () => mainWindow);
 
+  // Move a Claude key from the removed multi-account settings (one-time)
+  try {
+    migrateLegacyClaudeCredential();
+  } catch (error) {
+    console.warn('[main] Failed to migrate the legacy Claude credential:', error);
+  }
+
   // Create window
   createWindow();
 
@@ -548,76 +543,6 @@ app.whenReady().then(() => {
       console.warn('[main] Failed to pre-warm CLI cache:', error);
     });
   });
-
-  // Initialize Claude profile manager, then start usage monitor
-  // We do this sequentially to ensure profile data (including auto-switch settings)
-  // is loaded BEFORE the usage monitor attempts to read settings.
-  // This prevents the "UsageMonitor disabled" error due to race condition.
-  initializeClaudeProfileManager()
-    .then(() => {
-      // Only start monitoring if window is still available (app not quitting)
-      if (mainWindow) {
-        // Setup event forwarding from usage monitor to renderer
-        initializeUsageMonitorForwarding(mainWindow);
-
-        // Start the usage monitor (uses unified OperationRegistry for proactive restart)
-        const usageMonitor = getUsageMonitor();
-        usageMonitor.start();
-        console.warn('[main] Usage monitor initialized and started (after profile load)');
-
-        // Check for migrated profiles that need re-authentication
-        // These profiles were moved from shared ~/.claude to isolated directories
-        // and need new credentials since they now use a different keychain entry
-        const profileManager = getClaudeProfileManager();
-        const migratedProfileIds = profileManager.getMigratedProfileIds();
-        const activeProfile = profileManager.getActiveProfile();
-
-        if (migratedProfileIds.length > 0) {
-          console.warn('[main] Found migrated profiles that need re-authentication:', migratedProfileIds);
-
-          // Check ALL migrated profiles for valid credentials, not just the active one
-          // This prevents stale migrated flags from triggering unnecessary re-auth prompts
-          // when the user switches to a different profile later
-          for (const profileId of migratedProfileIds) {
-            const profile = profileManager.getProfile(profileId);
-            if (profile && isProfileAuthenticated(profile)) {
-              // Credentials are valid - clear the migrated flag
-              console.warn('[main] Migrated profile has valid credentials via file fallback, clearing migrated flag:', profile.name);
-              profileManager.clearMigratedProfile(profileId);
-            }
-          }
-
-          // Re-check if the active profile still needs re-auth after clearing valid ones
-          const remainingMigratedIds = profileManager.getMigratedProfileIds();
-          if (remainingMigratedIds.includes(activeProfile.id)) {
-            // Active profile still needs re-auth - show the modal
-            mainWindow.webContents.once('did-finish-load', () => {
-              // Small delay to ensure stores are initialized
-              setTimeout(() => {
-                const authFailureInfo: AuthFailureInfo = {
-                  profileId: activeProfile.id,
-                  profileName: activeProfile.name,
-                  failureType: 'missing',
-                  message: `Profile "${activeProfile.name}" was migrated to an isolated directory and needs re-authentication.`,
-                  detectedAt: new Date()
-                };
-                console.warn('[main] Sending auth failure for migrated active profile:', activeProfile.name);
-                mainWindow?.webContents.send(IPC_CHANNELS.CLAUDE_AUTH_FAILURE, authFailureInfo);
-              }, 1000);
-            });
-          }
-        }
-      }
-    })
-    .catch((error) => {
-      console.warn('[main] Failed to initialize profile manager:', error);
-      // Fallback: try starting usage monitor anyway (might use defaults)
-      if (mainWindow) {
-        initializeUsageMonitorForwarding(mainWindow);
-        const usageMonitor = getUsageMonitor();
-        usageMonitor.start();
-      }
-    });
 
   if (mainWindow) {
     // Log debug mode status
@@ -681,10 +606,6 @@ app.on('before-quit', (event) => {
 
   // Stop synchronous services immediately
   stopPeriodicUpdates();
-
-  const usageMonitor = getUsageMonitor();
-  usageMonitor.stop();
-  console.warn('[main] Usage monitor stopped');
 
   // Perform async cleanup, then allow quit to proceed
   (async () => {

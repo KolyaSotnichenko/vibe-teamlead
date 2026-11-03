@@ -162,7 +162,7 @@ import type { ModelType } from './task';
 // Model configuration for insights sessions
 export interface InsightsModelConfig {
   profileId: string;           // 'complex' | 'balanced' | 'quick' | 'custom'
-  model: ModelType;            // any model ID (e.g. 'sonnet', 'opus', or provider-specific model string)
+  model: ModelType;            // Claude model shorthand or full Claude model ID
   thinkingLevel: ThinkingLevel;
 }
 

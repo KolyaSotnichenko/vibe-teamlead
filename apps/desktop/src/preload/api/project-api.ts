@@ -106,18 +106,6 @@ export interface ProjectAPI {
     version?: string;
   }>>;
   installOllama: () => Promise<IPCResult<{ command: string }>>;
-  listOllamaModels: (baseUrl?: string) => Promise<IPCResult<{
-    models: Array<{
-      name: string;
-      size_bytes: number;
-      size_gb: number;
-      modified_at: string;
-      is_embedding: boolean;
-      embedding_dim?: number | null;
-      description?: string;
-    }>;
-    count: number;
-  }>>;
   listOllamaEmbeddingModels: (baseUrl?: string) => Promise<IPCResult<{
     embedding_models: Array<{
       name: string;
@@ -276,9 +264,6 @@ export const createProjectAPI = (): ProjectAPI => ({
 
   installOllama: () =>
     ipcRenderer.invoke(IPC_CHANNELS.OLLAMA_INSTALL),
-
-  listOllamaModels: (baseUrl?: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.OLLAMA_LIST_MODELS, baseUrl),
 
   listOllamaEmbeddingModels: (baseUrl?: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.OLLAMA_LIST_EMBEDDING_MODELS, baseUrl),

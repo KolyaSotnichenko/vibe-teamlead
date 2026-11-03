@@ -83,10 +83,6 @@ export interface SpecCreationMetadata {
     coding: string;
     qa: string;
   };
-  /** Per-phase provider preference (e.g. { spec: 'openai', coding: 'anthropic' }) */
-  phaseProviders?: Record<string, string>;
-  /** Task-level provider preference (e.g. 'openai', 'ollama') */
-  provider?: string;
   // Non-auto profile - single model and thinking level
   model?: string;
   thinkingLevel?: string;

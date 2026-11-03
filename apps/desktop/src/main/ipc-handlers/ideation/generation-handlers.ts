@@ -15,13 +15,13 @@ import { projectStore } from "../../project-store";
 import type { AgentManager } from "../../agent";
 import { debugLog } from "../../../shared/utils/debug-logger";
 import { safeSendToRenderer } from "../utils";
-import { getActiveProviderFeatureSettings } from "../feature-settings-helper";
+import { getFeatureSettings } from "../feature-settings-helper";
 
 /**
- * Read ideation feature settings using per-provider resolution
+ * Read ideation feature settings (Claude model + thinking level)
  */
 function getIdeationFeatureSettings(): { model?: string; thinkingLevel?: string } {
-  return getActiveProviderFeatureSettings('ideation');
+  return getFeatureSettings('ideation');
 }
 
 /**

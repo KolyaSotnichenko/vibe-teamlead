@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import * as os from 'os';
 import type { GitCommit } from '../../shared/types';
-import { getBestAvailableProfileEnv } from '../rate-limit-detector';
+import { getClaudeCredentialEnv } from '../ai/claude-code/credential';
 
 import { getAugmentedEnv } from '../env-utils';
 import { isWindows, requiresShell } from '../platform';
@@ -232,13 +232,9 @@ except Exception as e:
     // even when app is launched from Finder/Dock
     const augmentedEnv = getAugmentedEnv();
 
-    // Get best available Claude profile environment (automatically handles rate limits)
-    const profileResult = getBestAvailableProfileEnv();
-    const profileEnv = profileResult.env;
-
     const spawnEnv: Record<string, string> = {
       ...augmentedEnv,
-      ...profileEnv,
+      ...getClaudeCredentialEnv(),
       // Ensure critical env vars are set for claude CLI
       ...(isWindows() ? { USERPROFILE: homeDir } : { HOME: homeDir }),
       USER: process.env.USER || process.env.USERNAME || 'user',

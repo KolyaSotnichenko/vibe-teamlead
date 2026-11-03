@@ -191,34 +191,11 @@ function readJsonFile(filePath: string): ClaudeCodeSettings | undefined {
  * Resolve the user-global Claude config directory.
  *
  * Priority:
- * 1. Active Claude profile's configDir (from ClaudeProfileManager)
- * 2. CLAUDE_CONFIG_DIR environment variable
- * 3. Default: ~/.claude
+ * 1. CLAUDE_CONFIG_DIR environment variable
+ * 2. Default: ~/.claude
  */
 function getUserConfigDir(): string {
-  // Try to get configDir from the active Claude profile.
-  // We use a lazy import to avoid circular dependencies and to handle
-  // the case where ClaudeProfileManager hasn't been initialized yet.
-  try {
-    // Dynamic require to avoid circular dependency at module load time
-    const { getClaudeProfileManager } = require('../claude-profile-manager');
-    const manager = getClaudeProfileManager();
-    if (manager.isInitialized()) {
-      const activeProfile = manager.getActiveProfile();
-      if (activeProfile?.configDir) {
-        const configDir = activeProfile.configDir.startsWith('~/')
-          || activeProfile.configDir === '~'
-          ? activeProfile.configDir.replace(/^~/, homedir())
-          : activeProfile.configDir;
-        debugLog(`${LOG_PREFIX} Using active profile configDir:`, configDir);
-        return configDir;
-      }
-    }
-  } catch {
-    debugLog(`${LOG_PREFIX} ClaudeProfileManager not available, using fallback`);
-  }
-
-  // Fall back to CLAUDE_CONFIG_DIR env var
+  // CLAUDE_CONFIG_DIR env var
   const envConfigDir = process.env.CLAUDE_CONFIG_DIR;
   if (envConfigDir) {
     debugLog(`${LOG_PREFIX} Using CLAUDE_CONFIG_DIR:`, envConfigDir);

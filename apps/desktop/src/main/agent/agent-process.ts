@@ -3,7 +3,6 @@ import { addPendingQuestion, dropTaskQuestions } from './agent-questions';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
-import { app } from 'electron';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -16,15 +15,12 @@ import type { AgentExecutorConfig } from '../ai/agent/types';
 import { WorkerBridge } from '../ai/agent/worker-bridge';
 import type { CompletablePhase } from '../../shared/constants/phase-protocol';
 import { parseTaskEvent } from './task-event-parser';
-import { detectRateLimit, createSDKRateLimitInfo, getBestAvailableProfileEnv, detectAuthFailure } from '../rate-limit-detector';
-import { getAPIProfileEnv } from '../services/profile';
+import { detectRateLimit, createSDKRateLimitInfo, detectAuthFailure } from '../rate-limit-detector';
+import { getClaudeCredentialEnv } from '../ai/claude-code/credential';
 import { projectStore } from '../project-store';
-import { getClaudeProfileManager } from '../claude-profile-manager';
-import { getOAuthModeClearVars } from './env-utils';
 import { getAugmentedEnv } from '../env-utils';
 import { getToolInfo, getClaudeCliPathForSdk } from '../cli-tool-manager';
 import { killProcessGracefully, isWindows } from '../platform';
-import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Type for supported CLI tools
@@ -165,31 +161,8 @@ export class AgentProcessManager {
   private setupProcessEnvironment(
     extraEnv: Record<string, string>
   ): NodeJS.ProcessEnv {
-    // Get best available Claude profile environment (automatically handles rate limits)
-    const profileResult = getBestAvailableProfileEnv();
-    const profileEnv = profileResult.env;
-
-    debugLog('[AgentProcess:setupEnv] Profile result:', {
-      profileId: profileResult.profileId,
-      hasOAuthToken: !!profileEnv.CLAUDE_CODE_OAUTH_TOKEN,
-      hasApiKey: !!profileEnv.ANTHROPIC_API_KEY,
-      hasConfigDir: !!profileEnv.CLAUDE_CONFIG_DIR,
-      configDir: profileEnv.CLAUDE_CONFIG_DIR || '(not set)',
-      oauthTokenPrefix: profileEnv.CLAUDE_CODE_OAUTH_TOKEN?.substring(0, 8) || '(not set)',
-      apiKeyPrefix: profileEnv.ANTHROPIC_API_KEY?.substring(0, 8) || '(not set)',
-    });
-
-    // Warn if profile lacks CLAUDE_CONFIG_DIR - this means the profile has no configDir
-    // and subscription metadata may not propagate correctly to the agent subprocess
-    if (!profileEnv.CLAUDE_CONFIG_DIR) {
-      console.warn('[AgentProcess:setupEnv] WARNING: Profile env lacks CLAUDE_CONFIG_DIR - profile may not have a configDir set. Subscription metadata may not reach agent subprocess.');
-    }
-
-    debugLog('[AgentProcess:setupEnv] extraEnv auth keys:', {
-      hasOAuthToken: !!extraEnv.CLAUDE_CODE_OAUTH_TOKEN,
-      hasApiKey: !!extraEnv.ANTHROPIC_API_KEY,
-      hasConfigDir: !!extraEnv.CLAUDE_CONFIG_DIR,
-    });
+    // The app's Claude credential (API key, or subscription token in personal mode)
+    const credentialEnv = getClaudeCredentialEnv();
 
     // Use getAugmentedEnv() to ensure common tool paths (dotnet, homebrew, etc.)
     // are available even when app is launched from Finder/Dock
@@ -218,8 +191,7 @@ export class AgentProcessManager {
     const ghCliEnv = this.detectAndSetCliPath('gh');
     const glabCliEnv = this.detectAndSetCliPath('glab');
 
-    // Profile env is spread last to ensure CLAUDE_CONFIG_DIR and auth vars
-    // from the active profile always win over extraEnv or augmentedEnv.
+    // The credential is spread last so it always wins over extraEnv or augmentedEnv.
     const mergedEnv = {
       ...augmentedEnv,
       ...gitBashEnv,
@@ -227,32 +199,11 @@ export class AgentProcessManager {
       ...ghCliEnv,
       ...glabCliEnv,
       ...extraEnv,
-      ...profileEnv,
+      ...credentialEnv,
       PYTHONUNBUFFERED: '1',
       PYTHONIOENCODING: 'utf-8',
       PYTHONUTF8: '1'
     } as NodeJS.ProcessEnv;
-
-    // When the active profile provides CLAUDE_CONFIG_DIR, clear CLAUDE_CODE_OAUTH_TOKEN
-    // from the spawn environment. CLAUDE_CONFIG_DIR lets Claude Code resolve its own
-    // OAuth tokens from the config directory, making an explicit token unnecessary.
-    // This matches the terminal pattern in cli-integration-handler.ts where
-    // configDir is preferred over direct token injection.
-    // We check profileEnv specifically (not mergedEnv) to avoid clearing the token
-    // when CLAUDE_CONFIG_DIR comes from the shell environment rather than the profile.
-    if (profileEnv.CLAUDE_CONFIG_DIR) {
-      mergedEnv.CLAUDE_CODE_OAUTH_TOKEN = '';
-      debugLog('[AgentProcess:setupEnv] Profile provides CLAUDE_CONFIG_DIR, cleared CLAUDE_CODE_OAUTH_TOKEN from spawn env');
-    }
-
-    debugLog('[AgentProcess:setupEnv] Final merged env auth state:', {
-      hasOAuthToken: !!mergedEnv.CLAUDE_CODE_OAUTH_TOKEN,
-      hasApiKey: !!mergedEnv.ANTHROPIC_API_KEY,
-      hasConfigDir: !!mergedEnv.CLAUDE_CONFIG_DIR,
-      configDir: mergedEnv.CLAUDE_CONFIG_DIR || '(not set)',
-      oauthTokenPrefix: mergedEnv.CLAUDE_CODE_OAUTH_TOKEN?.substring(0, 8) || '(not set)',
-      apiKeyPrefix: mergedEnv.ANTHROPIC_API_KEY?.substring(0, 8) || '(not set)',
-    });
 
     return mergedEnv;
   }
@@ -268,80 +219,18 @@ export class AgentProcessManager {
     console.log('[AgentProcess] Rate limit detection result:', {
       isRateLimited: rateLimitDetection.isRateLimited,
       resetTime: rateLimitDetection.resetTime,
-      limitType: rateLimitDetection.limitType,
-      profileId: rateLimitDetection.profileId,
-      suggestedProfile: rateLimitDetection.suggestedProfile
+      limitType: rateLimitDetection.limitType
     });
 
     if (rateLimitDetection.isRateLimited) {
-      const wasHandled = this.handleRateLimitWithAutoSwap(
-        taskId,
-        rateLimitDetection,
-        processType
-      );
-      if (wasHandled) return true;
-
       const source = processType === 'spec-creation' ? 'roadmap' : 'task';
       const rateLimitInfo = createSDKRateLimitInfo(source, rateLimitDetection, { taskId });
-      console.log('[AgentProcess] Emitting sdk-rate-limit event (manual):', rateLimitInfo);
+      console.log('[AgentProcess] Emitting sdk-rate-limit event:', rateLimitInfo);
       this.emitter.emit('sdk-rate-limit', rateLimitInfo);
       return true;
     }
 
     return this.handleAuthFailure(taskId, allOutput);
-  }
-
-  private handleRateLimitWithAutoSwap(
-    taskId: string,
-    rateLimitDetection: ReturnType<typeof detectRateLimit>,
-    processType: ProcessType
-  ): boolean {
-    const profileManager = getClaudeProfileManager();
-    const autoSwitchSettings = profileManager.getAutoSwitchSettings();
-
-    console.log('[AgentProcess] Auto-switch settings:', {
-      enabled: autoSwitchSettings.enabled,
-      autoSwitchOnRateLimit: autoSwitchSettings.autoSwitchOnRateLimit,
-      proactiveSwapEnabled: autoSwitchSettings.proactiveSwapEnabled
-    });
-
-    if (!autoSwitchSettings.enabled || !autoSwitchSettings.autoSwitchOnRateLimit) {
-      console.log('[AgentProcess] Auto-switch disabled - showing manual modal');
-      return false;
-    }
-
-    const currentProfileId = rateLimitDetection.profileId;
-    const bestProfile = profileManager.getBestAvailableProfile(currentProfileId);
-
-    console.log('[AgentProcess] Best available profile:', bestProfile ? {
-      id: bestProfile.id,
-      name: bestProfile.name
-    } : 'NONE');
-
-    if (!bestProfile) {
-      // Single account case: let backend handle with intelligent pause
-      // Don't show manual modal - backend will pause intelligently and resume when ready
-      console.log('[AgentProcess] No alternative profile - backend will handle with intelligent pause');
-      // Return false to let handleProcessFailure emit sdk-rate-limit event
-      // The frontend can then show appropriate UI (e.g., "Paused until X time")
-      return false;
-    }
-
-    console.log('[AgentProcess] AUTO-SWAP: Switching from', currentProfileId, 'to', bestProfile.id);
-    profileManager.setActiveProfile(bestProfile.id);
-
-    const source = processType === 'spec-creation' ? 'roadmap' : 'task';
-    const rateLimitInfo = createSDKRateLimitInfo(source, rateLimitDetection, { taskId });
-    rateLimitInfo.wasAutoSwapped = true;
-    rateLimitInfo.swappedToProfile = { id: bestProfile.id, name: bestProfile.name };
-    rateLimitInfo.swapReason = 'reactive';
-
-    console.log('[AgentProcess] Emitting sdk-rate-limit event (auto-swapped):', rateLimitInfo);
-    this.emitter.emit('sdk-rate-limit', rateLimitInfo);
-
-    console.log('[AgentProcess] Emitting auto-swap-restart-task event for task:', taskId);
-    this.emitter.emit('auto-swap-restart-task', taskId, bestProfile.id);
-    return true;
   }
 
   private handleAuthFailure(taskId: string, allOutput: string): boolean {
@@ -355,76 +244,12 @@ export class AgentProcessManager {
 
     console.log('[AgentProcess] Auth failure detected:', authFailureDetection);
 
-    // Try auto-swap if enabled
-    const wasHandled = this.handleAuthFailureWithAutoSwap(taskId, authFailureDetection);
-
-    if (!wasHandled) {
-      // Fall back to UI notification
-      this.emitter.emit('auth-failure', taskId, {
-        profileId: authFailureDetection.profileId,
-        failureType: authFailureDetection.failureType,
-        message: authFailureDetection.message,
-        originalError: authFailureDetection.originalError
-      });
-    }
-
-    return true;
-  }
-
-  /**
-   * Attempt to auto-swap to another profile on authentication failure.
-   * Only works when autoSwitchOnAuthFailure is enabled and an alternative
-   * authenticated profile is available.
-   */
-  private handleAuthFailureWithAutoSwap(
-    taskId: string,
-    authFailureDetection: ReturnType<typeof detectAuthFailure>
-  ): boolean {
-    const profileManager = getClaudeProfileManager();
-    const autoSwitchSettings = profileManager.getAutoSwitchSettings();
-
-    console.log('[AgentProcess] Auth failure auto-switch settings:', {
-      enabled: autoSwitchSettings.enabled,
-      autoSwitchOnAuthFailure: autoSwitchSettings.autoSwitchOnAuthFailure
-    });
-
-    // Check if auto-switch on auth failure is enabled
-    if (!autoSwitchSettings.enabled || !autoSwitchSettings.autoSwitchOnAuthFailure) {
-      console.log('[AgentProcess] Auth failure auto-switch disabled - falling back to UI');
-      return false;
-    }
-
-    const currentProfileId = authFailureDetection.profileId;
-    const bestProfile = profileManager.getBestAvailableProfile(currentProfileId);
-
-    console.log('[AgentProcess] Best available profile for auth failure swap:', bestProfile ? {
-      id: bestProfile.id,
-      name: bestProfile.name,
-      isAuthenticated: bestProfile.isAuthenticated
-    } : 'NONE');
-
-    // Verify the best profile is actually authenticated
-    if (!bestProfile || !bestProfile.isAuthenticated) {
-      console.log('[AgentProcess] No authenticated alternative profile - falling back to UI');
-      return false;
-    }
-
-    console.log('[AgentProcess] AUTH-FAILURE AUTO-SWAP:', currentProfileId, '->', bestProfile.id);
-    profileManager.setActiveProfile(bestProfile.id);
-
-    // Emit auth-failure event with swap metadata for UI notification
     this.emitter.emit('auth-failure', taskId, {
-      profileId: authFailureDetection.profileId,
       failureType: authFailureDetection.failureType,
       message: authFailureDetection.message,
-      originalError: authFailureDetection.originalError,
-      wasAutoSwapped: true,
-      swappedToProfile: { id: bestProfile.id, name: bestProfile.name }
+      originalError: authFailureDetection.originalError
     });
 
-    // Reuse existing restart event
-    console.log('[AgentProcess] Emitting auto-swap-restart-task event for auth failure:', taskId);
-    this.emitter.emit('auto-swap-restart-task', taskId, bestProfile.id);
     return true;
   }
 
@@ -450,7 +275,7 @@ export class AgentProcessManager {
 
   /**
    * Parse environment variables from a .env file content.
-   * Filters out empty values to prevent overriding valid tokens from profiles.
+   * Filters out empty values so they don't override set variables.
    */
   private parseEnvFile(envPath: string): Record<string, string> {
     if (!existsSync(envPath)) {
@@ -552,33 +377,6 @@ export class AgentProcessManager {
 
     const env = this.setupProcessEnvironment(extraEnv);
 
-    // Get active API profile environment variables
-    let apiProfileEnv: Record<string, string> = {};
-    try {
-      apiProfileEnv = await getAPIProfileEnv();
-    } catch (error) {
-      console.error('[Agent Process] Failed to get API profile env:', error);
-      // Continue with empty profile env (falls back to OAuth mode)
-    }
-
-    // Get OAuth mode clearing vars (clears stale ANTHROPIC_* vars when in OAuth mode)
-    const oauthModeClearVars = getOAuthModeClearVars(apiProfileEnv);
-
-    debugLog('[AgentProcess:spawnProcess] Environment merge chain for task:', taskId, {
-      baseEnv: {
-        hasOAuthToken: !!env.CLAUDE_CODE_OAUTH_TOKEN,
-        hasApiKey: !!env.ANTHROPIC_API_KEY,
-        hasConfigDir: !!env.CLAUDE_CONFIG_DIR,
-        configDir: env.CLAUDE_CONFIG_DIR || '(not set)',
-      },
-      oauthModeClearVars: Object.keys(oauthModeClearVars),
-      apiProfileEnv: {
-        hasApiKey: !!apiProfileEnv.ANTHROPIC_API_KEY,
-        hasBaseUrl: !!apiProfileEnv.ANTHROPIC_BASE_URL,
-        apiKeyPrefix: apiProfileEnv.ANTHROPIC_API_KEY?.substring(0, 8) || '(not set)',
-      },
-    });
-
     // NOTE: Python subprocess spawning removed — use spawnWorkerProcess() for AI tasks.
     // The first element of args is used as the command for backward compatibility with tests.
     const command = args[0] ?? 'echo';
@@ -587,11 +385,7 @@ export class AgentProcessManager {
     try {
       childProcess = spawn(command, commandArgs, {
         cwd,
-        env: {
-          ...env, // Already includes process.env, extraEnv, profileEnv, PYTHONUNBUFFERED, PYTHONUTF8
-          ...oauthModeClearVars, // Clear stale ANTHROPIC_* vars when in OAuth mode
-          ...apiProfileEnv // Include active API profile config (highest priority for ANTHROPIC_* vars)
-        }
+        env // Already includes process.env, extraEnv, the Claude credential, PYTHONUNBUFFERED, PYTHONUTF8
       });
     } catch (err) {
       // spawn() failed synchronously (e.g., command not found, permission denied)
@@ -789,7 +583,7 @@ export class AgentProcessManager {
           return;
         }
 
-        // Only emit 'failed' when failure was NOT handled by auto-swap
+        // Only emit 'failed' when the failure was not a rate limit or auth problem
         if (currentPhase !== 'complete' && currentPhase !== 'failed') {
           this.emitter.emit('execution-progress', taskId, {
             phase: 'failed',

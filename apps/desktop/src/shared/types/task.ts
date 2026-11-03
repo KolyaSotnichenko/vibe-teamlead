@@ -165,7 +165,7 @@ export type TaskImpact = 'low' | 'medium' | 'high' | 'critical';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 // Re-export ThinkingLevel (defined in settings.ts) for convenience
 export type { ThinkingLevel };
-/** Model identifier — Claude shorthands or concrete model IDs from any provider */
+/** Model identifier — Claude shorthands (haiku, sonnet, opus) or full Claude model IDs */
 export type ModelType = string;
 export type TaskCategory =
   | 'feature'
@@ -231,12 +231,10 @@ export interface TaskMetadata {
   // Agent configuration (from agent profile or manual selection)
   model?: ModelType;  // Claude model to use (haiku, sonnet, opus) - used when not auto profile
   thinkingLevel?: ThinkingLevel;  // Thinking budget level (low, medium, high)
-  provider?: string;  // Active provider when task was created (anthropic, openai, google, etc.)
   // Auto profile - per-phase model configuration
   isAutoProfile?: boolean;  // True when using Auto (Optimized) profile
   phaseModels?: PhaseModelConfig;  // Per-phase model configuration
   phaseThinking?: PhaseThinkingConfig;  // Per-phase thinking configuration
-  phaseProviders?: Record<string, string>;  // Per-phase provider preference (cross-provider mode)
   fastMode?: boolean;  // Fast Mode — faster Opus 4.6 output, higher cost per token
 
   // Git/Worktree configuration

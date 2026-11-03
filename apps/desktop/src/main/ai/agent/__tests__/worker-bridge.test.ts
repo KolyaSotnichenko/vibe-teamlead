@@ -75,7 +75,6 @@ function createConfig(overrides: Partial<AgentExecutorConfig> = {}): AgentExecut
       maxSteps: 10,
       specDir: '/specs',
       projectDir: '/project',
-      provider: 'anthropic',
       modelId: 'claude-sonnet-4-20250514',
       toolContext: { cwd: '/project', projectDir: '/project', specDir: '/specs' },
     },

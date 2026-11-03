@@ -1,9 +1,6 @@
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { getBestAvailableProfileEnv } from '../rate-limit-detector';
-import { getAPIProfileEnv } from '../services/profile';
-import { getOAuthModeClearVars } from '../agent/env-utils';
-
+import { getClaudeCredentialEnv } from '../ai/claude-code/credential';
 import { getAugmentedEnv } from '../env-utils';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
 
@@ -83,15 +80,10 @@ export class InsightsConfig {
 
   /**
    * Get complete environment for process execution
-   * Includes system env, auto-claude env, and active Claude profile
+   * Includes system env, auto-claude env, and the app's Claude credential
    */
   async getProcessEnv(): Promise<Record<string, string>> {
     const autoBuildEnv = this.loadAutoBuildEnv();
-    // Get best available Claude profile environment (automatically handles rate limits)
-    const profileResult = getBestAvailableProfileEnv();
-    const profileEnv = profileResult.env;
-    const apiProfileEnv = await getAPIProfileEnv();
-    const oauthModeClearVars = getOAuthModeClearVars(apiProfileEnv);
 
     // Use getAugmentedEnv() to ensure common tool paths (claude, dotnet, etc.)
     // are available even when app is launched from Finder/Dock.
@@ -100,9 +92,7 @@ export class InsightsConfig {
     return {
       ...augmentedEnv,
       ...autoBuildEnv,
-      ...oauthModeClearVars,
-      ...profileEnv,
-      ...apiProfileEnv,
+      ...getClaudeCredentialEnv(),
     };
   }
 }
