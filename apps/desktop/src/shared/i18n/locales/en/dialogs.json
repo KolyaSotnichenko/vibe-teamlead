@@ -3,13 +3,11 @@
     "title": "Initialize Vibe Teamlead",
     "description": "This project doesn't have Vibe Teamlead initialized. Would you like to set it up now?",
     "willDo": "This will:",
-    "createFolder": "Create a .auto-claude folder in your project",
-    "copyFramework": "Copy the Vibe Teamlead framework files",
-    "setupSpecs": "Set up the specs directory for your tasks",
-    "sourcePathNotConfigured": "Source path not configured",
-    "sourcePathNotConfiguredDescription": "Please set the Vibe Teamlead source path in App Settings before initializing.",
+    "createFolder": "Create a .auto-claude folder for specs, plans and reports (kept out of git)",
+    "setupSpecs": "Nothing in your code changes until you start a task",
     "initFailed": "Initialization Failed",
-    "initFailedDescription": "Failed to initialize Vibe Teamlead. Please try again."
+    "initFailedDescription": "Failed to initialize Vibe Teamlead. Please try again.",
+    "setupGit": "Set up git if needed: agents build every task in its own git worktree, so the project gets a repository and a first commit"
   },
   "gitSetup": {
     "title": "Git Repository Required",

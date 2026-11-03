@@ -3,13 +3,11 @@
     "title": "Initialiser Vibe Teamlead",
     "description": "Ce projet n'a pas Vibe Teamlead initialisé. Voulez-vous le configurer maintenant ?",
     "willDo": "Ceci va :",
-    "createFolder": "Créer un dossier .auto-claude dans votre projet",
-    "copyFramework": "Copier les fichiers du framework Vibe Teamlead",
-    "setupSpecs": "Configurer le répertoire des spécifications pour vos tâches",
-    "sourcePathNotConfigured": "Chemin source non configuré",
-    "sourcePathNotConfiguredDescription": "Veuillez définir le chemin source Vibe Teamlead dans les paramètres de l'application avant d'initialiser.",
+    "createFolder": "Créer un dossier .auto-claude pour les specs, plans et rapports (exclu de git)",
+    "setupSpecs": "Rien ne change dans votre code tant que vous ne lancez pas de tâche",
     "initFailed": "Échec de l'initialisation",
-    "initFailedDescription": "Échec de l'initialisation de Vibe Teamlead. Veuillez réessayer."
+    "initFailedDescription": "Échec de l'initialisation de Vibe Teamlead. Veuillez réessayer.",
+    "setupGit": "Configurer git si nécessaire : les agents construisent chaque tâche dans son propre worktree git, le projet reçoit donc un dépôt et un premier commit"
   },
   "gitSetup": {
     "title": "Dépôt Git requis",

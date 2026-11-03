@@ -92,6 +92,21 @@ export function checkGitStatus(projectPath: string): GitStatus {
   };
 }
 
+/** `-c user.name/-c user.email` when the user has no git identity, so the first commit can't fail on it. */
+function identityArgs(git: string, projectPath: string): string[] {
+  const configured = (key: string) => {
+    try {
+      return execFileSync(git, ['config', key], { cwd: projectPath, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim() !== '';
+    } catch {
+      return false;
+    }
+  };
+  const args: string[] = [];
+  if (!configured('user.name')) args.push('-c', 'user.name=Vibe Teamlead');
+  if (!configured('user.email')) args.push('-c', 'user.email=vibe-teamlead@localhost');
+  return args;
+}
+
 /**
  * Initialize git in a project directory and create an initial commit.
  * This is a user-friendly way to set up git for non-technical users.
@@ -132,8 +147,8 @@ export function initializeGit(projectPath: string): InitializationResult {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
-      // Create initial commit
-      execFileSync(git, ['commit', '-m', 'Initial commit', '--allow-empty'], {
+      // Create initial commit (with a fallback identity when git has none configured)
+      execFileSync(git, [...identityArgs(git, projectPath), 'commit', '-m', 'Initial commit', '--allow-empty'], {
         cwd: projectPath,
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe']
@@ -279,63 +294,37 @@ export function isInitialized(projectPath: string): boolean {
 export function initializeProject(projectPath: string): InitializationResult {
   debug('initializeProject called', { projectPath });
 
-  // Validate project path exists
   if (!existsSync(projectPath)) {
-    debug('Project path does not exist', { projectPath });
-    return {
-      success: false,
-      error: `Project directory not found: ${projectPath}`
-    };
+    return { success: false, error: `Project directory not found: ${projectPath}` };
   }
 
-  // Check git status - Vibe Teamlead requires git for worktree-based builds
-  const gitStatus = checkGitStatus(projectPath);
-  if (!gitStatus.isGitRepo || !gitStatus.hasCommits) {
-    debug('Git check failed', { gitStatus });
-    return {
-      success: false,
-      error: gitStatus.error || 'Git repository required. Vibe Teamlead uses git worktrees for isolated builds.'
-    };
-  }
-
-  // Check if already initialized
   const dotAutoBuildPath = path.join(projectPath, '.auto-claude');
-
-  if (existsSync(dotAutoBuildPath)) {
-    debug('Already initialized - .auto-claude exists');
-    return {
-      success: false,
-      error: 'Project already has auto-claude initialized (.auto-claude exists)'
-    };
-  }
-
   try {
-    debug('Creating .auto-claude data directory', { dotAutoBuildPath });
-
-    // Create the .auto-claude directory
-    mkdirSync(dotAutoBuildPath, { recursive: true });
-
-    // Create data directories
+    // Data directories first (idempotent: an existing .auto-claude is fine), and
+    // .gitignore before any initial commit so .auto-claude/ is never committed.
     for (const dataDir of DATA_DIRECTORIES) {
       const dirPath = path.join(dotAutoBuildPath, dataDir);
-      debug('Creating data directory', { dataDir, dirPath });
       mkdirSync(dirPath, { recursive: true });
-      writeFileSync(path.join(dirPath, '.gitkeep'), '', 'utf-8');
+      const keep = path.join(dirPath, '.gitkeep');
+      if (!existsSync(keep)) writeFileSync(keep, '', 'utf-8');
     }
-
-    // Update .gitignore to exclude .auto-claude/
     ensureGitignoreEntries(projectPath, GITIGNORE_ENTRIES);
-
-    debug('Initialization complete');
-    return { success: true };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error during initialization';
-    debug('Initialization failed', { error: errorMessage });
-    return {
-      success: false,
-      error: errorMessage
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Could not create the .auto-claude folder' };
   }
+
+  // Agents build in git worktrees: the project needs a repository with a first commit.
+  const gitStatus = checkGitStatus(projectPath);
+  if (!gitStatus.isGitRepo || !gitStatus.hasCommits) {
+    debug('Setting up git', { gitStatus });
+    const git = initializeGit(projectPath);
+    if (!git.success) {
+      return { success: false, error: `Git setup failed: ${git.error ?? 'unknown error'}` };
+    }
+  }
+
+  debug('Initialization complete');
+  return { success: true };
 }
 
 /**

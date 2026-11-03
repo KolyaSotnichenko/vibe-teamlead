@@ -339,17 +339,6 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
             />
           )}
         </div>
-        <div className="space-y-3">
-          <Label htmlFor="autoBuildPath" className="text-sm font-medium text-foreground">{t('general.autoClaudePath')}</Label>
-          <p className="text-sm text-muted-foreground">{t('general.autoClaudePathDescription')}</p>
-          <Input
-            id="autoBuildPath"
-            placeholder={t('general.autoClaudePathPlaceholder')}
-            className="w-full max-w-lg"
-            value={settings.autoBuildPath || ''}
-            onChange={(e) => onSettingsChange({ ...settings, autoBuildPath: e.target.value })}
-          />
-        </div>
       </div>
     </SettingsSection>
   );
