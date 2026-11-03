@@ -122,6 +122,13 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   return env;
 }
 
+/** The Claude Code tool list a session will run with. */
+export function sessionTools(config: SessionConfig): string[] {
+  if (config.toolsOverride) return [...config.toolsOverride];
+  const hasSubagents = !!config.agents && Object.keys(config.agents).length > 0;
+  return resolveBuiltinTools(getAgentConfig(config.agentType).tools, hasSubagents);
+}
+
 export interface QueryExtras {
   askUser?: AskUserHandler;
   /** CodeGraph index is ready for this session's working directory */
@@ -133,16 +140,19 @@ export function buildQueryOptions(
   abortController: AbortController,
   extras: QueryExtras = {},
 ): Options {
-  const agentConfig = getAgentConfig(config.agentType);
   const hasSubagents = !!config.agents && Object.keys(config.agents).length > 0;
   const bundled = config.bundled ?? {};
-  const tools = resolveBuiltinTools(agentConfig.tools, hasSubagents);
+  const tools = sessionTools(config);
 
-  const mcpServers = buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
-    specDir: config.specDir,
-    memoryMcpUrl: config.memoryMcpUrl,
-    linearApiKey: config.linearApiKey,
-  });
+  // Tool-less sessions (plain text generation) get no MCP servers either.
+  const mcpServers =
+    tools.length === 0
+      ? {}
+      : buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
+          specDir: config.specDir,
+          memoryMcpUrl: config.memoryMcpUrl,
+          linearApiKey: config.linearApiKey,
+        });
   if (bundled.codegraphBin && extras.codegraphReady && tools.includes('Read')) {
     mcpServers[CODEGRAPH_SERVER_KEY] = codegraphMcpServer(bundled.codegraphBin, config.toolContext.cwd);
   }
@@ -229,7 +239,7 @@ export async function runAgentSession(
   config.abortSignal?.addEventListener('abort', onAbort, { once: true });
 
   const codegraphBin = config.bundled?.codegraphBin;
-  const codegraphReady = codegraphBin
+  const codegraphReady = codegraphBin && sessionTools(config).includes('Read')
     ? ensureCodegraphIndex(codegraphBin, config.toolContext.cwd, options.onLog)
     : false;
 

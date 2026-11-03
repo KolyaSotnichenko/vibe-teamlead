@@ -72,6 +72,11 @@ export interface SessionConfig {
    * Defaults to ['project'] so the target repo's .claude/ setup applies.
    */
   settingSources?: SettingSource[];
+  /**
+   * Explicit Claude Code tool list, overriding the agent type's tools
+   * (e.g. [] for single-shot text generation).
+   */
+  toolsOverride?: string[];
   /** Tools shipped with the app (Claude Code binary, Superpowers, CodeGraph) */
   bundled?: BundledTools;
   /** Claude Code config directory (defaults to ~/.vibe-teamlead/claude-code) */
