@@ -1,7 +1,10 @@
 {
   "sections": {
     "project": "Projet",
-    "tools": "Outils"
+    "tools": "Outils",
+    "build": "Construire",
+    "plan": "Planifier",
+    "knowledge": "Connaissances"
   },
   "items": {
     "kanban": "Tableau Kanban",
@@ -83,5 +86,13 @@
     "pathChangeWarningDescription": "Le changement d'installation CLI utilisera un binaire Claude Code différent. Les sessions en cours continueront à utiliser l'installation précédente jusqu'à leur redémarrage.",
     "switchInstallationConfirm": "Changer",
     "versionUnknown": "version inconnue"
+  },
+  "teamStatus": {
+    "title": "L'équipe",
+    "working": "En cours",
+    "waiting": "Vous attend",
+    "review": "Prêt à relire",
+    "queued": "En file",
+    "idle": "Inactif — lancez une tâche pour mettre l'équipe au travail"
   }
 }

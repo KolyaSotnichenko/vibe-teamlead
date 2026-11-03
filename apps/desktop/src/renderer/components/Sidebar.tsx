@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { Separator } from './ui/separator';
 import {
   Tooltip,
   TooltipContent,
@@ -57,6 +56,7 @@ import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 
 import { UpdateBanner } from './UpdateBanner';
+import { TeamStatus } from './sidebar/TeamStatus';
 import type { Project, GitStatus } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools';
@@ -73,32 +73,47 @@ interface NavItem {
   labelKey: string;
   icon: React.ElementType;
   shortcut?: string;
+  /** Purpose group in the sidebar */
+  group: 'build' | 'plan' | 'knowledge';
 }
 
-// Base nav items always shown
+const NAV_GROUPS = ['build', 'plan', 'knowledge'] as const;
+
 const baseNavItems: NavItem[] = [
-  { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K' },
-  { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A' },
-  { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N' },
-  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: Map, shortcut: 'D' },
-  { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I' },
-  { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
-  { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
-  { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
-  { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' }
+  { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K', group: 'build' },
+  { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A', group: 'build' },
+  { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W', group: 'build' },
+  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: Map, shortcut: 'D', group: 'plan' },
+  { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I', group: 'plan' },
+  { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' },
+  { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C', group: 'knowledge' },
+  { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L', group: 'knowledge' },
+  { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M', group: 'knowledge' }
 ];
 
-// GitHub nav items shown when GitHub is enabled
 const githubNavItems: NavItem[] = [
-  { id: 'github-issues', labelKey: 'navigation:items.githubIssues', icon: Github, shortcut: 'G' },
-  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'P' }
+  { id: 'github-issues', labelKey: 'navigation:items.githubIssues', icon: Github, shortcut: 'G', group: 'build' },
+  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'P', group: 'build' }
 ];
 
-// GitLab nav items shown when GitLab is enabled
 const gitlabNavItems: NavItem[] = [
-  { id: 'gitlab-issues', labelKey: 'navigation:items.gitlabIssues', icon: GitlabIcon, shortcut: 'B' },
-  { id: 'gitlab-merge-requests', labelKey: 'navigation:items.gitlabMRs', icon: GitMerge, shortcut: 'R' }
+  { id: 'gitlab-issues', labelKey: 'navigation:items.gitlabIssues', icon: GitlabIcon, shortcut: 'B', group: 'build' },
+  { id: 'gitlab-merge-requests', labelKey: 'navigation:items.gitlabMRs', icon: GitMerge, shortcut: 'R', group: 'build' }
 ];
+
+/** Brand mark: the team as a grid of agents, drawn in paper on ink. */
+function BrandMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-label="Vibe Teamlead" className={className}>
+      <title>Vibe Teamlead</title>
+      <rect x="0" y="0" width="24" height="24" fill="var(--vt-paper)" />
+      <rect x="4" y="4" width="7" height="7" fill="var(--vt-ink)" />
+      <rect x="13" y="4" width="7" height="7" fill="var(--vt-ink)" />
+      <rect x="4" y="13" width="7" height="7" fill="var(--vt-ink)" />
+      <rect x="13" y="13" width="7" height="7" fill="none" stroke="var(--vt-ink)" strokeWidth="1.5" />
+    </svg>
+  );
+}
 
 export function Sidebar({
   onSettingsClick,
@@ -295,6 +310,7 @@ export function Sidebar({
 
     const button = (
       <button
+        type="button"
         key={item.id}
         onClick={() => handleNavClick(item.id)}
         disabled={!selectedProjectId}
@@ -302,19 +318,19 @@ export function Sidebar({
         className={cn(
           // DESIGN-SYSTEM sidebar item: muted on ink; active = ink-hover fill,
           // paper text and a 2px vermilion mark on the left.
-          'relative flex w-full min-h-11 items-center text-sm text-sidebar-foreground transition-colors',
-          'hover:bg-accent hover:text-foreground',
-          'disabled:pointer-events-none disabled:opacity-50',
+          'group relative flex w-full min-h-10 items-center text-sm text-sidebar-foreground transition-colors',
+          'hover:bg-accent hover:text-foreground focus-visible:text-foreground',
+          'disabled:pointer-events-none disabled:opacity-40',
           isActive && "bg-accent text-foreground before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-[var(--vt-signal)] before:content-['']",
-          isCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
+          isCollapsed ? 'justify-center px-2' : 'gap-3 px-4'
         )}
       >
-        <Icon className="h-4 w-4 shrink-0" />
+        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         {!isCollapsed && (
           <>
             <span className="flex-1 text-left">{t(item.labelKey)}</span>
             {item.shortcut && (
-              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded-md border border-border bg-secondary px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
+              <kbd className="pointer-events-none font-mono text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 {item.shortcut}
               </kbd>
             )}
@@ -346,41 +362,35 @@ export function Sidebar({
   return (
     <TooltipProvider>
       <div className={cn(
-        "vt-ink-surface flex h-full flex-col bg-sidebar text-foreground border-r border-border transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
+        "vt-ink-surface flex h-full flex-col bg-sidebar text-foreground border-r border-border transition-[width] duration-200",
+        isCollapsed ? "w-16" : "w-60"
       )}>
-        {/* Header with drag area - extra top padding for macOS traffic lights */}
+        {/* Brand + collapse; top padding clears the macOS traffic lights */}
         <div className={cn(
-          "electron-drag flex h-14 items-center pt-6 transition-all duration-300",
-          isCollapsed ? "justify-center px-2" : "px-4"
+          "electron-drag flex items-center pt-9 pb-3",
+          isCollapsed ? "flex-col gap-3 px-2" : "gap-3 px-4"
         )}>
+          <BrandMark className="h-6 w-6 shrink-0" />
           {!isCollapsed && (
-            <span className="electron-no-drag text-lg font-bold text-primary">Vibe Teamlead</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-semibold leading-tight tracking-[-0.01em] text-foreground">Vibe Teamlead</p>
+              {selectedProject && (
+                <p className="truncate font-mono text-xs text-muted-foreground" title={selectedProject.path}>
+                  {selectedProject.name}
+                </p>
+              )}
+            </div>
           )}
-        </div>
-
-        <Separator className="mt-2" />
-
-        {/* Toggle button */}
-        <div className={cn(
-          "flex py-2 transition-all duration-300",
-          isCollapsed ? "justify-center px-2" : "justify-end px-3"
-        )}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+              <button
+                type="button"
+                className="electron-no-drag flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
                 onClick={toggleSidebar}
                 aria-label={isCollapsed ? t('actions.expandSidebar') : t('actions.collapseSidebar')}
               >
-                {isCollapsed ? (
-                  <PanelLeft className="h-4 w-4" />
-                ) : (
-                  <PanelLeftClose className="h-4 w-4" />
-                )}
-              </Button>
+                {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
             </TooltipTrigger>
             <TooltipContent side="right">
               {isCollapsed ? t('actions.expandSidebar') : t('actions.collapseSidebar')}
@@ -388,26 +398,26 @@ export function Sidebar({
           </Tooltip>
         </div>
 
-        <Separator />
+        {/* What the team is doing right now */}
+        <TeamStatus projectId={selectedProjectId} collapsed={isCollapsed} />
 
-        {/* Navigation */}
-        <ScrollArea className="flex-1">
-          <div className={cn("py-4 transition-all duration-300", isCollapsed ? "px-2" : "px-3")}>
-            {/* Project Section */}
-            <div>
-              {!isCollapsed && (
-                <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t('sections.project')}
-                </h3>
-              )}
-              <nav className="space-y-1">
-                {visibleNavItems.map(renderNavItem)}
-              </nav>
-            </div>
-          </div>
+        {/* Navigation, grouped by purpose */}
+        <ScrollArea className="mt-4 flex-1">
+          <nav className="pb-4">
+            {NAV_GROUPS.map((group) => {
+              const items = visibleNavItems.filter((item) => item.group === group);
+              if (items.length === 0) return null;
+              return (
+                <div key={group} className={cn("border-t border-border", isCollapsed ? "pt-2 pb-2" : "pt-3 pb-2")}>
+                  {!isCollapsed && (
+                    <h3 className="px-4 pb-1.5 text-xs text-muted-foreground">{t(`sections.${group}`)}</h3>
+                  )}
+                  {items.map(renderNavItem)}
+                </div>
+              );
+            })}
+          </nav>
         </ScrollArea>
-
-        <Separator />
 
         {/* Rate Limit Indicator - shows when Claude is rate limited */}
         <RateLimitIndicator />
@@ -415,61 +425,56 @@ export function Sidebar({
         {/* Update Banner - shows when app update is available */}
         <UpdateBanner />
 
-        {/* Bottom section with Settings, Help, and New Task */}
-        <div className={cn("space-y-3 transition-all duration-300", isCollapsed ? "p-2" : "p-4")}>
-          {/* Settings and Help row */}
-          <div className={cn(
-            "flex items-center",
-            isCollapsed ? "flex-col gap-1" : "gap-2"
-          )}>
+        {/* New task + settings/help */}
+        <div className={cn("border-t border-border", isCollapsed ? "space-y-1 p-2" : "p-3")}>
+          <div className={cn("flex", isCollapsed ? "flex-col gap-1" : "items-stretch gap-1")}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size={isCollapsed ? "icon" : "sm"}
-                  className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
+                <button
+                  type="button"
+                  onClick={onNewTaskClick}
+                  disabled={!selectedProjectId || !selectedProject?.autoBuildPath}
+                  className={cn(
+                    "flex min-h-11 items-center justify-center gap-2 bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40",
+                    isCollapsed ? "w-11" : "flex-1 px-3"
+                  )}
+                  aria-label={t('actions.newTask')}
+                >
+                  <Plus className="h-4 w-4" />
+                  {!isCollapsed && t('actions.newTask')}
+                </button>
+              </TooltipTrigger>
+              {isCollapsed && <TooltipContent side="right">{t('actions.newTask')}</TooltipContent>}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
                   onClick={onSettingsClick}
+                  aria-label={t('actions.settings')}
+                  className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <Settings className="h-4 w-4" />
-                  {!isCollapsed && t('actions.settings')}
-                </Button>
+                </button>
               </TooltipTrigger>
               <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.settings')}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <button
+                  type="button"
                   onClick={() => window.open('https://github.com/KolyaSotnichenko/vibe-teamlead/issues', '_blank')}
                   aria-label={t('tooltips.help')}
+                  className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <HelpCircle className="h-4 w-4" />
-                </Button>
+                </button>
               </TooltipTrigger>
               <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.help')}</TooltipContent>
             </Tooltip>
           </div>
-
-          {/* New Task button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                className="w-full"
-                size={isCollapsed ? "icon" : "default"}
-                onClick={onNewTaskClick}
-                disabled={!selectedProjectId || !selectedProject?.autoBuildPath}
-              >
-                <Plus className={isCollapsed ? "h-4 w-4" : "mr-2 h-4 w-4"} />
-                {!isCollapsed && t('actions.newTask')}
-              </Button>
-            </TooltipTrigger>
-            {isCollapsed && (
-              <TooltipContent side="right">{t('actions.newTask')}</TooltipContent>
-            )}
-          </Tooltip>
           {!isCollapsed && selectedProject && !selectedProject.autoBuildPath && (
-            <p className="mt-2 text-xs text-muted-foreground text-center">
+            <p className="mt-2 text-xs text-muted-foreground">
               {t('messages.initializeToCreateTasks')}
             </p>
           )}
