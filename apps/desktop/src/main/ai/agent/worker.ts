@@ -54,7 +54,7 @@ import {
   tryLoadPrompt,
 } from '../prompts/prompt-loader';
 import type { ProjectCapabilities } from '../prompts/types';
-import { runProjectIndexer } from '../project/project-indexer';
+import { buildProjectIndex, runProjectIndexer } from '../project/project-indexer';
 
 // =============================================================================
 // Validation
@@ -334,9 +334,21 @@ function loadRolePrompt(promptName: string): string | null {
 
 let cachedCapabilities: ProjectCapabilities | undefined;
 
-/** What kind of app the project is (web frontend, Electron, …), from its project index. */
+/**
+ * What kind of app the project is (web frontend, Electron, …). Read from the
+ * code itself: a stored project index may be missing in a worktree or date
+ * from before this task built the app (QA then got no browser tools).
+ */
 function projectCapabilities(session: SerializableSessionConfig): ProjectCapabilities {
-  cachedCapabilities ??= detectProjectCapabilities(loadProjectIndex(session.projectDir));
+  if (!cachedCapabilities) {
+    let index: Record<string, unknown> = {};
+    try {
+      index = buildProjectIndex(session.projectDir) as unknown as Record<string, unknown>;
+    } catch {
+      index = loadProjectIndex(session.projectDir);
+    }
+    cachedCapabilities = detectProjectCapabilities(index);
+  }
   return cachedCapabilities;
 }
 
@@ -814,6 +826,8 @@ async function runQualityAssurance(
   toolContext: ToolContext,
   hooks?: QAPhaseHooks,
 ): Promise<QAOutcome> {
+  // QA tests what the coders built: look at the project again (browser tools for a new web app)
+  cachedCapabilities = undefined;
   const qaLoop = new QALoop({
     specDir: session.specDir,
     projectDir: session.projectDir,
@@ -908,6 +922,12 @@ const MAX_SECURITY_QA_ROUNDS = 2;
  * or failed scans never block the task — the reason is logged and written
  * to security_qa.md.
  */
+/** A line for the task's Validation log (the phase view reads the log file) and the live log. */
+function qaLog(line: string): void {
+  postLog(line);
+  logWriter?.logText(line, 'qa');
+}
+
 async function runSecurityQa(
   session: SerializableSessionConfig,
   qaLoop: QALoop,
@@ -928,12 +948,13 @@ async function runSecurityQa(
       baseURL: session.baseURL,
       diffBase,
       signal: abortController.signal,
-      onLog: postLog,
+      // Into the task's Validation log too: the phase view reads the log file
+      onLog: qaLog,
     });
 
     if (result.status === 'cancelled') return { ...outcome, approved: false, reason: 'cancelled' };
     if (result.status !== 'findings') {
-      postLog(
+      qaLog(
         result.status === 'clear'
           ? 'Security QA: no exploitable findings'
           : `Security QA ${result.status}: ${result.reason ?? 'see security_qa.md'}`,
@@ -942,7 +963,7 @@ async function runSecurityQa(
     }
 
     const blocking = result.findings.filter((f) => isBlocking(f, settings.failOn));
-    postLog(`Security QA: ${blocking.length} finding(s) at ${settings.failOn} or above (round ${round}/${MAX_SECURITY_QA_ROUNDS})`);
+    qaLog(`Security QA: ${blocking.length} finding(s) at ${settings.failOn} or above (round ${round}/${MAX_SECURITY_QA_ROUNDS})`);
     if (round === MAX_SECURITY_QA_ROUNDS) {
       return { ...outcome, approved: false, reason: 'security_findings', error: 'Security QA findings remain; see security_qa.md' };
     }

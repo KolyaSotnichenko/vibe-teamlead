@@ -31,6 +31,8 @@ export interface StrixSettings {
   maxBudgetUsd: number;
 }
 
+const HEARTBEAT_MS = 60_000;
+
 const STRIX_TIMEOUT_MS: Record<StrixScanMode, number> = {
   quick: 60 * 60 * 1000,
   standard: 3 * 60 * 60 * 1000,
@@ -312,6 +314,12 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     `Security QA: Strix ${settings.scanMode} scan of changed code on ${strixModel(options.model)} (budget $${settings.maxBudgetUsd}, ` +
       `up to ${Math.round(STRIX_TIMEOUT_MS[settings.scanMode] / 60_000)} min). It runs in Docker; its progress follows as [strix] lines.`,
   );
+  // Strix prints little while it works: say it is alive once a minute
+  const startedAt = Date.now();
+  const heartbeat = setInterval(() => {
+    options.onLog?.(`Security QA: Strix still running (${Math.round((Date.now() - startedAt) / 60_000)} min)`);
+  }, HEARTBEAT_MS);
+  heartbeat.unref?.();
   const run = await runProcess(strix, buildStrixArgs(options, instructionFile), {
     cwd: workDir,
     env,
@@ -319,8 +327,10 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     // A deep scan can take hours; the budget cap is the real limit.
     timeoutMs: STRIX_TIMEOUT_MS[settings.scanMode],
     maxOutput: 1024 * 1024,
-    onLine: (line) => options.onLog?.(`[strix] ${line.trim()}`),
-  });
+    onLine: (line) => {
+      if (line.trim()) options.onLog?.(`[strix] ${line.trim()}`);
+    },
+  }).finally(() => clearInterval(heartbeat));
   const code: number | 'cancelled' = run.aborted ? 'cancelled' : run.timedOut ? -2 : run.code;
 
   if (code === 'cancelled') return finish({ status: 'cancelled', findings: [] });
