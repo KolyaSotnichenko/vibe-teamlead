@@ -1,20 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import type { StreamEvent } from '../../session/types';
+
 // =============================================================================
 // Mocks — must be declared before any imports that use them
 // =============================================================================
 
-const mockStreamText = vi.fn();
+const mockRunClaudeTask = vi.fn();
 
-vi.mock('ai', () => ({
-  streamText: (...args: unknown[]) => mockStreamText(...args),
-  stepCountIs: (n: number) => ({ type: 'stepCount', count: n }),
-}));
-
-const mockCreateSimpleClient = vi.fn();
-
-vi.mock('../../client/factory', () => ({
-  createSimpleClient: (...args: unknown[]) => mockCreateSimpleClient(...args),
+vi.mock('../../claude-code/task', () => ({
+  runClaudeTask: (...args: unknown[]) => mockRunClaudeTask(...args),
+  READ_TOOLS: ['Read', 'Glob', 'Grep'],
+  RESEARCH_TOOLS: ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'],
 }));
 
 // Mock filesystem: prompt files exist by default
@@ -24,13 +21,6 @@ const mockReadFileSync = vi.fn();
 vi.mock('node:fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
   readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
-}));
-
-// Mock the tool registry so we don't need real tool initialization
-vi.mock('../../tools/build-registry', () => ({
-  buildToolRegistry: () => ({
-    getToolsForAgent: vi.fn().mockReturnValue({}),
-  }),
 }));
 
 // =============================================================================
@@ -44,28 +34,20 @@ import type { IdeationConfig, IdeationStreamEvent } from '../ideation';
 // Helpers
 // =============================================================================
 
-const fakeModel = { modelId: 'claude-sonnet-test' };
-
-function makeMockClient() {
-  return {
-    model: fakeModel,
-    systemPrompt: '',
-    tools: {},
-    maxSteps: 30,
-  };
+/** Make runClaudeTask emit the given StreamEvents, then resolve */
+function emitEvents(events: StreamEvent[], finalText = '') {
+  mockRunClaudeTask.mockImplementation(async (opts: { onEvent?: (e: StreamEvent) => void }) => {
+    for (const e of events) opts.onEvent?.(e);
+    return { text: finalText, session: { outcome: 'completed' } };
+  });
 }
 
-/**
- * Build an async generator that yields stream parts and then ends.
- */
-function makeStream(parts: Array<Record<string, unknown>>) {
-  return {
-    fullStream: (async function* () {
-      for (const part of parts) {
-        yield part;
-      }
-    })(),
-  };
+function errorEvent(message: string): StreamEvent {
+  return { type: 'error', error: { code: 'error', message, retryable: false } };
+}
+
+function taskArgs() {
+  return mockRunClaudeTask.mock.calls[0][0];
 }
 
 function baseConfig(overrides: Partial<IdeationConfig> = {}): IdeationConfig {
@@ -85,7 +67,7 @@ function baseConfig(overrides: Partial<IdeationConfig> = {}): IdeationConfig {
 describe('runIdeation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateSimpleClient.mockResolvedValue(makeMockClient());
+    emitEvents([]);
     // Prompt file exists and has content by default
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue('Analyze the codebase for improvements.');
@@ -115,13 +97,11 @@ describe('runIdeation', () => {
   // Successful run
   // ---------------------------------------------------------------------------
 
-  it('returns success with accumulated text from stream', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'text-delta', text: 'Found ' },
-        { type: 'text-delta', text: '3 improvements.' },
-      ]),
-    );
+  it('returns success with accumulated text from text-delta events', async () => {
+    emitEvents([
+      { type: 'text-delta', text: 'Found ' },
+      { type: 'text-delta', text: '3 improvements.' },
+    ]);
 
     const result = await runIdeation(baseConfig());
 
@@ -130,34 +110,49 @@ describe('runIdeation', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('calls createSimpleClient with sonnet and medium thinking by default', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
+  it('falls back to the final assistant text when nothing was streamed', async () => {
+    emitEvents([], 'Wrote ideas.');
 
+    const result = await runIdeation(baseConfig());
+
+    expect(result.text).toBe('Wrote ideas.');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Task configuration
+  // ---------------------------------------------------------------------------
+
+  it('uses sonnet and medium thinking by default', async () => {
     await runIdeation(baseConfig());
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('sonnet');
-    expect(clientArgs.thinkingLevel).toBe('medium');
+    expect(taskArgs().model).toBe('sonnet');
+    expect(taskArgs().thinkingLevel).toBe('medium');
   });
 
   it('accepts custom modelShorthand and thinkingLevel', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
     await runIdeation(baseConfig({ modelShorthand: 'haiku', thinkingLevel: 'low' }));
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('haiku');
-    expect(clientArgs.thinkingLevel).toBe('low');
+    expect(taskArgs().model).toBe('haiku');
+    expect(taskArgs().thinkingLevel).toBe('low');
   });
 
-  it('passes tools from client to streamText', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
+  it('runs an ideation session with research tools and writes confined to outputDir', async () => {
     await runIdeation(baseConfig());
 
-    const streamArgs = mockStreamText.mock.calls[0][0];
-    expect(streamArgs).toHaveProperty('tools');
-    expect(streamArgs).toHaveProperty('model');
+    const args = taskArgs();
+    expect(args.agentType).toBe('ideation');
+    expect(args.cwd).toBe('/project');
+    expect(args.tools).toEqual(['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Write', 'Edit']);
+    expect(args.tools).not.toContain('Bash');
+    expect(args.allowedWritePaths).toEqual(['/project/.auto-claude/ideation']);
+    expect(args.maxTurns).toBe(30);
+  });
+
+  it('passes the abort signal through', async () => {
+    const controller = new AbortController();
+    await runIdeation(baseConfig({ abortSignal: controller.signal }));
+
+    expect(taskArgs().abortSignal).toBe(controller.signal);
   });
 
   // ---------------------------------------------------------------------------
@@ -165,12 +160,10 @@ describe('runIdeation', () => {
   // ---------------------------------------------------------------------------
 
   it('forwards text-delta events to onStream callback', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'text-delta', text: 'hello' },
-        { type: 'text-delta', text: ' world' },
-      ]),
-    );
+    emitEvents([
+      { type: 'text-delta', text: 'hello' },
+      { type: 'text-delta', text: ' world' },
+    ]);
 
     const events: IdeationStreamEvent[] = [];
     await runIdeation(baseConfig(), (e) => events.push(e));
@@ -180,30 +173,22 @@ describe('runIdeation', () => {
     expect((textEvents[0] as { type: 'text-delta'; text: string }).text).toBe('hello');
   });
 
-  it('forwards tool-use events from tool-call stream parts', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([{ type: 'tool-call', toolName: 'Glob', toolCallId: 'c1', input: {} }]),
-    );
+  it('forwards tool-use events from tool-call events', async () => {
+    emitEvents([{ type: 'tool-call', toolName: 'Glob', toolCallId: 'c1', args: {} }]);
 
     const events: IdeationStreamEvent[] = [];
     await runIdeation(baseConfig(), (e) => events.push(e));
 
-    const toolEvents = events.filter((e) => e.type === 'tool-use');
-    expect(toolEvents).toHaveLength(1);
-    expect((toolEvents[0] as { type: 'tool-use'; name: string }).name).toBe('Glob');
+    expect(events).toEqual([{ type: 'tool-use', name: 'Glob' }]);
   });
 
-  it('forwards error events from stream error parts', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([{ type: 'error', error: new Error('stream error') }]),
-    );
+  it('forwards error events as plain messages', async () => {
+    emitEvents([errorEvent('stream error')]);
 
     const events: IdeationStreamEvent[] = [];
     await runIdeation(baseConfig(), (e) => events.push(e));
 
-    const errorEvents = events.filter((e) => e.type === 'error');
-    expect(errorEvents).toHaveLength(1);
-    expect((errorEvents[0] as { type: 'error'; error: string }).error).toBe('stream error');
+    expect(events).toEqual([{ type: 'error', error: 'stream error' }]);
   });
 
   // ---------------------------------------------------------------------------
@@ -218,6 +203,7 @@ describe('runIdeation', () => {
     expect(result.success).toBe(false);
     expect(result.text).toBe('');
     expect(result.error).toContain('Prompt not found');
+    expect(mockRunClaudeTask).not.toHaveBeenCalled();
   });
 
   it('returns failure when prompt file cannot be read', async () => {
@@ -233,16 +219,11 @@ describe('runIdeation', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Error handling — streamText throws
+  // Error handling — runClaudeTask rejects
   // ---------------------------------------------------------------------------
 
-  it('returns failure when streamText iteration throws', async () => {
-    mockStreamText.mockReturnValue({
-      // biome-ignore lint/correctness/useYield: intentionally throwing before yield to test error path
-      fullStream: (async function* () {
-        throw new Error('API error');
-      })(),
-    });
+  it('returns failure when runClaudeTask rejects', async () => {
+    mockRunClaudeTask.mockRejectedValue(new Error('API error'));
 
     const result = await runIdeation(baseConfig());
 
@@ -250,18 +231,37 @@ describe('runIdeation', () => {
     expect(result.error).toBe('API error');
   });
 
-  it('emits error event to callback when streamText throws', async () => {
-    mockStreamText.mockReturnValue({
-      // biome-ignore lint/correctness/useYield: intentionally throwing before yield to test error path
-      fullStream: (async function* () {
-        throw new Error('network failure');
-      })(),
+  it('keeps partial streamed text on failure', async () => {
+    mockRunClaudeTask.mockImplementation(async (opts: { onEvent?: (e: StreamEvent) => void }) => {
+      opts.onEvent?.({ type: 'text-delta', text: 'partial' });
+      throw new Error('boom');
+    });
+
+    const result = await runIdeation(baseConfig());
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe('partial');
+  });
+
+  it('emits error event to callback when runClaudeTask rejects', async () => {
+    mockRunClaudeTask.mockRejectedValue(new Error('network failure'));
+
+    const events: IdeationStreamEvent[] = [];
+    await runIdeation(baseConfig(), (e) => events.push(e));
+
+    expect(events).toEqual([{ type: 'error', error: 'network failure' }]);
+  });
+
+  it('does not duplicate an error the session already streamed', async () => {
+    mockRunClaudeTask.mockImplementation(async (opts: { onEvent?: (e: StreamEvent) => void }) => {
+      opts.onEvent?.(errorEvent('rate limited'));
+      throw new Error('rate limited');
     });
 
     const events: IdeationStreamEvent[] = [];
     await runIdeation(baseConfig(), (e) => events.push(e));
 
-    expect(events.some((e) => e.type === 'error')).toBe(true);
+    expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
   });
 
   // ---------------------------------------------------------------------------
@@ -269,38 +269,30 @@ describe('runIdeation', () => {
   // ---------------------------------------------------------------------------
 
   it.each(IDEATION_TYPES)('loads the correct prompt file for ideation type: %s', async (type) => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
     await runIdeation(baseConfig({ ideationType: type }));
 
-    // The prompt file for each type should have been checked for existence
-    expect(mockExistsSync).toHaveBeenCalledWith(expect.stringContaining('.md'));
+    expect(mockExistsSync).toHaveBeenCalledWith(expect.stringMatching(/^\/app\/prompts\/ideation_.*\.md$/));
   });
 
   // ---------------------------------------------------------------------------
   // Context injection
   // ---------------------------------------------------------------------------
 
-  it('includes projectDir and outputDir in the prompt passed to streamText', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
+  it('includes projectDir and outputDir in the system prompt', async () => {
     await runIdeation(
       baseConfig({ projectDir: '/my/project', outputDir: '/my/project/.auto-claude/ideation' }),
     );
 
-    // The system prompt passed to streamText should contain the project dir
-    const streamArgs = mockStreamText.mock.calls[0][0];
-    const systemPrompt = streamArgs.system as string;
-    expect(systemPrompt).toContain('/my/project');
+    const systemPrompt = taskArgs().systemPrompt as string;
+    expect(systemPrompt).toContain('Analyze the codebase for improvements.');
+    expect(systemPrompt).toContain('**Project Directory**: /my/project');
+    expect(systemPrompt).toContain('**Output Directory**: /my/project/.auto-claude/ideation');
   });
 
   it('injects maxIdeasPerType into the context', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
     await runIdeation(baseConfig({ maxIdeasPerType: 10 }));
 
-    const streamArgs = mockStreamText.mock.calls[0][0];
-    const systemPrompt = streamArgs.system as string;
-    expect(systemPrompt).toContain('10');
+    expect(taskArgs().systemPrompt).toContain('**Max Ideas**: 10');
+    expect(taskArgs().prompt).toContain('up to 10');
   });
 });

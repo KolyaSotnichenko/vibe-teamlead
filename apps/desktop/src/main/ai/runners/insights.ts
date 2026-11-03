@@ -2,24 +2,21 @@
  * Insights Runner
  * ===============
  *
- * AI chat for codebase insights using Vercel AI SDK.
- * See apps/desktop/src/main/ai/runners/insights.ts for the TypeScript implementation.
+ * AI chat for codebase insights.
  *
  * Provides an AI-powered chat interface for asking questions about a codebase.
  * Can also suggest tasks based on the conversation.
  *
- * Uses `createSimpleClient()` with read-only tools (Read, Glob, Grep) and streaming.
+ * Runs one Claude Code session via `runClaudeTask()` with read-only tools
+ * (Read, Glob, Grep), streaming text and tool activity to the caller.
  */
 
-import { streamText, stepCountIs } from 'ai';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
-import { buildToolRegistry } from '../tools/build-registry';
-import type { ToolContext } from '../tools/types';
+import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
-import type { SecurityProfile } from '../security/bash-validator';
+import type { StreamEvent } from '../session/types';
 import { safeParseJson } from '../../utils/json-repair';
 import { parseLLMJson } from '../schema/structured-output';
 import { TaskSuggestionSchema } from '../schema/insight-extractor';
@@ -242,81 +239,59 @@ export async function runInsightsQuery(
     fullPrompt = `Previous conversation:\n${conversationContext}\n\nCurrent question: ${message}`;
   }
 
-  // Create tool context for read-only tools
-  const toolContext: ToolContext = {
-    cwd: projectDir,
-    projectDir,
-    specDir: join(projectDir, '.auto-claude', 'specs'),
-    securityProfile: null as unknown as SecurityProfile,
-    abortSignal,
-  };
-
-  // Bind tools via registry (insights agent gets Read, Glob, Grep)
-  const registry = buildToolRegistry();
-  const tools = registry.getToolsForAgent('insights', toolContext);
-
-  // Create simple client with tools
-  const client = await createSimpleClient({
-    systemPrompt,
-    modelShorthand,
-    thinkingLevel,
-    maxSteps: 30, // Allow sufficient turns for codebase exploration
-    tools,
-  });
-
   const toolCalls: ToolCallInfo[] = [];
   let responseText = '';
+  let lastError: string | undefined;
 
-  // Detect Codex models — they require instructions via providerOptions, not system
-  const insightsModelId = typeof client.model === 'string' ? client.model : client.model.modelId;
-  const isCodexInsights = insightsModelId?.includes('codex') ?? false;
+  const emitError = (error: string) => {
+    lastError = error;
+    onStream?.({ type: 'error', error });
+  };
 
-  try {
-    const result = streamText({
-      model: client.model,
-      system: isCodexInsights ? undefined : client.systemPrompt,
-      prompt: fullPrompt,
-      tools: client.tools,
-      stopWhen: stepCountIs(client.maxSteps),
-      abortSignal,
-      ...(isCodexInsights ? {
-        providerOptions: {
-          openai: {
-            instructions: client.systemPrompt,
-            store: false,
-          },
-        },
-      } : {}),
-    });
-
-    for await (const part of result.fullStream) {
-      switch (part.type) {
-        case 'text-delta': {
-          responseText += part.text;
-          onStream?.({ type: 'text-delta', text: part.text });
-          break;
-        }
-        case 'tool-call': {
-          const args = 'input' in part ? (part.input as Record<string, unknown>) : {};
-          const input = extractToolInput(args);
-          toolCalls.push({ name: part.toolName, input });
-          onStream?.({ type: 'tool-start', name: part.toolName, input });
-          break;
-        }
-        case 'tool-result': {
-          onStream?.({ type: 'tool-end', name: part.toolName });
-          break;
-        }
-        case 'error': {
-          const errorMsg = part.error instanceof Error ? part.error.message : String(part.error);
-          onStream?.({ type: 'error', error: errorMsg });
-          break;
-        }
+  const onEvent = (event: StreamEvent) => {
+    switch (event.type) {
+      case 'text-delta': {
+        responseText += event.text;
+        onStream?.({ type: 'text-delta', text: event.text });
+        break;
+      }
+      case 'tool-call': {
+        const input = extractToolInput(event.args ?? {});
+        toolCalls.push({ name: event.toolName, input });
+        onStream?.({ type: 'tool-start', name: event.toolName, input });
+        break;
+      }
+      case 'tool-result': {
+        onStream?.({ type: 'tool-end', name: event.toolName });
+        break;
+      }
+      case 'error': {
+        emitError(event.error.message);
+        break;
       }
     }
+  };
+
+  try {
+    const result = await runClaudeTask({
+      systemPrompt,
+      prompt: fullPrompt,
+      model: modelShorthand,
+      thinkingLevel,
+      tools: READ_TOOLS,
+      cwd: projectDir,
+      specDir: join(projectDir, '.auto-claude', 'specs'),
+      agentType: 'insights',
+      maxTurns: 30, // Allow sufficient turns for codebase exploration
+      abortSignal,
+      onEvent,
+    });
+    // Fall back to the final assistant message if nothing was streamed
+    if (!responseText) responseText = result.text;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    onStream?.({ type: 'error', error: errorMsg });
+    // Avoid a duplicate when the session already reported this error
+    if (errorMsg !== lastError) emitError(errorMsg);
     throw error;
   }
 

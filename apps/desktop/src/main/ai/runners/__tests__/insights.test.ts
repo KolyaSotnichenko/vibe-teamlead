@@ -1,20 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import type { StreamEvent } from '../../session/types';
+
 // =============================================================================
 // Mocks — must be declared before any imports that use them
 // =============================================================================
 
-const mockStreamText = vi.fn();
+const mockRunClaudeTask = vi.fn();
 
-vi.mock('ai', () => ({
-  streamText: (...args: unknown[]) => mockStreamText(...args),
-  stepCountIs: (n: number) => ({ type: 'stepCount', count: n }),
-}));
-
-const mockCreateSimpleClient = vi.fn();
-
-vi.mock('../../client/factory', () => ({
-  createSimpleClient: (...args: unknown[]) => mockCreateSimpleClient(...args),
+vi.mock('../../claude-code/task', () => ({
+  runClaudeTask: (...args: unknown[]) => mockRunClaudeTask(...args),
+  READ_TOOLS: ['Read', 'Glob', 'Grep'],
+  RESEARCH_TOOLS: ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'],
 }));
 
 // Filesystem mocks — project context files are absent by default
@@ -26,13 +23,6 @@ vi.mock('node:fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
   readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
   readdirSync: (...args: unknown[]) => mockReaddirSync(...args),
-}));
-
-// Mock tool registry
-vi.mock('../../tools/build-registry', () => ({
-  buildToolRegistry: () => ({
-    getToolsForAgent: vi.fn().mockReturnValue({}),
-  }),
 }));
 
 // json-repair is used for safeParseJson in the insights runner
@@ -67,25 +57,32 @@ import { parseLLMJson } from '../../schema/structured-output';
 // Helpers
 // =============================================================================
 
-const fakeModel = { modelId: 'claude-sonnet-test' };
-
-function makeMockClient(systemPrompt = 'You are an AI assistant.') {
-  return {
-    model: fakeModel,
-    systemPrompt,
-    tools: {},
-    maxSteps: 30,
-  };
+/** Make runClaudeTask emit the given StreamEvents, then resolve */
+function emitEvents(events: StreamEvent[], finalText = '') {
+  mockRunClaudeTask.mockImplementation(async (opts: { onEvent?: (e: StreamEvent) => void }) => {
+    for (const e of events) opts.onEvent?.(e);
+    return { text: finalText, session: { outcome: 'completed' } };
+  });
 }
 
-function makeStream(parts: Array<Record<string, unknown>>) {
-  return {
-    fullStream: (async function* () {
-      for (const part of parts) {
-        yield part;
-      }
-    })(),
-  };
+function text(t: string): StreamEvent {
+  return { type: 'text-delta', text: t };
+}
+
+function toolCall(toolName: string, args: Record<string, unknown>, id = 'c1'): StreamEvent {
+  return { type: 'tool-call', toolName, toolCallId: id, args };
+}
+
+function toolResult(toolName: string, id = 'c1'): StreamEvent {
+  return { type: 'tool-result', toolName, toolCallId: id, result: 'ok', durationMs: 1, isError: false };
+}
+
+function errorEvent(message: string): StreamEvent {
+  return { type: 'error', error: { code: 'error', message, retryable: false } };
+}
+
+function taskArgs() {
+  return mockRunClaudeTask.mock.calls[0][0];
 }
 
 function baseConfig(overrides: Partial<InsightsConfig> = {}): InsightsConfig {
@@ -103,23 +100,18 @@ function baseConfig(overrides: Partial<InsightsConfig> = {}): InsightsConfig {
 describe('runInsightsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateSimpleClient.mockResolvedValue(makeMockClient());
+    emitEvents([]);
     mockExistsSync.mockReturnValue(false);
     mockReaddirSync.mockReturnValue([]);
     vi.mocked(parseLLMJson).mockReturnValue(null);
   });
 
   // ---------------------------------------------------------------------------
-  // Successful run — no streaming events needed from caller
+  // Successful run
   // ---------------------------------------------------------------------------
 
-  it('returns response text accumulated from stream', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'text-delta', text: 'Authentication uses JWT tokens.' },
-        { type: 'text-delta', text: ' Tokens expire after 1 hour.' },
-      ]),
-    );
+  it('returns response text accumulated from text-delta events', async () => {
+    emitEvents([text('Authentication uses JWT tokens.'), text(' Tokens expire after 1 hour.')]);
 
     const result = await runInsightsQuery(baseConfig());
 
@@ -128,9 +120,15 @@ describe('runInsightsQuery', () => {
     expect(result.toolCalls).toEqual([]);
   });
 
-  it('returns empty text and no task suggestion when stream is empty', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
+  it('falls back to the final assistant text when nothing was streamed', async () => {
+    emitEvents([], 'Final answer.');
 
+    const result = await runInsightsQuery(baseConfig());
+
+    expect(result.text).toBe('Final answer.');
+  });
+
+  it('returns empty text and no task suggestion when session produces nothing', async () => {
     const result = await runInsightsQuery(baseConfig());
 
     expect(result.text).toBe('');
@@ -147,16 +145,7 @@ describe('runInsightsQuery', () => {
       description: 'Implement per-user rate limiting on auth endpoints',
       metadata: { category: 'security', complexity: 'medium', impact: 'high' },
     };
-
-    mockStreamText.mockReturnValue(
-      makeStream([
-        {
-          type: 'text-delta',
-          text: `Here is my suggestion.\n__TASK_SUGGESTION__:${JSON.stringify(suggestion)}\n`,
-        },
-      ]),
-    );
-
+    emitEvents([text(`Here is my suggestion.\n__TASK_SUGGESTION__:${JSON.stringify(suggestion)}\n`)]);
     vi.mocked(parseLLMJson).mockReturnValueOnce(suggestion as unknown as ReturnType<typeof parseLLMJson>);
 
     const result = await runInsightsQuery(baseConfig());
@@ -167,9 +156,7 @@ describe('runInsightsQuery', () => {
   });
 
   it('returns null taskSuggestion when no marker in response', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([{ type: 'text-delta', text: 'No suggestions here.' }]),
-    );
+    emitEvents([text('No suggestions here.')]);
 
     const result = await runInsightsQuery(baseConfig());
 
@@ -181,14 +168,12 @@ describe('runInsightsQuery', () => {
   // ---------------------------------------------------------------------------
 
   it('tracks tool calls in result.toolCalls', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'tool-call', toolName: 'Read', toolCallId: 'c1', input: { file_path: 'src/auth.ts' } },
-        { type: 'tool-result', toolCallId: 'c1', toolName: 'Read', output: 'file content' },
-        { type: 'tool-call', toolName: 'Glob', toolCallId: 'c2', input: { pattern: '**/*.ts' } },
-        { type: 'tool-result', toolCallId: 'c2', toolName: 'Glob', output: 'src/auth.ts' },
-      ]),
-    );
+    emitEvents([
+      toolCall('Read', { file_path: 'src/auth.ts' }, 'c1'),
+      toolResult('Read', 'c1'),
+      toolCall('Glob', { pattern: '**/*.ts' }, 'c2'),
+      toolResult('Glob', 'c2'),
+    ]);
 
     const result = await runInsightsQuery(baseConfig());
 
@@ -197,34 +182,16 @@ describe('runInsightsQuery', () => {
     expect(result.toolCalls[1].name).toBe('Glob');
   });
 
-  it('extracts file_path from Read tool call input', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        {
-          type: 'tool-call',
-          toolName: 'Read',
-          toolCallId: 'c1',
-          input: { file_path: 'src/auth.ts' },
-        },
-      ]),
-    );
+  it('extracts file_path from Read tool call args', async () => {
+    emitEvents([toolCall('Read', { file_path: 'src/auth.ts' })]);
 
     const result = await runInsightsQuery(baseConfig());
 
     expect(result.toolCalls[0].input).toBe('src/auth.ts');
   });
 
-  it('extracts pattern from Grep/Glob tool call input', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        {
-          type: 'tool-call',
-          toolName: 'Grep',
-          toolCallId: 'c1',
-          input: { pattern: 'useAuth' },
-        },
-      ]),
-    );
+  it('extracts pattern from Grep/Glob tool call args', async () => {
+    emitEvents([toolCall('Grep', { pattern: 'useAuth' })]);
 
     const result = await runInsightsQuery(baseConfig());
 
@@ -236,115 +203,122 @@ describe('runInsightsQuery', () => {
   // ---------------------------------------------------------------------------
 
   it('forwards text-delta events to onStream callback', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'text-delta', text: 'chunk1' },
-        { type: 'text-delta', text: 'chunk2' },
-      ]),
-    );
+    emitEvents([text('chunk1'), text('chunk2')]);
 
     const events: InsightsStreamEvent[] = [];
     await runInsightsQuery(baseConfig(), (e) => events.push(e));
 
-    const textEvents = events.filter((e) => e.type === 'text-delta');
-    expect(textEvents).toHaveLength(2);
+    expect(events.filter((e) => e.type === 'text-delta')).toEqual([
+      { type: 'text-delta', text: 'chunk1' },
+      { type: 'text-delta', text: 'chunk2' },
+    ]);
   });
 
-  it('forwards tool-start events for tool-call stream parts', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'tool-call', toolName: 'Grep', toolCallId: 'c1', input: { pattern: 'login' } },
-      ]),
-    );
+  it('forwards tool-start events for tool-call events', async () => {
+    emitEvents([toolCall('Grep', { pattern: 'login' })]);
 
     const events: InsightsStreamEvent[] = [];
     await runInsightsQuery(baseConfig(), (e) => events.push(e));
 
-    const toolStartEvents = events.filter((e) => e.type === 'tool-start');
-    expect(toolStartEvents).toHaveLength(1);
-    expect((toolStartEvents[0] as { type: 'tool-start'; name: string }).name).toBe('Grep');
+    expect(events).toEqual([{ type: 'tool-start', name: 'Grep', input: 'pattern: login' }]);
   });
 
-  it('forwards tool-end events for tool-result stream parts', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([
-        { type: 'tool-result', toolCallId: 'c1', toolName: 'Read', output: 'content' },
-      ]),
-    );
+  it('forwards tool-end events for tool-result events', async () => {
+    emitEvents([toolResult('Read')]);
 
     const events: InsightsStreamEvent[] = [];
     await runInsightsQuery(baseConfig(), (e) => events.push(e));
 
-    const toolEndEvents = events.filter((e) => e.type === 'tool-end');
-    expect(toolEndEvents).toHaveLength(1);
+    expect(events).toEqual([{ type: 'tool-end', name: 'Read' }]);
   });
 
-  it('forwards error events for error stream parts', async () => {
-    mockStreamText.mockReturnValue(
-      makeStream([{ type: 'error', error: new Error('tool failed') }]),
-    );
+  it('forwards error events as plain messages', async () => {
+    emitEvents([errorEvent('tool failed')]);
 
     const events: InsightsStreamEvent[] = [];
     await runInsightsQuery(baseConfig(), (e) => events.push(e));
 
-    const errorEvents = events.filter((e) => e.type === 'error');
-    expect(errorEvents).toHaveLength(1);
-    expect((errorEvents[0] as { type: 'error'; error: string }).error).toBe('tool failed');
+    expect(events).toEqual([{ type: 'error', error: 'tool failed' }]);
+  });
+
+  it('ignores thinking and usage events', async () => {
+    emitEvents([
+      { type: 'thinking-delta', text: 'hmm' },
+      { type: 'usage-update', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } },
+    ]);
+
+    const events: InsightsStreamEvent[] = [];
+    await runInsightsQuery(baseConfig(), (e) => events.push(e));
+
+    expect(events).toEqual([]);
   });
 
   // ---------------------------------------------------------------------------
   // Error propagation
   // ---------------------------------------------------------------------------
 
-  it('rethrows when streamText iteration throws', async () => {
-    mockStreamText.mockReturnValue({
-      // biome-ignore lint/correctness/useYield: intentionally throwing before yield to test error path
-      fullStream: (async function* () {
-        throw new Error('API timeout');
-      })(),
-    });
+  it('rethrows when runClaudeTask rejects', async () => {
+    mockRunClaudeTask.mockRejectedValue(new Error('API timeout'));
 
     await expect(runInsightsQuery(baseConfig())).rejects.toThrow('API timeout');
   });
 
   it('emits error event to callback before rethrowing', async () => {
-    mockStreamText.mockReturnValue({
-      // biome-ignore lint/correctness/useYield: intentionally throwing before yield to test error path
-      fullStream: (async function* () {
-        throw new Error('rate limited');
-      })(),
+    mockRunClaudeTask.mockRejectedValue(new Error('rate limited'));
+
+    const events: InsightsStreamEvent[] = [];
+    await expect(runInsightsQuery(baseConfig(), (e) => events.push(e))).rejects.toThrow('rate limited');
+
+    expect(events).toEqual([{ type: 'error', error: 'rate limited' }]);
+  });
+
+  it('does not duplicate an error the session already streamed', async () => {
+    mockRunClaudeTask.mockImplementation(async (opts: { onEvent?: (e: StreamEvent) => void }) => {
+      opts.onEvent?.(errorEvent('auth failed'));
+      throw new Error('auth failed');
     });
 
     const events: InsightsStreamEvent[] = [];
-    await expect(runInsightsQuery(baseConfig(), (e) => events.push(e))).rejects.toThrow(
-      'rate limited',
-    );
+    await expect(runInsightsQuery(baseConfig(), (e) => events.push(e))).rejects.toThrow('auth failed');
 
-    expect(events.some((e) => e.type === 'error')).toBe(true);
+    expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
   });
 
   // ---------------------------------------------------------------------------
-  // Client configuration
+  // Task configuration
   // ---------------------------------------------------------------------------
 
-  it('uses sonnet model and medium thinking level by default', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
+  it('runs a read-only insights session in the project directory', async () => {
     await runInsightsQuery(baseConfig());
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('sonnet');
-    expect(clientArgs.thinkingLevel).toBe('medium');
+    const args = taskArgs();
+    expect(args.tools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(args.cwd).toBe('/project');
+    expect(args.agentType).toBe('insights');
+    expect(args.maxTurns).toBe(30);
+    expect(args.allowedWritePaths).toBeUndefined();
+    expect(args.systemPrompt).toContain('__TASK_SUGGESTION__');
+  });
+
+  it('uses sonnet model and medium thinking level by default', async () => {
+    await runInsightsQuery(baseConfig());
+
+    expect(taskArgs().model).toBe('sonnet');
+    expect(taskArgs().thinkingLevel).toBe('medium');
   });
 
   it('accepts custom modelShorthand and thinkingLevel', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
     await runInsightsQuery(baseConfig({ modelShorthand: 'haiku', thinkingLevel: 'low' }));
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('haiku');
-    expect(clientArgs.thinkingLevel).toBe('low');
+    expect(taskArgs().model).toBe('haiku');
+    expect(taskArgs().thinkingLevel).toBe('low');
+  });
+
+  it('passes the abort signal through', async () => {
+    const controller = new AbortController();
+    await runInsightsQuery(baseConfig({ abortSignal: controller.signal }));
+
+    expect(taskArgs().abortSignal).toBe(controller.signal);
   });
 
   // ---------------------------------------------------------------------------
@@ -352,8 +326,6 @@ describe('runInsightsQuery', () => {
   // ---------------------------------------------------------------------------
 
   it('includes conversation history in the prompt when provided', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
     await runInsightsQuery(
       baseConfig({
         message: 'What about refresh tokens?',
@@ -364,19 +336,15 @@ describe('runInsightsQuery', () => {
       }),
     );
 
-    const callArgs = mockStreamText.mock.calls[0][0];
-    const prompt = callArgs.prompt as string;
+    const prompt = taskArgs().prompt as string;
     expect(prompt).toContain('How does auth work?');
     expect(prompt).toContain('It uses JWT.');
     expect(prompt).toContain('What about refresh tokens?');
   });
 
   it('uses message directly as prompt when history is empty', async () => {
-    mockStreamText.mockReturnValue(makeStream([]));
-
     await runInsightsQuery(baseConfig({ message: 'What is the entry point?' }));
 
-    const callArgs = mockStreamText.mock.calls[0][0];
-    expect(callArgs.prompt).toBe('What is the entry point?');
+    expect(taskArgs().prompt).toBe('What is the entry point?');
   });
 });

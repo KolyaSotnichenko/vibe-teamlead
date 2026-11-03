@@ -2,23 +2,20 @@
  * Roadmap Runner
  * ==============
  *
- * AI-powered roadmap generation using Vercel AI SDK.
- * See apps/desktop/src/main/ai/runners/roadmap.ts for the TypeScript implementation.
+ * AI-powered roadmap generation via Claude Code.
  *
  * Multi-step process: project discovery → feature generation → roadmap synthesis.
- * Uses `createSimpleClient()` with read-only tools and streaming.
+ * Each phase is one Claude Code session (`runClaudeTask()`) with read-only
+ * exploration + web research tools, plus Write/Edit confined to the roadmap
+ * output directory.
  */
 
-import { streamText, stepCountIs } from 'ai';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
-import type { SimpleClientResult } from '../client/types';
-import { buildToolRegistry } from '../tools/build-registry';
-import type { ToolContext } from '../tools/types';
+import { RESEARCH_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
-import type { SecurityProfile } from '../security/bash-validator';
+import type { StreamEvent } from '../session/types';
 import { safeParseJson } from '../../utils/json-repair';
 import { tryLoadPrompt } from '../prompts/prompt-loader';
 
@@ -30,6 +27,9 @@ const MAX_RETRIES = 3;
 
 /** Maximum agentic steps per phase */
 const MAX_STEPS_PER_PHASE = 30;
+
+/** Explore the codebase, research the web, write phase output to the roadmap dir */
+const ROADMAP_TOOLS = [...RESEARCH_TOOLS, 'Write', 'Edit'] as const;
 
 // =============================================================================
 // Types
@@ -89,6 +89,67 @@ export type RoadmapStreamEvent =
   | { type: 'error'; error: string };
 
 // =============================================================================
+// Phase Session
+// =============================================================================
+
+/** Settings shared by every phase session */
+interface PhaseSessionOptions {
+  projectDir: string;
+  outputDir: string;
+  modelShorthand: ModelShorthand;
+  thinkingLevel: ThinkingLevel;
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * Run one phase as a Claude Code session, translating its stream events into
+ * the runner's RoadmapStreamEvents. Throws on session failure.
+ */
+async function runPhaseSession(
+  session: PhaseSessionOptions,
+  systemPrompt: string,
+  prompt: string,
+  onStream?: RoadmapStreamCallback,
+): Promise<void> {
+  let lastError: string | undefined;
+  const onEvent = (event: StreamEvent) => {
+    switch (event.type) {
+      case 'text-delta':
+        onStream?.({ type: 'text-delta', text: event.text });
+        break;
+      case 'tool-call':
+        onStream?.({ type: 'tool-use', name: event.toolName });
+        break;
+      case 'error':
+        lastError = event.error.message;
+        onStream?.({ type: 'error', error: event.error.message });
+        break;
+    }
+  };
+
+  try {
+    await runClaudeTask({
+      systemPrompt,
+      prompt,
+      model: session.modelShorthand,
+      thinkingLevel: session.thinkingLevel,
+      tools: ROADMAP_TOOLS,
+      cwd: session.projectDir,
+      specDir: session.outputDir,
+      allowedWritePaths: [session.outputDir],
+      agentType: 'roadmap_discovery',
+      maxTurns: MAX_STEPS_PER_PHASE,
+      abortSignal: session.abortSignal,
+      onEvent,
+    });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg !== lastError) onStream?.({ type: 'error', error: errorMsg });
+    throw error;
+  }
+}
+
+// =============================================================================
 // Discovery Phase
 // =============================================================================
 
@@ -97,13 +158,11 @@ export type RoadmapStreamEvent =
  * Mirrors Python's `DiscoveryPhase.execute()`.
  */
 async function runDiscoveryPhase(
-  projectDir: string,
-  outputDir: string,
+  session: PhaseSessionOptions,
   refresh: boolean,
-  client: SimpleClientResult,
-  abortSignal?: AbortSignal,
   onStream?: RoadmapStreamCallback,
 ): Promise<RoadmapPhaseResult> {
+  const { projectDir, outputDir } = session;
   const discoveryFile = join(outputDir, 'roadmap_discovery.json');
   const projectIndexFile = join(outputDir, 'project_index.json');
 
@@ -112,10 +171,6 @@ async function runDiscoveryPhase(
   }
 
   const errors: string[] = [];
-
-  // Detect Codex models — they require instructions via providerOptions, not system
-  const discoveryModelId = typeof client.model === 'string' ? client.model : client.model.modelId;
-  const isCodexDiscovery = discoveryModelId?.includes('codex') ?? false;
 
   // Load the full prompt file with JSON schema; fall back to inline prompt
   const loadedDiscoveryPrompt = tryLoadPrompt('roadmap_discovery');
@@ -145,38 +200,7 @@ Do NOT ask questions. Make educated inferences and create the file.`;
     const discoveryUserPrompt = 'Analyze the project and create the discovery document. Use the available tools to explore the codebase, then write your findings as JSON to the output file specified in the context above.';
 
     try {
-      const result = streamText({
-        model: client.model,
-        system: isCodexDiscovery ? undefined : prompt,
-        prompt: discoveryUserPrompt,
-        tools: client.tools,
-        stopWhen: stepCountIs(client.maxSteps),
-        abortSignal,
-        ...(isCodexDiscovery ? {
-          providerOptions: {
-            openai: {
-              instructions: prompt,
-              store: false,
-            },
-          },
-        } : {}),
-      });
-
-      for await (const part of result.fullStream) {
-        switch (part.type) {
-          case 'text-delta':
-            onStream?.({ type: 'text-delta', text: part.text });
-            break;
-          case 'tool-call':
-            onStream?.({ type: 'tool-use', name: part.toolName });
-            break;
-          case 'error': {
-            const errorMsg = part.error instanceof Error ? part.error.message : String(part.error);
-            onStream?.({ type: 'error', error: errorMsg });
-            break;
-          }
-        }
-      }
+      await runPhaseSession(session, prompt, discoveryUserPrompt, onStream);
 
       // Validate output
       if (existsSync(discoveryFile)) {
@@ -211,13 +235,11 @@ Do NOT ask questions. Make educated inferences and create the file.`;
  * Mirrors Python's `FeaturesPhase.execute()`.
  */
 async function runFeaturesPhase(
-  projectDir: string,
-  outputDir: string,
+  session: PhaseSessionOptions,
   refresh: boolean,
-  client: SimpleClientResult,
-  abortSignal?: AbortSignal,
   onStream?: RoadmapStreamCallback,
 ): Promise<RoadmapPhaseResult> {
+  const { outputDir } = session;
   const roadmapFile = join(outputDir, 'roadmap.json');
   const discoveryFile = join(outputDir, 'roadmap_discovery.json');
   const projectIndexFile = join(outputDir, 'project_index.json');
@@ -234,10 +256,6 @@ async function runFeaturesPhase(
   const preservedFeatures = loadPreservedFeatures(roadmapFile);
 
   const errors: string[] = [];
-
-  // Detect Codex models — they require instructions via providerOptions, not system
-  const featuresModelId = typeof client.model === 'string' ? client.model : client.model.modelId;
-  const isCodexFeatures = featuresModelId?.includes('codex') ?? false;
 
   // Load the full prompt file with JSON schema; fall back to inline prompt
   const loadedFeaturesPrompt = tryLoadPrompt('roadmap_features');
@@ -277,38 +295,7 @@ The JSON must contain: vision, target_audience (object with "primary" key), phas
     const featuresUserPrompt = 'Read the discovery data and generate a complete roadmap with prioritized features. Write the roadmap JSON to the output file specified in the context above.';
 
     try {
-      const result = streamText({
-        model: client.model,
-        system: isCodexFeatures ? undefined : prompt,
-        prompt: featuresUserPrompt,
-        tools: client.tools,
-        stopWhen: stepCountIs(client.maxSteps),
-        abortSignal,
-        ...(isCodexFeatures ? {
-          providerOptions: {
-            openai: {
-              instructions: prompt,
-              store: false,
-            },
-          },
-        } : {}),
-      });
-
-      for await (const part of result.fullStream) {
-        switch (part.type) {
-          case 'text-delta':
-            onStream?.({ type: 'text-delta', text: part.text });
-            break;
-          case 'tool-call':
-            onStream?.({ type: 'tool-use', name: part.toolName });
-            break;
-          case 'error': {
-            const errorMsg = part.error instanceof Error ? part.error.message : String(part.error);
-            onStream?.({ type: 'error', error: errorMsg });
-            break;
-          }
-        }
-      }
+      await runPhaseSession(session, prompt, featuresUserPrompt, onStream);
 
       // Validate and merge — read/write through fd to avoid TOCTOU
       let roadmapRaw: string | null = null;
@@ -450,33 +437,13 @@ export async function runRoadmapGeneration(
     mkdirSync(outputDir, { recursive: true });
   }
 
-  // Create tool context for read-only tools + Write
-  const toolContext: ToolContext = {
-    cwd: projectDir,
-    projectDir,
-    specDir: join(projectDir, '.auto-claude', 'specs'),
-    securityProfile: null as unknown as SecurityProfile,
-    abortSignal,
-  };
-
-  const registry = buildToolRegistry();
-  const tools = registry.getToolsForAgent('roadmap_discovery', toolContext);
-
-  const client = await createSimpleClient({
-    systemPrompt: '',
-    modelShorthand,
-    thinkingLevel,
-    maxSteps: MAX_STEPS_PER_PHASE,
-    tools,
-  });
+  const session: PhaseSessionOptions = { projectDir, outputDir, modelShorthand, thinkingLevel, abortSignal };
 
   const phases: RoadmapPhaseResult[] = [];
 
   // Phase 1: Discovery
   onStream?.({ type: 'phase-start', phase: 'discovery' });
-  const discoveryResult = await runDiscoveryPhase(
-    projectDir, outputDir, refresh, client, abortSignal, onStream,
-  );
+  const discoveryResult = await runDiscoveryPhase(session, refresh, onStream);
   phases.push(discoveryResult);
   onStream?.({ type: 'phase-complete', phase: 'discovery', success: discoveryResult.success });
 
@@ -490,9 +457,7 @@ export async function runRoadmapGeneration(
 
   // Phase 2: Feature Generation
   onStream?.({ type: 'phase-start', phase: 'features' });
-  const featuresResult = await runFeaturesPhase(
-    projectDir, outputDir, refresh, client, abortSignal, onStream,
-  );
+  const featuresResult = await runFeaturesPhase(session, refresh, onStream);
   phases.push(featuresResult);
   onStream?.({ type: 'phase-complete', phase: 'features', success: featuresResult.success });
 

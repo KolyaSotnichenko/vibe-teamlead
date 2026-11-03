@@ -1,20 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import type { StreamEvent } from '../../session/types';
+
 // =============================================================================
 // Mocks — must be declared before any imports that use them
 // =============================================================================
 
-const mockStreamText = vi.fn();
+const mockRunClaudeTask = vi.fn();
 
-vi.mock('ai', () => ({
-  streamText: (...args: unknown[]) => mockStreamText(...args),
-  stepCountIs: (n: number) => ({ type: 'stepCount', count: n }),
-}));
-
-const mockCreateSimpleClient = vi.fn();
-
-vi.mock('../../client/factory', () => ({
-  createSimpleClient: (...args: unknown[]) => mockCreateSimpleClient(...args),
+vi.mock('../../claude-code/task', () => ({
+  runClaudeTask: (...args: unknown[]) => mockRunClaudeTask(...args),
+  READ_TOOLS: ['Read', 'Glob', 'Grep'],
+  RESEARCH_TOOLS: ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'],
 }));
 
 // Filesystem mocks
@@ -30,13 +27,6 @@ vi.mock('node:fs', () => ({
   writeFileSync: (...args: unknown[]) => mockWriteFileSync(...args),
   mkdirSync: (...args: unknown[]) => mockMkdirSync(...args),
   renameSync: (...args: unknown[]) => mockRenameSync(...args),
-}));
-
-// Tool registry mock
-vi.mock('../../tools/build-registry', () => ({
-  buildToolRegistry: () => ({
-    getToolsForAgent: vi.fn().mockReturnValue({}),
-  }),
 }));
 
 // json-repair used for safeParseJson
@@ -66,24 +56,13 @@ import type { RoadmapConfig, RoadmapStreamEvent } from '../roadmap';
 // Helpers
 // =============================================================================
 
-const fakeModel = { modelId: 'claude-sonnet-test' };
+type TaskOpts = { onEvent?: (e: StreamEvent) => void };
 
-function makeMockClient() {
-  return {
-    model: fakeModel,
-    systemPrompt: '',
-    tools: {},
-    maxSteps: 30,
-  };
-}
-
-function makeStream(parts: Array<Record<string, unknown>>) {
-  return {
-    fullStream: (async function* () {
-      for (const part of parts) {
-        yield part;
-      }
-    })(),
+/** A runClaudeTask implementation that emits the given StreamEvents, then resolves */
+function emitting(events: StreamEvent[] = []) {
+  return async (opts: TaskOpts) => {
+    for (const e of events) opts.onEvent?.(e);
+    return { text: '', session: { outcome: 'completed' } };
   };
 }
 
@@ -136,11 +115,10 @@ function baseConfig(overrides: Partial<RoadmapConfig> = {}): RoadmapConfig {
 describe('runRoadmapGeneration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateSimpleClient.mockResolvedValue(makeMockClient());
     // Output dir exists by default (created by mkdirSync is a no-op)
     mockExistsSync.mockReturnValue(false);
     mockMkdirSync.mockReturnValue(undefined);
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
   });
 
   // ---------------------------------------------------------------------------
@@ -158,10 +136,10 @@ describe('runRoadmapGeneration', () => {
       return false;
     });
 
-    // streamText yields nothing — validation happens from file reads
-    mockStreamText.mockImplementation(() => {
-      discoveryCreated = true; // simulate file being written during stream
-      return makeStream([]);
+    // Session emits nothing — validation happens from file reads
+    mockRunClaudeTask.mockImplementation(async () => {
+      discoveryCreated = true; // simulate file being written during the session
+      return { text: '', session: { outcome: 'completed' } };
     });
 
     // readFileSync returns valid JSON for each file
@@ -198,7 +176,7 @@ describe('runRoadmapGeneration', () => {
       return false; // discovery file never appears
     });
 
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     const result = await runRoadmapGeneration(baseConfig());
 
@@ -211,7 +189,7 @@ describe('runRoadmapGeneration', () => {
 
   it('does not run features phase when discovery fails', async () => {
     mockExistsSync.mockReturnValue(false);
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     const result = await runRoadmapGeneration(baseConfig());
 
@@ -236,7 +214,7 @@ describe('runRoadmapGeneration', () => {
       return '{}';
     });
 
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     const result = await runRoadmapGeneration(baseConfig());
 
@@ -261,8 +239,8 @@ describe('runRoadmapGeneration', () => {
 
     const result = await runRoadmapGeneration(baseConfig({ refresh: false }));
 
-    // streamText should not have been called since both files exist
-    expect(mockStreamText).not.toHaveBeenCalled();
+    // No session should run since both files exist
+    expect(mockRunClaudeTask).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
   });
 
@@ -275,7 +253,7 @@ describe('runRoadmapGeneration', () => {
       if (p.endsWith('roadmap') && !p.includes('.json')) return false; // dir does not exist
       return false;
     });
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     await runRoadmapGeneration(baseConfig({ outputDir: '/project/.auto-claude/roadmap' }));
 
@@ -320,15 +298,15 @@ describe('runRoadmapGeneration', () => {
     const events: RoadmapStreamEvent[] = [];
     await runRoadmapGeneration(baseConfig({ refresh: false }), (e) => events.push(e));
 
-    // Since files exist and refresh=false, streamText is never called and no text-delta fires
+    // Since files exist and refresh=false, no session runs and no text-delta fires
     // This confirms the caching path works correctly
     const textEvents = events.filter((e) => e.type === 'text-delta');
     expect(textEvents).toHaveLength(0);
   });
 
-  it('forwards text-delta from active streamText run when discovery must be generated', async () => {
+  it('forwards text-delta and tool-use events from the session when discovery must be generated', async () => {
     // outputDir exists, but discovery file does not (first attempt)
-    // After first streamText run, discovery file appears
+    // After the first session, discovery file appears
     let callCount = 0;
     mockExistsSync.mockImplementation((p: string) => {
       if (p.endsWith('roadmap') && !p.includes('.json')) return true;
@@ -338,51 +316,91 @@ describe('runRoadmapGeneration', () => {
 
     mockReadFileSync.mockReturnValue(VALID_DISCOVERY_JSON);
 
-    mockStreamText.mockImplementation(() => {
+    mockRunClaudeTask.mockImplementation(async (opts: TaskOpts) => {
       callCount++;
-      return {
-        fullStream: (async function* () {
-          yield { type: 'text-delta', text: 'Analyzing project...' };
-        })(),
-      };
+      opts.onEvent?.({ type: 'text-delta', text: 'Analyzing project...' });
+      opts.onEvent?.({ type: 'tool-call', toolName: 'Read', toolCallId: 'c1', args: { file_path: 'README.md' } });
+      opts.onEvent?.({ type: 'thinking-delta', text: 'ignored' });
+      return { text: '', session: { outcome: 'completed' } };
     });
 
     const events: RoadmapStreamEvent[] = [];
     await runRoadmapGeneration(baseConfig(), (e) => events.push(e));
 
-    const textEvents = events.filter((e) => e.type === 'text-delta');
-    expect(textEvents.length).toBeGreaterThan(0);
+    expect(events).toContainEqual({ type: 'text-delta', text: 'Analyzing project...' });
+    expect(events).toContainEqual({ type: 'tool-use', name: 'Read' });
+    expect(events.some((e) => (e as { text?: string }).text === 'ignored')).toBe(false);
+  });
+
+  it('forwards session error events as plain messages', async () => {
+    mockExistsSync.mockReturnValue(false);
+    mockRunClaudeTask.mockImplementation(
+      emitting([{ type: 'error', error: { code: 'error', message: 'tool failed', retryable: false } }]),
+    );
+
+    const events: RoadmapStreamEvent[] = [];
+    await runRoadmapGeneration(baseConfig(), (e) => events.push(e));
+
+    expect(events).toContainEqual({ type: 'error', error: 'tool failed' });
   });
 
   // ---------------------------------------------------------------------------
-  // Client configuration
+  // Task configuration
   // ---------------------------------------------------------------------------
 
   it('uses sonnet and medium thinking level by default', async () => {
     mockExistsSync.mockReturnValue(false);
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     await runRoadmapGeneration(baseConfig());
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('sonnet');
-    expect(clientArgs.thinkingLevel).toBe('medium');
+    const args = mockRunClaudeTask.mock.calls[0][0];
+    expect(args.model).toBe('sonnet');
+    expect(args.thinkingLevel).toBe('medium');
   });
 
   it('accepts custom modelShorthand and thinkingLevel', async () => {
     mockExistsSync.mockReturnValue(false);
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     await runRoadmapGeneration(baseConfig({ modelShorthand: 'haiku', thinkingLevel: 'low' }));
 
-    const clientArgs = mockCreateSimpleClient.mock.calls[0][0];
-    expect(clientArgs.modelShorthand).toBe('haiku');
-    expect(clientArgs.thinkingLevel).toBe('low');
+    const args = mockRunClaudeTask.mock.calls[0][0];
+    expect(args.model).toBe('haiku');
+    expect(args.thinkingLevel).toBe('low');
+  });
+
+  it('runs phases with research tools and writes confined to the roadmap output dir', async () => {
+    mockExistsSync.mockReturnValue(false);
+    mockRunClaudeTask.mockImplementation(emitting());
+    const controller = new AbortController();
+
+    await runRoadmapGeneration(baseConfig({ abortSignal: controller.signal }));
+
+    const args = mockRunClaudeTask.mock.calls[0][0];
+    expect(args.agentType).toBe('roadmap_discovery');
+    expect(args.cwd).toBe('/project');
+    expect(args.tools).toEqual(['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Write', 'Edit']);
+    expect(args.tools).not.toContain('Bash');
+    expect(args.allowedWritePaths).toEqual(['/project/.auto-claude/roadmap']);
+    expect(args.maxTurns).toBe(30);
+    expect(args.abortSignal).toBe(controller.signal);
+    expect(args.systemPrompt).toContain('/project/.auto-claude/roadmap/roadmap_discovery.json');
+  });
+
+  it('retries discovery up to 3 times when the file is not created', async () => {
+    mockExistsSync.mockReturnValue(false);
+    mockRunClaudeTask.mockImplementation(emitting());
+
+    const result = await runRoadmapGeneration(baseConfig());
+
+    expect(mockRunClaudeTask).toHaveBeenCalledTimes(3);
+    expect(result.phases[0].errors).toHaveLength(3);
   });
 
   it('uses default outputDir when not provided', async () => {
     mockExistsSync.mockReturnValue(false);
-    mockStreamText.mockReturnValue(makeStream([]));
+    mockRunClaudeTask.mockImplementation(emitting());
 
     await runRoadmapGeneration({ projectDir: '/my/project' });
 
@@ -394,27 +412,22 @@ describe('runRoadmapGeneration', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Error handling — streamText throws
+  // Error handling — runClaudeTask rejects
   // ---------------------------------------------------------------------------
 
-  it('records error in phase when streamText throws during discovery', async () => {
+  it('records error in phase when runClaudeTask rejects during discovery', async () => {
     mockExistsSync.mockImplementation((p: string) => {
       if (p.endsWith('roadmap') && !p.includes('.json')) return true;
       return false;
     });
 
-    mockStreamText.mockImplementation(() => {
-      return {
-        // biome-ignore lint/correctness/useYield: intentionally throwing before yield to test error path
-        fullStream: (async function* () {
-          throw new Error('network failure');
-        })(),
-      };
-    });
+    mockRunClaudeTask.mockRejectedValue(new Error('network failure'));
 
-    const result = await runRoadmapGeneration(baseConfig());
+    const events: RoadmapStreamEvent[] = [];
+    const result = await runRoadmapGeneration(baseConfig(), (e) => events.push(e));
 
     expect(result.success).toBe(false);
-    expect(result.phases[0].errors.length).toBeGreaterThan(0);
+    expect(result.phases[0].errors[0]).toContain('network failure');
+    expect(events).toContainEqual({ type: 'error', error: 'network failure' });
   });
 });

@@ -2,23 +2,20 @@
  * Ideation Runner
  * ===============
  *
- * AI-powered idea generation using Vercel AI SDK.
- * See apps/desktop/src/main/ai/runners/ideation.ts for the TypeScript implementation.
+ * AI-powered idea generation via Claude Code.
  *
- * Uses `createSimpleClient()` with read-only tools and streaming to generate
- * ideas of different types: code improvements, UI/UX, documentation, security,
- * performance, and code quality.
+ * Runs one Claude Code session per ideation type (`runClaudeTask()`) with
+ * read-only exploration + web research tools, plus Write/Edit confined to the
+ * output directory, to generate ideas of different types: code improvements,
+ * UI/UX, documentation, security, performance, and code quality.
  */
 
-import { streamText, stepCountIs } from 'ai';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createSimpleClient } from '../client/factory';
-import { buildToolRegistry } from '../tools/build-registry';
-import type { ToolContext } from '../tools/types';
+import { RESEARCH_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
-import type { SecurityProfile } from '../security/bash-validator';
+import type { StreamEvent } from '../session/types';
 
 // =============================================================================
 // Constants
@@ -55,6 +52,12 @@ const IDEATION_TYPE_PROMPTS: Record<IdeationType, string> = {
   performance_optimizations: 'ideation_performance.md',
   code_quality: 'ideation_code_quality.md',
 };
+
+/** Explore the codebase, research the web, write the ideas JSON to the output dir */
+const IDEATION_TOOLS = [...RESEARCH_TOOLS, 'Write', 'Edit'] as const;
+
+/** Maximum agentic turns per ideation type */
+const MAX_TURNS = 30;
 
 // =============================================================================
 // Types
@@ -106,8 +109,8 @@ export type IdeationStreamEvent =
 /**
  * Run an ideation agent for a specific ideation type.
  *
- * Loads the appropriate prompt, creates a simple client with read-only tools,
- * and streams the response. Mirrors Python's `IdeationGenerator.run_agent()`.
+ * Loads the appropriate prompt, runs a Claude Code session with exploration
+ * tools (writes confined to `outputDir`), and streams the response. Mirrors Python's `IdeationGenerator.run_agent()`.
  *
  * @param config - Ideation configuration
  * @param onStream - Optional callback for streaming events
@@ -156,80 +159,52 @@ export async function runIdeation(
   prompt += `**Project Directory**: ${projectDir}\n`;
   prompt += `**Max Ideas**: ${maxIdeasPerType}\n`;
 
-  // Create tool context for read-only tools
-  const toolContext: ToolContext = {
-    cwd: projectDir,
-    projectDir,
-    specDir: join(projectDir, '.auto-claude', 'specs'),
-    securityProfile: null as unknown as SecurityProfile,
-    abortSignal,
-  };
-
-  // Bind read-only tools + Write for output
-  const registry = buildToolRegistry();
-  const tools = registry.getToolsForAgent('ideation', toolContext);
-
-  // Create simple client
-  const client = await createSimpleClient({
-    systemPrompt: '',
-    modelShorthand,
-    thinkingLevel,
-    maxSteps: 30,
-    tools,
-  });
-
   let responseText = '';
-
-  // Detect Codex models — they require instructions via providerOptions, not system
-  const modelId = typeof client.model === 'string' ? client.model : client.model.modelId;
-  const isCodex = modelId?.includes('codex') ?? false;
+  let lastError: string | undefined;
   const userPrompt = `Analyze the project at ${projectDir} and generate up to ${maxIdeasPerType} ${ideationType.replace(/_/g, ' ')} ideas. Use the available tools to explore the codebase, then write your findings as a JSON file to the output directory.`;
 
-  try {
-    const result = streamText({
-      model: client.model,
-      system: isCodex ? undefined : prompt,
-      prompt: userPrompt,
-      tools: client.tools,
-      stopWhen: stepCountIs(client.maxSteps),
-      abortSignal,
-      ...(isCodex ? {
-        providerOptions: {
-          openai: {
-            instructions: prompt,
-            store: false,
-          },
-        },
-      } : {}),
-    });
-
-    for await (const part of result.fullStream) {
-      switch (part.type) {
-        case 'text-delta': {
-          responseText += part.text;
-          onStream?.({ type: 'text-delta', text: part.text });
-          break;
-        }
-        case 'tool-call': {
-          onStream?.({ type: 'tool-use', name: part.toolName });
-          break;
-        }
-        case 'error': {
-          const errorMsg =
-            part.error instanceof Error ? part.error.message : String(part.error);
-          onStream?.({ type: 'error', error: errorMsg });
-          break;
-        }
+  const onEvent = (event: StreamEvent) => {
+    switch (event.type) {
+      case 'text-delta': {
+        responseText += event.text;
+        onStream?.({ type: 'text-delta', text: event.text });
+        break;
+      }
+      case 'tool-call': {
+        onStream?.({ type: 'tool-use', name: event.toolName });
+        break;
+      }
+      case 'error': {
+        lastError = event.error.message;
+        onStream?.({ type: 'error', error: event.error.message });
+        break;
       }
     }
+  };
+
+  try {
+    const result = await runClaudeTask({
+      systemPrompt: prompt,
+      prompt: userPrompt,
+      model: modelShorthand,
+      thinkingLevel,
+      tools: IDEATION_TOOLS,
+      cwd: projectDir,
+      specDir: join(projectDir, '.auto-claude', 'specs'),
+      allowedWritePaths: [outputDir],
+      agentType: 'ideation',
+      maxTurns: MAX_TURNS,
+      abortSignal,
+      onEvent,
+    });
 
     return {
       success: true,
-      text: responseText,
+      text: responseText || result.text,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    onStream?.({ type: 'error', error: errorMsg });
+    if (errorMsg !== lastError) onStream?.({ type: 'error', error: errorMsg });
     return {
       success: false,
       text: responseText,
