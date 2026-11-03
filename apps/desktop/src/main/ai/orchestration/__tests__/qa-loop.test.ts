@@ -28,6 +28,7 @@ vi.mock('../../utils/json-repair', () => ({
 vi.mock('../qa-reports', () => ({
   DEFAULT_QA_ITERATIONS: 5,
   generateQAReport: vi.fn(() => '# QA Report'),
+  mergeQAReport: vi.fn((agent: string | null, summary: string) => (agent ? `${agent}\n${summary}` : summary)),
   generateEscalationReport: vi.fn(() => '# Escalation Report'),
   generateManualTestPlan: vi.fn().mockResolvedValue('# Manual Test Plan'),
 }));
@@ -183,6 +184,28 @@ describe('QALoop', () => {
     // Only the reviewer should have been called (no fixer needed)
     const calls = runSession.mock.calls as Array<[QASessionRunConfig]>;
     expect(calls.every((c) => c[0].agentType === 'qa_reviewer')).toBe(true);
+  });
+
+  it("keeps the reviewer's qa_report.md (AC coverage table) when writing the final report", async () => {
+    let sessionCallCount = 0;
+    const agentReport = '# QA Validation Report\n\n| AC | Result |\n|----|--------|\n| AC-1 | PASS |\n';
+    const runSession = vi.fn().mockImplementation(async () => {
+      sessionCallCount++;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      if (path.endsWith('implementation_plan.json')) {
+        return Promise.resolve(sessionCallCount === 0 ? completedPlan() : completedPlan('approved'));
+      }
+      if (path.endsWith('qa_report.md') && sessionCallCount > 0) return Promise.resolve(agentReport);
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    const outcome = await new QALoop(makeConfig({ runSession, maxIterations: 5 })).run();
+    expect(outcome.approved).toBe(true);
+
+    const reportWrite = mockWriteFile.mock.calls.find((c) => String(c[0]).endsWith('qa_report.md'));
+    expect(reportWrite?.[1]).toBe(`${agentReport}\n# QA Report`);
   });
 
   // -------------------------------------------------------------------------

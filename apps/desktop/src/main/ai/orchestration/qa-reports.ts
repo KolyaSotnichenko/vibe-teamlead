@@ -102,6 +102,22 @@ export function issuesSimilar(a: QAIssue, b: QAIssue, threshold = ISSUE_SIMILARI
 // Report Generation
 // =============================================================================
 
+/** Marks where the loop's summary starts inside qa_report.md */
+export const QA_LOOP_SUMMARY_MARKER = '<!-- vibe-teamlead:qa-loop-summary -->';
+
+/**
+ * qa_report.md as kept at the end of the QA loop: the reviewer's own report
+ * (with its acceptance-criteria coverage table, which the Workspace reads)
+ * followed by the loop summary. A summary from an earlier run is replaced,
+ * never stacked. Without a reviewer report the summary stands alone. Pure.
+ */
+export function mergeQAReport(agentReport: string | null | undefined, summary: string): string {
+  const own = (agentReport ?? '').split(QA_LOOP_SUMMARY_MARKER)[0].trimEnd();
+  if (!own) return `${QA_LOOP_SUMMARY_MARKER}\n${summary}`;
+  const demoted = summary.replace(/^# QA Report\b/m, '## QA loop summary');
+  return `${own}\n\n---\n\n${QA_LOOP_SUMMARY_MARKER}\n${demoted}`;
+}
+
 /**
  * Generate a QA summary report for display in the UI.
  * Written to specDir/qa_report.md.

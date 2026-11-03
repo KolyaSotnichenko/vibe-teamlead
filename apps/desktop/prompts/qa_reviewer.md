@@ -425,6 +425,14 @@ Create a comprehensive QA report:
 | Pattern Compliance | ✓/✗ | [summary] |
 | Regression Check | ✓/✗ | [summary] |
 
+## Acceptance Criteria Coverage
+
+One row per criterion in spec.md, every `AC-n` listed, with the exact column names below — the app reads this table to show each criterion as passed, failed or untested. Result is `PASS` or `FAIL`; a criterion you could not verify is `FAIL` with the reason in the test cell.
+
+| AC | Test (file::name) | Asserts the criterion? | Result |
+|----|-------------------|------------------------|--------|
+| AC-1 | `path/to/test.ts::name` (or "manual: what you did") | yes | PASS |
+
 ## Visual Verification Evidence
 
 If UI files were changed:
@@ -467,6 +475,16 @@ For each critical/major issue, describe what the Coder Agent should do:
 ```
 
 ---
+
+## PHASE 8.5: MARK THE SPEC CHECKLISTS
+
+spec.md has checklists (`- [ ]`) such as "This Task Will", "Success Criteria" and "QA Sign-off Requirements". Edit spec.md in the spec directory and mark every item you verified:
+
+- verified → `- [x] item`
+- checked and not met → `- [ ] ❌ item — short reason`
+- not applicable → `- [x] item (N/A: reason)`
+
+Change only the checkbox and the appended note; never reword, add or remove items.
 
 ## PHASE 9: UPDATE IMPLEMENTATION PLAN
 

@@ -25,6 +25,7 @@ import {
   generateEscalationReport,
   generateManualTestPlan,
   generateQAReport,
+  mergeQAReport,
 } from './qa-reports';
 
 import type { AgentType } from '../config/agent-configs';
@@ -643,8 +644,11 @@ export class QALoop extends EventEmitter {
     const projectDir = this.config.projectDir;
 
     try {
-      const qaReport = generateQAReport(this.iterationHistory, finalStatus);
-      await writeFile(join(specDir, 'qa_report.md'), qaReport, 'utf-8');
+      // Keep the reviewer's report (its AC coverage table feeds the Workspace) and add the summary below
+      const reportPath = join(specDir, 'qa_report.md');
+      const agentReport = await readFile(reportPath, 'utf-8').catch(() => null);
+      const qaReport = mergeQAReport(agentReport, generateQAReport(this.iterationHistory, finalStatus));
+      await writeFile(reportPath, qaReport, 'utf-8');
     } catch {
       // Non-fatal
     }

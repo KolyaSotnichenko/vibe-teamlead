@@ -23,7 +23,10 @@ import {
   generateManualTestPlan,
   issuesSimilar,
   isNoTestProject,
+  mergeQAReport,
+  QA_LOOP_SUMMARY_MARKER,
 } from '../qa-reports';
+import { parseQaCoverage } from '../../../ipc-handlers/task/workspace-parsers';
 import type { QAIterationRecord, QAIssue } from '../qa-loop';
 
 // ---------------------------------------------------------------------------
@@ -360,5 +363,28 @@ describe('isNoTestProject', () => {
       throw new Error('Permission denied');
     });
     expect(isNoTestProject('/spec', PROJECT_DIR)).toBe(true);
+  });
+});
+
+describe('mergeQAReport', () => {
+  const summary = '# QA Report\n\n**Result**: PASSED\n';
+  const agent = '# QA Validation Report\n\n| AC | Test | Result |\n|----|------|--------|\n| AC-1 | `a.test.ts::x` | PASS |\n';
+
+  it("keeps the reviewer's report with its AC table and appends the summary", () => {
+    const merged = mergeQAReport(agent, summary);
+    expect(merged.startsWith(agent.trimEnd())).toBe(true);
+    expect(merged).toContain(QA_LOOP_SUMMARY_MARKER);
+    expect(merged).toContain('## QA loop summary');
+    expect(parseQaCoverage(merged)?.map((r) => [r.acIds, r.test.result])).toEqual([[['AC-1'], 'pass']]);
+  });
+
+  it('replaces the summary of an earlier run instead of stacking it', () => {
+    const twice = mergeQAReport(mergeQAReport(agent, summary), summary);
+    expect(twice.split(QA_LOOP_SUMMARY_MARKER)).toHaveLength(2);
+    expect(twice.startsWith(agent.trimEnd())).toBe(true);
+  });
+
+  it('writes the summary alone when the reviewer left no report', () => {
+    expect(mergeQAReport(null, summary)).toBe(`${QA_LOOP_SUMMARY_MARKER}\n${summary}`);
   });
 });
