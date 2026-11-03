@@ -32,6 +32,8 @@ import type { ToolContext } from '../tools/types';
 export const AUTO_CLAUDE_SERVER_KEY = 'auto-claude';
 const TOOL_PREFIX = `mcp__${AUTO_CLAUDE_SERVER_KEY}__`;
 export const RENDER_DIAGRAM_TOOL = `${TOOL_PREFIX}render_diagram`;
+export const SEARCH_MEMORY_TOOL = `${TOOL_PREFIX}search_memory`;
+export const REMEMBER_TOOL = `${TOOL_PREFIX}remember`;
 
 
 /**
@@ -70,6 +72,48 @@ function renderDiagramTool(context: ToolContext) {
           content: [{ type: 'text' as const, text: `Error rendering diagram: ${error instanceof Error ? error.message : String(error)}` }],
           isError: true,
         };
+      }
+    },
+  );
+}
+
+/** search_memory: what agents learned earlier in this project. */
+function searchMemoryTool(context: ToolContext) {
+  return tool(
+    'search_memory',
+    "Search this project's memory: gotchas, decisions, patterns and per-file notes that agents saved in earlier tasks. " +
+      'Use it before working in an unfamiliar area, and when something fails in a way that may have happened before.',
+    {
+      query: z4.string().describe('What you want to know, in a sentence (e.g. "how auth tokens are refreshed")'),
+      limit: z4.number().int().min(1).max(20).optional().describe('How many memories to return (default 8)'),
+    },
+    async ({ query, limit }) => {
+      try {
+        return { content: [{ type: 'text' as const, text: await context.searchMemory!(query, limit) }] };
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+      }
+    },
+  );
+}
+
+/** remember: keep a lesson for the agents that work on this project later. */
+function rememberTool(context: ToolContext) {
+  return tool(
+    'remember',
+    'Save something the next agent working on this project should know: a non-obvious gotcha, a decision and why, ' +
+      'a pattern this codebase follows, or what a file is really for. One fact per call, specific and self-contained. ' +
+      'Not for progress notes or anything only this task needs.',
+    {
+      type: z4.enum(['gotcha', 'decision', 'pattern', 'module_insight', 'error_pattern', 'requirement']),
+      content: z4.string().min(12).describe('The fact, written so it makes sense without this conversation'),
+      files: z4.array(z4.string()).optional().describe('Files it is about (relative paths)'),
+    },
+    async ({ type, content, files }) => {
+      try {
+        return { content: [{ type: 'text' as const, text: await context.remember!(type, content, files) }] };
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
       }
     },
   );
@@ -133,8 +177,13 @@ export function createBuildToolsServer(
     );
   });
 
-  const wantsRender = !allowedToolNames || allowedToolNames.includes(RENDER_DIAGRAM_TOOL);
-  const allTools = wantsRender && context.renderDiagram ? [...tools, renderDiagramTool(context)] : tools;
+  const wants = (name: string) => !allowedToolNames || allowedToolNames.includes(name);
+  const allTools = [
+    ...tools,
+    ...(wants(RENDER_DIAGRAM_TOOL) && context.renderDiagram ? [renderDiagramTool(context)] : []),
+    ...(wants(SEARCH_MEMORY_TOOL) && context.searchMemory ? [searchMemoryTool(context)] : []),
+    ...(wants(REMEMBER_TOOL) && context.remember ? [rememberTool(context)] : []),
+  ];
 
   return createSdkMcpServer({
     name: AUTO_CLAUDE_SERVER_KEY,

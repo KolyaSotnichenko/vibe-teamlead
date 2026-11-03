@@ -46,6 +46,10 @@ const TOOL_RECORD_GOTCHA = 'mcp__auto-claude__record_gotcha';
 const TOOL_GET_SESSION_CONTEXT = 'mcp__auto-claude__get_session_context';
 const TOOL_UPDATE_QA_STATUS = 'mcp__auto-claude__update_qa_status';
 const TOOL_RENDER_DIAGRAM = 'mcp__auto-claude__render_diagram';
+const TOOL_SEARCH_MEMORY = 'mcp__auto-claude__search_memory';
+const TOOL_REMEMBER = 'mcp__auto-claude__remember';
+/** Project memory: read what earlier agents learned, keep what the next ones should know */
+const MEMORY_TOOLS = [TOOL_SEARCH_MEMORY, TOOL_REMEMBER] as const;
 
 // =============================================================================
 // External MCP Tools
@@ -275,7 +279,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   architect: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: ['context7', 'memory', 'auto-claude'],
-    autoClaudeTools: [TOOL_GET_SESSION_CONTEXT, TOOL_RECORD_DISCOVERY, TOOL_RENDER_DIAGRAM],
+    autoClaudeTools: [TOOL_GET_SESSION_CONTEXT, TOOL_RECORD_DISCOVERY, TOOL_RENDER_DIAGRAM, ...MEMORY_TOOLS],
     thinkingDefault: 'high',
   },
   planner: {
@@ -286,6 +290,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_GET_BUILD_PROGRESS,
       TOOL_GET_SESSION_CONTEXT,
       TOOL_RECORD_DISCOVERY,
+      ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'high',
   },
@@ -299,6 +304,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_RECORD_DISCOVERY,
       TOOL_RECORD_GOTCHA,
       TOOL_GET_SESSION_CONTEXT,
+      ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'low',
   },
@@ -314,6 +320,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_GET_BUILD_PROGRESS,
       TOOL_UPDATE_QA_STATUS,
       TOOL_GET_SESSION_CONTEXT,
+      ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'high',
   },
@@ -326,6 +333,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_GET_BUILD_PROGRESS,
       TOOL_UPDATE_QA_STATUS,
       TOOL_RECORD_GOTCHA,
+      ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'medium',
   },

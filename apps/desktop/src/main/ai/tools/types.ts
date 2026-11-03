@@ -33,6 +33,10 @@ export interface ToolContext {
   allowedWritePaths?: string[];
   /** Render a .drawio file to PNG (main process); available to the architect */
   renderDiagram?: (drawioPath: string) => Promise<{ pngPath: string; width: number; height: number }>;
+  /** Search the project's memory (worker → main); formatted lines */
+  searchMemory?: (query: string, limit?: number) => Promise<string>;
+  /** Keep something for later agents in the project's memory */
+  remember?: (memoryType: string, content: string, files?: string[]) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

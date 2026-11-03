@@ -56,6 +56,19 @@ vi.mock('../../session/progress-tracker', () => ({
   },
 }));
 
+// Project memory (main-process side of memory-request)
+const memoryMocks = vi.hoisted(() => ({
+  memoryPromptSection: vi.fn(),
+  searchProjectMemory: vi.fn(),
+  formatMemories: vi.fn(),
+  rememberForAgent: vi.fn(),
+  recordSessionInsights: vi.fn(),
+}));
+vi.mock('../../memory/agent-memory', () => ({
+  ...memoryMocks,
+  AGENT_MEMORY_TYPES: ['gotcha', 'decision', 'pattern', 'module_insight', 'error_pattern', 'requirement'],
+}));
+
 // Import after mocks
 import { WorkerBridge } from '../worker-bridge';
 
@@ -127,6 +140,37 @@ describe('WorkerBridge', () => {
   // ---------------------------------------------------------------------------
   // Message relay
   // ---------------------------------------------------------------------------
+
+  describe('memory requests', () => {
+    async function reply(): Promise<Record<string, unknown>> {
+      await vi.waitFor(() => expect(getWorker().postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'memory-result' })));
+      return getWorker().postMessage.mock.calls.map((c) => c[0]).find((m) => m.type === 'memory-result');
+    }
+
+    it("answers a prompt request with this project's memory section", async () => {
+      memoryMocks.memoryPromptSection.mockResolvedValue('## Project memory\n- [gotcha] x');
+      bridge.spawn(createConfig());
+      getWorker().emit('message', { type: 'memory-request', taskId: 'task-123', requestId: 'r1', specId: '002', request: { op: 'prompt', query: 'auth' } });
+      expect(await reply()).toEqual({ type: 'memory-result', requestId: 'r1', ok: true, text: '## Project memory\n- [gotcha] x' });
+      expect(memoryMocks.memoryPromptSection).toHaveBeenCalledWith('proj-456', 'auth', undefined);
+    });
+
+    it('stores insights under the project and task', async () => {
+      memoryMocks.recordSessionInsights.mockResolvedValue(3);
+      bridge.spawn(createConfig());
+      const insights = { subtask_id: '1.1' };
+      getWorker().emit('message', { type: 'memory-request', taskId: 'task-123', requestId: 'r2', specId: '002', request: { op: 'insights', insights } });
+      expect((await reply()).text).toBe('3');
+      expect(memoryMocks.recordSessionInsights).toHaveBeenCalledWith({ projectId: 'proj-456', specId: '002' }, insights);
+    });
+
+    it('replies with the error instead of throwing', async () => {
+      memoryMocks.rememberForAgent.mockRejectedValue(new Error('Memory is turned off in Settings'));
+      bridge.spawn(createConfig());
+      getWorker().emit('message', { type: 'memory-request', taskId: 'task-123', requestId: 'r3', request: { op: 'remember', memoryType: 'decision', content: 'We picked X because Y' } });
+      expect(await reply()).toEqual({ type: 'memory-result', requestId: 'r3', ok: false, error: 'Memory is turned off in Settings' });
+    });
+  });
 
   describe('message relay', () => {
     it('emits log events from worker log messages', () => {

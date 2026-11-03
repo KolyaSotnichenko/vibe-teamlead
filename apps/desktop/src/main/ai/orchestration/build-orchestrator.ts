@@ -100,6 +100,14 @@ export interface BuildOrchestratorConfig {
    * QA). The hooks report when a review or a fix round starts so the build's
    * phase follows along.
    */
+  /**
+   * Called with what a coder session learned (decisions, patterns, gotchas,
+   * files) — the worker stores it in the project's memory. Enables insight
+   * extraction after each subtask.
+   */
+  onInsights?: (subtask: SubtaskInfo, insights: import('../runners/insight-extractor').ExtractedInsights) => void;
+  /** Model for insight extraction (the task's model) */
+  insightModel?: string;
   runQA: (hooks: QAPhaseHooks) => Promise<{ approved: boolean; error?: string }>;
   /** Optional callback for syncing spec to source (worktree mode) */
   syncSpecToSource?: (specDir: string, sourceSpecDir: string) => Promise<boolean>;
@@ -527,6 +535,12 @@ export class BuildOrchestrator extends EventEmitter {
       },
       onSubtaskStuck: (subtask, reason) => {
         this.emitTyped('log', `Subtask ${subtask.id} stuck: ${reason}`);
+      },
+      extractInsights: !!this.config.onInsights,
+      insightModel: this.config.insightModel,
+      onInsightsExtracted: (subtaskId, insights) => {
+        const subtask = { id: subtaskId, description: '', status: 'completed' } as SubtaskInfo;
+        this.config.onInsights?.(subtask, insights);
       },
     };
 

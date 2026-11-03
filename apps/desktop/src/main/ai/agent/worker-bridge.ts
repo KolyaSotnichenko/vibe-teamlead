@@ -23,6 +23,7 @@ import type {
   WorkerMessage,
   AgentExecutorConfig,
   MainToWorkerMessage,
+  MemoryRequest,
 } from './types';
 import type { SessionResult } from '../session/types';
 import { ProgressTracker } from '../session/progress-tracker';
@@ -240,6 +241,10 @@ export class WorkerBridge extends EventEmitter {
         void this.renderDiagram(message.requestId, message.path);
         break;
 
+      case 'memory-request':
+        void this.handleMemoryRequest(message.requestId, message.specId, message.request);
+        break;
+
       case 'user-question':
         // No UI listening (e.g. headless run): answer "no answer" so the agent
         // proceeds on a stated assumption instead of waiting forever.
@@ -262,6 +267,42 @@ export class WorkerBridge extends EventEmitter {
       reply = { type: 'render-result', requestId, ok: true, ...rendered };
     } catch (error) {
       reply = { type: 'render-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    this.worker?.postMessage(reply);
+  }
+
+  /** Project memory for the worker's agents; always replies, never throws. */
+  private async handleMemoryRequest(requestId: string, specId: string | undefined, request: MemoryRequest): Promise<void> {
+    let reply: MainToWorkerMessage;
+    try {
+      if (!this.projectId) throw new Error('No project for this task');
+      const memory = await import('../memory/agent-memory');
+      const ref = { projectId: this.projectId, specId };
+      let text = '';
+      switch (request.op) {
+        case 'prompt':
+          text = await memory.memoryPromptSection(this.projectId, request.query, request.limit);
+          break;
+        case 'search': {
+          const found = await memory.searchProjectMemory(this.projectId, request.query, request.limit);
+          text = found.length ? memory.formatMemories(found) : 'No memories match.';
+          break;
+        }
+        case 'remember': {
+          const type = (memory.AGENT_MEMORY_TYPES as readonly string[]).includes(request.memoryType)
+            ? (request.memoryType as (typeof memory.AGENT_MEMORY_TYPES)[number])
+            : 'gotcha';
+          await memory.rememberForAgent(ref, { type, content: request.content, files: request.files });
+          text = 'Saved to project memory.';
+          break;
+        }
+        case 'insights':
+          text = String(await memory.recordSessionInsights(ref, request.insights));
+          break;
+      }
+      reply = { type: 'memory-result', requestId, ok: true, text };
+    } catch (error) {
+      reply = { type: 'memory-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
     }
     this.worker?.postMessage(reply);
   }

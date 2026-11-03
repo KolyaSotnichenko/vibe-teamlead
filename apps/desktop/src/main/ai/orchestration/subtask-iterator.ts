@@ -10,6 +10,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { runProcess } from '../../platform/exec';
 import { safeParseJson } from '../../utils/json-repair';
 import type { ExtractedInsights, InsightExtractionConfig } from '../runners/insight-extractor';
 import { extractSessionInsights } from '../runners/insight-extractor';
@@ -58,6 +59,8 @@ export interface SubtaskIteratorConfig {
    * Defaults to false (opt-in to avoid extra AI calls in test scenarios).
    */
   extractInsights?: boolean;
+  /** Model for insight extraction (the task's model; a custom endpoint may not serve Claude Haiku) */
+  insightModel?: string;
 }
 
 /** Result of the full subtask iteration */
@@ -179,6 +182,9 @@ export async function iterateSubtasks(
     // Notify start
     config.onSubtaskStart?.(subtaskInfo, currentAttempt);
 
+    // Where the code stood before the session, so insights see what it changed
+    const baseSha = config.extractInsights ? await gitHead(config.projectDir) : undefined;
+
     // Run the session
     const result = await config.runSubtaskSession(subtaskInfo, currentAttempt);
 
@@ -249,7 +255,7 @@ export async function iterateSubtasks(
 
       // Extract insights from the session (opt-in, never blocks the build)
       if (config.extractInsights) {
-        extractInsightsAfterSession(config, subtask, result).then((insights) => {
+        extractInsightsAfterSession(config, subtask, result, baseSha).then((insights) => {
           if (insights) config.onInsightsExtracted?.(subtask.id, insights);
         }).catch(() => { /* insight extraction is non-blocking */ });
       }
@@ -481,17 +487,20 @@ async function extractInsightsAfterSession(
   config: SubtaskIteratorConfig,
   subtask: PlanSubtask,
   result: SessionResult,
+  baseSha: string | undefined,
 ): Promise<ExtractedInsights | null> {
   try {
+    const changes = baseSha ? await gitChangesSince(config.projectDir, baseSha) : undefined;
     const insightConfig: InsightExtractionConfig = {
       subtaskId: subtask.id,
       subtaskDescription: subtask.description,
       sessionNum: 1,
       success: result.outcome === 'completed' || result.outcome === 'max_steps',
-      diff: '',           // Diff gathering requires git; left empty for now
-      changedFiles: [],   // Populated by future git integration
-      commitMessages: '',
+      diff: changes?.diff ?? '',
+      changedFiles: changes?.files ?? [],
+      commitMessages: changes?.commits ?? '',
       attemptHistory: [],
+      ...(config.insightModel ? { modelShorthand: config.insightModel as InsightExtractionConfig['modelShorthand'] } : {}),
     };
 
     return await extractSessionInsights(insightConfig);
@@ -503,6 +512,28 @@ async function extractInsightsAfterSession(
 // =============================================================================
 // Utilities
 // =============================================================================
+
+async function gitHead(cwd: string): Promise<string | undefined> {
+  const result = await runProcess('git', ['rev-parse', 'HEAD'], { cwd, timeoutMs: 10_000 });
+  return result.code === 0 ? result.stdout.trim() || undefined : undefined;
+}
+
+/** Everything a session changed since `baseSha`: commits and the working tree. */
+async function gitChangesSince(
+  cwd: string,
+  baseSha: string,
+): Promise<{ diff: string; files: string[]; commits: string }> {
+  const [diff, files, commits] = await Promise.all([
+    runProcess('git', ['diff', baseSha, '--', '.'], { cwd, timeoutMs: 20_000, maxOutput: 200_000 }),
+    runProcess('git', ['diff', '--name-only', baseSha, '--', '.'], { cwd, timeoutMs: 10_000 }),
+    runProcess('git', ['log', '--format=%s', `${baseSha}..HEAD`], { cwd, timeoutMs: 10_000 }),
+  ]);
+  return {
+    diff: diff.code === 0 ? diff.stdout : '',
+    files: files.code === 0 ? files.stdout.split('\n').map((f) => f.trim()).filter(Boolean) : [],
+    commits: commits.code === 0 ? commits.stdout.trim() : '',
+  };
+}
 
 /**
  * Delay with abort signal support.

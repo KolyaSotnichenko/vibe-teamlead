@@ -12,7 +12,7 @@
  */
 
 import { parentPort, workerData } from 'worker_threads';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
@@ -21,6 +21,7 @@ import { toClaudeAuth } from '../claude-code/auth';
 import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
+import type { MemoryRequest } from './types';
 import { buildSubagents, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
@@ -131,8 +132,69 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
     pendingQuestions.delete(msg.questionId);
   } else if (msg.type === 'render-result') {
     pendingRenders.get(msg.requestId)?.(msg);
+  } else if (msg.type === 'memory-result') {
+    pendingMemory.get(msg.requestId)?.(msg);
   }
 });
+
+// =============================================================================
+// Project memory (lives in the main process; asked over the bridge)
+// =============================================================================
+
+type MemoryReply = Extract<MainToWorkerMessage, { type: 'memory-result' }>;
+const pendingMemory = new Map<string, (reply: MemoryReply) => void>();
+const MEMORY_TIMEOUT_MS = 30_000;
+
+/** Ask the main process for memory work. Never rejects: failures come back as { ok: false }. */
+function memoryRequest(request: MemoryRequest): Promise<MemoryReply> {
+  return new Promise((resolve) => {
+    const requestId = randomUUID();
+    const settle = (reply: MemoryReply) => {
+      clearTimeout(timer);
+      pendingMemory.delete(requestId);
+      resolve(reply);
+    };
+    const timer = setTimeout(() => settle({ type: 'memory-result', requestId, ok: false, error: 'Memory did not answer' }), MEMORY_TIMEOUT_MS);
+    pendingMemory.set(requestId, settle);
+    postMessage({
+      type: 'memory-request',
+      taskId: config.taskId,
+      requestId,
+      specId: config.session.specDir ? basename(config.session.specDir) : undefined,
+      request,
+    });
+  });
+}
+
+/** What this task is about, for finding relevant memories: the spec, else the requirements, else the kickoff. */
+function taskFocusText(session: SerializableSessionConfig): string {
+  for (const name of ['spec.md', 'requirements.json']) {
+    try {
+      const path = join(session.specDir, name);
+      if (session.specDir && existsSync(path)) return readFileSync(path, 'utf-8').slice(0, 1500);
+    } catch {
+      // try the next source
+    }
+  }
+  const first = session.initialMessages?.[0]?.content;
+  return typeof first === 'string' ? first.slice(0, 1500) : '';
+}
+
+const memorySections = new Map<string, Promise<string>>();
+
+/** "## Project memory" section for a prompt ('' when memory is off or empty); one lookup per focus. */
+function memorySection(session: SerializableSessionConfig, focus?: string): Promise<string> {
+  const query = [focus, taskFocusText(session)].filter(Boolean).join('\n');
+  const key = focus ?? '';
+  let section = memorySections.get(key);
+  if (!section) {
+    section = query.trim()
+      ? memoryRequest({ op: 'prompt', query }).then((reply) => (reply.ok ? reply.text ?? '' : ''))
+      : Promise.resolve('');
+    memorySections.set(key, section);
+  }
+  return section;
+}
 
 // =============================================================================
 // Diagram rendering (architect review loop → main process → PNG)
@@ -238,6 +300,16 @@ function buildToolContext(session: SerializableSessionConfig, securityProfile: S
     securityProfile,
     abortSignal: abortController.signal,
     renderDiagram: renderDiagramViaMain,
+    searchMemory: async (query, limit) => {
+      const reply = await memoryRequest({ op: 'search', query, limit });
+      if (!reply.ok) throw new Error(reply.error ?? 'Memory search failed');
+      return reply.text ?? '';
+    },
+    remember: async (memoryType, content, files) => {
+      const reply = await memoryRequest({ op: 'remember', memoryType, content, files });
+      if (!reply.ok) throw new Error(reply.error ?? 'Could not save the memory');
+      return reply.text ?? 'Saved.';
+    },
   };
 }
 
@@ -328,6 +400,8 @@ let cachedProjectInstructions: string | null | undefined;
 async function assemblePrompt(
   promptName: string,
   session: SerializableSessionConfig,
+  /** Extra text to find memories for (e.g. the subtask) */
+  memoryFocus?: string,
 ): Promise<string> {
   const basePrompt = loadRolePrompt(promptName)
     ?? buildFallbackPrompt(promptName as AgentType, session.specDir, session.projectDir);
@@ -348,11 +422,13 @@ async function assemblePrompt(
   const qaTools =
     promptName === 'qa_reviewer' || promptName === 'qa_fixer' ? getQaToolsSection(projectCapabilities(session)) : '';
 
-  return injectContext(qaTools ? `${basePrompt}\n\n${qaTools}` : basePrompt, {
+  const prompt = injectContext(qaTools ? `${basePrompt}\n\n${qaTools}` : basePrompt, {
     specDir: session.specDir,
     projectDir: session.projectDir,
     projectInstructions: cachedProjectInstructions,
   });
+  const memory = await memorySection(session, memoryFocus);
+  return memory ? `${prompt}\n\n${memory}` : prompt;
 }
 
 // =============================================================================
@@ -558,9 +634,18 @@ async function runBuildOrchestrator(
     sourceSpecDir: session.sourceSpecDir,
     abortSignal: abortController.signal,
 
+    // What each coder session learned goes to the project's memory
+    insightModel: session.modelId,
+    onInsights: (_subtask, insights) => {
+      void memoryRequest({ op: 'insights', insights }).then((reply) => {
+        const count = Number(reply.text ?? 0);
+        if (reply.ok && count > 0) postLog(`Saved ${count} memor${count === 1 ? 'y' : 'ies'} from subtask ${insights.subtask_id}`);
+      });
+    },
+
     generatePrompt: async (agentType, _phase, context) => {
       const promptName = agentType === 'coder' ? 'coder' : agentType;
-      let prompt = await assemblePrompt(promptName, session);
+      let prompt = await assemblePrompt(promptName, session, context.subtask?.description);
 
       // Inject schema validation error feedback on retry so the planner knows what to fix
       if (context.planningRetryContext) {

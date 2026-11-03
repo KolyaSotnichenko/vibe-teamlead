@@ -107,7 +107,24 @@ export type WorkerMessage =
   | WorkerTaskEventMessage
   | WorkerQuestionMessage
   | WorkerQuestionCancelledMessage
-  | WorkerRenderDiagramMessage;
+  | WorkerRenderDiagramMessage
+  | WorkerMemoryRequestMessage;
+
+/** Project memory work the worker asks the main process to do (memory lives in main). */
+export type MemoryRequest =
+  | { op: 'prompt'; query: string; limit?: number }
+  | { op: 'search'; query: string; limit?: number }
+  | { op: 'remember'; memoryType: string; content: string; files?: string[] }
+  | { op: 'insights'; insights: import('../runners/insight-extractor').ExtractedInsights };
+
+export interface WorkerMemoryRequestMessage {
+  type: 'memory-request';
+  taskId: string;
+  requestId: string;
+  /** Spec id of the task, for tags and provenance */
+  specId?: string;
+  request: MemoryRequest;
+}
 
 /** A question the agent stopped waiting for (timeout or abort): remove it from the UI. */
 export interface WorkerQuestionCancelledMessage {
@@ -190,7 +207,8 @@ export type MainToWorkerMessage =
       width?: number;
       height?: number;
       error?: string;
-    };
+    }
+  | { type: 'memory-result'; requestId: string; ok: boolean; text?: string; error?: string };
 
 // =============================================================================
 // Serialized Security Profile
