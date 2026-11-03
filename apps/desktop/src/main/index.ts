@@ -61,6 +61,8 @@ import { DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LAN
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { readSettingsFile } from './settings-utils';
 import { migrateLegacyClaudeCredential } from './ai/claude-code/credential-migration';
+import { resolveClaudeAuth } from './ai/claude-code/credential';
+import { setDefaultClaudeAuthProvider } from './ai/claude-code/default-auth';
 import { appLog, setupErrorLogging } from './app-logger';
 import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
@@ -412,6 +414,8 @@ app.whenReady().then(() => {
 
   // GitHub App token: subprocess token provider + refresh schedule
   initGitHubAuth();
+  // runClaudeTask without explicit auth uses the stored Claude credential
+  setDefaultClaudeAuthProvider(resolveClaudeAuth);
 
   // Clear cache on Windows to prevent permission errors from stale cache
   if (isWindows()) {

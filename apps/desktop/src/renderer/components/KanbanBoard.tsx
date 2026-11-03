@@ -589,8 +589,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
           console.log(`[Queue] Task ${taskId} left in_progress, processing queue to fill slot`);
           processQueue();
-        } else if (newStatus === 'done') {
-          // A finished task may unblock queued tasks that depend on it.
+        } else if (newStatus === 'done' || newStatus === 'queue') {
+          // A finished task may unblock queued tasks that depend on it; a task
+          // that joins the queue starts at once if there is a free slot.
           processQueue();
         }
       }
@@ -599,6 +600,19 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     // Cleanup: unregister listener when component unmounts
     return unregister;
   }, [processQueue]);
+
+  // Tasks can arrive in the queue without a status change in this window: created
+  // straight into it (spec document import), or queued before the board opened.
+  // Whenever the set of startable queued tasks changes, fill the free slots.
+  const readyQueuedKey = useTaskStore((state) =>
+    state.tasks
+      .filter((t) => t.status === 'queue' && !t.metadata?.archivedAt && isReadyToStart(t, state.tasks))
+      .map((t) => t.id)
+      .join(',')
+  );
+  useEffect(() => {
+    if (readyQueuedKey) void processQueue();
+  }, [readyQueuedKey, processQueue]);
 
   // Get task order actions from store
   const reorderTasksInColumn = useTaskStore((state) => state.reorderTasksInColumn);

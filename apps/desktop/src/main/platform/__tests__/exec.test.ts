@@ -34,3 +34,14 @@ describe('runProcess', () => {
     expect(findOnPath('definitely-not-a-tool-xyz')).toBeUndefined();
   });
 });
+
+describe('searchPath', () => {
+  it('includes the places Docker Desktop and OrbStack put the docker CLI', async () => {
+    const { searchPath: search } = await import('../exec');
+    const { homedir } = await import('node:os');
+    const dirs = search().split(':');
+    expect(dirs).toContain(`${homedir()}/.docker/bin`);
+    expect(dirs).toContain('/Applications/Docker.app/Contents/Resources/bin');
+    expect(dirs).toContain(`${homedir()}/.orbstack/bin`);
+  });
+});

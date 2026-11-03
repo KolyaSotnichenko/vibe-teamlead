@@ -21,7 +21,7 @@ import type { ThinkingLevel } from '../config/types';
 import { getSecurityProfile } from '../security/security-profile';
 import type { ClaudeAuth, SessionEventCallback, SessionResult } from '../session/types';
 import { type BundledTools, resolveBundledTools } from './bundled-tools';
-import { resolveClaudeAuth } from './credential';
+import { defaultClaudeAuth } from './default-auth';
 import { runAgentSession } from './runner';
 import type { AskUserHandler } from './user-questions';
 
@@ -101,7 +101,7 @@ export async function runClaudeTask<T = unknown>(options: ClaudeTaskOptions<T>):
     {
       agentType: options.agentType ?? 'insights',
       model: resolveModelId(options.model ?? 'sonnet'),
-      auth: options.auth ?? resolveClaudeAuth(),
+      auth: options.auth ?? defaultClaudeAuth(),
       systemPrompt: options.systemPrompt,
       initialMessages: [{ role: 'user', content: options.prompt }],
       toolContext: {

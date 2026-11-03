@@ -33,7 +33,16 @@ export interface RunResult {
 }
 
 /** Common install locations that a Finder-launched app's PATH lacks. */
-const EXTRA_PATHS = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')];
+const EXTRA_PATHS = [
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  join(homedir(), '.local', 'bin'),
+  // Docker Desktop installs its CLI (and credential helpers) here without
+  // admin rights or the /usr/local/bin symlinks; OrbStack in its own bin.
+  join(homedir(), '.docker', 'bin'),
+  '/Applications/Docker.app/Contents/Resources/bin',
+  join(homedir(), '.orbstack', 'bin'),
+];
 
 /** PATH plus the usual Homebrew / user install directories. */
 export function searchPath(extra: string[] = []): string {

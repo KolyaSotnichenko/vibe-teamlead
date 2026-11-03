@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 
 import { toClaudeAuth } from '../claude-code/auth';
+import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import { buildSubagents, SPEC_SPECIALISTS } from '../claude-code/subagents';
@@ -67,6 +68,10 @@ if (!config?.taskId || !config?.session || !config.promptsDir) {
   throw new Error('worker.ts requires valid WorkerConfig via workerData');
 }
 setPromptsDir(config.promptsDir);
+// Utility tasks in this thread (spec fixer, compactor, insights) use the session's credential
+setDefaultClaudeAuthProvider(() =>
+  toClaudeAuth(config.session.apiKey, config.session.baseURL, config.session.allowSubscriptionLogin === true),
+);
 
 // =============================================================================
 // Task Log Writer
