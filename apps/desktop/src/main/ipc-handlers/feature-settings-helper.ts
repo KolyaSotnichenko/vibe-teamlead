@@ -23,14 +23,22 @@ interface FeatureSettings {
   thinkingLevel: string;
 }
 
+/**
+ * A feature added later reads a related feature's saved choice until the user
+ * picks one, so a model chosen before it existed (e.g. an Ollama model) applies.
+ */
+const INHERITS_FROM: Partial<Record<FeatureKey, FeatureKey>> = { briefImport: 'roadmap' };
+
 /** Feature model and thinking level for a specific feature runner. */
 export function getFeatureSettings(featureKey: FeatureKey): FeatureSettings {
   const settings = readSettingsFile();
-  const models = settings?.featureModels as FeatureModelConfig | undefined;
-  const thinking = settings?.featureThinking as FeatureThinkingConfig | undefined;
-  const model = models?.[featureKey];
+  const models = settings?.featureModels as Partial<FeatureModelConfig> | undefined;
+  const thinking = settings?.featureThinking as Partial<FeatureThinkingConfig> | undefined;
+  const inherited = INHERITS_FROM[featureKey];
+  const model = models?.[featureKey] ?? (inherited ? models?.[inherited] : undefined);
   return {
     model: isUsableModel(model) ? model : DEFAULT_FEATURE_MODELS[featureKey],
-    thinkingLevel: thinking?.[featureKey] ?? DEFAULT_FEATURE_THINKING[featureKey],
+    thinkingLevel:
+      thinking?.[featureKey] ?? (inherited ? thinking?.[inherited] : undefined) ?? DEFAULT_FEATURE_THINKING[featureKey],
   };
 }

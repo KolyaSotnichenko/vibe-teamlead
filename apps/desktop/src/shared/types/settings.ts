@@ -203,6 +203,7 @@ export interface FeatureModelConfig {
   githubPrs: string;    // GitHub PR review automation
   utility: string;      // Utility agents (commit message, merge resolver)
   naming: string;       // AI naming (task titles, terminal names)
+  briefImport: string;  // Spec document (ТЗ) → tasks
 }
 
 // Feature-specific thinking level configuration
@@ -214,6 +215,7 @@ export interface FeatureThinkingConfig {
   githubPrs: ThinkingLevel;
   utility: ThinkingLevel;
   naming: ThinkingLevel;
+  briefImport: ThinkingLevel;
 }
 
 // Agent profile for preset model/thinking configurations

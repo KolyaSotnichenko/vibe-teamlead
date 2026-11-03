@@ -23,6 +23,7 @@ import { AgentManager } from '../../agent/agent-manager';
 import { BatchProcessor } from '../../ai/runners/github/batch-processor';
 import type { GitHubIssue } from '../../ai/runners/github/duplicate-detector';
 import type { ModelShorthand, ThinkingLevel } from '../../ai/config/types';
+import { getFeatureSettings } from '../feature-settings-helper';
 
 // Debug logging
 const { debug: debugLog } = createContextLogger('GitHub AutoFix');
@@ -596,7 +597,7 @@ export function registerAutoFixHandlers(
 
           // Use TypeScript BatchProcessor instead of Python subprocess
           const batchProcessor = new BatchProcessor({
-            model: 'sonnet' as ModelShorthand,
+            model: getFeatureSettings('githubIssues').model as ModelShorthand,
             thinkingLevel: 'low' as ThinkingLevel,
           });
           const suggestions = await batchProcessor.groupIssues(issuesToBatch);
@@ -760,7 +761,7 @@ export function registerAutoFixHandlers(
 
           // Use TypeScript BatchProcessor for AI-powered grouping analysis
           const batchProcessor = new BatchProcessor({
-            model: 'sonnet' as ModelShorthand,
+            model: getFeatureSettings('githubIssues').model as ModelShorthand,
             thinkingLevel: 'low' as ThinkingLevel,
           });
           const suggestions = newIssues.length > 0 ? await batchProcessor.groupIssues(newIssues) : [];

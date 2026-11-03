@@ -15,6 +15,7 @@ import { join } from 'node:path';
 
 import { runClaudeTask } from '../claude-code/task';
 import { safeParseJson } from '../../utils/json-repair';
+import { getPhaseModel } from '../config/phase-config';
 
 // ---------------------------------------------------------------------------
 // Schemas (ported from schemas.py)
@@ -708,7 +709,8 @@ export async function runValidationFixer(
       await runClaudeTask({
         systemPrompt: VALIDATION_FIXER_SYSTEM_PROMPT,
         prompt,
-        model: 'sonnet',
+        // The task's planning model (it fixes the plan); not a fixed Claude model
+        model: await getPhaseModel(specDir, 'planning'),
         thinkingLevel: 'low',
         tools: ['Read', 'Write', 'Edit'],
         cwd: specDir,

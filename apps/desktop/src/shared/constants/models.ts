@@ -149,7 +149,8 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
   githubIssues: 'opus',   // Issue triage and analysis benefits from Opus
   githubPrs: 'opus',      // PR review benefits from thorough Opus analysis
   utility: 'haiku',       // Fast utility operations (commit messages, merge resolution)
-  naming: 'haiku'         // Fast, cheap model for task titles and terminal names
+  naming: 'haiku',        // Fast, cheap model for task titles and terminal names
+  briefImport: 'opus'     // Reads the whole spec document and the project
 };
 
 // Default feature thinking configuration
@@ -160,7 +161,8 @@ export const DEFAULT_FEATURE_THINKING: FeatureThinkingConfig = {
   githubIssues: 'medium', // Moderate thinking for issue analysis
   githubPrs: 'medium',    // Moderate thinking for PR review
   utility: 'low',         // Fast thinking for utility operations
-  naming: 'low'           // No thinking needed for short name generation
+  naming: 'low',          // No thinking needed for short name generation
+  briefImport: 'high'     // Splitting a spec into tasks needs deep thinking
 };
 
 // Feature labels for UI display
@@ -172,6 +174,7 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
   githubPrs: { label: 'GitHub PR Review', description: 'AI-powered pull request reviews' },
   utility: { label: 'Utility', description: 'Commit messages and merge conflict resolution' },
   naming: { label: 'AI Naming', description: 'Task titles and terminal tab names' },
+  briefImport: { label: 'Spec document import', description: 'Splits an uploaded spec document into tasks' },
 };
 
 // Default agent profiles for preset model/thinking configurations

@@ -16,6 +16,7 @@ import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import { getAgentConfig } from '../config/agent-configs';
+import { MODEL_ID_MAP } from '../config/types';
 import { ErrorCode } from '../session/error-classifier';
 import type { SessionConfig, SessionEventCallback, SessionResult } from '../session/types';
 import { isSubscriptionToken } from './auth';
@@ -97,6 +98,14 @@ const INHERITED_ENV = [
   'SSL_CERT_FILE',
 ] as const;
 
+/** Claude Code variables that pick the model behind an alias or for background calls. */
+const MODEL_ALIAS_ENV = [
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+] as const;
+
 /** Claude Code config home owned by Vibe Teamlead (bundled plugins live here, not in ~/.claude). */
 export function defaultClaudeConfigDir(): string {
   return join(homedir(), '.vibe-teamlead', 'claude-code');
@@ -124,6 +133,12 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   } else {
     env.ANTHROPIC_API_KEY = config.auth.apiKey;
     if (config.auth.baseURL) env.ANTHROPIC_BASE_URL = config.auth.baseURL;
+  }
+  // A model that is not Claude (e.g. Ollama behind the base URL): Claude Code's
+  // own background calls and the opus/sonnet/haiku aliases (subagents) would
+  // otherwise ask the endpoint for Claude models it does not serve.
+  if (config.model && !config.model.startsWith('claude-') && !(config.model in MODEL_ID_MAP)) {
+    for (const name of MODEL_ALIAS_ENV) env[name] = config.model;
   }
   env.CLAUDE_CONFIG_DIR = config.claudeConfigDir ?? defaultClaudeConfigDir();
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';

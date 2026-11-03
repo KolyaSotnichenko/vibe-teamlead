@@ -8,7 +8,7 @@ import {
   DEFAULT_FEATURE_THINKING,
   FEATURE_LABELS,
 } from '@shared/constants/models';
-import type { FeatureModelConfig, ThinkingLevel } from '@shared/types/settings';
+import type { FeatureModelConfig, FeatureThinkingConfig, ThinkingLevel } from '@shared/types/settings';
 import { featureDescription, featureLabel } from '../../lib/agent-labels';
 
 /**
@@ -24,8 +24,20 @@ export function FeatureModelSettings() {
   const { t } = useTranslation('settings');
   const settings = useSettingsStore((state) => state.settings);
 
-  const featureModels: FeatureModelConfig = settings.featureModels ?? DEFAULT_FEATURE_MODELS;
-  const featureThinking = settings.featureThinking ?? DEFAULT_FEATURE_THINKING;
+  // Saved choices over the defaults; spec import reads the roadmap choice until set
+  // (same rule as main's getFeatureSettings), so older settings show what will run.
+  const savedModels = settings.featureModels as Partial<FeatureModelConfig> | undefined;
+  const savedThinking = settings.featureThinking as Partial<FeatureThinkingConfig> | undefined;
+  const featureModels: FeatureModelConfig = {
+    ...DEFAULT_FEATURE_MODELS,
+    ...savedModels,
+    briefImport: savedModels?.briefImport ?? savedModels?.roadmap ?? DEFAULT_FEATURE_MODELS.briefImport,
+  };
+  const featureThinking: FeatureThinkingConfig = {
+    ...DEFAULT_FEATURE_THINKING,
+    ...savedThinking,
+    briefImport: savedThinking?.briefImport ?? savedThinking?.roadmap ?? DEFAULT_FEATURE_THINKING.briefImport,
+  };
 
   const handleModelChange = (feature: keyof FeatureModelConfig, value: string) => {
     saveSettings({ featureModels: { ...featureModels, [feature]: value } });

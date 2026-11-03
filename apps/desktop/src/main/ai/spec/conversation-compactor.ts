@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { runClaudeTask } from '../claude-code/task';
+import { getPhaseModel } from '../config/phase-config';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -110,6 +111,7 @@ export async function summarizePhaseOutput(
   phaseName: string,
   phaseOutput: string,
   targetWords = DEFAULT_TARGET_WORDS,
+  model = 'haiku',
 ): Promise<string> {
   // Truncate input if too large
   let truncatedOutput = phaseOutput;
@@ -137,7 +139,7 @@ ${truncatedOutput}
     const result = await runClaudeTask({
       systemPrompt: COMPACTOR_SYSTEM_PROMPT,
       prompt,
-      model: 'haiku',
+      model,
       thinkingLevel: 'low',
     });
 
@@ -177,5 +179,7 @@ export async function compactPhase(
     return '';
   }
 
-  return summarizePhaseOutput(phaseName, phaseOutput, targetWords);
+  // The task's spec model: a custom endpoint (e.g. Ollama) may not serve Claude Haiku
+  const model = await getPhaseModel(specDir, 'spec');
+  return summarizePhaseOutput(phaseName, phaseOutput, targetWords, model);
 }

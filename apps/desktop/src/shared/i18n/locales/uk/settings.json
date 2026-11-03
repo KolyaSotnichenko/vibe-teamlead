@@ -979,6 +979,10 @@
     "naming": {
       "label": "Назви",
       "description": "Назви задач і вкладок терміналів"
+    },
+    "briefImport": {
+      "label": "Імпорт ТЗ",
+      "description": "Розбиває завантажене ТЗ на задачі"
     }
   },
   "agentCategories": {

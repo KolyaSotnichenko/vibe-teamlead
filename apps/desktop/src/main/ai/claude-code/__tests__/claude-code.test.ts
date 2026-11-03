@@ -154,6 +154,24 @@ describe('buildEnv', () => {
   });
 });
 
+describe('buildEnv model aliases', () => {
+  it('points every alias at a non-Claude session model (e.g. Ollama)', () => {
+    const env = buildEnv(baseConfig({ model: 'qwen3-coder:480b-cloud' }));
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('qwen3-coder:480b-cloud');
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('qwen3-coder:480b-cloud');
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('qwen3-coder:480b-cloud');
+    expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBe('qwen3-coder:480b-cloud');
+  });
+
+  it('leaves the aliases alone for Claude models', () => {
+    for (const model of ['claude-sonnet-5-5', 'sonnet']) {
+      const env = buildEnv(baseConfig({ model }));
+      expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBeUndefined();
+      expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBeUndefined();
+    }
+  });
+});
+
 describe('runAgentSession', () => {
   it('fails fast with auth_failure when no API key is configured', async () => {
     const onEvent = vi.fn();

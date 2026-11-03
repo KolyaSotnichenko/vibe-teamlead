@@ -975,6 +975,10 @@
     "naming": {
       "label": "AI Naming",
       "description": "Task titles and terminal tab names"
+    },
+    "briefImport": {
+      "label": "Spec document import",
+      "description": "Splits an uploaded spec document into tasks"
     }
   },
   "agentCategories": {

@@ -15,6 +15,8 @@ import { isMacOS } from '../../platform';
 import { runProcess } from '../../platform/exec';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import { tryLoadPrompt } from '../prompts/prompt-loader';
+import type { ThinkingLevel } from '../config/types';
+import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
 import { type BriefProposalOutput, BriefProposalSchema } from '../schema/brief-proposal';
 import type { StreamEvent } from '../session/types';
 
@@ -176,6 +178,7 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
   const systemPrompt = tryLoadPrompt('brief_analyst');
   if (!systemPrompt) throw new BriefError('The brief analyst prompt is missing from this build.');
 
+  const feature = getFeatureSettings('briefImport');
   const result = await runClaudeTask({
     systemPrompt,
     prompt: [
@@ -183,8 +186,9 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
       `The project root is ${projectPath}.`,
       'Propose the epics and tasks as described in your instructions.',
     ].join('\n'),
-    model: 'opus',
-    thinkingLevel: 'high',
+    // Settings → Agents → feature models ("Spec document import")
+    model: feature.model,
+    thinkingLevel: feature.thinkingLevel as ThinkingLevel,
     tools: READ_TOOLS,
     cwd: projectPath,
     agentType: 'brief_analyst',
