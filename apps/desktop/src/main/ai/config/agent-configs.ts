@@ -156,7 +156,8 @@ export type AgentType =
   | 'batch_validation'
   | 'roadmap_discovery'
   | 'competitor_analysis'
-  | 'ideation';
+  | 'ideation'
+  | 'brief_analyst';
 
 /** Configuration for a single agent type */
 export interface AgentConfig {
@@ -332,6 +333,13 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   // ═══════════════════════════════════════════════════════════════════════
   // UTILITY PHASES (Minimal, no MCP)
   // ═══════════════════════════════════════════════════════════════════════
+  brief_analyst: {
+    // Reads the brief and the project; writes nothing (the proposal is structured output).
+    tools: [...BASE_READ_TOOLS],
+    mcpServers: [],
+    autoClaudeTools: [],
+    thinkingDefault: 'high',
+  },
   insights: {
     tools: [...ALL_BUILTIN_TOOLS],
     mcpServers: [],
