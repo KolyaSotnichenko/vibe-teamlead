@@ -15,7 +15,7 @@ import { resetStuckSubtasks } from '../ipc-handlers/task/plan-file-utils';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../shared/constants';
 import { projectStore } from '../project-store';
 import { type ResolvedClaudeCredential, resolveClaudeCredential } from '../ai/claude-code/credential';
-import { isClaudeModel, resolveModelId } from '../ai/config/phase-config';
+import { isUsableModel, resolveModelId } from '../ai/config/phase-config';
 import type { AgentExecutorConfig, SerializableSessionConfig, SerializedSecurityProfile } from '../ai/agent/types';
 import { getSecurityProfile } from '../ai/security/security-profile';
 import { createOrGetWorktree } from '../ai/worktree';
@@ -167,7 +167,7 @@ export class AgentManager extends EventEmitter {
       ? metadata.phaseModels.spec
       : (metadata?.model ?? 'sonnet');
 
-    const specModelId = resolveModelId(isClaudeModel(specModelShorthand) ? specModelShorthand : 'sonnet');
+    const specModelId = resolveModelId(isUsableModel(specModelShorthand) ? specModelShorthand : 'sonnet');
 
     // Load system prompt from prompts directory
     const systemPrompt = this.loadPrompt('spec_orchestrator') ?? this.buildDefaultSpecPrompt(taskDescription, specDir);
@@ -522,7 +522,7 @@ export class AgentManager extends EventEmitter {
         };
         const model = metadata.phaseModels?.[phase] || metadata.model;
         // Tasks created with a model of a removed provider fall back to the default
-        if (isClaudeModel(model)) return resolveModelId(model);
+        if (isUsableModel(model)) return resolveModelId(model);
       }
     } catch {
       // Fall through to default

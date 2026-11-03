@@ -17,7 +17,7 @@ import {
   SelectValue
 } from '../ui/select';
 import { Separator } from '../ui/separator';
-import { AVAILABLE_MODELS } from '../../../shared/constants';
+import { ClaudeModelSelect } from '../settings/ClaudeModelSelect';
 import type {
   Project,
   ProjectSettings as ProjectSettingsType,
@@ -114,21 +114,11 @@ export function GeneralSettings({
             <h3 className="text-sm font-semibold text-foreground">Agent Configuration</h3>
             <div className="space-y-2">
               <Label htmlFor="model" className="text-sm font-medium text-foreground">Model</Label>
-              <Select
+              <ClaudeModelSelect
+                id="model"
                 value={settings.model}
-                onValueChange={(value) => setSettings({ ...settings, model: value })}
-              >
-                <SelectTrigger id="model">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_MODELS.map((model) => (
-                    <SelectItem key={model.value} value={model.value}>
-                      {model.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setSettings({ ...settings, model: value })}
+              />
             </div>
             <div className="flex items-center justify-between pt-2">
               <div className="space-y-0.5">

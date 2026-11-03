@@ -21,6 +21,7 @@ import {
   DEFAULT_PHASE_MODELS,
   DEFAULT_PHASE_THINKING,
 } from './types';
+import { REMOVED_PROVIDER_MODELS } from '../../../shared/constants/models';
 
 // ============================================
 // Spec Phase Thinking Levels
@@ -164,12 +165,14 @@ export async function loadTaskMetadata(
 // ============================================
 
 /**
- * Whether a configured model value is a Claude model: a shorthand
- * (haiku, sonnet, opus...) or a full Claude model ID. Older settings and
- * tasks may still name models of the removed providers.
+ * Whether a configured model value can be used: a shorthand (haiku, sonnet,
+ * opus...), a Claude model ID, or any other id the configured endpoint serves
+ * (e.g. an Ollama model). Older settings and tasks may still name models of
+ * the removed providers; those fall back to the default.
  */
-export function isClaudeModel(model: string | undefined): model is string {
-  return !!model && (model in MODEL_ID_MAP || model.startsWith('claude-'));
+export function isUsableModel(model: string | undefined): model is string {
+  const id = model?.trim();
+  return !!id && !REMOVED_PROVIDER_MODELS.has(id);
 }
 
 /**
@@ -195,9 +198,9 @@ export async function getPhaseModel(
   if (metadata) {
     if (metadata.isAutoProfile && metadata.phaseModels) {
       const model = metadata.phaseModels[phase];
-      return resolveModelId(isClaudeModel(model) ? model : DEFAULT_PHASE_MODELS[phase]);
+      return resolveModelId(isUsableModel(model) ? model : DEFAULT_PHASE_MODELS[phase]);
     }
-    if (isClaudeModel(metadata.model)) {
+    if (isUsableModel(metadata.model)) {
       return resolveModelId(metadata.model);
     }
   }

@@ -6,7 +6,8 @@ import type {
   ToolDetectionResult,
   ClaudeCredentialStatus,
   ClaudeConnectionTestInput,
-  ClaudeConnectionTestResult
+  ClaudeConnectionTestResult,
+  ClaudeModelList
 } from '../../shared/types';
 
 export interface SettingsAPI {
@@ -41,6 +42,8 @@ export interface SettingsAPI {
   saveClaudeApiKey: (apiKey: string) => Promise<IPCResult<ClaudeCredentialStatus>>;
   clearClaudeApiKey: () => Promise<IPCResult<ClaudeCredentialStatus>>;
   testClaudeConnection: (input?: ClaudeConnectionTestInput) => Promise<IPCResult<ClaudeConnectionTestResult>>;
+  /** Models offered by the configured endpoint (Anthropic API or the base URL) */
+  listClaudeModels: (options?: { refresh?: boolean }) => Promise<IPCResult<ClaudeModelList>>;
 }
 
 export const createSettingsAPI = (): SettingsAPI => ({
@@ -93,4 +96,6 @@ export const createSettingsAPI = (): SettingsAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_CLEAR),
   testClaudeConnection: (input?: ClaudeConnectionTestInput): Promise<IPCResult<ClaudeConnectionTestResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_TEST, input),
+  listClaudeModels: (options?: { refresh?: boolean }): Promise<IPCResult<ClaudeModelList>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MODELS_LIST, options),
 });

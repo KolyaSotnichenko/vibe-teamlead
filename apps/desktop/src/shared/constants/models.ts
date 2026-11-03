@@ -9,22 +9,41 @@ import type { AgentProfile, PhaseModelConfig, FeatureModelConfig, FeatureThinkin
 // Available Models
 // ============================================
 
+/**
+ * Built-in choices (shorthands, resolved by MODEL_ID_MAP). The pickers add the
+ * models the configured endpoint lists, and accept any typed model id.
+ */
 export const AVAILABLE_MODELS = [
-  { value: 'opus', label: 'Claude Opus 4.6' },
-  { value: 'opus-1m', label: 'Claude Opus 4.6 (1M)' },
-  { value: 'opus-4.5', label: 'Claude Opus 4.5' },
-  { value: 'sonnet', label: 'Claude Sonnet 4.6' },
-  { value: 'haiku', label: 'Claude Haiku 4.5' }
+  { value: 'opus', label: 'Claude Opus 5.5' },
+  { value: 'opus-1m', label: 'Claude Opus 5.5 (1M)' },
+  { value: 'sonnet', label: 'Claude Sonnet 5.5' },
+  { value: 'haiku', label: 'Claude Haiku 5.5' }
 ] as const;
+
+/** Labels for shorthands no longer offered, so old settings still read well */
+export const LEGACY_MODEL_LABELS: Record<string, string> = {
+  'opus-4.5': 'Claude Opus 4.5'
+};
+
+/**
+ * Model ids of the providers that were removed. Settings and tasks may still
+ * name them; they fall back to the default Claude model.
+ */
+export const REMOVED_PROVIDER_MODELS: ReadonlySet<string> = new Set([
+  'gpt-5.3-codex', 'gpt-5.2', 'gpt-5.2-codex', 'gpt-5.1-codex-mini', 'gpt-5-nano', 'o3', 'o4-mini',
+  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash',
+  'mistral-large-latest', 'mistral-small-latest', 'meta-llama/llama-4-maverick', 'llama-3.3-70b-versatile',
+  'grok-4-0709', 'grok-3', 'grok-3-mini', 'glm-5', 'glm-4.7', 'glm-4.6v', 'glm-4.5-flash'
+]);
 
 // Maps model shorthand to actual Claude model IDs
 // Values must match apps/desktop/src/main/ai/config/types.ts MODEL_ID_MAP
 export const MODEL_ID_MAP: Record<string, string> = {
-  opus: 'claude-opus-4-6',
-  'opus-1m': 'claude-opus-4-6',
+  opus: 'claude-opus-5-5',
+  'opus-1m': 'claude-opus-5-5',
   'opus-4.5': 'claude-opus-4-5-20251101',
-  sonnet: 'claude-sonnet-4-6',
-  haiku: 'claude-haiku-4-5-20251001'
+  sonnet: 'claude-sonnet-5-5',
+  haiku: 'claude-haiku-5-5'
 } as const;
 
 // Maps thinking levels to budget tokens

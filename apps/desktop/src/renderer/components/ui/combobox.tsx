@@ -35,6 +35,13 @@ interface ComboboxProps {
   className?: string;
   /** ID for the trigger element */
   id?: string;
+  /**
+   * Accept a typed value that matches no option: offered as the last option,
+   * labelled with this function (e.g. "Use “my-model”").
+   */
+  customValueLabel?: (value: string) => string;
+  /** Shown under the list (e.g. a status line or a refresh button) */
+  footer?: React.ReactNode;
 }
 
 const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
@@ -49,6 +56,8 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
       disabled = false,
       className,
       id,
+      customValueLabel,
+      footer,
     },
     ref
   ) => {
@@ -65,14 +74,20 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
 
     // Filter options based on search
     const filteredOptions = React.useMemo(() => {
-      if (!search.trim()) return options;
-      const searchLower = search.toLowerCase();
-      return options.filter(
+      const typed = search.trim();
+      if (!typed) return options;
+      const searchLower = typed.toLowerCase();
+      const matches = options.filter(
         (opt) =>
           opt.label.toLowerCase().includes(searchLower) ||
+          opt.value.toLowerCase().includes(searchLower) ||
           opt.description?.toLowerCase().includes(searchLower)
       );
-    }, [options, search]);
+      if (customValueLabel && !options.some((opt) => opt.value === typed)) {
+        matches.push({ value: typed, label: customValueLabel(typed) });
+      }
+      return matches;
+    }, [options, search, customValueLabel]);
 
     // Get option ID for aria-activedescendant
     const getOptionId = (index: number) => `${listboxId}-option-${index}`;
@@ -100,10 +115,11 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
       }
     }, [open]);
 
-    // Reset focused index when filtered options change
+    // Reset focused index when the search changes
+    // biome-ignore lint/correctness/useExhaustiveDependencies: reset on every search change
     React.useEffect(() => {
       setFocusedIndex(-1);
-    }, []);
+    }, [search]);
 
     // Scroll focused option into view
     React.useEffect(() => {
@@ -290,6 +306,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
               )}
             </div>
           </ScrollArea>
+          {footer && <div className="border-t border-border px-3 py-2">{footer}</div>}
         </PopoverContent>
       </Popover>
     );

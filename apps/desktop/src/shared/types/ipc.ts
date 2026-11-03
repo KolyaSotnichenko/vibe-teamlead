@@ -129,7 +129,7 @@ import type {
   GitLabMRReviewProgress,
   GitLabNewCommitsCheck
 } from './integrations';
-import type { ClaudeCredentialStatus, ClaudeConnectionTestInput, ClaudeConnectionTestResult } from './claude-credential';
+import type { ClaudeCredentialStatus, ClaudeConnectionTestInput, ClaudeConnectionTestResult, ClaudeModelList } from './claude-credential';
 
 // ============================================
 // Branch Types
@@ -308,6 +308,8 @@ export interface ElectronAPI {
   saveClaudeApiKey: (apiKey: string) => Promise<IPCResult<ClaudeCredentialStatus>>;
   clearClaudeApiKey: () => Promise<IPCResult<ClaudeCredentialStatus>>;
   testClaudeConnection: (input?: ClaudeConnectionTestInput) => Promise<IPCResult<ClaudeConnectionTestResult>>;
+  /** Models offered by the configured endpoint (Anthropic API or the base URL) */
+  listClaudeModels: (options?: { refresh?: boolean }) => Promise<IPCResult<ClaudeModelList>>;
 
   // Dialog operations
   selectDirectory: () => Promise<string | null>;

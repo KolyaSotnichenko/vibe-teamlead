@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AppSettings } from '../../shared/types';
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { markSettingsLoaded } from '../lib/sentry';
+import { invalidateEndpointModels } from '../hooks/useEndpointModels';
 
 interface SettingsState {
   settings: AppSettings;
@@ -129,7 +130,11 @@ export async function saveSettings(updates: Partial<AppSettings>): Promise<boole
   try {
     const result = await window.electronAPI.saveSettings(updates);
     if (result.success) {
+      const endpointChanged =
+        'anthropicBaseUrl' in updates && updates.anthropicBaseUrl !== store.settings.anthropicBaseUrl;
       store.updateSettings(updates);
+      // The model pickers list the models of the configured endpoint
+      if (endpointChanged) invalidateEndpointModels();
       return true;
     }
     return false;

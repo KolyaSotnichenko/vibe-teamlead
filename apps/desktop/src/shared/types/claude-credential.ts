@@ -25,3 +25,23 @@ export interface ClaudeConnectionTestResult {
   /** Short reason when the test fails */
   error?: string;
 }
+
+/** A model offered by the configured endpoint (Anthropic or a compatible one such as Ollama) */
+export interface ClaudeModelInfo {
+  id: string;
+  /** Human-readable name, when the endpoint gives one */
+  displayName?: string;
+  /** ISO date the model was released, when the endpoint gives one */
+  createdAt?: string;
+}
+
+export interface ClaudeModelList {
+  models: ClaudeModelInfo[];
+  /** The endpoint that was asked (no trailing slash, no /v1) */
+  endpoint: string;
+  /** Whether this is the Anthropic API or a custom base URL */
+  custom: boolean;
+  /** Why the list could not be loaded; models is then empty */
+  error?: string;
+  fetchedAt: number;
+}

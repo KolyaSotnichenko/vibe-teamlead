@@ -135,6 +135,7 @@ export const IPC_CHANNELS = {
   CLAUDE_CREDENTIAL_SAVE: 'claudeCredential:save',
   CLAUDE_CREDENTIAL_CLEAR: 'claudeCredential:clear',
   CLAUDE_CREDENTIAL_TEST: 'claudeCredential:test',
+  CLAUDE_MODELS_LIST: 'claudeCredential:listModels',
 
   // Settings
   SETTINGS_GET: 'settings:get',

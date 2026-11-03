@@ -85,7 +85,7 @@
     },
     "baseUrl": {
       "label": "Base URL (optional)",
-      "help": "For a gateway or proxy that speaks the Anthropic API. Leave empty to use api.anthropic.com. Saved with the other settings."
+      "help": "For a gateway, proxy or local server that speaks the Anthropic API, such as Ollama at http://localhost:11434. Leave empty to use api.anthropic.com. The model pickers list the models it serves. Saved with the other settings."
     },
     "personalMode": {
       "label": "Use my Claude subscription (personal use)",
@@ -731,5 +731,18 @@
       "start": "To fix, start Docker Desktop:",
       "openSettings": "Settings → Tools"
     }
+  },
+  "modelPicker": {
+    "builtIn": "Built-in",
+    "fromEndpoint": "From {{endpoint}}",
+    "current": "Current",
+    "search": "Search or type a model id",
+    "empty": "No models match",
+    "useCustom": "Use “{{id}}”",
+    "refresh": "Refresh",
+    "loading": "Loading models…",
+    "error": "Couldn't load models: {{error}}",
+    "count_one": "{{count}} model from {{endpoint}}",
+    "count_other": "{{count}} models from {{endpoint}}"
   }
 }

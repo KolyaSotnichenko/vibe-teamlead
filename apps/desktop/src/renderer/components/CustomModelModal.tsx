@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue
 } from './ui/select';
-import { AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
+import { THINKING_LEVELS } from '../../shared/constants';
+import { ClaudeModelSelect } from './settings/ClaudeModelSelect';
 import type { InsightsModelConfig } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 
@@ -66,18 +67,7 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="model-select">{t('customModel.model')}</Label>
-            <Select value={model} onValueChange={(v) => setModel(v as ModelType)}>
-              <SelectTrigger id="model-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AVAILABLE_MODELS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClaudeModelSelect id="model-select" value={model} onChange={(v) => setModel(v as ModelType)} />
           </div>
 
           <div className="space-y-2">

@@ -28,6 +28,7 @@ import {
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import { cn } from '../lib/utils';
+import { ClaudeModelSelect } from './settings/ClaudeModelSelect';
 
 interface AgentProfileSelectorProps {
   /** Currently selected profile ID ('auto', 'complex', 'balanced', 'quick', or 'custom') */
@@ -91,8 +92,6 @@ export function AgentProfileSelector({
   // Use provided phase configs or defaults
   const currentPhaseModels = phaseModels || DEFAULT_PHASE_MODELS;
   const currentPhaseThinking = phaseThinking || DEFAULT_PHASE_THINKING;
-
-  const phaseModelOptions = AVAILABLE_MODELS.map(m => ({ value: m.value, label: m.label }));
 
   const handleProfileSelect = (selectedId: string) => {
     if (selectedId === 'custom') {
@@ -278,22 +277,12 @@ export function AgentProfileSelector({
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-[10px] text-muted-foreground">{t('agentProfile.model')}</Label>
-                      <Select
+                      <ClaudeModelSelect
+                        className="h-8 text-xs"
                         value={currentPhaseModels[phase]}
-                        onValueChange={(value) => handlePhaseModelChange(phase, value as ModelType)}
+                        onChange={(value) => handlePhaseModelChange(phase, value as ModelType)}
                         disabled={disabled}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {phaseModelOptions.map((m) => (
-                            <SelectItem key={m.value} value={m.value}>
-                              {m.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                     <ThinkingLevelSelect
                       value={currentPhaseThinking[phase]}
@@ -317,22 +306,13 @@ export function AgentProfileSelector({
             <Label htmlFor="custom-model" className="text-xs font-medium text-muted-foreground">
               {t('agentProfile.model')}
             </Label>
-            <Select
-              value={model}
-              onValueChange={(value) => onModelChange(value as ModelType)}
+            <ClaudeModelSelect
+              id="custom-model"
+              className="h-9"
+              value={model ?? ''}
+              onChange={(value) => onModelChange(value as ModelType)}
               disabled={disabled}
-            >
-              <SelectTrigger id="custom-model" className="h-9">
-                <SelectValue placeholder={t('agentProfile.selectModel')} />
-              </SelectTrigger>
-              <SelectContent>
-                {phaseModelOptions.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           {/* Thinking Level Selection */}

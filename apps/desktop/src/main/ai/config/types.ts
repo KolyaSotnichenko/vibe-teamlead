@@ -33,11 +33,11 @@ export type Phase = 'spec' | 'planning' | 'coding' | 'qa';
  * - apps/desktop/src/shared/constants/models.ts MODEL_ID_MAP
  */
 export const MODEL_ID_MAP: Record<ModelShorthand, string> = {
-  opus: 'claude-opus-4-6',
-  'opus-1m': 'claude-opus-4-6',
+  opus: 'claude-opus-5-5',
+  'opus-1m': 'claude-opus-5-5',
   'opus-4.5': 'claude-opus-4-5-20251101',
-  sonnet: 'claude-sonnet-4-6',
-  haiku: 'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-5-5',
+  haiku: 'claude-haiku-5-5',
 } as const;
 
 /**
@@ -81,6 +81,7 @@ export const EFFORT_LEVEL_MAP: Record<EffortLevel, string> = {
  * These models get both max_thinking_tokens AND effort_level.
  */
 export const ADAPTIVE_THINKING_MODELS: ReadonlySet<string> = new Set([
+  'claude-opus-5-5',
   'claude-opus-4-6',
 ]);
 

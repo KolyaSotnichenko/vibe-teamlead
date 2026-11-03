@@ -64,7 +64,7 @@ vi.mock('../../main/ai/claude-code/credential', () => ({
 
 vi.mock('../../main/ai/config/phase-config', () => ({
   resolveModelId: vi.fn((model: string) => `claude-${model}-20241022`),
-  isClaudeModel: vi.fn(() => true),
+  isUsableModel: vi.fn(() => true),
 }));
 
 // =============================================================================

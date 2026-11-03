@@ -60,6 +60,20 @@ export const settingsMock = {
     return { success: true, data: mockCredential };
   },
   testClaudeConnection: async () => ({ success: true, data: { ok: true } }),
+  listClaudeModels: async () => ({
+    success: true,
+    data: {
+      endpoint: 'https://api.anthropic.com',
+      custom: false,
+      fetchedAt: Date.now(),
+      models: [
+        { id: 'claude-fable-5-1', displayName: 'Claude Fable 5.1' },
+        { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5' },
+        { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5' },
+        { id: 'claude-haiku-5-5', displayName: 'Claude Haiku 5.5' },
+      ],
+    },
+  }),
 
   // App Info
   getAppVersion: async () => '0.1.0-browser',

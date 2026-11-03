@@ -14,6 +14,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { cn } from '../../lib/utils';
+import { invalidateEndpointModels } from '../../hooks/useEndpointModels';
 import type { ClaudeConnectionTestResult, ClaudeCredentialStatus } from '../../../shared/types';
 
 interface ClaudeCredentialPanelProps {
@@ -64,6 +65,7 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
       const result = await window.electronAPI.saveClaudeApiKey(apiKey);
       if (result.success && result.data) {
         onStatusChange(result.data);
+        invalidateEndpointModels();
         setApiKey('');
         setShowKey(false);
       } else {
@@ -82,7 +84,10 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
     setTestResult(null);
     try {
       const result = await window.electronAPI.clearClaudeApiKey();
-      if (result.success && result.data) onStatusChange(result.data);
+      if (result.success && result.data) {
+        onStatusChange(result.data);
+        invalidateEndpointModels();
+      }
     } finally {
       setBusy(null);
     }

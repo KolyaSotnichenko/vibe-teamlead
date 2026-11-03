@@ -11,7 +11,7 @@
  * A stored model of a removed (non-Claude) provider falls back to the default.
  */
 
-import { isClaudeModel } from '../ai/config/phase-config';
+import { isUsableModel } from '../ai/config/phase-config';
 import { readSettingsFile } from '../settings-utils';
 import { DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING } from '../../shared/constants/models';
 import type { FeatureModelConfig, FeatureThinkingConfig } from '../../shared/types/settings';
@@ -30,7 +30,7 @@ export function getFeatureSettings(featureKey: FeatureKey): FeatureSettings {
   const thinking = settings?.featureThinking as FeatureThinkingConfig | undefined;
   const model = models?.[featureKey];
   return {
-    model: isClaudeModel(model) ? model : DEFAULT_FEATURE_MODELS[featureKey],
+    model: isUsableModel(model) ? model : DEFAULT_FEATURE_MODELS[featureKey],
     thinkingLevel: thinking?.[featureKey] ?? DEFAULT_FEATURE_THINKING[featureKey],
   };
 }
