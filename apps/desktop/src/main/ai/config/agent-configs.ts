@@ -93,16 +93,20 @@ export const GRAPHITI_MCP_TOOLS = MEMORY_MCP_TOOLS;
 // Browser Automation MCP Tools (QA agents only)
 // =============================================================================
 
-/** Puppeteer MCP tools for web browser automation */
-export const PUPPETEER_TOOLS = [
-  'mcp__puppeteer__puppeteer_connect_active_tab',
-  'mcp__puppeteer__puppeteer_navigate',
-  'mcp__puppeteer__puppeteer_screenshot',
-  'mcp__puppeteer__puppeteer_click',
-  'mcp__puppeteer__puppeteer_fill',
-  'mcp__puppeteer__puppeteer_select',
-  'mcp__puppeteer__puppeteer_hover',
-  'mcp__puppeteer__puppeteer_evaluate',
+/** Core Playwright MCP tools for end-to-end validation of web frontends (bundled) */
+export const PLAYWRIGHT_TOOLS = [
+  'mcp__playwright__browser_navigate',
+  'mcp__playwright__browser_snapshot',
+  'mcp__playwright__browser_click',
+  'mcp__playwright__browser_type',
+  'mcp__playwright__browser_fill_form',
+  'mcp__playwright__browser_select_option',
+  'mcp__playwright__browser_take_screenshot',
+  'mcp__playwright__browser_console_messages',
+  'mcp__playwright__browser_network_requests',
+  'mcp__playwright__browser_wait_for',
+  'mcp__playwright__browser_verify_text_visible',
+  'mcp__playwright__browser_close',
 ] as const;
 
 /** Electron MCP tools for desktop app automation (when ELECTRON_MCP_ENABLED is set) */
@@ -493,7 +497,8 @@ const MCP_SERVER_NAME_MAP: Record<string, string> = {
   memory: 'memory',
   linear: 'linear',
   electron: 'electron',
-  puppeteer: 'puppeteer',
+  playwright: 'playwright',
+  'chrome-devtools': 'chrome-devtools',
   'auto-claude': 'auto-claude',
 };
 
@@ -531,8 +536,11 @@ export interface McpServerResolveOptions {
   memoryEnabled?: boolean;
   /** Whether Electron MCP is enabled */
   electronMcpEnabled?: boolean;
-  /** Whether Puppeteer MCP is enabled */
-  puppeteerMcpEnabled?: boolean;
+  /**
+   * Whether browser MCP servers (Playwright, Chrome DevTools) run for web
+   * frontends. They are bundled, headless and isolated, so on by default.
+   */
+  browserMcpEnabled?: boolean;
   /** Whether Context7 is enabled (default: true) */
   context7Enabled?: boolean;
   /** Per-agent MCP additions (comma-separated server names) */
@@ -547,7 +555,8 @@ export interface McpServerResolveOptions {
  * Get MCP servers required for an agent type.
  *
  * Handles dynamic server selection:
- * - "browser" → electron (if is_electron) or puppeteer (if is_web_frontend)
+ * - "browser" → electron (if is_electron) or playwright (if is_web_frontend);
+ *   qa_fixer also gets chrome-devtools for console/network/performance debugging
  * - "linear" → only if in mcpServersOptional AND linearEnabled is true
  * - "memory" → only if memoryEnabled is true
  * - Applies per-agent ADD/REMOVE overrides
@@ -575,7 +584,7 @@ export function getRequiredMcpServers(
     servers.push('linear');
   }
 
-  // Handle dynamic "browser" → electron/puppeteer
+  // Handle dynamic "browser" → electron / playwright (+ chrome-devtools for the fixer)
   const browserIdx = servers.indexOf('browser');
   if (browserIdx !== -1) {
     servers.splice(browserIdx, 1);
@@ -583,8 +592,9 @@ export function getRequiredMcpServers(
     if (caps) {
       if (caps.is_electron && options.electronMcpEnabled) {
         servers.push('electron');
-      } else if (caps.is_web_frontend && !caps.is_electron && options.puppeteerMcpEnabled) {
-        servers.push('puppeteer');
+      } else if (caps.is_web_frontend && !caps.is_electron && options.browserMcpEnabled !== false) {
+        servers.push('playwright');
+        if (agentType === 'qa_fixer') servers.push('chrome-devtools');
       }
     }
   }

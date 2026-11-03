@@ -91,16 +91,29 @@ describe('getMcpServerConfig', () => {
     });
   });
 
-  describe('puppeteer', () => {
-    it('returns the puppeteer server config', () => {
-      const config = getMcpServerConfig('puppeteer');
-      expect(config).not.toBeNull();
-      expect(config?.id).toBe('puppeteer');
+  describe('bundled browser servers', () => {
+    const bundled = { playwrightMcpCli: '/r/pw/cli.js', chromeDevtoolsMcpCli: '/r/cd/cli.js', nodeRuntime: '/r/Electron' };
+
+    it('are skipped when not bundled', () => {
+      expect(getMcpServerConfig('playwright')).toBeNull();
+      expect(getMcpServerConfig('chrome-devtools')).toBeNull();
     });
 
-    it('uses stdio transport', () => {
-      const config = getMcpServerConfig('puppeteer');
-      expect(config?.transport.type).toBe('stdio');
+    it('run Playwright headless and isolated on Electron as Node', () => {
+      const config = getMcpServerConfig('playwright', { bundled, browserOutputDir: '/spec/qa-browser' });
+      expect(config?.transport).toMatchObject({
+        type: 'stdio',
+        command: '/r/Electron',
+        args: ['/r/pw/cli.js', '--headless', '--isolated', '--browser', 'chrome', '--output-dir', '/spec/qa-browser'],
+        env: { ELECTRON_RUN_AS_NODE: '1' },
+      });
+    });
+
+    it('run Chrome DevTools without usage statistics or CrUX lookups', () => {
+      const config = getMcpServerConfig('chrome-devtools', { bundled });
+      const transport = config?.transport as { args: string[]; env: Record<string, string> };
+      expect(transport.args).toEqual(expect.arrayContaining(['--no-usage-statistics', '--no-performance-crux', '--isolated']));
+      expect(transport.env.CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS).toBe('1');
     });
   });
 
@@ -141,9 +154,9 @@ describe('getMcpServerConfig', () => {
 
 describe('resolveMcpServers', () => {
   it('returns configs for all recognized server IDs', () => {
-    const configs = resolveMcpServers(['context7', 'electron', 'puppeteer']);
-    expect(configs).toHaveLength(3);
-    expect(configs.map((c) => c.id)).toEqual(['context7', 'electron', 'puppeteer']);
+    const bundled = { playwrightMcpCli: '/pw.js', chromeDevtoolsMcpCli: '/cd.js', nodeRuntime: '/node' };
+    const configs = resolveMcpServers(['context7', 'electron', 'playwright', 'chrome-devtools'], { bundled });
+    expect(configs.map((c) => c.id)).toEqual(['context7', 'electron', 'playwright', 'chrome-devtools']);
   });
 
   it('filters out servers that cannot be configured (e.g. linear without API key)', () => {

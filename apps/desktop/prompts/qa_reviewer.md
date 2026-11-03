@@ -44,6 +44,15 @@ grep -A 100 "## QA Acceptance Criteria" spec.md
 
 ---
 
+## SECURITY GATES (HARD)
+
+Before this session the app ran gitleaks (secrets) and OSV-Scanner (newly introduced vulnerable dependencies) on what this build changed. Read `security_gates.md` in the spec directory.
+
+- If its status is **BLOCKED**, the review cannot pass: list every finding under Issues Found as critical and set `qa_signoff.status` to `rejected`. The app enforces this even if you approve.
+- If a gate was skipped, say so in the report; review those areas (secrets in code and config, new dependencies) by hand.
+
+---
+
 ## PHASE 1: VERIFY ALL SUBTASKS COMPLETED
 
 ```bash

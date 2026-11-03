@@ -84,20 +84,51 @@ const ELECTRON_SERVER: McpServerConfig = {
 };
 
 /**
- * Puppeteer MCP server - web browser automation.
- * Only available to QA agents for non-Electron web frontends.
+ * Bundled browser MCP servers run on Electron's own Node (ELECTRON_RUN_AS_NODE),
+ * headless and with in-memory profiles, against the user's installed Chrome.
  */
-const PUPPETEER_SERVER: McpServerConfig = {
-  id: 'puppeteer',
-  name: 'Puppeteer',
-  description: 'Web browser automation for frontend validation',
-  enabledByDefault: false,
-  transport: {
-    type: 'stdio',
-    command: 'npx',
-    args: ['-y', '@anthropic-ai/puppeteer-mcp-server'],
-  },
-};
+function bundledNodeServer(
+  id: string,
+  name: string,
+  description: string,
+  cli: string,
+  args: string[],
+  runtime: string,
+  env: Record<string, string> = {},
+): McpServerConfig {
+  return {
+    id,
+    name,
+    description,
+    enabledByDefault: true,
+    transport: {
+      type: 'stdio',
+      command: runtime,
+      args: [cli, ...args],
+      env: { ELECTRON_RUN_AS_NODE: '1', ...env },
+    },
+  };
+}
+
+/** Playwright MCP (Microsoft, Apache-2.0): drive the app under test as a user would. */
+function createPlaywrightServer(cli: string, runtime: string, outputDir?: string): McpServerConfig {
+  const args = ['--headless', '--isolated', '--browser', 'chrome'];
+  if (outputDir) args.push('--output-dir', outputDir);
+  return bundledNodeServer('playwright', 'Playwright', 'Browser automation for end-to-end validation', cli, args, runtime);
+}
+
+/** Chrome DevTools MCP (Google, Apache-2.0): console, network and performance debugging. */
+function createChromeDevtoolsServer(cli: string, runtime: string): McpServerConfig {
+  return bundledNodeServer(
+    'chrome-devtools',
+    'Chrome DevTools',
+    'Console, network and performance inspection for debugging',
+    cli,
+    ['--headless', '--isolated', '--no-usage-statistics', '--no-performance-crux'],
+    runtime,
+    { CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: '1', CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1' },
+  );
+}
 
 /**
  * Auto-Claude MCP server - custom build management tools.
@@ -132,6 +163,10 @@ export interface McpRegistryOptions {
   linearApiKey?: string;
   /** Environment variables for server processes */
   env?: Record<string, string>;
+  /** Bundled MCP server entry points (browser servers are skipped when absent) */
+  bundled?: { playwrightMcpCli?: string; chromeDevtoolsMcpCli?: string; nodeRuntime?: string };
+  /** Where browser tools save screenshots and traces */
+  browserOutputDir?: string;
 }
 
 /**
@@ -172,8 +207,17 @@ export function getMcpServerConfig(
     case 'electron':
       return ELECTRON_SERVER;
 
-    case 'puppeteer':
-      return PUPPETEER_SERVER;
+    case 'playwright': {
+      const { playwrightMcpCli, nodeRuntime } = options.bundled ?? {};
+      if (!playwrightMcpCli || !nodeRuntime) return null;
+      return createPlaywrightServer(playwrightMcpCli, nodeRuntime, options.browserOutputDir);
+    }
+
+    case 'chrome-devtools': {
+      const { chromeDevtoolsMcpCli, nodeRuntime } = options.bundled ?? {};
+      if (!chromeDevtoolsMcpCli || !nodeRuntime) return null;
+      return createChromeDevtoolsServer(chromeDevtoolsMcpCli, nodeRuntime);
+    }
 
     case 'auto-claude': {
       const specDir = options.specDir ?? '';

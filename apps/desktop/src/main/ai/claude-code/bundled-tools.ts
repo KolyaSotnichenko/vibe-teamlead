@@ -15,11 +15,13 @@
  *   <Resources>/plugins/vibe-teamlead-skills/
  *   <Resources>/drawio-viewer/viewer-static.min.js
  *   <Resources>/codegraph/bin/codegraph
+ *   <Resources>/scanners/{gitleaks,osv-scanner}
+ *   <Resources>/browser-mcp/node_modules/{@playwright/mcp,playwright,playwright-core,chrome-devtools-mcp}
  */
 
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 
 export interface BundledTools {
   /** Absolute path to the Claude Code executable */
@@ -34,7 +36,30 @@ export interface BundledTools {
   drawioViewerScript?: string;
   /** Absolute path to the CodeGraph launcher */
   codegraphBin?: string;
+  /** Playwright MCP entry point (@playwright/mcp cli.js) */
+  playwrightMcpCli?: string;
+  /** Chrome DevTools MCP entry point */
+  chromeDevtoolsMcpCli?: string;
+  /** Node runtime for bundled JS servers: Electron itself with ELECTRON_RUN_AS_NODE=1 */
+  nodeRuntime?: string;
+  /** gitleaks binary (secrets gate) */
+  gitleaksBin?: string;
+  /** OSV-Scanner binary (vulnerable dependency gate) */
+  osvScannerBin?: string;
 }
+
+/** Find an executable on PATH (development fallback for the scanners). */
+function onPath(name: string): string | undefined {
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+const PLAYWRIGHT_CLI = 'cli.js';
+const DEVTOOLS_CLI = join('build', 'src', 'bin', 'chrome-devtools-mcp.js');
 
 function platformTarget(): string {
   return `${process.platform}-${process.arch}`;
@@ -62,6 +87,11 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     vibeSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'vibe-teamlead-skills')]),
     drawioViewerScript: firstExisting([join(resourcesPath, 'drawio-viewer', 'viewer-static.min.js')]),
     codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', 'codegraph')]),
+    playwrightMcpCli: firstExisting([join(resourcesPath, 'browser-mcp', 'node_modules', '@playwright', 'mcp', PLAYWRIGHT_CLI)]),
+    chromeDevtoolsMcpCli: firstExisting([join(resourcesPath, 'browser-mcp', 'node_modules', 'chrome-devtools-mcp', DEVTOOLS_CLI)]),
+    nodeRuntime: process.execPath,
+    gitleaksBin: firstExisting([join(resourcesPath, 'scanners', 'gitleaks')]),
+    osvScannerBin: firstExisting([join(resourcesPath, 'scanners', 'osv-scanner')]),
   };
 }
 
@@ -83,6 +113,15 @@ export function resolveDevTools(appRoot: string): BundledTools {
         (p): p is string => !!p,
       ),
     ),
+    playwrightMcpCli: firstExisting(
+      [resolveFromPackage('@playwright/mcp', PLAYWRIGHT_CLI)].filter((p): p is string => !!p),
+    ),
+    chromeDevtoolsMcpCli: firstExisting(
+      [resolveFromPackage('chrome-devtools-mcp', DEVTOOLS_CLI)].filter((p): p is string => !!p),
+    ),
+    nodeRuntime: process.execPath,
+    gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', 'gitleaks')]) ?? onPath('gitleaks'),
+    osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', 'osv-scanner')]) ?? onPath('osv-scanner'),
   };
 }
 

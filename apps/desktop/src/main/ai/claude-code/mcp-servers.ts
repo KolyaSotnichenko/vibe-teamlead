@@ -28,7 +28,8 @@ const SERVER_KEYS: Record<string, string> = {
   linear: 'linear-server',
   memory: 'graphiti-memory',
   electron: 'electron',
-  puppeteer: 'puppeteer',
+  playwright: 'playwright',
+  'chrome-devtools': 'chrome-devtools',
 };
 
 export function toSdkServerConfig(config: McpServerConfig): SdkMcpServerConfig {

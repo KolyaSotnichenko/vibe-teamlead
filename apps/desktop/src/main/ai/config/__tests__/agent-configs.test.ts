@@ -9,7 +9,7 @@ import {
   CONTEXT7_TOOLS,
   LINEAR_TOOLS,
   MEMORY_MCP_TOOLS, GRAPHITI_MCP_TOOLS,
-  PUPPETEER_TOOLS,
+  PLAYWRIGHT_TOOLS,
   ELECTRON_TOOLS,
   type AgentType,
 } from '../agent-configs';
@@ -150,8 +150,8 @@ describe('MCP tool arrays', () => {
     expect(MEMORY_MCP_TOOLS).toHaveLength(5);
   });
 
-  it('PUPPETEER_TOOLS should have 8 tools', () => {
-    expect(PUPPETEER_TOOLS).toHaveLength(8);
+  it('PLAYWRIGHT_TOOLS should be Playwright MCP tools', () => {
+    expect(PLAYWRIGHT_TOOLS.every((t) => t.startsWith('mcp__playwright__browser_'))).toBe(true);
   });
 
   it('ELECTRON_TOOLS should have 4 tools', () => {
@@ -267,14 +267,24 @@ describe('getRequiredMcpServers', () => {
     expect(servers).toContain('electron');
   });
 
-  it('should resolve browser to puppeteer for web frontend projects', () => {
+  it('should resolve browser to playwright for web frontend projects', () => {
     const servers = getRequiredMcpServers('qa_reviewer', {
       memoryEnabled: true,
       projectCapabilities: { is_web_frontend: true, is_electron: false },
-      puppeteerMcpEnabled: true,
     });
     expect(servers).not.toContain('browser');
-    expect(servers).toContain('puppeteer');
+    expect(servers).toContain('playwright');
+    expect(servers).not.toContain('chrome-devtools');
+  });
+
+  it('should give the QA fixer Chrome DevTools too, and honour the opt-out', () => {
+    const caps = { is_web_frontend: true, is_electron: false };
+    expect(getRequiredMcpServers('qa_fixer', { projectCapabilities: caps })).toEqual(
+      expect.arrayContaining(['playwright', 'chrome-devtools']),
+    );
+    const off = getRequiredMcpServers('qa_fixer', { projectCapabilities: caps, browserMcpEnabled: false });
+    expect(off).not.toContain('playwright');
+    expect(off).not.toContain('chrome-devtools');
   });
 
   it('should filter context7 when explicitly disabled', () => {

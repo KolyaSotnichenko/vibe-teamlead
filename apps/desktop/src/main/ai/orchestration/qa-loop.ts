@@ -31,6 +31,7 @@ import type { Phase } from '../config/types';
 import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
+import type { GateReport } from '../security/gates';
 
 // =============================================================================
 // Constants
@@ -88,6 +89,11 @@ export interface QALoopConfig {
   generatePrompt: (agentType: AgentType, context: QAPromptContext) => Promise<string>;
   /** Callback to run an agent session */
   runSession: (config: QASessionRunConfig) => Promise<SessionResult>;
+  /**
+   * Security gates (gitleaks, OSV-Scanner) run before every review. Findings
+   * are hard gates: QA cannot approve while any remain.
+   */
+  runGates?: () => Promise<GateReport>;
 }
 
 /** Context passed to prompt generation */
@@ -231,6 +237,9 @@ export class QALoop extends EventEmitter {
         const iterationStart = Date.now();
         this.emitTyped('qa-iteration-start', iteration, maxIterations);
 
+        // Security gates first, so the reviewer and fixer see their findings
+        const gateIssues = await this.runGates();
+
         // Run QA reviewer
         this.sessionNumber++;
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', {
@@ -257,8 +266,17 @@ export class QALoop extends EventEmitter {
 
         // Read QA signoff from implementation_plan.json
         const signoff = await this.readQASignoff();
-        const status = this.resolveQAStatus(signoff);
-        const issues = signoff?.issues_found ?? [];
+        let status = this.resolveQAStatus(signoff);
+        let issues = signoff?.issues_found ?? [];
+
+        if (gateIssues.length && status !== 'unknown') {
+          if (status === 'approved') {
+            this.emitTyped('log', `Security gates blocked approval: ${gateIssues.length} finding(s)`);
+          }
+          status = 'rejected';
+          const known = new Set(issues.map((i) => i.title));
+          issues = [...issues, ...gateIssues.filter((i) => !known.has(i.title))];
+        }
         const iterationDuration = Date.now() - iterationStart;
 
         this.emitTyped('qa-review-complete', iteration, status, issues);
@@ -356,6 +374,34 @@ export class QALoop extends EventEmitter {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       return this.outcome(false, 0, Date.now() - startTime, 'error', message);
+    }
+  }
+
+  // ===========================================================================
+  // Security gates
+  // ===========================================================================
+
+  /** Run the gates; returns their findings as blocking QA issues. Never throws. */
+  private async runGates(): Promise<QAIssue[]> {
+    if (!this.config.runGates) return [];
+    try {
+      const report = await this.config.runGates();
+      for (const skipped of report.skipped) this.emitTyped('log', `Security gate skipped (${skipped.gate}): ${skipped.reason}`);
+      if (report.ran.length) {
+        this.emitTyped('log', `Security gates (${report.ran.join(', ')}): ${report.findings.length ? `${report.findings.length} finding(s)` : 'clear'}`);
+      }
+      return report.findings.map((f) => ({
+        type: 'critical' as const,
+        title: f.title,
+        description: f.detail,
+        location: f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : undefined,
+        fix_required: f.gate === 'gitleaks'
+          ? 'Remove the secret from code and history; load it from configuration; tell the user to rotate it.'
+          : 'Upgrade to a fixed version or replace the dependency, then re-run the tests.',
+      }));
+    } catch (error) {
+      this.emitTyped('log', `Security gates failed to run: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
     }
   }
 

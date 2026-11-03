@@ -31,6 +31,7 @@ import type {
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator } from '../orchestration/build-orchestrator';
 import { QALoop } from '../orchestration/qa-loop';
+import { runSecurityGates } from '../security/gates';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
@@ -263,7 +264,7 @@ function claudeSessionBase(session: SerializableSessionConfig): Pick<
       memoryEnabled: session.mcpOptions?.memoryEnabled ?? false,
       linearEnabled: session.mcpOptions?.linearEnabled ?? false,
       electronMcpEnabled: session.mcpOptions?.electronMcpEnabled ?? false,
-      puppeteerMcpEnabled: session.mcpOptions?.puppeteerMcpEnabled ?? false,
+      browserMcpEnabled: session.mcpOptions?.browserMcpEnabled ?? true,
       projectCapabilities: session.mcpOptions?.projectCapabilities,
       agentMcpAdd: session.mcpOptions?.agentMcpAdd,
       agentMcpRemove: session.mcpOptions?.agentMcpRemove,
@@ -714,6 +715,14 @@ async function runQALoop(
     specDir: session.specDir,
     projectDir: session.projectDir,
     abortSignal: abortController.signal,
+
+    runGates: () =>
+      runSecurityGates({
+        projectDir: session.projectDir,
+        specDir: session.specDir,
+        gitleaksBin: session.bundled?.gitleaksBin,
+        osvScannerBin: session.bundled?.osvScannerBin,
+      }),
 
     generatePrompt: async (agentType, _context) => {
       const promptName = agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer';

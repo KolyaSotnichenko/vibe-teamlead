@@ -448,4 +448,55 @@ describe('QALoop', () => {
     expect(completedEvents).toHaveLength(1);
     expect((completedEvents[0] as { approved: boolean }).approved).toBe(true);
   });
+
+  // -------------------------------------------------------------------------
+  // Security gates
+  // -------------------------------------------------------------------------
+
+  it('does not approve while security gates have findings, then approves once clear', async () => {
+    let sessionCallCount = 0;
+    const runSession = vi.fn().mockImplementation(async () => {
+      sessionCallCount++;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      if (path.endsWith('implementation_plan.json')) {
+        return Promise.resolve(sessionCallCount === 0 ? completedPlan() : completedPlan('approved'));
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+    const finding = { gate: 'gitleaks' as const, key: 'k', title: 'Secret detected: AWS key', file: 'src/a.ts', line: 3 };
+    const runGates = vi
+      .fn()
+      .mockResolvedValueOnce({ ran: ['gitleaks'], skipped: [], findings: [finding] })
+      .mockResolvedValue({ ran: ['gitleaks'], skipped: [], findings: [] });
+
+    const config = makeConfig({ runSession, runGates });
+    const outcome = await new QALoop(config).run();
+
+    expect(outcome.approved).toBe(true);
+    expect(outcome.totalIterations).toBe(2);
+    // reviewer, fixer (for the gate finding), reviewer
+    expect(runSession.mock.calls.map((c) => (c[0] as QASessionRunConfig).agentType)).toEqual([
+      'qa_reviewer',
+      'qa_fixer',
+      'qa_reviewer',
+    ]);
+  });
+
+  it('keeps going when the gates themselves fail', async () => {
+    let sessionCallCount = 0;
+    const runSession = vi.fn().mockImplementation(async () => {
+      sessionCallCount++;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      if (path.endsWith('implementation_plan.json')) {
+        return Promise.resolve(sessionCallCount === 0 ? completedPlan() : completedPlan('approved'));
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+    const config = makeConfig({ runSession, runGates: vi.fn().mockRejectedValue(new Error('spawn failed')) });
+    expect((await new QALoop(config).run()).approved).toBe(true);
+  });
 });

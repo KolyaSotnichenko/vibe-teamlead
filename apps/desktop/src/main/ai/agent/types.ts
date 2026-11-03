@@ -73,7 +73,7 @@ export interface SerializableSessionConfig {
     memoryEnabled?: boolean;
     linearEnabled?: boolean;
     electronMcpEnabled?: boolean;
-    puppeteerMcpEnabled?: boolean;
+    browserMcpEnabled?: boolean;
     projectCapabilities?: {
       is_electron?: boolean;
       is_web_frontend?: boolean;

@@ -38,6 +38,10 @@ jobs:
         working-directory: apps/desktop
         run: npm run build
 
+      - name: Fetch security scanners (gitleaks, OSV-Scanner)
+        working-directory: apps/desktop
+        run: node scripts/fetch-scanners.cjs --arch ${{ matrix.arch }}
+
       - name: Package
         working-directory: apps/desktop
         env:

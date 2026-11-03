@@ -68,6 +68,17 @@ git log --oneline -5
 
 ---
 
+## SECURITY GATE FINDINGS
+
+If `security_gates.md` in the spec directory is **BLOCKED**, fix those findings first:
+
+- **Secrets (gitleaks):** remove the value from the code, load it from configuration or the environment, and add the file pattern to `.gitignore` if it is a local config file. If the secret was committed, say in `qa_report.md` that the user must rotate it; do not rewrite git history.
+- **Vulnerable dependencies (OSV-Scanner):** upgrade to the fixed version shown in the advisory, or replace the package, then update the lockfile with the project's package manager and run the full test suite.
+
+The app re-runs the gates before the next review; QA cannot pass until they are clear.
+
+---
+
 ## PHASE 1: PARSE FIX REQUIREMENTS
 
 From `QA_FIX_REQUEST.md`, extract:

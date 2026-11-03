@@ -160,6 +160,12 @@ export function buildQueryOptions(
           specDir: config.specDir,
           memoryMcpUrl: config.memoryMcpUrl,
           linearApiKey: config.linearApiKey,
+          bundled: {
+            playwrightMcpCli: bundled.playwrightMcpCli,
+            chromeDevtoolsMcpCli: bundled.chromeDevtoolsMcpCli,
+            nodeRuntime: bundled.nodeRuntime,
+          },
+          browserOutputDir: config.specDir ? join(config.specDir, 'qa-browser') : undefined,
         });
   if (bundled.codegraphBin && extras.codegraphReady && tools.includes('Read')) {
     mcpServers[CODEGRAPH_SERVER_KEY] = codegraphMcpServer(bundled.codegraphBin, config.toolContext.cwd);
