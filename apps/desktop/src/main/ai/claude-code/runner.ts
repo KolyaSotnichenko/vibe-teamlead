@@ -222,11 +222,22 @@ export function buildQueryOptions(
   if (config.outputSchema) {
     options.outputFormat = {
       type: 'json_schema',
-      schema: z.toJSONSchema(config.outputSchema as z.ZodType) as Record<string, unknown>,
+      schema: toOutputJsonSchema(config.outputSchema as z.ZodType),
     };
   }
 
   return options;
+}
+
+/**
+ * Structured-output schema for Claude Code's --json-schema. Its validator knows
+ * draft-07, not zod's default draft 2020-12, and rejects any "$schema" it does
+ * not know ("no schema with key or ref …"), so: draft-07, without "$schema".
+ */
+export function toOutputJsonSchema(schema: z.ZodType): Record<string, unknown> {
+  const json = z.toJSONSchema(schema, { target: 'draft-7' }) as Record<string, unknown>;
+  delete json.$schema;
+  return json;
 }
 
 /**
