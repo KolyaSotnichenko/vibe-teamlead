@@ -16,7 +16,8 @@ import type {
   SupportedTerminal,
   WorktreeCreatePROptions,
   WorktreeCreatePRResult,
-  ImageAttachment
+  ImageAttachment,
+  TaskWorkspace
 } from '../../shared/types';
 
 export interface TaskAPI {
@@ -87,6 +88,10 @@ export interface TaskAPI {
 
   // Task Phase Logs
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
+
+  // Task Workspace (parsed spec, ACs, plan, timeline, architecture)
+  getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
+  openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
   unwatchTaskLogs: (specId: string) => Promise<IPCResult>;
   onTaskLogsChanged: (callback: (specId: string, logs: TaskLogs) => void) => () => void;
@@ -292,6 +297,13 @@ export const createTaskAPI = (): TaskAPI => ({
   // Task Phase Logs
   getTaskLogs: (projectId: string, specId: string): Promise<IPCResult<TaskLogs | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_LOGS_GET, projectId, specId),
+
+  // Task Workspace
+  getTaskWorkspace: (taskId: string, projectId?: string): Promise<IPCResult<TaskWorkspace | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_GET, taskId, projectId),
+
+  openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_OPEN_FILE, taskId, relativePath, projectId),
 
   watchTaskLogs: (projectId: string, specId: string): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_LOGS_WATCH, projectId, specId),

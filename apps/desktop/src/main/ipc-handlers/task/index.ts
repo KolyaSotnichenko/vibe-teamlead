@@ -6,6 +6,7 @@
  * - Execution management (start, stop, review, status, recovery)
  * - Worktree operations (status, diff, merge, discard, list)
  * - Logs management (get, watch, unwatch)
+ * - Workspace (parsed spec-dir artifacts)
  */
 
 import { BrowserWindow } from 'electron';
@@ -15,6 +16,7 @@ import { registerTaskExecutionHandlers } from './execution-handlers';
 import { registerWorktreeHandlers } from './worktree-handlers';
 import { registerTaskLogsHandlers } from './logs-handlers';
 import { registerTaskArchiveHandlers } from './archive-handlers';
+import { registerTaskWorkspaceHandlers } from './workspace-handlers';
 
 /**
  * Register all task-related IPC handlers
@@ -37,6 +39,9 @@ export function registerTaskHandlers(
 
   // Register archive handlers (archive, unarchive)
   registerTaskArchiveHandlers();
+
+  // Register workspace handlers (parsed spec, plan, timeline, architecture)
+  registerTaskWorkspaceHandlers();
 }
 
 // Export shared utilities for use by other modules if needed

@@ -1,0 +1,128 @@
+/**
+ * Task workspace types
+ *
+ * A parsed view of the artifacts the agents write into a task's spec directory
+ * (spec.md, implementation_plan.json, qa_report.md, task_logs.json, architecture/).
+ * Everything here comes from files on disk; nothing is predicted or estimated.
+ */
+
+import type { TaskLogPhase, TaskLogPhaseStatus } from './task';
+
+/** How an acceptance criterion is meant to be proved (from "— Test: <level>" in spec.md) */
+export type AcTestLevel = 'unit' | 'integration' | 'e2e' | 'manual';
+
+/** Coverage status merged from qa_report.md */
+export type AcStatus = 'pass' | 'fail' | 'untested';
+
+/** One row of the QA report's AC coverage table */
+export interface AcTestResult {
+  /** Test reference as written, e.g. "tests/test_x.py::test_y" */
+  test: string;
+  /** "Asserts the criterion?" column, as written (e.g. "yes", "no") */
+  asserts: string;
+  /** Result column, normalized */
+  result: 'pass' | 'fail' | 'unknown';
+}
+
+export interface WorkspaceAcceptanceCriterion {
+  /** e.g. "AC-1" */
+  id: string;
+  /** Given/When/Then text without the ID marker and the test-level suffix */
+  text: string;
+  testLevel: AcTestLevel | null;
+  status: AcStatus;
+  tests: AcTestResult[];
+  /** IDs of plan subtasks whose description starts with this AC in its [AC-..] prefix */
+  coveredBy: string[];
+}
+
+export type WorkspaceSubtaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'failed';
+
+export interface WorkspacePlanSubtask {
+  id: string;
+  title: string;
+  description: string;
+  status: WorkspaceSubtaskStatus;
+  phaseId: string;
+  /** AC IDs listed in the description's leading [AC-..] prefix */
+  acIds: string[];
+  /** Explicit subtask dependencies (subtask IDs), when the plan declares them */
+  dependsOn: string[];
+  files: string[];
+  verification?: { type: string; run?: string };
+}
+
+export interface WorkspacePlanPhase {
+  id: string;
+  name: string;
+  type?: string;
+  /** Phase IDs this phase depends on */
+  dependsOn: string[];
+  subtasks: WorkspacePlanSubtask[];
+}
+
+export interface WorkspacePlan {
+  feature?: string;
+  phases: WorkspacePlanPhase[];
+}
+
+export type WorkspaceTimelineKind = 'phase' | 'session' | 'subtask';
+
+/** A span of real activity reconstructed from task_logs.json timestamps */
+export interface WorkspaceTimelineItem {
+  id: string;
+  kind: WorkspaceTimelineKind;
+  phase: TaskLogPhase;
+  /** ISO timestamp of the first recorded activity */
+  startedAt: string;
+  /** ISO timestamp of the last recorded activity; null while still running */
+  endedAt: string | null;
+  status: TaskLogPhaseStatus;
+  /** Session number for kind === 'session' */
+  session?: number;
+  /** Subtask ID for kind === 'subtask' */
+  subtaskId?: string;
+  /** Number of log entries in the span */
+  entryCount: number;
+}
+
+export interface WorkspaceAdr {
+  /** File name inside architecture/adr/ */
+  fileName: string;
+  title: string;
+  /** MADR status (proposed, accepted, superseded, ...) when stated */
+  status?: string;
+  markdown: string;
+}
+
+export interface WorkspaceDiagram {
+  /** Base file name without extension */
+  name: string;
+  kind: 'drawio' | 'mermaid';
+  /** Path relative to the spec directory, for "Open in draw.io" */
+  drawioPath?: string;
+  /** Rendered PNG next to the .drawio file, as a data URL */
+  pngDataUrl?: string;
+  /** Mermaid source of a .mmd file */
+  mermaidSource?: string;
+}
+
+export interface WorkspaceArchitecture {
+  markdown?: string;
+  adrs: WorkspaceAdr[];
+  diagrams: WorkspaceDiagram[];
+}
+
+export interface TaskWorkspace {
+  /** Absolute spec directory the artifacts were read from */
+  specDir: string;
+  spec?: {
+    markdown: string;
+    criteria: WorkspaceAcceptanceCriterion[];
+  };
+  /** True when qa_report.md exists and contains an AC coverage table */
+  hasQaCoverage: boolean;
+  plan?: WorkspacePlan;
+  timeline: WorkspaceTimelineItem[];
+  architecture: WorkspaceArchitecture;
+}

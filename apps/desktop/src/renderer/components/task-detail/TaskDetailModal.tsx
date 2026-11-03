@@ -43,6 +43,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
+import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -360,7 +361,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
             className={cn(
               'fixed left-[50%] top-4 z-50',
               'translate-x-[-50%]',
-              'w-[95vw] max-w-5xl h-[calc(100vh-32px)]',
+              'w-[95vw] h-[calc(100vh-32px)]',
+              state.activeTab === 'workspace' ? 'max-w-6xl' : 'max-w-5xl',
               'bg-card border border-border rounded-xl',
               'shadow-2xl overflow-hidden flex flex-col',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -485,6 +487,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     Overview
                   </TabsTrigger>
                   <TabsTrigger
+                    value="workspace"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                  >
+                    {t('tasks:workspace.tab')}
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="subtasks"
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
                   >
@@ -560,6 +568,11 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       )}
                     </div>
                   </ScrollArea>
+                </TabsContent>
+
+                {/* Workspace Tab: spec + ACs, plan graph + timeline, architecture */}
+                <TabsContent value="workspace" className="flex-1 min-h-0 overflow-hidden mt-0">
+                  <TaskWorkspacePanel task={task} />
                 </TabsContent>
 
                 {/* Subtasks Tab */}

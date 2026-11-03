@@ -376,5 +376,113 @@
       "qaFixer": "QA fixer",
       "agent": "Agent"
     }
+  },
+  "workspace": {
+    "tab": "Workspace",
+    "loading": "Reading the spec directory…",
+    "loadError": "Could not read this task's files.",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "noSpecDir": {
+      "title": "Nothing written yet",
+      "body": "The spec, plan and architecture appear here as the agents write them into the task's spec directory."
+    },
+    "tabs": {
+      "spec": "Spec",
+      "plan": "Plan",
+      "architecture": "Architecture"
+    },
+    "sections": {
+      "label": "Workspace sections"
+    },
+    "spec": {
+      "criteriaTitle": "Acceptance criteria",
+      "criteriaSummary": "{{pass}} pass · {{fail}} fail · {{untested}} untested",
+      "noQa": "QA has not reported yet — results appear after the QA review.",
+      "coveredBy": "Covered by",
+      "notCovered": "No subtask covers this criterion",
+      "tests": "Tests",
+      "testLevel": {
+        "unit": "unit",
+        "integration": "integration",
+        "e2e": "e2e",
+        "manual": "manual"
+      },
+      "doesNotAssert": "does not assert the criterion",
+      "documentTitle": "spec.md",
+      "emptyTitle": "No spec yet",
+      "emptyBody": "The spec writer creates spec.md with numbered acceptance criteria (AC-1 … AC-n) before anything is planned.",
+      "noCriteriaTitle": "No acceptance criteria found",
+      "noCriteriaBody": "The spec has no lines marked **AC-n**, so coverage cannot be tracked."
+    },
+    "acStatus": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "untested": "Untested"
+    },
+    "plan": {
+      "graphTitle": "Dependency graph",
+      "graphSummary": "{{phases}} phases · {{subtasks}} subtasks · {{done}} done",
+      "graphLabel": "Plan dependency graph. Use Tab to move between subtasks.",
+      "phaseLabel": "Phase {{index}}",
+      "dependsOn": "Depends on",
+      "covers": "Covers",
+      "files": "Files",
+      "verification": "Verification",
+      "noDeps": "No dependencies",
+      "selectHint": "Select a subtask to see what it covers and depends on.",
+      "closeDetails": "Close details",
+      "emptyTitle": "No plan yet",
+      "emptyBody": "The planner writes implementation_plan.json after the architecture is done: phases, subtasks and the test each one writes first.",
+      "legend": "Legend",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fitView": "Fit to view",
+      "description": "Description"
+    },
+    "subtaskStatus": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Done",
+      "blocked": "Blocked",
+      "failed": "Failed"
+    },
+    "timeline": {
+      "title": "What happened",
+      "subtitle": "From recorded log timestamps",
+      "emptyTitle": "Nothing has run yet",
+      "emptyBody": "Each phase, agent session and subtask is listed here with its real start and end time once the agents start.",
+      "phase": {
+        "planning": "Planning",
+        "coding": "Coding",
+        "validation": "QA"
+      },
+      "session": "Session {{number}}",
+      "running": "Running",
+      "failed": "Failed",
+      "entries_one": "{{count}} entry",
+      "entries_other": "{{count}} entries"
+    },
+    "architecture": {
+      "documentTitle": "architecture.md",
+      "adrsTitle": "Decisions (ADR)",
+      "diagramsTitle": "Diagrams",
+      "openInDrawio": "Open in draw.io",
+      "openFailed": "Could not open the file",
+      "noPreview": "No rendered preview next to this diagram yet.",
+      "mermaidError": "This Mermaid diagram could not be rendered.",
+      "mermaidLoading": "Rendering diagram…",
+      "showSource": "Show source",
+      "hideSource": "Hide source",
+      "adrStatusUnknown": "no status",
+      "expandAdr": "Show decision",
+      "collapseAdr": "Hide decision",
+      "emptyTitle": "No architecture yet",
+      "emptyBody": "The architect writes architecture.md, decision records and diagrams after the spec is approved and before planning.",
+      "noDocTitle": "No architecture.md",
+      "noDocBody": "The architect's narrative and planner constraints appear here.",
+      "noAdrs": "No decisions recorded. The architect adds an ADR for each hard-to-reverse choice.",
+      "noDiagrams": "No diagrams yet. The architect adds diagrams before planning."
+    }
   }
 }

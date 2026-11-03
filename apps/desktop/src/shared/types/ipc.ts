@@ -27,6 +27,7 @@ import type {
   McpTestConnectionResult
 } from './project';
 import type { ScreenshotSource } from './screenshot';
+import type { TaskWorkspace } from './task-workspace';
 import type {
   Task,
   TaskStatus,
@@ -814,6 +815,10 @@ export interface ElectronAPI {
 
   // Task logs operations
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
+
+  // Task workspace (parsed spec, ACs, plan, timeline, architecture)
+  getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
+  openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
   unwatchTaskLogs: (specId: string) => Promise<IPCResult>;
 

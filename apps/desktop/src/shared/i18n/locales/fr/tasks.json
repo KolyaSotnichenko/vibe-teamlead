@@ -376,5 +376,113 @@
       "qaFixer": "Correcteur QA",
       "agent": "Agent"
     }
+  },
+  "workspace": {
+    "tab": "Espace de travail",
+    "loading": "Lecture du répertoire de spécification…",
+    "loadError": "Impossible de lire les fichiers de cette tâche.",
+    "retry": "Réessayer",
+    "refresh": "Actualiser",
+    "noSpecDir": {
+      "title": "Rien n'est encore écrit",
+      "body": "La spécification, le plan et l'architecture apparaissent ici à mesure que les agents les écrivent dans le répertoire de la tâche."
+    },
+    "tabs": {
+      "spec": "Spécification",
+      "plan": "Plan",
+      "architecture": "Architecture"
+    },
+    "sections": {
+      "label": "Sections de l'espace de travail"
+    },
+    "spec": {
+      "criteriaTitle": "Critères d'acceptation",
+      "criteriaSummary": "{{pass}} réussis · {{fail}} échoués · {{untested}} non testés",
+      "noQa": "La QA n'a pas encore rendu son rapport — les résultats apparaissent après la revue QA.",
+      "coveredBy": "Couvert par",
+      "notCovered": "Aucune sous-tâche ne couvre ce critère",
+      "tests": "Tests",
+      "testLevel": {
+        "unit": "unitaire",
+        "integration": "intégration",
+        "e2e": "e2e",
+        "manual": "manuel"
+      },
+      "doesNotAssert": "ne vérifie pas le critère",
+      "documentTitle": "spec.md",
+      "emptyTitle": "Pas encore de spécification",
+      "emptyBody": "Le rédacteur de spécification crée spec.md avec des critères numérotés (AC-1 … AC-n) avant toute planification.",
+      "noCriteriaTitle": "Aucun critère d'acceptation trouvé",
+      "noCriteriaBody": "La spécification ne contient aucune ligne marquée **AC-n** : la couverture ne peut pas être suivie."
+    },
+    "acStatus": {
+      "pass": "Réussi",
+      "fail": "Échec",
+      "untested": "Non testé"
+    },
+    "plan": {
+      "graphTitle": "Graphe des dépendances",
+      "graphSummary": "{{phases}} phases · {{subtasks}} sous-tâches · {{done}} terminées",
+      "graphLabel": "Graphe des dépendances du plan. Utilisez Tab pour passer d'une sous-tâche à l'autre.",
+      "phaseLabel": "Phase {{index}}",
+      "dependsOn": "Dépend de",
+      "covers": "Couvre",
+      "files": "Fichiers",
+      "verification": "Vérification",
+      "noDeps": "Aucune dépendance",
+      "selectHint": "Sélectionnez une sous-tâche pour voir ce qu'elle couvre et ses dépendances.",
+      "closeDetails": "Fermer les détails",
+      "emptyTitle": "Pas encore de plan",
+      "emptyBody": "Le planificateur écrit implementation_plan.json après l'architecture : phases, sous-tâches et le test que chacune écrit en premier.",
+      "legend": "Légende",
+      "zoomIn": "Zoom avant",
+      "zoomOut": "Zoom arrière",
+      "fitView": "Ajuster à la vue",
+      "description": "Description"
+    },
+    "subtaskStatus": {
+      "pending": "En attente",
+      "in_progress": "En cours",
+      "completed": "Terminée",
+      "blocked": "Bloquée",
+      "failed": "Échouée"
+    },
+    "timeline": {
+      "title": "Ce qui s'est passé",
+      "subtitle": "D'après les horodatages des journaux",
+      "emptyTitle": "Rien n'a encore été exécuté",
+      "emptyBody": "Chaque phase, session d'agent et sous-tâche apparaît ici avec ses heures réelles de début et de fin dès que les agents démarrent.",
+      "phase": {
+        "planning": "Planification",
+        "coding": "Développement",
+        "validation": "QA"
+      },
+      "session": "Session {{number}}",
+      "running": "En cours",
+      "failed": "Échec",
+      "entries_one": "{{count}} entrée",
+      "entries_other": "{{count}} entrées"
+    },
+    "architecture": {
+      "documentTitle": "architecture.md",
+      "adrsTitle": "Décisions (ADR)",
+      "diagramsTitle": "Diagrammes",
+      "openInDrawio": "Ouvrir dans draw.io",
+      "openFailed": "Impossible d'ouvrir le fichier",
+      "noPreview": "Pas encore d'aperçu rendu à côté de ce diagramme.",
+      "mermaidError": "Ce diagramme Mermaid n'a pas pu être rendu.",
+      "mermaidLoading": "Rendu du diagramme…",
+      "showSource": "Afficher la source",
+      "hideSource": "Masquer la source",
+      "adrStatusUnknown": "sans statut",
+      "expandAdr": "Afficher la décision",
+      "collapseAdr": "Masquer la décision",
+      "emptyTitle": "Pas encore d'architecture",
+      "emptyBody": "L'architecte écrit architecture.md, les décisions et les diagrammes après l'approbation de la spécification et avant la planification.",
+      "noDocTitle": "Pas d'architecture.md",
+      "noDocBody": "Le récit de l'architecte et les contraintes pour le planificateur apparaissent ici.",
+      "noAdrs": "Aucune décision enregistrée. L'architecte ajoute un ADR pour chaque choix difficile à revenir en arrière.",
+      "noDiagrams": "Pas encore de diagrammes. L'architecte ajoute les diagrammes avant la planification."
+    }
   }
 }

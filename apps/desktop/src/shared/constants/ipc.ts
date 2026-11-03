@@ -72,6 +72,10 @@ export const IPC_CHANNELS = {
   TASK_LOGS_STREAM: 'task:logsStream',     // Event: streaming log chunk (main -> renderer)
   TASK_MERGE_PROGRESS: 'task:mergeProgress',  // Event: merge progress update (main -> renderer)
 
+  // Task workspace (parsed spec, ACs, plan, timeline, architecture from the spec dir)
+  TASK_WORKSPACE_GET: 'task:workspaceGet',
+  TASK_WORKSPACE_OPEN_FILE: 'task:workspaceOpenFile',  // Open a file inside the spec dir with the default app
+
   // Terminal operations
   TERMINAL_CREATE: 'terminal:create',
   TERMINAL_DESTROY: 'terminal:destroy',

@@ -10,6 +10,7 @@ import type { ElectronAPI } from '../../shared/types';
 import {
   projectMock,
   taskMock,
+  taskWorkspaceMock,
   workspaceMock,
   terminalMock,
   claudeProfileMock,
@@ -34,6 +35,9 @@ const browserMockAPI: ElectronAPI = {
 
   // Task Operations
   ...taskMock,
+
+  // Task Workspace (parsed spec dir)
+  ...taskWorkspaceMock,
 
   // Workspace Management
   ...workspaceMock,

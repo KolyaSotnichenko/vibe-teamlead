@@ -1212,3 +1212,22 @@ body {
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
 }
+
+/* Pending/running marker: 8px ink square that "breathes" (DESIGN-SYSTEM.md, Pending) */
+@keyframes vt-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.vt-breathe {
+  animation: vt-breathe 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-breathe { animation: none; }
+}
+
+/* Plan graph (@xyflow/react): keyboard focus on nodes must be visible */
+.vt-plan-graph .react-flow__node:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.vt-plan-graph .react-flow__node.selectable { cursor: pointer; }
