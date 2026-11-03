@@ -1,5 +1,5 @@
-import { AlertTriangle, Play, RotateCcw, Loader2 } from 'lucide-react';
-import { Button } from '../ui/button';
+import { useTranslation } from 'react-i18next';
+import { Play, RotateCcw, Loader2 } from 'lucide-react';
 
 interface TaskWarningsProps {
   isStuck: boolean;
@@ -10,6 +10,10 @@ interface TaskWarningsProps {
   onResume: () => void;
 }
 
+/**
+ * Stuck / incomplete task: needs the user, so a vermilion left mark, the reason
+ * in words and one 44px action.
+ */
 export function TaskWarnings({
   isStuck,
   isIncomplete,
@@ -18,73 +22,42 @@ export function TaskWarnings({
   onRecover,
   onResume
 }: TaskWarningsProps) {
+  const { t } = useTranslation('tasks');
   if (!isStuck && !isIncomplete) return null;
 
+  const stuck = isStuck;
   return (
-    <>
-      {/* Stuck Task Warning */}
-      {isStuck && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-medium text-sm text-foreground mb-1">
-                Task Appears Stuck
-              </h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                This task is marked as running but no active process was found.
-                This can happen if the app crashed or the process was terminated unexpectedly.
-              </p>
-              <Button
-                variant="warning"
-                size="sm"
-                onClick={onRecover}
-                disabled={isRecovering}
-                className="w-full"
-              >
-                {isRecovering ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Recovering...
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Recover & Restart Task
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
+    <div role="alert" className="flex flex-wrap items-center gap-x-6 gap-y-3 border-l-[3px] border-destructive bg-muted py-2 pr-2 pl-4">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-destructive">
+          {stuck ? t('taskDetail.warnings.stuckTitle') : t('taskDetail.warnings.incompleteTitle')}
+        </p>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          {stuck
+            ? t('taskDetail.warnings.stuckBody')
+            : t('taskDetail.warnings.incompleteBody', { done: taskProgress.completed, total: taskProgress.total })}
+        </p>
+      </div>
+      {stuck ? (
+        <button
+          type="button"
+          onClick={onRecover}
+          disabled={isRecovering}
+          className="inline-flex h-11 shrink-0 items-center gap-2 bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          {isRecovering ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <RotateCcw aria-hidden className="h-4 w-4" />}
+          {isRecovering ? t('labels.recovering') : t('taskDetail.warnings.recoverRestart')}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onResume}
+          className="inline-flex h-11 shrink-0 items-center gap-2 bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          <Play aria-hidden className="h-4 w-4" />
+          {t('taskDetail.resume')}
+        </button>
       )}
-
-      {/* Incomplete Task Warning */}
-      {isIncomplete && !isStuck && (
-        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-orange-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-medium text-sm text-foreground mb-1">
-                Task Incomplete
-              </h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                This task has a spec and implementation plan but never completed any subtasks ({taskProgress.completed}/{taskProgress.total}).
-                The process likely crashed during spec creation. Click Resume to continue implementation.
-              </p>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={onResume}
-                className="w-full"
-              >
-                <Play className="mr-2 h-4 w-4" />
-                Resume Task
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

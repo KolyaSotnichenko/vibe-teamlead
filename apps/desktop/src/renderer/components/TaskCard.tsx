@@ -1,10 +1,22 @@
+/**
+ * Board card: one task as an instrument readout.
+ *
+ *   ┌────────────────────────────────────┐
+ *   │ □  ■■■▣□□  Coder   Dashboard layout │  stage ticks + who is working
+ *   │ Build analytics dashboard           │  title
+ *   │ ▬▬ ▬▬ ▭▭ ▭▭                   2/4   │  subtasks
+ *   │ ■ Waiting for you          Answer   │  only when an agent asks (vermilion)
+ *   ├────────────────────────────────────┤
+ *   │ worktree   4 min ago    ▶ Start │ ⋮ │  44px action strip
+ *   └────────────────────────────────────┘
+ *
+ * Everything shown comes from the Task object; nothing is estimated.
+ */
+
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { selectTaskQuestion, useAgentQuestionsStore } from '../stores/agent-questions-store';
 import { useTranslation } from 'react-i18next';
-import { Play, Square, Clock, Zap, Target, Shield, Gauge, Palette, FileCode, Bug, Wrench, Loader2, AlertTriangle, RotateCcw, Archive, GitPullRequest, MoreVertical } from 'lucide-react';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
+import { Play, Square, Loader2, RotateCcw, Archive, GitPullRequest, MoreVertical } from 'lucide-react';
+import { selectTaskQuestion, useAgentQuestionsStore } from '../stores/agent-questions-store';
 import { Checkbox } from './ui/checkbox';
 import {
   DropdownMenu,
@@ -14,19 +26,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { cn, formatRelativeTime, sanitizeMarkdownForDisplay } from '../lib/utils';
-import { PhaseProgressIndicator } from './PhaseProgressIndicator';
+import { cn, sanitizeMarkdownForDisplay } from '../lib/utils';
 import {
-  TASK_CATEGORY_LABELS,
-  TASK_CATEGORY_COLORS,
-  TASK_COMPLEXITY_COLORS,
-  TASK_COMPLEXITY_LABELS,
-  TASK_IMPACT_COLORS,
-  TASK_IMPACT_LABELS,
-  TASK_PRIORITY_COLORS,
-  TASK_PRIORITY_LABELS,
-  EXECUTION_PHASE_LABELS,
-  EXECUTION_PHASE_BADGE_COLORS,
   TASK_STATUS_COLUMNS,
   TASK_STATUS_LABELS,
   JSON_ERROR_PREFIX,
@@ -34,20 +35,9 @@ import {
 } from '../../shared/constants';
 import { stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks, hasRecentActivity, startTaskOrQueue } from '../stores/task-store';
 import { useToast } from '../hooks/use-toast';
-import type { Task, TaskCategory, ReviewReason, TaskStatus } from '../../shared/types';
-
-// Category icon mapping
-const CategoryIcon: Record<TaskCategory, typeof Zap> = {
-  feature: Target,
-  bug_fix: Bug,
-  refactoring: Wrench,
-  documentation: FileCode,
-  security: Shield,
-  performance: Gauge,
-  ui_ux: Palette,
-  infrastructure: Wrench,
-  testing: FileCode
-};
+import type { Task, TaskStatus } from '../../shared/types';
+import { StageTicks, SubtaskBar } from './board/StageMarks';
+import { countSubtasks, formatSince, getTaskStage, type TaskStageInfo } from './board/task-stage';
 
 // Catastrophic stuck detection interval (ms).
 // XState handles all normal process-exit transitions via PROCESS_EXITED events.
@@ -91,39 +81,74 @@ function taskCardPropsAreEqual(prevProps: TaskCardProps, nextProps: TaskCardProp
   }
 
   // Compare only the fields that affect rendering
-  const isEqual = (
+  return (
     prevTask.id === nextTask.id &&
     prevTask.status === nextTask.status &&
     prevTask.title === nextTask.title &&
     prevTask.description === nextTask.description &&
     prevTask.updatedAt === nextTask.updatedAt &&
     prevTask.reviewReason === nextTask.reviewReason &&
+    prevTask.location === nextTask.location &&
     prevTask.executionProgress?.phase === nextTask.executionProgress?.phase &&
-    prevTask.executionProgress?.phaseProgress === nextTask.executionProgress?.phaseProgress &&
+    prevTask.executionProgress?.message === nextTask.executionProgress?.message &&
+    prevTask.executionProgress?.currentSubtask === nextTask.executionProgress?.currentSubtask &&
+    prevTask.executionProgress?.completedPhases?.length === nextTask.executionProgress?.completedPhases?.length &&
     prevTask.subtasks.length === nextTask.subtasks.length &&
     prevTask.metadata?.fastMode === nextTask.metadata?.fastMode &&
-    prevTask.metadata?.category === nextTask.metadata?.category &&
-    prevTask.metadata?.complexity === nextTask.metadata?.complexity &&
+    prevTask.metadata?.priority === nextTask.metadata?.priority &&
     prevTask.metadata?.archivedAt === nextTask.metadata?.archivedAt &&
     prevTask.metadata?.prUrl === nextTask.metadata?.prUrl &&
+    prevTask.metadata?.useWorktree === nextTask.metadata?.useWorktree &&
     // Check if any subtask statuses changed (compare all subtasks)
     prevTask.subtasks.every((s, i) => s.status === nextTask.subtasks[i]?.status)
   );
+}
 
-  // Only log when actually re-rendering (reduces noise significantly)
-  if (window.DEBUG && !isEqual) {
-    const changes: string[] = [];
-    if (prevTask.status !== nextTask.status) changes.push(`status: ${prevTask.status} -> ${nextTask.status}`);
-    if (prevTask.executionProgress?.phase !== nextTask.executionProgress?.phase) {
-      changes.push(`phase: ${prevTask.executionProgress?.phase} -> ${nextTask.executionProgress?.phase}`);
-    }
-    if (prevTask.subtasks.length !== nextTask.subtasks.length) {
-      changes.push(`subtasks: ${prevTask.subtasks.length} -> ${nextTask.subtasks.length}`);
-    }
-    console.log(`[TaskCard] Re-render: ${prevTask.id} | ${changes.join(', ') || 'other fields'}`);
-  }
+type ChipTone = 'attention' | 'outline' | 'low';
 
-  return isEqual;
+/** Status chip per the design system: attention = signal fill, outline = ink frame, low = quiet fill. */
+function Chip({ tone, children }: { tone: ChipTone; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 shrink-0 items-center px-1.5 text-[11px] font-medium leading-none',
+        tone === 'attention' && 'bg-destructive text-destructive-foreground',
+        tone === 'outline' && 'border border-foreground text-foreground',
+        tone === 'low' && 'bg-accent text-muted-foreground'
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Words for the stage line: who is working and on what. */
+function useStageLine(task: Task, stage: TaskStageInfo, isStuck: boolean, isIncomplete: boolean) {
+  const { t } = useTranslation('tasks');
+  const currentSubtaskId = task.executionProgress?.currentSubtask;
+  const currentSubtask = currentSubtaskId
+    ? task.subtasks.find((s) => s.id === currentSubtaskId)
+    : task.subtasks.find((s) => s.status === 'in_progress');
+
+  let role: string;
+  let detail: string | undefined;
+  if (task.status === 'pr_created') role = t('board.line.prCreated');
+  else if (stage.finished) role = t('board.line.done');
+  else if (task.status === 'queue') role = t('board.line.queued');
+  else if (stage.current === 'review') role = t('board.line.yourReview');
+  else if (stage.agent) {
+    role = t(`board.agents.${stage.agent}`);
+    if (stage.paused) detail = t(`board.line.paused.${stage.paused}`);
+    else if (stage.agent === 'coder' && currentSubtask) detail = currentSubtask.title;
+    else if (stage.agent === 'qaFixer') detail = t('board.line.fixingQa');
+  } else if (stage.current && task.executionProgress?.phase === 'failed') {
+    role = t(`board.stages.${stage.current}`);
+    detail = t('board.line.failed');
+  } else role = task.subtasks.length > 0 ? t('board.line.planReady') : t('board.line.notStarted');
+
+  if (isStuck) detail = t('labels.stuck');
+  if (isIncomplete) detail = t('labels.incomplete');
+  return { role, detail };
 }
 
 export const TaskCard = memo(function TaskCard({
@@ -134,7 +159,7 @@ export const TaskCard = memo(function TaskCard({
   isSelected,
   onToggleSelect
 }: TaskCardProps) {
-  const { t } = useTranslation(['tasks', 'errors']);
+  const { t, i18n } = useTranslation(['tasks', 'errors']);
   const pendingQuestion = useAgentQuestionsStore(selectTaskQuestion(task.id));
   const openQuestion = useAgentQuestionsStore((s) => s.open);
   const { toast } = useToast();
@@ -143,27 +168,23 @@ export const TaskCard = memo(function TaskCard({
   const stuckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const isRunning = task.status === 'in_progress';
-  const executionPhase = task.executionProgress?.phase;
-  const hasActiveExecution = executionPhase && executionPhase !== 'idle' && executionPhase !== 'complete' && executionPhase !== 'failed';
-
-  // Check if task is in human_review but has no completed subtasks (crashed/incomplete)
   const isIncomplete = isIncompleteHumanReview(task);
+  const isArchived = !!task.metadata?.archivedAt;
 
-  // Memoize expensive computations to avoid running on every render
-  // Truncate description for card display - full description shown in modal
-  // Handle JSON error tasks with i18n
+  const stage = useMemo(() => getTaskStage(task), [task]);
+  const counts = useMemo(() => countSubtasks(task), [task]);
+  const { role, detail } = useStageLine(task, stage, isStuck, isIncomplete);
+
+  // Truncated description — shown only while nothing else describes the task yet
   const sanitizedDescription = useMemo(() => {
     if (!task.description) return null;
-    // Check for JSON error marker and use i18n
     if (task.description.startsWith(JSON_ERROR_PREFIX)) {
       const errorMessage = task.description.slice(JSON_ERROR_PREFIX.length);
-      const translatedDesc = t('errors:task.jsonError.description', { error: errorMessage });
-      return sanitizeMarkdownForDisplay(translatedDesc, 120);
+      return sanitizeMarkdownForDisplay(t('errors:task.jsonError.description', { error: errorMessage }), 120);
     }
     return sanitizeMarkdownForDisplay(task.description, 120);
   }, [task.description, t]);
 
-  // Memoize title with JSON error suffix handling
   const displayTitle = useMemo(() => {
     if (task.title.endsWith(JSON_ERROR_TITLE_SUFFIX)) {
       const baseName = task.title.slice(0, -JSON_ERROR_TITLE_SUFFIX.length);
@@ -172,28 +193,18 @@ export const TaskCard = memo(function TaskCard({
     return task.title;
   }, [task.title, t]);
 
-  // Memoize relative time (recalculates only when updatedAt changes)
-  const relativeTime = useMemo(
-    () => formatRelativeTime(task.updatedAt),
-    [task.updatedAt]
-  );
+  const since = useMemo(() => formatSince(task.updatedAt, i18n.language), [task.updatedAt, i18n.language]);
 
-  // Memoize status menu items to avoid recreating on every render
   const statusMenuItems = useMemo(() => {
     if (!onStatusChange) return null;
     return TASK_STATUS_COLUMNS.filter(status => status !== task.status).map((status) => (
-      <DropdownMenuItem
-        key={status}
-        onClick={() => onStatusChange(status)}
-      >
+      <DropdownMenuItem key={status} onClick={() => onStatusChange(status)}>
         {t(TASK_STATUS_LABELS[status])}
       </DropdownMenuItem>
     ));
   }, [task.status, onStatusChange, t]);
 
   // Catastrophic stuck detection — last-resort safety net.
-  // XState handles all normal transitions via PROCESS_EXITED events.
-  // This only fires if XState somehow fails to transition after 60s with no activity.
   useEffect(() => {
     if (!isRunning) {
       setIsStuck(false);
@@ -205,15 +216,11 @@ export const TaskCard = memo(function TaskCard({
     }
 
     stuckIntervalRef.current = setInterval(() => {
-      // If any activity (status, progress, logs) was recorded recently, task is alive
       if (hasRecentActivity(task.id)) {
         setIsStuck(false);
         return;
       }
-
-      // No activity for 60s — verify process is actually gone
       checkTaskRunning(task.id).then((actuallyRunning) => {
-        // Re-check activity in case something arrived while the IPC was in flight
         if (hasRecentActivity(task.id)) {
           setIsStuck(false);
         } else {
@@ -232,8 +239,7 @@ export const TaskCard = memo(function TaskCard({
   const handleStartStop = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isRunning) {
-      // Allow stopping both running and stuck tasks
-      // User should be able to force-stop a stuck task
+      // Stopping works for stuck tasks too
       stopTask(task.id);
     } else {
       const result = await startTaskOrQueue(task.id);
@@ -252,7 +258,6 @@ export const TaskCard = memo(function TaskCard({
   const handleRecover = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsRecovering(true);
-    // Auto-restart the task after recovery (no need to click Start again)
     const result = await recoverStuckTask(task.id, { autoRestart: true });
     if (result.success) {
       setIsStuck(false);
@@ -275,392 +280,196 @@ export const TaskCard = memo(function TaskCard({
     }
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'in_progress':
-        return 'info';
-      case 'ai_review':
-        return 'warning';
-      case 'human_review':
-        return 'purple';
-      case 'done':
-        return 'success';
-      default:
-        return 'secondary';
+  // Chip: why the task stands where it stands (word always shown, never colour alone)
+  const chip: { tone: ChipTone; label: string } | null = (() => {
+    if (isStuck) return { tone: 'attention', label: t('labels.needsRecovery') };
+    if (isIncomplete) return { tone: 'attention', label: t('labels.needsResume') };
+    if (stage.paused) return { tone: 'attention', label: t(`board.chip.paused.${stage.paused}`) };
+    if (task.executionProgress?.phase === 'failed' && task.status === 'in_progress') return { tone: 'attention', label: t('board.chip.failed') };
+    if (task.status === 'error') return { tone: 'attention', label: t('board.chip.failed') };
+    if (task.status === 'human_review') {
+      const reason = task.executionProgress?.phase === 'complete' ? 'completed' : task.reviewReason;
+      if (reason === 'errors') return { tone: 'attention', label: t('reviewReason.hasErrors') };
+      if (reason === 'qa_rejected') return { tone: 'attention', label: t('reviewReason.qaIssues') };
+      if (reason === 'plan_review') return { tone: 'outline', label: t('reviewReason.approvePlan') };
+      if (reason === 'stopped') return { tone: 'outline', label: t('reviewReason.stopped') };
+      if (reason === 'completed') return { tone: 'outline', label: t('board.chip.qaPassed') };
     }
-  };
+    if (isArchived) return { tone: 'low', label: t('status.archived') };
+    return null;
+  })();
+  const needsAttention = !!pendingQuestion || chip?.tone === 'attention';
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'in_progress':
-        return t('labels.running');
-      case 'ai_review':
-        return t('labels.aiReview');
-      case 'human_review':
-        return t('labels.needsReview');
-      case 'done':
-        return t('status.complete');
-      default:
-        return t('labels.pending');
+  const priority = task.metadata?.priority;
+  const showPriority = priority === 'urgent' || priority === 'high';
+  const showDescription = !stage.current && !stage.finished && counts.total === 0 && !!sanitizedDescription;
+
+  const actionClass =
+    'inline-flex h-11 min-w-11 items-center justify-center gap-1.5 border-l border-border px-3 text-xs font-medium ' +
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 disabled:opacity-50';
+
+  const renderAction = () => {
+    if (isStuck) {
+      return (
+        <button type="button" className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleRecover} disabled={isRecovering}>
+          {isRecovering ? <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw aria-hidden className="h-3.5 w-3.5" />}
+          {isRecovering ? t('labels.recovering') : t('actions.recover')}
+        </button>
+      );
     }
-  };
-
-  const getReviewReasonLabel = (reason?: ReviewReason): { label: string; variant: 'success' | 'destructive' | 'warning' } | null => {
-    if (!reason) return null;
-    switch (reason) {
-      case 'completed':
-        return { label: t('reviewReason.completed'), variant: 'success' };
-      case 'errors':
-        return { label: t('reviewReason.hasErrors'), variant: 'destructive' };
-      case 'qa_rejected':
-        return { label: t('reviewReason.qaIssues'), variant: 'warning' };
-      case 'plan_review':
-        return { label: t('reviewReason.approvePlan'), variant: 'warning' };
-      case 'stopped':
-        return { label: t('reviewReason.stopped'), variant: 'warning' };
-      default:
-        return null;
+    if (isIncomplete) {
+      return (
+        <button type="button" className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleStartStop}>
+          <Play aria-hidden className="h-3.5 w-3.5" />
+          {t('actions.resume')}
+        </button>
+      );
     }
+    if (task.status === 'done' || task.status === 'pr_created') {
+      return (
+        <>
+          {task.metadata?.prUrl && (
+            <button type="button" className={cn(actionClass, 'text-foreground hover:bg-accent')} onClick={handleViewPR} aria-label={t('tooltips.viewPR')}>
+              <GitPullRequest aria-hidden className="h-4 w-4" />
+            </button>
+          )}
+          {!isArchived && (
+            <button
+              type="button"
+              className={cn(actionClass, 'text-foreground hover:bg-accent')}
+              onClick={handleArchive}
+              aria-label={t('tooltips.archiveTask')}
+            >
+              <Archive aria-hidden className="h-3.5 w-3.5" />
+              {!task.metadata?.prUrl && t('actions.archive')}
+            </button>
+          )}
+        </>
+      );
+    }
+    if (task.status === 'backlog' || task.status === 'in_progress') {
+      return isRunning ? (
+        <button type="button" className={cn(actionClass, 'text-foreground hover:bg-accent')} onClick={handleStartStop}>
+          <Square aria-hidden className="h-3 w-3" />
+          {t('actions.stop')}
+        </button>
+      ) : (
+        <button type="button" className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleStartStop}>
+          <Play aria-hidden className="h-3.5 w-3.5" />
+          {t('actions.start')}
+        </button>
+      );
+    }
+    return null;
   };
-
-  // When executionPhase is 'complete', always show 'completed' badge regardless of reviewReason
-  // This ensures the user sees "Complete" when the task finished successfully
-  const effectiveReviewReason: ReviewReason | undefined =
-    executionPhase === 'complete' ? 'completed' : task.reviewReason;
-  const reviewReasonInfo = task.status === 'human_review' ? getReviewReasonLabel(effectiveReviewReason) : null;
-
-  const isArchived = !!task.metadata?.archivedAt;
 
   return (
-    <Card
+    <div
       className={cn(
-        'card-surface task-card-enhanced cursor-pointer',
-        isRunning && !isStuck && 'ring-2 ring-primary border-primary task-running-pulse',
-        isStuck && 'ring-2 ring-warning border-warning task-stuck-pulse',
+        'group relative cursor-pointer border bg-card text-card-foreground transition-colors duration-150',
+        isRunning && !isStuck ? 'border-foreground' : 'border-border hover:border-muted-foreground',
         isArchived && 'opacity-60 hover:opacity-80',
-        isSelectable && isSelected && 'ring-2 ring-ring border-ring bg-accent/10'
+        isSelectable && isSelected && 'outline-2 outline-solid outline-foreground -outline-offset-1'
       )}
+      data-attention={needsAttention || undefined}
       onClick={onClick}
     >
-      <CardContent className="p-4">
-        <div className={isSelectable ? 'flex gap-3' : undefined}>
-          {/* Checkbox for selectable mode - stops event propagation */}
+      {/* Left mark: vermilion only when the task needs the user */}
+      {needsAttention && <span aria-hidden className="absolute inset-y-[-1px] left-[-1px] w-[3px] bg-destructive" />}
+
+      <div className="px-3 pt-3 pb-3">
+        {/* Stage line */}
+        <div className="flex min-h-5 items-center gap-2">
           {isSelectable && (
-            <div className="flex-shrink-0 pt-0.5">
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={onToggleSelect}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={t('tasks:actions.selectTask', { title: displayTitle })}
-              />
-            </div>
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={onToggleSelect}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={t('tasks:actions.selectTask', { title: displayTitle })}
+              className="mr-0.5"
+            />
           )}
+          <StageTicks info={stage} />
+          <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
+            <span className={cn('shrink-0 font-semibold', stage.running ? 'text-foreground' : 'text-muted-foreground')}>{role}</span>
+            {detail && <span className="truncate text-muted-foreground">{detail}</span>}
+          </span>
+          {chip && <Chip tone={chip.tone}>{chip.label}</Chip>}
+        </div>
 
-          <div className={isSelectable ? 'flex-1 min-w-0' : undefined}>
-            {/* Title - full width, no wrapper */}
-            <h3
-              className="font-semibold text-sm text-foreground line-clamp-2 leading-snug"
-              title={displayTitle}
-            >
-              {displayTitle}
-            </h3>
+        {/* Title */}
+        <h3 className="mt-2 line-clamp-2 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
+          {displayTitle}
+        </h3>
 
-            {/* An agent of this task is waiting for the user's answer */}
-            {pendingQuestion && (
+        {showDescription && (
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{sanitizedDescription}</p>
+        )}
+
+        {/* Subtasks */}
+        {counts.total > 0 && (
+          <div className="mt-3 flex items-center gap-3">
+            <SubtaskBar subtasks={task.subtasks} className="flex-1" />
+            <span className="shrink-0 font-mono text-xs tabular-nums text-foreground">
+              <span aria-hidden="true">{counts.done}/{counts.total}</span>
+              <span className="sr-only">{t('board.subtasksAria', { done: counts.done, total: counts.total })}</span>
+              {counts.failed > 0 && <span className="ml-1.5 text-destructive">✕{counts.failed}</span>}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* An agent of this task is waiting for the user's answer */}
+      {pendingQuestion && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openQuestion(pendingQuestion.questionId);
+          }}
+          className="flex h-11 w-full items-center gap-2 bg-destructive px-3 text-left text-xs font-medium text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-destructive-foreground"
+        >
+          <span aria-hidden className="vt-breathe h-2 w-2 bg-destructive-foreground" />
+          <span className="flex-1">{t('agentQuestions.waiting')}</span>
+          <span className="font-semibold underline underline-offset-2">{t('agentQuestions.openQuestion')}</span>
+        </button>
+      )}
+
+      {/* Action strip */}
+      <div className="flex h-11 items-stretch border-t border-border">
+        <div className="flex min-w-0 flex-1 items-center gap-3 px-3 text-xs text-muted-foreground">
+          {task.location === 'worktree' && (
+            <span className="truncate font-mono text-[11px] text-foreground">{t('board.worktree')}</span>
+          )}
+          {showPriority && priority && <span className="shrink-0 text-foreground">{t(`overview.values.priority.${priority}`)}</span>}
+          {task.metadata?.fastMode && <span className="shrink-0">{t('metadata.fastMode')}</span>}
+          {since && (
+            <time className="shrink-0 truncate font-mono text-[11px] tabular-nums" dateTime={new Date(task.updatedAt).toISOString()}>
+              {since}
+            </time>
+          )}
+        </div>
+        {renderAction()}
+        {statusMenuItems && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openQuestion(pendingQuestion.questionId);
-                }}
-                className="mt-2 inline-flex min-h-7 items-center gap-1.5 bg-[var(--vt-signal-text)] px-2 text-[11px] font-medium uppercase tracking-wide text-[var(--vt-paper)]"
+                className={cn(actionClass, 'px-0 text-muted-foreground hover:bg-accent hover:text-foreground')}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={t('actions.taskActions')}
               >
-                <span aria-hidden className="h-2 w-2 bg-[var(--vt-paper)] animate-pulse-subtle" />
-                {t('agentQuestions.waiting')} · {t('agentQuestions.openQuestion')}
+                <MoreVertical aria-hidden className="h-4 w-4" />
               </button>
-            )}
-
-        {/* Description - sanitized to handle markdown content (memoized) */}
-        {sanitizedDescription && (
-          <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
-            {sanitizedDescription}
-          </p>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuLabel>{t('actions.moveTo')}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {statusMenuItems}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-
-        {/* Metadata badges */}
-        {(task.metadata || isStuck || isIncomplete || hasActiveExecution || reviewReasonInfo) && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {/* Stuck indicator - highest priority */}
-            {isStuck && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-warning/10 text-warning border-warning/30 badge-priority-urgent"
-              >
-                <AlertTriangle className="h-2.5 w-2.5" />
-                {t('labels.stuck')}
-              </Badge>
-            )}
-            {/* Incomplete indicator - task in human_review but no subtasks completed */}
-            {isIncomplete && !isStuck && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-orange-500/10 text-orange-400 border-orange-500/30"
-              >
-                <AlertTriangle className="h-2.5 w-2.5" />
-                {t('labels.incomplete')}
-              </Badge>
-            )}
-            {/* Archived indicator - task has been released */}
-            {task.metadata?.archivedAt && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-muted text-muted-foreground border-border"
-              >
-                <Archive className="h-2.5 w-2.5" />
-                {t('status.archived')}
-              </Badge>
-            )}
-            {/* Execution phase badge - shown when actively running */}
-            {hasActiveExecution && executionPhase && !isStuck && !isIncomplete && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'text-[10px] px-1.5 py-0.5 flex items-center gap-1',
-                  EXECUTION_PHASE_BADGE_COLORS[executionPhase]
-                )}
-              >
-                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                {EXECUTION_PHASE_LABELS[executionPhase]}
-              </Badge>
-            )}
-             {/* Status badge - hide when execution phase badge is showing */}
-             {!hasActiveExecution && (
-               task.status === 'done' ? (
-                    <Badge
-                      variant={getStatusBadgeVariant(task.status)}
-                      className="text-[10px] px-1.5 py-0.5"
-                    >
-                      {getStatusLabel(task.status)}
-                    </Badge>
-                  ) : (
-                   <Badge
-                     variant={isStuck ? 'warning' : isIncomplete ? 'warning' : getStatusBadgeVariant(task.status)}
-                     className="text-[10px] px-1.5 py-0.5"
-                   >
-                     {isStuck ? t('labels.needsRecovery') : isIncomplete ? t('labels.needsResume') : getStatusLabel(task.status)}
-                   </Badge>
-                 )
-             )}
-            {/* Review reason badge - explains why task needs human review */}
-            {reviewReasonInfo && !isStuck && !isIncomplete && (
-              <Badge
-                variant={reviewReasonInfo.variant}
-                className="text-[10px] px-1.5 py-0.5"
-              >
-                {reviewReasonInfo.label}
-              </Badge>
-            )}
-            {/* Fast Mode badge */}
-            {task.metadata?.fastMode && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
-              >
-                <Zap className="h-2.5 w-2.5" />
-                {t('metadata.fastMode')}
-              </Badge>
-            )}
-            {/* Category badge with icon */}
-            {task.metadata?.category && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
-              >
-                {CategoryIcon[task.metadata.category] && (
-                  (() => {
-                    const Icon = CategoryIcon[task.metadata.category!];
-                    return <Icon className="h-2.5 w-2.5 mr-0.5" />;
-                  })()
-                )}
-                {TASK_CATEGORY_LABELS[task.metadata.category]}
-              </Badge>
-            )}
-            {/* Impact badge - high visibility for important tasks */}
-            {task.metadata?.impact && (task.metadata.impact === 'high' || task.metadata.impact === 'critical') && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.impact])}
-              >
-                {TASK_IMPACT_LABELS[task.metadata.impact]}
-              </Badge>
-            )}
-            {/* Complexity badge */}
-            {task.metadata?.complexity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
-              >
-                {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
-              </Badge>
-            )}
-            {/* Priority badge - only show urgent/high */}
-            {task.metadata?.priority && (task.metadata.priority === 'urgent' || task.metadata.priority === 'high') && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_PRIORITY_COLORS[task.metadata.priority])}
-              >
-                {TASK_PRIORITY_LABELS[task.metadata.priority]}
-              </Badge>
-            )}
-            {/* Security severity - always show */}
-            {task.metadata?.securitySeverity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.securitySeverity])}
-              >
-                {task.metadata.securitySeverity} {t('metadata.severity')}
-              </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Progress section - Phase-aware with animations */}
-        {(task.subtasks.length > 0 || hasActiveExecution || isRunning || isStuck) && (
-          <div className="mt-4">
-            <PhaseProgressIndicator
-              phase={executionPhase}
-              subtasks={task.subtasks}
-              phaseProgress={task.executionProgress?.phaseProgress}
-              isStuck={isStuck}
-              isRunning={isRunning}
-            />
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{relativeTime}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* Action buttons */}
-            {isStuck ? (
-              <Button
-                variant="warning"
-                size="sm"
-                className="h-7 px-2.5"
-                onClick={handleRecover}
-                disabled={isRecovering}
-              >
-                {isRecovering ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                    {t('labels.recovering')}
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="mr-1.5 h-3 w-3" />
-                    {t('actions.recover')}
-                  </>
-                )}
-              </Button>
-            ) : isIncomplete ? (
-              <Button
-                variant="default"
-                size="sm"
-                className="h-7 px-2.5"
-                onClick={handleStartStop}
-              >
-                <Play className="mr-1.5 h-3 w-3" />
-                {t('actions.resume')}
-              </Button>
-            ) : task.status === 'done' && task.metadata?.prUrl ? (
-              <div className="flex gap-1">
-                {task.metadata?.prUrl && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 cursor-pointer"
-                    onClick={handleViewPR}
-                    title={t('tooltips.viewPR')}
-                  >
-                    <GitPullRequest className="h-3 w-3" />
-                  </Button>
-                )}
-                {!task.metadata?.archivedAt && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 cursor-pointer"
-                    onClick={handleArchive}
-                    title={t('tooltips.archiveTask')}
-                  >
-                    <Archive className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            ) : task.status === 'done' && !task.metadata?.archivedAt ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2.5 hover:bg-muted-foreground/10"
-                onClick={handleArchive}
-                title={t('tooltips.archiveTask')}
-              >
-                <Archive className="mr-1.5 h-3 w-3" />
-                {t('actions.archive')}
-              </Button>
-            ) : (task.status === 'backlog' || task.status === 'in_progress') && (
-              <Button
-                variant={isRunning ? 'destructive' : 'default'}
-                size="sm"
-                className="h-7 px-2.5"
-                onClick={handleStartStop}
-              >
-                {isRunning ? (
-                  <>
-                    <Square className="mr-1.5 h-3 w-3" />
-                    {t('actions.stop')}
-                  </>
-                ) : (
-                  <>
-                    <Play className="mr-1.5 h-3 w-3" />
-                    {t('actions.start')}
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Move to menu for keyboard accessibility */}
-            {statusMenuItems && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={t('actions.taskActions')}
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenuLabel>{t('actions.moveTo')}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {statusMenuItems}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        </div>
-        {/* Close content wrapper for selectable mode */}
-        </div>
-        {/* Close flex container for selectable mode */}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }, taskCardPropsAreEqual);

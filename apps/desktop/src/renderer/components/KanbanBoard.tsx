@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
 import {
@@ -9,29 +9,22 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  useDroppable,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable';
-import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock, Trash2 } from 'lucide-react';
-import { Checkbox } from './ui/checkbox';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { Loader2, RefreshCw, ChevronsRight, Trash2 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { Button } from './ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { TaskCard } from './TaskCard';
-import { SortableTaskCard } from './SortableTaskCard';
+import { BoardColumn } from './board/BoardColumn';
+import { BulkActionBar } from './board/BulkActionBar';
 import { QueueSettingsModal } from './QueueSettingsModal';
-import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from '../../shared/constants';
+import { TASK_STATUS_COLUMNS } from '../../shared/constants';
 import { cn } from '../lib/utils';
 import { persistTaskStatus, forceCompleteTask, archiveTasks, deleteTasks, useTaskStore, isQueueAtCapacity, DEFAULT_MAX_PARALLEL_TASKS } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
-import { useKanbanSettingsStore, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, COLLAPSED_COLUMN_WIDTH_REM, MIN_COLUMN_WIDTH_REM, MAX_COLUMN_WIDTH_REM, BASE_FONT_SIZE, pxToRem } from '../stores/kanban-settings-store';
+import { useKanbanSettingsStore, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, BASE_FONT_SIZE } from '../stores/kanban-settings-store';
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
@@ -72,567 +65,6 @@ interface KanbanBoardProps {
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }
-
-interface DroppableColumnProps {
-  status: TaskStatus;
-  tasks: Task[];
-  onTaskClick: (task: Task) => void;
-  onStatusChange: (taskId: string, newStatus: TaskStatus) => unknown;
-  isOver: boolean;
-  onAddClick?: () => void;
-  onArchiveAll?: () => void;
-  onQueueSettings?: () => void;
-  onQueueAll?: () => void;
-  maxParallelTasks?: number;
-  archivedCount?: number;
-  showArchived?: boolean;
-  onToggleArchived?: () => void;
-  // Selection props for human_review column
-  selectedTaskIds?: Set<string>;
-  onSelectAll?: () => void;
-  onDeselectAll?: () => void;
-  onToggleSelect?: (taskId: string) => void;
-  // Collapse props
-  isCollapsed?: boolean;
-  onToggleCollapsed?: () => void;
-  // Resize props
-  columnWidth?: number;
-  isResizing?: boolean;
-  onResizeStart?: (startX: number) => void;
-  onResizeEnd?: () => void;
-  // Lock props
-  isLocked?: boolean;
-  onToggleLocked?: () => void;
-}
-
-/**
- * Compare two tasks arrays for meaningful changes.
- * Returns true if tasks are equivalent (should skip re-render).
- */
-function tasksAreEquivalent(prevTasks: Task[], nextTasks: Task[]): boolean {
-  if (prevTasks.length !== nextTasks.length) return false;
-  if (prevTasks === nextTasks) return true;
-
-  // Compare by ID and fields that affect rendering
-  for (let i = 0; i < prevTasks.length; i++) {
-    const prev = prevTasks[i];
-    const next = nextTasks[i];
-    if (
-      prev.id !== next.id ||
-      prev.status !== next.status ||
-      prev.executionProgress?.phase !== next.executionProgress?.phase ||
-      prev.updatedAt !== next.updatedAt
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Custom comparator for DroppableColumn memo.
- */
-function droppableColumnPropsAreEqual(
-  prevProps: DroppableColumnProps,
-  nextProps: DroppableColumnProps
-): boolean {
-  // Quick checks first
-  if (prevProps.status !== nextProps.status) return false;
-  if (prevProps.isOver !== nextProps.isOver) return false;
-  if (prevProps.onTaskClick !== nextProps.onTaskClick) return false;
-  if (prevProps.onStatusChange !== nextProps.onStatusChange) return false;
-  if (prevProps.onAddClick !== nextProps.onAddClick) return false;
-  if (prevProps.onArchiveAll !== nextProps.onArchiveAll) return false;
-  if (prevProps.onQueueSettings !== nextProps.onQueueSettings) return false;
-  if (prevProps.onQueueAll !== nextProps.onQueueAll) return false;
-  if (prevProps.maxParallelTasks !== nextProps.maxParallelTasks) return false;
-  if (prevProps.archivedCount !== nextProps.archivedCount) return false;
-  if (prevProps.showArchived !== nextProps.showArchived) return false;
-  if (prevProps.onToggleArchived !== nextProps.onToggleArchived) return false;
-  if (prevProps.onSelectAll !== nextProps.onSelectAll) return false;
-  if (prevProps.onDeselectAll !== nextProps.onDeselectAll) return false;
-  if (prevProps.onToggleSelect !== nextProps.onToggleSelect) return false;
-  if (prevProps.isCollapsed !== nextProps.isCollapsed) return false;
-  if (prevProps.onToggleCollapsed !== nextProps.onToggleCollapsed) return false;
-  if (prevProps.columnWidth !== nextProps.columnWidth) return false;
-  if (prevProps.isResizing !== nextProps.isResizing) return false;
-  if (prevProps.onResizeStart !== nextProps.onResizeStart) return false;
-  if (prevProps.onResizeEnd !== nextProps.onResizeEnd) return false;
-  if (prevProps.isLocked !== nextProps.isLocked) return false;
-  if (prevProps.onToggleLocked !== nextProps.onToggleLocked) return false;
-
-  // Compare selection props
-  const prevSelected = prevProps.selectedTaskIds;
-  const nextSelected = nextProps.selectedTaskIds;
-  if (prevSelected !== nextSelected) {
-    if (!prevSelected || !nextSelected) return false;
-    if (prevSelected.size !== nextSelected.size) return false;
-    for (const id of prevSelected) {
-      if (!nextSelected.has(id)) return false;
-    }
-  }
-
-  // Deep compare tasks
-  const tasksEqual = tasksAreEquivalent(prevProps.tasks, nextProps.tasks);
-
-  // Only log when re-rendering (reduces noise)
-  if (window.DEBUG && !tasksEqual) {
-    console.log(`[DroppableColumn] Re-render: ${nextProps.status} column (${nextProps.tasks.length} tasks)`);
-  }
-
-  return tasksEqual;
-}
-
-// Empty state content for each column
-const getEmptyStateContent = (status: TaskStatus, t: (key: string) => string): { icon: React.ReactNode; message: string; subtext?: string } => {
-  switch (status) {
-    case 'backlog':
-      return {
-        icon: <Inbox className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyBacklog'),
-        subtext: t('kanban.emptyBacklogHint')
-      };
-    case 'queue':
-      return {
-        icon: <Loader2 className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyQueue'),
-        subtext: t('kanban.emptyQueueHint')
-      };
-    case 'in_progress':
-      return {
-        icon: <Loader2 className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyInProgress'),
-        subtext: t('kanban.emptyInProgressHint')
-      };
-    case 'ai_review':
-      return {
-        icon: <Eye className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyAiReview'),
-        subtext: t('kanban.emptyAiReviewHint')
-      };
-    case 'human_review':
-      return {
-        icon: <Eye className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyHumanReview'),
-        subtext: t('kanban.emptyHumanReviewHint')
-      };
-    case 'done':
-      return {
-        icon: <CheckCircle2 className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyDone'),
-        subtext: t('kanban.emptyDoneHint')
-      };
-    default:
-      return {
-        icon: <Inbox className="h-6 w-6 text-muted-foreground/50" />,
-        message: t('kanban.emptyDefault')
-      };
-  }
-};
-
-const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked }: DroppableColumnProps) {
-  const { t } = useTranslation(['tasks', 'common']);
-  const { setNodeRef } = useDroppable({
-    id: status
-  });
-
-  // Calculate selection state for this column
-  const taskCount = tasks.length;
-  const columnSelectedCount = tasks.filter(t => selectedTaskIds?.has(t.id)).length;
-  const isAllSelected = taskCount > 0 && columnSelectedCount === taskCount;
-  const isSomeSelected = columnSelectedCount > 0 && columnSelectedCount < taskCount;
-
-  // Determine checkbox checked state: true (all), 'indeterminate' (some), false (none)
-  const selectAllCheckedState: boolean | 'indeterminate' = isAllSelected
-    ? true
-    : isSomeSelected
-      ? 'indeterminate'
-      : false;
-
-  // Handle select all checkbox change
-  const handleSelectAllChange = useCallback(() => {
-    if (isAllSelected) {
-      onDeselectAll?.();
-    } else {
-      onSelectAll?.();
-    }
-  }, [isAllSelected, onSelectAll, onDeselectAll]);
-
-  // Memoize taskIds to prevent SortableContext from re-rendering unnecessarily
-  const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
-
-  // Create stable onClick handlers for each task to prevent unnecessary re-renders
-  const onClickHandlers = useMemo(() => {
-    const handlers = new Map<string, () => void>();
-    tasks.forEach((task) => {
-      handlers.set(task.id, () => onTaskClick(task));
-    });
-    return handlers;
-  }, [tasks, onTaskClick]);
-
-  // Create stable onStatusChange handlers for each task
-  const onStatusChangeHandlers = useMemo(() => {
-    const handlers = new Map<string, (newStatus: TaskStatus) => unknown>();
-    tasks.forEach((task) => {
-      handlers.set(task.id, (newStatus: TaskStatus) => onStatusChange(task.id, newStatus));
-    });
-    return handlers;
-  }, [tasks, onStatusChange]);
-
-  // Create stable onToggleSelect handlers for each task (for bulk selection)
-  const onToggleSelectHandlers = useMemo(() => {
-    if (!onToggleSelect) return null;
-    const handlers = new Map<string, () => void>();
-    tasks.forEach((task) => {
-      handlers.set(task.id, () => onToggleSelect(task.id));
-    });
-    return handlers;
-  }, [tasks, onToggleSelect]);
-
-  // Memoize task card elements to prevent recreation on every render
-  const taskCards = useMemo(() => {
-    if (tasks.length === 0) return null;
-    const isSelectable = !!onToggleSelectHandlers;
-    return tasks.map((task) => (
-      <SortableTaskCard
-        key={task.id}
-        task={task}
-        onClick={onClickHandlers.get(task.id)!}
-        onStatusChange={onStatusChangeHandlers.get(task.id)}
-        isSelectable={isSelectable}
-        isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
-        onToggleSelect={onToggleSelectHandlers?.get(task.id)}
-      />
-    ));
-  }, [tasks, onClickHandlers, onStatusChangeHandlers, onToggleSelectHandlers, selectedTaskIds]);
-
-  const getColumnBorderColor = (): string => {
-    switch (status) {
-      case 'backlog':
-        return 'column-backlog';
-      case 'queue':
-        return 'column-queue';
-      case 'in_progress':
-        return 'column-in-progress';
-      case 'ai_review':
-        return 'column-ai-review';
-      case 'human_review':
-        return 'column-human-review';
-      case 'done':
-        return 'column-done';
-      default:
-        return 'border-t-muted-foreground/30';
-    }
-  };
-
-  const emptyState = getEmptyStateContent(status, t);
-
-  // Collapsed state: show narrow vertical strip with rotated title and task count
-  if (isCollapsed) {
-    return (
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex flex-col rounded-xl border border-white/5 bg-linear-to-b from-secondary/30 to-transparent backdrop-blur-sm transition-all duration-200',
-          getColumnBorderColor(),
-          'border-t-2',
-          isOver && 'drop-zone-highlight'
-        )}
-        style={{ width: COLLAPSED_COLUMN_WIDTH_REM, minWidth: COLLAPSED_COLUMN_WIDTH_REM, maxWidth: COLLAPSED_COLUMN_WIDTH_REM }}
-      >
-        {/* Expand button at top */}
-        <div className="flex justify-center p-2 border-b border-white/5">
-          <Tooltip delayDuration={200}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-colors"
-                onClick={onToggleCollapsed}
-                aria-label={t('kanban.expandColumn')}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {t('kanban.expandColumn')}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* Rotated title and task count */}
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <div
-            className="flex items-center gap-2 whitespace-nowrap"
-            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-          >
-            <span className="column-count-badge">
-              {tasks.length}
-            </span>
-            <h2 className="font-semibold text-sm text-foreground">
-              {t(TASK_STATUS_LABELS[status])}
-            </h2>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="relative flex"
-      style={columnWidth ? { width: pxToRem(columnWidth), minWidth: MIN_COLUMN_WIDTH_REM, maxWidth: MAX_COLUMN_WIDTH_REM, flexShrink: 0 } : undefined}
-    >
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex flex-1 flex-col rounded-xl border border-white/5 bg-linear-to-b from-secondary/30 to-transparent backdrop-blur-sm transition-all duration-200',
-          !columnWidth && 'min-w-80 max-w-[30rem]',
-          getColumnBorderColor(),
-          'border-t-2',
-          isOver && 'drop-zone-highlight'
-        )}
-      >
-        {/* Column header - enhanced styling */}
-        <div className="flex items-center justify-between p-4 border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          {/* Collapse button */}
-          {onToggleCollapsed && (
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 hover:bg-muted-foreground/10 hover:text-muted-foreground transition-colors"
-                  onClick={onToggleCollapsed}
-                  aria-label={t('kanban.collapseColumn')}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {t('kanban.collapseColumn')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {/* Select All checkbox for column */}
-          {onSelectAll && onDeselectAll && (
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <div className="flex items-center">
-                  <Checkbox
-                    checked={selectAllCheckedState}
-                    onCheckedChange={handleSelectAllChange}
-                    disabled={taskCount === 0}
-                    aria-label={isAllSelected ? t('kanban.deselectAll') : t('kanban.selectAll')}
-                    className="h-4 w-4"
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isAllSelected ? t('kanban.deselectAll') : t('kanban.selectAll')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          <h2 className="font-semibold text-sm text-foreground">
-            {t(TASK_STATUS_LABELS[status])}
-          </h2>
-          {status === 'in_progress' && maxParallelTasks ? (
-            <span className={cn(
-              "column-count-badge",
-              tasks.length >= maxParallelTasks && "bg-warning/20 text-warning border-warning/30"
-            )}>
-              {tasks.length}/{maxParallelTasks}
-            </span>
-          ) : (
-            <span className="column-count-badge">
-              {tasks.length}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {/* Lock toggle button - available for all columns */}
-          {onToggleLocked && (
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-7 w-7 transition-colors',
-                    isLocked
-                      ? 'text-amber-500 bg-amber-500/10 hover:bg-amber-500/20'
-                      : 'hover:bg-muted-foreground/10 hover:text-muted-foreground'
-                  )}
-                  onClick={onToggleLocked}
-                  aria-pressed={isLocked}
-                  aria-label={isLocked ? t('kanban.unlockColumn') : t('kanban.lockColumn')}
-                >
-                  {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isLocked ? t('kanban.unlockColumn') : t('kanban.lockColumn')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {status === 'backlog' && (
-            <>
-              {onQueueAll && tasks.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
-                  onClick={onQueueAll}
-                  title={t('queue.queueAll')}
-                >
-                  <ListPlus className="h-4 w-4" />
-                </Button>
-              )}
-              {onAddClick && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-colors"
-                  onClick={onAddClick}
-                  aria-label={t('kanban.addTaskAriaLabel')}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              )}
-            </>
-          )}
-          {status === 'queue' && onQueueSettings && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
-              onClick={onQueueSettings}
-              title={t('kanban.queueSettings')}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          )}
-          {status === 'done' && onArchiveAll && tasks.length > 0 && !showArchived && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-muted-foreground/10 hover:text-muted-foreground transition-colors"
-              onClick={onArchiveAll}
-              aria-label={t('tooltips.archiveAllDone')}
-            >
-              <Archive className="h-4 w-4" />
-            </Button>
-          )}
-          {status === 'done' && archivedCount !== undefined && archivedCount > 0 && onToggleArchived && (
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-7 w-7 transition-colors relative',
-                    showArchived
-                      ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                      : 'hover:bg-muted-foreground/10 hover:text-muted-foreground'
-                  )}
-                  onClick={onToggleArchived}
-                  aria-pressed={showArchived}
-                  aria-label={t('common:accessibility.toggleShowArchivedAriaLabel')}
-                >
-                  <Archive className="h-4 w-4" />
-                  <span className="absolute -top-1 -right-1 text-[10px] font-medium bg-muted rounded-full min-w-[14px] h-[14px] flex items-center justify-center">
-                    {archivedCount}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {showArchived ? t('common:projectTab.hideArchived') : t('common:projectTab.showArchived')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-      </div>
-
-      {/* Task list */}
-      <div className="flex-1 min-h-0">
-        <ScrollArea className="h-full px-3 pb-3 pt-2">
-          <SortableContext
-            items={taskIds}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-3 min-h-[120px]">
-              {tasks.length === 0 ? (
-                <div
-                  className={cn(
-                    'empty-column-dropzone flex flex-col items-center justify-center py-6',
-                    isOver && 'active'
-                  )}
-                >
-                  {isOver ? (
-                    <>
-                      <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center mb-2">
-                        <Plus className="h-4 w-4 text-primary" />
-                      </div>
-                      <span className="text-sm font-medium text-primary">{t('kanban.dropHere')}</span>
-                    </>
-                  ) : (
-                    <>
-                      {emptyState.icon}
-                      <span className="mt-2 text-sm font-medium text-muted-foreground/70">
-                        {emptyState.message}
-                      </span>
-                      {emptyState.subtext && (
-                        <span className="mt-0.5 text-xs text-muted-foreground/50">
-                          {emptyState.subtext}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              ) : (
-                taskCards
-              )}
-            </div>
-          </SortableContext>
-        </ScrollArea>
-      </div>
-      </div>
-
-      {/* Resize handle on right edge */}
-      {onResizeStart && onResizeEnd && (
-        <div
-          className={cn(
-            "absolute right-0 top-0 bottom-0 w-1 touch-none z-10",
-            "transition-colors duration-150",
-            isLocked
-              ? "cursor-not-allowed bg-transparent"
-              : "cursor-col-resize hover:bg-primary/40",
-            isResizing && !isLocked && "bg-primary/60"
-          )}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            // Don't start resize if column is locked
-            if (isLocked) return;
-            onResizeStart(e.clientX);
-          }}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            // Don't start resize if column is locked
-            if (isLocked) return;
-            if (e.touches.length > 0) {
-              onResizeStart(e.touches[0].clientX);
-            }
-          }}
-          title={isLocked ? t('kanban.columnLocked') : undefined}
-        >
-          {/* Wider invisible hit area for easier grabbing */}
-          <div className="absolute inset-y-0 -left-1 -right-1" />
-        </div>
-      )}
-    </div>
-  );
-}, droppableColumnPropsAreEqual);
 
 export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isRefreshing }: KanbanBoardProps) {
   const { t } = useTranslation(['tasks', 'dialogs', 'common']);
@@ -1428,37 +860,30 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
-      {/* Kanban header with refresh button and expand all */}
+      {/* Board toolbar: expand all (when 3+ columns are collapsed) and refresh */}
       {(onRefresh || collapsedColumnCount >= 3) && (
-        <div className="flex items-center justify-between px-6 pt-4 pb-2">
-          <div className="flex items-center gap-2">
-            {/* Expand All button - appears when 3+ columns are collapsed */}
-            {collapsedColumnCount >= 3 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExpandAll}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronsRight className="h-4 w-4" />
-                {t('tasks:kanban.expandAll')}
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {onRefresh && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
-              </Button>
-            )}
-          </div>
+        <div className="flex h-11 shrink-0 items-center justify-end gap-1 px-4 pt-2">
+          {collapsedColumnCount >= 3 && (
+            <button
+              type="button"
+              onClick={handleExpandAll}
+              className="inline-flex h-11 items-center gap-2 px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <ChevronsRight aria-hidden className="h-4 w-4" />
+              {t('tasks:kanban.expandAll')}
+            </button>
+          )}
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="inline-flex h-11 items-center gap-2 px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60"
+            >
+              <RefreshCw aria-hidden className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+              {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
+            </button>
+          )}
         </div>
       )}
       {/* Kanban columns */}
@@ -1469,9 +894,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex flex-1 gap-4 overflow-x-auto p-6">
+        <div className="flex min-h-0 flex-1 overflow-x-auto px-2 pt-2 pb-6">
           {TASK_STATUS_COLUMNS.map((status) => (
-            <DroppableColumn
+            <BoardColumn
               key={status}
               status={status}
               tasks={tasksByStatus[status]}
@@ -1510,7 +935,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         {/* Drag overlay - enhanced visual feedback */}
         <DragOverlay>
           {activeTask ? (
-            <div className="drag-overlay-card">
+            <div className="vt-drag-overlay">
               <TaskCard task={activeTask} onClick={() => {}} />
             </div>
           ) : null}
@@ -1518,41 +943,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       </DndContext>
 
       {selectedTaskIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-border bg-card shadow-lg backdrop-blur-sm">
-            <span className="text-sm font-medium text-foreground">
-              {t('kanban.selectedCountOther', { count: selectedTaskIds.size })}
-            </span>
-            <div className="w-px h-5 bg-border" />
-            <Button
-              variant="default"
-              size="sm"
-              className="gap-2"
-              onClick={handleOpenBulkPRDialog}
-            >
-              <GitPullRequest className="h-4 w-4" />
-              {t('kanban.createPRs')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={handleOpenDeleteConfirm}
-            >
-              <Trash2 className="h-4 w-4" />
-              {t('kanban.deleteSelected')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-muted-foreground hover:text-foreground"
-              onClick={deselectAllTasks}
-            >
-              <X className="h-4 w-4" />
-              {t('kanban.clearSelection')}
-            </Button>
-          </div>
-        </div>
+        <BulkActionBar
+          count={selectedTaskIds.size}
+          onCreatePRs={handleOpenBulkPRDialog}
+          onDelete={handleOpenDeleteConfirm}
+          onClear={deselectAllTasks}
+        />
       )}
 
       {/* Delete confirmation dialog */}

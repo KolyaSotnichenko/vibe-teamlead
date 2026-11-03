@@ -510,5 +510,218 @@
       "noGates": "The gates run before the first QA review.",
       "noPentest": "Security QA (Strix) is off, or QA has not approved yet. Turn it on in Settings → General."
     }
+  },
+  "board": {
+    "stage": {
+      "allPassed": "All stages passed",
+      "position": "Stage {{index}} of {{total}}: {{stage}}",
+      "notStarted": "Not started"
+    },
+    "stages": {
+      "spec": "Spec",
+      "architect": "Architecture",
+      "planner": "Plan",
+      "coder": "Code",
+      "qa": "QA",
+      "review": "Review"
+    },
+    "agents": {
+      "spec": "Spec writer",
+      "architect": "Architect",
+      "planner": "Planner",
+      "coder": "Coder",
+      "qa": "QA reviewer",
+      "qaFixer": "QA fixer",
+      "you": "You"
+    },
+    "line": {
+      "prCreated": "PR created",
+      "done": "Done",
+      "queued": "Queued",
+      "yourReview": "Your review",
+      "paused": {
+        "rate_limit": "paused by a rate limit",
+        "auth": "paused: sign-in needed"
+      },
+      "fixingQa": "fixing QA issues",
+      "failed": "failed",
+      "planReady": "Plan ready",
+      "notStarted": "Not started"
+    },
+    "chip": {
+      "paused": {
+        "rate_limit": "Rate limited",
+        "auth": "Sign-in needed"
+      },
+      "failed": "Failed",
+      "qaPassed": "QA passed"
+    },
+    "subtasksAria": "{{done}} of {{total}} subtasks done",
+    "worktree": "worktree",
+    "columnMenu": "{{column}} column actions",
+    "lockWidth": "Lock column width",
+    "slots": "{{count}} of {{max}} parallel slots in use",
+    "full": "Full",
+    "selectedInColumn": "{{count}} selected",
+    "selected_one": "task selected",
+    "selected_other": "tasks selected"
+  },
+  "overview": {
+    "pipeline": {
+      "title": "Pipeline",
+      "state": {
+        "done": "Done",
+        "failed": "Sent back",
+        "upcoming": "Not yet",
+        "yourTurn": "Your turn",
+        "stopped": "Stopped"
+      },
+      "writes": {
+        "spec": "spec.md with numbered acceptance criteria",
+        "architect": "architecture.md, ADRs, diagrams",
+        "planner": "Subtasks, each with its failing test",
+        "coder": "Test first, in an isolated worktree",
+        "qa": "Security gates, AC coverage, Strix",
+        "review": "You approve and merge"
+      }
+    },
+    "question": {
+      "more_one": "{{count}} more question in the panel",
+      "more_other": "{{count}} more questions in the panel"
+    },
+    "facts": {
+      "title": "Details",
+      "spec": "Spec",
+      "column": "Column",
+      "code": "Code",
+      "codeWorktree": "Isolated worktree",
+      "codeDirect": "Project directory",
+      "baseBranch": "Base branch",
+      "staged": "Staged in project",
+      "yes": "Yes",
+      "started": "Run started",
+      "updated": "Last activity",
+      "created": "Created",
+      "category": "Category",
+      "priority": "Priority",
+      "complexity": "Complexity",
+      "impact": "Impact",
+      "securitySeverity": "Security severity",
+      "source": "Source",
+      "planApproval": "Plan approval",
+      "required": "Required before coding",
+      "fastMode": "Fast mode",
+      "on": "On",
+      "released": "Released in",
+      "archived": "Archived",
+      "openPr": "Open pull request"
+    },
+    "values": {
+      "category": {
+        "feature": "Feature",
+        "bug_fix": "Bug fix",
+        "refactoring": "Refactoring",
+        "documentation": "Documentation",
+        "security": "Security",
+        "performance": "Performance",
+        "ui_ux": "UI/UX",
+        "infrastructure": "Infrastructure",
+        "testing": "Testing"
+      },
+      "priority": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "complexity": {
+        "trivial": "Trivial",
+        "small": "Small",
+        "medium": "Medium",
+        "large": "Large",
+        "complex": "Complex"
+      },
+      "impact": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "source": {
+        "ideation": "Ideation",
+        "manual": "Written by you",
+        "imported": "Imported",
+        "insights": "Insights",
+        "roadmap": "Roadmap",
+        "linear": "Linear",
+        "github": "GitHub issue",
+        "gitlab": "GitLab issue"
+      }
+    },
+    "subtasks": {
+      "title": "Subtasks",
+      "openPlan": "Open plan",
+      "emptyTitle": "No plan yet",
+      "emptyBody": "The planner splits the spec into subtasks, each naming the failing test it writes first. They appear here with their status.",
+      "summary": "{{done}} of {{total}} done",
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed",
+      "showAll": "Show all {{count}} subtasks"
+    },
+    "checks": {
+      "title": "Checks",
+      "open": "Open",
+      "criteria": "Acceptance criteria",
+      "noCriteria": "No AC-n lines in the spec",
+      "criteriaCount_one": "{{count}} criterion",
+      "criteriaCount_other": "{{count}} criteria",
+      "noQaYet": "QA has not reported yet",
+      "architecture": "Architecture",
+      "architectureSummary": "{{diagrams}} diagrams, {{adrs}} ADRs",
+      "security": "Security",
+      "securityBlocking_one": "{{count}} blocking finding",
+      "securityBlocking_other": "{{count}} blocking findings",
+      "securityClear": "Gates and pentest clear",
+      "securityGatesClear": "Gates clear",
+      "securitySkipped": "Gates skipped, see the report"
+    },
+    "description": {
+      "title": "Description",
+      "empty": "No description. Edit the task to add one."
+    },
+    "context": {
+      "title": "Context",
+      "rationale": "Rationale",
+      "problemSolved": "Problem solved",
+      "targetAudience": "Who benefits",
+      "dependencies": "Dependencies",
+      "acceptanceCriteria": "Acceptance criteria (from the idea)",
+      "affectedFiles": "Files likely to change"
+    }
+  },
+  "taskDetail": {
+    "cannotResumeTitle": "Cannot resume task",
+    "cannotResumeBody": "The implementation plan could not be loaded. Try again, or check the task files.",
+    "deleteFailed": "The task could not be deleted.",
+    "recover": "Recover task",
+    "loadingPlan": "Loading plan…",
+    "resume": "Resume task",
+    "stop": "Stop task",
+    "start": "Start task",
+    "subtaskCount": "{{done}}/{{total}} subtasks",
+    "tabs": {
+      "overview": "Overview",
+      "subtasks": "Subtasks",
+      "logs": "Logs"
+    },
+    "delete": "Delete task",
+    "close": "Close",
+    "warnings": {
+      "stuckTitle": "Task looks stuck",
+      "stuckBody": "It is marked as running, but no agent process was found. This happens when the app quit or the process was killed.",
+      "incompleteTitle": "Task did not finish",
+      "incompleteBody": "It has a spec and a plan, but {{done}} of {{total}} subtasks are done. Resume to continue the implementation.",
+      "recoverRestart": "Recover and restart"
+    }
   }
 }

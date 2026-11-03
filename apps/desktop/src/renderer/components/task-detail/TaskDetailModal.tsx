@@ -1,13 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useToast } from '../../hooks/use-toast';
-import { Separator } from '../ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
 import { TooltipProvider } from '../ui/tooltip';
-import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Progress } from '../ui/progress';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,19 +28,19 @@ import {
   GitPullRequest
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { calculateProgress } from '../../lib/utils';
 import { stopTask, submitReview, recoverStuckTask, deleteTask, useTaskStore, startTaskOrQueue } from '../../stores/task-store';
 import { useProjectStore } from '../../stores/project-store';
 import { TASK_STATUS_LABELS } from '../../../shared/constants';
 import { TaskEditDialog } from '../TaskEditDialog';
 import { useTaskDetail } from './hooks/useTaskDetail';
-import { TaskMetadata } from './TaskMetadata';
 import { TaskWarnings } from './TaskWarnings';
 import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
 import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
+import { MonoTag } from './workspace/workspace-ui';
+import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -84,7 +81,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
   const state = useTaskDetail({ task });
   const activeProject = useProjectStore(s => s.getActiveProject());
   const showFilesTab = isFilesTabEnabled();
-  const progressPercent = calculateProgress(task.subtasks);
   const completedSubtasks = task.subtasks.filter(s => s.status === 'completed').length;
   const totalSubtasks = task.subtasks.length;
 
@@ -98,8 +94,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
         const isValid = await state.reloadPlanForIncompleteTask();
         if (!isValid) {
           toast({
-            title: 'Cannot Resume Task',
-            description: 'Failed to load implementation plan. Please try again or check the task files.',
+            title: t('tasks:taskDetail.cannotResumeTitle'),
+            description: t('tasks:taskDetail.cannotResumeBody'),
             variant: 'destructive',
             duration: 5000,
           });
@@ -149,7 +145,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       state.setShowDeleteDialog(false);
       onOpenChange(false);
     } else {
-      state.setDeleteError(result.error || 'Failed to delete task');
+      state.setDeleteError(result.error || t('tasks:taskDetail.deleteFailed'));
     }
     state.setIsDeleting(false);
   };
@@ -227,39 +223,66 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
     onOpenChange(false);
   };
 
-  // Helper function to get status badge variant
-  const getStatusBadgeVariant = (status: string, isStuck: boolean) => {
-    if (isStuck) return 'warning';
-    switch (status) {
-      case 'done':
-        return 'success';
-      case 'human_review':
-        return 'purple';
-      case 'in_progress':
-        return 'info';
-      default:
-        return 'secondary';
-    }
+  /** Open a Workspace section: switch tabs, then focus its section tab (Radix activates on focus). */
+  const openWorkspaceSection = (section: WorkspaceSection) => {
+    state.setActiveTab('workspace');
+    const order: WorkspaceSection[] = ['spec', 'plan', 'architecture', 'security'];
+    let attempts = 0;
+    const focusSection = () => {
+      const list = document.querySelector<HTMLElement>(`[role="tablist"][aria-label="${t('tasks:workspace.sections.label')}"]`);
+      const trigger = list?.querySelectorAll<HTMLElement>('[role="tab"]')[order.indexOf(section)];
+      if (trigger) trigger.focus();
+      else if (attempts++ < 10) requestAnimationFrame(focusSection);
+    };
+    requestAnimationFrame(focusSection);
   };
+
+  const reviewReasonChip = (() => {
+    if (task.status !== 'human_review' || !task.reviewReason) return null;
+    switch (task.reviewReason) {
+      case 'completed':
+        return { label: t('tasks:board.chip.qaPassed'), attention: false };
+      case 'errors':
+        return { label: t('tasks:reviewReason.hasErrors'), attention: true };
+      case 'qa_rejected':
+        return { label: t('tasks:reviewReason.qaIssues'), attention: true };
+      case 'plan_review':
+        return { label: t('tasks:reviewReason.approvePlan'), attention: false };
+      case 'stopped':
+        return { label: t('tasks:reviewReason.stopped'), attention: false };
+      default:
+        return null;
+    }
+  })();
+
+  const chipClass = (attention: boolean) =>
+    cn(
+      'inline-flex h-6 items-center px-2 text-xs font-medium',
+      attention ? 'bg-destructive text-destructive-foreground' : 'border border-foreground text-foreground'
+    );
+
+  const tabTriggerClass =
+    'relative h-11 rounded-none border-b-2 border-transparent px-4 text-sm text-muted-foreground shadow-none ' +
+    'data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 
   // Render primary action button based on state
   const renderPrimaryAction = () => {
     if (state.isStuck) {
       return (
         <Button
-          variant="warning"
+          className="h-11"
           onClick={handleRecover}
           disabled={state.isRecovering}
         >
           {state.isRecovering ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Recovering...
+              {t('tasks:labels.recovering')}
             </>
           ) : (
             <>
               <RotateCcw className="mr-2 h-4 w-4" />
-              Recover Task
+              {t('tasks:taskDetail.recover')}
             </>
           )}
         </Button>
@@ -268,16 +291,16 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
     if (state.isIncomplete) {
       return (
-        <Button variant="default" onClick={handleStartStop} disabled={state.isLoadingPlan}>
+        <Button variant="default" className="h-11" onClick={handleStartStop} disabled={state.isLoadingPlan}>
           {state.isLoadingPlan ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading Plan...
+              {t('tasks:taskDetail.loadingPlan')}
             </>
           ) : (
             <>
               <Play className="mr-2 h-4 w-4" />
-              Resume Task
+              {t('tasks:taskDetail.resume')}
             </>
           )}
         </Button>
@@ -287,18 +310,19 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
     if (task.status === 'backlog' || task.status === 'in_progress') {
       return (
         <Button
-          variant={state.isRunning ? 'destructive' : 'default'}
+          variant={state.isRunning ? 'outline' : 'default'}
+          className={cn('h-11', state.isRunning && 'border-foreground')}
           onClick={handleStartStop}
         >
           {state.isRunning ? (
             <>
               <Square className="mr-2 h-4 w-4" />
-              Stop Task
+              {t('tasks:taskDetail.stop')}
             </>
           ) : (
             <>
               <Play className="mr-2 h-4 w-4" />
-              Start Task
+              {t('tasks:taskDetail.start')}
             </>
           )}
         </Button>
@@ -308,8 +332,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
     if (task.status === 'done' && task.metadata?.prUrl) {
       return (
         <div className="flex items-center gap-4">
-          <div className="completion-state text-sm flex items-center gap-2 text-success">
-            <CheckCircle2 className="h-5 w-5" />
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <CheckCircle2 aria-hidden className="h-4 w-4" />
             <span className="font-medium">{t('tasks:status.complete')}</span>
           </div>
            {task.metadata?.prUrl && (
@@ -320,9 +344,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                    window.electronAPI?.openExternal(task.metadata.prUrl);
                  }
                }}
-               className="completion-state text-sm flex items-center gap-2 text-info cursor-pointer hover:underline bg-transparent border-none p-0"
+               className="inline-flex h-11 items-center gap-2 border border-foreground px-4 text-sm text-foreground hover:bg-accent"
              >
-              <GitPullRequest className="h-5 w-5" />
+              <GitPullRequest aria-hidden className="h-4 w-4" />
               <span className="font-medium">{t(TASK_STATUS_LABELS[task.status])}</span>
             </button>
           )}
@@ -332,8 +356,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
     if (task.status === 'done') {
       return (
-        <div className="completion-state text-sm flex items-center gap-2 text-success">
-          <CheckCircle2 className="h-5 w-5" />
+        <div className="flex items-center gap-2 text-sm text-foreground">
+          <CheckCircle2 aria-hidden className="h-4 w-4" />
           <span className="font-medium">{t('tasks:status.complete')}</span>
         </div>
       );
@@ -350,7 +374,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
           {/* Semi-transparent overlay - can see background content */}
           <DialogPrimitive.Overlay
             className={cn(
-              'fixed inset-0 z-50 bg-black/60',
+              'fixed inset-0 z-50 bg-[rgb(28_29_25/0.6)]',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',
               'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0'
             )}
@@ -363,8 +387,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
               'translate-x-[-50%]',
               'w-[95vw] h-[calc(100vh-32px)]',
               state.activeTab === 'workspace' ? 'max-w-6xl' : 'max-w-5xl',
-              'bg-card border border-border rounded-xl',
-              'shadow-2xl overflow-hidden flex flex-col',
+              'bg-card border border-foreground',
+              'overflow-hidden flex flex-col',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',
               'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
               'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -372,52 +396,37 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
             )}
           >
             {/* Header */}
-            <div className="p-5 pb-4 border-b border-border shrink-0">
+            <div className="shrink-0 border-b border-border px-6 pt-5 pb-4">
               <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <DialogPrimitive.Title className="text-xl font-semibold leading-tight text-foreground truncate">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <DialogPrimitive.Title className="truncate text-[22px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
                     {task.title}
                   </DialogPrimitive.Title>
                   <DialogPrimitive.Description asChild>
-                    <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-xs font-mono">
-                        {task.specId}
-                      </Badge>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <MonoTag>{task.specId}</MonoTag>
                       {state.isStuck ? (
-                        <Badge variant="warning" className="text-xs flex items-center gap-1 animate-pulse">
-                          <AlertTriangle className="h-3 w-3" />
-                          Stuck
-                        </Badge>
+                        <span className={chipClass(true)}>
+                          <AlertTriangle aria-hidden className="mr-1 h-3 w-3" />
+                          {t('tasks:labels.stuck')}
+                        </span>
                       ) : state.isIncomplete ? (
-                        <Badge variant="warning" className="text-xs flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            Incomplete
-                          </Badge>
+                        <span className={chipClass(true)}>
+                          <AlertTriangle aria-hidden className="mr-1 h-3 w-3" />
+                          {t('tasks:labels.incomplete')}
+                        </span>
                       ) : (
                         <>
-                           <Badge
-                             variant={getStatusBadgeVariant(task.status, state.isStuck)}
-                             className={cn('text-xs', (task.status === 'in_progress' && !state.isStuck) && 'status-running')}
-                           >
-                             {t(TASK_STATUS_LABELS[task.status])}
-                           </Badge>
-                          {task.status === 'human_review' && task.reviewReason && (
-                            <Badge
-                              variant={task.reviewReason === 'completed' ? 'success' : task.reviewReason === 'errors' ? 'destructive' : 'warning'}
-                              className="text-xs"
-                            >
-                              {task.reviewReason === 'completed' ? 'Completed' :
-                               task.reviewReason === 'errors' ? 'Has Errors' :
-                               task.reviewReason === 'plan_review' ? 'Approve Plan' :
-                               task.reviewReason === 'stopped' ? 'Stopped' : 'QA Issues'}
-                            </Badge>
-                          )}
+                          <span className={chipClass(false)}>
+                            {task.status === 'in_progress' && <span aria-hidden className="vt-breathe mr-1.5 h-2 w-2 bg-foreground" />}
+                            {t(TASK_STATUS_LABELS[task.status])}
+                          </span>
+                          {reviewReasonChip && <span className={chipClass(reviewReasonChip.attention)}>{reviewReasonChip.label}</span>}
                         </>
                       )}
-                      {/* Compact progress indicator */}
                       {totalSubtasks > 0 && (
-                        <span className="text-xs text-muted-foreground ml-1">
-                          {completedSubtasks}/{totalSubtasks} subtasks
+                        <span className="ml-1 font-mono text-xs tabular-nums text-muted-foreground">
+                          {t('tasks:taskDetail.subtaskCount', { done: completedSubtasks, total: totalSubtasks })}
                         </span>
                       )}
                     </div>
@@ -430,36 +439,27 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0 electron-no-drag">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="hover:bg-primary/10 hover:text-primary transition-colors"
+                <div className="electron-no-drag -mt-1 -mr-2 flex shrink-0 items-center">
+                  <button
+                    type="button"
+                    className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
                     onClick={() => state.setIsEditDialogOpen(true)}
                     disabled={state.isRunning && !state.isStuck}
+                    aria-label={state.isRunning && !state.isStuck ? t('tasks:kanban.cannotEditWhileRunning') : t('tasks:kanban.editTask')}
                   >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                    <Pencil aria-hidden className="h-4 w-4" />
+                  </button>
                   <DialogPrimitive.Close asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="hover:bg-muted transition-colors"
+                    <button
+                      type="button"
+                      className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
+                      aria-label={t('tasks:kanban.closeTaskDetailsAriaLabel')}
                     >
-                      <X className="h-5 w-5" />
-                      <span className="sr-only">Close</span>
-                    </Button>
+                      <X aria-hidden className="h-5 w-5" />
+                    </button>
                   </DialogPrimitive.Close>
                 </div>
               </div>
-
-              {/* Progress bar - only show when running or has progress */}
-              {(state.isRunning || completedSubtasks > 0) && totalSubtasks > 0 && (
-                <div className="mt-3 flex items-center gap-3">
-                  <Progress value={progressPercent} className="h-1.5 flex-1" />
-                  <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{progressPercent}%</span>
-                </div>
-              )}
 
               {/* Warnings - compact inline */}
               {(state.isStuck || state.isIncomplete) && (
@@ -479,35 +479,36 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
             {/* Body - Single Column with Tabs */}
             <div className="flex-1 min-h-0 overflow-hidden">
               <Tabs value={state.activeTab} onValueChange={state.setActiveTab} className="flex flex-col h-full">
-                <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-5 h-auto shrink-0">
+                <TabsList className="h-auto w-full shrink-0 justify-start rounded-none border-b border-border bg-transparent p-0 px-4">
                   <TabsTrigger
                     value="overview"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                    className={tabTriggerClass}
                   >
-                    Overview
+                    {t('tasks:taskDetail.tabs.overview')}
                   </TabsTrigger>
                   <TabsTrigger
                     value="workspace"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                    className={tabTriggerClass}
                   >
                     {t('tasks:workspace.tab')}
                   </TabsTrigger>
                   <TabsTrigger
                     value="subtasks"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                    className={tabTriggerClass}
                   >
-                    Subtasks ({task.subtasks.length})
+                    {t('tasks:taskDetail.tabs.subtasks')}
+                    <span className="ml-2 font-mono text-[11px] opacity-70">{task.subtasks.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="logs"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                    className={tabTriggerClass}
                   >
-                    Logs
+                    {t('tasks:taskDetail.tabs.logs')}
                   </TabsTrigger>
                   {showFilesTab && (
                     <TabsTrigger
                       value="files"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                      className={tabTriggerClass}
                     >
                       {t('tasks:files.tab')}
                     </TabsTrigger>
@@ -516,56 +517,56 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
                 {/* Overview Tab */}
                 <TabsContent value="overview" className="flex-1 min-h-0 overflow-hidden mt-0">
-                  <ScrollArea className="h-full">
-                    <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
-                      {/* Metadata */}
-                      <TaskMetadata task={task} />
-
-                      {/* Human Review Section */}
-                      {state.needsReview && (
-                        <>
-                          <Separator />
-                          <TaskReview
-                            task={task}
-                            feedback={state.feedback}
-                            isSubmitting={state.isSubmitting}
-                            worktreeStatus={state.worktreeStatus}
-                            worktreeDiff={state.worktreeDiff}
-                            isLoadingWorktree={state.isLoadingWorktree}
-                            isMerging={state.isMerging}
-                            isDiscarding={state.isDiscarding}
-                            showDiscardDialog={state.showDiscardDialog}
-                            showDiffDialog={state.showDiffDialog}
-                            workspaceError={state.workspaceError}
-                            stageOnly={state.stageOnly}
-                            stagedSuccess={state.stagedSuccess}
-                            stagedProjectPath={state.stagedProjectPath}
-                            suggestedCommitMessage={state.suggestedCommitMessage}
-                            mergePreview={state.mergePreview}
-                            isLoadingPreview={state.isLoadingPreview}
-                            showConflictDialog={state.showConflictDialog}
-                            onFeedbackChange={state.setFeedback}
-                            onReject={handleReject}
-                            images={state.feedbackImages}
-                            onImagesChange={state.setFeedbackImages}
-                            onMerge={handleMerge}
-                            onDiscard={handleDiscard}
-                            onShowDiscardDialog={state.setShowDiscardDialog}
-                            onShowDiffDialog={state.setShowDiffDialog}
-                            onStageOnlyChange={state.setStageOnly}
-                            onShowConflictDialog={state.setShowConflictDialog}
-                            onLoadMergePreview={state.loadMergePreview}
-                            onClose={handleClose}
-                            onSwitchToTerminals={onSwitchToTerminals}
-                            onOpenInbuiltTerminal={onOpenInbuiltTerminal}
-                            onReviewAgain={state.handleReviewAgain}
-                            showPRDialog={state.showPRDialog}
-                            isCreatingPR={state.isCreatingPR}
-                            onShowPRDialog={state.setShowPRDialog}
-                            onCreatePR={handleCreatePR}
-                          />
-                        </>
-                      )}
+                  <ScrollArea className="h-full" viewportClassName="[&>div]:!block">
+                    <div className="mx-auto max-w-[1100px] overflow-x-hidden">
+                      <OverviewTab
+                        task={task}
+                        onOpenWorkspace={openWorkspaceSection}
+                        onOpenSubtasks={() => state.setActiveTab('subtasks')}
+                        reviewSlot={
+                          state.needsReview ? (
+                      <TaskReview
+                        task={task}
+                        feedback={state.feedback}
+                        isSubmitting={state.isSubmitting}
+                        worktreeStatus={state.worktreeStatus}
+                        worktreeDiff={state.worktreeDiff}
+                        isLoadingWorktree={state.isLoadingWorktree}
+                        isMerging={state.isMerging}
+                        isDiscarding={state.isDiscarding}
+                        showDiscardDialog={state.showDiscardDialog}
+                        showDiffDialog={state.showDiffDialog}
+                        workspaceError={state.workspaceError}
+                        stageOnly={state.stageOnly}
+                        stagedSuccess={state.stagedSuccess}
+                        stagedProjectPath={state.stagedProjectPath}
+                        suggestedCommitMessage={state.suggestedCommitMessage}
+                        mergePreview={state.mergePreview}
+                        isLoadingPreview={state.isLoadingPreview}
+                        showConflictDialog={state.showConflictDialog}
+                        onFeedbackChange={state.setFeedback}
+                        onReject={handleReject}
+                        images={state.feedbackImages}
+                        onImagesChange={state.setFeedbackImages}
+                        onMerge={handleMerge}
+                        onDiscard={handleDiscard}
+                        onShowDiscardDialog={state.setShowDiscardDialog}
+                        onShowDiffDialog={state.setShowDiffDialog}
+                        onStageOnlyChange={state.setStageOnly}
+                        onShowConflictDialog={state.setShowConflictDialog}
+                        onLoadMergePreview={state.loadMergePreview}
+                        onClose={handleClose}
+                        onSwitchToTerminals={onSwitchToTerminals}
+                        onOpenInbuiltTerminal={onOpenInbuiltTerminal}
+                        onReviewAgain={state.handleReviewAgain}
+                        showPRDialog={state.showPRDialog}
+                        isCreatingPR={state.isCreatingPR}
+                        onShowPRDialog={state.setShowPRDialog}
+                        onCreatePR={handleCreatePR}
+                      />
+                          ) : undefined
+                        }
+                      />
                     </div>
                   </ScrollArea>
                 </TabsContent>
@@ -605,21 +606,20 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
             </div>
 
             {/* Footer - Actions */}
-            <div className="flex items-center gap-3 px-5 py-3 border-t border-border shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            <div className="flex shrink-0 items-center gap-3 border-t border-border px-6 py-3">
+              <button
+                type="button"
+                className="-ml-3 inline-flex h-11 items-center gap-2 px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
                 onClick={() => state.setShowDeleteDialog(true)}
                 disabled={state.isRunning && !state.isStuck}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Task
-              </Button>
+                <Trash2 aria-hidden className="h-4 w-4" />
+                {t('tasks:taskDetail.delete')}
+              </button>
               <div className="flex-1" />
               {renderPrimaryAction()}
-              <Button variant="outline" onClick={handleClose}>
-                Close
+              <Button variant="outline" className="h-11 border-foreground" onClick={handleClose}>
+                {t('tasks:taskDetail.close')}
               </Button>
             </div>
           </DialogPrimitive.Content>

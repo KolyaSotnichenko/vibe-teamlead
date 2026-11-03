@@ -317,7 +317,7 @@ export const earlyTaskWorkspace: TaskWorkspace = {
 export const taskWorkspaceMock = {
   getTaskWorkspace: async (taskId: string, _projectId?: string): Promise<IPCResult<TaskWorkspace | null>> => ({
     success: true,
-    data: taskId === 'task-1' ? sampleTaskWorkspace : earlyTaskWorkspace,
+    data: ['task-8', 'task-3', 'task-9'].includes(taskId) ? sampleTaskWorkspace : earlyTaskWorkspace,
   }),
   openTaskWorkspaceFile: async (_taskId: string, relativePath: string): Promise<IPCResult> => {
     console.warn('[Browser Mock] openTaskWorkspaceFile:', relativePath);

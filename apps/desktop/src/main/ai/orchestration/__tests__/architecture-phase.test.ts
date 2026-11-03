@@ -45,7 +45,7 @@ describe('architecture phase', () => {
 describe('QA phase', () => {
   type Internals = { runQAPhase(): Promise<{ success: boolean; error?: string }>; currentPhase: string };
 
-  function withQA(runQA: ReturnType<typeof vi.fn>) {
+  function withQA(runQA: (hooks: { onReview(): void; onFix(): void }) => Promise<{ approved: boolean; error?: string }>) {
     const dir = mkdtempSync(join(tmpdir(), 'vtl-qa-'));
     const o = new BuildOrchestrator({
       specDir: dir,

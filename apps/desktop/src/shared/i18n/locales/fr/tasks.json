@@ -510,5 +510,218 @@
       "noGates": "Les contrôles s'exécutent avant la première revue QA.",
       "noPentest": "La QA sécurité (Strix) est désactivée, ou la QA n'a pas encore approuvé. Activez-la dans Réglages → Général."
     }
+  },
+  "board": {
+    "stage": {
+      "allPassed": "Toutes les étapes sont passées",
+      "position": "Étape {{index}} sur {{total}} : {{stage}}",
+      "notStarted": "Pas commencée"
+    },
+    "stages": {
+      "spec": "Spec",
+      "architect": "Architecture",
+      "planner": "Plan",
+      "coder": "Code",
+      "qa": "QA",
+      "review": "Revue"
+    },
+    "agents": {
+      "spec": "Rédacteur de spec",
+      "architect": "Architecte",
+      "planner": "Planificateur",
+      "coder": "Développeur",
+      "qa": "Relecteur QA",
+      "qaFixer": "Correcteur QA",
+      "you": "Vous"
+    },
+    "line": {
+      "prCreated": "PR créée",
+      "done": "Terminée",
+      "queued": "En file",
+      "yourReview": "Votre revue",
+      "paused": {
+        "rate_limit": "en pause : limite de débit",
+        "auth": "en pause : connexion requise"
+      },
+      "fixingQa": "corrige les retours QA",
+      "failed": "échec",
+      "planReady": "Plan prêt",
+      "notStarted": "Pas commencée"
+    },
+    "chip": {
+      "paused": {
+        "rate_limit": "Limite de débit",
+        "auth": "Connexion requise"
+      },
+      "failed": "Échec",
+      "qaPassed": "QA validée"
+    },
+    "subtasksAria": "{{done}} sous-tâches terminées sur {{total}}",
+    "worktree": "worktree",
+    "columnMenu": "Actions de la colonne {{column}}",
+    "lockWidth": "Verrouiller la largeur",
+    "slots": "{{count}} emplacements parallèles utilisés sur {{max}}",
+    "full": "Pleine",
+    "selectedInColumn": "{{count}} sélectionnée(s)",
+    "selected_one": "tâche sélectionnée",
+    "selected_other": "tâches sélectionnées"
+  },
+  "overview": {
+    "pipeline": {
+      "title": "Pipeline",
+      "state": {
+        "done": "Terminée",
+        "failed": "Renvoyée",
+        "upcoming": "À venir",
+        "yourTurn": "À vous",
+        "stopped": "Arrêtée"
+      },
+      "writes": {
+        "spec": "spec.md avec critères d’acceptation numérotés",
+        "architect": "architecture.md, ADR, diagrammes",
+        "planner": "Sous-tâches, chacune avec son test en échec",
+        "coder": "Test d’abord, dans un worktree isolé",
+        "qa": "Contrôles de sécurité, couverture des AC, Strix",
+        "review": "Vous validez et fusionnez"
+      }
+    },
+    "question": {
+      "more_one": "{{count}} autre question dans le panneau",
+      "more_other": "{{count}} autres questions dans le panneau"
+    },
+    "facts": {
+      "title": "Détails",
+      "spec": "Spec",
+      "column": "Colonne",
+      "code": "Code",
+      "codeWorktree": "Worktree isolé",
+      "codeDirect": "Dossier du projet",
+      "baseBranch": "Branche de base",
+      "staged": "Indexé dans le projet",
+      "yes": "Oui",
+      "started": "Exécution lancée",
+      "updated": "Dernière activité",
+      "created": "Créée",
+      "category": "Catégorie",
+      "priority": "Priorité",
+      "complexity": "Complexité",
+      "impact": "Impact",
+      "securitySeverity": "Gravité sécurité",
+      "source": "Origine",
+      "planApproval": "Validation du plan",
+      "required": "Requise avant le code",
+      "fastMode": "Mode rapide",
+      "on": "Activé",
+      "released": "Publiée dans",
+      "archived": "Archivée",
+      "openPr": "Ouvrir la pull request"
+    },
+    "values": {
+      "category": {
+        "feature": "Fonctionnalité",
+        "bug_fix": "Correction de bug",
+        "refactoring": "Refactorisation",
+        "documentation": "Documentation",
+        "security": "Sécurité",
+        "performance": "Performance",
+        "ui_ux": "UI/UX",
+        "infrastructure": "Infrastructure",
+        "testing": "Tests"
+      },
+      "priority": {
+        "low": "Basse",
+        "medium": "Moyenne",
+        "high": "Haute",
+        "urgent": "Urgente"
+      },
+      "complexity": {
+        "trivial": "Triviale",
+        "small": "Petite",
+        "medium": "Moyenne",
+        "large": "Grande",
+        "complex": "Complexe"
+      },
+      "impact": {
+        "low": "Faible",
+        "medium": "Moyen",
+        "high": "Élevé",
+        "critical": "Critique"
+      },
+      "source": {
+        "ideation": "Idéation",
+        "manual": "Écrite par vous",
+        "imported": "Importée",
+        "insights": "Insights",
+        "roadmap": "Feuille de route",
+        "linear": "Linear",
+        "github": "Ticket GitHub",
+        "gitlab": "Ticket GitLab"
+      }
+    },
+    "subtasks": {
+      "title": "Sous-tâches",
+      "openPlan": "Ouvrir le plan",
+      "emptyTitle": "Pas encore de plan",
+      "emptyBody": "Le planificateur découpe la spec en sous-tâches, chacune nommant le test en échec qu’elle écrit d’abord. Elles apparaissent ici avec leur statut.",
+      "summary": "{{done}} sur {{total}} terminées",
+      "failed_one": "{{count}} en échec",
+      "failed_other": "{{count}} en échec",
+      "showAll": "Voir les {{count}} sous-tâches"
+    },
+    "checks": {
+      "title": "Contrôles",
+      "open": "Ouvrir",
+      "criteria": "Critères d’acceptation",
+      "noCriteria": "Aucune ligne AC-n dans la spec",
+      "criteriaCount_one": "{{count}} critère",
+      "criteriaCount_other": "{{count}} critères",
+      "noQaYet": "La QA n’a pas encore rendu son rapport",
+      "architecture": "Architecture",
+      "architectureSummary": "{{diagrams}} diagrammes, {{adrs}} ADR",
+      "security": "Sécurité",
+      "securityBlocking_one": "{{count}} problème bloquant",
+      "securityBlocking_other": "{{count}} problèmes bloquants",
+      "securityClear": "Contrôles et pentest sans problème",
+      "securityGatesClear": "Contrôles sans problème",
+      "securitySkipped": "Contrôles ignorés, voir le rapport"
+    },
+    "description": {
+      "title": "Description",
+      "empty": "Pas de description. Modifiez la tâche pour en ajouter une."
+    },
+    "context": {
+      "title": "Contexte",
+      "rationale": "Justification",
+      "problemSolved": "Problème résolu",
+      "targetAudience": "Bénéficiaires",
+      "dependencies": "Dépendances",
+      "acceptanceCriteria": "Critères d’acceptation (de l’idée)",
+      "affectedFiles": "Fichiers susceptibles de changer"
+    }
+  },
+  "taskDetail": {
+    "cannotResumeTitle": "Impossible de reprendre la tâche",
+    "cannotResumeBody": "Le plan d’implémentation n’a pas pu être chargé. Réessayez ou vérifiez les fichiers de la tâche.",
+    "deleteFailed": "La tâche n’a pas pu être supprimée.",
+    "recover": "Récupérer la tâche",
+    "loadingPlan": "Chargement du plan…",
+    "resume": "Reprendre la tâche",
+    "stop": "Arrêter la tâche",
+    "start": "Lancer la tâche",
+    "subtaskCount": "{{done}}/{{total}} sous-tâches",
+    "tabs": {
+      "overview": "Aperçu",
+      "subtasks": "Sous-tâches",
+      "logs": "Journaux"
+    },
+    "delete": "Supprimer la tâche",
+    "close": "Fermer",
+    "warnings": {
+      "stuckTitle": "La tâche semble bloquée",
+      "stuckBody": "Elle est marquée en cours, mais aucun processus d’agent n’a été trouvé. Cela arrive quand l’application s’est fermée ou que le processus a été tué.",
+      "incompleteTitle": "La tâche ne s’est pas terminée",
+      "incompleteBody": "Elle a une spec et un plan, mais {{done}} sous-tâches sur {{total}} sont terminées. Reprenez pour continuer l’implémentation.",
+      "recoverRestart": "Récupérer et relancer"
+    }
   }
 }

@@ -63,9 +63,10 @@ export const SortableTaskCard = memo(function SortableTaskCard({ task, onClick, 
       ref={setNodeRef}
       style={style}
       className={cn(
-        'touch-none transition-all duration-200',
-        isDragging && 'dragging-placeholder opacity-40 scale-[0.98]',
-        isOver && !isDragging && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-background rounded-xl'
+        'touch-none transition-opacity duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        // Source stays in place as a dashed outline while its overlay is dragged
+        isDragging && 'opacity-40 outline-1 outline-dashed outline-foreground',
+        isOver && !isDragging && 'outline-1 outline-solid outline-foreground/50 outline-offset-2'
       )}
       {...attributes}
       {...listeners}

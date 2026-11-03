@@ -1231,3 +1231,16 @@ body {
   outline-offset: 2px;
 }
 .vt-plan-graph .react-flow__node.selectable { cursor: pointer; }
+
+/* ============================================================
+   Board + task Overview (instrument panel)
+   ============================================================ */
+
+/* Card lifted by drag: no tilt, no blur — a 1px ink frame */
+.vt-drag-overlay {
+  cursor: grabbing;
+  outline: 1px solid var(--foreground);
+}
+.vt-drag-overlay > * {
+  border-color: var(--foreground);
+}
