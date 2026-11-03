@@ -65,7 +65,7 @@ export function IdeationEmptyState({
           </div>
         </div>
 
-        <Button onClick={onGenerate} size="lg" disabled={isCheckingToken}>
+        <Button onClick={onGenerate} size="lg" disabled={isCheckingToken || hasToken === false}>
           <Sparkles className="h-4 w-4 mr-2" />
           {t('ideation.dialogs.generateIdeas')}
         </Button>

@@ -457,6 +457,8 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "fitView": "Fit to view",
+      "layoutTopDown": "Lay out top to bottom",
+      "layoutLeftRight": "Lay out left to right",
       "description": "Description"
     },
     "subtaskStatus": {
@@ -909,7 +911,8 @@
       "searchingCode": "Searching code",
       "editing": "Editing",
       "writing": "Writing",
-      "running": "Running"
+      "running": "Running",
+      "command": "Command"
     },
     "done": "Done",
     "hideOutput": "Hide output",

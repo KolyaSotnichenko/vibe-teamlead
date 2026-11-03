@@ -17,7 +17,9 @@
 
 import { execFileSync } from 'child_process';
 import { rm } from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
+import path from 'path';
+import { isTaskBranch } from '../../shared/constants/config';
 import { getToolPath } from '../cli-tool-manager';
 import { getIsolatedGitEnv } from './git-isolation';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
@@ -62,9 +64,17 @@ export interface WorktreeCleanupResult {
  * Gets the worktree branch name based on spec ID
  */
 function getWorktreeBranch(worktreePath: string, specId: string, timeout: number, explicitBranchName?: string): string | null {
-  // First try to get branch from the worktree's HEAD
-  if (existsSync(worktreePath)) {
+  // First try to get branch from the worktree's HEAD — only when the folder still is
+  // its own worktree. A leftover folder inside the project makes git answer for the
+  // project itself (e.g. "main"), and that branch must never be deleted.
+  if (existsSync(path.join(worktreePath, '.git'))) {
     try {
+      const top = execFileSync(getToolPath('git'), ['rev-parse', '--show-toplevel'], {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        env: getIsolatedGitEnv(),
+        timeout
+      }).trim();
       const branch = execFileSync(getToolPath('git'), ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: worktreePath,
         encoding: 'utf-8',
@@ -72,7 +82,7 @@ function getWorktreeBranch(worktreePath: string, specId: string, timeout: number
         timeout
       }).trim();
 
-      if (branch && branch !== 'HEAD') {
+      if (branch && branch !== 'HEAD' && realpathSync(top) === realpathSync(worktreePath)) {
         return branch;
       }
     } catch {
@@ -252,7 +262,12 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
   }
 
   // 4. Delete the branch if requested
-  if (deleteBranch && branch) {
+  // Only ever delete the task's own branch (or the one the caller named)
+  const deletable = !!branch && (branch === branchName || isTaskBranch(branch));
+  if (deleteBranch && branch && !deletable) {
+    warnings.push(`Kept branch ${branch}: not a task branch`);
+  }
+  if (deleteBranch && branch && deletable) {
     try {
       execFileSync(getToolPath('git'), ['branch', '-D', branch], {
         cwd: projectPath,

@@ -387,7 +387,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
               'fixed left-[50%] top-4 z-50',
               'translate-x-[-50%]',
               'w-[95vw] h-[calc(100vh-32px)]',
-              state.activeTab === 'workspace' ? 'max-w-6xl' : 'max-w-5xl',
+              'max-w-6xl', // one width for every tab, so the close buttons don't jump
               'bg-card border border-foreground',
               'overflow-hidden flex flex-col',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',

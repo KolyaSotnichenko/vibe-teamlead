@@ -459,6 +459,8 @@
       "zoomIn": "Збільшити",
       "zoomOut": "Зменшити",
       "fitView": "Умістити в екран",
+      "layoutTopDown": "Розкласти зверху вниз",
+      "layoutLeftRight": "Розкласти зліва направо",
       "description": "Опис"
     },
     "subtaskStatus": {
@@ -943,7 +945,8 @@
       "searchingCode": "Пошук у коді",
       "editing": "Редагування",
       "writing": "Запис",
-      "running": "Виконання"
+      "running": "Виконання",
+      "command": "Команда"
     },
     "done": "Готово",
     "hideOutput": "Сховати вивід",

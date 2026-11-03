@@ -26,6 +26,8 @@ import { cn } from '../../../lib/utils';
 import { MergeProgressOverlay } from './MergeProgressOverlay';
 import type { WorktreeStatus, MergeConflict, MergeStats, GitConflictInfo, SupportedIDE, SupportedTerminal, MergeProgress, MergeLogEntry, MergeLogEntryType } from '../../../../shared/types';
 import { useSettingsStore } from '../../../stores/settings-store';
+import { useProjectStore } from '../../../stores/project-store';
+import { useGitHubRemote } from '../../../hooks/useGitHubRemote';
 
 // Maximum log entries to keep to prevent memory issues during long merges
 const MAX_LOG_ENTRIES = 500;
@@ -110,6 +112,8 @@ export function WorkspaceStatus({
   onSwitchToTerminals,
   onOpenInbuiltTerminal
 }: WorkspaceStatusProps) {
+  const projectPath = useProjectStore((st) => st.projects.find((p) => p.id === st.selectedProjectId)?.path);
+  const hasGitHubRemote = useGitHubRemote(projectPath);
   const { t } = useTranslation(['taskReview', 'common', 'tasks']);
   const { settings } = useSettingsStore();
   const preferredIDE = settings.preferredIDE || 'vscode';
@@ -703,24 +707,26 @@ export function WorkspaceStatus({
 
           {/* Create PR Button - hide for already_merged/superseded scenarios */}
           {onShowPRDialog && !isAlreadyMerged && !isSuperseded && (
-            <Button
-              variant="info"
-              onClick={() => onShowPRDialog(true)}
-              disabled={isMerging || isDiscarding || isCreatingPR}
-              className="flex-1"
-            >
-              {isCreatingPR ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t('taskReview:pr.actions.creating')}
-                </>
-              ) : (
-                <>
-                  <GitPullRequest className="mr-2 h-4 w-4" />
-                  {t('common:buttons.createPR')}
-                </>
-              )}
-            </Button>
+            <span className="flex flex-1" title={hasGitHubRemote === false ? t('common:buttons.createPRNeedsGitHub') : undefined}>
+              <Button
+                variant="info"
+                onClick={() => onShowPRDialog(true)}
+                disabled={isMerging || isDiscarding || isCreatingPR || hasGitHubRemote !== true}
+                className="flex-1"
+              >
+                {isCreatingPR ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t('taskReview:pr.actions.creating')}
+                  </>
+                ) : (
+                  <>
+                    <GitPullRequest className="mr-2 h-4 w-4" />
+                    {t('common:buttons.createPR')}
+                  </>
+                )}
+              </Button>
+            </span>
           )}
 
           {/* Discard button - hide for superseded (shown as primary action there) */}

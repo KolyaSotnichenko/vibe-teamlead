@@ -8,24 +8,26 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // Design system: primary = ink fill; secondary = 1px ink outline. No grey
+        // fills that read as disabled, and every hover keeps the label readable.
         default:
-          'bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98]',
+          'bg-primary text-primary-foreground hover:bg-[var(--primary-hover)] active:scale-[0.98]',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.98]',
         outline:
-          'border border-border bg-transparent hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',
+          'border border-foreground bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80 active:scale-[0.98]',
+          'border border-foreground bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',
         ghost:
-          'hover:bg-accent hover:text-accent-foreground',
+          'text-foreground hover:bg-accent hover:text-accent-foreground',
         link:
-          'text-primary underline-offset-4 hover:underline',
+          'text-foreground underline-offset-4 hover:underline',
         success:
-          'bg-[var(--success)] text-[var(--success-foreground)] hover:bg-[var(--success)]/90 active:scale-[0.98]',
+          'border border-foreground bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',
         warning:
-          'bg-warning text-warning-foreground hover:bg-warning/90 active:scale-[0.98]',
+          'border border-warning bg-transparent text-warning hover:bg-warning/10 active:scale-[0.98]',
         info:
-          'bg-info text-info-foreground hover:bg-info/90 active:scale-[0.98]',
+          'border border-foreground bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',
       },
       size: {
         default: 'h-10 px-4 py-2 text-sm rounded-lg',

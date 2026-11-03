@@ -30,6 +30,8 @@ const TabsTrigger = React.forwardRef<
       'transition-all duration-200',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       'disabled:pointer-events-none disabled:opacity-50',
+      // Active tab: card fill plus a 2px ink mark, so it shows on any surface and theme
+      'border-b-2 border-transparent data-[state=active]:border-foreground',
       'data-[state=active]:bg-card data-[state=active]:text-foreground',
       'data-[state=inactive]:hover:text-foreground/80',
       className

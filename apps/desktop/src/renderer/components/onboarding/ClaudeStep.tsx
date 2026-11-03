@@ -40,7 +40,7 @@ export function ClaudeStep({ onNext, onBack, onSkip }: ClaudeStepProps) {
           <p>{t('claude.personalMode')}</p>
         </div>
 
-        <div className="mt-10 flex items-center justify-between border-t border-border pt-6">
+        <div className="sticky bottom-0 z-10 mt-10 flex items-center justify-between border-t border-border bg-card py-4">
           <Button variant="ghost" onClick={onBack} className="text-muted-foreground hover:text-foreground">
             {t('claude.buttons.back')}
           </Button>

@@ -509,7 +509,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <Label htmlFor="yolo-mode" className="text-amber-200">
+              <Label htmlFor="yolo-mode" className="text-warning">
                 {t('devtools.yoloMode.label', 'YOLO Mode')}
               </Label>
             </div>
@@ -524,7 +524,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
               }}
             />
           </div>
-          <p className="text-xs text-amber-400/80">
+          <p className="text-xs text-muted-foreground">
             {t('devtools.yoloMode.description', 'Start Claude with --dangerously-skip-permissions flag, bypassing all safety prompts. Use with extreme caution.')}
           </p>
           {settings.dangerouslySkipPermissions && (

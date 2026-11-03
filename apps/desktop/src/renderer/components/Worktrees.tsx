@@ -1,3 +1,4 @@
+import { useGitHubRemote } from '../hooks/useGitHubRemote';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -63,6 +64,7 @@ export function Worktrees({ projectId }: WorktreesProps) {
   const { toast } = useToast();
   const projects = useProjectStore((state) => state.projects);
   const selectedProject = projects.find((p) => p.id === projectId);
+  const hasGitHubRemote = useGitHubRemote(selectedProject?.path);
   const tasks = useTaskStore((state) => state.tasks);
 
   const [worktrees, setWorktrees] = useState<WorktreeListItem[]>([]);
@@ -651,20 +653,23 @@ export function Worktrees({ projectId }: WorktreesProps) {
                             variant="default"
                             size="sm"
                             onClick={() => openMergeDialog(worktree)}
-                            disabled={!task}
+                            disabled={!task || worktree.isOrphaned}
                           >
                             <GitMerge className="h-3.5 w-3.5 mr-1.5" />
                             {t('dialogs:worktrees.mergeTo', { branch: worktree.baseBranch })}
                           </Button>
-                          {task && (
-                            <Button
-                              variant="info"
-                              size="sm"
-                              onClick={() => openCreatePRDialog(worktree, task)}
-                            >
-                              <GitPullRequest className="h-3.5 w-3.5 mr-1.5" />
-                              {t('common:buttons.createPR')}
-                            </Button>
+                          {task && !worktree.isOrphaned && (
+                            <span className="inline-flex" title={hasGitHubRemote === false ? t('common:buttons.createPRNeedsGitHub') : undefined}>
+                              <Button
+                                variant="info"
+                                size="sm"
+                                onClick={() => openCreatePRDialog(worktree, task)}
+                                disabled={hasGitHubRemote !== true}
+                              >
+                                <GitPullRequest className="h-3.5 w-3.5 mr-1.5" />
+                                {t('common:buttons.createPR')}
+                              </Button>
+                            </span>
                           )}
                           {task?.status === 'done' && task.metadata?.prUrl && (
                             <Button

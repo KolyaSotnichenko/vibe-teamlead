@@ -1,9 +1,9 @@
 /**
  * Plan dependency graph (@xyflow/react). Lazy-loaded with the Plan tab.
- * Phases are columns; subtasks are nodes whose status is carried by fill + glyph + word.
+ * Phases run left → right or top → bottom (whichever fits the panel; toggle in the corner); subtasks are nodes whose status is carried by fill + glyph + word.
  */
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Background,
@@ -19,14 +19,14 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
-import { Maximize2, Minus, Plus } from 'lucide-react';
+import { ArrowDown, ArrowRight, Maximize2, Minus, Plus } from 'lucide-react';
 import type { WorkspacePlan, WorkspacePlanSubtask } from '../../../../shared/types';
 import { cn } from '../../../lib/utils';
-import { layoutPlan, NODE_HEIGHT, NODE_WIDTH, PHASE_PADDING } from './plan-layout';
+import { bestDirection, layoutPlan, NODE_WIDTH, PHASE_PADDING, type PlanDirection } from './plan-layout';
 import { SubtaskStatusLabel } from './workspace-ui';
 
 type PhaseNodeData = { index: number; name: string; done: number; total: number };
-type SubtaskNodeData = { subtask: WorkspacePlanSubtask; dimmed: boolean };
+type SubtaskNodeData = { subtask: WorkspacePlanSubtask; dimmed: boolean; height: number };
 type PhaseNodeType = Node<PhaseNodeData, 'phase'>;
 type SubtaskNodeType = Node<SubtaskNodeData, 'subtask'>;
 
@@ -36,7 +36,8 @@ const PhaseNode = memo(function PhaseNode({ data, width, height }: NodeProps<Pha
   const { t } = useTranslation(['tasks']);
   return (
     <div style={{ width, height }} className="border border-border bg-background/60">
-      <Handle type="target" position={Position.Top} className={hiddenHandle} isConnectable={false} />
+      <Handle id="t" type="target" position={Position.Top} className={hiddenHandle} isConnectable={false} />
+      <Handle id="l" type="target" position={Position.Left} className={hiddenHandle} isConnectable={false} />
       <div className="flex h-11 items-center justify-between gap-3 border-b border-border" style={{ paddingLeft: PHASE_PADDING, paddingRight: PHASE_PADDING }}>
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
@@ -48,7 +49,8 @@ const PhaseNode = memo(function PhaseNode({ data, width, height }: NodeProps<Pha
           {data.done}/{data.total}
         </span>
       </div>
-      <Handle type="source" position={Position.Bottom} className={hiddenHandle} isConnectable={false} />
+      <Handle id="b" type="source" position={Position.Bottom} className={hiddenHandle} isConnectable={false} />
+      <Handle id="r" type="source" position={Position.Right} className={hiddenHandle} isConnectable={false} />
     </div>
   );
 });
@@ -59,7 +61,8 @@ const SubtaskNode = memo(function SubtaskNode({ data, selected }: NodeProps<Subt
   const inverted = s === 'completed';
   return (
     <div
-      style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
+      style={{ width: NODE_WIDTH, height: data.height }}
+      title={subtask.title}
       className={cn(
         'relative flex flex-col gap-1.5 px-3 py-2.5 transition-opacity',
         s === 'completed' && 'border border-primary bg-primary text-primary-foreground',
@@ -81,7 +84,7 @@ const SubtaskNode = memo(function SubtaskNode({ data, selected }: NodeProps<Subt
         </span>
         <SubtaskStatusLabel status={s} inverted={inverted} />
       </div>
-      <p className="line-clamp-2 text-[13px] font-medium leading-snug">{subtask.title}</p>
+      <p className="line-clamp-3 text-[13px] font-medium leading-[18px]">{subtask.title}</p>
       {subtask.acIds.length > 0 && (
         <div className="mt-auto flex flex-wrap gap-1">
           {subtask.acIds.map((ac) => (
@@ -105,7 +108,7 @@ const SubtaskNode = memo(function SubtaskNode({ data, selected }: NodeProps<Subt
 
 const nodeTypes = { phase: PhaseNode, subtask: SubtaskNode };
 
-function ZoomControls() {
+function ZoomControls({ direction, onDirection }: { direction: PlanDirection; onDirection: (d: PlanDirection) => void }) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const { t } = useTranslation(['tasks']);
   const btn =
@@ -121,8 +124,32 @@ function ZoomControls() {
       <button type="button" className={btn} onClick={() => fitView({ padding: 0.12 })} aria-label={t('tasks:workspace.plan.fitView')}>
         <Maximize2 className="h-4 w-4" />
       </button>
+      <button
+        type="button"
+        className={cn(btn, 'border-l border-border')}
+        onClick={() => onDirection(direction === 'LR' ? 'TB' : 'LR')}
+        aria-label={direction === 'LR' ? t('tasks:workspace.plan.layoutTopDown') : t('tasks:workspace.plan.layoutLeftRight')}
+        title={direction === 'LR' ? t('tasks:workspace.plan.layoutTopDown') : t('tasks:workspace.plan.layoutLeftRight')}
+      >
+        {direction === 'LR' ? <ArrowDown className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
+      </button>
     </Panel>
   );
+}
+
+/** Re-fit when the direction changes: the whole graph moves. */
+function FitOnChange({ direction }: { direction: PlanDirection }) {
+  const { fitView } = useReactFlow();
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const id = requestAnimationFrame(() => fitView({ padding: 0.08, maxZoom: 1 }));
+    return () => cancelAnimationFrame(id);
+  }, [direction, fitView]);
+  return null;
 }
 
 interface PlanGraphProps {
@@ -133,7 +160,20 @@ interface PlanGraphProps {
 
 export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
   const { t } = useTranslation(['tasks']);
-  const layout = useMemo(() => layoutPlan(plan), [plan]);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [viewWidth, setViewWidth] = useState(1000);
+  // null = automatic: whichever direction shows the plan larger in this panel
+  const [chosen, setChosen] = useState<PlanDirection | null>(null);
+  useLayoutEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    setViewWidth(el.clientWidth || 1000);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => setViewWidth(el.clientWidth || 1000)) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  const direction = chosen ?? bestDirection(plan, viewWidth, 600);
+  const layout = useMemo(() => layoutPlan(plan, direction), [plan, direction]);
 
   const related = useMemo(() => {
     if (!selectedId) return null;
@@ -168,7 +208,7 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
       });
     }
     for (const phase of layout.phases) {
-      for (const { subtask, x, y } of phase.subtasks) {
+      for (const { subtask, x, y, height } of phase.subtasks) {
         out.push({
           id: subtask.id,
           type: 'subtask',
@@ -176,8 +216,8 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
           extent: 'parent',
           position: { x, y },
           width: NODE_WIDTH,
-          height: NODE_HEIGHT,
-          data: { subtask, dimmed: related !== null && !related.has(subtask.id) },
+          height,
+          data: { subtask, dimmed: related !== null && !related.has(subtask.id), height },
           selected: subtask.id === selectedId,
           draggable: false,
           ariaLabel: `${subtask.id} ${subtask.title}, ${t(`tasks:workspace.subtaskStatus.${subtask.status}`)}`,
@@ -205,7 +245,7 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
             id: `e:${dep}->${s.id}`,
             source: dep,
             target: s.id,
-            sourceHandle: crossPhase ? 'b' : 'r',
+            sourceHandle: crossPhase && direction === 'TB' ? 'b' : 'r',
             targetHandle: 'l',
             type: 'smoothstep',
             style: { stroke: 'var(--foreground)', strokeWidth: related && touchesSelection ? 2 : 1, opacity: active ? 1 : 0.2 },
@@ -225,6 +265,8 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
           id: `pe:${dep}->${phase.id}`,
           source: `phase:${dep}`,
           target: `phase:${phase.id}`,
+          sourceHandle: direction === 'LR' ? 'r' : 'b',
+          targetHandle: direction === 'LR' ? 'l' : 't',
           type: 'smoothstep',
           style: { stroke: 'var(--muted-foreground)', strokeWidth: 1, strokeDasharray: '4 4' },
           markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--muted-foreground)', width: 14, height: 14 },
@@ -235,7 +277,7 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
       }
     }
     return out;
-  }, [plan, related, selectedId]);
+  }, [plan, related, selectedId, direction]);
 
   const onNodeClick = useCallback(
     (_: unknown, node: Node) => {
@@ -248,7 +290,7 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
   const height = Math.min(640, Math.max(280, layout.height + 64));
 
   return (
-    <section style={{ height }} className="vt-plan-graph border border-foreground bg-background" aria-label={t('tasks:workspace.plan.graphLabel')}>
+    <section ref={sectionRef} style={{ height }} className="vt-plan-graph border border-foreground bg-background" aria-label={t('tasks:workspace.plan.graphLabel')}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -274,7 +316,8 @@ export function PlanGraph({ plan, selectedId, onSelect }: PlanGraphProps) {
         preventScrolling={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--border)" />
-        <ZoomControls />
+        <FitOnChange direction={direction} />
+        <ZoomControls direction={direction} onDirection={setChosen} />
       </ReactFlow>
     </section>
   );

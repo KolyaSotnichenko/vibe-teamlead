@@ -26,6 +26,10 @@
       "title": "Агенти",
       "description": "Типова модель і фреймворк"
     },
+    "memory": {
+      "title": "Пам'ять",
+      "description": "Що агенти дізнаються й використовують знову"
+    },
     "paths": {
       "title": "Шляхи",
       "description": "Шляхи до CLI та фреймворку"
@@ -337,7 +341,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "Синхронізація GitHub Issues",
+      "description": "Репозиторій, гілки, PR",
       "integrationTitle": "Інтеграція з GitHub",
       "integrationDescription": "Підключіть GitHub для відстеження issues",
       "syncDescription": "Синхронізація з GitHub Issues",
@@ -553,9 +557,11 @@
         "description": "Відстеження прогресу збірки"
       },
       "memory": {
-        "name": "Пам’ять",
-        "description": "Граф знань для контексту між сеансами",
-        "notConfigured": "Потрібно налаштувати пам’ять (див. налаштування пам’яті)"
+        "name": "Пам'ять проєкту",
+        "description": "Вбудована: агенти шукають і додають спогади інструментами застосунку",
+        "off": "Вимкнено в «Налаштування → Пам'ять»",
+        "managedInSettings": "Вмикається в «Налаштування → Пам'ять»",
+        "notConfigured": "Вимкнено в «Налаштування → Пам'ять»"
       }
     },
     "customServers": "Власні сервери",
@@ -1002,8 +1008,8 @@
     },
     "github": {
       "title": "Інтеграція з GitHub",
-      "enableIssues": "Увімкнути GitHub Issues",
-      "enableIssuesDescription": "Синхронізуйте issues з GitHub і автоматично створюйте задачі",
+      "enableIssues": "Підключити GitHub",
+      "enableIssuesDescription": "Репозиторій і токен для pull request-ів та issues",
       "connectedViaCli": "Підключено через GitHub CLI",
       "authenticatedAs": "Автентифіковано як {{username}}",
       "authenticatedViaOAuth": "Автентифіковано через GitHub OAuth (gh CLI)",
@@ -1064,5 +1070,9 @@
     "noProjects": "Проєктів ще немає",
     "addProject": "Додати проєкт...",
     "removeProject": "Вилучити проєкт"
+  },
+  "memorySettings": {
+    "howItWorks": "Після кожної підзадачі застосунок зберігає, що дізнався кодер (підводні камені, патерни, що не спрацювало). Перед стартом архітектора, планувальника, кодера й QA найдоречніші спогади потрапляють у їхній промпт, і вони самі можуть шукати й додавати спогади. Пам'ять локальна, окремо для кожного проєкту, в ~/.vibe-teamlead/memories.",
+    "whereToSee": "Що збережено — у «Контекст → Спогади». Модель ембеддингів шукає спогади за змістом; якщо її нема, вони все одно зберігаються, а пошук іде за ключовими словами."
   }
 }

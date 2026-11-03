@@ -85,7 +85,8 @@ export function GitHubIntegration({
   // Fetch branches when GitHub is enabled and project path is available
   useEffect(() => {
     debugLog(`useEffect[branches] - githubEnabled: ${envConfig?.githubEnabled}, projectPath: ${projectPath}`);
-    if (envConfig?.githubEnabled && projectPath) {
+    // Branches are local git: the base branch can be chosen with or without GitHub
+    if (projectPath) {
       debugLog('useEffect[branches] - Triggering fetchBranches');
       fetchBranches();
     } else {
@@ -361,6 +362,17 @@ export function GitHubIntegration({
 
           <Separator />
 
+          <AutoSyncToggle
+            enabled={envConfig.githubAutoSync || false}
+            onToggle={(checked) => updateEnvConfig({ githubAutoSync: checked })}
+          />
+        </>
+      )}
+
+      {/* Git settings work without GitHub too: worktrees branch from and merge into this branch */}
+      <>
+          <Separator />
+
           {/* Default Branch Selector */}
           {projectPath && (
             <div className="space-y-2">
@@ -435,15 +447,7 @@ export function GitHubIntegration({
               </div>
             </>
           )}
-
-          <Separator />
-
-          <AutoSyncToggle
-            enabled={envConfig.githubAutoSync || false}
-            onToggle={(checked) => updateEnvConfig({ githubAutoSync: checked })}
-          />
-        </>
-      )}
+      </>
     </div>
   );
 }

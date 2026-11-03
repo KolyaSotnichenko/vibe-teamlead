@@ -31,7 +31,7 @@ export function ToolsStep({ onNext, onBack, onSkip }: ToolsStepProps) {
 
         <ToolsChecklist />
 
-        <div className="mt-10 flex items-center justify-between border-t border-border pt-6">
+        <div className="sticky bottom-0 z-10 mt-10 flex items-center justify-between border-t border-border bg-card py-4">
           <Button variant="ghost" onClick={onBack} className="min-h-11 text-muted-foreground hover:text-foreground">
             {t('tools.buttons.back')}
           </Button>

@@ -53,6 +53,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { TerminalFontSettings } from './terminal-font-settings/TerminalFontSettings';
+import { MemorySettings } from './MemorySettings';
 import { ClaudeSettings } from './ClaudeSettings';
 import { ToolsSettings } from './ToolsSettings';
 import { ProjectSelector } from './ProjectSelector';
@@ -69,7 +70,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'tools' | 'agent' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'tools' | 'agent' | 'memory' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -85,6 +86,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'claude', icon: KeyRound },
   { id: 'tools', icon: Wrench },
   { id: 'agent', icon: Bot },
+  { id: 'memory', icon: Database },
   { id: 'paths', icon: FolderOpen },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
@@ -95,8 +97,7 @@ const projectNavItemsConfig: NavItemConfig<ProjectSettingsSection>[] = [
   { id: 'general', icon: Settings2 },
   { id: 'linear', icon: Zap },
   { id: 'github', icon: Github },
-  { id: 'gitlab', icon: GitLabIcon },
-  { id: 'memory', icon: Database }
+  { id: 'gitlab', icon: GitLabIcon }
 ];
 
 /**
@@ -195,6 +196,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <TerminalFontSettings />;
       case 'agent':
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="agent" />;
+      case 'memory':
+        return <MemorySettings settings={settings} onSettingsChange={setSettings} />;
       case 'paths':
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="paths" />;
       case 'claude':

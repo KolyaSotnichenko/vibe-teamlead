@@ -285,7 +285,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
                         onClick={() => handleSelect(option.value)}
                         onMouseEnter={() => setFocusedIndex(index)}
                         className={cn(
-                          'relative flex w-full cursor-default select-none items-center',
+                          'relative flex w-full cursor-pointer select-none items-center',
                           'rounded-md py-2 pl-8 pr-2 text-sm outline-none',
                           'hover:bg-accent hover:text-accent-foreground',
                           'transition-colors duration-150',

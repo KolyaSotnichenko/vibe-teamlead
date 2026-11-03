@@ -84,7 +84,7 @@
   },
   "grid": {
     "title": "Agent Terminals",
-    "emptyBody": "Spawn multiple terminals to run Claude agents in parallel. Use <kbd>Ctrl+T</kbd> to create a new terminal.",
+    "emptyBody": "Spawn multiple terminals to run Claude agents in parallel. Use <kbd>⌘T</kbd> to create a new terminal.",
     "newTerminal": "New Terminal",
     "count": "{{count}} / {{max}} terminals",
     "history": "History",

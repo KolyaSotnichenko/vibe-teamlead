@@ -52,11 +52,41 @@ const PHASE_ICONS: Record<TaskLogPhase, typeof Pencil> = {
   validation: FlaskConical
 };
 
-const PHASE_COLORS: Record<TaskLogPhase, string> = {
-  planning: 'text-amber-500 bg-amber-500/10 border-amber-500/30',
-  coding: 'text-info bg-info/10 border-info/30',
-  validation: 'text-purple-500 bg-purple-500/10 border-purple-500/30'
-};
+// The active phase is framed in ink; vermilion stays for what needs attention
+const ACTIVE_PHASE_CLASS = 'text-foreground bg-secondary/40 border-foreground/40';
+
+/** One row of a phase log: a tool call (start + its end, when it came) or any other entry. */
+export type LogItem =
+  | { kind: 'tool'; start: TaskLogEntry; end?: TaskLogEntry }
+  | { kind: 'entry'; entry: TaskLogEntry };
+
+/**
+ * Pair each tool_end with the earliest unmatched tool_start of the same tool, so a
+ * call shows as one row instead of "Running …" followed by a separate "Done". Pure.
+ */
+export function pairToolEntries(entries: TaskLogEntry[]): LogItem[] {
+  const items: LogItem[] = [];
+  const open = new Map<string, Array<{ kind: 'tool'; start: TaskLogEntry; end?: TaskLogEntry }>>();
+  for (const entry of entries) {
+    if (entry.type === 'tool_start' && entry.tool_name) {
+      const item = { kind: 'tool' as const, start: entry };
+      items.push(item);
+      const queue = open.get(entry.tool_name) ?? [];
+      queue.push(item);
+      open.set(entry.tool_name, queue);
+      continue;
+    }
+    if (entry.type === 'tool_end' && entry.tool_name) {
+      const item = open.get(entry.tool_name)?.shift();
+      if (item) {
+        item.end = entry;
+        continue;
+      }
+    }
+    items.push({ kind: 'entry', entry });
+  }
+  return items;
+}
 
 // Map log phases to config phase keys
 // Note: 'planning' log phase covers both spec creation and implementation planning
@@ -193,9 +223,9 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, i
 
   // Memoize sorted entries to avoid re-calculating on every render
   // Entries are naturally in chronological order (oldest first from append())
-  const displayedEntries = useMemo(() => {
-    const entries = phaseLog?.entries || [];
-    return logOrder === 'reverse-chronological' ? [...entries].reverse() : entries;
+  const displayedItems = useMemo(() => {
+    const items = pairToolEntries(phaseLog?.entries || []);
+    return logOrder === 'reverse-chronological' ? items.reverse() : items;
   }, [phaseLog?.entries, logOrder]);
 
   const getStatusBadge = () => {
@@ -247,7 +277,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, i
           className={cn(
             'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
             'hover:bg-secondary/50',
-            status === 'active' && !isInterrupted && PHASE_COLORS[phase],
+            status === 'active' && !isInterrupted && ACTIVE_PHASE_CLASS,
             isInterrupted && 'border-warning/30 bg-warning/5',
             status === 'completed' && 'border-success/30 bg-success/5',
             status === 'failed' && 'border-destructive/30 bg-destructive/5',
@@ -260,7 +290,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, i
             ) : (
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             )}
-            <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
+            <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? 'text-foreground' : 'text-muted-foreground')} />
             <span className="font-medium text-sm">{t(PHASE_LABEL_KEYS[phase])}</span>
             {hasEntries && (
               <span className="text-xs text-muted-foreground">
@@ -292,13 +322,105 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, i
           {!hasEntries ? (
             <p className="text-xs text-muted-foreground italic">{t('tasks:logs.empty')}</p>
           ) : (
-            displayedEntries.map((entry) => (
-              <LogEntry key={`${entry.timestamp}-${entry.type}-${entry.content}`} entry={entry} />
-            ))
+            displayedItems.map((item) =>
+              item.kind === 'tool' ? (
+                <ToolCallRow
+                  key={`${item.start.timestamp}-tool-${item.start.tool_input ?? item.start.content}`}
+                  start={item.start}
+                  end={item.end}
+                  live={status === 'active' && !isTaskStuck}
+                />
+              ) : (
+                <LogEntry key={`${item.entry.timestamp}-${item.entry.type}-${item.entry.content}`} entry={item.entry} />
+              )
+            )
           )}
         </div>
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+const TOOL_ROW_CLASS = 'text-foreground bg-secondary/40';
+
+/** Icon and label of a tool, all in the same neutral style: a tool call is not a signal. */
+function toolInfo(toolName: string, t: (key: string) => string) {
+  switch (toolName) {
+    case 'Read':
+      return { icon: FileText, label: t('tasks:logs.tools.reading'), color: TOOL_ROW_CLASS };
+    case 'Glob':
+      return { icon: FolderSearch, label: t('tasks:logs.tools.searchingFiles'), color: TOOL_ROW_CLASS };
+    case 'Grep':
+      return { icon: Search, label: t('tasks:logs.tools.searchingCode'), color: TOOL_ROW_CLASS };
+    case 'Edit':
+      return { icon: Pencil, label: t('tasks:logs.tools.editing'), color: TOOL_ROW_CLASS };
+    case 'Write':
+      return { icon: FileCode, label: t('tasks:logs.tools.writing'), color: TOOL_ROW_CLASS };
+    case 'Bash':
+      return { icon: Terminal, label: t('tasks:logs.tools.command'), color: TOOL_ROW_CLASS };
+    default: {
+      // mcp__server__tool → "tool" (the server name adds nothing for the reader)
+      const mcp = toolName.match(/^mcp__[^_]+(?:[-_][^_]+)*?__(.+)$/);
+      return { icon: Wrench, label: (mcp ? mcp[1] : toolName).replace(/_/g, ' '), color: TOOL_ROW_CLASS };
+    }
+  }
+}
+
+/** One tool call: what ran, whether it finished, and its output on demand. */
+function ToolCallRow({ start, end, live }: { start: TaskLogEntry; end?: TaskLogEntry; live: boolean }) {
+  const { t } = useTranslation(['tasks']);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { icon: Icon, label, color } = toolInfo(start.tool_name ?? '', t);
+  const detail = end?.detail;
+  const pending = !end && live;
+  return (
+    <div className="flex flex-col">
+      <div className={cn('flex items-center gap-2 px-2 py-1 text-xs min-w-0', color)}>
+        <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+        <span className="font-medium shrink-0">{label}</span>
+        {start.tool_input && (
+          <span className="font-mono text-muted-foreground truncate min-w-0" title={start.tool_input}>
+            {start.tool_input}
+          </span>
+        )}
+        {start.subphase && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground border-muted-foreground/30 shrink-0">
+            {start.subphase}
+          </Badge>
+        )}
+        <span className="ml-auto flex items-center gap-2 shrink-0">
+          {end && (
+            <span className="flex items-center gap-1 text-muted-foreground" title={t('tasks:logs.done')}>
+              <CheckCircle2 className="h-3 w-3" />
+              <span className="sr-only">{t('tasks:logs.done')}</span>
+            </span>
+          )}
+          {pending && <span className="h-2 w-2 bg-foreground animate-pulse" aria-label={t('tasks:logs.tools.running')} />}
+          {detail && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              aria-expanded={isExpanded}
+              className={cn(
+                'flex items-center gap-1 text-[10px] px-1.5 py-0.5',
+                'text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors',
+                isExpanded && 'bg-secondary text-foreground'
+              )}
+            >
+              {isExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
+              <span>{isExpanded ? t('tasks:logs.hideOutput') : t('tasks:logs.showOutput')}</span>
+            </button>
+          )}
+        </span>
+      </div>
+      {detail && isExpanded && (
+        <div className="mt-1 ml-5 p-2 bg-secondary/30 border border-border overflow-x-auto">
+          <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-words font-mono max-h-[300px] overflow-y-auto">
+            {detail}
+          </pre>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -312,24 +434,7 @@ function LogEntry({ entry }: LogEntryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasDetail = Boolean(entry.detail);
 
-  const getToolInfo = (toolName: string) => {
-    switch (toolName) {
-      case 'Read':
-        return { icon: FileText, label: t('tasks:logs.tools.reading'), color: 'text-blue-500 bg-blue-500/10' };
-      case 'Glob':
-        return { icon: FolderSearch, label: t('tasks:logs.tools.searchingFiles'), color: 'text-amber-500 bg-amber-500/10' };
-      case 'Grep':
-        return { icon: Search, label: t('tasks:logs.tools.searchingCode'), color: 'text-green-500 bg-green-500/10' };
-      case 'Edit':
-        return { icon: Pencil, label: t('tasks:logs.tools.editing'), color: 'text-purple-500 bg-purple-500/10' };
-      case 'Write':
-        return { icon: FileCode, label: t('tasks:logs.tools.writing'), color: 'text-cyan-500 bg-cyan-500/10' };
-      case 'Bash':
-        return { icon: Terminal, label: t('tasks:logs.tools.running'), color: 'text-orange-500 bg-orange-500/10' };
-      default:
-        return { icon: Wrench, label: toolName, color: 'text-muted-foreground bg-muted' };
-    }
-  };
+  const getToolInfo = (toolName: string) => toolInfo(toolName, t);
 
   const formatTime = (timestamp: string) => {
     try {
@@ -355,7 +460,7 @@ function LogEntry({ entry }: LogEntryProps) {
     return (
       <div className="flex flex-col">
         <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs', color)}>
-          <Icon className="h-3 w-3 animate-pulse" />
+          <Icon className="h-3 w-3 text-muted-foreground" />
           <span className="font-medium">{label}</span>
           {entry.tool_input && (
             <span className="text-muted-foreground truncate max-w-[500px]" title={entry.tool_input}>

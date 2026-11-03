@@ -26,6 +26,10 @@
       "title": "Agent Settings",
       "description": "Default model and framework"
     },
+    "memory": {
+      "title": "Memory",
+      "description": "What agents learn and reuse"
+    },
     "paths": {
       "title": "Paths",
       "description": "CLI tools and framework paths"
@@ -337,7 +341,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "GitHub issues sync",
+      "description": "Repository, branches, PRs",
       "integrationTitle": "GitHub Integration",
       "integrationDescription": "Connect to GitHub for issue tracking",
       "syncDescription": "Sync with GitHub Issues",
@@ -553,9 +557,11 @@
         "description": "Build progress tracking"
       },
       "memory": {
-        "name": "Memory",
-        "description": "Knowledge graph for cross-session context",
-        "notConfigured": "Requires memory configuration (see Memory settings)"
+        "name": "Project memory",
+        "description": "Built in: agents search and add memories with the app's tools",
+        "off": "Turned off in Settings → Memory",
+        "managedInSettings": "On or off in Settings → Memory",
+        "notConfigured": "Turned off in Settings → Memory"
       }
     },
     "customServers": "Custom Servers",
@@ -998,8 +1004,8 @@
     },
     "github": {
       "title": "GitHub Integration",
-      "enableIssues": "Enable GitHub Issues",
-      "enableIssuesDescription": "Sync issues from GitHub and create tasks automatically",
+      "enableIssues": "Connect GitHub",
+      "enableIssuesDescription": "Repository and token for pull requests and issues",
       "connectedViaCli": "Connected via GitHub CLI",
       "authenticatedAs": "Authenticated as {{username}}",
       "authenticatedViaOAuth": "Authenticated via GitHub OAuth (gh CLI)",
@@ -1060,5 +1066,9 @@
     "noProjects": "No projects yet",
     "addProject": "Add Project...",
     "removeProject": "Remove project"
+  },
+  "memorySettings": {
+    "howItWorks": "After each subtask the app saves what the coder learned (gotchas, patterns, what didn't work). Before the architect, planner, coder and QA start, the memories most relevant to their task go into their prompt, and they can search and add memories themselves. Memory is local, per project, in ~/.vibe-teamlead/memories.",
+    "whereToSee": "See what's stored in Context → Memories. The embedding model finds memories by meaning; without one they are still saved and found by keywords."
   }
 }

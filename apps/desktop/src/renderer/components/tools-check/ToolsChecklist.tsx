@@ -179,13 +179,15 @@ function SummaryLine({ summary, securityQaOn }: { summary: AreaSummary[]; securi
     <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
       {summary.map(({ area, blockers }) => {
         const ready = blockers.length === 0;
+        // An optional check that is switched off needs nothing from the user: neutral, not a signal
+        const optionalOff = area === 'security_qa' && !securityQaOn;
         const needs = list(
           blockers.map((b) => (b.notRunning ? t('tools.summary.running', { tool: TOOL_NAMES[b.id] }) : TOOL_NAMES[b.id]))
         );
         return (
           <li key={area} className="flex items-baseline gap-1.5">
-            <span aria-hidden="true" className={cn('font-mono text-xs', ready ? 'text-foreground' : 'text-destructive')}>
-              {ready ? '✓' : '✕'}
+            <span aria-hidden="true" className={cn('font-mono text-xs', ready || optionalOff ? 'text-muted-foreground' : 'text-destructive')}>
+              {ready ? '✓' : optionalOff ? '–' : '✕'}
             </span>
             <span className="font-medium text-foreground">{t(`tools.areas.${area}.title`)}:</span>
             <span className={ready ? 'text-muted-foreground' : 'text-foreground'}>

@@ -4,7 +4,7 @@ import { IPC_CHANNELS, AUTO_BUILD_PATHS, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_M
 import type { IPCResult, WorktreeStatus, WorktreeDiff, WorktreeDiffFile, WorktreeMergeResult, WorktreeDiscardResult, WorktreeListResult, WorktreeListItem, WorktreeCreatePROptions, WorktreeCreatePRResult, SupportedIDE, SupportedTerminal, SupportedCLI, AppSettings } from '../../../shared/types';
 import path from 'path';
 import { minimatch } from 'minimatch';
-import { existsSync, readdirSync, statSync, readFileSync, promises as fsPromises } from 'fs';
+import { existsSync, readdirSync, realpathSync, statSync, readFileSync, promises as fsPromises } from 'fs';
 import { execFileSync, spawn, spawnSync, exec, execFile } from 'child_process';
 import { homedir } from 'os';
 import { projectStore } from '../../project-store';
@@ -46,6 +46,25 @@ export const GIT_BRANCH_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*[a-zA-Z0-9]$|^[a-zA
  * to the main project and returns its current branch instead of the worktree's branch.
  * This could cause deletion of the wrong branch.
  */
+/**
+ * True when `dir` is the root of its own git worktree (it has a `.git` entry and git
+ * agrees that `dir` is the top level). A leftover folder inside the project is not.
+ */
+export function isOwnWorktree(dir: string): boolean {
+  if (!existsSync(path.join(dir, '.git'))) return false;
+  try {
+    const top = execFileSync(getToolPath('git'), ['rev-parse', '--show-toplevel'], {
+      cwd: dir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10_000,
+    }).trim();
+    return realpathSync(top) === realpathSync(dir);
+  } catch {
+    return false;
+  }
+}
+
 export function validateWorktreeBranch(
   detectedBranch: string | null,
   expectedBranch: string
@@ -2213,7 +2232,8 @@ export function registerWorktreeHandlers(
                     }
                   } else {
                     debug('Worktree cleanup failed (non-fatal):', cleanupResult.warnings);
-                    // Non-fatal - merge succeeded, cleanup can be done manually
+                    // Non-fatal - merge succeeded; say so, so the leftover folder isn't a mystery
+                    message = `Changes merged, but the task folder could not be removed (${cleanupResult.warnings[0] ?? 'unknown error'}). Delete it from Worktrees.`;
                   }
 
                   // Log any warnings for debugging
@@ -2707,6 +2727,23 @@ export function registerWorktreeHandlers(
         // Helper to process a single worktree entry (async)
         const processWorktreeEntry = async (entry: string, entryPath: string): Promise<WorktreeListItem | null> => {
           try {
+            // A folder left behind by a cleanup that only half worked is no longer a
+            // worktree: git walks up to the project and would report its branch (main).
+            // Show it as a leftover to delete, never as a task branch to merge.
+            if (!isOwnWorktree(entryPath)) {
+              return {
+                specName: entry,
+                path: entryPath,
+                branch: '',
+                baseBranch: '',
+                commitCount: 0,
+                filesChanged: 0,
+                additions: 0,
+                deletions: 0,
+                isOrphaned: true
+              };
+            }
+
             // Get branch info (async)
             const branchResult = await execFileAsync(getToolPath('git'), ['rev-parse', '--abbrev-ref', 'HEAD'], {
               cwd: entryPath,

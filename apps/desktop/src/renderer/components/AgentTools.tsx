@@ -225,17 +225,11 @@ const MCP_SERVERS: Record<string, { name: string; icon: React.ElementType; tools
     icon: Search,
     tools: ['mcp__context7__resolve-library-id', 'mcp__context7__query-docs'],
   },
+  // Built-in project memory: served by the app's own tools server, switched in Settings → Memory
   'memory': {
-    name: 'Memory',
-    // Note: mcp__graphiti-memory__ tool names are the external MCP server's protocol names
+    name: 'Project memory',
     icon: Brain,
-    tools: [
-      'mcp__graphiti-memory__search_nodes',
-      'mcp__graphiti-memory__search_facts',
-      'mcp__graphiti-memory__add_episode',
-      'mcp__graphiti-memory__get_episodes',
-      'mcp__graphiti-memory__get_entity_edge',
-    ],
+    tools: ['mcp__vibe-teamlead__search_memory', 'mcp__vibe-teamlead__remember'],
   },
   'vibe-teamlead': {
     name: 'Vibe Teamlead Tools',
@@ -287,6 +281,9 @@ const MCP_SERVERS: Record<string, { name: string; icon: React.ElementType; tools
   },
 };
 
+// Part of the app: always there for the agents that use them (memory follows Settings → Memory)
+const BUILT_IN_SERVERS = new Set(['vibe-teamlead', 'memory']);
+
 // All available MCP servers that can be added to agents
 const ALL_MCP_SERVERS = [
   'context7',
@@ -319,6 +316,7 @@ interface AgentCardProps {
 }
 
 function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServerStates, customServers, onAddMcp, onRemoveMcp }: AgentCardProps) {
+  const memoryOn = useSettingsStore((state) => state.settings.memoryEnabled !== false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const { t } = useTranslation(['settings']);
@@ -355,19 +353,19 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
 
     // Filter out MCPs that are disabled at project level (custom servers are always enabled)
     return combinedMcps.filter(mcp => {
+      if (mcp === 'memory') return memoryOn;
       if (!mcpServerStates) return true; // No project config, show all
       // Custom servers are always available if they exist
       if (customServers.some(s => s.id === mcp)) return true;
       switch (mcp) {
         case 'context7': return mcpServerStates.context7Enabled !== false;
-        case 'memory': return mcpServerStates.memoryEnabled !== false;
         case 'linear': return mcpServerStates.linearMcpEnabled !== false;
         case 'electron': return mcpServerStates.electronEnabled !== false;
         case 'puppeteer': return mcpServerStates.puppeteerEnabled !== false;
         default: return true;
       }
     });
-  }, [config, overrides, mcpServerStates, customServers]);
+  }, [config, overrides, mcpServerStates, customServers, memoryOn]);
 
   // Check if an MCP is a custom addition (not in defaults)
   const isCustomAdd = (mcpId: string) => {
@@ -385,7 +383,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
   const customServerIds = customServers.map(s => s.id);
   const allAvailableMcpIds = [...ALL_MCP_SERVERS, ...customServerIds];
   const availableMcps = allAvailableMcpIds.filter(
-    mcp => !effectiveMcps.includes(mcp) && !removedMcps.includes(mcp) && mcp !== 'vibe-teamlead'
+    mcp => !effectiveMcps.includes(mcp) && !removedMcps.includes(mcp) && !BUILT_IN_SERVERS.has(mcp)
   );
 
   return (
@@ -450,7 +448,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
                   const serverInfo = allMcpServers[server];
                   const ServerIcon = serverInfo?.icon || Server;
                   const isAdded = isCustomAdd(server);
-                  const canRemove = server !== 'vibe-teamlead';
+                  const canRemove = !BUILT_IN_SERVERS.has(server);
 
                   return (
                     <div key={server} className="flex items-center justify-between group">
@@ -936,7 +934,7 @@ export function AgentTools() {
   // Count enabled MCP servers
   const enabledCount = [
     mcpServers.context7Enabled !== false,
-    mcpServers.memoryEnabled && envConfig?.memoryProviderConfig,
+    settings.memoryEnabled !== false,
     mcpServers.linearMcpEnabled !== false && envConfig?.linearEnabled,
     mcpServers.electronEnabled,
     mcpServers.puppeteerEnabled,
@@ -1063,17 +1061,16 @@ export function AgentTools() {
                     <div>
                       <span className="text-sm font-medium">{t('settings:mcp.servers.memory.name')}</span>
                       <p className="text-xs text-muted-foreground">
-                        {envConfig.memoryProviderConfig
+                        {settings.memoryEnabled !== false
                           ? t('settings:mcp.servers.memory.description')
-                          : t('settings:mcp.servers.memory.notConfigured')}
+                          : t('settings:mcp.servers.memory.off')}
                       </p>
                     </div>
                   </div>
-                  <Switch
-                    checked={mcpServers.memoryEnabled !== false && !!envConfig.memoryProviderConfig}
-                    onCheckedChange={(checked) => updateMcpServer('memoryEnabled', checked)}
-                    disabled={!envConfig.memoryProviderConfig}
-                  />
+                  {/* Built in: no switch here — one place to turn it on or off */}
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {t('settings:mcp.servers.memory.managedInSettings')}
+                  </span>
                 </div>
 
                 {/* Linear */}

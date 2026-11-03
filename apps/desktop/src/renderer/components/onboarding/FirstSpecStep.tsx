@@ -177,7 +177,7 @@ export function FirstSpecStep({ onNext, onBack, onSkip, onOpenTaskCreator }: Fir
         </p>
 
         {/* Action Buttons */}
-        <div className="flex justify-between items-center mt-10 pt-6 border-t border-border">
+        <div className="sticky bottom-0 z-10 mt-10 flex justify-between items-center border-t border-border bg-card py-4">
           <Button
             variant="ghost"
             onClick={onBack}

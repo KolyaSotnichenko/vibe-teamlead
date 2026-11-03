@@ -1,3 +1,4 @@
+import type { TaskLogs } from '../../../shared/types';
 /**
  * Mock implementation for task operations
  */
@@ -89,10 +90,38 @@ export const taskMock = {
   }),
 
   // Task logs operations
-  getTaskLogs: async () => ({
-    success: true,
-    data: null
-  }),
+  getTaskLogs: async (_projectId: string, specId: string) => {
+    // Sample phase logs so the Logs tab can be reviewed in the browser
+    const at = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    const e = (m: number, type: string, content: string, extra: Record<string, string> = {}) => ({ timestamp: at(m), type, content, phase: 'coding', ...extra });
+    return {
+      success: true as const,
+      data: {
+        spec_id: specId,
+        created_at: at(30),
+        updated_at: at(0),
+        phases: {
+          planning: { phase: 'planning', status: 'completed', started_at: at(30), completed_at: at(20), entries: [{ timestamp: at(25), type: 'text', content: 'Spec written', phase: 'planning' }] },
+          coding: {
+            phase: 'coding', status: 'active', started_at: at(20), completed_at: null,
+            entries: [
+              e(9, 'text', 'Starting subtask 1-1: add the rate limiter middleware'),
+              e(8, 'tool_start', '', { tool_name: 'Read', tool_input: 'apps/api/src/main.ts' }),
+              e(8, 'tool_end', '', { tool_name: 'Read', detail: 'import { NestFactory } from "@nestjs/core";' }),
+              e(7, 'tool_start', '', { tool_name: 'Bash', tool_input: 'cat apps/api/prisma/schema.prisma' }),
+              e(7, 'tool_end', '', { tool_name: 'Bash', detail: 'model User {\n  id String @id\n}' }),
+              e(6, 'tool_start', '', { tool_name: 'mcp__vibe-teamlead__update_subtask_status', tool_input: 'subtask-1-1 in_progress' }),
+              e(6, 'tool_end', '', { tool_name: 'mcp__vibe-teamlead__update_subtask_status' }),
+              e(5, 'error', 'Test failed: expected 429, got 200', { detail: 'AssertionError: expected 200 to be 429' }),
+              e(4, 'success', 'Tests pass'),
+              e(1, 'tool_start', '', { tool_name: 'Bash', tool_input: 'pnpm --filter api test' }),
+            ],
+          },
+          validation: { phase: 'validation', status: 'pending', started_at: null, completed_at: null, entries: [] },
+        },
+      } as unknown as TaskLogs,
+    };
+  },
 
   watchTaskLogs: async () => ({ success: true }),
 
