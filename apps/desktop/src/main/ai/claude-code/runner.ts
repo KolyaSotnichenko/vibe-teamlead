@@ -8,6 +8,7 @@
  * StreamEvent contract the orchestration layer and UI already consume.
  */
 
+import { isMainThread } from 'node:worker_threads';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -273,8 +274,13 @@ export async function runAgentSession(
   config.abortSignal?.addEventListener('abort', onAbort, { once: true });
 
   const codegraphBin = config.bundled?.codegraphBin;
+  // Pipeline agents (worker thread) wait for the index; main-process tasks never block on it.
   const codegraphReady = codegraphBin && sessionTools(config).includes('Read')
-    ? ensureCodegraphIndex(codegraphBin, config.toolContext.cwd, options.onLog)
+    ? await ensureCodegraphIndex(codegraphBin, config.toolContext.cwd, {
+        wait: !isMainThread,
+        signal: config.abortSignal,
+        log: options.onLog,
+      })
     : false;
 
   let thrown: unknown;

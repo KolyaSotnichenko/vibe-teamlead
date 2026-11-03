@@ -7,7 +7,7 @@
  * agents' edits during the session.
  */
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 
@@ -59,30 +59,67 @@ export function excludeIndexFromGit(projectDir: string): void {
   }
 }
 
-const indexed = new Set<string>();
+/** Per project directory: the indexing result (true = ready), shared by concurrent sessions. */
+const indexing = new Map<string, Promise<boolean>>();
+
+function runInit(bin: string, projectDir: string, log?: (line: string) => void): Promise<boolean> {
+  return new Promise((resolve) => {
+    log?.(`CodeGraph: indexing ${projectDir}`);
+    const child = spawn(bin, ['init', '-y', projectDir], { cwd: projectDir, env: codegraphEnv(), stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (stderr.length < 4000) stderr += chunk.toString();
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), INDEX_TIMEOUT_MS);
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      log?.(`CodeGraph: indexing failed (${error.message})`);
+      resolve(false);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) log?.(`CodeGraph: indexing failed (${stderr.trim() || `exit ${code}`})`);
+      resolve(code === 0);
+    });
+  });
+}
 
 /**
- * Build the index for a project directory once per process.
- * Returns false when indexing failed; the session then runs without CodeGraph.
+ * Index a project directory once per process (async, never blocks the event
+ * loop). A failure is remembered, so later sessions don't wait for it again.
  */
-export function ensureCodegraphIndex(bin: string, projectDir: string, log?: (line: string) => void): boolean {
-  if (indexed.has(projectDir)) return true;
-  excludeIndexFromGit(projectDir);
-  if (existsSync(join(projectDir, INDEX_DIR))) {
-    indexed.add(projectDir);
-    return true;
+export function indexProject(bin: string, projectDir: string, log?: (line: string) => void): Promise<boolean> {
+  let pending = indexing.get(projectDir);
+  if (!pending) {
+    excludeIndexFromGit(projectDir);
+    pending = existsSync(join(projectDir, INDEX_DIR)) ? Promise.resolve(true) : runInit(bin, projectDir, log);
+    indexing.set(projectDir, pending);
   }
-  log?.(`CodeGraph: indexing ${projectDir}`);
-  const result = spawnSync(bin, ['init', '-y', projectDir], {
-    cwd: projectDir,
-    env: codegraphEnv(),
-    encoding: 'utf-8',
-    timeout: INDEX_TIMEOUT_MS,
-  });
-  if (result.status !== 0) {
-    log?.(`CodeGraph: indexing failed (${result.error?.message ?? result.stderr?.trim() ?? `exit ${result.status}`})`);
-    return false;
+  return pending;
+}
+
+/**
+ * Whether CodeGraph can be attached to a session now.
+ * - `wait: true` (pipeline agents in the worker): wait for indexing, unless aborted.
+ * - `wait: false` (main-process utility tasks): start indexing in the background
+ *   and attach only if it is already done.
+ */
+export async function ensureCodegraphIndex(
+  bin: string,
+  projectDir: string,
+  options: { wait: boolean; signal?: AbortSignal; log?: (line: string) => void },
+): Promise<boolean> {
+  const pending = indexProject(bin, projectDir, options.log);
+  if (!options.wait) {
+    const ready = await Promise.race([pending, Promise.resolve(undefined)]);
+    return ready === true;
   }
-  indexed.add(projectDir);
-  return true;
+  if (options.signal?.aborted) return false;
+  const aborted = new Promise<false>((resolve) => options.signal?.addEventListener('abort', () => resolve(false), { once: true }));
+  return Promise.race([pending, aborted]);
+}
+
+/** Test helper */
+export function resetCodegraphIndexCache(): void {
+  indexing.clear();
 }
