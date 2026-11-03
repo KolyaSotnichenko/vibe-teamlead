@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { useSettingsStore } from '../../stores/settings-store';
-import { saveProviderAgentConfig } from '../../stores/settings-store';
-import { MultiProviderModelSelect } from './MultiProviderModelSelect';
+import { useSettingsStore, saveSettings } from '../../stores/settings-store';
+import { ClaudeModelSelect } from './ClaudeModelSelect';
 import { ThinkingLevelSelect } from './ThinkingLevelSelect';
 import { Label } from '../ui/label';
 import {
@@ -9,51 +8,30 @@ import {
   DEFAULT_FEATURE_THINKING,
   FEATURE_LABELS,
 } from '@shared/constants/models';
-import type { BuiltinProvider } from '@shared/types/provider-account';
 import type { FeatureModelConfig, ThinkingLevel } from '@shared/types/settings';
 
-interface FeatureModelSettingsProps {
-  provider: BuiltinProvider;
-}
-
 /**
- * Per-provider feature model configuration component.
+ * Feature model configuration component.
  *
- * Renders a model selector and a thinking-level selector for each feature
- * (Insights, Ideation, Roadmap, GitHub Issues, GitHub PRs, Utility).
+ * Renders a Claude model selector and a thinking-level selector for each
+ * feature (Insights, Ideation, Roadmap, GitHub Issues, GitHub PRs, Utility, Naming).
  *
- * Reads from `settings.providerAgentConfig[provider].featureModels` with
- * fallback to `settings.featureModels` then `DEFAULT_FEATURE_MODELS`.
- * Writes via `saveProviderAgentConfig`.
+ * Reads `settings.featureModels` / `settings.featureThinking` with fallback
+ * to the defaults; writes via `saveSettings`.
  */
-export function FeatureModelSettings({ provider }: FeatureModelSettingsProps) {
+export function FeatureModelSettings() {
   const { t } = useTranslation('settings');
   const settings = useSettingsStore((state) => state.settings);
 
-  // For Ollama, default to empty strings — Anthropic model shorthands are meaningless
-  const providerFeatureDefaults: FeatureModelConfig = provider === 'ollama'
-    ? { insights: '', ideation: '', roadmap: '', githubIssues: '', githubPrs: '', utility: '', naming: '' }
-    : DEFAULT_FEATURE_MODELS;
-  const providerThinkingDefaults = provider === 'ollama'
-    ? { insights: 'low' as ThinkingLevel, ideation: 'low' as ThinkingLevel, roadmap: 'low' as ThinkingLevel, githubIssues: 'low' as ThinkingLevel, githubPrs: 'low' as ThinkingLevel, utility: 'low' as ThinkingLevel, naming: 'low' as ThinkingLevel }
-    : DEFAULT_FEATURE_THINKING;
-
-  const featureModels: FeatureModelConfig =
-    settings.providerAgentConfig?.[provider]?.featureModels ?? providerFeatureDefaults;
-
-  const featureThinking =
-    settings.providerAgentConfig?.[provider]?.featureThinking ?? providerThinkingDefaults;
+  const featureModels: FeatureModelConfig = settings.featureModels ?? DEFAULT_FEATURE_MODELS;
+  const featureThinking = settings.featureThinking ?? DEFAULT_FEATURE_THINKING;
 
   const handleModelChange = (feature: keyof FeatureModelConfig, value: string) => {
-    saveProviderAgentConfig(provider, {
-      featureModels: { ...featureModels, [feature]: value },
-    });
+    saveSettings({ featureModels: { ...featureModels, [feature]: value } });
   };
 
   const handleThinkingChange = (feature: keyof FeatureModelConfig, value: string) => {
-    saveProviderAgentConfig(provider, {
-      featureThinking: { ...featureThinking, [feature]: value as ThinkingLevel },
-    });
+    saveSettings({ featureThinking: { ...featureThinking, [feature]: value as ThinkingLevel } });
   };
 
   return (
@@ -84,10 +62,9 @@ export function FeatureModelSettings({ provider }: FeatureModelSettingsProps) {
                 <Label className="text-xs text-muted-foreground">
                   {t('general.model')}
                 </Label>
-                <MultiProviderModelSelect
+                <ClaudeModelSelect
                   value={currentModel}
                   onChange={(value) => handleModelChange(feature, value)}
-                  filterProvider={provider}
                 />
               </div>
 
@@ -96,7 +73,6 @@ export function FeatureModelSettings({ provider }: FeatureModelSettingsProps) {
                 value={currentThinking}
                 onChange={(value) => handleThinkingChange(feature, value)}
                 modelValue={currentModel}
-                provider={provider}
               />
             </div>
           </div>

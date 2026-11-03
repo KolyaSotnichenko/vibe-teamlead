@@ -32,9 +32,8 @@
     "connectDescription": "Vibe Teamlead nécessite GitHub pour gérer vos branches de code et maintenir les tâches à jour.",
     "claudeTitle": "Connecter à Claude AI",
     "claudeDescription": "Vibe Teamlead utilise Claude AI pour des fonctionnalités intelligentes comme la génération de feuille de route, l'automatisation des tâches et l'idéation.",
-    "aiProviderTitle": "Connecter à l'IA",
-    "aiProviderDescription": "Ajoutez un compte fournisseur IA pour activer des fonctionnalités comme la génération de feuille de route, l'automatisation des tâches et l'idéation.",
-    "aiProviderReady": "Vous avez au moins un fournisseur IA configuré. Vous pouvez passer à l'étape suivante.",
+    "aiProviderTitle": "Connecter Claude",
+    "aiProviderDescription": "Ajoutez votre clé API Anthropic pour alimenter des fonctionnalités comme la génération de Roadmap, l’automatisation des tâches et l’Idéation.",
     "skipForNow": "Passer pour l'instant",
     "continue": "Continuer",
     "selectRepo": "Sélectionner le dépôt",
@@ -224,16 +223,5 @@
     "skipTitle": "Ignorer l'analyse concurrentielle",
     "skipDescription": "Générer la feuille de route sans informations concurrentielles.",
     "cancel": "Annuler"
-  },
-  "versionWarning": {
-    "title": "Action requise",
-    "subtitle": "Mise à jour version 2.7.5",
-    "description": "En raison de changements d'authentification dans cette version, vous devez réauthentifier votre profil Claude.",
-    "instructions": "Pour vous réauthentifier :",
-    "step1": "Allez dans Paramètres",
-    "step2": "Naviguez vers Paramètres de l'app > Intégrations",
-    "step3": "Cliquez sur « Réauthentifier » sur votre profil",
-    "gotIt": "Compris",
-    "goToSettings": "Aller aux paramètres"
   }
 }

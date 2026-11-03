@@ -13,7 +13,6 @@ import {
   taskWorkspaceMock,
   workspaceMock,
   terminalMock,
-  claudeProfileMock,
   contextMock,
   integrationMock,
   changelogMock,
@@ -44,9 +43,6 @@ const browserMockAPI: ElectronAPI = {
 
   // Terminal Operations
   ...terminalMock,
-
-  // Claude Profile Management
-  ...claudeProfileMock,
 
   // Settings
   ...settingsMock,
@@ -123,127 +119,9 @@ const browserMockAPI: ElectronAPI = {
   // Infrastructure & Docker Operations
   ...infrastructureMock,
 
-  // API Profile Management (custom Anthropic-compatible endpoints)
-  getAPIProfiles: async () => ({
-    success: true,
-    data: {
-      profiles: [],
-      activeProfileId: null,
-      version: 1
-    }
-  }),
-
-  saveAPIProfile: async (profile) => ({
-    success: true,
-    data: {
-      id: `mock-profile-${Date.now()}`,
-      ...profile,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }
-  }),
-
-  updateAPIProfile: async (profile) => ({
-    success: true,
-    data: {
-      ...profile,
-      updatedAt: Date.now()
-    }
-  }),
-
-  deleteAPIProfile: async (_profileId: string) => ({
-    success: true
-  }),
-
-  setActiveAPIProfile: async (_profileId: string | null) => ({
-    success: true
-  }),
-
-  testConnection: async (_baseUrl: string, _apiKey: string, _signal?: AbortSignal) => ({
-    success: true,
-    data: {
-      success: true,
-      message: 'Connection successful (mock)'
-    }
-  }),
-
-  discoverModels: async (_baseUrl: string, _apiKey: string, _signal?: AbortSignal) => ({
-    success: true,
-    data: {
-      models: []
-    }
-  }),
-
-  // Provider Account management (unified multi-provider credentials)
-  getProviderAccounts: async () => ({
-    success: true,
-    data: { accounts: [] }
-  }),
-
-  saveProviderAccount: async (account) => ({
-    success: true,
-    data: {
-      id: `mock-account-${Date.now()}`,
-      ...account,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }
-  }),
-
-  updateProviderAccount: async (_id, updates) => ({
-    success: true,
-    data: {
-      id: _id,
-      provider: 'anthropic' as const,
-      name: 'Mock Account',
-      authType: 'api-key' as const,
-      billingModel: 'pay-per-use' as const,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      ...updates
-    }
-  }),
-
-  deleteProviderAccount: async (_id: string) => ({
-    success: true
-  }),
-
-  setProviderAccountQueueOrder: async (_order: string[]) => ({
-    success: true
-  }),
-
-  setCrossProviderQueueOrder: async (_order: string[]) => ({
-    success: true
-  }),
-
-  saveModelOverrides: async (_overrides: Record<string, unknown>) => ({
-    success: true
-  }),
-
-  testProviderConnection: async (_provider: string, _config) => ({
-    success: true,
-    data: { success: true }
-  }),
-
-  checkEnvCredentials: async () => ({
-    success: true,
-    data: {}
-  }),
-
-  // Codex OAuth authentication (mock)
-  codexAuthLogin: async () => ({
-    success: false,
-    error: 'Codex OAuth not available in browser mock'
-  }),
-
-  codexAuthStatus: async () => ({
-    success: true,
-    data: { isAuthenticated: false }
-  }),
-
-  codexAuthLogout: async () => ({
-    success: true
-  }),
+  // Claude session events (non-terminal)
+  onSDKRateLimit: () => () => {},
+  onAuthFailure: () => () => {},
 
   // GitHub API
   github: {
@@ -360,19 +238,6 @@ const browserMockAPI: ElectronAPI = {
     answer: async () => ({ success: true }),
     onAsked: () => () => {},
     onResolved: () => () => {},
-  },
-
-  // Queue Routing API (rate limit recovery)
-  queue: {
-    getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
-    getBestProfileForTask: async () => ({ success: true, data: null }),
-    getBestUnifiedAccount: async () => ({ success: true, data: null }),
-    assignProfileToTask: async () => ({ success: true }),
-    updateTaskSession: async () => ({ success: true }),
-    getTaskSession: async () => ({ success: true, data: null }),
-    onQueueProfileSwapped: () => () => {},
-    onQueueSessionCaptured: () => () => {},
-    onQueueBlockedNoProfiles: () => () => {}
   },
 
   // Claude Code Operations

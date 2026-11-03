@@ -6,7 +6,6 @@ import {
   Cpu,
   Loader2,
   CheckCircle2,
-  AlertCircle,
   ChevronRight,
   Sparkles,
   Plus,
@@ -35,9 +34,9 @@ import {
   SelectValue
 } from './ui/select';
 import { GitHubOAuthFlow } from './project-settings/GitHubOAuthFlow';
-import { ProviderAccountsList } from './settings/ProviderAccountsList';
-import { useSettingsStore } from '../stores/settings-store';
-import type { Project, ProjectSettings } from '../../shared/types';
+import { ClaudeCredentialPanel } from './settings/ClaudeCredentialPanel';
+import { useClaudeCredential } from '../hooks/useClaudeCredential';
+import type { Project } from '../../shared/types';
 
 interface GitHubSetupModalProps {
   open: boolean;
@@ -54,7 +53,7 @@ type SetupStep = 'github-auth' | 'claude-auth' | 'repo-confirm' | 'repo' | 'bran
  *
  * Flow:
  * 1. Authenticate with GitHub (via gh CLI OAuth) - for repo operations
- * 2. Authenticate with Claude (via claude CLI OAuth) - for AI features
+ * 2. Add the Anthropic API key - for AI features
  * 3. Detect/confirm repository
  * 4. Select base branch for tasks (with recommended default)
  */
@@ -66,7 +65,7 @@ export function GitHubSetupModal({
   onSkip
 }: GitHubSetupModalProps) {
   const { t } = useTranslation('dialogs');
-  const { getProviderAccounts, loadProviderAccounts } = useSettingsStore();
+  const { status: claudeStatus, setStatus: setClaudeStatus, refresh: refreshClaudeStatus } = useClaudeCredential();
   const [step, setStep] = useState<SetupStep>('github-auth');
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
@@ -121,10 +120,9 @@ export function GitHubSetupModal({
           const ghTokenResult = await window.electronAPI.getGitHubToken();
           const hasGitHubAuth = ghTokenResult.success && ghTokenResult.data?.token;
 
-          // Check for existing AI provider accounts
-          await loadProviderAccounts();
-          const accounts = getProviderAccounts();
-          const hasAIAuth = accounts.length > 0;
+          // Check for the Claude credential
+          const credential = await window.electronAPI.getClaudeCredentialStatus();
+          const hasAIAuth = credential.success && credential.data?.configured === true;
 
           // Determine starting step based on existing auth
           if (hasGitHubAuth && hasAIAuth) {
@@ -133,7 +131,7 @@ export function GitHubSetupModal({
             setStep('repo'); // Temporary, detectRepository will update
             await detectRepository();
           } else if (hasGitHubAuth) {
-            // Only GitHub authenticated, go to AI provider auth
+            // Only GitHub authenticated, go to the Claude key step
             setGithubToken(ghTokenResult.data!.token);
             setStep('claude-auth');
           } else {
@@ -241,25 +239,23 @@ export function GitHubSetupModal({
   const handleGitHubAuthSuccess = async (token: string) => {
     setGithubToken(token);
 
-    // Check if user already has AI provider accounts configured
+    // Skip the Claude key step when a credential is already configured
     try {
-      await loadProviderAccounts();
-      const accounts = getProviderAccounts();
-      if (accounts.length > 0) {
-        // Already has provider accounts, skip AI auth and go directly to repo detection
+      const credential = await window.electronAPI.getClaudeCredentialStatus();
+      if (credential.success && credential.data?.configured) {
         await detectRepository();
         return;
       }
     } catch (err) {
-      console.error('Failed to check provider accounts:', err);
-      // On error, fall through to show AI auth step
+      console.error('Failed to check the Claude credential:', err);
+      // On error, fall through to show the Claude key step
     }
 
-    // No provider accounts, show AI auth step
+    void refreshClaudeStatus();
     setStep('claude-auth');
   };
 
-  // Handle AI provider auth continue — called when user has added at least one provider account
+  // Continue from the Claude key step once a credential is configured
   const handleAIAuthContinue = async () => {
     await detectRepository();
   };
@@ -401,16 +397,7 @@ export function GitHubSetupModal({
             </DialogHeader>
 
             <div className="py-4 space-y-4">
-              <ProviderAccountsList />
-
-              {getProviderAccounts().length > 0 && (
-                <div className="flex items-center gap-2 rounded-lg bg-success/10 border border-success/30 p-3">
-                  <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                  <p className="text-sm text-success">
-                    {t('githubSetup.aiProviderReady')}
-                  </p>
-                </div>
-              )}
+              <ClaudeCredentialPanel status={claudeStatus} onStatusChange={setClaudeStatus} />
             </div>
 
             <DialogFooter>
@@ -421,7 +408,7 @@ export function GitHubSetupModal({
               )}
               <Button
                 onClick={handleAIAuthContinue}
-                disabled={getProviderAccounts().length === 0}
+                disabled={!claudeStatus.configured}
               >
                 <ChevronRight className="mr-2 h-4 w-4" />
                 {t('githubSetup.continue')}

@@ -12,7 +12,7 @@ import {
 import { ScrollArea } from '../ui/scroll-area';
 import { WizardProgress, WizardStep } from './WizardProgress';
 import { WelcomeStep } from './WelcomeStep';
-import { AccountsStep } from './AccountsStep';
+import { ClaudeStep } from './ClaudeStep';
 import { DevToolsStep } from './DevToolsStep';
 import { PrivacyStep } from './PrivacyStep';
 import { MemoryStep } from './MemoryStep';
@@ -27,12 +27,12 @@ interface OnboardingWizardProps {
 }
 
 // Wizard step identifiers
-type WizardStepId = 'welcome' | 'accounts' | 'devtools' | 'privacy' | 'memory' | 'completion';
+type WizardStepId = 'welcome' | 'claude' | 'devtools' | 'privacy' | 'memory' | 'completion';
 
 // Step configuration with translation keys
 const WIZARD_STEPS: { id: WizardStepId; labelKey: string }[] = [
   { id: 'welcome', labelKey: 'steps.welcome' },
-  { id: 'accounts', labelKey: 'steps.accounts' },
+  { id: 'claude', labelKey: 'steps.claude' },
   { id: 'devtools', labelKey: 'steps.devtools' },
   { id: 'privacy', labelKey: 'steps.privacy' },
   { id: 'memory', labelKey: 'steps.memory' },
@@ -136,12 +136,12 @@ export function OnboardingWizard({
             onSkip={completeWizard}
           />
         );
-      case 'accounts':
+      case 'claude':
         return (
-          <AccountsStep
+          <ClaudeStep
             onNext={goToNextStep}
             onBack={goToPreviousStep}
-            onSkip={completeWizard}
+            onSkip={goToNextStep}
           />
         );
       case 'devtools':

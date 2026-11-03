@@ -5,7 +5,7 @@
  * OnboardingWizard integration tests
  *
  * Integration tests for the complete onboarding wizard flow.
- * Verifies step navigation, accounts step, back button behavior,
+ * Verifies step navigation, the Claude key step, back button behavior,
  * and progress indicator.
  */
 
@@ -34,11 +34,12 @@ vi.mock('react-i18next', () => ({
         'welcome.features.memory.description': 'Remembers context',
         'welcome.features.parallel.title': 'Parallel',
         'welcome.features.parallel.description': 'Work in parallel',
-        'accounts.title': 'Add Your AI Accounts',
-        'accounts.description': 'Connect your AI provider accounts.',
-        'accounts.buttons.back': 'Back',
-        'accounts.buttons.continue': 'Continue',
-        'accounts.buttons.skip': 'Skip for now',
+        'claude.title': 'Connect Claude',
+        'claude.description': 'Agents run on your Anthropic API key.',
+        'claude.buttons.back': 'Back',
+        'claude.buttons.continue': 'Continue',
+        'claude.buttons.skip': 'Skip for now',
+        'claude.apiKey.save': 'Save key',
         // Common translations
         'common:actions.close': 'Close'
       };
@@ -58,36 +59,24 @@ vi.mock('../../stores/settings-store', () => ({
     const state = {
       settings: { onboardingCompleted: false },
       isLoading: false,
-      profiles: [],
-      activeProfileId: null,
-      providerAccounts: [],
-      envCredentials: {},
       updateSettings: mockUpdateSettings,
       loadSettings: mockLoadSettings,
-      loadProviderAccounts: vi.fn().mockResolvedValue(undefined),
-      checkEnvCredentials: vi.fn().mockResolvedValue(undefined),
-      deleteProviderAccount: vi.fn().mockResolvedValue({ success: true }),
-      updateProviderAccount: vi.fn().mockResolvedValue({ success: true }),
     };
     if (!selector) return state;
     return selector(state);
   })
 }));
 
-// Mock provider registry
-vi.mock('@shared/constants/providers', () => ({
-  PROVIDER_REGISTRY: []
-}));
-
 // Mock electronAPI
 const mockSaveSettings = vi.fn().mockResolvedValue({ success: true });
+const mockGetClaudeCredentialStatus = vi.fn();
 
 Object.defineProperty(window, 'electronAPI', {
   value: {
     saveSettings: mockSaveSettings,
     onAppUpdateDownloaded: vi.fn(),
-    requestAllProfilesUsage: vi.fn().mockResolvedValue({ success: true, data: { allProfiles: [] } }),
-    onAllProfilesUsageUpdated: vi.fn(() => vi.fn()),
+    getClaudeCredentialStatus: mockGetClaudeCredentialStatus,
+    worktreeDetectTools: vi.fn().mockResolvedValue({ success: false }),
   },
   writable: true
 });
@@ -100,46 +89,56 @@ describe('OnboardingWizard Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetClaudeCredentialStatus.mockResolvedValue({ success: true, data: { configured: false, source: 'none' } });
   });
 
-  describe('Accounts Step Navigation', () => {
-    it('should navigate from welcome to accounts step', async () => {
+  describe('Claude Step Navigation', () => {
+    it('should navigate from welcome to the Claude step', async () => {
       render(<OnboardingWizard {...defaultProps} />);
 
       // Start at welcome step
       expect(screen.getByText(/Welcome to Vibe Teamlead/)).toBeInTheDocument();
 
-      // Click "Get Started" to go to accounts
+      // Click "Get Started" to go to the Claude step
       const getStartedButton = screen.getByRole('button', { name: /Get Started/ });
       fireEvent.click(getStartedButton);
 
-      // Should now show accounts step
       await waitFor(() => {
-        expect(screen.getByText(/Add Your AI Accounts/)).toBeInTheDocument();
+        expect(screen.getByText(/Connect Claude/)).toBeInTheDocument();
       });
     });
 
-    it('should allow continuing from accounts step without adding accounts', async () => {
+    it('should require a key before continuing (skip stays available)', async () => {
       render(<OnboardingWizard {...defaultProps} />);
 
-      // Navigate to accounts
       fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
       await waitFor(() => {
-        expect(screen.getByText(/Add Your AI Accounts/)).toBeInTheDocument();
+        expect(screen.getByText(/Connect Claude/)).toBeInTheDocument();
       });
 
-      // Continue button should be enabled (accounts are optional)
-      const continueButton = screen.getByRole('button', { name: /Continue/ });
-      expect(continueButton).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Skip for now/ })).not.toBeDisabled();
     });
 
-    it('should navigate back from accounts to welcome', async () => {
+    it('should allow continuing when a key is already configured', async () => {
+      mockGetClaudeCredentialStatus.mockResolvedValue({
+        success: true,
+        data: { configured: true, source: 'stored', kind: 'api-key', hint: 'abcd' },
+      });
       render(<OnboardingWizard {...defaultProps} />);
 
-      // Navigate to accounts
       fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
       await waitFor(() => {
-        expect(screen.getByText(/Add Your AI Accounts/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Continue/ })).not.toBeDisabled();
+      });
+    });
+
+    it('should navigate back from the Claude step to welcome', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
+      await waitFor(() => {
+        expect(screen.getByText(/Connect Claude/)).toBeInTheDocument();
       });
 
       // Click back
@@ -206,21 +205,19 @@ describe('OnboardingWizard Integration Tests', () => {
       });
     });
 
-    it('should allow skipping from accounts step', async () => {
+    it('should move on to the next step when the Claude step is skipped', async () => {
       render(<OnboardingWizard {...defaultProps} />);
 
-      // Navigate to accounts
       fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
       await waitFor(() => {
-        expect(screen.getByText(/Add Your AI Accounts/)).toBeInTheDocument();
+        expect(screen.getByText(/Connect Claude/)).toBeInTheDocument();
       });
 
-      // Click skip
       fireEvent.click(screen.getByRole('button', { name: /Skip for now/ }));
 
-      // Should call saveSettings
       await waitFor(() => {
-        expect(mockSaveSettings).toHaveBeenCalledWith({ onboardingCompleted: true });
+        expect(screen.queryByText(/Connect Claude/)).not.toBeInTheDocument();
+        expect(screen.getByText('devtools.title')).toBeInTheDocument();
       });
     });
   });

@@ -638,25 +638,6 @@ describe('ProjectTabBar', () => {
     });
   });
 
-  describe('UsageIndicator Integration', () => {
-    it('should render UsageIndicator next to add button', () => {
-      // Component structure verification
-      // UsageIndicator should be rendered in the right-side container
-      const containerClasses = ['flex', 'items-center', 'gap-2', 'px-2', 'py-1'];
-
-      containerClasses.forEach(cls => {
-        expect(cls).toBeTruthy();
-      });
-    });
-
-    it('should render UsageIndicator before add project button', () => {
-      // Order verification: UsageIndicator, then Add button
-      const expectedOrder = ['UsageIndicator', 'AddButton'];
-      expect(expectedOrder[0]).toBe('UsageIndicator');
-      expect(expectedOrder[1]).toBe('AddButton');
-    });
-  });
-
   describe('Updated Container Styling', () => {
     it('should apply correct gap-2 spacing in right-side container', () => {
       // From component: <div className="flex items-center gap-2 px-2 py-1">

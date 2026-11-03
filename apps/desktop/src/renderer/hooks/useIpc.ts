@@ -5,7 +5,7 @@ import { useRoadmapStore } from '../stores/roadmap-store';
 import { useRateLimitStore } from '../stores/rate-limit-store';
 import { useAuthFailureStore } from '../stores/auth-failure-store';
 import { useProjectStore } from '../stores/project-store';
-import type { ImplementationPlan, TaskStatus, RoadmapGenerationStatus, Roadmap, ExecutionProgress, RateLimitInfo, SDKRateLimitInfo, AuthFailureInfo } from '../../shared/types';
+import type { ImplementationPlan, TaskStatus, RoadmapGenerationStatus, Roadmap, ExecutionProgress, SDKRateLimitInfo, AuthFailureInfo } from '../../shared/types';
 
 /** Maximum log entries to buffer in the batch queue between flushes (OOM prevention) */
 const MAX_BATCH_QUEUE_LOGS = 100;
@@ -336,20 +336,6 @@ export function useIpcListeners(): void {
       }
     );
 
-    // Terminal rate limit listener
-    const showRateLimitModal = useRateLimitStore.getState().showRateLimitModal;
-    const cleanupRateLimit = window.electronAPI.onTerminalRateLimit(
-      (info: RateLimitInfo) => {
-        // Convert detectedAt string to Date if needed
-        showRateLimitModal({
-          ...info,
-          detectedAt: typeof info.detectedAt === 'string'
-            ? new Date(info.detectedAt)
-            : info.detectedAt
-        });
-      }
-    );
-
     // SDK rate limit listener (for changelog, tasks, roadmap, ideation)
     const showSDKRateLimitModal = useRateLimitStore.getState().showSDKRateLimitModal;
     const cleanupSDKRateLimit = window.electronAPI.onSDKRateLimit(
@@ -395,7 +381,6 @@ export function useIpcListeners(): void {
       cleanupRoadmapComplete();
       cleanupRoadmapError();
       cleanupRoadmapStopped();
-      cleanupRateLimit();
       cleanupSDKRateLimit();
       cleanupAuthFailure();
     };

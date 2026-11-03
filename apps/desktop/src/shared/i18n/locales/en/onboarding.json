@@ -28,57 +28,15 @@
       }
     }
   },
-  "oauth": {
-    "title": "Claude Authentication",
-    "description": "Connect your Claude account to enable AI features",
-    "configureTitle": "Configure Claude Authentication",
-    "addAccountsDesc": "Add your Claude accounts to enable AI features",
-    "multiAccountInfo": "Add multiple Claude subscriptions to automatically switch between them when you hit rate limits.",
-    "noAccountsYet": "No accounts configured yet",
-    "badges": {
-      "default": "Default",
-      "active": "Active",
-      "authenticated": "Authenticated",
-      "needsAuth": "Needs Auth"
-    },
+  "claude": {
+    "title": "Connect Claude",
+    "description": "Agents run on Claude Code with your Anthropic API key. You can change it later in Settings → Claude.",
+    "whereToGetKey": "Create a key at console.anthropic.com → API keys. Usage is billed to that account.",
+    "personalMode": "On your own machine you can use a Claude Pro/Max subscription instead: paste a token from `claude setup-token` and turn on personal mode in Settings → Claude.",
     "buttons": {
-      "authenticate": "Authenticate",
-      "setActive": "Set Active",
-      "rename": "Rename",
-      "delete": "Delete",
-      "add": "Add",
-      "adding": "Adding...",
-      "showToken": "Show Token",
-      "hideToken": "Hide Token",
-      "copyToken": "Copy Token",
       "back": "Back",
       "continue": "Continue",
-      "skip": "Skip"
-    },
-    "labels": {
-      "accountName": "Account name",
-      "namePlaceholder": "Profile name (e.g., Work, Personal)",
-      "tokenLabel": "OAuth Token",
-      "tokenPlaceholder": "Enter token here",
-      "tokenHint": "Paste the token shown in your terminal after completing OAuth login."
-    },
-    "keychainTitle": "Secure Storage",
-    "keychainDescription": "Your tokens are encrypted using your system's keychain. You may see a password prompt from macOS — click \"Always Allow\" to avoid seeing it again.",
-    "toast": {
-      "authSuccess": "Profile authenticated successfully",
-      "authSuccessWithEmail": "Account: {{email}}",
-      "authSuccessGeneric": "Authentication complete. You can now use this profile.",
-      "authStartFailed": "Failed to start authentication",
-      "addProfileFailed": "Failed to add profile",
-      "tokenSaved": "Token saved",
-      "tokenSavedDescription": "Your token has been saved successfully.",
-      "tokenSaveFailed": "Failed to save token",
-      "tryAgain": "Please try again."
-    },
-    "alerts": {
-      "profileCreatedAuthFailed": "Profile created but failed to prepare authentication: {{error}}",
-      "authPrepareFailed": "Failed to prepare authentication: {{error}}",
-      "authStartFailedMessage": "Failed to start authentication. Please try again."
+      "skip": "Skip for now"
     }
   },
   "memory": {
@@ -151,7 +109,7 @@
   },
   "steps": {
     "welcome": "Welcome",
-    "accounts": "Accounts",
+    "claude": "Claude",
     "devtools": "Dev Tools",
     "privacy": "Privacy",
     "memory": "Memory",
@@ -177,32 +135,6 @@
       "label": "Send anonymous error reports",
       "description": "Help us identify and fix issues"
     }
-  },
-  "claudeCode": {
-    "title": "Claude Code CLI",
-    "description": "Install or update the Claude Code CLI to enable AI-powered features",
-    "detecting": "Checking Claude Code installation...",
-    "info": {
-      "title": "What is Claude Code?",
-      "description": "Claude Code is Anthropic's official CLI that powers Vibe Teamlead's AI features. It provides secure authentication and direct access to Claude models."
-    },
-    "status": {
-      "installed": "Installed",
-      "outdated": "Update Available",
-      "notFound": "Not Installed"
-    },
-    "version": {
-      "current": "Current Version",
-      "latest": "Latest Version"
-    },
-    "install": {
-      "button": "Install Claude Code",
-      "updating": "Update Claude Code",
-      "inProgress": "Installing...",
-      "success": "Installation command sent to terminal. Please complete the installation there.",
-      "instructions": "The installer will open in your terminal. Follow the prompts to complete installation."
-    },
-    "learnMore": "Learn more about Claude Code"
   },
   "devtools": {
     "title": "Developer Tools",
@@ -230,15 +162,6 @@
     "noToolsDetected": "No additional tools detected (VS Code and system terminal will be used)",
     "custom": "Custom...",
     "saveAndContinue": "Save & Continue"
-  },
-  "accounts": {
-    "title": "Add Your AI Accounts",
-    "description": "Connect your AI provider accounts. You can add more later in Settings.",
-    "buttons": {
-      "back": "Back",
-      "continue": "Continue",
-      "skip": "Skip for now"
-    }
   },
   "ollama": {
     "notInstalled": {

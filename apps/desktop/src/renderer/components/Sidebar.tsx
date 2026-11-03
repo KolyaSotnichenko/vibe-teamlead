@@ -53,7 +53,6 @@ import {
 } from '../stores/project-env-store';
 import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
-import { RateLimitIndicator } from './RateLimitIndicator';
 
 import { UpdateBanner } from './UpdateBanner';
 import { TeamStatus } from './sidebar/TeamStatus';
@@ -418,9 +417,6 @@ export function Sidebar({
             })}
           </nav>
         </ScrollArea>
-
-        {/* Rate Limit Indicator - shows when Claude is rate limited */}
-        <RateLimitIndicator />
 
         {/* Update Banner - shows when app update is available */}
         <UpdateBanner />

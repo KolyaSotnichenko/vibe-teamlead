@@ -66,8 +66,8 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
     if (hasToken === false) {
       toast({
         variant: 'destructive',
-        title: t('errors.noProviderConfigured', 'No AI provider configured'),
-        description: t('errors.configureProviderFirst', 'Please add a provider account in Settings to use AI features.'),
+        title: t('errors.noClaudeCredential'),
+        description: t('errors.addClaudeKey'),
       });
       return;
     }
@@ -78,8 +78,8 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
     if (hasToken === false) {
       toast({
         variant: 'destructive',
-        title: t('errors.noProviderConfigured', 'No AI provider configured'),
-        description: t('errors.configureProviderFirst', 'Please add a provider account in Settings to use AI features.'),
+        title: t('errors.noClaudeCredential'),
+        description: t('errors.addClaudeKey'),
       });
       return;
     }
@@ -112,8 +112,8 @@ export function useIdeation(projectId: string, options: UseIdeationOptions = {})
     if (hasToken === false) {
       toast({
         variant: 'destructive',
-        title: t('errors.noProviderConfigured', 'No AI provider configured'),
-        description: t('errors.configureProviderFirst', 'Please add a provider account in Settings to use AI features.'),
+        title: t('errors.noClaudeCredential'),
+        description: t('errors.addClaudeKey'),
       });
       return;
     }

@@ -3,6 +3,10 @@
  */
 
 import { DEFAULT_APP_SETTINGS } from '../../../shared/constants';
+import type { ClaudeCredentialStatus } from '../../../shared/types';
+
+// In-memory Claude credential so the settings UI can be tried in a browser
+let mockCredential: ClaudeCredentialStatus = { configured: false, source: 'none' };
 
 export const settingsMock = {
   // Settings
@@ -39,6 +43,23 @@ export const settingsMock = {
     success: true,
     data: { hasCompletedOnboarding: false }
   }),
+
+  // Claude credential (mock - kept in memory, the key is never echoed back)
+  getClaudeCredentialStatus: async () => ({ success: true, data: mockCredential }),
+  saveClaudeApiKey: async (apiKey: string) => {
+    mockCredential = {
+      configured: true,
+      source: 'stored',
+      kind: apiKey.startsWith('sk-ant-oat') ? 'subscription-token' : 'api-key',
+      hint: apiKey.trim().slice(-4),
+    };
+    return { success: true, data: mockCredential };
+  },
+  clearClaudeApiKey: async () => {
+    mockCredential = { configured: false, source: 'none' };
+    return { success: true, data: mockCredential };
+  },
+  testClaudeConnection: async () => ({ success: true, data: { ok: true } }),
 
   // App Info
   getAppVersion: async () => '0.1.0-browser',

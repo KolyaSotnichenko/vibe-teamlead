@@ -58,17 +58,6 @@ export const infrastructureMock = {
     }
   }),
 
-  listOllamaModels: async () => ({
-    success: true,
-    data: {
-      models: [
-        { name: 'llama2', size_bytes: 4000000000, size_gb: 3.73, modified_at: '2024-01-01', is_embedding: false },
-        { name: 'nomic-embed-text', size_bytes: 500000000, size_gb: 0.47, modified_at: '2024-01-01', is_embedding: true, embedding_dim: 768, description: 'Nomic AI text embeddings' },
-      ],
-      count: 2
-    }
-  }),
-
    listOllamaEmbeddingModels: async () => ({
      success: true,
      data: {

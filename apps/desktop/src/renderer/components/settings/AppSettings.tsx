@@ -19,7 +19,7 @@ import {
   Code,
   Bug,
   Terminal,
-  Users
+  KeyRound
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -52,7 +52,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { TerminalFontSettings } from './terminal-font-settings/TerminalFontSettings';
-import { AccountSettings } from './AccountSettings';
+import { ClaudeSettings } from './ClaudeSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -67,7 +67,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'agent' | 'paths' | 'integrations' | 'accounts' | 'api-profiles' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'agent' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -80,9 +80,9 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'language', icon: Globe },
   { id: 'devtools', icon: Code },
   { id: 'terminal-fonts', icon: Terminal },
+  { id: 'claude', icon: KeyRound },
   { id: 'agent', icon: Bot },
   { id: 'paths', icon: FolderOpen },
-  { id: 'accounts', icon: Users },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
   { id: 'debug', icon: Bug }
@@ -194,8 +194,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="agent" />;
       case 'paths':
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="paths" />;
-      case 'accounts':
-        return <AccountSettings settings={settings} onSettingsChange={setSettings} isOpen={open} />;
+      case 'claude':
+        return <ClaudeSettings settings={settings} onSettingsChange={setSettings} />;
       case 'updates':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':
