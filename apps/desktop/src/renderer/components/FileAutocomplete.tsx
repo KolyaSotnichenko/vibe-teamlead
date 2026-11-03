@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { File, Folder, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -25,6 +26,7 @@ export function FileAutocomplete({
   onClose,
   maxResults = 10
 }: FileAutocompleteProps) {
+  const { t } = useTranslation('common');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const { files, loadDirectory } = useFileExplorerStore();
@@ -181,7 +183,7 @@ export function FileAutocomplete({
           minWidth: '200px'
         }}
       >
-        No files found
+        {t('common:files.noFilesFound')}
       </div>
     );
   }
@@ -229,7 +231,7 @@ export function FileAutocomplete({
         ))}
       </div>
       <div className="border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground bg-muted/30">
-        <span className="font-medium">↑↓</span> navigate · <span className="font-medium">Enter</span> select · <span className="font-medium">Esc</span> close
+        <Trans i18nKey="common:files.autocompleteHint" components={{ key: <span className="font-medium" /> }} />
       </div>
     </div>
   );

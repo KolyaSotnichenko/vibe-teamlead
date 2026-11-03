@@ -110,7 +110,10 @@
       "refresh": "Оновити",
       "learnMore": "Докладніше",
       "installed": "GitLab CLI встановлено:"
-    }
+    },
+    "connectedToProject": "Підключено до {{project}}",
+    "loadBranchesFailed": "Не вдалося завантажити гілки",
+    "loadProjectsFailed": "Не вдалося завантажити проєкти"
   },
   "mergeRequests": {
     "title": "GitLab Merge Requests",

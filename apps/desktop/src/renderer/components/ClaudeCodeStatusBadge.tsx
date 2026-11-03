@@ -117,15 +117,15 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
       if (result.success && result.data) {
         setAvailableVersions(result.data.versions);
       } else {
-        setVersionsError(result.error || "Failed to load versions");
+        setVersionsError(result.error || t("navigation:claudeCode.failedToLoadVersions"));
       }
     } catch (err) {
       console.error("Failed to fetch versions:", err);
-      setVersionsError("Failed to load versions");
+      setVersionsError(t("navigation:claudeCode.failedToLoadVersions"));
     } finally {
       setIsLoadingVersions(false);
     }
-  }, []);
+  }, [t]);
 
   // Fetch CLI installations
   const fetchInstallations = useCallback(async () => {
@@ -141,15 +141,15 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
       if (result.success && result.data) {
         setInstallations(result.data.installations);
       } else {
-        setInstallationsError(result.error || "Failed to load installations");
+        setInstallationsError(result.error || t("navigation:claudeCode.failedToLoadInstallations"));
       }
     } catch (err) {
       console.error("Failed to fetch installations:", err);
-      setInstallationsError("Failed to load installations");
+      setInstallationsError(t("navigation:claudeCode.failedToLoadInstallations"));
     } finally {
       setIsLoadingInstallations(false);
     }
-  }, []);
+  }, [t]);
 
   // Initial check and periodic re-check
   useEffect(() => {
@@ -184,7 +184,7 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
     setInstallError(null);
     try {
       if (!window.electronAPI?.installClaudeCode) {
-        setInstallError("Installation not available");
+        setInstallError(t("navigation:claudeCode.installNotAvailable"));
         setIsInstalling(false);
         return;
       }
@@ -197,11 +197,11 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
           checkVersion();
         }, VERSION_RECHECK_DELAY_MS);
       } else {
-        setInstallError(result.error || "Installation failed");
+        setInstallError(result.error || t("navigation:claudeCode.installFailed"));
       }
     } catch (err) {
       console.error("Failed to install Claude Code:", err);
-      setInstallError(err instanceof Error ? err.message : "Installation failed");
+      setInstallError(err instanceof Error ? err.message : t("navigation:claudeCode.installFailed"));
     } finally {
       setIsInstalling(false);
     }
@@ -217,7 +217,7 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
 
     try {
       if (!window.electronAPI?.installClaudeCodeVersion) {
-        setInstallError("Version switching not available");
+        setInstallError(t("navigation:claudeCode.versionSwitchNotAvailable"));
         return;
       }
 
@@ -229,11 +229,11 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
           checkVersion();
         }, VERSION_RECHECK_DELAY_MS);
       } else {
-        setInstallError(result.error || "Failed to switch version");
+        setInstallError(result.error || t("navigation:claudeCode.switchVersionFailed"));
       }
     } catch (err) {
       console.error("Failed to switch Claude Code version:", err);
-      setInstallError(err instanceof Error ? err.message : "Failed to switch version");
+      setInstallError(err instanceof Error ? err.message : t("navigation:claudeCode.switchVersionFailed"));
     } finally {
       setIsInstalling(false);
       setSelectedVersion(null);
@@ -250,7 +250,7 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
 
     try {
       if (!window.electronAPI?.setClaudeCodeActivePath) {
-        setInstallError("Path switching not available");
+        setInstallError(t("navigation:claudeCode.pathSwitchNotAvailable"));
         return;
       }
 
@@ -263,11 +263,11 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
           fetchInstallations();
         }, VERSION_RECHECK_DELAY_MS);
       } else {
-        setInstallError(result.error || "Failed to switch CLI path");
+        setInstallError(result.error || t("navigation:claudeCode.switchPathFailed"));
       }
     } catch (err) {
       console.error("Failed to switch Claude CLI path:", err);
-      setInstallError(err instanceof Error ? err.message : "Failed to switch CLI path");
+      setInstallError(err instanceof Error ? err.message : t("navigation:claudeCode.switchPathFailed"));
     } finally {
       setIsInstalling(false);
       setSelectedInstallation(null);

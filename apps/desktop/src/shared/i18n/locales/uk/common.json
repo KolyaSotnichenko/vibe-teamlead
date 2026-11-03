@@ -100,7 +100,8 @@
     "gotIt": "Зрозуміло",
     "continue": "Продовжити",
     "saving": "Збереження...",
-    "deleting": "Видалення..."
+    "deleting": "Видалення...",
+    "edit": "Редагувати"
   },
   "actions": {
     "save": "Зберегти",
@@ -157,7 +158,8 @@
     "terminalWorktreeNotFound": "Worktree термінала не знайдено: {{name}}",
     "failedToDeleteTerminalWorktree": "Не вдалося видалити worktree термінала: {{name}}",
     "noClaudeCredential": "Немає API-ключа Claude",
-    "addClaudeKey": "Додайте API-ключ Anthropic у Налаштування → Claude, щоб користуватися функціями AI."
+    "addClaudeKey": "Додайте API-ключ Anthropic у Налаштування → Claude, щоб користуватися функціями AI.",
+    "unexpected": "Сталася неочікувана помилка"
   },
   "worktrees": {
     "deleteSuccess": "Worktree «{{branch}}» видалено",
@@ -811,5 +813,34 @@
     "region": "Сповіщення",
     "error": "Помилка",
     "dismiss": "Закрити"
+  },
+  "errorBoundary": {
+    "title": "Щось пішло не так",
+    "description": "Під час відображення цього вмісту сталася помилка.",
+    "tryAgain": "Спробувати ще раз"
+  },
+  "combobox": {
+    "placeholder": "Виберіть...",
+    "searchPlaceholder": "Пошук...",
+    "emptyMessage": "Нічого не знайдено"
+  },
+  "files": {
+    "projectFiles": "Файли проєкту",
+    "dragToTerminal": "Перетягніть файли в термінал, щоб вставити шлях",
+    "dragToReference": "Перетягніть файли, щоб додати їх як посилання",
+    "noFilesFound": "Файлів не знайдено",
+    "referencedFiles": "Файли-посилання",
+    "folder": "тека",
+    "autocompleteHint": "<key>↑↓</key> навігація · <key>Enter</key> вибрати · <key>Esc</key> закрити"
+  },
+  "featureCard": {
+    "phase": "Фаза: {{phase}}",
+    "competitorInsight": "Ця функція вирішує проблеми, на які скаржаться користувачі конкурентів",
+    "votes_one": "{{count}} голос із відгуків користувачів",
+    "votes_few": "{{count}} голоси з відгуків користувачів",
+    "votes_many": "{{count}} голосів із відгуків користувачів",
+    "votes_other": "{{count}} голосу з відгуків користувачів",
+    "external": "Зовнішнє",
+    "importedFrom": "Імпортовано з {{provider}}"
   }
 }

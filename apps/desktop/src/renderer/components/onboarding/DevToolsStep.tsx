@@ -163,10 +163,10 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
         updateSettings(settingsToSave);
         onNext();
       } else {
-        setError(result?.error || 'Failed to save settings');
+        setError(result?.error || t('devtools.saveFailed'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      setError(err instanceof Error ? err.message : t('common:errors.unknownError'));
     } finally {
       setIsSaving(false);
     }
@@ -199,7 +199,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
   }
 
   // Add custom option last
-  ideOptions.push({ value: 'custom', label: 'Custom...', detected: false });
+  ideOptions.push({ value: 'custom', label: t('devtools.custom'), detected: false });
 
   // Build Terminal options with detection status
   const terminalOptions: Array<{ value: SupportedTerminal; label: string; detected: boolean }> = [];
@@ -207,7 +207,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
   // Always add system terminal first
   terminalOptions.push({
     value: 'system',
-    label: TERMINAL_NAMES.system || 'System Terminal',
+    label: t('devtools.systemTerminal'),
     detected: true
   });
 
@@ -238,7 +238,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
   }
 
   // Add custom option last
-  terminalOptions.push({ value: 'custom', label: 'Custom...', detected: false });
+  terminalOptions.push({ value: 'custom', label: t('devtools.custom'), detected: false });
 
   // Build CLI options with detection status
   const cliOptions: Array<{ value: SupportedCLI; label: string; detected: boolean }> = [];
@@ -267,7 +267,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
   }
 
   // Add custom option last
-  cliOptions.push({ value: 'custom', label: 'Custom...', detected: false });
+  cliOptions.push({ value: 'custom', label: t('devtools.custom'), detected: false });
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-8 py-6">
@@ -349,7 +349,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
                 disabled={isSaving}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select IDE..." />
+                  <SelectValue placeholder={t('devtools.idePlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {ideOptions.map((option) => (
@@ -398,7 +398,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
                 disabled={isSaving}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select terminal..." />
+                  <SelectValue placeholder={t('devtools.terminalPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {terminalOptions.map((option) => (
@@ -447,7 +447,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
                 disabled={isSaving}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select CLI..." />
+                  <SelectValue placeholder={t('devtools.cliPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {cliOptions.map((option) => (
@@ -514,7 +514,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
             onClick={onBack}
             className="text-muted-foreground hover:text-foreground"
           >
-            {t('common:buttons.back', 'Back')}
+            {t('common:buttons.back')}
           </Button>
           <Button
             onClick={handleSave}
@@ -523,7 +523,7 @@ export function DevToolsStep({ onNext, onBack }: DevToolsStepProps) {
             {isSaving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Saving...
+                {t('common:buttons.saving')}
               </>
             ) : (
               t('devtools.saveAndContinue')

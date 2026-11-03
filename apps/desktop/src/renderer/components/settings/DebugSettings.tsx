@@ -49,7 +49,7 @@ export function DebugSettings() {
       const info = await window.electronAPI.getDebugInfo();
       setDebugInfo(info);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load debug info');
+      setError(err instanceof Error ? err.message : t('debug.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -59,10 +59,10 @@ export function DebugSettings() {
     try {
       const result = await window.electronAPI.openLogsFolder();
       if (!result.success) {
-        setError(result.error || 'Failed to open logs folder');
+        setError(result.error || t('debug.openLogsFailed'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to open logs folder');
+      setError(err instanceof Error ? err.message : t('debug.openLogsFailed'));
     }
   };
 
@@ -73,10 +73,10 @@ export function DebugSettings() {
         setCopySuccess(true);
         setTimeout(() => setCopySuccess(false), 2000);
       } else {
-        setError(result.error || 'Failed to copy debug info');
+        setError(result.error || t('debug.copyFailed'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy debug info');
+      setError(err instanceof Error ? err.message : t('debug.copyFailed'));
     }
   };
 

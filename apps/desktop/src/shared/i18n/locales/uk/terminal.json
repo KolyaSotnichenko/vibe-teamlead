@@ -96,5 +96,9 @@
     "invokeClaudeAll": "Запустити Claude в усіх",
     "files": "Файли",
     "terminalFallback": "Термінал"
-  }
+  },
+  "dropToInsertPath": "Відпустіть, щоб вставити шлях",
+  "openIdeFailed": "Не вдалося відкрити IDE",
+  "couldNotLaunchIde": "Не вдалося запустити IDE",
+  "defaultTitle": "Термінал"
 }

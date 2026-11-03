@@ -94,5 +94,9 @@
     "invokeClaudeAll": "Invoke Claude All",
     "files": "Files",
     "terminalFallback": "Terminal"
-  }
+  },
+  "dropToInsertPath": "Drop to insert path",
+  "openIdeFailed": "Failed to open IDE",
+  "couldNotLaunchIde": "Could not launch IDE",
+  "defaultTitle": "Terminal"
 }

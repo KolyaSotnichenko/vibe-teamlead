@@ -172,11 +172,11 @@ export function GitLabIntegration({
         }
       } else {
         debugLog('fetchBranches: Failed -', result.error || 'No data returned');
-        setBranchesError(result.error || 'Failed to load branches');
+        setBranchesError(result.error || t('settings.loadBranchesFailed'));
       }
     } catch (err) {
       debugLog('fetchBranches: Exception:', err);
-      setBranchesError(err instanceof Error ? err.message : 'Failed to load branches');
+      setBranchesError(err instanceof Error ? err.message : t('settings.loadBranchesFailed'));
     } finally {
       setIsLoadingBranches(false);
     }
@@ -196,11 +196,11 @@ export function GitLabIntegration({
         setProjects(result.data.projects);
         debugLog('Loaded projects:', result.data.projects.length);
       } else {
-        setProjectsError(result.error || 'Failed to load projects');
+        setProjectsError(result.error || t('settings.loadProjectsFailed'));
       }
     } catch (err) {
       debugLog('Error fetching projects:', err);
-      setProjectsError(err instanceof Error ? err.message : 'Failed to load projects');
+      setProjectsError(err instanceof Error ? err.message : t('settings.loadProjectsFailed'));
     } finally {
       setIsLoadingProjects(false);
     }
@@ -773,7 +773,7 @@ function ConnectionStatus({ isChecking, connectionStatus }: ConnectionStatusProp
           <p className="text-xs text-muted-foreground">
             {isChecking ? t('settings.checking') :
               connectionStatus?.connected
-                ? `${t('settings.connectedTo')} ${connectionStatus.projectPathWithNamespace}`
+                ? t('settings.connectedToProject', { project: connectionStatus.projectPathWithNamespace })
                 : connectionStatus?.error || t('settings.notConnected')}
           </p>
           {connectionStatus?.connected && connectionStatus.projectDescription && (

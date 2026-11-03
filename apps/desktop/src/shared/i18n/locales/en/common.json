@@ -100,7 +100,8 @@
     "gotIt": "Got it",
     "continue": "Continue",
     "saving": "Saving...",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "edit": "Edit"
   },
   "actions": {
     "save": "Save",
@@ -157,7 +158,8 @@
     "terminalWorktreeNotFound": "Terminal worktree not found: {{name}}",
     "failedToDeleteTerminalWorktree": "Failed to delete terminal worktree: {{name}}",
     "noClaudeCredential": "No Claude API key",
-    "addClaudeKey": "Add your Anthropic API key in Settings → Claude to use AI features."
+    "addClaudeKey": "Add your Anthropic API key in Settings → Claude to use AI features.",
+    "unexpected": "An unexpected error occurred"
   },
   "worktrees": {
     "deleteSuccess": "Worktree '{{branch}}' deleted successfully",
@@ -800,5 +802,32 @@
     "region": "Notifications",
     "error": "Error",
     "dismiss": "Dismiss"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "An error occurred while rendering this content.",
+    "tryAgain": "Try Again"
+  },
+  "combobox": {
+    "placeholder": "Select...",
+    "searchPlaceholder": "Search...",
+    "emptyMessage": "No results found"
+  },
+  "files": {
+    "projectFiles": "Project Files",
+    "dragToTerminal": "Drag files into a terminal to insert the path",
+    "dragToReference": "Drag files to add as references",
+    "noFilesFound": "No files found",
+    "referencedFiles": "Referenced Files",
+    "folder": "folder",
+    "autocompleteHint": "<key>↑↓</key> navigate · <key>Enter</key> select · <key>Esc</key> close"
+  },
+  "featureCard": {
+    "phase": "Phase: {{phase}}",
+    "competitorInsight": "This feature addresses competitor pain points",
+    "votes_one": "{{count}} vote from user feedback",
+    "votes_other": "{{count}} votes from user feedback",
+    "external": "External",
+    "importedFrom": "Imported from {{provider}}"
   }
 }

@@ -105,7 +105,11 @@
     "fineTuneDescription": "Від 75% до 200% із кроком 5%",
     "default": "Типовий",
     "comfortable": "Зручний",
-    "large": "Великий"
+    "large": "Великий",
+    "resetToDefault": "Скинути до типового (100%)",
+    "decrease": "Зменшити масштаб на {{step}}%",
+    "increase": "Збільшити масштаб на {{step}}%",
+    "applyChanges": "Застосувати зміни масштабу"
   },
   "logOrder": {
     "label": "Порядок журналу",
@@ -181,7 +185,8 @@
       "high": "Високий і вище",
       "medium": "Середній і вище",
       "low": "Низький і вище"
-    }
+    },
+    "detecting": "Визначення..."
   },
   "theme": {
     "title": "Вигляд",
@@ -192,7 +197,17 @@
     "dark": "Темна",
     "system": "Системна",
     "colorTheme": "Колірна тема",
-    "colorThemeDescription": "Виберіть палітру кольорів"
+    "colorThemeDescription": "Виберіть палітру кольорів",
+    "appearanceMode": "Режим вигляду",
+    "appearanceModeDescription": "Виберіть світлу, темну або системну тему",
+    "colorThemeSelectDescription": "Виберіть кольорову палітру інтерфейсу",
+    "backgroundColor": "Колір фону",
+    "accentColor": "Акцентний колір",
+    "themes": {
+      "default": {
+        "description": "Палітра приладової панелі, спільна з Meter: чорнило на ґрунті, кіновар лише як сигнал"
+      }
+    }
   },
   "devtools": {
     "title": "Інструменти розробника",
@@ -234,7 +249,11 @@
       "label": "Режим YOLO",
       "description": "Запускати Claude з прапорцем --dangerously-skip-permissions, оминаючи всі запити безпеки. Використовуйте з особливою обережністю.",
       "warning": "Цей режим оминає систему дозволів Claude. Вмикайте, лише якщо повністю довіряєте коду, що виконується."
-    }
+    },
+    "customPath": "Власний шлях",
+    "custom": "Власний...",
+    "systemTerminal": "Системний термінал",
+    "detectFailed": "Не вдалося визначити інструменти"
   },
   "updates": {
     "title": "Оновлення",
@@ -264,7 +283,9 @@
     "downloadStableVersion": "Завантажити стабільну версію",
     "readOnlyVolumeTitle": "Неможливо встановити з образу диска",
     "readOnlyVolumeDescription": "Vibe Teamlead запущено з образу диска лише для читання (DMG). Перетягніть застосунок у папку «Програми» й запустіть його звідти, щоб встановлювати оновлення.",
-    "downloadError": "Не вдалося завантажити оновлення"
+    "downloadError": "Не вдалося завантажити оновлення",
+    "unknownVersion": "Невідомо",
+    "downloadProgress": "{{transferred}} МБ / {{total}} МБ"
   },
   "notifications": {
     "title": "Сповіщення",
@@ -288,7 +309,20 @@
       "title": "Загальні",
       "description": "Auto-Build і конфігурація агентів",
       "useClaudeMd": "Використовувати CLAUDE.md",
-      "useClaudeMdDescription": "Додавати інструкції з CLAUDE.md до контексту агентів"
+      "useClaudeMdDescription": "Додавати інструкції з CLAUDE.md до контексту агентів",
+      "autoBuildIntegration": "Інтеграція Auto-Build",
+      "notInitializedTitle": "Не ініціалізовано",
+      "notInitializedDescription": "Ініціалізуйте Auto-Build, щоб створювати задачі й запускати робочі процеси агентів.",
+      "initializing": "Ініціалізація...",
+      "initializeAutoBuild": "Ініціалізувати Auto-Build",
+      "initialized": "Ініціалізовано",
+      "notInitialized": "Не ініціалізовано",
+      "checkingStatus": "Перевірка стану...",
+      "agentConfiguration": "Конфігурація агентів",
+      "model": "Модель",
+      "initializeFirst": "Спершу ініціалізуйте Auto-Build, щоб налаштувати: {{feature}}",
+      "panelTitle": "Загальні",
+      "panelDescription": "Налаштуйте Auto-Build, модель агентів і сповіщення для {{projectName}}"
     },
     "claude": {
       "title": "Автентифікація Claude",
@@ -332,7 +366,25 @@
       "description": "Бекенд пам’яті Graphiti",
       "integrationTitle": "Пам’ять",
       "integrationDescription": "Налаштуйте постійну пам’ять агентів між сеансами",
-      "syncDescription": "Налаштування постійної пам’яті"
+      "syncDescription": "Налаштування постійної пам’яті",
+      "override": "(перевизначення)",
+      "usingGlobalKey": "Використовується глобальний ключ",
+      "usingGlobalKeyDescription": "Використовується ключ із налаштувань застосунку. Введіть нижче ключ для цього проєкту, щоб перевизначити його.",
+      "overrideGlobalKeyPlaceholder": "Введіть, щоб перевизначити глобальний ключ...",
+      "hideApiKey": "Приховати API-ключ {{provider}}",
+      "showApiKey": "Показати API-ключ {{provider}}",
+      "embeddingModelOptional": "Модель ембедингів (необов’язково)",
+      "azureApiKeyPlaceholder": "API-ключ Azure",
+      "enabled": "Увімкнено",
+      "disabled": "Вимкнено",
+      "enableMemoryDescription": "Постійна пам’ять між сеансами на основі LadybugDB (вбудована база даних)",
+      "fileBasedInfo": "Використовується пам’ять на основі файлів. Висновки сеансів зберігаються локально в JSON-файлах. Увімкніть пам’ять, щоб мати постійний контекст між сеансами із семантичним пошуком.",
+      "selectEmbeddingProvider": "Виберіть постачальника ембедингів",
+      "databaseName": "Назва бази даних",
+      "databaseNameDescription": "Зберігається в {{path}}",
+      "databasePath": "Шлях до бази даних (необов’язково)",
+      "databasePathDescription": "Власне розташування сховища. Типово: {{path}}",
+      "databaseNameHint": "Назва бази даних пам’яті (зберігається в {{path}})"
     }
   },
   "agentProfile": {
@@ -423,7 +475,8 @@
     "description": "Журнали та діагностичні відомості для усунення проблем",
     "errorReporting": {
       "label": "Анонімні звіти про помилки",
-      "description": "Надсилати звіти про збої, щоб допомогти покращити Vibe Teamlead. Особисті дані й код не збираються."
+      "description": "Надсилати звіти про збої, щоб допомогти покращити Vibe Teamlead. Особисті дані й код не збираються.",
+      "saveFailed": "Не вдалося зберегти налаштування звітів про помилки"
     },
     "openLogsFolder": "Відкрити папку журналів",
     "copyDebugInfo": "Скопіювати діагностику",
@@ -434,13 +487,17 @@
     "recentErrors": "Нещодавні помилки",
     "noRecentErrors": "Нещодавніх помилок немає",
     "helpTitle": "Повідомлення про проблеми",
-    "helpText": "Повідомляючи про баг, натисніть «Скопіювати діагностику», щоб отримати відомості про систему й нещодавні помилки — це допоможе нам знайти причину."
+    "helpText": "Повідомляючи про баг, натисніть «Скопіювати діагностику», щоб отримати відомості про систему й нещодавні помилки — це допоможе нам знайти причину.",
+    "loadFailed": "Не вдалося завантажити діагностичну інформацію",
+    "openLogsFailed": "Не вдалося відкрити теку журналів",
+    "copyFailed": "Не вдалося скопіювати діагностичну інформацію"
   },
   "projectSettings": {
     "noProjectSelected": {
       "title": "Проєкт не вибрано",
       "description": "Виберіть проєкт на бічній панелі, щоб налаштувати його."
-    }
+    },
+    "selectProjectToEdit": "Виберіть проєкт, щоб переглянути й змінити його налаштування"
   },
   "mcp": {
     "title": "Огляд MCP-серверів",
@@ -492,6 +549,11 @@
       "autoClaude": {
         "name": "Інструменти Vibe Teamlead",
         "description": "Відстеження прогресу збірки"
+      },
+      "memory": {
+        "name": "Пам’ять",
+        "description": "Граф знань для контексту між сеансами",
+        "notConfigured": "Потрібно налаштувати пам’ять (див. налаштування пам’яті)"
       }
     },
     "customServers": "Власні сервери",
@@ -539,7 +601,30 @@
       "createAnthropicKey": "Створити API-ключ Anthropic",
       "openai": "Схоже, це API OpenAI. Знадобиться API-ключ.",
       "createOpenaiKey": "Створити API-ключ OpenAI"
-    }
+    },
+    "serverNames": {
+      "memory": "Пам’ять",
+      "auto-claude": "Інструменти Vibe Teamlead"
+    },
+    "serverDescriptions": {
+      "context7": "Пошук документації бібліотек і фреймворків через @upstash/context7-mcp",
+      "memory": "Граф знань для контексту між сеансами. Потрібна змінна середовища GRAPHITI_MCP_URL.",
+      "auto-claude": "Відстеження прогресу збірки, контекст сеансу, запис відкриттів і підводних каменів",
+      "linear": "Керування проєктами через Linear API. Потрібна змінна середовища LINEAR_API_KEY.",
+      "electron": "Автоматизація десктопних застосунків через Chrome DevTools Protocol. Потрібно ELECTRON_MCP_ENABLED=true.",
+      "puppeteer": "Автоматизація браузера для вебфронтендів, що не на Electron."
+    },
+    "mcpCount": "{{count}} MCP",
+    "mcpServersHeading": "MCP-сервери",
+    "availableTools": "Доступні інструменти",
+    "textOnly": "Лише текст (без інструментів)",
+    "healthCheckFailed": "Перевірка стану не вдалася",
+    "connectionTestFailed": "Перевірка з’єднання не вдалася",
+    "testConnectionTitle": "Перевірити з’єднання",
+    "agentCount_one": "{{count}} агент",
+    "agentCount_few": "{{count}} агенти",
+    "agentCount_many": "{{count}} агентів",
+    "agentCount_other": "{{count}} агента"
   },
   "terminalFonts": {
     "title": "Шрифти термінала",
@@ -680,6 +765,82 @@
     "pr_template_filler": {
       "label": "Заповнювач шаблонів PR",
       "description": "Заповнює шаблони PR на GitHub за допомогою AI на основі змін у коді"
+    },
+    "spec_gatherer": {
+      "label": "Збирач вимог",
+      "description": "Збирає початкові вимоги від користувача"
+    },
+    "spec_researcher": {
+      "label": "Дослідник специфікації",
+      "description": "Перевіряє зовнішні інтеграції та API"
+    },
+    "spec_writer": {
+      "label": "Автор специфікації",
+      "description": "Створює документ spec.md"
+    },
+    "spec_critic": {
+      "label": "Критик специфікації",
+      "description": "Самокритика з глибоким аналізом"
+    },
+    "spec_discovery": {
+      "label": "Дослідження проєкту",
+      "description": "Початкове дослідження та аналіз проєкту"
+    },
+    "spec_context": {
+      "label": "Контекст специфікації",
+      "description": "Збирає контекст з наявного коду"
+    },
+    "spec_validation": {
+      "label": "Перевірка специфікації",
+      "description": "Перевіряє повноту та якість специфікації"
+    },
+    "planner": {
+      "label": "Планувальник",
+      "description": "Створює план реалізації з підзадачами"
+    },
+    "coder": {
+      "label": "Розробник",
+      "description": "Реалізує окремі підзадачі"
+    },
+    "qa_reviewer": {
+      "label": "QA-рецензент",
+      "description": "Перевіряє критерії приймання. Використовує Electron або Puppeteer залежно від типу проєкту."
+    },
+    "qa_fixer": {
+      "label": "QA-виправлювач",
+      "description": "Виправляє проблеми, знайдені QA. Використовує Electron або Puppeteer залежно від типу проєкту."
+    },
+    "pr_reviewer": {
+      "label": "Рецензент PR",
+      "description": "Рецензує pull request на GitHub"
+    },
+    "commit_message": {
+      "label": "Повідомлення коміту",
+      "description": "Генерує повідомлення комітів"
+    },
+    "merge_resolver": {
+      "label": "Розв’язувач конфліктів",
+      "description": "Розв’язує конфлікти злиття"
+    },
+    "insights": {
+      "label": "Інсайти",
+      "description": "Видобуває інсайти з коду"
+    },
+    "analysis": {
+      "label": "Аналіз",
+      "description": "Аналіз коду з пошуком контексту"
+    },
+    "batch_analysis": {
+      "label": "Пакетний аналіз",
+      "description": "Пакетна обробка задач або елементів"
+    },
+    "ideation": {
+      "label": "Генерування ідей",
+      "description": "Генерує ідеї функцій"
+    },
+    "roadmap_discovery": {
+      "label": "Дослідження дорожньої карти",
+      "description": "Знаходить елементи дорожньої карти"
     }
   },
   "tools": {
@@ -817,5 +978,85 @@
       "label": "Назви",
       "description": "Назви задач і вкладок терміналів"
     }
+  },
+  "agentCategories": {
+    "spec": "Створення специфікації",
+    "build": "Збірка",
+    "qa": "QA",
+    "utility": "Службові",
+    "ideation": "Генерування ідей"
+  },
+  "integrations": {
+    "common": {
+      "connectionStatus": "Стан з’єднання",
+      "checking": "Перевірка...",
+      "notConnected": "Не підключено",
+      "enabled": "Увімкнено",
+      "apiKey": "API-ключ"
+    },
+    "github": {
+      "title": "Інтеграція з GitHub",
+      "enableIssues": "Увімкнути GitHub Issues",
+      "enableIssuesDescription": "Синхронізуйте issues з GitHub і автоматично створюйте задачі",
+      "connectedViaCli": "Підключено через GitHub CLI",
+      "authenticatedAs": "Автентифіковано як {{username}}",
+      "authenticatedViaOAuth": "Автентифіковано через GitHub OAuth (gh CLI)",
+      "useDifferentToken": "Використати інший токен",
+      "authentication": "Автентифікація GitHub",
+      "useManualToken": "Ввести токен вручну",
+      "personalAccessToken": "Personal Access Token",
+      "useOAuthInstead": "Використати OAuth",
+      "tokenHint": "Створіть токен з областю доступу <code>repo</code> у <link>налаштуваннях GitHub</link>",
+      "tokenPlaceholder": "ghp_xxxxxxxx або github_pat_xxxxxxxx",
+      "repository": "Репозиторій",
+      "enterManually": "Ввести вручну",
+      "loadingRepos": "Завантаження репозиторіїв...",
+      "selectRepo": "Виберіть репозиторій...",
+      "searchRepos": "Пошук репозиторіїв...",
+      "noMatchingRepos": "Немає відповідних репозиторіїв",
+      "noReposFound": "Репозиторіїв не знайдено",
+      "selectedRepo": "Вибрано: <code>{{repo}}</code>",
+      "repoFormat": "Формат: <code>owner/repo</code> (наприклад, facebook/react)",
+      "repoPlaceholder": "owner/repository",
+      "connectedTo": "Підключено до {{repo}}",
+      "issuesAvailable": "Issues доступні",
+      "issuesAvailableDescription": "Відкривайте GitHub Issues на бічній панелі, щоб переглядати й досліджувати issues та створювати з них задачі.",
+      "autoSync": "Автосинхронізація під час завантаження",
+      "autoSyncDescription": "Автоматично отримувати issues під час завантаження проєкту",
+      "loadBranchesFailed": "Не вдалося завантажити гілки",
+      "loadReposFailed": "Не вдалося завантажити репозиторії",
+      "projectSpecificTitle": "Конфігурація для проєкту",
+      "projectSpecificDescription": "Цей репозиторій GitHub налаштовано лише для <strong>{{projectName}}</strong>. Кожен проєкт може мати власний репозиторій GitHub.",
+      "mainBranch": "Основна гілка",
+      "mainBranchDescription": "Базова гілка для створення worktree задач. Усі нові задачі відгалужуватимуться від неї.",
+      "loadingBranches": "Завантаження гілок...",
+      "selectMainBranch": "Виберіть основну гілку",
+      "branchHint": "Задачі створюватимуться в гілках на кшталт <code>{{pattern}}</code> від <code>{{branch}}</code>"
+    },
+    "linear": {
+      "title": "Інтеграція з Linear",
+      "enableSync": "Увімкнути синхронізацію з Linear",
+      "enableSyncDescription": "Автоматично створювати й оновлювати issues у Linear",
+      "apiKeyHint": "Отримайте API-ключ у <link>налаштуваннях Linear</link>",
+      "connected": "Підключено",
+      "connectedToTeam": "Підключено до {{team}}",
+      "tasksAvailable": "Доступно для імпорту задач: {{issueCount}}+",
+      "importExisting": "Імпорт наявних задач",
+      "importExistingDescription": "Виберіть, які issues з Linear імпортувати в AutoBuild як задачі.",
+      "importTasks": "Імпортувати задачі з Linear",
+      "realtimeSync": "Синхронізація в реальному часі",
+      "realtimeSyncDescription": "Автоматично імпортувати нові задачі, створені в Linear",
+      "realtimeSyncWarning": "Коли ввімкнено, нові issues з Linear автоматично імпортуватимуться в AutoBuild. Налаштуйте нижче фільтри команди та проєкту, щоб керувати тим, які issues імпортуються.",
+      "autoDetected": "Визначається автоматично",
+      "autoCreated": "Створюється автоматично",
+      "teamId": "ID команди (необов’язково)",
+      "projectId": "ID проєкту (необов’язково)"
+    }
+  },
+  "projectSelector": {
+    "placeholder": "Виберіть проєкт...",
+    "noProjects": "Проєктів ще немає",
+    "addProject": "Додати проєкт...",
+    "removeProject": "Вилучити проєкт"
   }
 }

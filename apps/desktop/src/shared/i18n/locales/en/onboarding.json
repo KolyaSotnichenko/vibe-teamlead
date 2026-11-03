@@ -82,7 +82,8 @@
     "embeddingModel": "Embedding Model",
     "embeddingDim": "Embedding Dimension",
     "embeddingDimDescription": "Required for Ollama embeddings (e.g., 768 for nomic-embed-text)",
-    "modelRecommendation": "Recommended: qwen3-embedding:4b (balanced), :8b (quality), :0.6b (fast)"
+    "modelRecommendation": "Recommended: qwen3-embedding:4b (balanced), :8b (quality), :0.6b (fast)",
+    "saveFailed": "Failed to save memory configuration"
   },
   "completion": {
     "title": "You're All Set!",
@@ -135,7 +136,8 @@
     "toggle": {
       "label": "Send anonymous error reports",
       "description": "Help us identify and fix issues"
-    }
+    },
+    "saveFailed": "Failed to save privacy settings. Please try again."
   },
   "devtools": {
     "title": "Developer Tools",
@@ -162,7 +164,12 @@
     "detectedSummary": "Detected on your system:",
     "noToolsDetected": "No additional tools detected (VS Code and system terminal will be used)",
     "custom": "Custom...",
-    "saveAndContinue": "Save & Continue"
+    "saveAndContinue": "Save & Continue",
+    "systemTerminal": "System Terminal",
+    "idePlaceholder": "Select IDE...",
+    "terminalPlaceholder": "Select terminal...",
+    "cliPlaceholder": "Select CLI...",
+    "saveFailed": "Failed to save settings"
   },
   "ollama": {
     "notInstalled": {
@@ -180,7 +187,31 @@
       "description": "Ollama is installed but not running. Start Ollama to use local embedding models.",
       "retry": "Retry",
       "fallbackNote": "Memory will still work with keyword search even without embeddings."
-    }
+    },
+    "models": {
+      "qwen3_4b": "Qwen3 4B - Balanced quality and speed",
+      "qwen3_8b": "Qwen3 8B - Best embedding quality",
+      "qwen3_06b": "Qwen3 0.6B - Smallest and fastest",
+      "embeddinggemma": "Google's lightweight embedding model",
+      "nomic": "Popular general-purpose embeddings"
+    },
+    "checkFailed": "Failed to check Ollama models",
+    "installStartFailed": "Failed to start Ollama installation",
+    "installFailed": "Failed to install Ollama",
+    "downloadModelFailed": "Failed to download {{model}}",
+    "downloadFailed": "Download failed",
+    "checking": "Checking Ollama models...",
+    "dim": "({{dim}} dim)",
+    "badges": {
+      "recommended": "Recommended",
+      "quality": "Highest Quality",
+      "fast": "Fastest"
+    },
+    "installed": "Installed",
+    "downloading": "Downloading...",
+    "download": "Download",
+    "startingDownload": "Starting download...",
+    "selectHint": "Select an installed model for semantic search. Memory works with keyword search even without embeddings."
   },
   "tools": {
     "title": "Check your tools",
@@ -190,5 +221,35 @@
       "continue": "Continue",
       "skip": "Skip for now"
     }
+  },
+  "firstSpec": {
+    "tips": {
+      "descriptive": {
+        "title": "Be Descriptive",
+        "description": "Clearly describe what you want to build. Include requirements, constraints, and expected behavior."
+      },
+      "small": {
+        "title": "Start Small",
+        "description": "Begin with a focused task like adding a feature or fixing a bug. Smaller tasks are easier to verify."
+      },
+      "context": {
+        "title": "Include Context",
+        "description": "Mention relevant files, APIs, or patterns. The more context you provide, the better the results."
+      },
+      "ai": {
+        "title": "Let AI Help",
+        "description": "The AI can generate titles and classify tasks. Focus on describing what you want, not the details."
+      }
+    },
+    "title": "Create Your First Task",
+    "subtitle": "Describe what you want to build and let Vibe Teamlead handle the rest",
+    "creatorOpenedTitle": "Task Creator Opened",
+    "creatorOpenedDescription": "Great! You can create your first task now or continue with the wizard. You can always create tasks later from the main dashboard.",
+    "tipsTitle": "Tips for Great Tasks",
+    "exampleTitle": "Example Task Description:",
+    "exampleText": "\"Add a dark mode toggle to the settings page. It should persist the user's preference in localStorage and apply the theme immediately without page reload. Use the existing color variables in styles/theme.css.\"",
+    "openCreator": "Open Task Creator",
+    "continueHint": "You can continue with the wizard now or create more tasks.",
+    "skipHint": "You can skip this step and create tasks later from the dashboard."
   }
 }
