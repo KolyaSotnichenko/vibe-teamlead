@@ -524,7 +524,7 @@ describe("IPC Handlers", { timeout: 30000 }, () => {
 
       expect(result).toHaveProperty("success", true);
       const data = (result as { data: { theme: string } }).data;
-      expect(data).toHaveProperty("theme", "dark");
+      expect(data).toHaveProperty("theme", "system");
     });
   });
 

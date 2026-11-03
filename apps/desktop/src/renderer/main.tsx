@@ -14,6 +14,19 @@ initSentryRenderer().catch((err) => {
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+// Design-system fonts, bundled (no network): Archivo for Latin, Inter Tight
+// only for Cyrillic (Archivo has none), IBM Plex Mono for data.
+import '@fontsource/archivo/latin-400.css';
+import '@fontsource/archivo/latin-500.css';
+import '@fontsource/archivo/latin-600.css';
+import '@fontsource/archivo/latin-700.css';
+import '@fontsource/inter-tight/cyrillic-400.css';
+import '@fontsource/inter-tight/cyrillic-500.css';
+import '@fontsource/inter-tight/cyrillic-600.css';
+import '@fontsource/inter-tight/cyrillic-700.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
 import './styles/globals.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

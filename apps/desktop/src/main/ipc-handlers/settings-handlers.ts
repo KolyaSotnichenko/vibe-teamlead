@@ -264,7 +264,7 @@ const detectAutoBuildSourcePath = (): string | null => {
     }
   }
 
-  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Aperant prompts path. Please configure manually in settings.');
+  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Vibe Teamlead prompts path. Please configure manually in settings.');
   console.warn('[detectAutoBuildSourcePath] Set DEBUG=1 environment variable for detailed path checking.');
   return null;
 };

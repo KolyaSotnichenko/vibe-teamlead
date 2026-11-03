@@ -1,14 +1,15 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Auto-Build UI Design System - Oscura Midnight Theme */
-/* A modern, professional design system with deep dark mode and warm yellow accents */
+/* Vibe Teamlead UI — tokens from apps/desktop/design/DESIGN-SYSTEM.md */
 
 /* Define custom theme colors for Tailwind CSS v4 */
 @theme {
   /* Font families */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  /* Archivo for Latin; Inter Tight draws Cyrillic in the same line */
+  --font-sans: 'Archivo', 'Inter Tight', system-ui, sans-serif;
+  /* IBM Plex Mono only for data: numbers, repos, paths, ids */
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   /* Colors - using CSS variables for theme switching */
   --color-border: var(--border);
@@ -50,13 +51,275 @@
   --color-info-foreground: var(--info-foreground);
 
   /* Border radius - from design system */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
-  --radius-full: 9999px;
+  /* Radius 0 throughout — depth comes from hairlines, never from corners */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+  --radius-full: 0px;
+
+  /* No shadows: depth is a 1px border, not a blur */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+  --inset-shadow-sm: none;
+  --drop-shadow-sm: none;
+  --drop-shadow-md: none;
+  --drop-shadow-lg: none;
+
+  /* Tailwind palette remapped onto the design system: warm hues = attention
+     (vermilion), everything else = the ink/ground neutral scale. Components
+     keep their classes; colour no longer carries meaning on its own. */
+  --color-red-50: #EFF0EA;
+  --color-red-100: #D8DAD0;
+  --color-red-200: #D3D5CC;
+  --color-red-300: #F0613C;
+  --color-red-400: #D6401A;
+  --color-red-500: #B5340F;
+  --color-red-600: #B5340F;
+  --color-red-700: #B5340F;
+  --color-red-800: #B5340F;
+  --color-red-900: #1C1D19;
+  --color-red-950: #1C1D19;
+  --color-orange-50: #EFF0EA;
+  --color-orange-100: #D8DAD0;
+  --color-orange-200: #D3D5CC;
+  --color-orange-300: #F0613C;
+  --color-orange-400: #D6401A;
+  --color-orange-500: #B5340F;
+  --color-orange-600: #B5340F;
+  --color-orange-700: #B5340F;
+  --color-orange-800: #B5340F;
+  --color-orange-900: #1C1D19;
+  --color-orange-950: #1C1D19;
+  --color-amber-50: #EFF0EA;
+  --color-amber-100: #D8DAD0;
+  --color-amber-200: #D3D5CC;
+  --color-amber-300: #F0613C;
+  --color-amber-400: #D6401A;
+  --color-amber-500: #B5340F;
+  --color-amber-600: #B5340F;
+  --color-amber-700: #B5340F;
+  --color-amber-800: #B5340F;
+  --color-amber-900: #1C1D19;
+  --color-amber-950: #1C1D19;
+  --color-yellow-50: #EFF0EA;
+  --color-yellow-100: #D8DAD0;
+  --color-yellow-200: #D3D5CC;
+  --color-yellow-300: #F0613C;
+  --color-yellow-400: #D6401A;
+  --color-yellow-500: #B5340F;
+  --color-yellow-600: #B5340F;
+  --color-yellow-700: #B5340F;
+  --color-yellow-800: #B5340F;
+  --color-yellow-900: #1C1D19;
+  --color-yellow-950: #1C1D19;
+  --color-rose-50: #EFF0EA;
+  --color-rose-100: #D8DAD0;
+  --color-rose-200: #D3D5CC;
+  --color-rose-300: #F0613C;
+  --color-rose-400: #D6401A;
+  --color-rose-500: #B5340F;
+  --color-rose-600: #B5340F;
+  --color-rose-700: #B5340F;
+  --color-rose-800: #B5340F;
+  --color-rose-900: #1C1D19;
+  --color-rose-950: #1C1D19;
+  --color-pink-50: #EFF0EA;
+  --color-pink-100: #D8DAD0;
+  --color-pink-200: #D3D5CC;
+  --color-pink-300: #F0613C;
+  --color-pink-400: #D6401A;
+  --color-pink-500: #B5340F;
+  --color-pink-600: #B5340F;
+  --color-pink-700: #B5340F;
+  --color-pink-800: #B5340F;
+  --color-pink-900: #1C1D19;
+  --color-pink-950: #1C1D19;
+  --color-green-50: #EFF0EA;
+  --color-green-100: #DFE1D9;
+  --color-green-200: #D3D5CC;
+  --color-green-300: #C6C8BE;
+  --color-green-400: #9D9F94;
+  --color-green-500: #565951;
+  --color-green-600: #4C4F46;
+  --color-green-700: #33352E;
+  --color-green-800: #26271F;
+  --color-green-900: #1C1D19;
+  --color-green-950: #1C1D19;
+  --color-emerald-50: #EFF0EA;
+  --color-emerald-100: #DFE1D9;
+  --color-emerald-200: #D3D5CC;
+  --color-emerald-300: #C6C8BE;
+  --color-emerald-400: #9D9F94;
+  --color-emerald-500: #565951;
+  --color-emerald-600: #4C4F46;
+  --color-emerald-700: #33352E;
+  --color-emerald-800: #26271F;
+  --color-emerald-900: #1C1D19;
+  --color-emerald-950: #1C1D19;
+  --color-teal-50: #EFF0EA;
+  --color-teal-100: #DFE1D9;
+  --color-teal-200: #D3D5CC;
+  --color-teal-300: #C6C8BE;
+  --color-teal-400: #9D9F94;
+  --color-teal-500: #565951;
+  --color-teal-600: #4C4F46;
+  --color-teal-700: #33352E;
+  --color-teal-800: #26271F;
+  --color-teal-900: #1C1D19;
+  --color-teal-950: #1C1D19;
+  --color-lime-50: #EFF0EA;
+  --color-lime-100: #DFE1D9;
+  --color-lime-200: #D3D5CC;
+  --color-lime-300: #C6C8BE;
+  --color-lime-400: #9D9F94;
+  --color-lime-500: #565951;
+  --color-lime-600: #4C4F46;
+  --color-lime-700: #33352E;
+  --color-lime-800: #26271F;
+  --color-lime-900: #1C1D19;
+  --color-lime-950: #1C1D19;
+  --color-blue-50: #EFF0EA;
+  --color-blue-100: #DFE1D9;
+  --color-blue-200: #D3D5CC;
+  --color-blue-300: #C6C8BE;
+  --color-blue-400: #9D9F94;
+  --color-blue-500: #565951;
+  --color-blue-600: #4C4F46;
+  --color-blue-700: #33352E;
+  --color-blue-800: #26271F;
+  --color-blue-900: #1C1D19;
+  --color-blue-950: #1C1D19;
+  --color-cyan-50: #EFF0EA;
+  --color-cyan-100: #DFE1D9;
+  --color-cyan-200: #D3D5CC;
+  --color-cyan-300: #C6C8BE;
+  --color-cyan-400: #9D9F94;
+  --color-cyan-500: #565951;
+  --color-cyan-600: #4C4F46;
+  --color-cyan-700: #33352E;
+  --color-cyan-800: #26271F;
+  --color-cyan-900: #1C1D19;
+  --color-cyan-950: #1C1D19;
+  --color-sky-50: #EFF0EA;
+  --color-sky-100: #DFE1D9;
+  --color-sky-200: #D3D5CC;
+  --color-sky-300: #C6C8BE;
+  --color-sky-400: #9D9F94;
+  --color-sky-500: #565951;
+  --color-sky-600: #4C4F46;
+  --color-sky-700: #33352E;
+  --color-sky-800: #26271F;
+  --color-sky-900: #1C1D19;
+  --color-sky-950: #1C1D19;
+  --color-indigo-50: #EFF0EA;
+  --color-indigo-100: #DFE1D9;
+  --color-indigo-200: #D3D5CC;
+  --color-indigo-300: #C6C8BE;
+  --color-indigo-400: #9D9F94;
+  --color-indigo-500: #565951;
+  --color-indigo-600: #4C4F46;
+  --color-indigo-700: #33352E;
+  --color-indigo-800: #26271F;
+  --color-indigo-900: #1C1D19;
+  --color-indigo-950: #1C1D19;
+  --color-violet-50: #EFF0EA;
+  --color-violet-100: #DFE1D9;
+  --color-violet-200: #D3D5CC;
+  --color-violet-300: #C6C8BE;
+  --color-violet-400: #9D9F94;
+  --color-violet-500: #565951;
+  --color-violet-600: #4C4F46;
+  --color-violet-700: #33352E;
+  --color-violet-800: #26271F;
+  --color-violet-900: #1C1D19;
+  --color-violet-950: #1C1D19;
+  --color-purple-50: #EFF0EA;
+  --color-purple-100: #DFE1D9;
+  --color-purple-200: #D3D5CC;
+  --color-purple-300: #C6C8BE;
+  --color-purple-400: #9D9F94;
+  --color-purple-500: #565951;
+  --color-purple-600: #4C4F46;
+  --color-purple-700: #33352E;
+  --color-purple-800: #26271F;
+  --color-purple-900: #1C1D19;
+  --color-purple-950: #1C1D19;
+  --color-fuchsia-50: #EFF0EA;
+  --color-fuchsia-100: #DFE1D9;
+  --color-fuchsia-200: #D3D5CC;
+  --color-fuchsia-300: #C6C8BE;
+  --color-fuchsia-400: #9D9F94;
+  --color-fuchsia-500: #565951;
+  --color-fuchsia-600: #4C4F46;
+  --color-fuchsia-700: #33352E;
+  --color-fuchsia-800: #26271F;
+  --color-fuchsia-900: #1C1D19;
+  --color-fuchsia-950: #1C1D19;
+  --color-slate-50: #EFF0EA;
+  --color-slate-100: #DFE1D9;
+  --color-slate-200: #D3D5CC;
+  --color-slate-300: #C6C8BE;
+  --color-slate-400: #9D9F94;
+  --color-slate-500: #565951;
+  --color-slate-600: #4C4F46;
+  --color-slate-700: #33352E;
+  --color-slate-800: #26271F;
+  --color-slate-900: #1C1D19;
+  --color-slate-950: #1C1D19;
+  --color-gray-50: #EFF0EA;
+  --color-gray-100: #DFE1D9;
+  --color-gray-200: #D3D5CC;
+  --color-gray-300: #C6C8BE;
+  --color-gray-400: #9D9F94;
+  --color-gray-500: #565951;
+  --color-gray-600: #4C4F46;
+  --color-gray-700: #33352E;
+  --color-gray-800: #26271F;
+  --color-gray-900: #1C1D19;
+  --color-gray-950: #1C1D19;
+  --color-zinc-50: #EFF0EA;
+  --color-zinc-100: #DFE1D9;
+  --color-zinc-200: #D3D5CC;
+  --color-zinc-300: #C6C8BE;
+  --color-zinc-400: #9D9F94;
+  --color-zinc-500: #565951;
+  --color-zinc-600: #4C4F46;
+  --color-zinc-700: #33352E;
+  --color-zinc-800: #26271F;
+  --color-zinc-900: #1C1D19;
+  --color-zinc-950: #1C1D19;
+  --color-neutral-50: #EFF0EA;
+  --color-neutral-100: #DFE1D9;
+  --color-neutral-200: #D3D5CC;
+  --color-neutral-300: #C6C8BE;
+  --color-neutral-400: #9D9F94;
+  --color-neutral-500: #565951;
+  --color-neutral-600: #4C4F46;
+  --color-neutral-700: #33352E;
+  --color-neutral-800: #26271F;
+  --color-neutral-900: #1C1D19;
+  --color-neutral-950: #1C1D19;
+  --color-stone-50: #EFF0EA;
+  --color-stone-100: #DFE1D9;
+  --color-stone-200: #D3D5CC;
+  --color-stone-300: #C6C8BE;
+  --color-stone-400: #9D9F94;
+  --color-stone-500: #565951;
+  --color-stone-600: #4C4F46;
+  --color-stone-700: #33352E;
+  --color-stone-800: #26271F;
+  --color-stone-900: #1C1D19;
+  --color-stone-950: #1C1D19;
 
   /* Animations */
   --animate-accordion-down: accordion-down 0.2s ease-out;
@@ -86,9 +349,10 @@
     to { transform: scale(1); opacity: 1 }
   }
 
+  /* "Breathing" square for pending states (DESIGN-SYSTEM: Pending) */
   @keyframes pulse-subtle {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(71, 159, 250, 0.4); }
-    50% { opacity: 0.95; box-shadow: 0 0 0 4px rgba(71, 159, 250, 0.1); }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
   }
 
   @keyframes indeterminate {
@@ -107,924 +371,117 @@
 }
 
 /* CSS variables for light mode (secondary consideration per design system) */
+/* ============================================================
+   Vibe Teamlead design tokens
+   Source of truth: apps/desktop/design/DESIGN-SYSTEM.md (shared with Meter).
+   Instrument panel: radius 0, no shadows, hairline structure,
+   vermilion only as a signal ("needs attention").
+   ============================================================ */
+
 :root {
-  /* Light Mode - Warm off-white tones */
-  --background: #F2F2ED;
-  --foreground: #0B0B0F;
+  /* Meter palette */
+  --vt-ground: #E8EAE3;
+  --vt-ground-alt: #DFE1D9;
+  --vt-panel: #EFF0EA;
+  --vt-paper: #EFF0EA;
+  --vt-ink: #1C1D19;
+  --vt-ink-hover: #2A2C25;
+  --vt-ink-line: #33352E;
+  --vt-ink-line-soft: #26271F;
+  --vt-text-secondary: #4C4F46;
+  --vt-text-muted: #565951;
+  --vt-text-muted-dark: #8C8E83;
+  --vt-text-muted-dark-soft: #9D9F94;
+  --vt-hairline: #C6C8BE;
+  --vt-hairline-soft: #D3D5CC;
+  --vt-signal: #D6401A;
+  --vt-signal-text: #B5340F;
+  --vt-signal-on-dark: #F0613C;
+  --vt-chip-low: #D8DAD0;
 
-  --card: #FFFFFF;
-  --card-foreground: #0B0B0F;
+  /* Semantic mapping (light) */
+  --background: var(--vt-ground);
+  --foreground: var(--vt-ink);
+  --card: var(--vt-panel);
+  --card-foreground: var(--vt-ink);
+  --popover: var(--vt-panel);
+  --popover-foreground: var(--vt-ink);
+  --primary: var(--vt-ink);
+  --primary-foreground: var(--vt-paper);
+  --secondary: var(--vt-ground-alt);
+  --secondary-foreground: var(--vt-ink);
+  --muted: var(--vt-ground-alt);
+  --muted-foreground: var(--vt-text-muted);
+  --accent: var(--vt-chip-low);
+  --accent-foreground: var(--vt-ink);
+  --destructive: var(--vt-signal-text);
+  --destructive-foreground: var(--vt-paper);
+  --border: var(--vt-hairline);
+  --input: var(--vt-ink);
+  --ring: var(--vt-ink);
+  --sidebar: var(--vt-ink);
+  --sidebar-foreground: var(--vt-text-muted-dark-soft);
 
-  /* Accent - Muted olive/yellow for light mode */
-  --primary: #A5A66A;
-  --primary-foreground: #0B0B0F;
+  /* States are told apart by fill + label, not hue: only "attention" is vermilion. */
+  --success: var(--vt-text-secondary);
+  --success-foreground: var(--vt-paper);
+  --success-light: var(--vt-chip-low);
+  --warning: var(--vt-signal-text);
+  --warning-foreground: var(--vt-paper);
+  --warning-light: var(--vt-chip-low);
+  --info: var(--vt-text-muted);
+  --info-foreground: var(--vt-paper);
+  --info-light: var(--vt-chip-low);
+  --error: var(--vt-signal-text);
+  --error-light: var(--vt-chip-low);
 
-  --secondary: #E8E8E3;
-  --secondary-foreground: #0B0B0F;
+  /* No shadows: depth is a 1px line */
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-focus: 0 0 0 2px var(--ring);
 
-  --muted: #EDEDE8;
-  --muted-foreground: #5C6974;
-
-  --accent: #EFEFE0;
-  --accent-foreground: #A5A66A;
-
-  --destructive: #D84F68;
-  --destructive-foreground: #FFFFFF;
-
-  --border: #DEDED9;
-  --input: #DEDED9;
-  --ring: #A5A66A;
-
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #0B0B0F;
-
-  --popover: #FFFFFF;
-  --popover-foreground: #0B0B0F;
-
-  /* Semantic colors */
-  --success: #4EBE96;
-  --success-foreground: #FFFFFF;
-  --success-light: #E0F5ED;
-  --warning: #D2D714;
-  --warning-foreground: #0B0B0F;
-  --warning-light: #F5F5D0;
-  --info: #479FFA;
-  --info-foreground: #FFFFFF;
-  --info-light: #E8F4FF;
-  --error: #D84F68;
-  --error-light: #FCE8EC;
-
-  /* Shadows - soft and diffused for light mode */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(165, 166, 106, 0.2);
-
-  /* Border radius */
-  --radius: 12px;
+  --radius: 0px;
 }
 
-/* Dark Mode - Oscura Midnight (Default/Primary theme per design system) */
-.dark {
-  /* Near-black backgrounds - OLED optimized */
-  --background: #0B0B0F;
-  --foreground: #E6E6E6;
-
-  /* Card surfaces - subtle elevation */
-  --card: #121216;
-  --card-foreground: #E6E6E6;
-
-  /* Accent - Saturated yellow for vibrant contrast */
-  --primary: #D6D876;
-  --primary-foreground: #0B0B0F;
-
-  --secondary: #1A1A1F;
-  --secondary-foreground: #E6E6E6;
-
-  --muted: #1A1A1F;
-  --muted-foreground: #868F97;
-
-  --accent: #2A2A1F;
-  --accent-foreground: #D6D876;
-
-  --destructive: #FF5C5C;
-  --destructive-foreground: #0B0B0F;
-
-  /* Subtle dark borders for card definition */
-  --border: #232323;
-  --input: #232323;
-  --ring: #D6D876;
-
-  --sidebar: #0E0E12;
-  --sidebar-foreground: #E6E6E6;
-
-  --popover: #1A1A1F;
-  --popover-foreground: #E6E6E6;
-
-  /* Semantic colors - muted for dark mode */
-  --success: #4EBE96;
-  --success-foreground: #0B0B0F;
-  --success-light: #1A2924;
-  --warning: #D2D714;
-  --warning-foreground: #0B0B0F;
-  --warning-light: #262618;
-  --info: #479FFA;
-  --info-foreground: #0B0B0F;
-  --info-light: #1A2230;
-  --error: #FF5C5C;
-  --error-light: #2A1A1A;
-
-  /* Shadows - deeper for dark mode, but cards use borders primarily */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.6);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.7);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.8);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.9);
-  --shadow-focus: 0 0 0 2px rgba(214, 216, 118, 0.2);
-}
-
-/* ============================================
-   DUSK THEME (Light)
-   Warm, muted palette inspired by Fey/Oscura
-   ============================================ */
-[data-theme="dusk"] {
-  /* Backgrounds */
-  --background: #F5F5F0;
-  --foreground: #131419;
-
-  /* Card surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #131419;
-
-  /* Primary accent - muted olive/yellow */
-  --primary: #B8B978;
-  --primary-foreground: #131419;
-
-  /* Secondary */
-  --secondary: #EAEAE5;
-  --secondary-foreground: #131419;
-
-  /* Muted */
-  --muted: #F0F0EB;
-  --muted-foreground: #5C6974;
-
-  /* Accent */
-  --accent: #F0F0E0;
-  --accent-foreground: #B8B978;
-
-  /* Destructive */
-  --destructive: #D84F68;
-  --destructive-foreground: #FFFFFF;
-
-  /* Borders and inputs */
-  --border: #E0E0DB;
-  --input: #E0E0DB;
-  --ring: #B8B978;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #131419;
-
-  /* Popover */
-  --popover: #FFFFFF;
-  --popover-foreground: #131419;
-
-  /* Semantic colors */
-  --success: #4EBE96;
-  --success-foreground: #FFFFFF;
-  --success-light: #E0F5ED;
-  --warning: #D2D714;
-  --warning-foreground: #131419;
-  --warning-light: #F5F5D0;
-  --info: #479FFA;
-  --info-foreground: #FFFFFF;
-  --info-light: #E8F4FF;
-  --error: #D84F68;
-  --error-light: #FCE8EC;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(184, 185, 120, 0.2);
-}
-
-/* ============================================
-   DUSK THEME (Dark)
-   Fey-inspired dark theme
-   ============================================ */
-[data-theme="dusk"].dark {
-  /* Backgrounds */
-  --background: #131419;
-  --foreground: #E6E6E6;
-
-  /* Card surfaces */
-  --card: #1A1B21;
-  --card-foreground: #E6E6E6;
-
-  /* Primary accent - pale yellow */
-  --primary: #E6E7A3;
-  --primary-foreground: #131419;
-
-  /* Secondary */
-  --secondary: #222329;
-  --secondary-foreground: #E6E6E6;
-
-  /* Muted */
-  --muted: #16171D;
-  --muted-foreground: #868F97;
-
-  /* Accent */
-  --accent: #2A2B1F;
-  --accent-foreground: #E6E7A3;
-
-  /* Destructive */
-  --destructive: #D84F68;
-  --destructive-foreground: #131419;
-
-  /* Borders and inputs */
-  --border: #282828;
-  --input: #282828;
-  --ring: #E6E7A3;
-
-  /* Sidebar */
-  --sidebar: #16171D;
-  --sidebar-foreground: #E6E6E6;
-
-  /* Popover */
-  --popover: #222329;
-  --popover-foreground: #E6E6E6;
-
-  /* Semantic colors */
-  --success: #4EBE96;
-  --success-foreground: #131419;
-  --success-light: #1A2E28;
-  --warning: #D2D714;
-  --warning-foreground: #131419;
-  --warning-light: #2A2B1A;
-  --info: #479FFA;
-  --info-foreground: #131419;
-  --info-light: #1A2433;
-  --error: #D84F68;
-  --error-light: #2E1A1F;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
-  --shadow-focus: 0 0 0 2px rgba(230, 231, 163, 0.25);
-}
-
-/* ============================================
-   LIME THEME (Light)
-   Fresh, energetic lime/chartreuse theme
-   ============================================ */
-[data-theme="lime"] {
-  /* Backgrounds */
-  --background: #E8F5A3;
-  --foreground: #1A1A2E;
-
-  /* Card surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #1A1A2E;
-
-  /* Primary accent - purple for contrast against lime */
-  --primary: #7C3AED;
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary */
-  --secondary: #F5F9E8;
-  --secondary-foreground: #1A1A2E;
-
-  /* Muted */
-  --muted: #F8FAFC;
-  --muted-foreground: #64748B;
-
-  /* Accent */
-  --accent: #EDE9FE;
-  --accent-foreground: #7C3AED;
-
-  /* Destructive */
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
-
-  /* Borders and inputs */
-  --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #7C3AED;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #1A1A2E;
-
-  /* Popover */
-  --popover: #FFFFFF;
-  --popover-foreground: #1A1A2E;
-
-  /* Semantic colors */
-  --success: #059669;
-  --success-foreground: #FFFFFF;
-  --success-light: #D1FAE5;
-  --warning: #D97706;
-  --warning-foreground: #FFFFFF;
-  --warning-light: #FEF3C7;
-  --info: #2563EB;
-  --info-foreground: #FFFFFF;
-  --info-light: #DBEAFE;
-  --error: #DC2626;
-  --error-light: #FEE2E2;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(124, 58, 237, 0.2);
-}
-
-/* ============================================
-   LIME THEME (Dark)
-   Fresh lime theme with deep purple undertones
-   ============================================ */
-[data-theme="lime"].dark {
-  /* Backgrounds */
-  --background: #0F0F1A;
-  --foreground: #F8FAFC;
-
-  /* Card surfaces */
-  --card: #1E1E2E;
-  --card-foreground: #F8FAFC;
-
-  /* Primary accent - bright purple for dark mode */
-  --primary: #8B5CF6;
-  --primary-foreground: #0F0F1A;
-
-  /* Secondary */
-  --secondary: #1A1A2E;
-  --secondary-foreground: #F8FAFC;
-
-  /* Muted */
-  --muted: #13131F;
-  --muted-foreground: #A1A1B5;
-
-  /* Accent */
-  --accent: #2E2350;
-  --accent-foreground: #8B5CF6;
-
-  /* Destructive */
-  --destructive: #F87171;
-  --destructive-foreground: #0F0F1A;
-
-  /* Borders and inputs */
-  --border: #2E2E40;
-  --input: #2E2E40;
-  --ring: #8B5CF6;
-
-  /* Sidebar */
-  --sidebar: #13131F;
-  --sidebar-foreground: #F8FAFC;
-
-  /* Popover */
-  --popover: #262638;
-  --popover-foreground: #F8FAFC;
-
-  /* Semantic colors */
-  --success: #34D399;
-  --success-foreground: #0F0F1A;
-  --success-light: #134E4A;
-  --warning: #FBBF24;
-  --warning-foreground: #0F0F1A;
-  --warning-light: #451A03;
-  --info: #60A5FA;
-  --info-foreground: #0F0F1A;
-  --info-light: #1E3A8A;
-  --error: #F87171;
-  --error-light: #450A0A;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
-  --shadow-focus: 0 0 0 3px rgba(139, 92, 246, 0.3);
-}
-
-/* ============================================
-   OCEAN THEME (Light)
-   Calm, professional blue tones
-   ============================================ */
-[data-theme="ocean"] {
-  /* Backgrounds */
-  --background: #E0F2FE;
-  --foreground: #0C4A6E;
-
-  /* Card surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #0C4A6E;
-
-  /* Primary accent - sky blue */
-  --primary: #0284C7;
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary */
-  --secondary: #F0F9FF;
-  --secondary-foreground: #0C4A6E;
-
-  /* Muted */
-  --muted: #F8FAFC;
-  --muted-foreground: #64748B;
-
-  /* Accent */
-  --accent: #E0F2FE;
-  --accent-foreground: #0284C7;
-
-  /* Destructive */
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
-
-  /* Borders and inputs */
-  --border: #BAE6FD;
-  --input: #BAE6FD;
-  --ring: #0284C7;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #0C4A6E;
-
-  /* Popover */
-  --popover: #FFFFFF;
-  --popover-foreground: #0C4A6E;
-
-  /* Semantic colors */
-  --success: #059669;
-  --success-foreground: #FFFFFF;
-  --success-light: #D1FAE5;
-  --warning: #D97706;
-  --warning-foreground: #FFFFFF;
-  --warning-light: #FEF3C7;
-  --info: #2563EB;
-  --info-foreground: #FFFFFF;
-  --info-light: #DBEAFE;
-  --error: #DC2626;
-  --error-light: #FEE2E2;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(2, 132, 199, 0.2);
-}
-
-/* ============================================
-   OCEAN THEME (Dark)
-   Deep ocean blue tones
-   ============================================ */
-[data-theme="ocean"].dark {
-  /* Backgrounds */
-  --background: #082F49;
-  --foreground: #F0F9FF;
-
-  /* Card surfaces */
-  --card: #164E63;
-  --card-foreground: #F0F9FF;
-
-  /* Primary accent - bright sky blue */
-  --primary: #38BDF8;
-  --primary-foreground: #082F49;
-
-  /* Secondary */
-  --secondary: #0C4A6E;
-  --secondary-foreground: #F0F9FF;
-
-  /* Muted */
-  --muted: #0A3D5C;
-  --muted-foreground: #7DD3FC;
-
-  /* Accent */
-  --accent: #0C4A6E;
-  --accent-foreground: #38BDF8;
-
-  /* Destructive */
-  --destructive: #F87171;
-  --destructive-foreground: #082F49;
-
-  /* Borders and inputs */
-  --border: #0E7490;
-  --input: #0E7490;
-  --ring: #38BDF8;
-
-  /* Sidebar */
-  --sidebar: #0A3D5C;
-  --sidebar-foreground: #F0F9FF;
-
-  /* Popover */
-  --popover: #1E6B8A;
-  --popover-foreground: #F0F9FF;
-
-  /* Semantic colors */
-  --success: #34D399;
-  --success-foreground: #082F49;
-  --success-light: #134E4A;
-  --warning: #FBBF24;
-  --warning-foreground: #082F49;
-  --warning-light: #451A03;
-  --info: #60A5FA;
-  --info-foreground: #082F49;
-  --info-light: #1E3A8A;
-  --error: #F87171;
-  --error-light: #450A0A;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
-  --shadow-focus: 0 0 0 3px rgba(56, 189, 248, 0.3);
-}
-
-/* ============================================
-   RETRO THEME (Light)
-   Warm, nostalgic amber/orange vibes
-   ============================================ */
-[data-theme="retro"] {
-  /* Backgrounds */
-  --background: #FEF3C7;
-  --foreground: #78350F;
-
-  /* Card surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #78350F;
-
-  /* Primary accent - warm amber/orange */
-  --primary: #D97706;
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary */
-  --secondary: #FFFBEB;
-  --secondary-foreground: #78350F;
-
-  /* Muted */
-  --muted: #FEFCE8;
-  --muted-foreground: #92400E;
-
-  /* Accent */
-  --accent: #FEF3C7;
-  --accent-foreground: #D97706;
-
-  /* Destructive */
-  --destructive: #B91C1C;
-  --destructive-foreground: #FFFFFF;
-
-  /* Borders and inputs */
-  --border: #FDE68A;
-  --input: #FDE68A;
-  --ring: #D97706;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #78350F;
-
-  /* Popover */
-  --popover: #FFFFFF;
-  --popover-foreground: #78350F;
-
-  /* Semantic colors */
-  --success: #15803D;
-  --success-foreground: #FFFFFF;
-  --success-light: #DCFCE7;
-  --warning: #CA8A04;
-  --warning-foreground: #78350F;
-  --warning-light: #FEF9C3;
-  --info: #1D4ED8;
-  --info-foreground: #FFFFFF;
-  --info-light: #DBEAFE;
-  --error: #B91C1C;
-  --error-light: #FEE2E2;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(217, 119, 6, 0.2);
-}
-
-/* ============================================
-   RETRO THEME (Dark)
-   Warm stone/brown tones with golden accents
-   ============================================ */
-[data-theme="retro"].dark {
-  /* Backgrounds */
-  --background: #1C1917;
-  --foreground: #FEFCE8;
-
-  /* Card surfaces */
-  --card: #44403C;
-  --card-foreground: #FEFCE8;
-
-  /* Primary accent - bright amber/gold */
-  --primary: #FBBF24;
-  --primary-foreground: #1C1917;
-
-  /* Secondary */
-  --secondary: #292524;
-  --secondary-foreground: #FEFCE8;
-
-  /* Muted */
-  --muted: #1C1917;
-  --muted-foreground: #FDE68A;
-
-  /* Accent */
-  --accent: #451A03;
-  --accent-foreground: #FBBF24;
-
-  /* Destructive */
-  --destructive: #F87171;
-  --destructive-foreground: #1C1917;
-
-  /* Borders and inputs */
-  --border: #78716C;
-  --input: #78716C;
-  --ring: #FBBF24;
-
-  /* Sidebar */
-  --sidebar: #1C1917;
-  --sidebar-foreground: #FEFCE8;
-
-  /* Popover */
-  --popover: #57534E;
-  --popover-foreground: #FEFCE8;
-
-  /* Semantic colors */
-  --success: #4ADE80;
-  --success-foreground: #1C1917;
-  --success-light: #14532D;
-  --warning: #FACC15;
-  --warning-foreground: #1C1917;
-  --warning-light: #422006;
-  --info: #60A5FA;
-  --info-foreground: #1C1917;
-  --info-light: #1E3A8A;
-  --error: #F87171;
-  --error-light: #450A0A;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
-  --shadow-focus: 0 0 0 3px rgba(251, 191, 36, 0.3);
-}
-
-/* ============================================
-   NEO THEME (Light)
-   Modern, cyberpunk-inspired pink/purple palette
-   ============================================ */
-[data-theme="neo"] {
-  /* Backgrounds */
-  --background: #FDF4FF;
-  --foreground: #581C87;
-
-  /* Card surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #581C87;
-
-  /* Primary accent - fuchsia/magenta */
-  --primary: #D946EF;
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary */
-  --secondary: #FAF5FF;
-  --secondary-foreground: #581C87;
-
-  /* Muted */
-  --muted: #F5F3FF;
-  --muted-foreground: #7C3AED;
-
-  /* Accent */
-  --accent: #FAE8FF;
-  --accent-foreground: #D946EF;
-
-  /* Destructive */
-  --destructive: #E11D48;
-  --destructive-foreground: #FFFFFF;
-
-  /* Borders and inputs */
-  --border: #F0ABFC;
-  --input: #F0ABFC;
-  --ring: #D946EF;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #581C87;
-
-  /* Popover */
-  --popover: #FFFFFF;
-  --popover-foreground: #581C87;
-
-  /* Semantic colors */
-  --success: #06B6D4;
-  --success-foreground: #FFFFFF;
-  --success-light: #CFFAFE;
-  --warning: #F59E0B;
-  --warning-foreground: #581C87;
-  --warning-light: #FEF3C7;
-  --info: #8B5CF6;
-  --info-foreground: #FFFFFF;
-  --info-light: #EDE9FE;
-  --error: #E11D48;
-  --error-light: #FFE4E6;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(217, 70, 239, 0.2);
-}
-
-/* ============================================
-   NEO THEME (Dark)
-   Cyberpunk dark mode with neon pink/purple glow
-   ============================================ */
-[data-theme="neo"].dark {
-  /* Backgrounds */
-  --background: #0F0720;
-  --foreground: #FAF5FF;
-
-  /* Card surfaces */
-  --card: #2D1B4E;
-  --card-foreground: #FAF5FF;
-
-  /* Primary accent - bright pink/fuchsia */
-  --primary: #F0ABFC;
-  --primary-foreground: #0F0720;
-
-  /* Secondary */
-  --secondary: #1A0A30;
-  --secondary-foreground: #FAF5FF;
-
-  /* Muted */
-  --muted: #150825;
-  --muted-foreground: #E879F9;
-
-  /* Accent */
-  --accent: #581C87;
-  --accent-foreground: #F0ABFC;
-
-  /* Destructive */
-  --destructive: #FB7185;
-  --destructive-foreground: #0F0720;
-
-  /* Borders and inputs */
-  --border: #581C87;
-  --input: #581C87;
-  --ring: #F0ABFC;
-
-  /* Sidebar */
-  --sidebar: #150825;
-  --sidebar-foreground: #FAF5FF;
-
-  /* Popover */
-  --popover: #3D2563;
-  --popover-foreground: #FAF5FF;
-
-  /* Semantic colors */
-  --success: #22D3EE;
-  --success-foreground: #0F0720;
-  --success-light: #164E63;
-  --warning: #FBBF24;
-  --warning-foreground: #0F0720;
-  --warning-light: #451A03;
-  --info: #A78BFA;
-  --info-foreground: #0F0720;
-  --info-light: #4C1D95;
-  --error: #FB7185;
-  --error-light: #4C0519;
-
-  /* Shadows - with subtle neon glow effect */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(217, 70, 239, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 0 30px rgba(217, 70, 239, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 0 40px rgba(217, 70, 239, 0.15);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 0 50px rgba(217, 70, 239, 0.2);
-  --shadow-focus: 0 0 0 3px rgba(240, 171, 252, 0.4);
-}
-
-/* ============================================
-   FOREST THEME (Light)
-   Natural, earthy green tones
-   ============================================ */
-[data-theme="forest"] {
-  /* Backgrounds */
-  --background: #DCFCE7;
-  --foreground: #14532D;
-
-  /* Card surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #14532D;
-
-  /* Primary accent - natural green */
-  --primary: #16A34A;
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary */
-  --secondary: #F0FDF4;
-  --secondary-foreground: #14532D;
-
-  /* Muted */
-  --muted: #ECFDF5;
-  --muted-foreground: #166534;
-
-  /* Accent */
-  --accent: #DCFCE7;
-  --accent-foreground: #16A34A;
-
-  /* Destructive */
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
-
-  /* Borders and inputs */
-  --border: #86EFAC;
-  --input: #86EFAC;
-  --ring: #16A34A;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #14532D;
-
-  /* Popover */
-  --popover: #FFFFFF;
-  --popover-foreground: #14532D;
-
-  /* Semantic colors */
-  --success: #059669;
-  --success-foreground: #FFFFFF;
-  --success-light: #D1FAE5;
-  --warning: #CA8A04;
-  --warning-foreground: #14532D;
-  --warning-light: #FEF9C3;
-  --info: #0284C7;
-  --info-foreground: #FFFFFF;
-  --info-light: #E0F2FE;
-  --error: #DC2626;
-  --error-light: #FEE2E2;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(22, 163, 74, 0.2);
-}
-
-/* ============================================
-   FOREST THEME (Dark)
-   Deep forest green tones with bright green accents
-   ============================================ */
-[data-theme="forest"].dark {
-  /* Backgrounds */
-  --background: #052E16;
-  --foreground: #F0FDF4;
-
-  /* Card surfaces */
-  --card: #166534;
-  --card-foreground: #F0FDF4;
-
-  /* Primary accent - bright green for dark mode */
-  --primary: #4ADE80;
-  --primary-foreground: #052E16;
-
-  /* Secondary */
-  --secondary: #14532D;
-  --secondary-foreground: #F0FDF4;
-
-  /* Muted */
-  --muted: #0A3D1F;
-  --muted-foreground: #86EFAC;
-
-  /* Accent */
-  --accent: #14532D;
-  --accent-foreground: #4ADE80;
-
-  /* Destructive */
-  --destructive: #F87171;
-  --destructive-foreground: #052E16;
-
-  /* Borders and inputs */
-  --border: #166534;
-  --input: #166534;
-  --ring: #4ADE80;
-
-  /* Sidebar */
-  --sidebar: #0A3D1F;
-  --sidebar-foreground: #F0FDF4;
-
-  /* Popover */
-  --popover: #15803D;
-  --popover-foreground: #F0FDF4;
-
-  /* Semantic colors */
-  --success: #34D399;
-  --success-foreground: #052E16;
-  --success-light: #064E3B;
-  --warning: #FBBF24;
-  --warning-foreground: #052E16;
-  --warning-light: #451A03;
-  --info: #38BDF8;
-  --info-foreground: #052E16;
-  --info-light: #0C4A6E;
-  --error: #F87171;
-  --error-light: #450A0A;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
-  --shadow-focus: 0 0 0 3px rgba(74, 222, 128, 0.3);
+/* Dark: ink surfaces, paper text, "on dark" tokens from the design system.
+   .vt-ink-surface makes any region (e.g. the sidebar) an ink island in light mode. */
+.dark,
+.vt-ink-surface {
+  --background: var(--vt-ink);
+  --foreground: var(--vt-paper);
+  --card: var(--vt-ink-line-soft);
+  --card-foreground: var(--vt-paper);
+  --popover: var(--vt-ink-line-soft);
+  --popover-foreground: var(--vt-paper);
+  --primary: var(--vt-paper);
+  --primary-foreground: var(--vt-ink);
+  --secondary: var(--vt-ink-hover);
+  --secondary-foreground: var(--vt-paper);
+  --muted: var(--vt-ink-hover);
+  --muted-foreground: var(--vt-text-muted-dark-soft);
+  --accent: var(--vt-ink-hover);
+  --accent-foreground: var(--vt-paper);
+  --destructive: var(--vt-signal-on-dark);
+  --destructive-foreground: var(--vt-ink);
+  --border: var(--vt-ink-line);
+  --input: var(--vt-text-muted-dark);
+  --ring: var(--vt-signal-on-dark);
+  --sidebar: var(--vt-ink);
+  --sidebar-foreground: var(--vt-text-muted-dark-soft);
+
+  --success: var(--vt-text-muted-dark-soft);
+  --success-foreground: var(--vt-ink);
+  --success-light: var(--vt-ink-hover);
+  --warning: var(--vt-signal-on-dark);
+  --warning-foreground: var(--vt-ink);
+  --warning-light: var(--vt-ink-hover);
+  --info: var(--vt-text-muted-dark);
+  --info-foreground: var(--vt-ink);
+  --info-light: var(--vt-ink-hover);
+  --error: var(--vt-signal-on-dark);
+  --error-light: var(--vt-ink-hover);
 }
 
 /* Base styles */
@@ -1060,7 +517,7 @@ body {
 
 :root .card-surface {
   /* Light mode can use subtle shadows */
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 /* Interactive card hover state */
@@ -1073,7 +530,7 @@ body {
 }
 
 .dark .card-interactive:hover {
-  border-color: rgba(214, 216, 118, 0.5);
+  border-color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 
 /* Surface elevated - for dropdowns, popovers */
@@ -1084,7 +541,7 @@ body {
 }
 
 .dark .surface-elevated {
-  background-color: #1A1A1F;
+  background-color: var(--popover);
 }
 
 /* Custom scrollbar - following design system */
@@ -1124,11 +581,11 @@ body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(134, 143, 151, 0.3);
+  background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(134, 143, 151, 0.5);
+  background: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
 }
 
 /* Electron window dragging area */
@@ -1150,29 +607,17 @@ body {
   outline-offset: 2px;
 }
 
-/* Column status colors for Kanban */
-.column-backlog {
-  border-top-color: var(--muted-foreground);
-}
-
-.column-queue {
-  border-top-color: #22d3ee;
-}
-
-.column-in-progress {
-  border-top-color: var(--info);
-}
-
-.column-ai-review {
-  border-top-color: var(--warning);
+/* Kanban columns: status is told by the label; only "waiting for you" is vermilion */
+.column-backlog,
+.column-queue,
+.column-in-progress,
+.column-ai-review,
+.column-done {
+  border-top-color: var(--foreground);
 }
 
 .column-human-review {
-  border-top-color: #A855F7;
-}
-
-.column-done {
-  border-top-color: var(--success);
+  border-top-color: var(--vt-signal);
 }
 
 /* Progress bar working animation - subtle glow sweep */
@@ -1200,9 +645,9 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(214, 216, 118, 0.4) 25%,
-    rgba(214, 216, 118, 0.7) 50%,
-    rgba(214, 216, 118, 0.4) 75%,
+    color-mix(in srgb, var(--foreground) 40%, transparent) 25%,
+    color-mix(in srgb, var(--foreground) 70%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 40%, transparent) 75%,
     transparent 100%
   );
   background-size: 200% 100%;
@@ -1216,9 +661,9 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(165, 166, 106, 0.3) 25%,
-    rgba(165, 166, 106, 0.6) 50%,
-    rgba(165, 166, 106, 0.3) 75%,
+    color-mix(in srgb, var(--foreground) 30%, transparent) 25%,
+    color-mix(in srgb, var(--foreground) 60%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 30%, transparent) 75%,
     transparent 100%
   );
   background-size: 200% 100%;
@@ -1234,11 +679,11 @@ body {
 }
 
 .task-card-glow:hover {
-  box-shadow: 0 0 0 1px var(--primary), 0 4px 12px -2px rgba(214, 216, 118, 0.15);
+  box-shadow: none;
 }
 
 :root .task-card-glow:hover {
-  box-shadow: 0 0 0 1px var(--primary), var(--shadow-lg);
+  box-shadow: none;
 }
 
 /* Progress bar working animation */
@@ -1280,17 +725,14 @@ body {
 
 /* Drag overlay shadow */
 .drag-overlay-shadow {
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.25),
-    0 10px 10px -5px rgba(0, 0, 0, 0.15),
-    0 0 0 1px var(--primary);
+  box-shadow: none;
 }
 
 /* Drop zone highlight */
 .drop-zone-active {
   background: linear-gradient(
     to bottom,
-    rgba(214, 216, 118, 0.08),
+    color-mix(in srgb, var(--foreground) 8%, transparent),
     transparent
   );
   border-color: var(--primary);
@@ -1382,13 +824,13 @@ body {
 }
 
 .task-card-enhanced:hover {
-  border-color: rgba(214, 216, 118, 0.4);
-  box-shadow: 0 0 0 1px rgba(214, 216, 118, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  box-shadow: none;
   transform: translateY(-1px);
 }
 
 .dark .task-card-enhanced:hover {
-  box-shadow: 0 0 0 1px rgba(214, 216, 118, 0.15), 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
 }
 
 /* Running task pulse animation */
@@ -1399,11 +841,11 @@ body {
 @keyframes task-pulse {
   0%, 100% {
     border-color: var(--primary);
-    box-shadow: 0 0 0 0 rgba(214, 216, 118, 0.4);
+    box-shadow: none;
   }
   50% {
-    border-color: rgba(214, 216, 118, 0.8);
-    box-shadow: 0 0 0 4px rgba(214, 216, 118, 0.1);
+    border-color: color-mix(in srgb, var(--foreground) 80%, transparent);
+    box-shadow: none;
   }
 }
 
@@ -1415,11 +857,11 @@ body {
 @keyframes stuck-pulse {
   0%, 100% {
     border-color: var(--warning);
-    box-shadow: 0 0 0 0 rgba(210, 215, 20, 0.3);
+    box-shadow: none;
   }
   50% {
-    border-color: rgba(210, 215, 20, 0.8);
-    box-shadow: 0 0 8px rgba(210, 215, 20, 0.2);
+    border-color: var(--border);
+    box-shadow: none;
   }
 }
 
@@ -1428,7 +870,7 @@ body {
   background: linear-gradient(
     90deg,
     var(--primary) 0%,
-    rgba(214, 216, 118, 0.7) 50%,
+    color-mix(in srgb, var(--foreground) 70%, transparent) 50%,
     var(--primary) 100%
   );
   background-size: 200% 100%;
@@ -1479,20 +921,20 @@ body {
 
 .empty-column-dropzone:hover,
 .empty-column-dropzone.active {
-  border-color: rgba(214, 216, 118, 0.4);
-  background-color: rgba(214, 216, 118, 0.05);
+  border-color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
 /* Drag overlay card styling */
 .drag-overlay-card {
   opacity: 0.95;
   transform: rotate(2deg) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   cursor: grabbing;
 }
 
 .dark .drag-overlay-card {
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
 }
 
 /* Dragging source placeholder effect */
@@ -1505,7 +947,7 @@ body {
 /* Drop zone highlight when dragging over */
 .drop-zone-highlight {
   border-color: var(--primary) !important;
-  background-color: rgba(214, 216, 118, 0.08) !important;
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
 }
 
 /* Column count badge styling */
@@ -1557,12 +999,8 @@ body {
 
 /* Review section styling */
 .review-section-highlight {
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  background: linear-gradient(
-    135deg,
-    rgba(168, 85, 247, 0.08) 0%,
-    rgba(168, 85, 247, 0.02) 100%
-  );
+  border: 1px solid var(--foreground);
+  background: var(--card);
   border-radius: var(--radius-xl);
   padding: 1rem;
 }
@@ -1576,7 +1014,7 @@ body {
   color: var(--success);
   padding: 1rem;
   border-radius: var(--radius-lg);
-  background: rgba(78, 190, 150, 0.1);
+  background: var(--muted);
 }
 
 /* Section divider with gradient */
@@ -1646,12 +1084,12 @@ body {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .dark .tooltip-enhanced {
-  background: #1A1A1F;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  background: var(--popover);
+  box-shadow: none;
 }
 
 /* ============================================
@@ -1727,3 +1165,50 @@ body {
 [data-ui-scale="190"] { font-size: 30.4px; }
 [data-ui-scale="195"] { font-size: 31.2px; }
 [data-ui-scale="200"] { font-size: 32px; }
+
+/* Reduced motion: no movement at all (DESIGN-SYSTEM accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Visible 2px focus ring on every interactive element */
+:where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Nested ink islands must re-resolve Tailwind's colour aliases locally
+   (they are computed once on :root otherwise). */
+.vt-ink-surface {
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+}

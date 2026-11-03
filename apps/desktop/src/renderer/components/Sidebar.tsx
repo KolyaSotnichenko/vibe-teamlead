@@ -19,7 +19,6 @@ import {
   Sparkles,
   GitBranch,
   HelpCircle,
-  Heart,
   Wrench,
   PanelLeft,
   PanelLeftClose
@@ -301,10 +300,12 @@ export function Sidebar({
         disabled={!selectedProjectId}
         aria-keyshortcuts={item.shortcut}
         className={cn(
-          'flex w-full items-center rounded-lg text-sm transition-all duration-200',
-          'hover:bg-accent hover:text-accent-foreground',
+          // DESIGN-SYSTEM sidebar item: muted on ink; active = ink-hover fill,
+          // paper text and a 2px vermilion mark on the left.
+          'relative flex w-full min-h-11 items-center text-sm text-sidebar-foreground transition-colors',
+          'hover:bg-accent hover:text-foreground',
           'disabled:pointer-events-none disabled:opacity-50',
-          isActive && 'bg-accent text-accent-foreground',
+          isActive && "bg-accent text-foreground before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-[var(--vt-signal)] before:content-['']",
           isCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'
         )}
       >
@@ -345,7 +346,7 @@ export function Sidebar({
   return (
     <TooltipProvider>
       <div className={cn(
-        "flex h-full flex-col bg-sidebar border-r border-border transition-all duration-300",
+        "vt-ink-surface flex h-full flex-col bg-sidebar text-foreground border-r border-border transition-all duration-300",
         isCollapsed ? "w-16" : "w-64"
       )}>
         {/* Header with drag area - extra top padding for macOS traffic lights */}
@@ -440,7 +441,7 @@ export function Sidebar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => window.open('https://github.com/AndyMik90/Auto-Claude/issues', '_blank')}
+                  onClick={() => window.open('https://github.com/KolyaSotnichenko/vibe-teamlead/issues', '_blank')}
                   aria-label={t('tooltips.help')}
                 >
                   <HelpCircle className="h-4 w-4" />
@@ -449,26 +450,6 @@ export function Sidebar({
               <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.help')}</TooltipContent>
             </Tooltip>
           </div>
-
-          {/* Sponsor link */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => window.open('https://github.com/sponsors/AndyMik90', '_blank')}
-                className={cn(
-                  'flex w-full items-center text-xs transition-colors',
-                  'text-amber-500/70 hover:text-amber-400',
-                  isCollapsed ? 'justify-center' : 'gap-1.5 px-3'
-                )}
-              >
-                <Heart className="h-3.5 w-3.5" />
-                {!isCollapsed && <span>{t('actions.sponsor')}</span>}
-              </button>
-            </TooltipTrigger>
-            {isCollapsed && (
-              <TooltipContent side="right">{t('actions.sponsor')}</TooltipContent>
-            )}
-          </Tooltip>
 
           {/* New Task button */}
           <Tooltip>

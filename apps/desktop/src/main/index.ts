@@ -390,10 +390,10 @@ function createWindow(): void {
 }
 
 // Set app name before ready (for dock tooltip on macOS in dev mode)
-app.setName('Aperant');
+app.setName('Vibe Teamlead');
 if (isMacOS()) {
   // Force the name to appear in dock on macOS
-  app.name = 'Aperant';
+  app.name = 'Vibe Teamlead';
 }
 
 // Fix Windows GPU cache permission errors (0x5 Access Denied)

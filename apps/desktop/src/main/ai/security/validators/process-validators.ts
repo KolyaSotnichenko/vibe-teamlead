@@ -88,6 +88,8 @@ const BLOCKED_PROCESS_NAMES = new Set([
   'Electron',
   'auto-claude',
   'Aperant',
+  'Vibe Teamlead',
+  'vibe-teamlead',
 ]);
 
 // ---------------------------------------------------------------------------
