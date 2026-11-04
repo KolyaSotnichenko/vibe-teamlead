@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mergeTaskBranch } from '../git-merge';
+import { mergeTaskBranch, withoutGitHooks } from '../git-merge';
 
 const BINARY = Buffer.from([0x00, 0x01, 0xa8, 0x10, 0xff, 0xfe, 0x00, 0x80]);
 const BRANCH = 'vibe-teamlead/001-task';
+const ALL_HOOKS = ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit', 'pre-merge-commit', 'post-merge', 'reference-transaction', 'post-index-change', 'post-checkout', 'post-rewrite'];
 
 describe('mergeTaskBranch', () => {
   let repo: string;
@@ -125,7 +126,7 @@ describe('mergeTaskBranch', () => {
   it('runs no hooks: a branch could bring its own, and they would run outside the agents\' limits', async () => {
     const marker = join(repo, 'hook-ran');
     mkdirSync(join(wt, 'hooks'));
-    for (const name of ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit', 'pre-merge-commit', 'post-merge']) {
+    for (const name of ALL_HOOKS) {
       writeFileSync(join(wt, 'hooks', name), `#!/bin/sh\ntouch "${marker}"\nexit 1\n`);
       chmodSync(join(wt, 'hooks', name), 0o755);
     }
@@ -174,6 +175,23 @@ describe('mergeTaskBranch', () => {
       expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('main side\n');
     });
 
+    it('names the files the model wrote in the commit', async () => {
+      await merge({ resolveConflict: async () => 'both sides' });
+      expect(git(repo, 'log', '-1', '--format=%b')).toBe('Conflicts resolved by the model, not reviewed:\n- shared.txt');
+    });
+
+    it('runs no hooks on a rollback either', async () => {
+      const marker = join(repo, 'hook-ran');
+      mkdirSync(join(repo, '.git', 'tracked-hooks'));
+      for (const name of ALL_HOOKS) {
+        writeFileSync(join(repo, '.git', 'tracked-hooks', name), `#!/bin/sh\ntouch "${marker}"\n`);
+        chmodSync(join(repo, '.git', 'tracked-hooks', name), 0o755);
+      }
+      git(repo, 'config', 'core.hooksPath', '.git/tracked-hooks');
+      await expect(merge()).resolves.toMatchObject({ status: 'conflicts' });
+      expect(existsSync(marker)).toBe(false);
+    });
+
     it('rolls back when the resolver fails', async () => {
       const result = await merge({ resolveConflict: async () => { throw new Error('no model'); } });
       expect(result.status).toBe('conflicts');
@@ -213,6 +231,18 @@ describe('mergeTaskBranch', () => {
       expect(readFileSync(outside, 'utf-8')).toBe('untouched');
     });
 
+    it('writes to the conflicted file itself when its name holds a tab', async () => {
+      const name = 'a\tb.txt';
+      writeFileSync(join(repo, 'a'), 'must stay\n');
+      git(repo, 'add', 'a');
+      conflictWith(name, () => writeFileSync(join(repo, name), 'main\n'), () => writeFileSync(join(wt, name), 'task\n'));
+
+      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'merged' });
+
+      expect(readFileSync(join(repo, 'a'), 'utf-8')).toBe('must stay\n');
+      expect(readFileSync(join(repo, name), 'utf-8')).toBe('anything\n');
+    });
+
     it('a binary file', async () => {
       conflictWith('logo.png', () => writeFileSync(join(repo, 'logo.png'), Buffer.from([0, 1, 2])), () => writeFileSync(join(wt, 'logo.png'), Buffer.from([0, 3, 4])));
       await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'conflicts', conflictFiles: ['logo.png'] });
@@ -242,6 +272,11 @@ describe('mergeTaskBranch', () => {
     const after = head();
     await expect(merge()).resolves.toMatchObject({ status: 'up_to_date' });
     expect(head()).toBe(after);
+  });
+
+  it('adds to git config passed through the environment, not over it', () => {
+    expect(withoutGitHooks({ GIT_CONFIG_COUNT: '2' })).toMatchObject({ GIT_CONFIG_COUNT: '3', GIT_CONFIG_KEY_2: 'core.hooksPath' });
+    expect(withoutGitHooks({})).toMatchObject({ GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.hooksPath' });
   });
 
   it('accepts a base branch given as origin/main', async () => {

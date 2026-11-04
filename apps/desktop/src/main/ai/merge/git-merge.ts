@@ -5,9 +5,9 @@
  */
 
 import { execFile } from 'node:child_process';
-import { lstatSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { devNull } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, sep } from 'node:path';
 
 /** The three versions of a text file in conflict, as git holds them */
 export interface MergeConflictVersions {
@@ -43,10 +43,20 @@ export interface MergeTaskBranchResult {
 }
 
 /**
- * Hooks stay off: `core.hooksPath` can point into the repository, so the branch
- * could bring the hooks that run here, outside the limits agents work under.
+ * The environment for git commands that must run no hooks: `core.hooksPath` can
+ * point into the repository, so a merged branch could bring the hooks that run
+ * here, outside the limits agents work under. Set in the environment so that
+ * every command is covered, including ref updates (reference-transaction). Pure.
  */
-const NO_HOOKS = ['-c', `core.hooksPath=${devNull}`];
+export function withoutGitHooks(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const index = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0;
+  return {
+    ...env,
+    GIT_CONFIG_COUNT: String(index + 1),
+    [`GIT_CONFIG_KEY_${index}`]: 'core.hooksPath',
+    [`GIT_CONFIG_VALUE_${index}`]: devNull,
+  };
+}
 
 const REGULAR_FILE = new Set(['100644', '100755']);
 
@@ -60,7 +70,8 @@ function isUsableMerge(content: string | undefined, versions: MergeConflictVersi
 }
 
 export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<MergeTaskBranchResult> {
-  const { projectDir, branch, worktreePath, stageOnly, git = 'git', env } = options;
+  const { projectDir, branch, worktreePath, stageOnly, git = 'git' } = options;
+  const env = withoutGitHooks(options.env ?? process.env);
   const baseBranch = options.baseBranch.replace(/^origin\//, '');
 
   const run = (args: string[], cwd = projectDir) =>
@@ -77,16 +88,23 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
     if (squashMsg) rmSync(isAbsolute(squashMsg) ? squashMsg : join(projectDir, squashMsg), { force: true });
   };
 
+  const isPlainFileInProject = (file: string) => {
+    const target = join(projectDir, file);
+    const root = realpathSync(projectDir);
+    const parent = realpathSync(dirname(target));
+    return (parent === root || parent.startsWith(`${root}${sep}`)) && !lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink();
+  };
+
   /** Only text files both sides still have reach the resolver; the rest stay for the user. */
   const resolveOne = async (file: string, versions: Map<string, { mode: string; blob: string }>): Promise<string | undefined> => {
     const ours = versions.get('2');
     const theirs = versions.get('3');
     if (!ours || !theirs || [...versions.values()].some(({ mode }) => !REGULAR_FILE.has(mode))) return undefined;
-    if (lstatSync(join(projectDir, file), { throwIfNoEntry: false })?.isSymbolicLink()) return undefined;
     const read = async (blob?: string) => (blob ? (await run(['cat-file', 'blob', blob])).raw : '');
     const conflict = { file, base: await read(versions.get('1')?.blob), ours: await read(ours.blob), theirs: await read(theirs.blob) };
     if (isBinary(conflict.base) || isBinary(conflict.ours) || isBinary(conflict.theirs)) return undefined;
     try {
+      if (!isPlainFileInProject(file)) return undefined;
       const resolved = await options.resolveConflict(conflict);
       if (!isUsableMerge(resolved, conflict)) return undefined;
       return conflict.ours.endsWith('\n') && !resolved.endsWith('\n') ? `${resolved}\n` : resolved;
@@ -105,16 +123,20 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
 
   if (worktreePath && (await run(['status', '--porcelain', '--untracked-files=no'], worktreePath)).stdout) {
     await run(['add', '-u'], worktreePath);
-    const saved = await run([...NO_HOOKS, 'commit', '-m', 'Changes left uncommitted at merge'], worktreePath);
+    const saved = await run(['commit', '-m', 'Changes left uncommitted at merge'], worktreePath);
     if (!saved.ok) return refused(saved.output);
   }
 
-  const merge = await run([...NO_HOOKS, 'merge', '--no-commit', ...(stageOnly ? ['--squash'] : ['--no-ff']), branch]);
+  let resolvedByModel: string[] = [];
+  const merge = await run(['merge', '--no-commit', ...(stageOnly ? ['--squash'] : ['--no-ff']), branch]);
   if (!merge.ok) {
     // Stage 1 is the base, 2 the project's branch, 3 the task
     const stages = new Map<string, Map<string, { mode: string; blob: string }>>();
     for (const entry of (await run(['ls-files', '--unmerged', '-z'])).raw.split('\0').filter(Boolean)) {
-      const [info, file] = entry.split('\t');
+      // Only the first tab separates: a file name can hold one
+      const tab = entry.indexOf('\t');
+      const info = entry.slice(0, tab);
+      const file = entry.slice(tab + 1);
       const [mode, blob, stage] = info.split(' ');
       if (!stages.has(file)) stages.set(file, new Map());
       stages.get(file)?.set(stage, { mode, blob });
@@ -132,7 +154,13 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
       }
       merged.set(file, resolved);
     }
-    for (const [file, content] of merged) writeFileSync(join(projectDir, file), content, 'utf-8');
+    try {
+      for (const [file, content] of merged) writeFileSync(join(projectDir, file), content, 'utf-8');
+    } catch (error) {
+      await rollBack();
+      return refused(error instanceof Error ? error.message : String(error));
+    }
+    resolvedByModel = conflictFiles;
     const added = await run(['add', '--', ...conflictFiles]);
     if (!added.ok) {
       await rollBack();
@@ -146,7 +174,9 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   }
   if (!(await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])).ok) return { status: 'up_to_date' };
 
-  const committed = await run([...NO_HOOKS, 'commit', '-m', options.message]);
+  // The commit says which files no person has checked, since it goes in without a review
+  const body = resolvedByModel.length ? `\n\nConflicts resolved by the model, not reviewed:\n${resolvedByModel.map((file) => `- ${file}`).join('\n')}` : '';
+  const committed = await run(['commit', '-m', `${options.message}${body}`]);
   if (!committed.ok) {
     await rollBack();
     return refused(committed.output);

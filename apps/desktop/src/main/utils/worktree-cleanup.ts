@@ -25,6 +25,7 @@ import { taskLogService } from '../task-log-service';
 import { getToolPath } from '../cli-tool-manager';
 import { stopStorybooksUnder } from '../design/storybook-service';
 import { getIsolatedGitEnv } from './git-isolation';
+import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
 
 /**
@@ -337,7 +338,7 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
     execFileSync(getToolPath('git'), ['worktree', 'prune'], {
       cwd: projectPath,
       encoding: 'utf-8',
-      env: getIsolatedGitEnv(),
+      env: withoutGitHooks(getIsolatedGitEnv()),
       timeout
     });
     console.warn(`${logPrefix} Git worktree references pruned`);
@@ -359,7 +360,7 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
       execFileSync(getToolPath('git'), ['branch', '-D', branch], {
         cwd: projectPath,
         encoding: 'utf-8',
-        env: getIsolatedGitEnv(),
+        env: withoutGitHooks(getIsolatedGitEnv()),
         timeout
       });
       console.warn(`${logPrefix} Branch deleted: ${branch}`);
