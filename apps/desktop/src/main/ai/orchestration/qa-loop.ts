@@ -476,6 +476,8 @@ export class QALoop extends EventEmitter {
         const iterationStart = Date.now();
         this.emitTyped('qa-iteration-start', iteration, maxIterations);
 
+        const reviewStartFingerprint = await this.config.approvals?.fingerprint();
+
         // Security gates first, so the reviewer and fixer see their findings
         this.lastGateKeys = [];
         const securityIssues = await this.runGates();
@@ -604,9 +606,14 @@ export class QALoop extends EventEmitter {
         if (status === 'approved') {
           await this.recordIteration(iteration, 'approved', [], iterationDuration, { reviewed_commit: reviewedCommit });
           await this.writeReports('approved');
+          // Only for the code it reviewed: if that moved during the review, a later run reviews again
           if (this.config.approvals) {
             const fingerprint = await this.config.approvals.fingerprint();
-            recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint);
+            if (fingerprint === reviewStartFingerprint) {
+              recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint);
+            } else {
+              this.emitTyped('log', 'The code changed during the review, so this approval will not be reused by a later run');
+            }
           }
           return this.outcome(true, iteration, Date.now() - startTime);
         }

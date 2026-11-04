@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -73,6 +73,31 @@ describe('workTreeFingerprint', () => {
     const before = await workTreeFingerprint(repo);
     writeFileSync(join(repo, 'new.txt'), 'longer');
     expect(await workTreeFingerprint(repo)).not.toBe(before);
+  });
+
+  it('sees a new file change even with the same size and time', async () => {
+    const file = join(repo, 'new.txt');
+    const when = new Date('2026-01-01T00:00:00Z');
+    writeFileSync(file, 'aaaa');
+    utimesSync(file, when, when);
+    const before = await workTreeFingerprint(repo);
+    writeFileSync(file, 'bbbb');
+    utimesSync(file, when, when);
+    expect(await workTreeFingerprint(repo)).not.toBe(before);
+  });
+
+  it('reads a link as a link, not what it points at', async () => {
+    const outside = join(tmp(), 'target');
+    writeFileSync(outside, 'one');
+    symlinkSync(outside, join(repo, 'link'));
+    const before = await workTreeFingerprint(repo);
+    writeFileSync(outside, 'two');
+    expect(await workTreeFingerprint(repo)).toBe(before);
+  });
+
+  it.each(['--skip-worktree', '--assume-unchanged'])('is unknown when git is told not to look at a file (%s)', async (flag) => {
+    git('update-index', flag, 'a.txt');
+    await expect(workTreeFingerprint(repo)).resolves.toBeUndefined();
   });
 
   it("ignores the app's own folder: reports are written there after the review", async () => {

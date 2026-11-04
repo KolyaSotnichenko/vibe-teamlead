@@ -208,6 +208,23 @@ describe('QALoop', () => {
       expect(runSession).toHaveBeenCalledTimes(1);
     });
 
+    it('an approval is recorded only for the code the review started on', async () => {
+      const store = await approvals();
+      let state = 'code-1';
+      const { approve } = planSays(completedPlan());
+      const runSession = vi.fn(async () => {
+        state = 'changed during the review';
+        approve();
+        return makeSessionResult('completed');
+      });
+
+      const outcome = await new QALoop(makeConfig({ runSession, approvals: { dir: store.dir, fingerprint: async () => state } })).run();
+
+      expect(outcome.approved).toBe(true);
+      expect(approvalHolds(store.dir, PROJECT_DIR, SPEC_DIR, 'code-1')).toBe(false);
+      expect(approvalHolds(store.dir, PROJECT_DIR, SPEC_DIR, state)).toBe(false);
+    });
+
     it('a new review drops the record, so a rejection leaves nothing to trust', async () => {
       const store = await approvals('code-2');
       recordApproval(store.dir, PROJECT_DIR, SPEC_DIR, 'code-2');
