@@ -89,3 +89,7 @@ An agent started a dev server in the background and didn't close its background 
 ## "Noted: the dev-server process … was stopped by the background timeout"
 
 Agents start dev servers and watchers as background tasks (QA does this to test the API or the UI). A task left running keeps the session open, and when it times out the agent wakes up for one more turn just to say so. That's harmless but costs tokens. Agents are told to stop every background task with TaskStop before finishing. The app also checks: if an agent tries to finish while tasks it started are still running, it is asked once to stop them first.
+
+## "No such tool available: mcp__playwright__…"
+
+QA gets browser tools only for a web frontend (Playwright) or an Electron app with Electron MCP turned on. For an API or a library there are none. QA's instructions now say which browser tools the session has (or that there are none, and why), so it doesn't try a tool that isn't there; without browser tools it checks behaviour with tests, `curl` and the code and says in the report that visual checks weren't possible. If your project has a web UI and QA still reports no browser tools, check Settings → Tools and that Chrome is installed.

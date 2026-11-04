@@ -222,6 +222,7 @@ export function tokensSummary(tokens: DesignTokens): string {
   if (!tokens.gradients) lines.push('Gradients: none');
   if (tokens.spacing?.length) lines.push(`Spacing scale: ${tokens.spacing.join(', ')} px`);
   for (const b of tokens.bannedPatterns ?? []) lines.push(`Never: ${b.message}`);
+  for (const a of tokens.allowedPatterns ?? []) lines.push(`Allowed on purpose (the design check skips it): \`${a.pattern}\` (${a.message})`);
   return lines.join('\n');
 }
 
@@ -276,7 +277,7 @@ export function designPromptSection(info: DesignSystemInfo, options: DesignPromp
   for (const rule of ANTI_SLOP_RULES) parts.push(`- ${rule}`);
   if (options.role === 'qa' && info.exists) {
     parts.push('');
-    parts.push('Design review (when UI changed): take screenshots of every changed screen and state (empty, loading, error, long text), compare them with the design system and the rules above, and add a "Design Review" table to qa_report.md: | Screen | Rule | Finding | Result |. The app also runs a static design check on the lines this task added; its results are in `design_check.md` in the spec directory (read it), and in blocking mode they arrive as QA issues.');
+    parts.push('Design review (when UI changed): take screenshots of every changed screen and state (empty, loading, error, long text), compare them with the design system and the rules above, and add a "Design Review" table to qa_report.md: | Screen | Rule | Finding | Result |. The app also runs a static design check on the lines this task added; its results are in `design_check.md` in the spec directory (read it), and in blocking mode they arrive as QA issues. The check runs inside Vibe Teamlead, not in this project: its rules are the design system above (including the patterns allowed on purpose), so do not search the project for its code or config.');
   }
   const refs = referencesPromptSection(info.references, { audience: options.role });
   if (refs) {

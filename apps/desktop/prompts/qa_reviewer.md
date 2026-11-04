@@ -205,7 +205,7 @@ Check the PROJECT CAPABILITIES section above for available startup commands.
    Args: {"url": "http://localhost:[port]"}
    ```
 
-If no browser tools are in your tool list (a call answers "No such tool available"), don't try other tool names: there is no Puppeteer or other browser server. Verify UI behaviour with the project's own end-to-end tests (e.g. its Playwright or Cypress suite, run with Bash), HTTP checks (`curl`) and the code, and write in the report that visual verification was not possible in this session.
+The "Browser tools in this session" section at the end of your instructions says which browser tools you have; don't call one it doesn't list. If none are available, don't try other tool names: there is no Puppeteer or other browser server. Verify UI behaviour with the project's own end-to-end tests (e.g. its Playwright or Cypress suite, run with Bash), HTTP checks (`curl`) and the code, and write in the report that visual verification was not possible in this session.
 
 ### 4.2: Capture and Verify Screenshots
 

@@ -103,3 +103,11 @@ describe('allowed exceptions', () => {
   });
 });
 
+
+describe('tokens summary for prompts', () => {
+  it('lists the patterns the design system allows on purpose', async () => {
+    const { tokensSummary } = await import('../design-system');
+    const s = tokensSummary({ ...tokens, allowedPatterns: [{ pattern: 'repeating-linear-gradient\\(', message: 'Hatched backgrounds' }] });
+    expect(s).toContain('Allowed on purpose (the design check skips it): `repeating-linear-gradient\\(` (Hatched backgrounds)');
+  });
+});

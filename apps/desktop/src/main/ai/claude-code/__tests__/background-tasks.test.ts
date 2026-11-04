@@ -2,7 +2,7 @@ import type { HookInput } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
 
 import { backgroundTaskId, buildBackgroundTaskHooks } from '../background-tasks';
-import { buildQueryOptions } from '../runner';
+import { browserToolsSection, buildQueryOptions } from '../runner';
 import type { SessionConfig } from '../../session/types';
 
 const signal = new AbortController().signal;
@@ -76,5 +76,40 @@ describe('background task hooks', () => {
     expect(options.tools).toContain('Bash');
     expect(options.hooks?.Stop).toHaveLength(1);
     expect(options.hooks?.PostToolUse?.[0].matcher).toBe('Bash|TaskStop');
+  });
+});
+
+describe('browser tools section', () => {
+  it('names the browser tools QA really has', () => {
+    const s = browserToolsSection('qa_reviewer', ['vibe-teamlead', 'playwright'], { is_web_frontend: true });
+    expect(s).toContain('`mcp__playwright__*`');
+    expect(s).toMatch(/No other browser tools/);
+  });
+
+  it('tells QA there are none, and why, so it never probes for one', () => {
+    expect(browserToolsSection('qa_reviewer', ['context7'], { is_web_frontend: false })).toMatch(/None \(this project has no web or desktop UI\)\. Don't call/);
+    expect(browserToolsSection('qa_fixer', [], { is_web_frontend: true })).toMatch(/turned off or not bundled/);
+  });
+
+  it('is only for QA, and reaches the QA system prompt', () => {
+    expect(browserToolsSection('coder', [], undefined)).toBe('');
+    const options = buildQueryOptions(
+      {
+        agentType: 'qa_reviewer',
+        model: 'm',
+        auth: { apiKey: 'sk-ant-test' },
+        systemPrompt: 'QA',
+        initialMessages: [{ role: 'user', content: 'go' }],
+        toolContext: { cwd: '/w', projectDir: '/w', specDir: '/w/spec', securityProfile: undefined as never },
+        maxSteps: 10,
+        specDir: '/w/spec',
+        projectDir: '/w',
+        bundled: {},
+        mcpOptions: { projectCapabilities: { is_web_frontend: false } },
+      } as SessionConfig,
+      new AbortController(),
+      { codegraphReady: false },
+    );
+    expect((options.systemPrompt as { append: string }).append).toMatch(/## Browser tools in this session\nNone/);
   });
 });
