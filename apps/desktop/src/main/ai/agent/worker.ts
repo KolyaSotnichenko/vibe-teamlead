@@ -44,6 +44,8 @@ import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking, resolvePhaseModel } from '../config/phase-config';
 import { TaskLogWriter } from '../logging/task-log-writer';
+import { designPromptSection } from '../design/design-system';
+import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import {
   detectProjectCapabilities,
   getQaToolsSection,
@@ -439,8 +441,23 @@ async function assemblePrompt(
     projectDir: session.projectDir,
     projectInstructions: cachedProjectInstructions,
   });
+  const design = designSection(promptName, session);
   const memory = await memorySection(session, memoryFocus);
-  return memory ? `${prompt}\n\n${memory}` : prompt;
+  return [prompt, design, memory].filter(Boolean).join('\n\n');
+}
+
+/** Agents that shape or check UI get the design system (and anti-slop rules for UI projects). */
+const DESIGN_BUILDERS = new Set(['spec_writer', 'spec_quick', 'spec_critic', 'architect', 'planner', 'coder', 'qa_fixer', 'followup_planner']);
+
+function designSection(promptName: string, session: SerializableSessionConfig): string {
+  const qa = promptName === 'qa_reviewer';
+  if (!qa && !DESIGN_BUILDERS.has(promptName)) return '';
+  const info = session.designSystem;
+  if (!info) return '';
+  const caps = projectCapabilities(session);
+  const hasUi = caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native;
+  if (!info.exists && !hasUi && !info.storybook.enabled) return '';
+  return designPromptSection(info, { role: qa ? 'qa' : 'builder', storybookEnabled: info.storybook.enabled, storybook: info.storybook });
 }
 
 // =============================================================================
@@ -842,6 +859,17 @@ async function runQualityAssurance(
         osvScannerBin: session.bundled?.osvScannerBin,
         signal: abortController.signal,
       }),
+
+    // Static design check on the lines this task added to UI files (needs tokens)
+    runDesignCheck: session.designSystem?.tokens && session.designSystem.qaMode !== 'off'
+      ? async () => {
+          const tokens = session.designSystem?.tokens;
+          const mode = session.designSystem?.qaMode ?? 'off';
+          if (!tokens) return { findings: [], mode };
+          const files = await addedUiLines(session.projectDir, await resolveBaseRef(session.projectDir));
+          return { findings: lintAddedLines(files, tokens), mode };
+        }
+      : undefined,
 
     generatePrompt: (agentType) => assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session),
 

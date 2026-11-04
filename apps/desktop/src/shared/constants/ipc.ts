@@ -84,6 +84,17 @@ export const IPC_CHANNELS = {
   BRIEF_CANCEL: 'brief:cancel',
   BRIEF_CREATE_TASKS: 'brief:createTasks',
   BRIEF_PROGRESS: 'brief:progress',  // Event: analyst progress line (main -> renderer)
+
+  // Design system (per project) and Storybook
+  DESIGN_GET: 'design:get',
+  DESIGN_SAVE: 'design:save',
+  DESIGN_EXTRACT: 'design:extract',
+  DESIGN_PROPOSE: 'design:propose',
+  DESIGN_WRITE: 'design:write',
+  DESIGN_CANCEL: 'design:cancel',
+  DESIGN_PROGRESS: 'design:progress',  // Event: design agent progress line (main -> renderer)
+  STORYBOOK_START: 'design:storybookStart',
+  STORYBOOK_STOP: 'design:storybookStop',
   TASK_WORKSPACE_GET_IMAGE: 'task:workspaceGetImage',  // A diagram PNG of the spec dir as a data URL
   TASK_WORKSPACE_OPEN_FILE: 'task:workspaceOpenFile',  // Open a .drawio inside the spec dir with the default app
 

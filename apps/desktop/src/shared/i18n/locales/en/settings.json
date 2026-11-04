@@ -1003,6 +1003,10 @@
     "briefImport": {
       "label": "Spec document import",
       "description": "Splits an uploaded spec document into tasks"
+    },
+    "designSystem": {
+      "label": "Design system",
+      "description": "Extracts or designs the project design system"
     }
   },
   "agentCategories": {

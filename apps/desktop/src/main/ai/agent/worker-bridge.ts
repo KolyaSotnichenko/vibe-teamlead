@@ -30,10 +30,22 @@ import { ProgressTracker } from '../session/progress-tracker';
 import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import { readStrixSettings } from '../security/strix-setting';
+import { loadDesignSystem } from '../design/design-system';
+import { projectStore } from '../../project-store';
 import { resolvePromptsDir } from '../prompts/prompt-loader';
 import type { AgentAnswers } from '../claude-code/user-questions';
 
 // ESM-compatible __dirname
+/** The project's design system for the agents; never blocks a session. */
+function readDesignSystem(projectId: string | undefined) {
+  try {
+    const project = projectId ? projectStore.getProject(projectId) : undefined;
+    return project ? loadDesignSystem(project.path, project.settings) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -120,6 +132,7 @@ export class WorkerBridge extends EventEmitter {
         bundled,
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
         securityQa: config.session.securityQa ?? readStrixSettings(),
+        designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
       },
       promptsDir: resolvePromptsDir(),
     };

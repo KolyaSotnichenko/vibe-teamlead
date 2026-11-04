@@ -1149,7 +1149,8 @@
   "context": {
     "tabs": {
       "projectIndex": "Project Index",
-      "memories": "Memories"
+      "memories": "Memories",
+      "designSystem": "Design system"
     },
     "projectIndex": {
       "title": "Project Structure",
@@ -1197,6 +1198,74 @@
       "monitoring": "Monitoring",
       "metrics": "Metrics:",
       "health": "Health: {{value}}"
+    },
+    "design": {
+      "title": "Design system",
+      "tab": "Design system",
+      "emptyBody": "The rules and tokens the agents build this project's UI by — colours, type, spacing, components and what never to do. QA checks every UI change against it, so the result looks like your product, not like generic AI output.",
+      "extractTitle": "Extract from the code",
+      "extractBody": "The agent reads your styles, theme and components and writes down the visual language that is already there.",
+      "extract": "Extract",
+      "extractAgain": "Extract again",
+      "generateTitle": "Design a new one",
+      "generateBody": "Describe the product; the agent proposes three distinct directions, you pick one and it writes the full system.",
+      "generate": "Start",
+      "generateNew": "New design",
+      "repoTitle": "Use a file in the repository",
+      "repoBody": "Point at a design system document you already keep in the repo (relative path).",
+      "useFile": "Use this file",
+      "inRepo": "in the repository",
+      "noTokens": "No design-tokens.json yet: the agents read the document, but the automatic QA check needs tokens. Extract again or add them in Edit.",
+      "tokensInvalid": "The tokens are not valid JSON.",
+      "fontsNote": "Font previews use fonts installed on this Mac.",
+      "radius": "Corner radius",
+      "shadows": "Shadows",
+      "gradients": "Gradients",
+      "spacing": "Spacing scale",
+      "allowed": "allowed",
+      "none": "none",
+      "banned": "Never",
+      "qaTitle": "QA design check",
+      "qaBody": "Before every QA review the app checks the lines the task added to UI files: colours outside the palette, Tailwind's default colours, radii, shadows and gradients the system doesn't have, and the banned patterns. QA also reviews screenshots against the document.",
+      "qaModes": {
+        "block": "Block",
+        "blockHint": "QA can't approve with findings",
+        "warn": "Report only",
+        "warnHint": "Findings go into the report",
+        "off": "Off",
+        "offHint": "No automatic check"
+      },
+      "document": "Document",
+      "edit": "Edit",
+      "brief": {
+        "product": "What is the product?",
+        "productPlaceholder": "A desktop app where a team of AI agents builds software from a spec…",
+        "audience": "Who uses it?",
+        "audiencePlaceholder": "Engineering leads in 20–200 person teams",
+        "mood": "Mood and references (optional)",
+        "moodPlaceholder": "calm, precise, like an instrument panel; not playful"
+      },
+      "propose": "Propose directions",
+      "chooseDirection": "Three directions. Pick the one that fits; the agent then writes the full design system for it.",
+      "useDirection": "Use this direction",
+      "otherDirections": "Other directions",
+      "editBrief": "Change the brief",
+      "working": {
+        "extract": "Reading the project styles…",
+        "propose": "Thinking about directions…",
+        "write": "Writing the design system…"
+      },
+      "storybook": {
+        "notSetUp": "not set up",
+        "start": "Start Storybook",
+        "starting": "Starting…",
+        "stop": "Stop",
+        "openBrowser": "Open in browser",
+        "enable": "Agents add Storybook and stories",
+        "enableBody": "Every new or changed UI component gets stories for its states, and QA screenshots them. If the project has no Storybook yet, the next UI task sets it up (it adds dev dependencies to the project).",
+        "pendingTitle": "Storybook will be set up with the next UI task",
+        "pendingBody": "Once it exists here, you can run it and browse the components in this tab."
+      }
     }
   },
   "prStatus": {

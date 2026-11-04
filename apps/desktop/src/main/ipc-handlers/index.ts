@@ -6,6 +6,7 @@
  */
 
 import { registerBriefHandlers } from './brief-handlers';
+import { registerDesignHandlers } from './design-handlers';
 import { registerToolsCheckHandlers } from './tools-check-handlers';
 import type { BrowserWindow } from 'electron';
 import { AgentManager } from '../agent';
@@ -115,6 +116,7 @@ export function setupIpcHandlers(
 
   // Brief import (brief → epics and tasks)
   registerBriefHandlers(getMainWindow);
+  registerDesignHandlers(getMainWindow);
 
   // Debug handlers (logs, debug info, etc.)
   registerDebugHandlers();

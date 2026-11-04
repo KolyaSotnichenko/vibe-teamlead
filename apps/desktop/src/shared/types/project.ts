@@ -26,6 +26,12 @@ export interface ProjectSettings {
   useClaudeMd?: boolean;
   /** Maximum parallel tasks allowed (default: 3) */
   maxParallelTasks?: number;
+  /** Design system markdown, relative to the project (default: found automatically) */
+  designSystemPath?: string;
+  /** How QA treats design-check findings (default: block when a design system exists) */
+  designQaMode?: import('./design-system').DesignQaMode;
+  /** Agents may add Storybook and write stories for UI components (default: off) */
+  storybookEnabled?: boolean;
 }
 
 export interface NotificationSettings {

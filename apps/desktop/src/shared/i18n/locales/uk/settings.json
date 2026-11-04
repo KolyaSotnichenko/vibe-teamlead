@@ -1007,6 +1007,10 @@
     "briefImport": {
       "label": "Імпорт ТЗ",
       "description": "Розбиває завантажене ТЗ на задачі"
+    },
+    "designSystem": {
+      "label": "Дизайн-система",
+      "description": "Збирає з коду або проєктує дизайн-систему проєкту"
     }
   },
   "agentCategories": {

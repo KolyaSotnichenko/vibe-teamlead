@@ -60,6 +60,8 @@ export interface SerializableSessionConfig {
   allowSubscriptionLogin?: boolean;
   /** Security QA (Strix) settings, resolved in the main process */
   securityQa?: import('../security/strix').StrixSettings;
+  /** The project's design system (resolved in the main process; .vibe-teamlead/ is not in worktrees) */
+  designSystem?: import('../../../shared/types').DesignSystemInfo;
   /** The app's Claude credential: an API key, or a subscription token (personal mode only) */
   apiKey?: string;
   /** Optional Anthropic-compatible endpoint */

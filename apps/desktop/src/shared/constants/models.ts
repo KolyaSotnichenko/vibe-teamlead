@@ -150,7 +150,8 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
   githubPrs: 'opus',      // PR review benefits from thorough Opus analysis
   utility: 'haiku',       // Fast utility operations (commit messages, merge resolution)
   naming: 'haiku',        // Fast, cheap model for task titles and terminal names
-  briefImport: 'opus'     // Reads the whole spec document and the project
+  briefImport: 'opus',    // Reads the whole spec document and the project
+  designSystem: 'opus'    // Visual direction and a coherent token system
 };
 
 // Default feature thinking configuration
@@ -162,7 +163,8 @@ export const DEFAULT_FEATURE_THINKING: FeatureThinkingConfig = {
   githubPrs: 'medium',    // Moderate thinking for PR review
   utility: 'low',         // Fast thinking for utility operations
   naming: 'low',          // No thinking needed for short name generation
-  briefImport: 'high'     // Splitting a spec into tasks needs deep thinking
+  briefImport: 'high',    // Splitting a spec into tasks needs deep thinking
+  designSystem: 'high'    // Distinctive, consistent design choices
 };
 
 // Feature labels for UI display
@@ -175,6 +177,7 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
   utility: { label: 'Utility', description: 'Commit messages and merge conflict resolution' },
   naming: { label: 'AI Naming', description: 'Task titles and terminal tab names' },
   briefImport: { label: 'Spec document import', description: 'Splits an uploaded spec document into tasks' },
+  designSystem: { label: 'Design system', description: 'Extracts or designs the project design system' },
 };
 
 // Default agent profiles for preset model/thinking configurations

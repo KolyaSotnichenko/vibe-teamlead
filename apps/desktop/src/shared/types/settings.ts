@@ -204,6 +204,7 @@ export interface FeatureModelConfig {
   utility: string;      // Utility agents (commit message, merge resolver)
   naming: string;       // AI naming (task titles, terminal names)
   briefImport: string;  // Spec document (ТЗ) → tasks
+  designSystem: string; // Design system: extract from code, generate directions
 }
 
 // Feature-specific thinking level configuration
@@ -216,6 +217,7 @@ export interface FeatureThinkingConfig {
   utility: ThinkingLevel;
   naming: ThinkingLevel;
   briefImport: ThinkingLevel;
+  designSystem: ThinkingLevel;
 }
 
 // Agent profile for preset model/thinking configurations

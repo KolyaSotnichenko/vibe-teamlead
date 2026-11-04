@@ -23,6 +23,7 @@ export * from './app-update';
 export * from './cli';
 export * from './pr-status';
 export * from './claude-credential';
+export * from './design-system';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';

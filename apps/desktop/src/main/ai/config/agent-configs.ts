@@ -162,7 +162,8 @@ export type AgentType =
   | 'roadmap_discovery'
   | 'competitor_analysis'
   | 'ideation'
-  | 'brief_analyst';
+  | 'brief_analyst'
+  | 'design_system';
 
 /** Configuration for a single agent type */
 export interface AgentConfig {
@@ -344,6 +345,13 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   // ═══════════════════════════════════════════════════════════════════════
   brief_analyst: {
     // Reads the brief and the project; writes nothing (the proposal is structured output).
+    tools: [...BASE_READ_TOOLS],
+    mcpServers: [],
+    appTools: [],
+    thinkingDefault: 'high',
+  },
+  design_system: {
+    // Reads the project's styles and components; the design system comes back as structured output.
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
     appTools: [],

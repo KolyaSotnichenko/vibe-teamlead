@@ -27,7 +27,7 @@ interface FeatureSettings {
  * A feature added later reads a related feature's saved choice until the user
  * picks one, so a model chosen before it existed (e.g. an Ollama model) applies.
  */
-const INHERITS_FROM: Partial<Record<FeatureKey, FeatureKey>> = { briefImport: 'roadmap' };
+const INHERITS_FROM: Partial<Record<FeatureKey, FeatureKey>> = { briefImport: 'roadmap', designSystem: 'roadmap' };
 
 /** Feature model and thinking level for a specific feature runner. */
 export function getFeatureSettings(featureKey: FeatureKey): FeatureSettings {

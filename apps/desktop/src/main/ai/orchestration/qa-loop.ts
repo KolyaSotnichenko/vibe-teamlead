@@ -34,6 +34,7 @@ import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import type { GateReport } from '../security/gates';
+import type { DesignFinding, DesignQaMode } from '../../../shared/types';
 
 // =============================================================================
 // Constants
@@ -96,6 +97,34 @@ export interface QALoopConfig {
    * are hard gates: QA cannot approve while any remain.
    */
   runGates?: () => Promise<GateReport>;
+  /**
+   * Static design check on the lines the task added to UI files. In 'block'
+   * mode its findings are QA issues like gate findings; in 'warn' mode they are
+   * only reported (design_check.md in the spec dir).
+   */
+  runDesignCheck?: () => Promise<{ findings: DesignFinding[]; mode: DesignQaMode }>;
+}
+
+/** One QA issue per file with design-check findings. Pure — tested directly. */
+export function designIssues(findings: DesignFinding[]): QAIssue[] {
+  const byFile = new Map<string, DesignFinding[]>();
+  for (const f of findings) byFile.set(f.file, [...(byFile.get(f.file) ?? []), f]);
+  return [...byFile.entries()].map(([file, list]) => ({
+    type: 'critical' as const,
+    title: `Design system: ${list.length} violation${list.length === 1 ? '' : 's'} in ${file}`,
+    description: list.slice(0, 8).map((f) => `line ${f.line}: ${f.match} — ${f.message}`).join('\n') + (list.length > 8 ? `\n…and ${list.length - 8} more` : ''),
+    location: `${file}:${list[0].line}`,
+    fix_required: 'Use the design system tokens (colours, radius, shadows) and components instead; see design_check.md and the Design system section of your instructions.',
+  }));
+}
+
+/** design_check.md for the reviewer, the fixer and the Workspace. Pure. */
+export function formatDesignCheck(findings: DesignFinding[], mode: DesignQaMode): string {
+  const lines = ['# Design check', '', `Mode: ${mode === 'block' ? 'blocking — QA cannot approve with findings' : 'report only'}`, ''];
+  if (!findings.length) return [...lines, 'No findings: the added UI code uses the design system tokens.', ''].join('\n');
+  lines.push('| File | Line | Rule | Found | Why |', '|---|---|---|---|---|');
+  for (const f of findings) lines.push(`| ${f.file} | ${f.line} | ${f.rule} | \`${f.match.replace(/\|/g, '\\|')}\` | ${f.message} |`);
+  return [...lines, ''].join('\n');
 }
 
 /** Context passed to prompt generation */
@@ -240,7 +269,7 @@ export class QALoop extends EventEmitter {
         this.emitTyped('qa-iteration-start', iteration, maxIterations);
 
         // Security gates first, so the reviewer and fixer see their findings
-        const gateIssues = await this.runGates();
+        const gateIssues = [...(await this.runGates()), ...(await this.runDesignCheck())];
 
         // Run QA reviewer. The previous verdict is cleared first so a reviewer that
         // fails to write one can never be read as approving.
@@ -384,6 +413,25 @@ export class QALoop extends EventEmitter {
   // ===========================================================================
   // Security gates
   // ===========================================================================
+
+  /**
+   * Design check: findings grouped per file (one issue each, so the fixer gets a
+   * short list), written to design_check.md. Blocking only in 'block' mode. Never throws.
+   */
+  private async runDesignCheck(): Promise<QAIssue[]> {
+    if (!this.config.runDesignCheck) return [];
+    try {
+      const { findings, mode } = await this.config.runDesignCheck();
+      if (mode === 'off') return [];
+      await writeFile(join(this.config.specDir, 'design_check.md'), formatDesignCheck(findings, mode), 'utf-8').catch(() => {});
+      this.emitTyped('log', `Design check: ${findings.length ? `${findings.length} finding(s)${mode === 'warn' ? ' (warn only)' : ''}` : 'clear'}`);
+      if (mode !== 'block') return [];
+      return designIssues(findings);
+    } catch (error) {
+      this.emitTyped('log', `Design check failed to run: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
+  }
 
   /** Run the gates; returns their findings as blocking QA issues. Never throws. */
   private async runGates(): Promise<QAIssue[]> {

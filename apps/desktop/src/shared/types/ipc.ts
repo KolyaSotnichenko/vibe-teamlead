@@ -823,6 +823,7 @@ export interface ElectronAPI {
   agentQuestions: import('./agent-questions').AgentQuestionsAPI;
   brief: import('./brief').BriefAPI;
   tools: import('./tools-check').ToolsCheckAPI;
+  design: import('./design-system').DesignAPI;
 }
 
 /** Platform information exposed via contextBridge for platform-specific behavior */

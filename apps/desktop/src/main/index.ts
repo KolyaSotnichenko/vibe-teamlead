@@ -3,6 +3,7 @@
 // require-in-the-middle hooks. Sentry's hooks expect require.cache to exist,
 // which is only available in CommonJS. Without this, node-pty native module
 // loading fails with "ReferenceError: require is not defined".
+import { stopAllStorybooks } from './design/storybook-service';
 import Module, { createRequire } from 'module';
 import { initGitHubAuth } from './github-auth/token-store';
 import { migrateGlobalData } from './data-dir-migration';
@@ -608,6 +609,7 @@ app.on('before-quit', (event) => {
 
   // Stop synchronous services immediately
   stopPeriodicUpdates();
+  stopAllStorybooks();
 
   // Perform async cleanup, then allow quit to proceed
   (async () => {

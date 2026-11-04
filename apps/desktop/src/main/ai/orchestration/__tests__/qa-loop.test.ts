@@ -43,7 +43,7 @@ vi.mock('../../schema', () => ({
   })),
 }));
 
-import { QALoop } from '../qa-loop';
+import { designIssues, QALoop } from '../qa-loop';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
 
@@ -206,6 +206,46 @@ describe('QALoop', () => {
 
     const reportWrite = mockWriteFile.mock.calls.find((c) => String(c[0]).endsWith('qa_report.md'));
     expect(reportWrite?.[1]).toBe(`${agentReport}\n# QA Report`);
+  });
+
+  it('blocks approval on design-check findings in block mode, and only reports them in warn mode', async () => {
+    const finding = { rule: 'off-palette-color' as const, file: 'src/A.tsx', line: 3, match: '#7c3aed', message: 'not in palette' };
+    const run = async (mode: 'block' | 'warn') => {
+      let calls = 0;
+      mockReadFile.mockReset();
+      mockWriteFile.mockReset().mockResolvedValue(undefined);
+      const runSession = vi.fn().mockImplementation(async () => {
+        calls++;
+        return makeSessionResult('completed');
+      });
+      mockReadFile.mockImplementation((path: string) => {
+        if (path.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+        return Promise.reject(new Error('ENOENT'));
+      });
+      const outcome = await new QALoop(
+        makeConfig({ runSession, maxIterations: 1, runDesignCheck: async () => ({ findings: [finding], mode }) }),
+      ).run();
+      const report = mockWriteFile.mock.calls.find((c) => String(c[0]).endsWith('design_check.md'));
+      return { outcome, report: String(report?.[1] ?? '') };
+    };
+
+    const blocked = await run('block');
+    expect(blocked.outcome.approved).toBe(false);
+    expect(blocked.report).toContain('| src/A.tsx | 3 | off-palette-color | `#7c3aed` |');
+
+    const warned = await run('warn');
+    expect(warned.outcome.approved).toBe(true);
+    expect(warned.report).toContain('report only');
+  });
+
+  it('groups design findings into one issue per file', () => {
+    const issues = designIssues([
+      { rule: 'radius', file: 'a.tsx', line: 1, match: 'rounded-xl', message: 'sharp corners' },
+      { rule: 'shadow', file: 'a.tsx', line: 2, match: 'shadow-lg', message: 'no shadows' },
+      { rule: 'gradient', file: 'b.css', line: 9, match: 'linear-gradient(', message: 'no gradients' },
+    ]);
+    expect(issues.map((i) => i.title)).toEqual(['Design system: 2 violations in a.tsx', 'Design system: 1 violation in b.css']);
+    expect(issues[0].description).toBe('line 1: rounded-xl — sharp corners\nline 2: shadow-lg — no shadows');
   });
 
   // -------------------------------------------------------------------------

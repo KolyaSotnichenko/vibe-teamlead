@@ -69,6 +69,9 @@ vi.mock('../../memory/agent-memory', () => ({
   AGENT_MEMORY_TYPES: ['gotcha', 'decision', 'pattern', 'module_insight', 'error_pattern', 'requirement'],
 }));
 
+// The project's design system is read from the project store (Electron app paths)
+vi.mock('../../../project-store', () => ({ projectStore: { getProject: () => undefined } }));
+
 // Import after mocks
 import { WorkerBridge } from '../worker-bridge';
 
