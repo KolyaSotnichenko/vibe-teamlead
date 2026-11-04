@@ -253,6 +253,8 @@ export interface AppSettings {
   autoUpdateAutoBuild: boolean;
   autoNameTerminals: boolean;
   notifications: NotificationSettings;
+  /** The sidebar teamlead chirps when the team's mood changes. On unless set to false. */
+  teamleadVoice?: boolean;
   /**
    * Personal mode: run agents on the user's own Claude subscription
    * (OAuth token) instead of an API key. Off by default; for the owner's

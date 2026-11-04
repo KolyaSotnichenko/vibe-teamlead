@@ -1,15 +1,22 @@
 /**
  * Team status readout — the sidebar's instrument: what the agent team is doing
- * right now for the selected project. Numbers in mono, right-aligned; the only
- * vermilion is "waiting for you", and only when it is non-zero.
+ * right now for the selected project. The pixel teamlead shows it as a mood
+ * (and, if enabled, says it in droid chirps); the counts stay below in mono.
+ * The only vermilion is "waiting for you", and only when it is non-zero.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../lib/utils';
 import { useAgentQuestionsStore } from '../../stores/agent-questions-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useTaskStore } from '../../stores/task-store';
+import { phraseFor, speak } from './teamlead/droid-voice';
+import { countMood, DONE_FOR_MS, HELLO_FOR_MS, SLEEP_AFTER_MS, teamleadMood } from './teamlead/mood';
+import type { TeamleadMood } from './teamlead/sprite';
+import { Teamlead } from './teamlead/Teamlead';
 
 export interface TeamCounts {
   working: number;
@@ -40,6 +47,7 @@ export function TeamStatus({ projectId, collapsed }: { projectId: string | null;
   const openQuestion = useAgentQuestionsStore((s) => s.open);
 
   const waiting = pending.filter((q) => !projectId || !q.projectId || q.projectId === projectId);
+  const mood = useTeamleadMood(projectId, waiting.length);
 
   if (collapsed) {
     // Collapsed: a single mark that only appears when someone is waiting.
@@ -67,15 +75,18 @@ export function TeamStatus({ projectId, collapsed }: { projectId: string | null;
     { key: 'queued', label: t('teamStatus.queued'), value: counts.queued },
     { key: 'review', label: t('teamStatus.review'), value: counts.review },
   ];
-  const idle = rows.every((row) => row.value === 0);
+  const caption = t(`teamStatus.mood.${mood.mood}`, { count: mood.count });
 
   return (
     <section aria-label={t('teamStatus.title')} className="mx-3 border border-border">
       <h2 className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t('teamStatus.title')}</h2>
-      {idle ? (
-        <p className="px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">{t('teamStatus.idle')}</p>
-      ) : (
-        <div>
+      <div className="flex items-center gap-3 border-b border-border px-3 py-3">
+        <Teamlead mood={mood.mood} label={t('teamStatus.teamleadLabel', { mood: caption })} onClick={mood.greet} />
+        <p aria-live="polite" className="min-w-0 text-xs leading-relaxed text-foreground">
+          {caption}
+        </p>
+      </div>
+      <div>
           {rows.map((row, index) => {
             const content = (
               <>
@@ -101,8 +112,89 @@ export function TeamStatus({ projectId, collapsed }: { projectId: string | null;
               </div>
             );
           })}
-        </div>
-      )}
+      </div>
     </section>
   );
+}
+
+const MOOD_COUNT: Partial<Record<TeamleadMood, keyof ReturnType<typeof countMood> | 'waiting'>> = {
+  working: 'coding',
+  qa: 'qa',
+  queued: 'queued',
+  waiting: 'waiting',
+  review: 'review',
+  error: 'errors',
+};
+
+/**
+ * The teamlead's mood for a project, with the short-lived moods (a fresh
+ * merge, a greeting) and falling asleep after a quiet hour. Speaks when the
+ * mood changes, if the voice is on; switching projects is silent.
+ */
+function useTeamleadMood(projectId: string | null, waiting: number) {
+  const counts = useTaskStore(
+    useShallow((s) => countMood(projectId ? s.tasks.filter((task) => task.projectId === projectId) : [])),
+  );
+  const shipped = useTaskStore((s) =>
+    projectId
+      ? s.tasks
+          .filter((task) => task.projectId === projectId && (task.status === 'done' || task.status === 'pr_created'))
+          .map((task) => task.id)
+          .sort()
+          .join(',')
+      : '',
+  );
+  const voiceOn = useSettingsStore((s) => s.settings.teamleadVoice !== false);
+  const [mergedUntil, setMergedUntil] = useState(0);
+  const [helloUntil, setHelloUntil] = useState(0);
+  const [quietSince, setQuietSince] = useState(() => Date.now());
+  const [, setTick] = useState(0);
+
+  // A task newly done or turned into a PR: a short celebration
+  const seenShipped = useRef<{ project: string | null; ids: Set<string> } | null>(null);
+  useEffect(() => {
+    const ids = new Set(shipped ? shipped.split(',') : []);
+    const prev = seenShipped.current;
+    seenShipped.current = { project: projectId, ids };
+    if (!prev || prev.project !== projectId) return;
+    if ([...ids].some((id) => !prev.ids.has(id))) setMergedUntil(Date.now() + DONE_FOR_MS);
+  }, [shipped, projectId]);
+
+  const signature = `${projectId}|${counts.coding}|${counts.qa}|${counts.queued}|${counts.review}|${counts.errors}|${waiting}`;
+  useEffect(() => {
+    setQuietSince(Date.now());
+  }, [signature]);
+
+  const now = Date.now();
+  // One timer for the nearest moment the mood changes by itself
+  const upcoming = [mergedUntil, helloUntil, quietSince + SLEEP_AFTER_MS].filter((at) => at > now);
+  const nextChange = upcoming.length ? Math.min(...upcoming) : 0;
+  useEffect(() => {
+    if (!nextChange) return;
+    const id = window.setTimeout(() => setTick((n) => n + 1), Math.max(nextChange - Date.now(), 0) + 20);
+    return () => window.clearTimeout(id);
+  }, [nextChange]);
+
+  const mood = teamleadMood({
+    ...counts,
+    waiting,
+    quietForMs: now - quietSince,
+    justMerged: mergedUntil > now,
+    hello: helloUntil > now,
+  });
+
+  const spoken = useRef<{ project: string | null; mood: TeamleadMood } | null>(null);
+  useEffect(() => {
+    const prev = spoken.current;
+    spoken.current = { project: projectId, mood };
+    const phrase = phraseFor(prev && prev.project === projectId ? prev.mood : null, mood);
+    if (phrase && voiceOn) speak(phrase);
+  }, [mood, projectId, voiceOn]);
+
+  const key = MOOD_COUNT[mood];
+  return {
+    mood,
+    count: key === 'waiting' ? waiting : key ? counts[key] : 0,
+    greet: () => setHelloUntil(Date.now() + HELLO_FOR_MS),
+  };
 }

@@ -593,6 +593,17 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
             />
           </div>
         ))}
+        <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+          <div className="space-y-1">
+            <Label htmlFor="teamleadVoice" className="font-medium text-foreground">{t('notifications.teamleadVoice')}</Label>
+            <p className="text-sm text-muted-foreground">{t('notifications.teamleadVoiceDescription')}</p>
+          </div>
+          <Switch
+            id="teamleadVoice"
+            checked={settings.teamleadVoice !== false}
+            onCheckedChange={(checked) => onSettingsChange({ ...settings, teamleadVoice: checked })}
+          />
+        </div>
       </div>
     </SettingsSection>
   );

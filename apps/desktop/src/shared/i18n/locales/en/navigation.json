@@ -106,7 +106,26 @@
     "waiting": "Waiting for you",
     "review": "Ready for review",
     "queued": "Queued",
-    "idle": "Idle — start a task to put the team to work"
+    "idle": "Idle — start a task to put the team to work",
+    "teamleadLabel": "Teamlead: {{mood}} Click to say hi.",
+    "mood": {
+      "idle": "All quiet. Add a task and the team will pick it up.",
+      "working_one": "{{count}} agent at work",
+      "working_other": "{{count}} agents at work",
+      "qa_one": "QA is checking {{count}} task",
+      "qa_other": "QA is checking {{count}} tasks",
+      "queued_one": "{{count}} task waiting for a free slot",
+      "queued_other": "{{count}} tasks waiting for a free slot",
+      "waiting_one": "An agent is waiting for your answer",
+      "waiting_other": "{{count}} agents are waiting for your answer",
+      "review_one": "{{count}} task ready for review",
+      "review_other": "{{count}} tasks ready for review",
+      "error_one": "QA didn't approve {{count}} task. The reason is in Review",
+      "error_other": "QA didn't approve {{count}} tasks. The reasons are in Review",
+      "done": "Merged!",
+      "sleep": "Nothing has happened for an hour",
+      "hello": "Hi! I'm here if you need me."
+    }
   },
   "docs": {
     "title": "Documentation",
