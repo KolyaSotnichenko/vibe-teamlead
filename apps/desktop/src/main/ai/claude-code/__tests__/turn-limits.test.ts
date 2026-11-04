@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -26,6 +26,19 @@ describe('turn limit records', () => {
     writeFileSync(join(specDir, TURN_LIMITS_FILE), 'not json');
     recordTurnLimit(specDir, { agentType: 'coder', limit: 200 });
     expect(parseTurnLimits(JSON.parse(readFileSync(join(specDir, TURN_LIMITS_FILE), 'utf-8')))).toHaveLength(1);
+  });
+
+  it('replaces a link at its path instead of writing through it: agents can write to this folder', () => {
+    const specDir = dir();
+    const outside = join(dir(), 'precious.txt');
+    writeFileSync(outside, 'untouched');
+    symlinkSync(outside, join(specDir, TURN_LIMITS_FILE));
+
+    recordTurnLimit(specDir, { agentType: 'coder', limit: 200 });
+
+    expect(readFileSync(outside, 'utf-8')).toBe('untouched');
+    expect(lstatSync(join(specDir, TURN_LIMITS_FILE)).isSymbolicLink()).toBe(false);
+    expect(readdirSync(specDir)).toEqual([TURN_LIMITS_FILE]);
   });
 
   it('a new run starts clean', () => {

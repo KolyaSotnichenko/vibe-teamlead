@@ -545,8 +545,8 @@ describe('QALoop', () => {
       });
     }
 
-    it('a reviewer stopped at the turn limit: asks for the verdict, but only a finished report may give one', async () => {
-      const inner = sessions([false, true], true);
+    it('a reviewer stopped at the turn limit can report problems, but never approve: the review runs again', async () => {
+      const inner = sessions([false, true, true], true);
       let n = 0;
       const runSession = vi.fn(async (config: QASessionRunConfig) => {
         const result = await inner(config);
@@ -554,12 +554,43 @@ describe('QALoop', () => {
       });
       const generatePrompt = vi.fn().mockResolvedValue('full prompt');
       const outcome = await new QALoop(makeConfig({ runSession, generatePrompt })).run();
+
+      // Its "approved" (second session) didn't count; the third, a whole review, did
       expect(outcome.approved).toBe(true);
-      expect(generatePrompt).toHaveBeenCalledTimes(1);
+      expect(runSession).toHaveBeenCalledTimes(3);
+      expect(generatePrompt).toHaveBeenCalledTimes(2);
       const second = (runSession.mock.calls as Array<[QASessionRunConfig]>)[1][0];
-      expect(second.systemPrompt).toContain('mcp__vibe-teamlead__update_qa_status');
       expect(second.systemPrompt).toMatch(/ran out of turns/);
       expect(second.systemPrompt).toMatch(/no verdict/i);
+    });
+
+    it('problems reported after the limit count, without another review', async () => {
+      let plan = completedPlan();
+      let report: string | null = null;
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(plan);
+        if (p.endsWith('qa_report.md') && report) return Promise.resolve(report);
+        return Promise.reject(new Error('ENOENT'));
+      });
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      let n = 0;
+      const runSession = vi.fn(async () => {
+        if (n++ === 0) {
+          report = 'partial report';
+          return makeSessionResult('max_steps');
+        }
+        plan = completedPlan('rejected');
+        return makeSessionResult('completed');
+      });
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt, maxIterations: 1 })).run();
+
+      expect(outcome.approved).toBe(false);
+      expect(outcome.reason).toBe('max_iterations');
+      expect(generatePrompt).toHaveBeenCalledTimes(1);
     });
 
     it('a reviewer stopped at the limit with no report at all: the review runs again', async () => {

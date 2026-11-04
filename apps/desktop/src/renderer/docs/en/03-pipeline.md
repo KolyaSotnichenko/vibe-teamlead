@@ -49,6 +49,6 @@ An optional pentest after QA approval. You enable it in Settings → Agent Setti
 ## Stop, recovery, queue
 
 - **Stop** stops the agents. If a plan already exists, the task goes to your review (Human Review); if not, back to Planning.
-- **Turn limit:** a coder session may take up to 200 turns (planner and architect 120, QA 200). A subtask that reaches it isn't counted as done: a new session continues it, up to 3 attempts, and then the build stops and names the subtask. A QA reviewer stopped at the limit is asked for its verdict only if its report is finished; otherwise the review runs again. The task window shows these sessions.
+- **Turn limit:** a coder session may take up to 200 turns (planner and architect 120, QA 200). A subtask that reaches it isn't counted as done: a new session continues it, up to 3 attempts, and then the build stops and names the subtask. A QA reviewer stopped at the limit can still report the problems it found, but it can't approve: without problems, the review runs again. The task window shows these sessions.
 - **Recovery:** on startup the app finds subtasks that got stuck and puts them back into work. There is a separate coder recovery prompt for failures.
 - **Queue:** when there is a free slot within the limit on parallel tasks, queued tasks start on their own.

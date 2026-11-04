@@ -141,10 +141,10 @@ export function qaRoundData(agentType: string, context: QAPromptContext): string
   return quoteFindings(lines);
 }
 
-/** A review cut off by its limit may have written only part of a report */
+/** A review cut off by its limit may have written only part of a report, so it can't pass; see run() */
 const SIGNOFF_AFTER_LIMIT = `
 
-Your review session ran out of turns, so the report may be unfinished. If it doesn't show a finished review, with a status and every acceptance criterion checked, record no verdict and stop: the review will run again.`;
+Your review session ran out of turns, so the review may be unfinished. If the report lists problems, record "rejected" with them. Otherwise record no verdict and stop: the review will run again. An approval from this session doesn't count.`;
 
 const SIGNOFF_KICKOFF = 'Record the verdict from qa_report.md with update_qa_status, then stop.';
 
@@ -562,6 +562,12 @@ export class QALoop extends EventEmitter {
               return this.outcome(false, iteration, Date.now() - startTime, 'cancelled');
             }
             signoff = await this.readQASignoff();
+            // Only a review that ended by itself can pass: this one was cut off
+            if (reviewResult.outcome === 'max_steps' && this.resolveQAStatus(signoff) === 'approved') {
+              this.emitTyped('log', 'The review was cut off by its turn limit, so its approval does not count; running it again');
+              await this.clearQASignoff();
+              signoff = null;
+            }
           }
         }
         const status = this.resolveQAStatus(signoff);
