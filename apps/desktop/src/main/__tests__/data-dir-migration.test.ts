@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,8 @@ function git(cwd: string, ...args: string[]): string {
 
 /** A project as Auto Claude left it: data folder, a task worktree on an auto-claude/ branch. */
 function legacyProject(): { dir: string; spec: string } {
-  const dir = mkdtempSync(path.join(tmpdir(), 'vtl-migrate-'));
+  // Real path: on macOS the temp folder is a symlink and git reports where it leads
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'vtl-migrate-')));
   const spec = '001-scaffold';
   git(dir, 'init', '-q', '-b', 'main');
   writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n.auto-claude/\n.auto-claude-security.json\n');

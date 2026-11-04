@@ -17,6 +17,12 @@ vi.mock('../ai/claude-code/bundled-tools', () => ({
   resolveBundledTools: () => ({ claudeCodeExecutable: '/app/claude', gitleaksBin: gitleaks }),
 }));
 
+// The real lookup adds folders of this machine: the developer's own Strix must not count
+vi.mock('../ai/security/strix', async (original) => ({
+  ...(await original<typeof import('../ai/security/strix')>()),
+  strixPath: () => process.env.PATH ?? '',
+}));
+
 import { checkTools } from '../tools-check';
 
 describe('checkTools', () => {
