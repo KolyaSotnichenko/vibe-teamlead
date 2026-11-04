@@ -28,6 +28,9 @@ describe('write containment', () => {
     for (const name of ['QA_FIX_REQUEST.md', 'QA_RERUN']) {
       expect(denied(evaluatePreToolUse('Write', { file_path: join(context.specDir, name) }, context))).toBe(true);
       expect(denied(evaluatePreToolUse('Edit', { file_path: join(context.specDir, name) }, context))).toBe(true);
+      // The macOS file system ignores case, and a path can end in a way basename alone misreads
+      expect(denied(evaluatePreToolUse('Write', { file_path: join(context.specDir, name.toLowerCase()) }, context))).toBe(true);
+      expect(denied(evaluatePreToolUse('Write', { file_path: `${name}/.` }, context))).toBe(true);
     }
   });
 

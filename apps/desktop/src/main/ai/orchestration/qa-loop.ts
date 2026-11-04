@@ -101,7 +101,9 @@ function cleanForMessage(text: string | undefined, max = 300): string {
   const clean = (text ?? '')
     // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what this removes
     .replace(/[\u0000-\u001F\u007F]+/g, ' ')
-    .replace(/<\/?qa_findings[^>]*>?/gi, '')
+    // Quoted text can't open or close the block it sits in
+    .replace(/</g, '‹')
+    .replace(/>/g, '›')
     .replace(/\s+/g, ' ')
     .trim();
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
@@ -385,6 +387,11 @@ export class QALoop extends EventEmitter {
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
   private lastDesignFindings: DesignFinding[] = [];
   private checksRepeat = false;
+  /**
+   * The last review this run saw itself. A review is only shortened on this, never
+   * on the plan: agents can write there, and could talk the next review into approving.
+   */
+  private lastReviewThisRun: QAPromptContext['lastReview'];
   private lastGateKeys: string[] = [];
   /** Why the last read of qa_signoff found no verdict */
   private signoffProblem = '';
@@ -497,7 +504,7 @@ export class QALoop extends EventEmitter {
           iteration,
           maxIterations,
           previousError: lastErrorContext,
-          lastReview: this.lastReview(),
+          lastReview: this.lastReviewThisRun,
         };
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', reviewContext);
 
@@ -549,6 +556,9 @@ export class QALoop extends EventEmitter {
         const issues = signoff?.issues_found ?? [];
 
         this.lastReviewerApproved = status === 'approved';
+        if (reviewedCommit && (status === 'approved' || status === 'rejected')) {
+          this.lastReviewThisRun = { commit: reviewedCommit, approved: status === 'approved', issues };
+        }
         this.lastBlocking = (status === 'rejected' ? issues : []).map((i) => ({
           source: 'qa' as const,
           title: i.title ?? i.description ?? '',
@@ -857,13 +867,6 @@ export class QALoop extends EventEmitter {
   // Iteration History
   // ===========================================================================
 
-  /** The latest round a reviewer finished, for the next review to build on. */
-  private lastReview(): QAPromptContext['lastReview'] {
-    const round = [...this.iterationHistory].reverse().find((r) => r.reviewed_commit);
-    // Agents can write to the plan, and this goes into instructions and a command
-    if (!round?.reviewed_commit || !/^[0-9a-f]{7,64}$/.test(round.reviewed_commit)) return undefined;
-    return { commit: round.reviewed_commit, approved: round.status === 'approved', issues: round.issues };
-  }
 
   /** Rounds recorded by earlier runs; entries an agent wrote into the plan by hand are skipped. */
   private async loadIterationHistory(): Promise<QAIterationRecord[]> {

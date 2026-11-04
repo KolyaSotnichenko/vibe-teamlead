@@ -32,7 +32,7 @@ function deny(reason: string): HookJSONOutput {
 }
 
 /** Each starts agents on the next QA run, so an agent must not be able to leave one for itself. */
-const APP_REQUEST_FILES = new Set(['QA_FIX_REQUEST.md', 'QA_RERUN']);
+const APP_REQUEST_FILES = new Set(['qa_fix_request.md', 'qa_rerun']);
 
 /** Directories a session may write to. */
 export function writeRoots(context: ToolContext): string[] {
@@ -60,10 +60,10 @@ export function evaluatePreToolUse(
   if (WRITE_TOOLS.has(toolName)) {
     const raw = (toolInput?.file_path ?? toolInput?.notebook_path) as string | undefined;
     if (raw) {
-      if (APP_REQUEST_FILES.has(basename(raw))) {
-        return deny(`${basename(raw)} is a request from the app or the user to QA; agents don't write it. Record your findings in qa_report.md.`);
-      }
       const target = isAbsolute(raw) ? resolve(raw) : resolve(context.cwd, raw);
+      if (APP_REQUEST_FILES.has(basename(target).toLowerCase())) {
+        return deny(`${basename(target)} is a request from the app or the user to QA; agents don't write it. Record your findings in qa_report.md.`);
+      }
       const roots = writeRoots(context);
       if (!roots.some((root) => isPathContained(target, root).contained)) {
         return deny(`Write denied: ${toolName} cannot write to ${raw}. Allowed directories: ${roots.join(', ')}`);
