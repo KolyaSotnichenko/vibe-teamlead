@@ -56,19 +56,18 @@ const NOT_THE_APP = ['--', '.', ':(exclude).vibe-teamlead'];
 
 const MAX_HASHED_FILE = 64 * 1024 * 1024;
 
-/** What a new file holds. A link counts as where it points; a huge file as its size and time. */
-function newFileState(path: string): string {
+/** What a new file holds; a link counts as where it points. Undefined when that can't be read in full. */
+function newFileState(path: string): string | undefined {
   const stat = lstatSync(path, { throwIfNoEntry: false });
-  if (!stat) return '';
-  if (stat.isSymbolicLink()) return `link:${readlinkSync(path)}`;
-  if (!stat.isFile()) return '';
-  if (stat.size > MAX_HASHED_FILE) return `large:${stat.size}:${stat.mtimeMs}`;
+  if (stat?.isSymbolicLink()) return `link:${readlinkSync(path)}`;
+  if (!stat?.isFile() || stat.size > MAX_HASHED_FILE) return undefined;
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
 /**
  * The state of the code: HEAD, uncommitted edits and new files. Undefined when git
- * can't say, or was told to skip a file, since then a diff can't show its edits.
+ * can't say, was told to skip a file, or a new file can't be read in full (a nested
+ * repository, a huge file): then no approval is reused, and QA reviews again.
  * Ignored files don't count: they never reach the task's commits.
  */
 export async function workTreeFingerprint(cwd: string): Promise<string | undefined> {
@@ -87,7 +86,9 @@ export async function workTreeFingerprint(cwd: string): Promise<string | undefin
   if (tracked.split('\0').some((entry) => /^(S|[a-z]) /.test(entry))) return undefined;
   const hash = createHash('sha256').update(head).update('\0').update(diff).update('\0');
   for (const file of untracked.split('\0').filter(Boolean)) {
-    hash.update(`${file}\0${newFileState(join(cwd, file))}\0`);
+    const state = newFileState(join(cwd, file));
+    if (state === undefined) return undefined;
+    hash.update(`${file}\0${state}\0`);
   }
   return hash.digest('hex');
 }

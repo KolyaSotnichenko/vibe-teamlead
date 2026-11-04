@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, truncateSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -93,6 +93,21 @@ describe('workTreeFingerprint', () => {
     const before = await workTreeFingerprint(repo);
     writeFileSync(outside, 'two');
     expect(await workTreeFingerprint(repo)).toBe(before);
+  });
+
+  it('is unknown with a repository nested inside: its contents can\'t be read from here', async () => {
+    const nested = join(repo, 'vendor');
+    mkdirSync(nested);
+    execFileSync('git', ['init', '-q'], { cwd: nested, stdio: 'ignore' });
+    writeFileSync(join(nested, 'x.txt'), 'x');
+    await expect(workTreeFingerprint(repo)).resolves.toBeUndefined();
+  });
+
+  it('is unknown with a new file too big to read', async () => {
+    const huge = join(repo, 'huge.bin');
+    writeFileSync(huge, '');
+    truncateSync(huge, 64 * 1024 * 1024 + 1);
+    await expect(workTreeFingerprint(repo)).resolves.toBeUndefined();
   });
 
   it.each(['--skip-worktree', '--assume-unchanged'])('is unknown when git is told not to look at a file (%s)', async (flag) => {
