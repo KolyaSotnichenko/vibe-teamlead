@@ -51,7 +51,7 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, shell, nativeImage, session, screen, Menu, MenuItem } from 'electron';
+import { app, BrowserWindow, dialog, shell, nativeImage, session, screen, Menu, MenuItem } from 'electron';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -62,6 +62,7 @@ import { TerminalManager } from './terminal-manager';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
+import { createQuitGuard, quitPrompt } from './quit-guard';
 import { readSettingsFile } from './settings-utils';
 import { migrateLegacyClaudeCredential } from './ai/claude-code/credential-migration';
 import { resolveClaudeAuth } from './ai/claude-code/credential';
@@ -167,6 +168,17 @@ app.on('child-process-gone', (_event, details) => {
 // The second call sees isQuitting=true and allows quit to proceed immediately.
 // Fixes: pty.node SIGABRT crash caused by environment teardown before PTY cleanup (GitHub #1469)
 let isQuitting = false;
+
+// Quitting stops the agents: while a task runs, the user decides
+const quitGuard = createQuitGuard({
+  running: () => agentManager?.getRunningTasks() ?? [],
+  ask: (count) => {
+    const { message, detail, buttons } = quitPrompt(getAppLanguage(), count);
+    const options = { type: 'warning' as const, message, detail, buttons, defaultId: 0, cancelId: 0 };
+    const choice = mainWindow ? dialog.showMessageBoxSync(mainWindow, options) : dialog.showMessageBoxSync(options);
+    return choice === 1;
+  },
+});
 
 function createWindow(): void {
   // Get the primary display's work area (accounts for taskbar, dock, etc.)
@@ -364,6 +376,10 @@ function createWindow(): void {
   if (is.dev) {
     mainWindow.webContents.openDevTools({ mode: 'right' });
   }
+
+  mainWindow.on('close', (event) => {
+    if (!quitGuard.confirm()) event.preventDefault();
+  });
 
   // Clean up on close
   mainWindow.on('closed', () => {
@@ -600,6 +616,11 @@ app.on('window-all-closed', () => {
 app.on('before-quit', (event) => {
   // Re-entrancy guard: the second app.quit() call (after cleanup) must pass through
   if (isQuitting) {
+    return;
+  }
+  // Cmd+Q while a task runs, and the user chose to keep working
+  if (!quitGuard.confirm()) {
+    event.preventDefault();
     return;
   }
   isQuitting = true;

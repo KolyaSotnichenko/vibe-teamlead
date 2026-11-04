@@ -62,6 +62,10 @@ QA writes the AC table to `qa_report.md`. If the model didn't fill in the table 
 
 The task logs should contain the line "CodeGraph: index ready / attached". Agents are told to search through CodeGraph first, but weaker models sometimes still go to grep. If the line is missing, check Settings → Tools.
 
+## Closing the app while agents work
+
+Closing the window quits the app, and nothing keeps working in the background. Quitting stops the agents, so while a task runs the app asks first: keep working, or close and stop. A stopped task can be resumed later.
+
 ## Memory is empty
 
 Memory appears after the first subtask completed by the coder. Check that it's enabled in Settings → Memory. To view it: Context → Memories.
