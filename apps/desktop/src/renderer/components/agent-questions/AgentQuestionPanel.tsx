@@ -17,7 +17,7 @@ import { useAgentQuestionsStore } from '../../stores/agent-questions-store';
 import { useTaskStore } from '../../stores/task-store';
 
 /** Selected option labels per question (+ optional free text) */
-type Draft = Record<string, { selected: string[]; other: string }>;
+export type Draft = Record<string, { selected: string[]; other: string }>;
 
 const ROLE_KEYS: Array<[RegExp, string]> = [
   [/^spec/, 'spec'],
@@ -45,7 +45,7 @@ export function toAnswers(questions: AgentQuestion[], draft: Draft): AgentAnswer
   return answers;
 }
 
-function QuestionBlock({
+export function QuestionBlock({
   question,
   value,
   onChange,

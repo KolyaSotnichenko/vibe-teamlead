@@ -10,7 +10,8 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 
-import type { BriefProposal, BriefTaskDraft } from '../../../shared/types/brief';
+import type { BriefClarification, BriefProposal, BriefTaskDraft } from '../../../shared/types/brief';
+import type { AskUserHandler } from '../claude-code/user-questions';
 import { isMacOS } from '../../platform';
 import { runProcess } from '../../platform/exec';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
@@ -165,9 +166,20 @@ export function progressLine(event: StreamEvent, projectPath: string): string | 
 export interface AnalyzeBriefOptions {
   projectPath: string;
   autoBuildPath?: string;
-  input: { text?: string; filePath?: string };
+  input: { text?: string; filePath?: string; clarify?: boolean };
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
+  /** Asks the user (the brief dialog). With it and `input.clarify`, the analyst clarifies before proposing. */
+  askUser?: AskUserHandler;
+}
+
+/** The questions and answers, as the analyst's notes and the spec agents' context. Pure. */
+export function clarificationsMarkdown(items: BriefClarification[]): string {
+  const lines = ['# Clarifications', '', 'Questions the analyst asked before proposing the tasks, with the answers.', ''];
+  for (const item of items) {
+    lines.push(`## ${item.question}`, '', item.answer ? item.answer : '_Skipped: the analyst chose and noted an assumption._', '');
+  }
+  return lines.join('\n');
 }
 
 export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefProposal> {
@@ -179,17 +191,36 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
   if (!systemPrompt) throw new BriefError('The brief analyst prompt is missing from this build.');
 
   const feature = getFeatureSettings('briefImport');
+  const clarify = options.input.clarify !== false && !!options.askUser;
+  // Every question and its answer, as they happen (the proposal's record, not the model's)
+  const clarifications: BriefClarification[] = [];
+  const askUser: AskUserHandler | undefined = clarify && options.askUser
+    ? async (questions, askSignal) => {
+        onProgress?.('Waiting for your answer');
+        const answers = await options.askUser!(questions, askSignal);
+        for (const q of questions) clarifications.push({ question: q.question, answer: answers?.[q.question]?.trim() || undefined });
+        onProgress?.(answers ? 'Answer received; the analyst continues' : 'Skipped; the analyst continues on an assumption');
+        return answers;
+      }
+    : undefined;
+
   const result = await runClaudeTask({
     systemPrompt,
     prompt: [
       `The brief is at ${brief.readPath}. Read all of it.`,
       `The project root is ${projectPath}.`,
+      clarify
+        ? 'Clarification: ON. Follow "CLARIFY BEFORE YOU PROPOSE" in your instructions, then propose.'
+        : 'Clarification: OFF. Do not ask questions; propose on stated assumptions.',
       'Propose the epics and tasks as described in your instructions.',
     ].join('\n'),
+    // Superpowers brainstorming drives the questions (only when clarifying)
+    skills: clarify ? ['superpowers:brainstorming'] : [],
+    askUser,
     // Settings → Agents → feature models ("Spec document import")
     model: feature.model,
     thinkingLevel: feature.thinkingLevel as ThinkingLevel,
-    tools: READ_TOOLS,
+    tools: clarify ? [...READ_TOOLS, 'AskUserQuestion', 'Skill'] : READ_TOOLS,
     cwd: projectPath,
     agentType: 'brief_analyst',
     outputSchema: BriefProposalSchema,
@@ -202,18 +233,20 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
   });
 
   if (!result.output) throw new BriefError('The analyst did not return a proposal. Try again.');
-  const proposal = normalizeProposal(brief.briefId, result.output);
+  const proposal = { ...normalizeProposal(brief.briefId, result.output), clarifications };
   if (!proposal.tasks.length) throw new BriefError('The analyst found nothing to build in this brief.');
+  if (clarifications.length) writeFileSync(join(brief.dir, 'clarifications.md'), clarificationsMarkdown(clarifications), 'utf-8');
   writeFileSync(join(brief.dir, 'proposal.json'), JSON.stringify(proposal, null, 2), 'utf-8');
   return proposal;
 }
 
 /** Description written into a task created from a brief. */
-export function taskDescription(task: BriefTaskDraft, briefRelPath: string): string {
+export function taskDescription(task: BriefTaskDraft, briefRelPath: string, clarificationsRelPath?: string): string {
   const parts = [task.description.trim()];
   if (task.acceptanceCriteria.length) {
     parts.push('', '## Acceptance criteria (draft)', '', ...task.acceptanceCriteria.map((c) => `- ${c}`));
   }
   parts.push('', `Source: ${briefRelPath}${task.sourceSection ? ` — ${task.sourceSection}` : ''}`);
+  if (clarificationsRelPath) parts.push(`Decisions from the brief Q&A: ${clarificationsRelPath}`);
   return parts.join('\n');
 }

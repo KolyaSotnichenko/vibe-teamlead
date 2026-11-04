@@ -84,6 +84,8 @@ export const IPC_CHANNELS = {
   BRIEF_CANCEL: 'brief:cancel',
   BRIEF_CREATE_TASKS: 'brief:createTasks',
   BRIEF_PROGRESS: 'brief:progress',  // Event: analyst progress line (main -> renderer)
+  BRIEF_QUESTION: 'brief:question',  // Event: the analyst asks the user (main -> renderer)
+  BRIEF_ANSWER: 'brief:answer',
 
   // Design system (per project) and Storybook
   DESIGN_GET: 'design:get',

@@ -1,7 +1,7 @@
 import { ipcRenderer, webUtils } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { BriefAPI, BriefProgressEvent } from '../../shared/types/brief';
+import type { BriefAPI, BriefProgressEvent, BriefQuestionEvent } from '../../shared/types/brief';
 
 export type { BriefAPI };
 
@@ -17,4 +17,11 @@ export const createBriefAPI = (): BriefAPI => ({
     ipcRenderer.on(IPC_CHANNELS.BRIEF_PROGRESS, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.BRIEF_PROGRESS, handler);
   },
+  onQuestion: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: BriefQuestionEvent) => callback(payload);
+    ipcRenderer.on(IPC_CHANNELS.BRIEF_QUESTION, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.BRIEF_QUESTION, handler);
+  },
+  answer: (projectId, questionId, answers, stopAsking) =>
+    ipcRenderer.invoke(IPC_CHANNELS.BRIEF_ANSWER, projectId, questionId, answers, stopAsking),
 });

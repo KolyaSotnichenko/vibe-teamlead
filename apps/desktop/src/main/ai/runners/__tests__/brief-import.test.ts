@@ -5,8 +5,11 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../claude-code/task', () => ({ READ_TOOLS: ['Read'], runClaudeTask: vi.fn() }));
+vi.mock('../../prompts/prompt-loader', () => ({ tryLoadPrompt: () => 'You are the brief analyst.' }));
+vi.mock('../../../ipc-handlers/feature-settings-helper', () => ({ getFeatureSettings: () => ({ model: 'opus', thinkingLevel: 'high' }) }));
 
-import { BriefError, normalizeProposal, storeBrief, taskDescription } from '../brief-import';
+import { runClaudeTask } from '../../claude-code/task';
+import { BriefError, analyzeBrief, normalizeProposal, storeBrief, taskDescription } from '../brief-import';
 import type { BriefProposalOutput } from '../../schema/brief-proposal';
 
 const task = (key: string, dependsOn: string[] = [], epic = 'E1') => ({
@@ -74,3 +77,43 @@ describe('taskDescription', () => {
     expect(md).toContain('Source: .vibe-teamlead/briefs/b/brief.md — 2. Invoices');
   });
 });
+
+describe('analyzeBrief clarification', () => {
+  const output = { title: 'Bakery', summary: 's', epics: [{ key: 'E1', title: 'Orders', summary: '' }], tasks: [task('T1')], assumptions: [], openQuestions: [] };
+
+  it('lets the analyst ask through the dialog with Superpowers brainstorming, and records the answers', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockImplementationOnce(async (opts) => {
+      const signal = new AbortController().signal;
+      await opts.askUser?.([{ question: 'Who orders?', header: 'Users', multiSelect: false, options: [] }], signal);
+      await opts.askUser?.([{ question: 'Delivery?', header: 'Delivery', multiSelect: false, options: [] }], signal);
+      return { output } as never;
+    });
+    const projectPath = mkdtempSync(join(tmpdir(), 'vtl-brief-'));
+    const askUser = vi.fn(async (qs: { question: string }[]) => (qs[0].question === 'Who orders?' ? { 'Who orders?': 'Cafes' } : null));
+
+    const proposal = await analyzeBrief({ projectPath, input: { text: 'An app for my bakery', clarify: true }, askUser });
+
+    const opts = run.mock.calls[0][0];
+    expect(opts.tools).toEqual(expect.arrayContaining(['AskUserQuestion', 'Skill']));
+    expect(opts.skills).toEqual(['superpowers:brainstorming']);
+    expect(opts.prompt).toContain('Clarification: ON');
+    expect(proposal.clarifications).toEqual([{ question: 'Who orders?', answer: 'Cafes' }, { question: 'Delivery?', answer: undefined }]);
+    const md = readFileSync(join(projectPath, '.vibe-teamlead', 'briefs', proposal.briefId, 'clarifications.md'), 'utf-8');
+    expect(md).toContain('## Who orders?');
+    expect(md).toContain('Cafes');
+  });
+
+  it('asks nothing when clarification is off', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockResolvedValueOnce({ output } as never);
+    const projectPath = mkdtempSync(join(tmpdir(), 'vtl-brief-'));
+    const proposal = await analyzeBrief({ projectPath, input: { text: 'Bakery', clarify: false }, askUser: vi.fn() });
+    const opts = run.mock.calls.at(-1)?.[0];
+    expect(opts?.askUser).toBeUndefined();
+    expect(opts?.tools).toEqual(['Read']);
+    expect(opts?.skills).toEqual([]);
+    expect(proposal.clarifications).toEqual([]);
+  });
+});
+

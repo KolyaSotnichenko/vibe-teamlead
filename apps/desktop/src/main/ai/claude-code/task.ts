@@ -55,6 +55,8 @@ export interface ClaudeTaskOptions<T = unknown> {
   agentType?: AgentType;
   /** Structured output schema (validated) */
   outputSchema?: ZodSchema<T>;
+  /** Skills instead of the agent type's (plugin-qualified, e.g. 'superpowers:brainstorming') */
+  skills?: string[];
   /** Max agentic turns. Default: 3 without tools, 50 with tools */
   maxTurns?: number;
   abortSignal?: AbortSignal;
@@ -124,6 +126,7 @@ export async function runClaudeTask<T = unknown>(options: ClaudeTaskOptions<T>):
       projectDir: cwd,
       outputSchema: options.outputSchema,
       toolsOverride: tools,
+      ...(options.skills ? { skillsOverride: options.skills } : {}),
       // Text generation must not pick up the project's CLAUDE.md or skills.
       settingSources: tools.length > 0 ? ['project'] : [],
       bundled: options.bundled ?? resolveBundledTools(),

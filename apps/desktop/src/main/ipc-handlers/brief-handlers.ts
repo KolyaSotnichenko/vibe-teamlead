@@ -12,6 +12,8 @@ import { type BrowserWindow, dialog, ipcMain } from 'electron';
 import { AUTO_BUILD_PATHS, IPC_CHANNELS } from '../../shared/constants';
 import type { BriefAnalyzeInput, BriefCreatedTask, BriefCreateOptions, BriefProposal, BriefTaskDraft, IPCResult } from '../../shared/types';
 import { BriefError, analyzeBrief, briefsRoot, taskDescription } from '../ai/runners/brief-import';
+import type { AskUserHandler } from '../ai/claude-code/user-questions';
+import type { AgentAnswers } from '../../shared/types/agent-questions';
 import { projectStore } from '../project-store';
 import { persistPlanStatus } from './task/plan-file-utils';
 import { createTaskInProject } from './task/crud-handlers';
@@ -41,6 +43,35 @@ export function orderByDependencies(tasks: BriefTaskDraft[]): BriefTaskDraft[] {
 
 export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null): void {
   const running = new Map<string, AbortController>();
+  // The analyst's open question per project, and whether the user said "stop asking"
+  const waiting = new Map<string, { questionId: string; resolve: (answers: AgentAnswers | null) => void }>();
+  const stopped = new Set<string>();
+
+  const askUserFor = (projectId: string): AskUserHandler => (questions, signal) =>
+    new Promise((resolve) => {
+      if (stopped.has(projectId) || signal.aborted) return resolve(null);
+      const questionId = `brief-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const done = (answers: AgentAnswers | null) => {
+        signal.removeEventListener('abort', onAbort);
+        if (waiting.get(projectId)?.questionId === questionId) waiting.delete(projectId);
+        resolve(answers);
+      };
+      const onAbort = () => done(null);
+      signal.addEventListener('abort', onAbort, { once: true });
+      waiting.set(projectId, { questionId, resolve: done });
+      getMainWindow()?.webContents.send(IPC_CHANNELS.BRIEF_QUESTION, { projectId, questionId, questions });
+    });
+
+  ipcMain.handle(
+    IPC_CHANNELS.BRIEF_ANSWER,
+    (_e, projectId: string, questionId: string, answers: AgentAnswers | null, stopAsking?: boolean): IPCResult => {
+      if (stopAsking) stopped.add(projectId);
+      const entry = waiting.get(projectId);
+      if (!entry || entry.questionId !== questionId) return { success: false, error: 'The analyst is no longer waiting for this answer.' };
+      entry.resolve(answers && Object.keys(answers).length ? answers : null);
+      return { success: true };
+    },
+  );
 
   ipcMain.handle(IPC_CHANNELS.BRIEF_PICK_FILE, async (): Promise<IPCResult<string | null>> => {
     const window = getMainWindow();
@@ -62,11 +93,17 @@ export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null)
       running.get(projectId)?.abort();
       const controller = new AbortController();
       running.set(projectId, controller);
+      stopped.delete(projectId);
       try {
         const proposal = await analyzeBrief({
           projectPath: project.path,
           autoBuildPath: project.autoBuildPath,
-          input: { text: typeof input?.text === 'string' ? input.text : undefined, filePath: typeof input?.filePath === 'string' ? input.filePath : undefined },
+          input: {
+            text: typeof input?.text === 'string' ? input.text : undefined,
+            filePath: typeof input?.filePath === 'string' ? input.filePath : undefined,
+            clarify: input?.clarify !== false,
+          },
+          askUser: askUserFor(projectId),
           signal: controller.signal,
           onProgress: (message) => getMainWindow()?.webContents.send(IPC_CHANNELS.BRIEF_PROGRESS, { projectId, message }),
         });
@@ -105,13 +142,15 @@ export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null)
 
       const briefFile = existsSync(path.join(briefDir, 'brief.md')) ? 'brief.md' : 'source.pdf';
       const briefRelPath = path.relative(project.path, path.join(briefDir, briefFile));
+      const clarificationsFile = path.join(briefDir, 'clarifications.md');
+      const clarificationsRelPath = existsSync(clarificationsFile) ? path.relative(project.path, clarificationsFile) : undefined;
       const specIdByKey = new Map<string, string>();
       const created: BriefCreatedTask[] = [];
 
       try {
         for (const draft of orderByDependencies(tasks)) {
           const dependencies = draft.dependsOn.map((key) => specIdByKey.get(key)).filter((id): id is string => !!id);
-          const task = await createTaskInProject(project, draft.title, taskDescription(draft, briefRelPath), {
+          const task = await createTaskInProject(project, draft.title, taskDescription(draft, briefRelPath, clarificationsRelPath), {
             // The user's default models (agent profile + custom phase models), as the task wizard sets them
             ...resolveDefaultTaskModels(readSettingsFile() as never),
             sourceType: 'brief',

@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { BriefCreatedTask, BriefProposal, BriefTaskDraft } from '../../../shared/types';
+import type { BriefClarification, BriefCreatedTask, BriefProposal, BriefQuestionEvent, BriefTaskDraft } from '../../../shared/types';
 import { cn } from '../../lib/utils';
 import { loadTasks } from '../../stores/task-store';
 import { BriefAnalysingStep } from './BriefAnalysingStep';
@@ -59,6 +59,10 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
   const [created, setCreated] = useState<BriefCreatedTask[]>([]);
   const [createdTitles, setCreatedTitles] = useState<Map<string, string>>(new Map());
   const [confirm, setConfirm] = useState<null | 'close' | 'back'>(null);
+  // Superpowers-style questions before the proposal (default on)
+  const [clarify, setClarify] = useState(true);
+  const [question, setQuestion] = useState<BriefQuestionEvent | null>(null);
+  const [asked, setAsked] = useState<BriefClarification[]>([]);
 
   /** Bumped on every analyse / cancel / close: a late result of an older run is ignored. */
   const runRef = useRef(0);
@@ -82,6 +86,8 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
     setCreateError(null);
     setCreated([]);
     setConfirm(null);
+    setQuestion(null);
+    setAsked([]);
   }, [initialProposal]);
 
   // Fresh dialog every time it opens
@@ -100,10 +106,36 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
     });
   }, [open, projectId, brief]);
 
+  // The analyst's questions for this project's analysis
+  useEffect(() => {
+    if (!open || !brief.onQuestion) return;
+    return brief.onQuestion((event) => {
+      if (event.projectId !== projectId || stepRef.current !== 'analysing') return;
+      setQuestion(event);
+    });
+  }, [open, projectId, brief]);
+
+  const answerQuestion = async (answers: Record<string, string> | null, stopAsking = false) => {
+    if (!question) return;
+    const current = question;
+    setQuestion(null);
+    setAsked((prev) => [
+      ...prev,
+      ...current.questions.map((q) => ({ question: q.question, answer: answers?.[q.question] })),
+    ]);
+    try {
+      await brief.answer(projectId, current.questionId, answers, stopAsking);
+    } catch {
+      // The analyst stopped waiting; it continues on an assumption.
+    }
+  };
+
   const analyse = async () => {
     const token = ++runRef.current;
-    const input = file ? { filePath: file.path } : { text: text.trim() };
+    const input = { ...(file ? { filePath: file.path } : { text: text.trim() }), clarify };
     setAnalyseError(null);
+    setQuestion(null);
+    setAsked([]);
     setLines([]);
     setCancelling(false);
     setStartedAt(Date.now());
@@ -297,6 +329,9 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
                 lines={lines}
                 cancelling={cancelling}
                 onCancel={() => void cancelAnalysis()}
+                question={question?.questions ?? null}
+                asked={asked}
+                onAnswer={(answers, stop) => void answerQuestion(answers, stop)}
               />
             )}
             {step === 'review' && proposal && (
@@ -335,6 +370,14 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
             <>
               {step === 'input' && (
                 <footer className="flex shrink-0 items-center justify-end gap-3 border-t border-border px-6 py-3">
+                  <ToggleRow
+                    checked={clarify}
+                    onChange={setClarify}
+                    label={t('tasks:briefImport.input.clarify')}
+                    hint={clarify ? t('tasks:briefImport.input.clarifyHint') : t('tasks:briefImport.input.clarifyOffHint')}
+                    stateLabels={[t('tasks:briefImport.input.clarifyOn'), t('tasks:briefImport.input.clarifyOff')]}
+                  />
+                  <span className="flex-1" />
                   <button type="button" onClick={requestClose} className={ghostButton}>
                     {t('common:buttons.cancel')}
                   </button>

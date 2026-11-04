@@ -120,6 +120,20 @@ export function BriefReviewStep({
           </section>
         )}
 
+        {(proposal.clarifications?.length ?? 0) > 0 && (
+          <section aria-labelledby="brief-clarifications" className="space-y-3">
+            <SectionHeader id="brief-clarifications" title={t('tasks:briefImport.review.clarifications')} meta={proposal.clarifications?.length ?? 0} />
+            <ol className="space-y-3">
+              {proposal.clarifications?.map((c, i) => (
+                <li key={`${i}-${c.question}`} className="text-sm">
+                  <p className="text-muted-foreground">{c.question}</p>
+                  <p className="mt-0.5 border-l-2 border-foreground pl-3 text-foreground">{c.answer ?? t('tasks:briefImport.question.skipped')}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
         {proposal.assumptions.length > 0 && (
           <section aria-labelledby="brief-assumptions" className="space-y-3">
             <SectionHeader id="brief-assumptions" title={t('tasks:briefImport.review.assumptions')} meta={proposal.assumptions.length} />

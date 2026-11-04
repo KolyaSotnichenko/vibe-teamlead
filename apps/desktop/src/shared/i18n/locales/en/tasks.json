@@ -815,7 +815,12 @@
       "textPlaceholder": "For example: customers can create invoices, send them by email as PDF and see which ones are unpaid…",
       "textHint": "A few sentences are enough; the analyst fills in the rest from the code and lists what it assumed.",
       "fileWins": "The file will be analysed. Remove it to describe the work in text instead.",
-      "analyse": "Analyse"
+      "analyse": "Analyse",
+      "clarify": "Ask me questions first",
+      "clarifyHint": "Asks what the brief leaves open, one question at a time (Superpowers brainstorming).",
+      "clarifyOn": "On",
+      "clarifyOff": "Off",
+      "clarifyOffHint": "Proposes straight away on stated assumptions."
     },
     "analysing": {
       "title": "Reading {{source}} and the project",
@@ -883,7 +888,8 @@
       "create_one": "Create {{count}} task",
       "create_other": "Create {{count}} tasks",
       "creating_one": "Creating {{count}} task…",
-      "creating_other": "Creating {{count}} tasks…"
+      "creating_other": "Creating {{count}} tasks…",
+      "clarifications": "Your answers"
     },
     "done": {
       "label": "Created",
@@ -910,7 +916,17 @@
       "after": "after {{list}}",
       "afterAria": "Starts after {{list}}"
     },
-    "menu": "Import brief…"
+    "menu": "Import brief…",
+    "question": {
+      "title": "Question {{n}} from the analyst",
+      "body": "Pick an option or write your own answer. Skipping lets the analyst choose and note it as an assumption.",
+      "send": "Send answer",
+      "skip": "Skip",
+      "stop": "Stop asking and propose",
+      "answered_one": "{{count}} answered",
+      "answered_other": "{{count}} answered",
+      "skipped": "Skipped — the analyst chose and noted an assumption"
+    }
   },
   "logs": {
     "phases": {

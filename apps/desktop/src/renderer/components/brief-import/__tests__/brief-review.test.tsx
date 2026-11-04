@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import type { BriefAPI, BriefProgressEvent, BriefProposal, BriefTaskDraft } from '../../../../shared/types';
+import type { BriefQuestionEvent, BriefAPI, BriefProgressEvent, BriefProposal, BriefTaskDraft } from '../../../../shared/types';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -121,6 +121,8 @@ describe('BriefImportDialog', () => {
       pathForFile: vi.fn((f: File) => `/drop/${f.name}`),
       analyze: vi.fn(),
       cancel: vi.fn(async () => ({ success: true })),
+      onQuestion: vi.fn(() => () => {}),
+      answer: vi.fn(async () => ({ success: true })),
       createTasks: vi.fn(async (_p: string, _b: string, tasks: BriefTaskDraft[]) => ({
         success: true,
         data: tasks.map((t, i) => ({ key: t.key, taskId: `id-${i}`, specId: `0${20 + i}-${t.key.toLowerCase()}` })),
@@ -208,7 +210,7 @@ describe('BriefImportDialog', () => {
 
     fireEvent.change(screen.getByLabelText('tasks:briefImport.input.textHeading'), { target: { value: 'Invoices please' } });
     fireEvent.click(screen.getByRole('button', { name: 'tasks:briefImport.input.analyse' }));
-    expect(brief.analyze).toHaveBeenCalledWith('p1', { text: 'Invoices please' });
+    expect(brief.analyze).toHaveBeenCalledWith('p1', { text: 'Invoices please', clarify: true });
 
     act(() => {
       progress?.({ projectId: 'other', message: 'not ours' });
@@ -220,6 +222,33 @@ describe('BriefImportDialog', () => {
     await act(async () => resolve({ success: true, data: proposal }));
     expect(await screen.findByText('Invoicing')).toBeInTheDocument();
     expect(screen.getByText('Which email provider?')).toBeInTheDocument();
+  });
+
+  it("shows the analyst's question, sends the answer, and can stop the questions", async () => {
+    let ask: ((e: BriefQuestionEvent) => void) | null = null;
+    brief.onQuestion.mockImplementation((cb: (e: BriefQuestionEvent) => void) => {
+      ask = cb;
+      return noop;
+    });
+    brief.analyze.mockImplementation(() => new Promise(noop));
+    render(<BriefImportDialog projectId="p1" open onOpenChange={noop} />);
+    fireEvent.change(screen.getByLabelText('tasks:briefImport.input.textHeading'), { target: { value: 'An app for my bakery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'tasks:briefImport.input.analyse' }));
+
+    const question = { question: 'Who orders: walk-in customers or cafes?', header: 'Users', multiSelect: false, options: [{ label: 'Cafes (Recommended)', description: 'B2B orders' }, { label: 'Walk-in', description: 'Retail' }] };
+    act(() => ask?.({ projectId: 'p1', questionId: 'q1', questions: [question] }));
+    expect(screen.getAllByText('Who orders: walk-in customers or cafes?').length).toBeGreaterThan(0);
+    const send = screen.getByRole('button', { name: 'tasks:briefImport.question.send' });
+    expect(send).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: /Cafes/ }));
+    fireEvent.click(send);
+    await waitFor(() => expect(brief.answer).toHaveBeenCalledWith('p1', 'q1', { 'Who orders: walk-in customers or cafes?': 'Cafes (Recommended)' }, false));
+    // The answered question stays listed with its answer
+    expect(screen.getByText('Cafes (Recommended)')).toBeInTheDocument();
+
+    act(() => ask?.({ projectId: 'p1', questionId: 'q2', questions: [{ ...question, question: 'Delivery or pickup?' }] }));
+    fireEvent.click(screen.getByRole('button', { name: 'tasks:briefImport.question.stop' }));
+    await waitFor(() => expect(brief.answer).toHaveBeenCalledWith('p1', 'q2', null, true));
   });
 
   it('cancel stops the analyst and returns to the input; errors offer Retry', async () => {

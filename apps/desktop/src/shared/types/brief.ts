@@ -43,6 +43,21 @@ export interface BriefProposal {
   assumptions: string[];
   /** Questions for the user; the spec agents ask them again per task */
   openQuestions: string[];
+  /** What the analyst asked before proposing, and the answers (empty when it asked nothing) */
+  clarifications?: BriefClarification[];
+}
+
+export interface BriefClarification {
+  question: string;
+  /** The user's answer; undefined when they skipped it */
+  answer?: string;
+}
+
+/** The analyst asks the user something (main → renderer) */
+export interface BriefQuestionEvent {
+  projectId: string;
+  questionId: string;
+  questions: import('./agent-questions').AgentQuestion[];
 }
 
 export interface BriefAnalyzeInput {
@@ -50,6 +65,8 @@ export interface BriefAnalyzeInput {
   text?: string;
   /** Absolute path of a brief file (.md, .txt, .pdf, .docx, .rtf, .odt) */
   filePath?: string;
+  /** Ask the user clarifying questions before proposing (Superpowers brainstorming). Default: on */
+  clarify?: boolean;
 }
 
 export interface BriefCreateOptions {
@@ -83,4 +100,11 @@ export interface BriefAPI {
     options: BriefCreateOptions,
   ) => Promise<IPCResult<BriefCreatedTask[]>>;
   onProgress: (callback: (event: BriefProgressEvent) => void) => () => void;
+  /** The analyst's questions while it works */
+  onQuestion: (callback: (event: BriefQuestionEvent) => void) => () => void;
+  /**
+   * Answer a question (null = skip it). `stopAsking`: answer nothing more, the
+   * analyst proposes from what it has.
+   */
+  answer: (projectId: string, questionId: string, answers: Record<string, string> | null, stopAsking?: boolean) => Promise<IPCResult>;
 }

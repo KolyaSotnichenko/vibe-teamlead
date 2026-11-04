@@ -210,7 +210,9 @@ export function buildQueryOptions(
     plugins.push({ type: 'local', path: bundled.drawioPluginDir, skipMcpDiscovery: true });
     availablePlugins.add('drawio');
   }
-  const skills = skillsForAgent(config.agentType, availablePlugins);
+  const skills = config.skillsOverride
+    ? config.skillsOverride.filter((s) => availablePlugins.has(s.split(':')[0]))
+    : skillsForAgent(config.agentType, availablePlugins);
 
   const append = [config.systemPrompt, ASK_USER_INSTRUCTIONS, skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '']
     .filter(Boolean)

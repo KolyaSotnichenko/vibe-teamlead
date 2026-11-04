@@ -3,7 +3,7 @@
  * `analyze` streams a few progress lines before it answers, and honours `cancel`.
  */
 
-import type { BriefAPI, BriefProgressEvent, BriefProposal } from '../../../shared/types';
+import type { BriefAPI, BriefProgressEvent, BriefProposal, BriefQuestionEvent } from '../../../shared/types';
 
 export const sampleBriefProposal: BriefProposal = {
   briefId: '20261103-1430-invoicing-v1',
@@ -99,6 +99,7 @@ export const sampleBriefProposal: BriefProposal = {
   ],
   assumptions: ['One currency per organisation in v1.', 'Tax is a percentage per line; no compound taxes.'],
   openQuestions: ['Which email provider should be used?', 'Do credit notes need their own number sequence?'],
+  clarifications: [{ question: 'Should invoices be sent the moment an order ships, or once a month per customer?', answer: 'When the order ships (Recommended)' }],
 };
 
 const PROGRESS = [
@@ -114,13 +115,38 @@ const PROGRESS = [
 const STEP_MS = 650;
 
 const listeners = new Set<(event: BriefProgressEvent) => void>();
+const questionListeners = new Set<(event: BriefQuestionEvent) => void>();
+let pendingAnswer: ((answers: Record<string, string> | null) => void) | null = null;
 let runId = 0;
+
+const MOCK_QUESTIONS: BriefQuestionEvent['questions'][] = [
+  [{
+    question: 'The brief says invoices go out "automatically". Should they be sent the moment an order ships, or collected into one invoice per customer at the end of the month?',
+    header: 'Sending',
+    multiSelect: false,
+    options: [
+      { label: 'When the order ships (Recommended)', description: 'One invoice per order; simplest, and matches how orders work today.' },
+      { label: 'Monthly per customer', description: 'Needs a billing run and an "open items" view.' },
+    ],
+  }],
+];
 
 export const briefMock: BriefAPI = {
   pickFile: async () => ({ success: true, data: '/Users/demo/Documents/invoicing-brief.md' }),
   pathForFile: (file: File) => `/Users/demo/Downloads/${file.name}`,
-  analyze: async (projectId) => {
+  analyze: async (projectId, input) => {
     const id = ++runId;
+    if (input?.clarify !== false) {
+      await new Promise((r) => setTimeout(r, STEP_MS));
+      for (const cb of listeners) cb({ projectId, message: 'Reading the brief and the project' });
+      for (const questions of MOCK_QUESTIONS) {
+        await new Promise((r) => setTimeout(r, STEP_MS));
+        const answered = new Promise<Record<string, string> | null>((resolve) => { pendingAnswer = resolve; });
+        for (const cb of questionListeners) cb({ projectId, questionId: `mock-${id}`, questions });
+        await answered;
+        if (id !== runId) return { success: false, error: 'Cancelled' };
+      }
+    }
     for (const message of PROGRESS) {
       await new Promise((r) => setTimeout(r, STEP_MS));
       if (id !== runId) return { success: false, error: 'Cancelled' };
@@ -130,8 +156,19 @@ export const briefMock: BriefAPI = {
     if (id !== runId) return { success: false, error: 'Cancelled' };
     return { success: true, data: sampleBriefProposal };
   },
+  onQuestion: (callback) => {
+    questionListeners.add(callback);
+    return () => questionListeners.delete(callback);
+  },
+  answer: async (_projectId, _questionId, answers) => {
+    pendingAnswer?.(answers);
+    pendingAnswer = null;
+    return { success: true };
+  },
   cancel: async () => {
     runId += 1;
+    pendingAnswer?.(null);
+    pendingAnswer = null;
     return { success: true };
   },
   createTasks: async (_projectId, _briefId, tasks) => ({

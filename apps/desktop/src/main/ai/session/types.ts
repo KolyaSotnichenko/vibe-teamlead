@@ -69,6 +69,8 @@ export interface SessionConfig {
   linearApiKey?: string;
   /** Programmatic subagents Claude Code may delegate to via its Agent tool */
   agents?: Record<string, AgentDefinition>;
+  /** Skills for this session instead of the agent type's (e.g. [] to turn them off) */
+  skillsOverride?: string[];
   /** Default model of subagents without one of their own (the agent's ad-hoc subagents) */
   subagentModel?: string;
   /** Claude Code plugins to load (e.g. Superpowers), by local path */
