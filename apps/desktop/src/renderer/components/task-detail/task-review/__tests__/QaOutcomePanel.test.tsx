@@ -45,6 +45,14 @@ describe('QaOutcomePanel', () => {
     await waitFor(() => expect(submitReview).toHaveBeenCalledWith('t1', false, undefined, undefined, { rerunOnly: true }));
   });
 
+  it('says when a check keeps repeating itself', async () => {
+    setup({
+      approved: false, reason: 'recurring_issues', iterations: 1, reviewerApproved: false, checksRepeat: true, at: 'now',
+      blocking: [{ source: 'design', title: 'No gradients', location: 'a.css:1', match: 'linear-gradient(' }],
+    });
+    expect(await screen.findByText('qaOutcome.reason.checksRepeat')).toBeInTheDocument();
+  });
+
   it('explains a run from before the outcome was recorded', async () => {
     setup(undefined);
     expect(await screen.findByText('qaOutcome.unrecorded')).toBeInTheDocument();

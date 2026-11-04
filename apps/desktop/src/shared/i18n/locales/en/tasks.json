@@ -967,6 +967,7 @@
     "title": "Why QA did not approve",
     "reason": {
       "checksBlocked": "The QA reviewer approved, but an automatic check blocked it:",
+      "checksRepeat": "An automatic check keeps finding this and the QA fixer could not clear it. The review will run once the check is clear:",
       "recurring_issues": "The same issues came back round after round, so QA stopped and handed the task to you ({{count}} rounds).",
       "max_iterations": "QA did not approve after {{count}} rounds of review and fixes.",
       "consecutive_errors": "QA could not record its verdict three times in a row.",

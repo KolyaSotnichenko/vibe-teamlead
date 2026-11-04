@@ -36,7 +36,7 @@ import type {
 } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
-import { DEFAULT_QA_ITERATIONS, QALoop, type QAOutcome } from '../orchestration/qa-loop';
+import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { resolveBaseRef, runSecurityGates } from '../security/gates';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
@@ -923,7 +923,10 @@ async function runQualityAssurance(
         }
       : undefined,
 
-    generatePrompt: (agentType) => assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session),
+    generatePrompt: async (agentType, context) => {
+      const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session);
+      return [prompt, qaRoundSection(agentType, context)].filter(Boolean).join('\n\n');
+    },
 
     runSession: (runConfig) => {
       postLog(`Running ${runConfig.agentType} session (session=${runConfig.sessionNumber})`);

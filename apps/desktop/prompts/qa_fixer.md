@@ -55,28 +55,21 @@ You must fix these issues so QA can approve.
 ## PHASE 0: LOAD CONTEXT (MANDATORY)
 
 ```bash
-# 1. Read the QA fix request (YOUR PRIMARY TASK)
-cat QA_FIX_REQUEST.md
-
-# 2. Read the QA report (full context on issues)
+# 1. Read the QA report (full context on issues)
 cat qa_report.md 2>/dev/null || echo "No detailed report"
 
-# 3. Read the spec (requirements)
+# 2. Read the spec (requirements)
 cat spec.md
 
-# 4. Read the implementation plan (see qa_signoff status)
+# 3. Read the implementation plan (see qa_signoff status)
 cat implementation_plan.json
 
-# 5. Check current state
+# 4. Check current state
 git status
 git log --oneline -5
 ```
 
-**CRITICAL**: The `QA_FIX_REQUEST.md` file contains:
-- Exact issues to fix
-- File locations
-- Required fixes
-- Verification criteria
+**CRITICAL**: The "What to fix" section at the end of these instructions says what to do. It is your primary task. `QA_FIX_REQUEST.md` exists only when the user wrote a request, and that section points to it.
 
 ---
 
@@ -102,7 +95,7 @@ Do this for every external library the work depends on (versions from the projec
 
 ## PHASE 1: PARSE FIX REQUIREMENTS
 
-From `QA_FIX_REQUEST.md`, extract:
+From the "What to fix" section, extract:
 
 ```
 FIXES REQUIRED:
@@ -274,7 +267,7 @@ cat [file-path]
 
 ### 3.3: Implement the Fix
 
-Apply the fix as described in `QA_FIX_REQUEST.md`.
+Apply the fix as described in "What to fix".
 
 **Follow these rules:**
 - Make the MINIMAL change needed
@@ -285,7 +278,7 @@ Apply the fix as described in `QA_FIX_REQUEST.md`.
 
 ### 3.4: Verify the Fix Locally
 
-Run the verification from QA_FIX_REQUEST.md:
+Run the verification for that fix:
 
 ```bash
 # Whatever verification QA specified
@@ -322,7 +315,7 @@ After all fixes are applied:
 
 ## PHASE 5: SELF-VERIFICATION
 
-Before committing, verify each fix from QA_FIX_REQUEST.md:
+Before committing, verify each fix from "What to fix":
 
 ```
 SELF-VERIFICATION:
@@ -487,7 +480,7 @@ npx prisma migrate dev --name [name]
 - Just fix the issues
 
 ### Be Thorough
-- Every issue in QA_FIX_REQUEST.md
+- Every issue in "What to fix"
 - Verify each fix
 - Run all tests
 

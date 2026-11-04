@@ -90,7 +90,9 @@ export function QaOutcomePanel({ task }: { task: Task }) {
   }
   if (!outcome || outcome.approved) return null;
 
-  const reasonText = outcome.reviewerApproved
+  const reasonText = outcome.checksRepeat
+    ? t('qaOutcome.reason.checksRepeat')
+    : outcome.reviewerApproved
     ? t('qaOutcome.reason.checksBlocked')
     : t(`qaOutcome.reason.${outcome.reason ?? 'max_iterations'}`, { count: outcome.iterations, error: outcome.error ?? '' });
   const designMatches = outcome.blocking.filter((b) => b.source === 'design' && b.match).map((b) => b.match as string);

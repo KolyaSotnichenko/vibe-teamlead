@@ -240,8 +240,7 @@ function buildSpecLocationHeader(context: PromptContext): string {
     `- Spec: \`${context.specDir}/spec.md\`\n` +
     `- Implementation plan: \`${context.specDir}/implementation_plan.json\`\n` +
     `- Progress notes: \`${context.specDir}/build-progress.txt\`\n` +
-    `- QA report output: \`${context.specDir}/qa_report.md\`\n` +
-    `- Fix request output: \`${context.specDir}/QA_FIX_REQUEST.md\`\n\n` +
+    `- QA report output: \`${context.specDir}/qa_report.md\`\n\n` +
     `The project root is: \`${context.projectDir}\`\n\n` +
     `---\n\n`
   );

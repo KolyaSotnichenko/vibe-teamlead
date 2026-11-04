@@ -57,4 +57,9 @@ describe('QA prompts', () => {
     expect(prompt(name)).toContain('mcp__vibe-teamlead__update_qa_status');
     expect(prompt(name)).not.toContain('"qa_signoff": {');
   });
+
+  it('the reviewer no longer writes a fix request: that file is what the user asks', () => {
+    expect(prompt('qa_reviewer')).not.toContain('QA_FIX_REQUEST');
+    expect(prompt('qa_fixer')).not.toContain('cat QA_FIX_REQUEST.md');
+  });
 });

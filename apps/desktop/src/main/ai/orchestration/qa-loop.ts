@@ -60,6 +60,31 @@ Read the status in qa_report.md, then record that same verdict with mcp__vibe-te
 Do nothing else: no checks, no servers, no file edits. The verdict is your whole job in this session.`;
 }
 
+/** What this round of the loop asks of the agent, added to its instructions. Pure — tested directly. */
+export function qaRoundSection(agentType: string, context: QAPromptContext): string {
+  if (agentType === 'qa_fixer') {
+    if (context.isHumanFeedback) {
+      return '## What to fix\n\nThe user wrote a request: `QA_FIX_REQUEST.md` in the spec directory. Read it first; doing what it asks is your whole job.';
+    }
+    if (!context.issues?.length) return '';
+    const list = context.issues.map((issue, i) => {
+      const head = `${i + 1}. **${issue.title ?? issue.description ?? 'Issue'}**${issue.location ? ` (${issue.location})` : ''}`;
+      const body = issue.title && issue.description ? `\n   ${issue.description.replace(/\n/g, '\n   ')}` : '';
+      return `${head}${body}${issue.fix_required ? `\n   Fix: ${issue.fix_required}` : ''}`;
+    });
+    return [
+      '## What to fix',
+      '',
+      'QA found these. They are your whole job: fix them and nothing else.',
+      '',
+      ...list,
+      '',
+      "If a finding can't be fixed in the code (a false positive, or something the design system allows), leave it, don't edit the reports or the check's output, and say so in your final message. The app shows it to the user.",
+    ].join('\n');
+  }
+  return '';
+}
+
 const SIGNOFF_KICKOFF = 'Record the verdict from qa_report.md with update_qa_status, then stop.';
 
 // =============================================================================
@@ -213,6 +238,8 @@ export interface QAPromptContext {
   isHumanFeedback?: boolean;
   /** Previous error context for self-correction */
   previousError?: QAErrorContext;
+  /** For the fixer: what this round found */
+  issues?: QAIssue[];
 }
 
 /** Error context for self-correction feedback */
@@ -295,6 +322,7 @@ export class QALoop extends EventEmitter {
   private lastReviewerApproved = false;
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
   private lastDesignFindings: DesignFinding[] = [];
+  private checksRepeat = false;
   private lastGateKeys: string[] = [];
   /** Why the last read of qa_signoff found no verdict */
   private signoffProblem = '';
@@ -364,9 +392,42 @@ export class QALoop extends EventEmitter {
         const designBlocking = await this.runDesignCheck();
         const blockers = [...securityIssues, ...designBlocking];
 
-        // Run QA reviewer. The previous verdict is cleared first so a reviewer that
-        // fails to write one can never be read as approving.
+        // The previous verdict is cleared first: a reviewer that fails to write one, or
+        // a restart after the checks blocked, can never be read as approving.
         await this.clearQASignoff();
+
+        // A review can't pass while the checks have findings, so it waits until they're clear
+        if (blockers.length) {
+          this.lastReviewerApproved = false;
+          this.lastBlocking = [
+            ...securityIssues.map((i) => ({ source: 'security' as const, title: i.title ?? '', location: i.location })),
+            ...this.lastDesignFindings.map((f) => ({ source: 'design' as const, title: f.message, location: `${f.file}:${f.line}`, match: f.match })),
+          ];
+          if (securityIssues.length) this.emitTyped('log', `Security gates: ${securityIssues.length} issue(s) to fix before the review`);
+          if (designBlocking.length) this.emitTyped('log', `Design check: ${designBlocking.length} file(s) to fix before the review (see design_check.md)`);
+          this.emitTyped('qa-review-complete', iteration, 'rejected', blockers);
+
+          const gateKeys = this.lastGateKeys;
+          const seenBefore = new Set(this.iterationHistory.flatMap((r) => r.gate_keys ?? []));
+          await this.recordIteration(iteration, 'rejected', blockers, Date.now() - iterationStart, gateKeys);
+
+          // Nothing new, and the fixer already had a round at these: another can't help
+          // (a false positive, say). Only the user can settle it.
+          const recurring = findRecurring(this.iterationHistory, blockers);
+          if (gateKeys.every((k) => seenBefore.has(k)) || recurring.length) {
+            this.emitTyped('log', 'The checks keep finding the same thing — handing over to you');
+            this.checksRepeat = true;
+            await this.escalate(blockers);
+            return this.outcome(false, iteration, Date.now() - startTime, 'recurring_issues');
+          }
+
+          if (iteration >= maxIterations) break;
+          const stopped = await this.runFixer(iteration, maxIterations, blockers, startTime);
+          if (stopped) return stopped;
+          continue;
+        }
+
+        // Run QA reviewer
         this.sessionNumber++;
         const reportBefore = await this.readReport();
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', {
@@ -417,28 +478,15 @@ export class QALoop extends EventEmitter {
             signoff = await this.readQASignoff();
           }
         }
-        let status = this.resolveQAStatus(signoff);
-        let issues = signoff?.issues_found ?? [];
+        const status = this.resolveQAStatus(signoff);
+        const issues = signoff?.issues_found ?? [];
 
         this.lastReviewerApproved = status === 'approved';
-        const reviewerIssues = status === 'rejected' ? issues : [];
-        if (blockers.length && status !== 'unknown') {
-          if (status === 'approved') {
-            // Say which check blocked it: the reviewer approved
-            if (securityIssues.length) this.emitTyped('log', `Security gates blocked approval: ${securityIssues.length} finding(s)`);
-            if (designBlocking.length) this.emitTyped('log', `Design check blocked approval: ${designBlocking.length} finding(s) (see design_check.md)`);
-          }
-          status = 'rejected';
-          // The approval no longer stands: left in the plan, a restart would read it as approved
-          await this.clearQASignoff();
-          const known = new Set(issues.map((i) => i.title));
-          issues = [...issues, ...blockers.filter((i) => !known.has(i.title))];
-        }
-        this.lastBlocking = [
-          ...securityIssues.map((i) => ({ source: 'security' as const, title: i.title ?? '', location: i.location })),
-          ...this.lastDesignFindings.map((f) => ({ source: 'design' as const, title: f.message, location: `${f.file}:${f.line}`, match: f.match })),
-          ...reviewerIssues.map((i) => ({ source: 'qa' as const, title: i.title ?? i.description ?? '', location: i.location })),
-        ];
+        this.lastBlocking = (status === 'rejected' ? issues : []).map((i) => ({
+          source: 'qa' as const,
+          title: i.title ?? i.description ?? '',
+          location: i.location,
+        }));
         const iterationDuration = Date.now() - iterationStart;
 
         this.emitTyped('qa-review-complete', iteration, status, issues);
@@ -452,17 +500,7 @@ export class QALoop extends EventEmitter {
         if (status === 'rejected') {
           consecutiveErrors = 0;
           lastErrorContext = undefined;
-          const gateKeys = this.lastGateKeys;
-          const seenBefore = new Set(this.iterationHistory.flatMap((r) => r.gate_keys ?? []));
-          await this.recordIteration(iteration, 'rejected', issues, iterationDuration, gateKeys);
-
-          // The reviewer is satisfied and the checks found nothing new: another fixer
-          // round can't help (a false positive, say). Only the user can settle it.
-          if (this.lastReviewerApproved && gateKeys.length && gateKeys.every((k) => seenBefore.has(k))) {
-            this.emitTyped('log', 'The reviewer approved but the same check findings are back — handing over to you');
-            await this.escalate(blockers);
-            return this.outcome(false, iteration, Date.now() - startTime, 'recurring_issues');
-          }
+          await this.recordIteration(iteration, 'rejected', issues, iterationDuration);
 
           // Check for recurring issues
           const recurring = findRecurring(this.iterationHistory, issues);
@@ -476,40 +514,8 @@ export class QALoop extends EventEmitter {
             break; // Max iterations reached
           }
 
-          // Run QA fixer
-          this.emitTyped('qa-fix-start', iteration);
-          this.sessionNumber++;
-
-          const fixPrompt = await this.config.generatePrompt('qa_fixer', {
-            iteration,
-            maxIterations,
-          });
-
-          const fixResult = await this.config.runSession({
-            agentType: 'qa_fixer',
-            phase: 'qa',
-            systemPrompt: fixPrompt,
-            specDir: this.config.specDir,
-            projectDir: this.config.projectDir,
-            sessionNumber: this.sessionNumber,
-            abortSignal: this.config.abortSignal,
-            cliModel: this.config.cliModel,
-            cliThinking: this.config.cliThinking,
-          });
-
-          if (fixResult.outcome === 'cancelled') {
-            await this.writeReports('max_iterations');
-            return this.outcome(false, iteration, Date.now() - startTime, 'cancelled');
-          }
-
-          if (fixResult.outcome === 'error' || fixResult.outcome === 'auth_failure') {
-            this.emitTyped('log', `Fixer error: ${fixResult.error?.message ?? 'unknown'}`);
-            await this.writeReports('max_iterations');
-            return this.outcome(false, iteration, Date.now() - startTime, 'error', fixResult.error?.message);
-          }
-
-          this.emitTyped('qa-fix-complete', iteration);
-          this.emitTyped('log', 'Fixes applied, re-running QA validation...');
+          const stopped = await this.runFixer(iteration, maxIterations, issues, startTime);
+          if (stopped) return stopped;
           continue;
         }
 
@@ -542,6 +548,45 @@ export class QALoop extends EventEmitter {
       const message = error instanceof Error ? error.message : String(error);
       return this.outcome(false, 0, Date.now() - startTime, 'error', message);
     }
+  }
+
+  // ===========================================================================
+  // Fixer
+  // ===========================================================================
+
+  /** One fixer round; returns the outcome when the loop has to end. */
+  private async runFixer(iteration: number, maxIterations: number, issues: QAIssue[], startTime: number): Promise<QAOutcome | null> {
+    this.emitTyped('qa-fix-start', iteration);
+    this.sessionNumber++;
+
+    const fixPrompt = await this.config.generatePrompt('qa_fixer', { iteration, maxIterations, issues });
+
+    const fixResult = await this.config.runSession({
+      agentType: 'qa_fixer',
+      phase: 'qa',
+      systemPrompt: fixPrompt,
+      specDir: this.config.specDir,
+      projectDir: this.config.projectDir,
+      sessionNumber: this.sessionNumber,
+      abortSignal: this.config.abortSignal,
+      cliModel: this.config.cliModel,
+      cliThinking: this.config.cliThinking,
+    });
+
+    if (fixResult.outcome === 'cancelled') {
+      await this.writeReports('max_iterations');
+      return this.outcome(false, iteration, Date.now() - startTime, 'cancelled');
+    }
+
+    if (fixResult.outcome === 'error' || fixResult.outcome === 'auth_failure') {
+      this.emitTyped('log', `Fixer error: ${fixResult.error?.message ?? 'unknown'}`);
+      await this.writeReports('max_iterations');
+      return this.outcome(false, iteration, Date.now() - startTime, 'error', fixResult.error?.message);
+    }
+
+    this.emitTyped('qa-fix-complete', iteration);
+    this.emitTyped('log', 'Fixes applied, re-running QA validation...');
+    return null;
   }
 
   // ===========================================================================
@@ -867,6 +912,7 @@ export class QALoop extends EventEmitter {
         reason: approved ? undefined : reason,
         iterations: totalIterations,
         reviewerApproved: approved || this.lastReviewerApproved,
+        ...(this.checksRepeat ? { checksRepeat: true } : {}),
         blocking: approved ? [] : this.lastBlocking,
         ...(error ? { error } : {}),
         at: new Date().toISOString(),

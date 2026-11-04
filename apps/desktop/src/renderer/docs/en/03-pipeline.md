@@ -27,14 +27,16 @@ What happens in each phase:
 
 ```mermaid
 flowchart TD
-  G["Gates: gitleaks + OSV-Scanner"] --> R["QA reviewer"]
-  R -->|"approved, gates clean"| OK["Ready for your review"]
+  G["Gates: gitleaks + OSV-Scanner + design check"] -->|"clear"| R["QA reviewer"]
+  G -->|"findings"| F
+  G -->|"same findings again"| ESC
+  R -->|"approved"| OK["Ready for your review"]
   R -->|"issues"| F["QA fixer"]
   F --> G
   R -->|"too many iterations or the same issue again"| ESC["Escalation to you"]
 ```
 
-- Gate findings block approval, even if the reviewer said "ok". The fixer gets one round at a finding; if the reviewer approves and the same finding is back, the task comes to you at once. In Review you can allow a design finding the design system permits, then run QA again.
+- The review runs only when the checks are clear: findings go straight to the fixer, which gets one round at each. If the same finding is back, the task comes to you at once. In Review you can allow a design finding the design system permits, then run QA again.
 - The app writes a `qa_report.md` report (with the AC table) and a manual test plan.
 - If the same problem comes back in three rounds, including rounds of earlier QA runs, the task is escalated to you, so the fixer gets two tries at it.
 

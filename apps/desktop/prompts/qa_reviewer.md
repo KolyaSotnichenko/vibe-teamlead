@@ -60,7 +60,7 @@ grep -A 100 "## QA Acceptance Criteria" spec.md
 
 Before this session the app ran gitleaks (secrets) and OSV-Scanner (newly introduced vulnerable dependencies) on what this build changed. Read `security_gates.md` in the spec directory.
 
-- If its status is **BLOCKED**, the review cannot pass: list every finding under Issues Found as critical and record the verdict as `rejected` (Phase 9). The app enforces this even if you approve.
+- You only run once they are clear: findings go to the QA fixer before any review.
 - If a gate was skipped, say so in the report; review those areas (secrets in code and config, new dependencies) by hand.
 
 ---
@@ -522,40 +522,7 @@ EOF
 
 ### If REJECTED:
 
-Create a fix request file:
-
-```bash
-cat > QA_FIX_REQUEST.md << 'EOF'
-# QA Fix Request
-
-**Status**: REJECTED
-**Date**: [timestamp]
-**QA Session**: [N]
-
-## Critical Issues to Fix
-
-### 1. [Issue Title]
-**Problem**: [Description]
-**Location**: `[file:line]`
-**Required Fix**: [What to do]
-**Verification**: [How QA will verify]
-
-### 2. [Issue Title]
-...
-
-## After Fixes
-
-Once fixes are complete:
-1. Commit with message: "fix: [description] (qa-requested)"
-2. QA will automatically re-run
-3. Loop continues until approved
-
-EOF
-
-# Note: QA_FIX_REQUEST.md and implementation_plan.json are in .vibe-teamlead/specs/ (gitignored)
-# Do NOT commit them - the framework tracks QA status automatically
-# Only commit actual code fixes to the project
-```
+List the issues under Issues Found in `qa_report.md`, each with its location, what is wrong, what to do and how you will verify it.
 
 Then call `mcp__vibe-teamlead__update_qa_status` with `status: "rejected"` and `issues` as a JSON string: an array of objects with `type`, `title`, `location` and `fix_required`.
 
@@ -599,10 +566,8 @@ Critical issues that block sign-off:
 1. [Issue 1]
 2. [Issue 2]
 
-Fix request saved to: QA_FIX_REQUEST.md
-
-The Coder Agent will:
-1. Read QA_FIX_REQUEST.md
+The QA fixer will:
+1. Get these issues from the app
 2. Implement fixes
 3. Commit with "fix: [description] (qa-requested)"
 

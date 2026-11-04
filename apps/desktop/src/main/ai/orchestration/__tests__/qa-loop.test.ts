@@ -44,7 +44,7 @@ vi.mock('../../schema', () => ({
 }));
 
 import { validateStructuredOutput } from '../../schema';
-import { designIssues, gateIssues, QALoop } from '../qa-loop';
+import { designIssues, gateIssues, QALoop, qaRoundSection } from '../qa-loop';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
 
@@ -239,7 +239,7 @@ describe('QALoop', () => {
     expect(warned.report).toContain('report only');
   });
 
-  it('records why QA ended without approval: reviewer approved, the design check blocked', async () => {
+  it('records why QA ended without approval: the design check blocked', async () => {
     const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
     const { tmpdir } = await import('node:os');
     const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
@@ -261,7 +261,7 @@ describe('QALoop', () => {
 
     expect(outcome.approved).toBe(false);
     const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
-    expect(recorded).toMatchObject({ approved: false, reason: 'max_iterations', reviewerApproved: true });
+    expect(recorded).toMatchObject({ approved: false, reason: 'max_iterations', reviewerApproved: false });
     expect(recorded.blocking).toEqual([
       { source: 'design', title: 'Gradients are not part of the design system', location: 'src/Grid.tsx:7', match: 'repeating-linear-gradient(' },
     ]);
@@ -704,15 +704,15 @@ describe('QALoop', () => {
   });
 
   // -------------------------------------------------------------------------
-  // The reviewer approves, a gate keeps blocking
+  // Checks come first: no review while they have findings
   // -------------------------------------------------------------------------
 
-  describe('reviewer approved but a check keeps blocking', () => {
+  describe('a check has findings', () => {
     const gradient = (line: number) => ({ rule: 'gradient' as const, file: 'a.css', line, match: 'repeating-linear-gradient(', message: 'No gradients' });
 
-    /** The plan as a file: what the loop writes is what it reads next. Each reviewer run signs with `verdict`. */
-    function approvingReviewer(history: unknown[] = [], verdict: () => Record<string, unknown> = () => ({ status: 'approved', issues_found: [] })) {
-      const state = { plan: { phases: [{ subtasks: [{ status: 'completed' }] }], qa_iteration_history: history } as Record<string, unknown> };
+    /** The plan as a file: what the loop writes is what it reads next. Each reviewer run approves. */
+    function approvingReviewer(extra: Record<string, unknown> = {}) {
+      const state = { plan: { phases: [{ subtasks: [{ status: 'completed' }] }], ...extra } as Record<string, unknown> };
       mockReadFile.mockImplementation((p: string) =>
         p.endsWith('implementation_plan.json') ? Promise.resolve(JSON.stringify(state.plan)) : Promise.reject(new Error('ENOENT')),
       );
@@ -721,7 +721,7 @@ describe('QALoop', () => {
         return Promise.resolve();
       });
       const runSession = vi.fn().mockImplementation(async (c: QASessionRunConfig) => {
-        if (c.agentType === 'qa_reviewer') state.plan.qa_signoff = verdict();
+        if (c.agentType === 'qa_reviewer') state.plan.qa_signoff = { status: 'approved', issues_found: [] };
         return makeSessionResult('completed');
       });
       return { state, runSession };
@@ -730,22 +730,58 @@ describe('QALoop', () => {
     const agents = (run: ReturnType<typeof vi.fn>) => (run.mock.calls as Array<[QASessionRunConfig]>).map((c) => c[0].agentType);
     const escalated = () => mockWriteFile.mock.calls.some((c) => String(c[0]).endsWith('QA_ESCALATION.md'));
 
-    it('stops when the same finding is back after the fixer had its round, even on another line', async () => {
+    it('sends the fixer first and reviews only once the checks are clear', async () => {
+      const { runSession } = approvingReviewer();
+      let rounds = 0;
+      const runDesignCheck = async () => ({ findings: rounds++ === 0 ? [gradient(1)] : [], mode: 'block' as const });
+      const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual(['qa_fixer', 'qa_reviewer']);
+      expect(outcome.approved).toBe(true);
+    });
+
+    it('tells the fixer what to fix', async () => {
+      const { runSession } = approvingReviewer();
+      const generatePrompt = vi.fn().mockResolvedValue('prompt');
+      let rounds = 0;
+      const runDesignCheck = async () => ({ findings: rounds++ === 0 ? [gradient(7)] : [], mode: 'block' as const });
+      await new QALoop(makeConfig({ runSession, generatePrompt, runDesignCheck })).run();
+      const [agent, context] = generatePrompt.mock.calls[0];
+      expect(agent).toBe('qa_fixer');
+      expect(context.issues[0].title).toBe('Design system: 1 violation in a.css');
+    });
+
+    it('hands over when the same finding is back after the fixer had its round, even on another line', async () => {
+      const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qarepeat-'));
       const { runSession } = approvingReviewer();
       let line = 100;
       const runDesignCheck = async () => ({ findings: [gradient(line++)], mode: 'block' as const });
-      const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
-      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      const outcome = await new QALoop(makeConfig({ specDir, runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual(['qa_fixer']);
       expect(outcome.reason).toBe('recurring_issues');
       expect(escalated()).toBe(true);
+      const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
+      expect(recorded.checksRepeat).toBe(true);
+      expect(recorded.blocking[0]).toMatchObject({ source: 'design', match: 'repeating-linear-gradient(' });
     });
 
-    it('remembers the finding across runs, so a new run does not start the fixer again', async () => {
+    it('remembers the finding across runs: no agent runs for it again', async () => {
       const round = { iteration: 1, status: 'rejected', durationMs: 1, timestamp: 't', issues: [], gate_keys: ['design|a.css|gradient|repeating-linear-gradient('] };
-      const { runSession } = approvingReviewer([round]);
+      const { runSession } = approvingReviewer({ qa_iteration_history: [round] });
       const runDesignCheck = async () => ({ findings: [gradient(103)], mode: 'block' as const });
-      await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
-      expect(agents(runSession)).toEqual(['qa_reviewer']);
+      const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual([]);
+      expect(outcome.reason).toBe('recurring_issues');
+    });
+
+    it('stops on a finding seen in rounds recorded before findings had keys', async () => {
+      const round = (n: number) => ({ iteration: n, status: 'rejected', durationMs: 1, timestamp: 't', issues: [{ title: 'Design system: 1 violation in a.css', location: 'a.css:9' }] });
+      const { runSession } = approvingReviewer({ qa_iteration_history: [round(1), round(2)] });
+      const runDesignCheck = async () => ({ findings: [gradient(103)], mode: 'block' as const });
+      const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual([]);
+      expect(outcome.reason).toBe('recurring_issues');
     });
 
     it('gives the fixer a round for a finding it has not seen', async () => {
@@ -758,11 +794,11 @@ describe('QALoop', () => {
         return { findings: round > 2 ? [] : findings, mode: 'block' as const };
       };
       const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
-      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      expect(agents(runSession)).toEqual(['qa_fixer', 'qa_fixer', 'qa_reviewer']);
       expect(outcome.approved).toBe(true);
     });
 
-    it('stops for a repeated secret on a moved line too', async () => {
+    it('treats a repeated secret on a moved line as the same finding', async () => {
       const { runSession } = approvingReviewer();
       let line = 1;
       const runGates = async () => ({
@@ -770,22 +806,35 @@ describe('QALoop', () => {
         findings: [{ gate: 'gitleaks' as const, key: `gitleaks:rule:a.ts:${line}`, title: 'Secret detected', file: 'a.ts', line: line++ }],
       });
       await new QALoop(makeConfig({ runSession, runGates: runGates as QALoopConfig['runGates'] })).run();
-      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      expect(agents(runSession)).toEqual(['qa_fixer']);
     });
 
-    it('keeps fixing while the reviewer itself rejects', async () => {
-      const { runSession } = approvingReviewer([], () => ({ status: 'rejected', issues_found: [{ title: `Bug ${Math.random()}` }] }));
-      const runDesignCheck = async () => ({ findings: [gradient(1)], mode: 'block' as const });
-      await new QALoop(makeConfig({ runSession, runDesignCheck, maxIterations: 2 })).run();
-      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer']);
-      expect(escalated()).toBe(false);
-    });
-
-    it('leaves no approval in the plan once a check blocked it, so a restart cannot read it as approved', async () => {
-      const { state, runSession } = approvingReviewer();
+    it('leaves no earlier approval in the plan, so a restart cannot read it as approved', async () => {
+      const { state, runSession } = approvingReviewer({ qa_signoff: { status: 'approved' } });
+      const read = mockReadFile.getMockImplementation() as (p: string) => Promise<string>;
+      mockReadFile.mockImplementation((p: string) => (p.endsWith('QA_RERUN') ? Promise.resolve('x') : read(p)));
       const runDesignCheck = async () => ({ findings: [gradient(1)], mode: 'block' as const });
       await new QALoop(makeConfig({ runSession, runDesignCheck, maxIterations: 1 })).run();
       expect(state.plan.qa_signoff).toBeUndefined();
+    });
+  });
+
+  describe('qaRoundSection', () => {
+    const context = { iteration: 1, maxIterations: 5 };
+
+    it('lists the issues for the fixer', () => {
+      const text = qaRoundSection('qa_fixer', { ...context, issues: [{ title: 'Broken login', location: 'a.ts:3', fix_required: 'Check the hash' }] });
+      expect(text).toContain('Broken login');
+      expect(text).toContain('a.ts:3');
+      expect(text).toContain('Check the hash');
+    });
+
+    it('sends the fixer to the request when the user wrote one', () => {
+      expect(qaRoundSection('qa_fixer', { ...context, isHumanFeedback: true })).toContain('QA_FIX_REQUEST.md');
+    });
+
+    it('says nothing for a first review', () => {
+      expect(qaRoundSection('qa_reviewer', context)).toBe('');
     });
   });
 
@@ -812,12 +861,8 @@ describe('QALoop', () => {
 
     expect(outcome.approved).toBe(true);
     expect(outcome.totalIterations).toBe(2);
-    // reviewer, fixer (for the gate finding), reviewer
-    expect(runSession.mock.calls.map((c) => (c[0] as QASessionRunConfig).agentType)).toEqual([
-      'qa_reviewer',
-      'qa_fixer',
-      'qa_reviewer',
-    ]);
+    // The review waits until the gates are clear
+    expect(runSession.mock.calls.map((c) => (c[0] as QASessionRunConfig).agentType)).toEqual(['qa_fixer', 'qa_reviewer']);
   });
 
   it('keeps going when the gates themselves fail', async () => {
