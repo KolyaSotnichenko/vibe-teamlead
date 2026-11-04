@@ -616,7 +616,8 @@
       "names": {
         "explorer": "дослідник",
         "test_runner": "тести",
-        "reviewer": "рев'юер"
+        "reviewer": "рев'юер",
+        "general-purpose": "загальний"
       }
     }
   },

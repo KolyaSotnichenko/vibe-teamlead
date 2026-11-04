@@ -156,6 +156,13 @@ describe('buildEnv', () => {
   });
 });
 
+describe('buildEnv subagent model', () => {
+  it('sets the default model of ad-hoc subagents only when one is chosen', () => {
+    expect(buildEnv(baseConfig({ subagentModel: 'glm-5.3-flash' })).CLAUDE_CODE_SUBAGENT_MODEL).toBe('glm-5.3-flash');
+    expect(buildEnv(baseConfig()).CLAUDE_CODE_SUBAGENT_MODEL).toBeUndefined();
+  });
+});
+
 describe('buildEnv model aliases', () => {
   it('points every alias at a non-Claude session model (e.g. Ollama)', () => {
     const env = buildEnv(baseConfig({ model: 'qwen3-coder:480b-cloud' }));

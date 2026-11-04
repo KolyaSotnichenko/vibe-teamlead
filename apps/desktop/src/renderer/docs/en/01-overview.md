@@ -18,7 +18,7 @@ flowchart TD
   I --> J["Merge or PR"]
 ```
 
-1. **You create a task** (the Create button → New task) or **upload a spec document** (`.docx`, `.md`, `.pdf`, `.txt`, `.rtf`). The spec analyst splits the document into separate tasks.
+1. **You create a task** (the Create button → New task) or **upload a spec document** (`.docx`, `.md`, `.pdf`, `.txt`, `.rtf`). The spec analyst splits the document into epics and tasks right away, without asking questions: what only you can decide goes into "Open questions" and its own choices into "Assumptions", both shown on the review step, where you can edit the tasks before they are created. Questions about a single task come later, from the spec writer, when that task starts.
 2. **Specification.** The agents gather requirements and write `spec.md` with acceptance criteria `AC-1…AC-n`. Each criterion has a test level: unit, integration or e2e.
 3. **Architecture** (for medium and high complexity tasks). The architect writes `architecture.md`, decisions in ADR format, and draw.io and Mermaid diagrams. It renders each diagram and fixes it until it is clean.
 4. **Plan.** The planner splits the work into phases and subtasks. Each subtask states which ACs it covers and which test must fail first.

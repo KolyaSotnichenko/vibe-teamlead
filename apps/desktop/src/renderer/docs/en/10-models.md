@@ -12,5 +12,6 @@ The two keys are stored separately, encrypted in the macOS Keychain. Sessions us
 
 - **Agent profile** (Settings → Agent Settings): models and "thinking" level for each phase: spec, planning, code, QA.
 - **Custom phase models:** you can set a model separately for each phase. The list comes from your endpoint (Anthropic or a gateway).
-- **Feature models:** separate models for Insights, Roadmap, Ideation, spec document analysis and so on. Spec document analysis inherits the Roadmap model until you set its own.
+- **Feature models:** separate models for Insights, Roadmap, Ideation, spec document analysis and so on. Spec document analysis inherits the Roadmap model until you set its own. The Utility model writes commit messages, PR descriptions and the changelog.
+- **Subagent model:** Settings → Agent Settings → Subagents; by default the same as the agent's.
 - **Non-Claude models** (glm, kimi, qwen through a gateway) work. The app also substitutes the selected model wherever Claude Code would otherwise call its own "small" models.

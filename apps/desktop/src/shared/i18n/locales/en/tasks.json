@@ -606,7 +606,8 @@
       "names": {
         "explorer": "explorer",
         "test_runner": "test runner",
-        "reviewer": "reviewer"
+        "reviewer": "reviewer",
+        "general-purpose": "general"
       }
     }
   },

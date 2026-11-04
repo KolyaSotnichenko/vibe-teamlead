@@ -347,7 +347,7 @@ export class WorkerBridge extends EventEmitter {
 
   private trackSubagents(event: StreamEvent): void {
     if (event.type === 'tool-call' && event.toolName === 'Agent' && !event.parentToolCallId) {
-      const name = typeof event.args?.subagent_type === 'string' ? event.args.subagent_type : 'subagent';
+      const name = typeof event.args?.subagent_type === 'string' ? event.args.subagent_type : 'general-purpose';
       this.activeSubagents.set(event.toolCallId, name);
     } else if (event.type === 'tool-result' && event.toolName === 'Agent') {
       this.activeSubagents.delete(event.toolCallId);

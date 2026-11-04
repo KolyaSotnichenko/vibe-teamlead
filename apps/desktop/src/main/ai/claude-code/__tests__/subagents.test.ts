@@ -15,11 +15,13 @@ describe('helper subagents', () => {
     const agents = helperSubagents('coder', { enabled: true, model: '' });
     expect(Object.keys(agents)).toEqual(['explorer', 'test_runner', 'reviewer']);
     for (const a of Object.values(agents)) {
-      expect(a.tools).not.toContain('Write');
-      expect(a.tools).not.toContain('Edit');
+      // They inherit MCP servers and skills (no tool whitelist), minus anything that changes files
+      expect(a.tools).toBeUndefined();
+      expect(a.disallowedTools).toEqual(expect.arrayContaining(['Write', 'Edit', 'MultiEdit', 'mcp__vibe-teamlead__update_subtask_status']));
       expect(a.model).toBe('inherit');
     }
-    expect(agents.explorer.tools).not.toContain('Bash');
+    expect(agents.explorer.disallowedTools).toContain('Bash');
+    expect(agents.test_runner.disallowedTools).not.toContain('Bash');
   });
 
   it('uses the chosen model, and gives nothing when turned off or for agents without helpers', () => {

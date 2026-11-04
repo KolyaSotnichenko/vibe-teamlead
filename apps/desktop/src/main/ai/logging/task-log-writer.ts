@@ -133,8 +133,9 @@ export class TaskLogWriter {
       case 'tool-call': {
         // Flush pending text before the tool call entry
         this.flushPendingText();
-        if (event.toolName === 'Agent' && typeof event.args.subagent_type === 'string') {
-          this.subagentCalls.set(event.toolCallId, event.args.subagent_type);
+        if (event.toolName === 'Agent') {
+          // No subagent_type: an ad-hoc subagent the agent wrote itself (Claude Code's general-purpose)
+          this.subagentCalls.set(event.toolCallId, typeof event.args.subagent_type === 'string' ? event.args.subagent_type : 'general-purpose');
         }
         this.writeToolStart(logPhase, event.toolName, this.extractToolInput(event.toolName, event.args), {
           tool_use_id: event.toolCallId,
@@ -334,7 +335,7 @@ export class TaskLogWriter {
         return typeof args.query === 'string' ? truncate(args.query) : undefined;
       case 'Agent': {
         // "explorer · Find where invoices are exported"
-        const who = typeof args.subagent_type === 'string' ? args.subagent_type : 'subagent';
+        const who = typeof args.subagent_type === 'string' ? args.subagent_type : 'general-purpose';
         const what = typeof args.description === 'string' ? args.description : '';
         return truncate(what ? `${who} · ${what}` : who);
       }

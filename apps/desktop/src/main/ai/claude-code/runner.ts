@@ -146,6 +146,8 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   if (config.model && !config.model.startsWith('claude-') && !(config.model in MODEL_ID_MAP)) {
     for (const name of MODEL_ALIAS_ENV) env[name] = config.model;
   }
+  // Settings → Agents → Subagents: the model of subagents the agent starts itself
+  if (config.subagentModel) env.CLAUDE_CODE_SUBAGENT_MODEL = config.subagentModel;
   env.CLAUDE_CONFIG_DIR = config.claudeConfigDir ?? defaultClaudeConfigDir();
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
   env.DISABLE_TELEMETRY = '1';

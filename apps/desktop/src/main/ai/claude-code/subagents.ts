@@ -97,30 +97,49 @@ type HelperName = 'explorer' | 'test_runner' | 'reviewer';
 
 interface HelperSpec {
   description: string;
-  tools: string[];
+  /** Tools taken away; everything else (MCP servers such as CodeGraph and Context7, skills, web) is inherited */
+  disallowedTools: string[];
   prompt: string;
 }
 
+/** No helper changes files or the build's state */
+const NO_CHANGES = [
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'NotebookEdit',
+  'mcp__vibe-teamlead__update_subtask_status',
+  'mcp__vibe-teamlead__update_qa_status',
+  'mcp__vibe-teamlead__record_discovery',
+  'mcp__vibe-teamlead__record_gotcha',
+  'mcp__vibe-teamlead__remember',
+];
+
 const REPORT_RULES = `Report back in under 300 words: findings first, then file paths with line numbers. No preamble. You run inside an isolated task worktree; stay in it.`;
 
-/** The helpers. Read-only except the test runner's Bash (still under the session's command allowlist). */
+/**
+ * The helpers. They inherit the session's tools (CodeGraph, Context7, project
+ * memory search, skills from Superpowers, web) minus anything that changes
+ * files; the explorer has no shell either. The session's hooks (command
+ * allowlist, path containment) apply to them too.
+ */
 export const HELPER_SUBAGENTS: Record<HelperName, HelperSpec> = {
   explorer: {
     description:
       'Read-only codebase search. Use it to find where something is defined or used, how a module works, or which files a change touches, instead of reading many files yourself.',
-    tools: ['Read', 'Glob', 'Grep'],
-    prompt: `You are a codebase explorer. Answer the question you are given by searching and reading the code (Glob, Grep, Read). Do not change anything. ${REPORT_RULES}`,
+    disallowedTools: [...NO_CHANGES, 'Bash'],
+    prompt: `You are a codebase explorer. Answer the question you are given by searching and reading the code: CodeGraph first when it is available, then Glob, Grep and Read. Do not change anything. ${REPORT_RULES}`,
   },
   test_runner: {
     description:
       'Runs test, lint, typecheck or build commands and reports only what failed (test name, file:line, error). Use it for long test runs so their output stays out of your context.',
-    tools: ['Bash', 'Read', 'Glob', 'Grep'],
+    disallowedTools: NO_CHANGES,
     prompt: `You are a test runner. Run exactly the commands you are given (or the project's test command if none), then report: pass/fail counts and, for each failure, the test name, file:line and the essential error lines. Do not edit files or try to fix anything. ${REPORT_RULES}`,
   },
   reviewer: {
     description:
       'Reviews the current changes (git diff) against the subtask or acceptance criteria and reports concrete problems: bugs, missed criteria, missing tests. Use it before marking work complete.',
-    tools: ['Bash', 'Read', 'Glob', 'Grep'],
+    disallowedTools: NO_CHANGES,
     prompt: `You are a code reviewer. Inspect the changes with \`git diff\` and \`git status\` (read-only git only) and the files they touch. Check them against what you were asked to verify. Report only real problems, most severe first, each with file:line and why it is wrong. If there are none, say so. Do not edit files. ${REPORT_RULES}`,
   },
 };
@@ -143,7 +162,7 @@ export function helperSubagents(agentType: AgentType, settings: SubagentSettings
     agents[name] = {
       description: spec.description,
       prompt: spec.prompt,
-      tools: spec.tools,
+      disallowedTools: spec.disallowedTools,
       model: s.model || 'inherit',
     };
   }
@@ -162,6 +181,10 @@ export function helpersPromptSection(agents: Record<string, AgentDefinition>): s
     '',
     ...lines,
     '',
-    'Delegate searches across many files, long test runs and the final self-review. Do the edits yourself: subagents never change files. Run independent helpers in parallel (several Agent calls in one message).',
+    'Delegate searches across many files, long test runs and the final self-review. Do the edits yourself: these helpers never change files.',
+    '',
+    'You can also start your own subagent for a self-contained piece of work (researching a library, investigating a failure, writing tests for a separate module): call the Agent tool without `subagent_type` and write its instructions yourself. Such a subagent can edit files, so give it files no other subagent touches, and check its work before you build on it.',
+    '',
+    'Run subagents in the foreground (`run_in_background: false`); for independent ones, put several Agent calls in one message so they run in parallel.',
   ].join('\n');
 }

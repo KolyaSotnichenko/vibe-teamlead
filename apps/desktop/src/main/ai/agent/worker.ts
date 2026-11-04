@@ -506,6 +506,7 @@ async function runSingleSession(
     model,
     systemPrompt: helpersSection ? `${systemPrompt}\n\n${helpersSection}` : systemPrompt,
     ...(helperNames.length ? { agents: helpers } : {}),
+    ...(helperNames.length && baseSession.subagents?.model ? { subagentModel: baseSession.subagents.model } : {}),
     initialMessages,
     toolContext,
     maxSteps: baseSession.maxSteps,
