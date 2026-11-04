@@ -82,10 +82,19 @@ export function lintAddedLines(files: AddedLines[], tokens: DesignTokens): Desig
       return [];
     }
   });
+  const allowed = (tokens.allowedPatterns ?? []).flatMap((a) => {
+    try {
+      return [new RegExp(a.pattern)];
+    } catch {
+      return [];
+    }
+  });
   const findings: DesignFinding[] = [];
   const seen = new Set<string>();
   const add = (f: DesignFinding) => {
     const key = `${f.file}|${f.rule}|${f.match}`;
+    // An exception the design system allows (banned patterns are never excused)
+    if (f.rule !== 'banned' && allowed.some((re) => re.test(f.match))) return;
     if (seen.has(key) || findings.length >= MAX_FINDINGS) return;
     seen.add(key);
     findings.push(f);

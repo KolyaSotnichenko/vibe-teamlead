@@ -238,6 +238,34 @@ describe('QALoop', () => {
     expect(warned.report).toContain('report only');
   });
 
+  it('records why QA ended without approval: reviewer approved, the design check blocked', async () => {
+    const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const { tmpdir } = await import('node:os');
+    const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
+    const finding = { rule: 'gradient' as const, file: 'src/Grid.tsx', line: 7, match: 'repeating-linear-gradient(', message: 'Gradients are not part of the design system' };
+    let calls = 0;
+    mockReadFile.mockReset();
+    mockWriteFile.mockReset().mockResolvedValue(undefined);
+    const runSession = vi.fn().mockImplementation(async () => {
+      calls++;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((p: string) => {
+      if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+      return Promise.reject(new Error('ENOENT'));
+    });
+    const outcome = await new QALoop(
+      makeConfig({ specDir, runSession, maxIterations: 1, runDesignCheck: async () => ({ findings: [finding], mode: 'block' }) }),
+    ).run();
+
+    expect(outcome.approved).toBe(false);
+    const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
+    expect(recorded).toMatchObject({ approved: false, reason: 'max_iterations', reviewerApproved: true });
+    expect(recorded.blocking).toEqual([
+      { source: 'design', title: 'Gradients are not part of the design system', location: 'src/Grid.tsx:7', match: 'repeating-linear-gradient(' },
+    ]);
+  });
+
   it('groups design findings into one issue per file', () => {
     const issues = designIssues([
       { rule: 'radius', file: 'a.tsx', line: 1, match: 'rounded-xl', message: 'sharp corners' },

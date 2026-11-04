@@ -83,3 +83,23 @@ describe('parseAddedLines', () => {
     expect(hexToRgb('#abc')).toEqual([170, 187, 204]);
   });
 });
+
+describe('allowed exceptions', () => {
+  it('skips findings the design system allows, but never excuses a banned pattern', () => {
+    const withExceptions: DesignTokens = {
+      ...tokens,
+      allowedPatterns: [
+        { pattern: 'repeating-linear-gradient\\(', message: 'grid background' },
+        { pattern: 'animate-bounce', message: 'tries to excuse a banned one' },
+      ],
+    };
+    const found = lintAddedLines(
+      [{ file: 'Grid.tsx', lines: [{ n: 1, text: "style={{ background: 'repeating-linear-gradient(90deg, #1C1D19 0 1px, transparent 1px 8px)' }}" }, { n: 2, text: '<div className="bg-gradient-to-r animate-bounce" />' }] }],
+      withExceptions,
+    ).map((f) => `${f.rule}:${f.match}`);
+    expect(found).not.toContain('gradient:repeating-linear-gradient(');
+    // a different gradient on another line is still reported; the banned pattern too
+    expect(found).toEqual(expect.arrayContaining(['gradient:bg-gradient-to-r', 'banned:animate-bounce']));
+  });
+});
+

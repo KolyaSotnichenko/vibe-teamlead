@@ -11,6 +11,7 @@ import {
   StagedInProjectMessage,
   CreatePRDialog
 } from './task-review';
+import { QaOutcomePanel } from './task-review/QaOutcomePanel';
 
 interface TaskReviewProps {
   task: Task;
@@ -157,6 +158,9 @@ export function TaskReview({
       ) : (
         <NoWorkspaceMessage task={task} onClose={onClose} />
       )}
+
+      {/* Why QA did not approve (only after QA ended without approval) */}
+      <QaOutcomePanel task={task} />
 
       {/* QA Feedback Section */}
       <QAFeedbackSection

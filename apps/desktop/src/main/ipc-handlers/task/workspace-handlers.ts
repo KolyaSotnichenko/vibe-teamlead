@@ -122,10 +122,15 @@ export async function loadArchitecture(specDir: string): Promise<WorkspaceArchit
   return { ...(markdown !== undefined ? { markdown } : {}), adrs, diagrams };
 }
 
+function isQaOutcome(value: unknown): value is import('../../../shared/types').QaOutcomeInfo {
+  const v = value as { approved?: unknown; blocking?: unknown } | undefined;
+  return !!v && typeof v.approved === 'boolean' && Array.isArray(v.blocking);
+}
+
 /** Read and parse every workspace artifact in a spec directory. Never throws. */
 export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace> {
   const file = (name: string) => path.join(specDir, name);
-  const [specMarkdown, planRaw, qaMarkdown, logs, architecture, gates, pentest] = await Promise.all([
+  const [specMarkdown, planRaw, qaMarkdown, logs, architecture, gates, pentest, qaOutcome] = await Promise.all([
     readText(file('spec.md')),
     readJson(file('implementation_plan.json')),
     readText(file('qa_report.md')),
@@ -133,6 +138,7 @@ export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace>
     loadArchitecture(specDir),
     readJson(file('security_gates.json')),
     readJson(file('security_qa.json')),
+    readJson(file('qa_outcome.json')),
   ]);
   const plan = parsePlan(planRaw);
   const qaRows = qaMarkdown !== undefined ? parseQaCoverage(qaMarkdown) : null;
@@ -150,6 +156,7 @@ export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace>
       gates: parseSecurityGates(gates),
       pentest: parseSecurityQa(pentest, specDir),
     },
+    ...(isQaOutcome(qaOutcome) ? { qaOutcome } : {}),
   };
 }
 

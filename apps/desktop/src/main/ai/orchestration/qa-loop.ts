@@ -16,6 +16,7 @@
  * - Human feedback processing (QA_FIX_REQUEST.md)
  */
 
+import { writeFileSync } from 'node:fs';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'events';
@@ -34,7 +35,7 @@ import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import type { GateReport } from '../security/gates';
-import type { DesignFinding, DesignQaMode } from '../../../shared/types';
+import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
 
 // =============================================================================
 // Constants
@@ -214,6 +215,9 @@ export class QALoop extends EventEmitter {
   private sessionNumber = 0;
   private aborted = false;
   private iterationHistory: QAIterationRecord[] = [];
+  private lastReviewerApproved = false;
+  private lastBlocking: QaOutcomeInfo['blocking'] = [];
+  private lastDesignFindings: DesignFinding[] = [];
 
   constructor(config: QALoopConfig) {
     super();
@@ -269,7 +273,9 @@ export class QALoop extends EventEmitter {
         this.emitTyped('qa-iteration-start', iteration, maxIterations);
 
         // Security gates first, so the reviewer and fixer see their findings
-        const gateIssues = [...(await this.runGates()), ...(await this.runDesignCheck())];
+        const securityIssues = await this.runGates();
+        const designBlocking = await this.runDesignCheck();
+        const gateIssues = [...securityIssues, ...designBlocking];
 
         // Run QA reviewer. The previous verdict is cleared first so a reviewer that
         // fails to write one can never be read as approving.
@@ -302,14 +308,23 @@ export class QALoop extends EventEmitter {
         let status = this.resolveQAStatus(signoff);
         let issues = signoff?.issues_found ?? [];
 
+        this.lastReviewerApproved = status === 'approved';
+        const reviewerIssues = status === 'rejected' ? issues : [];
         if (gateIssues.length && status !== 'unknown') {
           if (status === 'approved') {
-            this.emitTyped('log', `Security gates blocked approval: ${gateIssues.length} finding(s)`);
+            // Say which check blocked it: the reviewer approved
+            if (securityIssues.length) this.emitTyped('log', `Security gates blocked approval: ${securityIssues.length} finding(s)`);
+            if (designBlocking.length) this.emitTyped('log', `Design check blocked approval: ${designBlocking.length} finding(s) (see design_check.md)`);
           }
           status = 'rejected';
           const known = new Set(issues.map((i) => i.title));
           issues = [...issues, ...gateIssues.filter((i) => !known.has(i.title))];
         }
+        this.lastBlocking = [
+          ...securityIssues.map((i) => ({ source: 'security' as const, title: i.title, location: i.location })),
+          ...this.lastDesignFindings.map((f) => ({ source: 'design' as const, title: f.message, location: `${f.file}:${f.line}`, match: f.match })),
+          ...reviewerIssues.map((i) => ({ source: 'qa' as const, title: i.title, location: i.location })),
+        ];
         const iterationDuration = Date.now() - iterationStart;
 
         this.emitTyped('qa-review-complete', iteration, status, issues);
@@ -425,7 +440,11 @@ export class QALoop extends EventEmitter {
       if (mode === 'off') return [];
       await writeFile(join(this.config.specDir, 'design_check.md'), formatDesignCheck(findings, mode), 'utf-8').catch(() => {});
       this.emitTyped('log', `Design check: ${findings.length ? `${findings.length} finding(s)${mode === 'warn' ? ' (warn only)' : ''}` : 'clear'}`);
-      if (mode !== 'block') return [];
+      if (mode !== 'block') {
+        this.lastDesignFindings = [];
+        return [];
+      }
+      this.lastDesignFindings = findings;
       return designIssues(findings);
     } catch (error) {
       this.emitTyped('log', `Design check failed to run: ${error instanceof Error ? error.message : String(error)}`);
@@ -727,6 +746,24 @@ export class QALoop extends EventEmitter {
       reason: approved ? undefined : reason,
       error,
     };
+
+    // What blocked it, for the task window ("Has Errors" alone says nothing)
+    if (reason !== 'cancelled') {
+      const info: QaOutcomeInfo = {
+        approved,
+        reason: approved ? undefined : reason,
+        iterations: totalIterations,
+        reviewerApproved: approved || this.lastReviewerApproved,
+        blocking: approved ? [] : this.lastBlocking,
+        ...(error ? { error } : {}),
+        at: new Date().toISOString(),
+      };
+      try {
+        writeFileSync(join(this.config.specDir, 'qa_outcome.json'), JSON.stringify(info, null, 2), 'utf-8');
+      } catch {
+        // informational
+      }
+    }
 
     this.emitTyped('qa-complete', outcome);
     return outcome;

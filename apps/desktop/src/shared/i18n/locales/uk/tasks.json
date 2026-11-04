@@ -1002,5 +1002,40 @@
     "showOutput": "Показати вивід",
     "less": "Менше",
     "more": "Більше"
+  },
+  "qaOutcome": {
+    "title": "Чому QA не схвалив",
+    "reason": {
+      "checksBlocked": "QA-рев'юер схвалив, але автоматична перевірка заблокувала:",
+      "recurring_issues": "Ті самі зауваження поверталися раз за разом, тож QA зупинився й передав задачу вам (раундів: {{count}}).",
+      "max_iterations": "QA не схвалив після {{count}} раундів перевірки й виправлень.",
+      "consecutive_errors": "QA тричі поспіль не зміг записати свій вердикт.",
+      "error": "QA зупинився з помилкою: {{error}}"
+    },
+    "sources": {
+      "security_one": "Перевірки безпеки · {{count}}",
+      "security_few": "Перевірки безпеки · {{count}}",
+      "security_many": "Перевірки безпеки · {{count}}",
+      "security_other": "Перевірки безпеки · {{count}}",
+      "design_one": "Дизайн-перевірка · {{count}}",
+      "design_few": "Дизайн-перевірка · {{count}}",
+      "design_many": "Дизайн-перевірка · {{count}}",
+      "design_other": "Дизайн-перевірка · {{count}}",
+      "qa_one": "QA-рев'юер · {{count}}",
+      "qa_few": "QA-рев'юер · {{count}}",
+      "qa_many": "QA-рев'юер · {{count}}",
+      "qa_other": "QA-рев'юер · {{count}}"
+    },
+    "allow": "Дозволити {{match}}",
+    "allowed": "дозволено в дизайн-системі",
+    "allowedBy": "Дозволено з перевірки «{{title}}»",
+    "allowFailed": "Не вдалося оновити токени дизайн-системи.",
+    "noTokens": "У дизайн-системи проєкту немає файлу токенів, куди додати виняток.",
+    "more": "…і ще {{count}}",
+    "next": "Далі: опишіть, що виправити, у «Request Changes», запустіть QA ще раз або злийте як є, якщо знахідки вас не турбують.",
+    "nextWithDesign": "Далі: якщо дизайн-знахідка — це те, що ваша дизайн-система дозволяє, дозвольте її тут (виняток піде в токени) і запустіть QA ще раз. Інакше опишіть, що виправити, у «Request Changes» або злийте як є.",
+    "rerun": "Запустити QA ще раз",
+    "rerunFeedback": "Run QA again. No code changes are requested: the design system or the checks were updated since the last run. Fix only what QA finds now.",
+    "unrecorded": "Цей прогін QA закінчився до того, як застосунок почав записувати причину. Подивіться Workspace → Security і design_check.md у «Файлах»: рев'юер міг схвалити, а заблокували перевірки безпеки чи дизайн-перевірка. Запустіть QA ще раз, щоб побачити причини тут."
   }
 }

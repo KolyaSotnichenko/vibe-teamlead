@@ -40,6 +40,11 @@ export interface DesignTokens {
   spacing?: number[];
   /** Project-specific "never do this" rules */
   bannedPatterns?: DesignBannedPattern[];
+  /**
+   * Exceptions the design system allows (e.g. "repeating-linear-gradient" for a
+   * grid background): a finding whose matched text matches one is not reported
+   */
+  allowedPatterns?: DesignBannedPattern[];
 }
 
 /** How the QA loop treats design-check findings */

@@ -70,6 +70,8 @@ Structure of `markdown`:
 
 Use Markdown tables and short lists; no marketing language. The document is the source of truth — `tokens` are its checkable subset.
 
+`tokens.allowedPatterns`: when the document deliberately allows an exception to a token rule (gradients are off but a `repeating-linear-gradient` draws the grid background; radius is 0 but avatars are `rounded-full`), add a regular expression for exactly that exception with a `message` saying why, so the QA check doesn't flag it. Keep them narrow; never allow a whole rule.
+
 `tokens.bannedPatterns`: add 2–6 regular expressions for this system's "never" rules that can be matched in code (e.g. `"animate-bounce"`, `"backdrop-blur"`, `"font-(serif|mono)\\b"` when those are ruled out), each with a plain `message`.
 
 With references: the document ends with a "## References" section: what you took from which reference, and how you resolved the conflicts between them.

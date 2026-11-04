@@ -158,4 +158,25 @@ export interface TaskWorkspace {
   timeline: WorkspaceTimelineItem[];
   architecture: WorkspaceArchitecture;
   security: WorkspaceSecurity;
+  /** Why the last QA run ended without approval (qa_outcome.json) */
+  qaOutcome?: QaOutcomeInfo;
+}
+
+/** What blocked QA, in the words the task window shows */
+export interface QaOutcomeInfo {
+  approved: boolean;
+  /** max_iterations | recurring_issues | consecutive_errors | error | cancelled */
+  reason?: string;
+  iterations: number;
+  /** The reviewer itself approved; only the automatic checks blocked it */
+  reviewerApproved: boolean;
+  blocking: Array<{
+    source: 'security' | 'design' | 'qa';
+    title: string;
+    location?: string;
+    /** For design findings: the exact text the check matched */
+    match?: string;
+  }>;
+  error?: string;
+  at: string;
 }

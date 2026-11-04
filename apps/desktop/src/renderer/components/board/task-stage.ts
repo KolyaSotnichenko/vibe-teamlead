@@ -80,6 +80,18 @@ function stageFromCompleted(task: Task): PipelineStage | null {
   return null;
 }
 
+/**
+ * Which stage an error came from. A failed QA run never records qa_review as
+ * completed, so "coding finished" (or every subtask done) means it was QA,
+ * not the code, that ended without approval.
+ */
+function failedStage(task: Task): PipelineStage {
+  if (stageFromCompleted(task) === 'qa') return 'qa';
+  const codingDone = (task.executionProgress?.completedPhases ?? []).includes('coding');
+  const allSubtasksDone = task.subtasks.length > 0 && task.subtasks.every((s) => s.status === 'completed');
+  return codingDone || allSubtasksDone ? 'qa' : 'coder';
+}
+
 export function getTaskStage(task: Task): TaskStageInfo {
   const progress = task.executionProgress;
   const phase = progress?.phase;
@@ -94,7 +106,7 @@ export function getTaskStage(task: Task): TaskStageInfo {
   if (task.status === 'human_review' || task.status === 'error') {
     let failed: PipelineStage | undefined;
     if (task.reviewReason === 'qa_rejected') failed = 'qa';
-    else if (task.reviewReason === 'errors' || task.status === 'error') failed = stageFromCompleted(task) === 'qa' ? 'qa' : 'coder';
+    else if (task.reviewReason === 'errors' || task.status === 'error') failed = failedStage(task);
     if (task.reviewReason === 'plan_review') {
       // Plan is written and waits for approval before any code
       const states = statesFor('review');

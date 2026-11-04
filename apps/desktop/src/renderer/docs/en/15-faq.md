@@ -38,7 +38,17 @@ While a task builds, the agents write their logs, QA report, security results an
 
 ## A task in Human Review with "Has Errors"
 
-QA couldn't approve the task and, after the fixer's attempts, handed it to you. The reason is in Workspace → Security and in `qa_report.md`. Describe what to fix in "Request Changes" and the fixer and QA run again. You can also merge as is if the findings don't worry you.
+QA couldn't approve the task and, after the fixer's attempts, handed it to you. The Review tab opens with a "Why QA didn't approve" panel. It gives the reason in plain words and lists what blocked approval, grouped by source: security gates, the design check, or the reviewer's issues. The task pipeline marks QA as the failed stage, not Code.
+
+- A design finding the design system should allow (say, a `repeating-linear-gradient` it uses on purpose) has an "Allow" button. It adds the pattern to `tokens.allowedPatterns`, so the design check stops flagging it. Banned patterns can't be allowed this way.
+- "Run QA again" re-runs the fixer and QA.
+- To have something specific fixed, describe it in "Request Changes". You can also merge as is.
+
+Tasks that failed before this panel existed show a short note and the "Run QA again" button. The details are still in Workspace → Security and in `qa_report.md`.
+
+## Storybook opens without styles
+
+Stories render without the app's look when `.storybook/preview` doesn't import the global styles (`globals.css` and the like), fonts and providers. Agents are now told to set this up, and QA counts unstyled stories as an issue. For a task built before that, use "Request Changes": "import the global styles and fonts in .storybook/preview".
 
 ## The Create PR button is disabled
 

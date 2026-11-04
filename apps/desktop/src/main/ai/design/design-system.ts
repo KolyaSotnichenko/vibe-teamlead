@@ -55,6 +55,7 @@ export const DesignTokensSchema = z.object({
   gradients: z.boolean().optional(),
   spacing: z.array(z.number().min(0)).optional(),
   bannedPatterns: z.array(z.object({ pattern: z.string().min(1), message: z.string().min(1) })).optional(),
+  allowedPatterns: z.array(z.object({ pattern: z.string().min(1), message: z.string().min(1) })).optional(),
 });
 
 type DesignSettings = Pick<ProjectSettings, 'designSystemPath' | 'designQaMode' | 'storybookEnabled'> | undefined;
@@ -292,8 +293,8 @@ export function designPromptSection(info: DesignSystemInfo, options: DesignPromp
     }
     parts.push(
       options.role === 'qa'
-        ? 'Every new or changed UI component must have stories for its states (default, empty, loading, error, long content). Build or run Storybook and screenshot the stories of changed components as part of the design review.'
-        : 'Every new or changed UI component gets a `*.stories.*` file next to it with its states: default, empty, loading, error, long content, disabled. Stories use real props, no network.',
+        ? 'Every new or changed UI component must have stories for its states (default, empty, loading, error, long content). Build or run Storybook and screenshot the stories of changed components as part of the design review. Stories that render without the app\'s styles (no global CSS, default fonts) are a QA issue: `.storybook/preview` must import the app\'s global styles and providers.'
+        : 'Every new or changed UI component gets a `*.stories.*` file next to it with its states: default, empty, loading, error, long content, disabled. Stories use real props, no network. Stories must look like the app: `.storybook/preview` imports the app\'s global styles (the Tailwind / globals.css entry), loads its fonts and wraps stories in the app\'s providers (theme, router, i18n) where components need them. Check one story renders styled (screenshot) before you finish.',
     );
   }
   return parts.join('\n');

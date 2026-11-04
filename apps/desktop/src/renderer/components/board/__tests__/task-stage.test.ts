@@ -107,6 +107,16 @@ describe('getTaskStage', () => {
     expect(info.states.qa).toBe('upcoming');
   });
 
+  it('errors after coding finished are QA not approving, not the code', () => {
+    const sub = (id: string) => ({ id, title: id, description: '', status: 'completed', files: [] }) as unknown as Task['subtasks'][number];
+    const byPhase = getTaskStage(task({ status: 'human_review', reviewReason: 'errors', executionProgress: { phase: 'failed', phaseProgress: 0, overallProgress: 0, completedPhases: ['planning', 'coding'] } }));
+    expect(byPhase.states.coder).toBe('done');
+    expect(byPhase.states.qa).toBe('failed');
+    const bySubtasks = getTaskStage(task({ status: 'human_review', reviewReason: 'errors', subtasks: [sub('1'), sub('2')] }));
+    expect(bySubtasks.states.qa).toBe('failed');
+    expect(bySubtasks.states.coder).toBe('done');
+  });
+
   it('plan review leaves code and QA ahead', () => {
     const info = getTaskStage(task({ status: 'human_review', reviewReason: 'plan_review' }));
     expect(info.current).toBe('review');

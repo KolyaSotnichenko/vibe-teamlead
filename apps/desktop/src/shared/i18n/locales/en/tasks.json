@@ -962,5 +962,34 @@
     "showOutput": "Show output",
     "less": "Less",
     "more": "More"
+  },
+  "qaOutcome": {
+    "title": "Why QA did not approve",
+    "reason": {
+      "checksBlocked": "The QA reviewer approved, but an automatic check blocked it:",
+      "recurring_issues": "The same issues came back round after round, so QA stopped and handed the task to you ({{count}} rounds).",
+      "max_iterations": "QA did not approve after {{count}} rounds of review and fixes.",
+      "consecutive_errors": "QA could not record its verdict three times in a row.",
+      "error": "QA stopped with an error: {{error}}"
+    },
+    "sources": {
+      "security_one": "Security gates · {{count}}",
+      "security_other": "Security gates · {{count}}",
+      "design_one": "Design check · {{count}}",
+      "design_other": "Design check · {{count}}",
+      "qa_one": "QA reviewer · {{count}}",
+      "qa_other": "QA reviewer · {{count}}"
+    },
+    "allow": "Allow {{match}}",
+    "allowed": "allowed in the design system",
+    "allowedBy": "Allowed from the review of \"{{title}}\"",
+    "allowFailed": "Could not update the design tokens.",
+    "noTokens": "This project's design system has no tokens file to add the exception to.",
+    "more": "…and {{count}} more",
+    "next": "Next: describe what to fix under Request Changes, run QA again, or merge as is if the findings don't worry you.",
+    "nextWithDesign": "Next: if a design finding is something your design system allows, allow it here (it goes into the design tokens) and run QA again. Otherwise describe what to fix under Request Changes, or merge as is.",
+    "rerun": "Run QA again",
+    "rerunFeedback": "Run QA again. No code changes are requested: the design system or the checks were updated since the last run. Fix only what QA finds now.",
+    "unrecorded": "This QA run ended before the app recorded why. Look at Workspace → Security and at design_check.md in Files: the reviewer may have approved while the security gates or the design check blocked it. Run QA again to get the reasons here."
   }
 }
