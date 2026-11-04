@@ -228,6 +228,17 @@ interface PlanSubtask {
  * Replaces the Python `run_autonomous_agent()` main loop in `agents/coder.py`.
  * Manages transitions between planning, coding, QA review, and QA fixing phases.
  */
+/** Why the build can't go on to QA: QA needs every subtask done. Pure. */
+export function codingFailure(stuckSubtasks: string[]): string | undefined {
+  if (!stuckSubtasks.length) return undefined;
+  return `Not finished after ${MAX_SUBTASK_RETRIES} attempts: ${stuckSubtasks.join(', ')}. Resume the task to try again, or split these subtasks.`;
+}
+
+const CONTINUE_SUBTASK = `
+
+## Continuing this subtask
+An earlier session on this subtask stopped at its turn limit, before finishing. Its work is in the project, possibly uncommitted. Look at \`git status\` and \`git diff\` first, keep what is right and finish what is left. Don't start over. Mark the subtask completed only when it is really done.`;
+
 export class BuildOrchestrator extends EventEmitter {
   private config: BuildOrchestratorConfig;
   private currentPhase: ExecutionPhase = 'idle';
@@ -510,7 +521,7 @@ export class BuildOrchestrator extends EventEmitter {
         this.emitTyped('iteration-start', this.iteration, 'coding');
         this.emitTyped('log', `Working on ${subtask.id}: ${subtask.description} (attempt ${attempt})`);
       },
-      runSubtaskSession: async (subtask, attempt) => {
+      runSubtaskSession: async (subtask, attempt, continuing) => {
         const prompt = await this.config.generatePrompt('coder', 'coding', {
           iteration: this.iteration,
           subtask,
@@ -520,7 +531,7 @@ export class BuildOrchestrator extends EventEmitter {
         return this.config.runSession({
           agentType: 'coder',
           phase: 'coding',
-          systemPrompt: prompt,
+          systemPrompt: continuing ? `${prompt}${CONTINUE_SUBTASK}` : prompt,
           specDir: this.config.specDir,
           projectDir: this.config.projectDir,
           subtaskId: subtask.id,
@@ -532,6 +543,7 @@ export class BuildOrchestrator extends EventEmitter {
       },
       onSubtaskComplete: (subtask, result) => {
         this.emitTyped('session-complete', result, 'coding');
+        if (result.outcome === 'max_steps') this.emitTyped('log', `${subtask.id} stopped at the turn limit before finishing; continuing in a new session`);
       },
       onSubtaskStuck: (subtask, reason) => {
         this.emitTyped('log', `Subtask ${subtask.id} stuck: ${reason}`);
@@ -550,12 +562,8 @@ export class BuildOrchestrator extends EventEmitter {
       return { success: false, error: 'Build cancelled' };
     }
 
-    if (iteratorResult.stuckSubtasks.length > 0 && iteratorResult.completedSubtasks === 0) {
-      return {
-        success: false,
-        error: `All subtasks stuck: ${iteratorResult.stuckSubtasks.join(', ')}`,
-      };
-    }
+    const failure = codingFailure(iteratorResult.stuckSubtasks);
+    if (failure) return { success: false, error: failure };
 
     // Sync after coding
     if (this.config.sourceSpecDir && this.config.syncSpecToSource) {

@@ -47,7 +47,8 @@ export interface SubtaskIteratorConfig {
   /** Called when a subtask starts */
   onSubtaskStart?: (subtask: SubtaskInfo, attempt: number) => void;
   /** Run the coder session for a subtask; returns the session result */
-  runSubtaskSession: (subtask: SubtaskInfo, attempt: number) => Promise<SessionResult>;
+  /** `continuing`: an earlier session on this subtask stopped at its turn limit */
+  runSubtaskSession: (subtask: SubtaskInfo, attempt: number, continuing: boolean) => Promise<SessionResult>;
   /** Called when a subtask session completes */
   onSubtaskComplete?: (subtask: SubtaskInfo, result: SessionResult) => void;
   /** Called when a subtask is marked stuck */
@@ -129,6 +130,7 @@ export async function iterateSubtasks(
 ): Promise<SubtaskIteratorResult> {
   const attemptCounts = new Map<string, number>();
   const stuckSubtasks: string[] = [];
+  const stoppedAtLimit = new Set<string>();
   let completedSubtasks = 0;
   let totalSubtasks = 0;
 
@@ -186,7 +188,8 @@ export async function iterateSubtasks(
     const baseSha = config.extractInsights ? await gitHead(config.projectDir) : undefined;
 
     // Run the session
-    const result = await config.runSubtaskSession(subtaskInfo, currentAttempt);
+    const result = await config.runSubtaskSession(subtaskInfo, currentAttempt, stoppedAtLimit.has(subtask.id));
+    if (result.outcome === 'max_steps') stoppedAtLimit.add(subtask.id);
 
     // Notify complete
     config.onSubtaskComplete?.(subtaskInfo, result);
@@ -235,11 +238,11 @@ export async function iterateSubtasks(
       continue;
     }
 
-    // Post-session: if the session completed or hit max_steps (not error), ensure the
-    // subtask is marked as completed. The coder agent is instructed to update
-    // implementation_plan.json itself, but it doesn't always do so reliably.
+    // A session that ended by itself is done, so the subtask is marked completed: the
+    // coder is told to update implementation_plan.json itself, but doesn't always.
+    // One stopped at its turn limit isn't: the subtask stays open for a new session.
     if (result.outcome === 'completed' || result.outcome === 'max_steps') {
-      await ensureSubtaskMarkedCompleted(config.specDir, subtask.id);
+      if (result.outcome === 'completed') await ensureSubtaskMarkedCompleted(config.specDir, subtask.id);
 
       // Re-stamp executionPhase on the worktree plan after the coder session.
       // The coder model's Edit/Write calls can overwrite executionPhase with a
