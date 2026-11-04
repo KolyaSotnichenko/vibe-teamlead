@@ -159,8 +159,15 @@ describe('IPC Bridge Integration', () => {
           'task-id',
           false,
           'Needs more work',
+          undefined,
           undefined
         );
+      });
+
+      it('passes a rerun request through submitReview', async () => {
+        const submitReview = electronAPI['submitReview'] as (...args: unknown[]) => Promise<unknown>;
+        await submitReview('task-id', false, undefined, undefined, { rerunOnly: true });
+        expect(mockIpcRenderer.invoke).toHaveBeenCalledWith('task:review', 'task-id', false, undefined, undefined, { rerunOnly: true });
       });
     });
 
