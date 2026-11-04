@@ -100,6 +100,14 @@ export const IPC_CHANNELS = {
   STORYBOOK_TASK_STATUS: 'design:taskStorybookStatus',
   STORYBOOK_TASK_START: 'design:taskStorybookStart',
   STORYBOOK_TASK_STOP: 'design:taskStorybookStop',
+  DESIGN_REFS_LIST: 'design:refsList',
+  DESIGN_REFS_PICK: 'design:refsPick',
+  DESIGN_REFS_ADD_FILES: 'design:refsAddFiles',
+  DESIGN_REFS_ADD_URLS: 'design:refsAddUrls',
+  DESIGN_REFS_SET_ROLE: 'design:refsSetRole',
+  DESIGN_REFS_REMOVE: 'design:refsRemove',
+  DESIGN_REFS_RETRY: 'design:refsRetry',
+  DESIGN_REFS_CHANGED: 'design:refsChanged',  // Event: a reference changed (main -> renderer)
 
   // Token usage per project
   USAGE_GET: 'usage:get',

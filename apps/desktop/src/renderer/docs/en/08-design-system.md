@@ -16,6 +16,14 @@
 
 The document and tokens can be edited right in the tab. The model for this agent is "Design system" in the feature models.
 
+**References** (Context → Design system → References): images, PDFs (brand books), token files (W3C / Tokens Studio JSON, CSS variables, a Tailwind config) and sites, as many as you like.
+- Each is looked at once when you add it and gets short notes: what it is, its palette, fonts, light or dark, traits and what to take from it. Colours of images and page screenshots are measured from the pixels, not guessed. Token files are read exactly, without a model. A site is opened in a hidden, sandboxed window (no sign-ins, no downloads): screenshot plus what its CSS declares.
+- Every reference has a role: **As is** (rules: exact colours, fonts, brand rules) or **Inspiration** (a direction, not a copy). Token files and PDFs start as "As is", images and sites as "Inspiration".
+- "Extract", "Design a new one" and "Write" use them: as-is ones are followed, inspiration ones are read for what they share. The agent opens the as-is images and up to 6 inspiration ones itself and knows the rest from their notes, so many references don't overflow it. It ends the document with a "References" section: what it took from which, and the conflicts it resolved.
+- The tab shows what the references share and where they disagree (light vs dark, different fonts in as-is ones). Many different inspiration references blur the direction: keep the ones that matter.
+- Pipeline agents and QA get the notes too (as-is ones are binding).
+- Files are kept in `.vibe-teamlead/design/references/`. Each digest is a small design-agent session, counted in the token usage.
+
 **How agents use it:**
 - **Builders** (spec writer, architect, planner, coder, QA fixer) get the design system and the "anti-slop" rules in their prompt.
 - **UI projects without a design system** still get the "anti-slop" rules and an instruction to follow the styles already in the code.

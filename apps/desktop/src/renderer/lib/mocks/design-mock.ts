@@ -3,7 +3,7 @@
  * produce a sample system so every state of the tab can be reviewed.
  */
 
-import type { DesignAPI, DesignDirection, DesignSystemInfo, DesignTokens } from '../../../shared/types';
+import type { DesignAPI, DesignDirection, DesignReferenceList, DesignSystemInfo, DesignTokens } from '../../../shared/types';
 
 const sampleTokens: DesignTokens = {
   colors: [
@@ -100,6 +100,44 @@ const withSample = (): DesignSystemInfo => ({
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// References (browser preview): a few digested ones; added ones "digest" after a moment
+const swatch = (hex: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="${hex}"/><rect x="16" y="16" width="70" height="10" fill="#888"/><rect x="16" y="34" width="110" height="6" fill="#aaa"/></svg>`)}`;
+let refs: DesignReferenceList['references'] = [
+  {
+    id: 'r1', kind: 'pdf', name: 'Brand guidelines 2026.pdf', source: 'Brand guidelines 2026.pdf', role: 'as-is', addedAt: new Date().toISOString(), status: 'ready', thumbnail: swatch('#EFF0EA'),
+    notes: { summary: 'Brand book: logo, colours and type for print and screen.', palette: [{ value: '#1C1D19', role: 'ink' }, { value: '#E8EAE3', role: 'ground' }, { value: '#D6401A', role: 'signal' }], fonts: ['Archivo', 'IBM Plex Mono'], theme: 'light', traits: ['Sharp corners', 'Hairline rules'], takeaways: ['Vermilion only for attention', 'Headings in sentence case'] },
+  },
+  {
+    id: 'r2', kind: 'site', name: 'Linear — linear.app', source: 'https://linear.app', role: 'inspiration', addedAt: new Date().toISOString(), status: 'ready', thumbnail: swatch('#101114'),
+    notes: { summary: 'Product site: dark, dense, quiet type.', palette: [{ value: '#101114', share: 0.71, role: 'background' }, { value: '#F7F8F8', share: 0.09, role: 'text' }, { value: '#5E6AD2', share: 0.02, role: 'accent' }], fonts: ['Inter'], theme: 'dark', traits: ['Dense lists', 'Subtle borders'], takeaways: ['Keyboard-first density'] },
+  },
+  {
+    id: 'r3', kind: 'image', name: 'dashboard-moodboard.png', source: 'dashboard-moodboard.png', role: 'inspiration', addedAt: new Date().toISOString(), status: 'ready', thumbnail: swatch('#E8EAE3'),
+    notes: { summary: 'Moodboard of instrument panels and lab notebooks.', palette: [{ value: '#E8EAE3', share: 0.58, role: 'background' }, { value: '#1C1D19', share: 0.21, role: 'text' }, { value: '#D6401A', share: 0.03, role: 'accent' }], fonts: [], theme: 'light', traits: ['Datasheet structure', 'Mono numbers'], takeaways: ['Numbers in mono, labels in sans'] },
+  },
+  {
+    id: 'r4', kind: 'tokens', name: 'tokens.json', source: 'tokens.json', role: 'as-is', addedAt: new Date().toISOString(), status: 'ready',
+    notes: { summary: 'Token file with 6 colours, fonts Archivo, IBM Plex Mono, 1 radii.', palette: [{ value: '#1C1D19', role: 'ink' }, { value: '#E8EAE3', role: 'ground' }, { value: '#D6401A', role: 'signal' }], fonts: ['Archivo', 'IBM Plex Mono'], traits: ['Radii: 0 px'], takeaways: ['Use these values exactly.'] },
+  },
+];
+const refListeners = new Set<(projectId: string) => void>();
+const refList = (): DesignReferenceList => {
+  const ready = refs.filter((r) => r.status === 'ready');
+  const light = ready.filter((r) => r.notes?.theme === 'light').length;
+  const dark = ready.filter((r) => r.notes?.theme === 'dark').length;
+  return {
+    references: refs,
+    summary: { total: refs.length, ready: ready.length, light, dark, sharedColors: ['#1C1D19', '#E8EAE3', '#D6401A'], sharedFonts: ['Archivo'], conflicts: light && dark ? [{ kind: 'theme', light, dark }] : [] },
+  };
+};
+const finishLater = (projectId: string, id: string) =>
+  setTimeout(() => {
+    refs = refs.map((r) => (r.id === id ? { ...r, status: 'ready', thumbnail: r.kind === 'tokens' ? undefined : swatch('#DFE1D9'), notes: { summary: 'Digested in the browser preview.', palette: [{ value: '#DFE1D9', share: 0.6 }, { value: '#1C1D19', share: 0.2 }], fonts: [], theme: 'light', traits: [], takeaways: [] } } : r));
+    for (const cb of refListeners) cb(projectId);
+  }, 1500);
+let nextRef = 10;
+
 export const designMock: DesignAPI = {
   get: async () => ({ success: true, data: info }),
   save: async (_projectId, content) => {
@@ -127,4 +165,43 @@ export const designMock: DesignAPI = {
   taskStorybookStatus: async () => ({ success: true, data: { worktree: true, detected: true, dir: 'apps/web', script: 'storybook', needsInstall: true, installing: false } }),
   startTaskStorybook: async () => ({ success: false, error: 'Storybook runs only in the desktop app.' }),
   stopTaskStorybook: async () => ({ success: true }),
+  listReferences: async () => ({ success: true, data: refList() }),
+  pickReferenceFiles: async () => ({ success: true, data: ['/Users/demo/Desktop/inspiration.png'] }),
+  pathForFile: (file: File) => `/Users/demo/Downloads/${file.name}`,
+  addReferenceFiles: async (projectId, paths, role) => {
+    for (const p of paths) {
+      const id = `r${nextRef++}`;
+      const name = p.split('/').pop() ?? p;
+      const kind = /\.pdf$/i.test(name) ? 'pdf' : /\.(json|css|js|ts)$/i.test(name) ? 'tokens' : 'image';
+      refs = [...refs, { id, kind, name, source: name, role: kind === 'tokens' ? 'as-is' : (role ?? 'inspiration'), addedAt: new Date().toISOString(), status: 'digesting' }];
+      finishLater(projectId, id);
+    }
+    return { success: true, data: refList() };
+  },
+  addReferenceUrls: async (projectId, urls, role) => {
+    for (const u of urls) {
+      const id = `r${nextRef++}`;
+      const host = u.replace(/^https?:\/\//, '').split('/')[0];
+      refs = [...refs, { id, kind: 'site', name: host, source: u, role: role ?? 'inspiration', addedAt: new Date().toISOString(), status: 'digesting' }];
+      finishLater(projectId, id);
+    }
+    return { success: true, data: refList() };
+  },
+  setReferenceRole: async (_p, id, role) => {
+    refs = refs.map((r) => (r.id === id ? { ...r, role } : r));
+    return { success: true, data: refList() };
+  },
+  removeReference: async (_p, id) => {
+    refs = refs.filter((r) => r.id !== id);
+    return { success: true, data: refList() };
+  },
+  retryReference: async (projectId, id) => {
+    refs = refs.map((r) => (r.id === id ? { ...r, status: 'digesting', error: undefined } : r));
+    finishLater(projectId, id);
+    return { success: true, data: refList() };
+  },
+  onReferencesChanged: (callback) => {
+    refListeners.add(callback);
+    return () => refListeners.delete(callback);
+  },
 };

@@ -14,6 +14,7 @@ import { tryLoadPrompt } from '../prompts/prompt-loader';
 import { progressLine } from '../runners/brief-import';
 import type { StreamEvent } from '../session/types';
 import { DesignTokensSchema } from './design-system';
+import { readReferences, referencesPromptSection } from './references';
 
 const HEX6 = /^#[0-9a-f]{6}$/i;
 
@@ -65,6 +66,11 @@ function briefText(brief: DesignBrief): string {
     .join('\n');
 }
 
+/** The user's references for the design jobs (empty when there are none). */
+function referencesFor(projectPath: string): string {
+  return referencesPromptSection(readReferences(projectPath), { audience: 'design', projectPath });
+}
+
 function progress(onProgress: RunOptions['onProgress'], projectPath: string) {
   return (event: StreamEvent) => {
     const line = progressLine(event, projectPath);
@@ -82,6 +88,8 @@ export async function extractDesignSystem(options: RunOptions): Promise<{ markdo
       'Job: EXTRACT.',
       `The project root is ${options.projectPath}.`,
       'Find the visual language the code already uses and write it down as the design system (markdown + tokens).',
+      '',
+      referencesFor(options.projectPath),
     ].join('\n'),
     model: feature.model,
     thinkingLevel: feature.thinkingLevel as ThinkingLevel,
@@ -109,6 +117,8 @@ export async function proposeDirections(options: RunOptions & { brief: DesignBri
       `The project root is ${options.projectPath} (you may glance at it to understand the product; do not extract its styles).`,
       '',
       briefText(options.brief),
+      '',
+      referencesFor(options.projectPath),
     ].join('\n'),
     model: feature.model,
     thinkingLevel: feature.thinkingLevel as ThinkingLevel,
@@ -140,6 +150,8 @@ export async function writeDesignSystem(
       '',
       'Chosen direction (keep its palette and fonts; you may add neutral shades the system needs):',
       JSON.stringify(options.direction, null, 2),
+      '',
+      referencesFor(options.projectPath),
     ].join('\n'),
     model: feature.model,
     thinkingLevel: feature.thinkingLevel as ThinkingLevel,

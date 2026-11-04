@@ -72,6 +72,81 @@ export interface DesignSystemInfo {
   tokensError?: string;
   qaMode: DesignQaMode;
   storybook: StorybookInfo;
+  /** Digested references (ready ones), for the agents' prompts */
+  references?: DesignReference[];
+}
+
+// ---------------------------------------------------------------------------
+// References: images, PDFs, token files and sites the design system builds on
+// ---------------------------------------------------------------------------
+
+export type DesignReferenceKind = 'image' | 'pdf' | 'tokens' | 'site';
+
+/** "as-is": rules to follow (a brand book, tokens); "inspiration": a direction, not a copy */
+export type DesignReferenceRole = 'as-is' | 'inspiration';
+
+export type DesignReferenceStatus = 'pending' | 'digesting' | 'ready' | 'error';
+
+export interface DesignReferenceColor {
+  /** #RRGGBB */
+  value: string;
+  /** Share of the image (0–1), for colours measured from pixels */
+  share?: number;
+  /** What it seems to be for: background, text, accent… */
+  role?: string;
+}
+
+/** What one reference brings, written once when it is added */
+export interface DesignReferenceNotes {
+  /** Two or three sentences: what it is and what it looks like */
+  summary: string;
+  palette: DesignReferenceColor[];
+  fonts: string[];
+  /** Light or dark overall */
+  theme?: 'light' | 'dark';
+  /** Density, corners, shadows, borders, imagery… one short line each */
+  traits: string[];
+  /** What to take from it (or, for "as-is", the rules it sets) */
+  takeaways: string[];
+  /** Tokens read exactly from a token file or a site's CSS */
+  tokens?: Partial<import('./design-system').DesignTokens>;
+}
+
+export interface DesignReference {
+  id: string;
+  kind: DesignReferenceKind;
+  /** File name or page title */
+  name: string;
+  /** Original file name or URL */
+  source: string;
+  role: DesignReferenceRole;
+  addedAt: string;
+  /** Stored file, relative to the project (.vibe-teamlead/design/references/…) */
+  file?: string;
+  /** PNG the agents look at (an image, a page screenshot, a PDF's first page), relative to the project */
+  preview?: string;
+  status: DesignReferenceStatus;
+  error?: string;
+  notes?: DesignReferenceNotes;
+}
+
+/** Where the references agree and where they pull apart (computed from the notes) */
+export interface DesignReferenceSummary {
+  total: number;
+  ready: number;
+  light: number;
+  dark: number;
+  /** Colours that recur across references */
+  sharedColors: string[];
+  /** Fonts that recur across references */
+  sharedFonts: string[];
+  /** Where they disagree: light vs dark, or different fonts among "as-is" references */
+  conflicts: Array<{ kind: 'theme'; light: number; dark: number } | { kind: 'fonts'; fonts: string[] }>;
+}
+
+export interface DesignReferenceList {
+  references: Array<DesignReference & { /** Small data: URL thumbnail */ thumbnail?: string }>;
+  summary: DesignReferenceSummary;
 }
 
 /** A visual direction proposed from a brief, before the full system is written */
@@ -146,4 +221,20 @@ export interface DesignAPI {
   /** Install the worktree's dependencies if needed, then start its Storybook; progress arrives as onProgress with projectId `task:<taskId>` */
   startTaskStorybook: (taskId: string, projectId: string) => Promise<import('./common').IPCResult<{ url: string }>>;
   stopTaskStorybook: (taskId: string, projectId: string) => Promise<import('./common').IPCResult>;
+  /** References of the project's design system */
+  listReferences: (projectId: string) => Promise<import('./common').IPCResult<DesignReferenceList>>;
+  /** Choose reference files in the system dialog; null when cancelled */
+  pickReferenceFiles: () => Promise<import('./common').IPCResult<string[] | null>>;
+  /** Absolute path of a file dropped into the renderer */
+  pathForFile: (file: File) => string;
+  /** Add files (images, PDFs, token files); each is digested once, in the background */
+  addReferenceFiles: (projectId: string, paths: string[], role?: DesignReferenceRole) => Promise<import('./common').IPCResult<DesignReferenceList>>;
+  /** Add sites by URL */
+  addReferenceUrls: (projectId: string, urls: string[], role?: DesignReferenceRole) => Promise<import('./common').IPCResult<DesignReferenceList>>;
+  setReferenceRole: (projectId: string, id: string, role: DesignReferenceRole) => Promise<import('./common').IPCResult<DesignReferenceList>>;
+  removeReference: (projectId: string, id: string) => Promise<import('./common').IPCResult<DesignReferenceList>>;
+  /** Digest a reference again (after an error) */
+  retryReference: (projectId: string, id: string) => Promise<import('./common').IPCResult<DesignReferenceList>>;
+  /** References changed (a digest finished) */
+  onReferencesChanged: (callback: (projectId: string) => void) => () => void;
 }

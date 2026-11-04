@@ -18,6 +18,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '../../lib/utils';
 import { EmptyState, Notice, SectionHeader, WorkspaceMarkdown } from '../task-detail/workspace/workspace-ui';
 import { loadProjects } from '../../stores/project-store';
+import { DesignReferences } from './DesignReferences';
 import type { DesignBrief, DesignDirection, DesignQaMode, DesignSystemInfo, DesignTokens } from '../../../shared/types';
 
 type Busy = 'extract' | 'propose' | 'write' | 'save' | 'storybook' | null;
@@ -346,6 +347,8 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
           </section>
         )}
 
+        {!info.exists && <DesignReferences projectId={projectId} />}
+
         {generateFlow}
 
         {info.exists && !generating && (
@@ -397,6 +400,8 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
               {info.tokensError && <Notice>{info.tokensError}</Notice>}
               {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
             </section>
+
+            <DesignReferences projectId={projectId} />
 
             <section className="space-y-3" aria-labelledby="ds-qa">
               <SectionHeader id="ds-qa" title={t('context.design.qaTitle')} />

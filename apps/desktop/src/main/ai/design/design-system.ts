@@ -13,6 +13,8 @@ import path from 'node:path';
 
 import { z } from 'zod';
 
+import { readReferences, referencesPromptSection } from './references';
+
 import type {
   DesignQaMode,
   DesignSystemInfo,
@@ -177,6 +179,7 @@ export function loadDesignSystem(projectPath: string, settings: DesignSettings):
     tokensError: error,
     qaMode: effectiveQaMode(exists, settings?.designQaMode),
     storybook: detectStorybook(projectPath, settings?.storybookEnabled === true),
+    references: readReferences(projectPath).filter((r) => r.status === 'ready' && r.notes),
   };
 }
 
@@ -273,6 +276,11 @@ export function designPromptSection(info: DesignSystemInfo, options: DesignPromp
   if (options.role === 'qa' && info.exists) {
     parts.push('');
     parts.push('Design review (when UI changed): take screenshots of every changed screen and state (empty, loading, error, long text), compare them with the design system and the rules above, and add a "Design Review" table to qa_report.md: | Screen | Rule | Finding | Result |. The app also runs a static design check on the lines this task added; its results are in `design_check.md` in the spec directory (read it), and in blocking mode they arrive as QA issues.');
+  }
+  const refs = referencesPromptSection(info.references, { audience: options.role });
+  if (refs) {
+    parts.push('');
+    parts.push(refs);
   }
   if (options.storybookEnabled) {
     parts.push('');

@@ -1268,7 +1268,49 @@
       },
       "replace": "Replace",
       "replaceApp": "This replaces the current design system (document and tokens) once the agent finishes. Edits you made in this tab will be lost.",
-      "replaceRepo": "This overwrites {{path}} in your repository (and design-tokens.json next to it) once the agent finishes. Commit or back up your version first if you want to keep it."
+      "replaceRepo": "This overwrites {{path}} in your repository (and design-tokens.json next to it) once the agent finishes. Commit or back up your version first if you want to keep it.",
+      "refs": {
+        "title": "References",
+        "meta": "{{total}} · {{ready}} ready",
+        "body": "Images, brand books, token files and sites the design system should build on. Each one is looked at once when you add it; the design agent then works from those notes, so you can add as many as you like. \"As is\" references are rules (exact colours, fonts, brand rules); \"Inspiration\" ones set a direction, not a copy. They are used by \"Extract\", \"Design a new one\" and by the agents and QA.",
+        "drop": "Drop images, PDFs or token files",
+        "choose": "Choose files",
+        "sites": "Sites",
+        "sitesHint": "One per line. Each is opened in a hidden window: screenshot and CSS.",
+        "addSites": "Add sites",
+        "roles": {
+          "as-is": "As is",
+          "inspiration": "Inspiration"
+        },
+        "roleLabel": "How to use {{name}}",
+        "kinds": {
+          "image": "Image",
+          "pdf": "PDF",
+          "tokens": "Tokens",
+          "site": "Site"
+        },
+        "theme": {
+          "light": "light",
+          "dark": "dark"
+        },
+        "pending": "Waiting",
+        "digesting": "Looking at it…",
+        "failed": "Could not read this reference.",
+        "retry": "Retry",
+        "details": "Notes about {{name}}",
+        "remove": "Remove {{name}}",
+        "fonts": "Fonts: {{fonts}}",
+        "shared": "Shared across references:",
+        "conflictTheme": "Light references: {{light}}, dark: {{dark}}. Remove the ones that don't fit, or the agent will pick one and say why.",
+        "conflictFonts": "\"As is\" references set different fonts: {{fonts}}.",
+        "group": {
+          "as-is_one": "As is · {{count}}",
+          "as-is_other": "As is · {{count}}",
+          "inspiration_one": "Inspiration · {{count}}",
+          "inspiration_other": "Inspiration · {{count}}"
+        },
+        "tooMany": "{{count}} inspiration references: the agent opens 6 of them and knows the rest from their notes. Many different ones blur the direction; keep the ones that matter."
+      }
     }
   },
   "prStatus": {

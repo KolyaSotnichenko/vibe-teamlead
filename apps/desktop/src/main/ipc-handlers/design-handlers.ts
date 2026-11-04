@@ -4,10 +4,22 @@
  * the project's Storybook for the in-app component view.
  */
 
-import { type BrowserWindow, ipcMain } from 'electron';
+import path from 'node:path';
+
+import { type BrowserWindow, dialog, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DesignBrief, DesignDirection, DesignSystemInfo, DesignTokens, IPCResult, TaskStorybookStatus } from '../../shared/types';
+import type { DesignBrief, DesignDirection, DesignReferenceRole, DesignSystemInfo, DesignTokens, IPCResult, TaskStorybookStatus } from '../../shared/types';
+import {
+  addReferenceFiles,
+  addReferenceUrls,
+  listReferences,
+  onReferencesChanged,
+  removeReference,
+  resumePending,
+  retryReference,
+  setReferenceRole,
+} from '../design/reference-service';
 import { extractDesignSystem, proposeDirections, writeDesignSystem } from '../ai/design/design-agent';
 import { loadDesignSystem, saveDesignSystem } from '../ai/design/design-system';
 import {
@@ -199,6 +211,59 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
       return { success: false, error: errorMessage(error) };
     }
   });
+
+  // ---- References -------------------------------------------------------
+  onReferencesChanged((projectPath) => {
+    const project = projectStore.getProjects().find((p) => p.path === projectPath);
+    if (project) getMainWindow()?.webContents.send(IPC_CHANNELS.DESIGN_REFS_CHANGED, project.id);
+  });
+  const isRole = (role: unknown): role is DesignReferenceRole => role === 'as-is' || role === 'inspiration';
+  const refs = <T>(projectId: string, run: (projectPath: string) => T | Promise<T>): Promise<IPCResult<T>> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return Promise.resolve({ success: false, error: 'Project not found' });
+    return Promise.resolve()
+      .then(() => run(project.path))
+      .then((data) => ({ success: true as const, data }), (error) => ({ success: false as const, error: errorMessage(error) }));
+  };
+
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_LIST, (_e, projectId: string) =>
+    refs(projectId, (projectPath) => {
+      resumePending(projectPath);
+      return listReferences(projectPath);
+    }),
+  );
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_PICK, async (): Promise<IPCResult<string[] | null>> => {
+    const win = getMainWindow();
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'References', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf', 'json', 'css', 'scss', 'js', 'cjs', 'mjs', 'ts'] },
+      ],
+    };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    return { success: true, data: result.canceled ? null : result.filePaths };
+  });
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_ADD_FILES, (_e, projectId: string, paths: unknown, role?: unknown) =>
+    refs(projectId, async (projectPath) => {
+      const files = Array.isArray(paths) ? paths.filter((p): p is string => typeof p === 'string' && path.isAbsolute(p)) : [];
+      return (await addReferenceFiles(projectPath, files, isRole(role) ? role : undefined)).list;
+    }),
+  );
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_ADD_URLS, (_e, projectId: string, urls: unknown, role?: unknown) =>
+    refs(projectId, (projectPath) => addReferenceUrls(projectPath, Array.isArray(urls) ? urls.filter((u): u is string => typeof u === 'string') : [], isRole(role) ? role : undefined).list),
+  );
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_SET_ROLE, (_e, projectId: string, id: string, role: unknown) =>
+    refs(projectId, (projectPath) => {
+      if (!isRole(role)) throw new Error('Unknown role');
+      return setReferenceRole(projectPath, String(id), role);
+    }),
+  );
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_REMOVE, (_e, projectId: string, id: string) =>
+    refs(projectId, (projectPath) => removeReference(projectPath, String(id))),
+  );
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REFS_RETRY, (_e, projectId: string, id: string) =>
+    refs(projectId, (projectPath) => retryReference(projectPath, String(id))),
+  );
 
   ipcMain.handle(IPC_CHANNELS.STORYBOOK_TASK_STOP, async (_e, taskId: string, projectId: string): Promise<IPCResult> => {
     try {
