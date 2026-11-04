@@ -1264,7 +1264,8 @@
         "enable": "Agents add Storybook and stories",
         "enableBody": "Every new or changed UI component gets stories for its states, and QA screenshots them. If the project has no Storybook yet, the next UI task sets it up (it adds dev dependencies to the project).",
         "pendingTitle": "Storybook will be set up with the next UI task",
-        "pendingBody": "Agents set it up in the task's branch, so it appears here after you merge that task. Then you can run it and browse the components in this tab."
+        "pendingBody": "Agents set it up in the task's branch, so it appears here after you merge that task. Then you can start it here and browse the components in your browser.",
+        "runningAt": "Running at"
       },
       "replace": "Replace",
       "replaceApp": "This replaces the current design system (document and tokens) once the agent finishes. Edits you made in this tab will be lost.",

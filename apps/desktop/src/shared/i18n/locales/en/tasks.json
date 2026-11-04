@@ -532,7 +532,7 @@
       "noPentest": "Security QA (Strix) is off, or QA has not approved yet. Turn it on in Settings → Agent Settings."
     },
     "storybook": {
-      "intro": "This task's components, live, before you merge: the Storybook of the task's worktree, with controls and addons. It reloads as the agents change files.",
+      "intro": "This task's components, live, before you merge: the app starts the Storybook of the task's worktree and opens it in your browser, with controls and addons. It reloads as the agents change files.",
       "start": "Start Storybook",
       "installAndStart": "Install dependencies and start",
       "installNote": "The task's worktree has no dependencies installed yet. The first start installs them there (it takes a few minutes and disk space; they are removed with the worktree).",
@@ -541,7 +541,8 @@
       "openBrowser": "Open in browser",
       "failed": "Storybook did not start.",
       "notRunningTitle": "Storybook is not running",
-      "notRunningBody": "Start it to browse and try the components this task added or changed."
+      "notRunningBody": "Start it to browse and try the components this task added or changed in your browser.",
+      "runningAt": "Running at"
     }
   },
   "board": {

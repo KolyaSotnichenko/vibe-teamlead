@@ -450,7 +450,11 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
                       </Button>
                     </div>
                   ) : (
-                    <Button size="sm" disabled={busy === 'storybook'} onClick={() => void run('storybook', () => window.electronAPI.design.startStorybook(projectId), (d) => setStorybookUrl(d.url))}>
+                    <Button size="sm" disabled={busy === 'storybook'} onClick={() => void run('storybook', () => window.electronAPI.design.startStorybook(projectId), (d) => {
+                      setStorybookUrl(d.url);
+                      // Storybook opens in the browser, not inside the app
+                      void window.electronAPI.openExternal(d.url);
+                    })}>
                       {busy === 'storybook' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1.5 h-3.5 w-3.5" />}
                       {busy === 'storybook' ? t('context.design.storybook.starting') : t('context.design.storybook.start')}
                     </Button>
@@ -472,7 +476,12 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
               />
             </div>
             {storybookUrl && (
-              <iframe title="Storybook" src={storybookUrl} className="h-[640px] w-full border border-foreground bg-white" />
+              <Notice>
+                {t('context.design.storybook.runningAt')}{' '}
+                <button type="button" onClick={() => void window.electronAPI.openExternal(storybookUrl)} className="font-mono text-foreground underline underline-offset-4">
+                  {storybookUrl}
+                </button>
+              </Notice>
             )}
             {!info.storybook.detected && info.storybook.enabled && (
               <EmptyState compact title={t('context.design.storybook.pendingTitle')} body={t('context.design.storybook.pendingBody')} />

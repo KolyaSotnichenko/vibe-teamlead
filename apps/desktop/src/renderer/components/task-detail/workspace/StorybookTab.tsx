@@ -39,6 +39,8 @@ export function StorybookTab({ taskId, projectId, status, onStatus }: {
     try {
       const result = await window.electronAPI.design.startTaskStorybook(taskId, projectId);
       if (!result.success) setError(result.error ?? t('tasks:workspace.storybook.failed'));
+      // Storybook opens in the browser, not inside the app
+      else if (result.data?.url) void window.electronAPI.openExternal(result.data.url);
     } finally {
       setStarting(false);
       setProgress(null);
@@ -91,7 +93,12 @@ export function StorybookTab({ taskId, projectId, status, onStatus }: {
         </pre>
       )}
       {url ? (
-        <iframe title={`Storybook — ${taskId}`} src={url} className="h-[70vh] min-h-[480px] w-full border border-foreground bg-white" />
+        <Notice>
+          {t('tasks:workspace.storybook.runningAt')}{' '}
+          <button type="button" onClick={() => void window.electronAPI.openExternal(url)} className="font-mono text-foreground underline underline-offset-4">
+            {url}
+          </button>
+        </Notice>
       ) : (
         !starting && !status.installing && !error && <EmptyState compact title={t('tasks:workspace.storybook.notRunningTitle')} body={t('tasks:workspace.storybook.notRunningBody')} />
       )}
