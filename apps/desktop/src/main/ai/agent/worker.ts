@@ -50,6 +50,7 @@ import { TaskLogWriter, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import { runStandaloneQa } from './standalone-qa';
+import { clearTurnLimits } from '../claude-code/turn-limits';
 import {
   detectProjectCapabilities,
   getQaToolsSection,
@@ -598,7 +599,10 @@ async function run(): Promise<void> {
   postLog(`Starting agent session: type=${session.agentType}, model=${session.modelId}`);
 
   // A worker that was killed can't stop its servers; this task's next worker does
-  if (session.specDir) cleanUpLeftovers(session.specDir);
+  if (session.specDir) {
+    cleanUpLeftovers(session.specDir);
+    clearTurnLimits(session.specDir);
+  }
 
   try {
     const securityProfile = buildSecurityProfile(session);

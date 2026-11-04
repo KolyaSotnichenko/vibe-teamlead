@@ -26,6 +26,7 @@ import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from '
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { removeBrokenBrowserServers } from './browser-servers';
+import { recordTurnLimit } from './turn-limits';
 import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
@@ -462,6 +463,10 @@ export async function runAgentSession(
     toolCalls: acc.toolCallCount,
     durationMs: Date.now() - startTime,
   });
+
+  if (outcome === 'max_steps' && config.specDir) {
+    recordTurnLimit(config.specDir, { agentType: config.agentType, subtaskId: config.subtaskId, limit: config.maxSteps });
+  }
 
   options.onLog?.(sessionSummary(config.agentType, outcome, acc.stepsExecuted, acc.toolCallCount, acc.usage, config.maxSteps));
 

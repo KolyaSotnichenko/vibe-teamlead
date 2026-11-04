@@ -145,6 +145,13 @@ export interface WorkspaceSecurity {
   };
 }
 
+export interface TurnLimitHit {
+  agentType: string;
+  subtaskId?: string;
+  limit: number;
+  count: number;
+}
+
 export interface TaskWorkspace {
   /** Absolute spec directory the artifacts were read from */
   specDir: string;
@@ -160,6 +167,8 @@ export interface TaskWorkspace {
   security: WorkspaceSecurity;
   /** Why the last QA run ended without approval (qa_outcome.json) */
   qaOutcome?: QaOutcomeInfo;
+  /** Sessions of this run that stopped at their turn limit */
+  turnLimits?: TurnLimitHit[];
   /** A merge the model resolved, waiting for the user's decision */
   mergeReview?: { files: string[] };
 }

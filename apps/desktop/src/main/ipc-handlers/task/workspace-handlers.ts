@@ -21,6 +21,7 @@ import { ensureAbsolutePath } from '../../utils/path-helpers';
 import { findTaskWorktree } from '../../worktree-paths';
 import { findTaskAndProject } from './shared';
 import { getMergeReview, getMergeReviewDiff } from '../../ai/merge/git-merge';
+import { parseTurnLimits, TURN_LIMITS_FILE } from '../../ai/claude-code/turn-limits';
 import { getToolPath } from '../../cli-tool-manager';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import {
@@ -133,7 +134,7 @@ function isQaOutcome(value: unknown): value is import('../../../shared/types').Q
 /** Read and parse every workspace artifact in a spec directory. Never throws. */
 export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace> {
   const file = (name: string) => path.join(specDir, name);
-  const [specMarkdown, planRaw, qaMarkdown, logs, architecture, gates, pentest, qaOutcome] = await Promise.all([
+  const [specMarkdown, planRaw, qaMarkdown, logs, architecture, gates, pentest, qaOutcome, turnLimits] = await Promise.all([
     readText(file('spec.md')),
     readJson(file('implementation_plan.json')),
     readText(file('qa_report.md')),
@@ -142,6 +143,7 @@ export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace>
     readJson(file('security_gates.json')),
     readJson(file('security_qa.json')),
     readJson(file('qa_outcome.json')),
+    readJson(file(TURN_LIMITS_FILE)),
   ]);
   const plan = parsePlan(planRaw);
   const qaRows = qaMarkdown !== undefined ? parseQaCoverage(qaMarkdown) : null;
@@ -160,6 +162,7 @@ export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace>
       pentest: parseSecurityQa(pentest, specDir),
     },
     ...(isQaOutcome(qaOutcome) ? { qaOutcome } : {}),
+    ...(parseTurnLimits(turnLimits).length ? { turnLimits: parseTurnLimits(turnLimits) } : {}),
   };
 }
 
