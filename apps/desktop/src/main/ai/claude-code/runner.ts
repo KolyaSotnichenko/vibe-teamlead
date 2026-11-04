@@ -53,6 +53,11 @@ export const BACKGROUND_INSTRUCTIONS = `
 ## Background processes
 Start long-running commands (dev servers, watchers, emulators) with Bash \`run_in_background\` and keep the task id it returns. Stop each one with TaskStop as soon as you no longer need it, and always before your final report. Killing the process by PID is not enough: the background task stays open, keeps this session alive and wakes you up later for nothing.`;
 
+/** Every turn re-sends everything so far: fewer turns and smaller results are what make a session cheap. */
+export const CONTEXT_INSTRUCTIONS = `
+## Keeping your context small
+Every turn re-sends everything before it. Read files with Read, not cat or sed. Put independent calls (several reads, searches, checks) in one message. Filter what a command prints: never a bare \`ps aux\` or \`lsof\`; pipe test and build logs through \`tail\` or \`grep\`. Leave generated folders (node_modules, dist, .next, build output) out of searches.`;
+
 const QA_AGENTS = new Set(['qa_reviewer', 'qa_fixer']);
 
 /**
@@ -257,6 +262,7 @@ export function buildQueryOptions(
     skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '',
     skills.includes(FRONTEND_DESIGN_SKILL) ? FRONTEND_DESIGN_INSTRUCTIONS : '',
     tools.includes('Bash') ? BACKGROUND_INSTRUCTIONS : '',
+    tools.includes('Bash') ? CONTEXT_INSTRUCTIONS : '',
     browserToolsSection(config.agentType, Object.keys(mcpServers), config.mcpOptions?.projectCapabilities),
   ]
     .filter(Boolean)

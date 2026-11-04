@@ -58,6 +58,27 @@ describe('QA prompts', () => {
     expect(prompt(name)).not.toContain('"qa_signoff": {');
   });
 
+  it('QA does not load the plan and progress notes at the start of every session', () => {
+    for (const name of ['qa_reviewer', 'qa_fixer']) {
+      expect(prompt(name)).not.toContain('cat implementation_plan.json');
+      expect(prompt(name)).not.toContain('cat build-progress.txt');
+    }
+    expect(prompt('qa_fixer')).not.toContain('cat spec.md');
+  });
+
+  it('the coder reads with the Read tool, not cat, and only the end of the progress notes', () => {
+    const coder = prompt('coder');
+    expect(coder).not.toContain('cat "$SPEC_DIR/implementation_plan.json"');
+    expect(coder).not.toContain('cat "$SPEC_DIR/spec.md"');
+    expect(coder).not.toContain('cat "$SPEC_DIR/build-progress.txt"');
+    expect(coder).not.toContain('cat [path/to/file]');
+    expect(coder).toContain('in one message');
+  });
+
+  it('the reviewer does not name browser tools the session may not have', () => {
+    expect(prompt('qa_reviewer')).not.toContain('mcp__playwright__browser_navigate');
+  });
+
   it('the reviewer no longer writes a fix request: that file is what the user asks', () => {
     expect(prompt('qa_reviewer')).not.toContain('QA_FIX_REQUEST');
     expect(prompt('qa_fixer')).not.toContain('cat QA_FIX_REQUEST.md');

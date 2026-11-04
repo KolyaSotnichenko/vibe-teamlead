@@ -54,20 +54,14 @@ You must fix these issues so QA can approve.
 
 ## PHASE 0: LOAD CONTEXT (MANDATORY)
 
+Read `qa_report.md` with the Read tool for context on the issues, then check the current state:
+
 ```bash
-# 1. Read the QA report (full context on issues)
-cat qa_report.md 2>/dev/null || echo "No detailed report"
-
-# 2. Read the spec (requirements)
-cat spec.md
-
-# 3. Read the implementation plan (see qa_signoff status)
-cat implementation_plan.json
-
-# 4. Check current state
 git status
 git log --oneline -5
 ```
+
+Open `spec.md` only for the section an issue refers to. Don't read `implementation_plan.json` or `build-progress.txt` whole: you don't need them to fix an issue.
 
 **CRITICAL**: The "What to fix" section at the end of these instructions says what to do. It is your primary task. `QA_FIX_REQUEST.md` exists only when the user wrote a request, and that section points to it.
 

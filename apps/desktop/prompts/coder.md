@@ -154,67 +154,20 @@ find . -name "implementation_plan.json" -type f 2>/dev/null | head -5
 # 3. Set SPEC_DIR based on what you find (example - adjust path as needed)
 SPEC_DIR="./.vibe-teamlead/specs/YOUR-SPEC-NAME"  # Replace with actual path from step 2
 
-# 4. Read the implementation plan (your main source of truth)
-cat "$SPEC_DIR/implementation_plan.json"
-
-# 5. Read the project spec (requirements, patterns, scope)
-cat "$SPEC_DIR/spec.md"
-
-# 6. Read the project index (services, ports, commands)
-cat "$SPEC_DIR/project_index.json" 2>/dev/null || echo "No project index"
-
-# 7. Read the task context (files to modify, patterns to follow)
-cat "$SPEC_DIR/context.json" 2>/dev/null || echo "No context file"
-
-# 8. Read progress from previous sessions
-cat "$SPEC_DIR/build-progress.txt" 2>/dev/null || echo "No previous progress"
-
-# 9. Check recent git history
+# 4. Check recent git history
 git log --oneline -10
+```
 
-# 10. Count progress
-echo "Completed subtasks: $(grep -c '"status": "completed"' "$SPEC_DIR/implementation_plan.json" 2>/dev/null || echo 0)"
-echo "Pending subtasks: $(grep -c '"status": "pending"' "$SPEC_DIR/implementation_plan.json" 2>/dev/null || echo 0)"
+Then read these with the Read tool, all in one message (skip any that doesn't exist):
 
-# 11. READ SESSION MEMORY (CRITICAL - Learn from past sessions)
-echo "=== SESSION MEMORY ==="
+- `$SPEC_DIR/implementation_plan.json`: your main source of truth
+- `$SPEC_DIR/context.json`: files to modify, patterns to follow
+- `$SPEC_DIR/memory/codebase_map.json`, `$SPEC_DIR/memory/patterns.md`, `$SPEC_DIR/memory/gotchas.md`: what earlier sessions learned
 
-# Read codebase map (what files do what)
-if [ -f "$SPEC_DIR/memory/codebase_map.json" ]; then
-  echo "Codebase Map:"
-  cat "$SPEC_DIR/memory/codebase_map.json"
-else
-  echo "No codebase map yet (first session)"
-fi
+From `$SPEC_DIR/spec.md` read the parts your subtask refers to: its acceptance criteria and the sections around them. For progress notes, only the end:
 
-# Read patterns to follow
-if [ -f "$SPEC_DIR/memory/patterns.md" ]; then
-  echo -e "\nCode Patterns to Follow:"
-  cat "$SPEC_DIR/memory/patterns.md"
-else
-  echo "No patterns documented yet"
-fi
-
-# Read gotchas to avoid
-if [ -f "$SPEC_DIR/memory/gotchas.md" ]; then
-  echo -e "\nGotchas to Avoid:"
-  cat "$SPEC_DIR/memory/gotchas.md"
-else
-  echo "No gotchas documented yet"
-fi
-
-# Read recent session insights (last 3 sessions)
-if [ -d "$SPEC_DIR/memory/session_insights" ]; then
-  echo -e "\nRecent Session Insights:"
-  ls -t "$SPEC_DIR/memory/session_insights/session_*.json" 2>/dev/null | head -3 | while read file; do
-    echo "--- $file ---"
-    cat "$file"
-  done
-else
-  echo "No session insights yet (first session)"
-fi
-
-echo "=== END SESSION MEMORY ==="
+```bash
+tail -n 40 "$SPEC_DIR/build-progress.txt" 2>/dev/null
 ```
 
 ---
@@ -303,10 +256,7 @@ For your selected subtask, read the relevant files.
 
 ### 5.1: Read Files to Modify
 
-```bash
-# From your subtask's files_to_modify
-cat [path/to/file]
-```
+Read your subtask's `files_to_modify` with the Read tool, all in one message.
 
 Understand:
 - Current implementation
@@ -315,10 +265,7 @@ Understand:
 
 ### 5.2: Read Pattern Files
 
-```bash
-# From your subtask's patterns_from
-cat [path/to/pattern/file]
-```
+Read your subtask's `patterns_from` the same way.
 
 Understand:
 - Code style

@@ -34,25 +34,18 @@ Your job is to catch ALL of these before sign-off.
 
 ## PHASE 0: LOAD CONTEXT (MANDATORY)
 
+Read these with the Read tool, in one message:
+
+- `spec.md`: your source of truth for requirements and the QA acceptance criteria
+- `project_index.json`: the project structure
+
+Then see what changed (three-dot diff shows only spec branch changes):
+
 ```bash
-# 1. Read the spec (your source of truth for requirements)
-cat spec.md
-
-# 2. Read the implementation plan (see what was built)
-cat implementation_plan.json
-
-# 3. Read the project index (understand the project structure)
-cat project_index.json
-
-# 4. Check build progress
-cat build-progress.txt
-
-# 5. See what files were changed (three-dot diff shows only spec branch changes)
 git diff {{BASE_BRANCH}}...HEAD --name-status
-
-# 6. Read QA acceptance criteria from spec
-grep -A 100 "## QA Acceptance Criteria" spec.md
 ```
+
+`implementation_plan.json` and `build-progress.txt` are long. Don't read them whole: Phase 1 counts the subtasks, and `mcp__vibe-teamlead__get_build_progress` gives the progress.
 
 ---
 
@@ -196,14 +189,10 @@ Check the PROJECT CAPABILITIES section above for available startup commands.
    ```
    Wait 15 seconds, then retry `get_electron_window_info`.
 
-**For web frontends** (when the Playwright browser tools `mcp__playwright__*` are in your tool list):
+**For web frontends** (when you have browser tools):
 1. Start dev server using the dev_command from the startup commands above
 2. Wait for the server to be listening on the expected port
-3. Navigate:
-   ```
-   Tool: mcp__playwright__browser_navigate
-   Args: {"url": "http://localhost:[port]"}
-   ```
+3. Open the page with your browser tool
 
 The "Browser tools in this session" section at the end of your instructions says which browser tools you have; don't call one it doesn't list. If none are available, don't try other tool names: there is no Puppeteer or other browser server. Verify UI behaviour with the project's own end-to-end tests (e.g. its Playwright or Cypress suite, run with Bash), HTTP checks (`curl`) and the code, and write in the report that visual verification was not possible in this session.
 
@@ -214,14 +203,14 @@ For EACH visual success criterion in the spec:
 2. Set up test conditions (e.g., create long text to test overflow)
 3. Take a screenshot:
    - Electron: `mcp__electron__take_screenshot`
-   - Web: `mcp__playwright__browser_take_screenshot`
+   - Web: your browser tool's screenshot
 4. Examine the screenshot and verify the criterion is met
 5. Document: "[Criterion]: VERIFIED via screenshot" or "FAILED: [what you observed]"
 
 ### 4.3: Check Console for Errors
 
 - Electron: `mcp__electron__read_electron_logs` with `{"logType": "console", "lines": 50}`
-- Web: `mcp__playwright__browser_console_messages`
+- Web: your browser tool's console messages
 
 ### 4.4: Document Findings
 

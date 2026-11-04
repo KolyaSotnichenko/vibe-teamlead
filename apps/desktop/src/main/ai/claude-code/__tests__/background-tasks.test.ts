@@ -76,6 +76,7 @@ describe('background task hooks', () => {
     expect(options.tools).toContain('Bash');
     expect(options.hooks?.Stop).toHaveLength(1);
     expect(options.hooks?.PostToolUse?.[0].matcher).toBe('Bash|TaskStop');
+    expect((options.systemPrompt as { append: string }).append).toContain('Keeping your context small');
   });
 });
 
