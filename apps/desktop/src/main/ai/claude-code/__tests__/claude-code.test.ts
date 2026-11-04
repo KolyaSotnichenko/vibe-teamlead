@@ -130,7 +130,7 @@ describe('buildQueryOptions', () => {
     expect(options.env?.ANTHROPIC_API_KEY).toBe('sk-ant-test');
     expect(options.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     expect(options.env?.CLAUDE_CONFIG_DIR).toMatch(/\.vibe-teamlead/);
-    expect(options.hooks?.PreToolUse).toHaveLength(2);
+    expect(options.hooks?.PreToolUse).toHaveLength(3); // security, questions, dev server guard
     expect(options.mcpServers).toHaveProperty('vibe-teamlead');
     expect(options.outputFormat?.type).toBe('json_schema');
   });

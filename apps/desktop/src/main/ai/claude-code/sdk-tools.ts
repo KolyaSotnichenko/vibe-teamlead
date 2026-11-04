@@ -22,6 +22,8 @@ import {
   recordDiscoveryTool,
   recordGotchaTool,
   updateQaStatusTool,
+  startDevServerTool,
+  stopDevServerTool,
   updateSubtaskStatusTool,
 } from '../tools/app-tools';
 import { isPathContained } from '../security/path-containment';
@@ -127,6 +129,8 @@ const BUILD_TOOLS: readonly DefinedTool[] = [
   recordGotchaTool,
   getSessionContextTool,
   updateQaStatusTool,
+  startDevServerTool,
+  stopDevServerTool,
 ] as unknown as readonly DefinedTool[];
 
 function toText(output: unknown): string {

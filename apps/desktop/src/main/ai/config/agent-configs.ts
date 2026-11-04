@@ -45,6 +45,8 @@ const TOOL_RECORD_DISCOVERY = 'mcp__vibe-teamlead__record_discovery';
 const TOOL_RECORD_GOTCHA = 'mcp__vibe-teamlead__record_gotcha';
 const TOOL_GET_SESSION_CONTEXT = 'mcp__vibe-teamlead__get_session_context';
 const TOOL_UPDATE_QA_STATUS = 'mcp__vibe-teamlead__update_qa_status';
+/** Dev servers the app runs: free port, ready on return, kept for the task */
+const DEV_SERVER_TOOLS = ['mcp__vibe-teamlead__start_dev_server', 'mcp__vibe-teamlead__stop_dev_server'] as const;
 const TOOL_RENDER_DIAGRAM = 'mcp__vibe-teamlead__render_diagram';
 const TOOL_SEARCH_MEMORY = 'mcp__vibe-teamlead__search_memory';
 const TOOL_REMEMBER = 'mcp__vibe-teamlead__remember';
@@ -306,6 +308,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_RECORD_DISCOVERY,
       TOOL_RECORD_GOTCHA,
       TOOL_GET_SESSION_CONTEXT,
+      ...DEV_SERVER_TOOLS,
       ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'low',
@@ -322,6 +325,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_GET_BUILD_PROGRESS,
       TOOL_UPDATE_QA_STATUS,
       TOOL_GET_SESSION_CONTEXT,
+      ...DEV_SERVER_TOOLS,
       ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'high',
@@ -335,6 +339,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
       TOOL_GET_BUILD_PROGRESS,
       TOOL_UPDATE_QA_STATUS,
       TOOL_RECORD_GOTCHA,
+      ...DEV_SERVER_TOOLS,
       ...MEMORY_TOOLS,
     ],
     thinkingDefault: 'medium',

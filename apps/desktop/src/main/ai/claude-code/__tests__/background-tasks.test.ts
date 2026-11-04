@@ -80,6 +80,43 @@ describe('background task hooks', () => {
   });
 });
 
+describe('dev server guard', () => {
+  const session = (agentType: string) =>
+    ({
+      agentType,
+      model: 'claude-sonnet-4-6',
+      auth: { apiKey: 'sk-ant-test' },
+      systemPrompt: 'x',
+      initialMessages: [{ role: 'user', content: 'go' }],
+      toolContext: { cwd: '/w', projectDir: '/w', specDir: '/w/spec', securityProfile: undefined as never },
+      maxSteps: 10,
+      specDir: '/w/spec',
+      projectDir: '/w',
+      bundled: {},
+    }) as unknown as SessionConfig;
+
+  const ask = async (agentType: string, command: string) => {
+    const options = buildQueryOptions(session(agentType), new AbortController(), { codegraphReady: false });
+    const matchers = options.hooks?.PreToolUse ?? [];
+    const results = [];
+    for (const m of matchers.filter((x) => x.matcher === 'Bash')) {
+      for (const h of m.hooks) {
+        results.push(await h({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', { signal: new AbortController().signal }));
+      }
+    }
+    return JSON.stringify(results);
+  };
+
+  it('sends dev servers started with Bash to the tool', async () => {
+    expect(await ask('qa_reviewer', '(cd apps/web && pnpm run dev) > /tmp/web.log &')).toContain('start_dev_server');
+    expect(await ask('coder', 'pnpm dev')).toContain('start_dev_server');
+  });
+
+  it('leaves other commands alone', async () => {
+    expect(await ask('qa_reviewer', 'pnpm test')).not.toContain('start_dev_server');
+  });
+});
+
 describe('browser tools section', () => {
   it('names the browser tools QA really has', () => {
     const s = browserToolsSection('qa_reviewer', ['vibe-teamlead', 'playwright'], { is_web_frontend: true });

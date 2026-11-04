@@ -73,15 +73,13 @@ echo "In Progress: $(grep -c '"status": "in_progress"' implementation_plan.json)
 
 ## PHASE 2: START DEVELOPMENT ENVIRONMENT
 
-```bash
-# Start all services
-chmod +x init.sh && ./init.sh
+Only what the checks below need: tests that bring their own server need none.
 
-# Verify services are running
-lsof -iTCP -sTCP:LISTEN | grep -E "node|python|next|vite"
-```
+Start servers with the tool `mcp__vibe-teamlead__start_dev_server`: give it a `name`, the `command` (from `project_index.json` or the package scripts) and any `env`, such as the URL of another server. The app picks a free port and passes it in `PORT` (or name the variable in `port_env`, or put `{port}` in the command), waits until the server answers and returns its URL and log file. No `sleep` or `curl` loop is needed.
 
-Wait for all services to be healthy before proceeding.
+A server stays up for the next sessions of this task and the app stops it with the task, so don't stop it when you finish; asking again with the same request returns the one already running. Don't start dev servers from Bash, and don't look for them with `lsof` or `ps`.
+
+Databases and other containers: `docker compose up -d <service>`. `init.sh` in the spec directory shows what the project needs; read it for the steps and values, don't run it.
 
 ---
 
@@ -190,9 +188,8 @@ Check the PROJECT CAPABILITIES section above for available startup commands.
    Wait 15 seconds, then retry `get_electron_window_info`.
 
 **For web frontends** (when you have browser tools):
-1. Start dev server using the dev_command from the startup commands above
-2. Wait for the server to be listening on the expected port
-3. Open the page with your browser tool
+1. Start the server with `mcp__vibe-teamlead__start_dev_server` if it isn't running yet
+2. Open the URL it returned with your browser tool
 
 The "Browser tools in this session" section at the end of your instructions says which browser tools you have; don't call one it doesn't list. If none are available, don't try other tool names: there is no Puppeteer or other browser server. Verify UI behaviour with the project's own end-to-end tests (e.g. its Playwright or Cypress suite, run with Bash), HTTP checks (`curl`) and the code, and write in the report that visual verification was not possible in this session.
 

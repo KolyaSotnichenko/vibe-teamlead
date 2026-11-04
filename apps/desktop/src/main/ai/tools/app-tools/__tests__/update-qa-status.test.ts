@@ -75,6 +75,11 @@ describe('QA prompts', () => {
     expect(coder).toContain('in one message');
   });
 
+  it.each(['qa_reviewer', 'qa_fixer', 'coder'])('%s starts servers with the tool, not init.sh', (name) => {
+    expect(prompt(name)).toContain('mcp__vibe-teamlead__start_dev_server');
+    expect(prompt(name)).not.toContain('./init.sh');
+  });
+
   it('the reviewer does not name browser tools the session may not have', () => {
     expect(prompt('qa_reviewer')).not.toContain('mcp__playwright__browser_navigate');
   });

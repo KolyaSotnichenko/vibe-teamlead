@@ -102,7 +102,7 @@ describe('bundled tools in query options', () => {
       args: ['serve', '--mcp', '--path', '/work'],
     });
     expect(options.tools).toContain('AskUserQuestion');
-    expect(options.hooks?.PreToolUse).toHaveLength(2);
+    expect(options.hooks?.PreToolUse).toHaveLength(3); // security, questions, dev server guard
   });
 
   it('lets agents with Bash stop their background commands, and tells them to', () => {

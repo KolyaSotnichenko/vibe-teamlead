@@ -107,15 +107,15 @@ Create a mental checklist. You must address EVERY issue.
 
 ---
 
-## PHASE 2: START DEVELOPMENT ENVIRONMENT
+## PHASE 2: START DEVELOPMENT ENVIRONMENT (ONLY IF A FIX NEEDS IT)
 
-```bash
-# Start services if needed
-chmod +x init.sh && ./init.sh
+Most fixes are verified with tests and need no server.
 
-# Verify running
-lsof -iTCP -sTCP:LISTEN | grep -E "node|python|next|vite"
-```
+Start servers with the tool `mcp__vibe-teamlead__start_dev_server`: give it a `name`, the `command` (from `project_index.json` or the package scripts) and any `env`, such as the URL of another server. The app picks a free port and passes it in `PORT` (or name the variable in `port_env`, or put `{port}` in the command), waits until the server answers and returns its URL and log file. No `sleep` or `curl` loop is needed.
+
+A server stays up for the next sessions of this task and the app stops it with the task, so don't stop it when you finish; asking again with the same request returns the one already running. Don't start dev servers from Bash, and don't look for them with `lsof` or `ps`.
+
+Databases and other containers: `docker compose up -d <service>`. `init.sh` in the spec directory shows what the project needs; read it for the steps and values, don't run it.
 
 ---
 

@@ -38,6 +38,7 @@ import type { SessionConfig, StreamEvent, SessionResult } from '../session/types
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
+import { killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
@@ -127,6 +128,7 @@ function postTaskEvent(eventType: string, extra?: Record<string, unknown>): void
 // =============================================================================
 
 const abortController = new AbortController();
+abortController.signal.addEventListener('abort', killAllDevServersNow, { once: true });
 
 parentPort.on('message', (msg: MainToWorkerMessage) => {
   if (msg.type === 'abort') {
@@ -882,6 +884,7 @@ async function runBuildOrchestrator(
     postTaskEvent('CODING_FAILED', { error: outcome.error });
   }
 
+  await releaseTaskResources(session);
   postFinalResult(outcome.success, outcome.totalIterations, outcome.durationMs, outcome.error);
 }
 
@@ -960,6 +963,12 @@ async function runQualityAssurance(
   return outcome.approved && session.securityQa?.enabled ? runSecurityQa(session, qaLoop, outcome) : outcome;
 }
 
+/** What agents left running for this task must not outlive it or hold ports for the next one. */
+async function releaseTaskResources(session: SerializableSessionConfig): Promise<void> {
+  await stopAllDevServers().catch(() => {});
+  if (session.projectDir) await stopWorktreeContainers(session.projectDir).catch(() => {});
+}
+
 /** The final result message every pipeline sends back to the bridge. */
 function postFinalResult(success: boolean, steps: number, durationMs: number, error?: string): void {
   const result: SessionResult = {
@@ -997,6 +1006,7 @@ async function runQALoop(session: SerializableSessionConfig, toolContext: ToolCo
     postTaskEvent('QA_AGENT_ERROR', { error: outcome.error });
   }
 
+  await releaseTaskResources(session);
   postFinalResult(outcome.approved, outcome.totalIterations, outcome.durationMs, outcome.error);
 }
 

@@ -113,6 +113,8 @@ const NO_CHANGES = [
   'mcp__vibe-teamlead__record_discovery',
   'mcp__vibe-teamlead__record_gotcha',
   'mcp__vibe-teamlead__remember',
+  'mcp__vibe-teamlead__start_dev_server',
+  'mcp__vibe-teamlead__stop_dev_server',
 ];
 
 const REPORT_RULES = `Report back in under 300 words: findings first, then file paths with line numbers. No preamble. You run inside an isolated task worktree; stay in it.`;

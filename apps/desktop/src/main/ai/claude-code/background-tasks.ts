@@ -8,6 +8,8 @@
 
 import type { HookCallbackMatcher, HookInput, HookJSONOutput } from '@anthropic-ai/claude-agent-sdk';
 
+import { isDevServerCommand } from '../dev-servers/dev-servers';
+
 /** The background task id in a Bash result: the structured field, or the line Claude Code prints. Pure. */
 export function backgroundTaskId(response: unknown): string | undefined {
   if (response && typeof response === 'object') {
@@ -22,6 +24,28 @@ function stoppedTaskId(input: unknown): string | undefined {
   const i = (input ?? {}) as { task_id?: unknown; shell_id?: unknown };
   const id = i.task_id ?? i.shell_id;
   return typeof id === 'string' && id ? id : undefined;
+}
+
+/** Dev servers go through the app's tool, which sees them, frees their port and stops them. */
+export function buildDevServerGuard(): HookCallbackMatcher {
+  return {
+    matcher: 'Bash',
+    hooks: [
+      async (input: HookInput): Promise<HookJSONOutput> => {
+        if (input.hook_event_name !== 'PreToolUse') return {};
+        const command = (input.tool_input as { command?: unknown } | null)?.command;
+        if (typeof command !== 'string' || !isDevServerCommand(command)) return {};
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason:
+              'Start dev servers with mcp__vibe-teamlead__start_dev_server: it picks a free port, waits until the server answers and returns the URL. No sleep or curl loop needed.',
+          },
+        };
+      },
+    ],
+  };
 }
 
 export function stopReminder(ids: string[]): string {

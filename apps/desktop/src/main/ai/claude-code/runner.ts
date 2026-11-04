@@ -26,7 +26,7 @@ import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from '
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { buildSecurityHooks } from './security-hooks';
-import { buildBackgroundTaskHooks } from './background-tasks';
+import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
@@ -282,7 +282,11 @@ export function buildQueryOptions(
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
     hooks: {
-      PreToolUse: [...buildSecurityHooks(config.toolContext), buildAskUserHook(extras.askUser)],
+      PreToolUse: [
+        ...buildSecurityHooks(config.toolContext),
+        buildAskUserHook(extras.askUser),
+        ...(tools.includes('Bash') && getAgentConfig(config.agentType).appTools?.includes('mcp__vibe-teamlead__start_dev_server') ? [buildDevServerGuard()] : []),
+      ],
       ...(background
         ? { PostToolUse: background.PostToolUse, PostToolUseFailure: background.PostToolUseFailure, Stop: background.Stop }
         : {}),

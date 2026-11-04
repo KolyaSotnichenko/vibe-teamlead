@@ -224,29 +224,15 @@ Scan `implementation_plan.json` in order:
 
 ---
 
-## STEP 4: START DEVELOPMENT ENVIRONMENT
+## STEP 4: START DEVELOPMENT ENVIRONMENT (ONLY IF THE SUBTASK NEEDS IT)
 
-### 4.1: Run Setup
+Tests usually need no server.
 
-```bash
-chmod +x init.sh && ./init.sh
-```
+Start servers with the tool `mcp__vibe-teamlead__start_dev_server`: give it a `name`, the `command` (from `project_index.json` or the package scripts) and any `env`, such as the URL of another server. The app picks a free port and passes it in `PORT` (or name the variable in `port_env`, or put `{port}` in the command), waits until the server answers and returns its URL and log file. No `sleep` or `curl` loop is needed.
 
-Or start manually using `project_index.json`:
-```bash
-# Read service commands from project_index.json
-cat project_index.json | grep -A 5 '"dev_command"'
-```
+A server stays up for the next sessions of this task and the app stops it with the task, so don't stop it when you finish; asking again with the same request returns the one already running. Don't start dev servers from Bash, and don't look for them with `lsof` or `ps`.
 
-### 4.2: Verify Services Running
-
-```bash
-# Check what's listening
-lsof -iTCP -sTCP:LISTEN | grep -E "node|python|next|vite"
-
-# Test connectivity (ports from project_index.json)
-curl -s -o /dev/null -w "%{http_code}" http://localhost:[PORT]
-```
+Databases and other containers: `docker compose up -d <service>`. `init.sh` in the spec directory shows what the project needs; read it for the steps and values, don't run it.
 
 ---
 
