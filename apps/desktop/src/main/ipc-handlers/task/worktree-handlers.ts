@@ -25,6 +25,8 @@ import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
 import { excludeFromGit } from '../../utils/git-exclude';
+import { mergeTaskBranch } from '../../ai/merge/git-merge';
+import { MergeDecision } from '../../ai/merge/types';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
@@ -2062,58 +2064,46 @@ export function registerWorktreeHandlers(
           dryRun: false,
         });
 
-        // Run the merge with progress callbacks
+        // git does the merge; the merge engine only resolves the files git can't
         let mergeSucceeded = false;
         let mergeError: string | undefined;
+        let conflictFiles: string[] | undefined;
 
-        try {
-          const report = await orchestrator.mergeTask(
-            task.specId,
-            worktreePath ?? undefined,
-            effectiveBaseBranch,
-            (stage, percent, message, details) => {
+        const mergeResult = await mergeTaskBranch({
+          projectDir: project.path,
+          branch: `vibe-teamlead/${task.specId}`,
+          baseBranch: effectiveBaseBranch,
+          worktreePath: worktreePath ?? undefined,
+          message: `Merge vibe-teamlead/${task.specId}: ${task.title}`,
+          stageOnly: options?.noCommit === true,
+          git: getToolPath('git'),
+          env: getIsolatedGitEnv(),
+          resolveConflicts: async (files) => {
+            emitProgress('resolving', 25, `Resolving conflicts in ${files.length} file(s)`);
+            if (!worktreePath) return new Map();
+            const report = await orchestrator.mergeTask(task.specId, worktreePath, effectiveBaseBranch, (stage, percent, message, details) => {
               emitProgress(stage, percent, message, details ?? {});
+            });
+            const merged = new Map<string, string>();
+            for (const file of files) {
+              const result = report.fileResults.get(file);
+              if (result?.mergedContent && result.decision !== MergeDecision.FAILED) merged.set(file, result.mergedContent);
             }
-          );
+            return merged;
+          },
+        });
+        debug('Merge result:', mergeResult);
 
-          debug('Merge report:', {
-            success: report.success,
-            stats: report.stats,
-            error: report.error,
-            fileResults: report.fileResults.size
-          });
-
-          if (report.success) {
-            // Apply merged content to the project directory
-            const applied = orchestrator.applyToProject(report);
-            debug('Applied merge to project:', applied);
-
-            if (applied) {
-              // Stage all changed files (the app's own folder isn't one of them)
-              try {
-                excludeFromGit(project.path, `${project.autoBuildPath || '.vibe-teamlead'}/`);
-                execFileSync(getToolPath('git'), ['add', '-A'], {
-                  cwd: project.path,
-                  encoding: 'utf-8',
-                  env: getIsolatedGitEnv()
-                });
-                debug('Staged merged files');
-              } catch (gitErr) {
-                debug('Failed to stage merged files:', gitErr);
-              }
-
-              mergeSucceeded = true;
-            } else {
-              mergeError = 'Failed to apply merged files to project directory';
-            }
-          } else {
-            mergeError = report.error ?? 'Merge failed';
-          }
-        } catch (err) {
-          mergeError = err instanceof Error ? err.message : String(err);
-          debug('Merge orchestrator threw:', mergeError);
-          emitProgress('error', 0, `Merge failed: ${mergeError}`);
+        if (mergeResult.status === 'conflicts') {
+          conflictFiles = mergeResult.conflictFiles;
+          mergeError = `Could not merge automatically: ${(conflictFiles ?? []).join(', ')}. Nothing was changed. Resolve the conflicts on the task branch and merge again.`;
+        } else if (mergeResult.status === 'refused') {
+          mergeError = mergeResult.message ?? 'Merge failed';
+        } else {
+          mergeSucceeded = true;
+          emitProgress('complete', 100, 'Merge complete');
         }
+        if (mergeError) emitProgress('error', 0, `Merge failed: ${mergeError}`);
 
         // Post-merge: check git status, update plan files, clean worktree
 
@@ -2398,7 +2388,7 @@ export function registerWorktreeHandlers(
                 data: {
                   success: false,
                   message: mergeError ?? 'Merge failed',
-                  conflictFiles: undefined
+                  conflictFiles
                 }
               };
             }

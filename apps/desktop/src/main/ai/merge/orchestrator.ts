@@ -673,24 +673,6 @@ export class MergeOrchestrator {
     return written;
   }
 
-  applyToProject(report: MergeReport): boolean {
-    if (this.dryRun) return true;
-
-    let success = true;
-    for (const [filePath, result] of report.fileResults) {
-      if (result.mergedContent && result.decision !== MergeDecision.FAILED) {
-        const targetPath = path.join(this.projectDir, filePath);
-        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-        try {
-          fs.writeFileSync(targetPath, result.mergedContent, 'utf8');
-        } catch {
-          success = false;
-        }
-      }
-    }
-    return success;
-  }
-
   private saveReport(report: MergeReport, name: string): void {
     const reportsDir = path.join(this.storageDir, 'merge_reports');
     fs.mkdirSync(reportsDir, { recursive: true });
