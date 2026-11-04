@@ -619,6 +619,92 @@ describe('QALoop', () => {
     expect(issues[0].location).toBe('a.json:1');
   });
 
+  // -------------------------------------------------------------------------
+  // The reviewer approves, a gate keeps blocking
+  // -------------------------------------------------------------------------
+
+  describe('reviewer approved but a check keeps blocking', () => {
+    const gradient = (line: number) => ({ rule: 'gradient' as const, file: 'a.css', line, match: 'repeating-linear-gradient(', message: 'No gradients' });
+
+    /** The plan as a file: what the loop writes is what it reads next. Each reviewer run signs with `verdict`. */
+    function approvingReviewer(history: unknown[] = [], verdict: () => Record<string, unknown> = () => ({ status: 'approved', issues_found: [] })) {
+      const state = { plan: { phases: [{ subtasks: [{ status: 'completed' }] }], qa_iteration_history: history } as Record<string, unknown> };
+      mockReadFile.mockImplementation((p: string) =>
+        p.endsWith('implementation_plan.json') ? Promise.resolve(JSON.stringify(state.plan)) : Promise.reject(new Error('ENOENT')),
+      );
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) state.plan = JSON.parse(data);
+        return Promise.resolve();
+      });
+      const runSession = vi.fn().mockImplementation(async (c: QASessionRunConfig) => {
+        if (c.agentType === 'qa_reviewer') state.plan.qa_signoff = verdict();
+        return makeSessionResult('completed');
+      });
+      return { state, runSession };
+    }
+
+    const agents = (run: ReturnType<typeof vi.fn>) => (run.mock.calls as Array<[QASessionRunConfig]>).map((c) => c[0].agentType);
+    const escalated = () => mockWriteFile.mock.calls.some((c) => String(c[0]).endsWith('QA_ESCALATION.md'));
+
+    it('stops when the same finding is back after the fixer had its round, even on another line', async () => {
+      const { runSession } = approvingReviewer();
+      let line = 100;
+      const runDesignCheck = async () => ({ findings: [gradient(line++)], mode: 'block' as const });
+      const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      expect(outcome.reason).toBe('recurring_issues');
+      expect(escalated()).toBe(true);
+    });
+
+    it('remembers the finding across runs, so a new run does not start the fixer again', async () => {
+      const round = { iteration: 1, status: 'rejected', durationMs: 1, timestamp: 't', issues: [], gate_keys: ['design|a.css|gradient|repeating-linear-gradient('] };
+      const { runSession } = approvingReviewer([round]);
+      const runDesignCheck = async () => ({ findings: [gradient(103)], mode: 'block' as const });
+      await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer']);
+    });
+
+    it('gives the fixer a round for a finding it has not seen', async () => {
+      const { runSession } = approvingReviewer();
+      let round = 0;
+      const runDesignCheck = async () => {
+        round++;
+        const findings = [gradient(1)];
+        if (round === 2) findings.push({ rule: 'gradient' as const, file: 'b.css', line: 2, match: 'linear-gradient(', message: 'No gradients' });
+        return { findings: round > 2 ? [] : findings, mode: 'block' as const };
+      };
+      const outcome = await new QALoop(makeConfig({ runSession, runDesignCheck })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      expect(outcome.approved).toBe(true);
+    });
+
+    it('stops for a repeated secret on a moved line too', async () => {
+      const { runSession } = approvingReviewer();
+      let line = 1;
+      const runGates = async () => ({
+        ran: ['gitleaks'], skipped: [], baseRef: 'x',
+        findings: [{ gate: 'gitleaks' as const, key: `gitleaks:rule:a.ts:${line}`, title: 'Secret detected', file: 'a.ts', line: line++ }],
+      });
+      await new QALoop(makeConfig({ runSession, runGates: runGates as QALoopConfig['runGates'] })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+    });
+
+    it('keeps fixing while the reviewer itself rejects', async () => {
+      const { runSession } = approvingReviewer([], () => ({ status: 'rejected', issues_found: [{ title: `Bug ${Math.random()}` }] }));
+      const runDesignCheck = async () => ({ findings: [gradient(1)], mode: 'block' as const });
+      await new QALoop(makeConfig({ runSession, runDesignCheck, maxIterations: 2 })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      expect(escalated()).toBe(false);
+    });
+
+    it('leaves no approval in the plan once a check blocked it, so a restart cannot read it as approved', async () => {
+      const { state, runSession } = approvingReviewer();
+      const runDesignCheck = async () => ({ findings: [gradient(1)], mode: 'block' as const });
+      await new QALoop(makeConfig({ runSession, runDesignCheck, maxIterations: 1 })).run();
+      expect(state.plan.qa_signoff).toBeUndefined();
+    });
+  });
+
   it('does not approve while security gates have findings, then approves once clear', async () => {
     let sessionCallCount = 0;
     const runSession = vi.fn().mockImplementation(async () => {

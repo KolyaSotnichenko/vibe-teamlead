@@ -74,6 +74,8 @@ export interface QAIterationRecord {
   issues: QAIssue[];
   durationMs: number;
   timestamp: string;
+  /** What the gates found this round, independent of line numbers */
+  gate_keys?: string[];
 }
 
 /** Configuration for the QA loop */
@@ -279,6 +281,7 @@ export class QALoop extends EventEmitter {
   private lastReviewerApproved = false;
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
   private lastDesignFindings: DesignFinding[] = [];
+  private lastGateKeys: string[] = [];
 
   constructor(config: QALoopConfig) {
     super();
@@ -337,6 +340,7 @@ export class QALoop extends EventEmitter {
         this.emitTyped('qa-iteration-start', iteration, maxIterations);
 
         // Security gates first, so the reviewer and fixer see their findings
+        this.lastGateKeys = [];
         const securityIssues = await this.runGates();
         const designBlocking = await this.runDesignCheck();
         const blockers = [...securityIssues, ...designBlocking];
@@ -381,6 +385,8 @@ export class QALoop extends EventEmitter {
             if (designBlocking.length) this.emitTyped('log', `Design check blocked approval: ${designBlocking.length} finding(s) (see design_check.md)`);
           }
           status = 'rejected';
+          // The approval no longer stands: left in the plan, a restart would read it as approved
+          await this.clearQASignoff();
           const known = new Set(issues.map((i) => i.title));
           issues = [...issues, ...blockers.filter((i) => !known.has(i.title))];
         }
@@ -402,19 +408,23 @@ export class QALoop extends EventEmitter {
         if (status === 'rejected') {
           consecutiveErrors = 0;
           lastErrorContext = undefined;
-          await this.recordIteration(iteration, 'rejected', issues, iterationDuration);
+          const gateKeys = this.lastGateKeys;
+          const seenBefore = new Set(this.iterationHistory.flatMap((r) => r.gate_keys ?? []));
+          await this.recordIteration(iteration, 'rejected', issues, iterationDuration, gateKeys);
+
+          // The reviewer is satisfied and the checks found nothing new: another fixer
+          // round can't help (a false positive, say). Only the user can settle it.
+          if (this.lastReviewerApproved && gateKeys.length && gateKeys.every((k) => seenBefore.has(k))) {
+            this.emitTyped('log', 'The reviewer approved but the same check findings are back — handing over to you');
+            await this.escalate(blockers);
+            return this.outcome(false, iteration, Date.now() - startTime, 'recurring_issues');
+          }
 
           // Check for recurring issues
           const recurring = findRecurring(this.iterationHistory, issues);
           if (recurring.length) {
             this.emitTyped('log', 'Recurring issues detected — escalating to human review');
-            try {
-              const escalationReport = generateEscalationReport(this.iterationHistory, recurring);
-              await writeFile(join(this.config.specDir, 'QA_ESCALATION.md'), escalationReport, 'utf-8');
-            } catch {
-              // Non-fatal
-            }
-            await this.writeReports('escalated');
+            await this.escalate(recurring);
             return this.outcome(false, iteration, Date.now() - startTime, 'recurring_issues');
           }
 
@@ -509,6 +519,7 @@ export class QALoop extends EventEmitter {
         return [];
       }
       this.lastDesignFindings = findings;
+      this.lastGateKeys.push(...findings.map((f) => `design|${f.file}|${f.rule}|${f.match}`));
       return designIssues(findings);
     } catch (error) {
       this.emitTyped('log', `Design check failed to run: ${error instanceof Error ? error.message : String(error)}`);
@@ -525,6 +536,8 @@ export class QALoop extends EventEmitter {
       if (report.ran.length) {
         this.emitTyped('log', `Security gates (${report.ran.join(', ')}): ${report.findings.length ? `${report.findings.length} finding(s)` : 'clear'}`);
       }
+      // The last part of a gitleaks key is the line, which moves with any edit
+      this.lastGateKeys.push(...report.findings.map((f) => f.key.replace(/:\d+$/, '')));
       return gateIssues(report.findings);
     } catch (error) {
       this.emitTyped('log', `Security gates failed to run: ${error instanceof Error ? error.message : String(error)}`);
@@ -680,6 +693,7 @@ export class QALoop extends EventEmitter {
     status: 'approved' | 'rejected' | 'error',
     issues: QAIssue[],
     durationMs: number,
+    gateKeys?: string[],
   ): Promise<void> {
     const record: QAIterationRecord = {
       iteration,
@@ -687,6 +701,7 @@ export class QALoop extends EventEmitter {
       issues,
       durationMs,
       timestamp: new Date().toISOString(),
+      ...(gateKeys?.length ? { gate_keys: gateKeys } : {}),
     };
 
     this.iterationHistory.push(record);
@@ -718,6 +733,16 @@ export class QALoop extends EventEmitter {
     } catch {
       // Non-fatal — iteration is still tracked in memory
     }
+  }
+
+  /** QA_ESCALATION.md and the final reports. Never throws. */
+  private async escalate(issues: QAIssue[]): Promise<void> {
+    try {
+      await writeFile(join(this.config.specDir, 'QA_ESCALATION.md'), generateEscalationReport(this.iterationHistory, issues), 'utf-8');
+    } catch {
+      // Non-fatal
+    }
+    await this.writeReports('escalated');
   }
 
   /**
