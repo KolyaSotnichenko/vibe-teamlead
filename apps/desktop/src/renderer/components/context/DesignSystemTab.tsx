@@ -132,6 +132,8 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
   const [draftTokens, setDraftTokens] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [storybookUrl, setStorybookUrl] = useState<string | null>(null);
+  // Extract again / new design replace the current document and tokens: ask first
+  const [confirmReplace, setConfirmReplace] = useState<'extract' | 'generate' | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.electronAPI.design.get(projectId);
@@ -355,17 +357,43 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
                 meta={`${info.markdownPath}${info.source === 'repo' ? ` · ${t('context.design.inRepo')}` : ''}`}
                 action={
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={working} onClick={() => void run('extract', () => window.electronAPI.design.extract(projectId), setInfo)}>
+                    <Button variant="outline" size="sm" disabled={working} onClick={() => setConfirmReplace('extract')}>
                       <ScanSearch className="mr-1.5 h-3.5 w-3.5" />
                       {t('context.design.extractAgain')}
                     </Button>
-                    <Button variant="outline" size="sm" disabled={working} onClick={() => setGenerating(true)}>
+                    <Button variant="outline" size="sm" disabled={working} onClick={() => setConfirmReplace('generate')}>
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                       {t('context.design.generateNew')}
                     </Button>
                   </div>
                 }
               />
+              {confirmReplace && (
+                <div role="alertdialog" aria-labelledby="ds-replace" className="flex flex-wrap items-center justify-between gap-3 border border-foreground bg-card px-4 py-3">
+                  <p id="ds-replace" className="max-w-prose text-sm text-foreground">
+                    {info.source === 'repo'
+                      ? t('context.design.replaceRepo', { path: info.markdownPath })
+                      : t('context.design.replaceApp')}
+                  </p>
+                  <div className="flex gap-2">
+                    {/* Focus starts on Cancel (design system: confirmation dialogs) */}
+                    <Button variant="outline" size="sm" autoFocus onClick={() => setConfirmReplace(null)}>
+                      {t('buttons.cancel')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const kind = confirmReplace;
+                        setConfirmReplace(null);
+                        if (kind === 'extract') void run('extract', () => window.electronAPI.design.extract(projectId), setInfo);
+                        else setGenerating(true);
+                      }}
+                    >
+                      {t('context.design.replace')}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {info.tokensError && <Notice>{info.tokensError}</Notice>}
               {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
             </section>

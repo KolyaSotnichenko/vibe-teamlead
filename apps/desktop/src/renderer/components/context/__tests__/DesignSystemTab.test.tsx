@@ -42,4 +42,20 @@ describe('DesignSystemTab', () => {
     fireEvent.click(screen.getByRole('radio', { name: /context.design.qaModes.warn/ }));
     await waitFor(() => expect(updateProjectSettings).toHaveBeenCalledWith('p1', { designQaMode: 'warn' }));
   }, 15_000);
+
+  it('asks before replacing an existing design system', async () => {
+    await designMock.extract('p1'); // the mock now holds a system
+    const extract = vi.spyOn(designMock, 'extract');
+    extract.mockClear();
+    (window as unknown as { electronAPI: { design: typeof designMock } }).electronAPI.design = designMock;
+    render(<DesignSystemTab projectId="p1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /context.design.extractAgain/ }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('context.design.replaceApp');
+    expect(extract).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'buttons.cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /context.design.extractAgain/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'context.design.replace' }));
+    await waitFor(() => expect(extract).toHaveBeenCalledWith('p1'));
+  });
 });
