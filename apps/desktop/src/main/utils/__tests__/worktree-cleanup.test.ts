@@ -1,12 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 
-import { cleanupWorktree } from '../worktree-cleanup';
+import { cleanupWorktree, makeTreeWritable } from '../worktree-cleanup';
 import { isOwnWorktree } from '../../ipc-handlers/task/worktree-handlers';
 
 const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
@@ -57,5 +57,29 @@ describe('cleanupWorktree', () => {
     expect(existsSync(leftover)).toBe(false);
     expect(branches(dir)).toEqual(expect.arrayContaining(['main', 'dev']));
     expect(result.branch).toBe('vibe-teamlead/002-left');
+  });
+});
+
+describe('makeTreeWritable', () => {
+  it('gives the owner write access to a read-only tree like a pnpm store, leaving symlink targets alone', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-ro-'));
+    const store = path.join(root, '.pnpm-store', 'v3', 'files', '00');
+    mkdirSync(store, { recursive: true });
+    const file = path.join(store, 'blob');
+    writeFileSync(file, 'x');
+    const outside = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-out-')), 'target');
+    writeFileSync(outside, 'y');
+    chmodSync(outside, 0o444);
+    symlinkSync(outside, path.join(store, 'link'));
+    chmodSync(file, 0o444);
+    for (const d of [store, path.dirname(store), path.join(root, '.pnpm-store', 'v3'), path.join(root, '.pnpm-store')]) chmodSync(d, 0o555);
+
+    await makeTreeWritable(root);
+
+    const mode = (p: string) => lstatSync(p).mode & 0o777;
+    expect(mode(path.join(root, '.pnpm-store'))).toBe(0o755);
+    expect(mode(store)).toBe(0o755);
+    expect(mode(file)).toBe(0o644);
+    expect(mode(outside)).toBe(0o444);
   });
 });

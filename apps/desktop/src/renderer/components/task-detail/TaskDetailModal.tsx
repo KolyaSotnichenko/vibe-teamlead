@@ -478,7 +478,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
             </div>
 
             {/* Body - Single Column with Tabs */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            {/* relative: absolutely positioned bits deep in a tab (sr-only labels) must stay
+                inside this clip, or they stretch the dialog and anything can scroll it */}
+            <div className="relative flex-1 min-h-0 overflow-hidden">
               <Tabs value={state.activeTab} onValueChange={state.setActiveTab} className="flex flex-col h-full">
                 <TabsList className="h-auto w-full shrink-0 justify-start rounded-none border-b border-border bg-transparent p-0 px-4">
                   <TabsTrigger

@@ -155,7 +155,7 @@ export function TaskLogs({
   return (
     <div
       ref={logsContainerRef}
-      className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+      className="relative h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
       onScroll={onLogsScroll}
     >
       <div className="p-4 space-y-2">

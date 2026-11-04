@@ -174,12 +174,15 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   useEffect(() => {
     const isReverseOrder = logOrder === 'reverse-chronological';
 
-    if (activeTab === 'logs' && !isUserScrolledUp) {
-      if (isReverseOrder && logsContainerRef.current) {
-        logsContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (!isReverseOrder && logsEndRef.current) {
-        logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
+    // Scroll only the logs container. scrollIntoView would also scroll every
+    // ancestor, including the dialog (overflow-hidden is still scrollable by
+    // script), which pushed the header out of view and left a blank modal.
+    const container = logsContainerRef.current;
+    if (activeTab === 'logs' && !isUserScrolledUp && container) {
+      container.scrollTo({
+        top: isReverseOrder ? 0 : container.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [activeTab, isUserScrolledUp, logOrder, phaseLogs]);
 

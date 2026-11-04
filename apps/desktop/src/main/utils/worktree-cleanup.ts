@@ -18,6 +18,7 @@
 import { execFileSync } from 'child_process';
 import { rm } from 'fs/promises';
 import { existsSync, realpathSync } from 'fs';
+import { chmod, lstat, readdir } from 'fs/promises';
 import path from 'path';
 import { isTaskBranch } from '../../shared/constants/config';
 import { getToolPath } from '../cli-tool-manager';
@@ -108,6 +109,31 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Adds owner write (and, for folders, search) permission to everything under
+ * `dirPath`. Package managers leave read-only trees behind (the pnpm store
+ * writes its files and folders without write permission), and a folder
+ * without write permission can't have its entries removed, so `rm` fails
+ * with EACCES. Symlinks are skipped, so nothing outside the folder changes.
+ */
+export async function makeTreeWritable(dirPath: string): Promise<void> {
+  const st = await lstat(dirPath);
+  if (st.isSymbolicLink()) return;
+  if (st.isDirectory()) {
+    await chmod(dirPath, st.mode | 0o700);
+    for (const name of await readdir(dirPath)) {
+      await makeTreeWritable(path.join(dirPath, name)).catch(() => {});
+    }
+  } else if ((st.mode & 0o200) === 0) {
+    await chmod(dirPath, st.mode | 0o200);
+  }
+}
+
+function isPermissionError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return code === 'EACCES' || code === 'EPERM';
+}
+
+/**
  * Deletes a directory with retry logic for Windows file locking issues
  *
  * On Windows, files can be locked by other processes (IDE, build tools, etc.)
@@ -121,6 +147,7 @@ async function deleteDirectoryWithRetry(
   logPrefix: string
 ): Promise<void> {
   let lastError: Error | null = null;
+  let madeWritable = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -128,6 +155,12 @@ async function deleteDirectoryWithRetry(
       return; // Success
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      if (isPermissionError(error) && !madeWritable) {
+        // Read-only folders (e.g. a pnpm store): give the owner write access, then retry
+        madeWritable = true;
+        console.warn(`${logPrefix} Permission denied, making the folder writable before retrying`);
+        await makeTreeWritable(dirPath).catch(() => {});
+      }
 
       if (attempt < maxRetries) {
         const waitTime = retryDelay * attempt; // Linear backoff
