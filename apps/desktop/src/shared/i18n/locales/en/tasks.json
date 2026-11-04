@@ -995,9 +995,15 @@
   "mergeReview": {
     "title": "The model resolved conflicts. Check its work",
     "description": "Git could not merge these files on its own, so the model did. Nothing is committed yet, and the task branch is still there.",
-    "hint": "See the result in your editor or with git diff --cached. If you correct a file, your edits go into the commit.",
+    "hint": "Open a file to see the changes. If you correct it in your editor, your edits go into the commit.",
     "commit": "Commit the merge",
     "cancel": "Cancel the merge",
-    "failed": "Could not finish this. Check the project in a terminal."
+    "failed": "Could not finish this. Check the project in a terminal.",
+    "againstProject": "What changes in the project",
+    "againstTask": "Difference from the task",
+    "loading": "Loading…",
+    "noDifference": "No difference here.",
+    "truncated": "The diff is too long to show in full. See the rest in your editor.",
+    "diffFailed": "Could not load the diff."
   }
 }

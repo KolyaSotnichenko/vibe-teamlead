@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cancelMergeReview, commitMergeReview, getMergeReview, mergeTaskBranch, withoutGitHooks } from '../git-merge';
+import { cancelMergeReview, commitMergeReview, getMergeReview, getMergeReviewDiff, mergeTaskBranch, withoutGitHooks } from '../git-merge';
 
 const BINARY = Buffer.from([0x00, 0x01, 0xa8, 0x10, 0xff, 0xfe, 0x00, 0x80]);
 const BRANCH = 'vibe-teamlead/001-task';
@@ -214,6 +214,38 @@ describe('mergeTaskBranch', () => {
         await expect(getMergeReview(options())).resolves.toBeNull();
         await expect(cancelMergeReview(options())).resolves.toMatchObject({ status: 'refused' });
         expect(existsSync(join(repo, '.git', 'MERGE_HEAD'))).toBe(true);
+      });
+
+      it('shows what the merge changes in the project, and how it differs from the task', async () => {
+        await resolved();
+        const project = await getMergeReviewDiff({ ...options(), file: 'shared.txt', against: 'project' });
+        expect(project?.diff).toContain('-main side');
+        expect(project?.diff).toContain('+both sides');
+        expect(project?.truncated).toBe(false);
+        const task = await getMergeReviewDiff({ ...options(), file: 'shared.txt', against: 'task' });
+        expect(task?.diff).toContain('-task side');
+        expect(task?.diff).toContain('+both sides');
+      });
+
+      it("the diff follows the user's edits", async () => {
+        await resolved();
+        writeFileSync(join(repo, 'shared.txt'), 'corrected by hand\n');
+        const { diff } = (await getMergeReviewDiff({ ...options(), file: 'shared.txt', against: 'project' })) ?? { diff: '' };
+        expect(diff).toContain('+corrected by hand');
+      });
+
+      it('gives no diff for a file outside the review, or without a review', async () => {
+        await expect(getMergeReviewDiff({ ...options(), file: 'shared.txt', against: 'project' })).resolves.toBeNull();
+        await resolved();
+        await expect(getMergeReviewDiff({ ...options(), file: 'gone.txt', against: 'project' })).resolves.toBeNull();
+        await expect(getMergeReviewDiff({ ...options(), file: '../../etc/passwd', against: 'project' })).resolves.toBeNull();
+      });
+
+      it('cuts a huge diff and says so', async () => {
+        await merge({ resolveConflict: async () => `${'line of text\n'.repeat(60_000)}` });
+        const result = await getMergeReviewDiff({ ...options(), file: 'shared.txt', against: 'project' });
+        expect(result?.truncated).toBe(true);
+        expect(result?.diff.length).toBeLessThanOrEqual(256 * 1024);
       });
 
       it('stage only stays as it was: staged, for the user to commit', async () => {

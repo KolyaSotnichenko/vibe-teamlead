@@ -133,7 +133,7 @@ export async function commitMergeReview(options: MergeReviewOptions & { message:
   const review = await getMergeReview(options);
   if (!review) return refused(NOTHING_TO_REVIEW);
   const run = gitRunner(projectDir, git, env);
-  const added = await run(['add', '--', ...review.files]);
+  const added = await run(['--literal-pathspecs', 'add', '--', ...review.files]);
   if (!added.ok) return refused(added.output);
   const body = `\n\nConflicts resolved by the model, then confirmed:\n${review.files.map((file) => `- ${file}`).join('\n')}`;
   const committed = await run(['commit', '-m', `${message}${body}`]);
@@ -152,6 +152,29 @@ export async function cancelMergeReview(options: MergeReviewOptions): Promise<Me
   if (!(await getMergeReview(options))) return refused(NOTHING_TO_REVIEW);
   await rollBackMerge(gitRunner(projectDir, git, env), projectDir);
   return { status: 'cancelled' };
+}
+
+const MAX_DIFF_CHARS = 256 * 1024;
+
+/**
+ * A reviewed file against the project's branch (what the merge changes there) or
+ * the task (what the model changed in its version), with the user's edits. Only
+ * files in the review. Plain diff: a branch's .gitattributes can't pick a driver.
+ */
+export async function getMergeReviewDiff(
+  options: MergeReviewOptions & { file: string; against: 'project' | 'task' },
+): Promise<{ diff: string; truncated: boolean } | null> {
+  const { projectDir, file, against, git = 'git', env = process.env } = options;
+  const review = await getMergeReview(options);
+  if (!review?.files.includes(file)) return null;
+  const run = gitRunner(projectDir, git, env);
+  const result = await run([
+    '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv',
+    against === 'project' ? 'HEAD' : 'MERGE_HEAD', '--', file,
+  ]);
+  if (!result.ok) return null;
+  const truncated = result.raw.length > MAX_DIFF_CHARS;
+  return { diff: truncated ? result.raw.slice(0, MAX_DIFF_CHARS) : result.raw, truncated };
 }
 
 export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<MergeTaskBranchResult> {
@@ -235,7 +258,7 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
       return refused(error instanceof Error ? error.message : String(error));
     }
     resolvedByModel = conflictFiles;
-    const added = await run(['add', '--', ...conflictFiles]);
+    const added = await run(['--literal-pathspecs', 'add', '--', ...conflictFiles]);
     if (!added.ok) {
       await rollBack();
       return refused(added.output);

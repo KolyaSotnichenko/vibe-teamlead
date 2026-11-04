@@ -74,6 +74,7 @@ export const IPC_CHANNELS = {
 
   // Task workspace (parsed spec, ACs, plan, timeline, architecture from the spec dir)
   TASK_WORKSPACE_GET: 'task:workspaceGet',
+  TASK_MERGE_REVIEW_DIFF: 'task:mergeReviewDiff',
 
   // External tools check (onboarding, Settings → Tools)
   TOOLS_CHECK: 'tools:check',

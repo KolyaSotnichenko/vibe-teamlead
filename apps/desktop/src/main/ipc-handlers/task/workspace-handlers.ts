@@ -20,7 +20,7 @@ import type { TaskWorkspace, WorkspaceAdr, WorkspaceArchitecture, WorkspaceDiagr
 import { ensureAbsolutePath } from '../../utils/path-helpers';
 import { findTaskWorktree } from '../../worktree-paths';
 import { findTaskAndProject } from './shared';
-import { getMergeReview } from '../../ai/merge/git-merge';
+import { getMergeReview, getMergeReviewDiff } from '../../ai/merge/git-merge';
 import { getToolPath } from '../../cli-tool-manager';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import {
@@ -203,6 +203,27 @@ export async function resolveSpecFile(specDir: string, relativePath: unknown): P
 }
 
 export function registerTaskWorkspaceHandlers(): void {
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_MERGE_REVIEW_DIFF,
+    async (_, taskId: string, file: string, against: 'project' | 'task', projectId?: string): Promise<IPCResult<{ diff: string; truncated: boolean }>> => {
+      try {
+        const { task, project } = findTaskAndProject(taskId, projectId);
+        if (!task || !project) return { success: false, error: 'Task not found' };
+        const data = await getMergeReviewDiff({
+          projectDir: ensureAbsolutePath(project.path),
+          branch: `vibe-teamlead/${task.specId}`,
+          file,
+          against: against === 'task' ? 'task' : 'project',
+          git: getToolPath('git'),
+          env: getIsolatedGitEnv(),
+        });
+        return data ? { success: true, data } : { success: false, error: 'This file is not part of a merge waiting for review' };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.TASK_WORKSPACE_GET,
     async (_, taskId: string, projectId?: string): Promise<IPCResult<TaskWorkspace | null>> => {

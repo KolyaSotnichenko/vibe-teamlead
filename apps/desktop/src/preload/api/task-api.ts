@@ -92,6 +92,7 @@ export interface TaskAPI {
 
   // Task Workspace (parsed spec, ACs, plan, timeline, architecture)
   getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
+  getMergeReviewDiff: (taskId: string, file: string, against: 'project' | 'task', projectId?: string) => Promise<IPCResult<{ diff: string; truncated: boolean }>>;
   getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult<string>>;
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
@@ -302,6 +303,9 @@ export const createTaskAPI = (): TaskAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.TASK_LOGS_GET, projectId, specId),
 
   // Task Workspace
+  getMergeReviewDiff: (taskId: string, file: string, against: 'project' | 'task', projectId?: string): Promise<IPCResult<{ diff: string; truncated: boolean }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_MERGE_REVIEW_DIFF, taskId, file, against, projectId),
+
   getTaskWorkspace: (taskId: string, projectId?: string): Promise<IPCResult<TaskWorkspace | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_GET, taskId, projectId),
 

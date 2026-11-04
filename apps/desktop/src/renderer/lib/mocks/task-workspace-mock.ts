@@ -316,6 +316,8 @@ export const earlyTaskWorkspace: TaskWorkspace = {
 };
 
 export const taskWorkspaceMock = {
+  getMergeReviewDiff: async () => ({ success: false as const, error: 'Not available in browser mode' }),
+
   getTaskWorkspace: async (taskId: string, _projectId?: string): Promise<IPCResult<TaskWorkspace | null>> => ({
     success: true,
     data: ['task-8', 'task-3', 'task-9'].includes(taskId) ? sampleTaskWorkspace : earlyTaskWorkspace,
