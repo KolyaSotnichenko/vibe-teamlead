@@ -25,7 +25,7 @@ import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
 import { excludeFromGit } from '../../utils/git-exclude';
-import { mergeTaskBranch } from '../../ai/merge/git-merge';
+import { cancelMergeReview, commitMergeReview, mergeTaskBranch } from '../../ai/merge/git-merge';
 import { randomBytes } from 'crypto';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
@@ -1992,7 +1992,7 @@ export function registerWorktreeHandlers(
    */
   ipcMain.handle(
     IPC_CHANNELS.TASK_WORKTREE_MERGE,
-    async (_, taskId: string, options?: { noCommit?: boolean }): Promise<IPCResult<WorktreeMergeResult>> => {
+    async (_, taskId: string, options?: { noCommit?: boolean; reviewAction?: 'commit' | 'cancel' }): Promise<IPCResult<WorktreeMergeResult>> => {
       const isDebugMode = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
       const debug = (...args: unknown[]) => {
         if (isDebugMode) {
@@ -2059,15 +2059,20 @@ export function registerWorktreeHandlers(
         let mergeError: string | undefined;
         let conflictFiles: string[] | undefined;
 
-        const mergeResult = await mergeTaskBranch({
-          projectDir: project.path,
-          branch: `vibe-teamlead/${task.specId}`,
+        const taskBranch = { projectDir: project.path, branch: `vibe-teamlead/${task.specId}`, git: getToolPath('git'), env: getIsolatedGitEnv() };
+        const mergeMessage = `Merge vibe-teamlead/${task.specId}: ${task.title}`;
+
+        if (options?.reviewAction === 'cancel') {
+          const cancelled = await cancelMergeReview(taskBranch);
+          return { success: true, data: { success: cancelled.status === 'cancelled', message: cancelled.message ?? 'The merge was cancelled.' } };
+        }
+
+        const mergeResult = options?.reviewAction === 'commit' ? await commitMergeReview({ ...taskBranch, message: mergeMessage }) : await mergeTaskBranch({
+          ...taskBranch,
           baseBranch: effectiveBaseBranch,
           worktreePath: worktreePath ?? undefined,
-          message: `Merge vibe-teamlead/${task.specId}: ${task.title}`,
+          message: mergeMessage,
           stageOnly: options?.noCommit === true,
-          git: getToolPath('git'),
-          env: getIsolatedGitEnv(),
           resolveConflict: async ({ file, base, ours, theirs }) => {
             emitProgress('resolving', 25, `Resolving a conflict in ${file}`);
             // A boundary the file content can't know, so it can't close its own block
@@ -2079,6 +2084,20 @@ export function registerWorktreeHandlers(
           },
         });
         debug('Merge result:', mergeResult);
+
+        if (mergeResult.status === 'needs_review') {
+          const count = mergeResult.conflictFiles?.length ?? 0;
+          emitProgress('complete', 100, 'Waiting for your review');
+          return {
+            success: true,
+            data: {
+              success: true,
+              needsReview: true,
+              conflictFiles: mergeResult.conflictFiles,
+              message: `The model resolved conflicts in ${count} file(s). Nothing is committed yet: open the task to check them and confirm.`,
+            },
+          };
+        }
 
         if (mergeResult.status === 'conflicts') {
           conflictFiles = mergeResult.conflictFiles;

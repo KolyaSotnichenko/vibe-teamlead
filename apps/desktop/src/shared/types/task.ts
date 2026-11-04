@@ -446,6 +446,8 @@ export interface WorktreeMergeResult {
   message: string;
   merged?: boolean;
   conflictFiles?: string[];
+  /** The model resolved conflicts: staged, and the commit waits for the user */
+  needsReview?: boolean;
   staged?: boolean;
   alreadyStaged?: boolean;
   projectPath?: string;

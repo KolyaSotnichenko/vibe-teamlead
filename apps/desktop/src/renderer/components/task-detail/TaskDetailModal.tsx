@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useToast } from '../../hooks/use-toast';
@@ -79,6 +80,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
   const { t } = useTranslation(['tasks']);
   const { toast } = useToast();
   const state = useTaskDetail({ task });
+  const [mergeReviewKey, setMergeReviewKey] = useState(0);
   const activeProject = useProjectStore(s => s.getActiveProject());
   const showFilesTab = isFilesTabEnabled();
   const completedSubtasks = task.subtasks.filter(s => s.status === 'completed').length;
@@ -162,6 +164,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
           state.setStagedSuccess(result.data.message || t('tasks:taskDetail.changesStaged'));
           state.setStagedProjectPath(result.data.projectPath);
           state.setSuggestedCommitMessage(result.data.suggestedCommitMessage);
+        } else if (result.data.needsReview) {
+          // The commit waits for the user: stay here, with the files to check
+          setMergeReviewKey((key) => key + 1);
         } else {
           onOpenChange(false);
         }
@@ -544,6 +549,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                         stagedSuccess={state.stagedSuccess}
                         stagedProjectPath={state.stagedProjectPath}
                         suggestedCommitMessage={state.suggestedCommitMessage}
+                        mergeReviewKey={mergeReviewKey}
                         mergePreview={state.mergePreview}
                         isLoadingPreview={state.isLoadingPreview}
                         showConflictDialog={state.showConflictDialog}

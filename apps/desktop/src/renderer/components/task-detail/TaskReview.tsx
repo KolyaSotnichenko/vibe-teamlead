@@ -12,6 +12,7 @@ import {
   CreatePRDialog
 } from './task-review';
 import { QaOutcomePanel } from './task-review/QaOutcomePanel';
+import { MergeReviewPanel } from './task-review/MergeReviewPanel';
 
 interface TaskReviewProps {
   task: Task;
@@ -46,6 +47,8 @@ interface TaskReviewProps {
   onShowConflictDialog: (show: boolean) => void;
   onLoadMergePreview: () => void;
   onClose?: () => void;
+  /** Changes when a merge may have started waiting for review */
+  mergeReviewKey?: number;
   onSwitchToTerminals?: () => void;
   onOpenInbuiltTerminal?: (id: string, cwd: string) => void;
   onReviewAgain?: () => void;
@@ -96,6 +99,7 @@ export function TaskReview({
   onShowConflictDialog,
   onLoadMergePreview,
   onClose,
+  mergeReviewKey,
   onSwitchToTerminals,
   onOpenInbuiltTerminal,
   onReviewAgain,
@@ -108,6 +112,8 @@ export function TaskReview({
     <div className="space-y-4">
       {/* Section divider */}
       <div className="section-divider-gradient" />
+
+      <MergeReviewPanel key={mergeReviewKey} task={task} onMerged={onClose} />
 
       {/* Workspace Status - priority: loading > staged fresh > staged persisted > worktree exists > no workspace */}
       {isLoadingWorktree ? (

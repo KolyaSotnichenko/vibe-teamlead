@@ -5,7 +5,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { lstatSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { devNull } from 'node:os';
 import { dirname, isAbsolute, join, sep } from 'node:path';
 
@@ -36,7 +36,8 @@ export interface MergeTaskBranchOptions {
 }
 
 export interface MergeTaskBranchResult {
-  status: 'merged' | 'staged' | 'up_to_date' | 'conflicts' | 'refused';
+  /** needs_review: the model resolved conflicts; staged, with the merge left open for the user */
+  status: 'merged' | 'staged' | 'up_to_date' | 'needs_review' | 'cancelled' | 'conflicts' | 'refused';
   /** Why it was refused, in git's or the hook's words */
   message?: string;
   conflictFiles?: string[];
@@ -58,6 +59,9 @@ export function withoutGitHooks(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   };
 }
 
+/** In the git directory: agents can't reach it, and git never commits it */
+const MERGE_REVIEW_FILE = 'vibe-teamlead-merge-review.json';
+
 const REGULAR_FILE = new Set(['100644', '100755']);
 
 /** Not text the resolver can read: a null byte, or bytes that aren't valid UTF-8. Pure. */
@@ -69,24 +73,94 @@ function isUsableMerge(content: string | undefined, versions: MergeConflictVersi
   return !content.startsWith('```') || versions.ours.startsWith('```') || versions.theirs.startsWith('```');
 }
 
-export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<MergeTaskBranchResult> {
-  const { projectDir, branch, worktreePath, stageOnly, git = 'git' } = options;
-  const env = withoutGitHooks(options.env ?? process.env);
-  const baseBranch = options.baseBranch.replace(/^origin\//, '');
+type GitRun = ReturnType<typeof gitRunner>;
 
-  const run = (args: string[], cwd = projectDir) =>
+function gitRunner(projectDir: string, git: string, baseEnv: NodeJS.ProcessEnv) {
+  const env = withoutGitHooks(baseEnv);
+  return (args: string[], cwd = projectDir) =>
     new Promise<{ ok: boolean; raw: string; stdout: string; output: string }>((resolve) => {
       execFile(git, args, { cwd, env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
         resolve({ ok: !error, raw: stdout, stdout: stdout.trim(), output: `${stderr}\n${stdout}`.trim() });
       });
     });
-  const refused = (message: string): MergeTaskBranchResult => ({ status: 'refused', message });
+}
 
-  const rollBack = async () => {
-    await run(['reset', '--merge']);
-    const squashMsg = (await run(['rev-parse', '--git-path', 'SQUASH_MSG'])).stdout;
-    if (squashMsg) rmSync(isAbsolute(squashMsg) ? squashMsg : join(projectDir, squashMsg), { force: true });
-  };
+const refused = (message: string): MergeTaskBranchResult => ({ status: 'refused', message });
+
+/** A file inside the repository's git directory. */
+async function gitPath(run: GitRun, projectDir: string, name: string): Promise<string> {
+  const raw = (await run(['rev-parse', '--git-path', name])).stdout;
+  return isAbsolute(raw) ? raw : join(projectDir, raw);
+}
+
+async function rollBackMerge(run: GitRun, projectDir: string): Promise<void> {
+  await run(['reset', '--merge']);
+  rmSync(await gitPath(run, projectDir, 'SQUASH_MSG'), { force: true });
+  rmSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), { force: true });
+}
+
+export interface MergeReviewOptions {
+  projectDir: string;
+  branch: string;
+  git?: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * The merge waiting for the user's decision, if any. It lives in git's own state,
+ * so it survives a restart, and ends by itself if the user finishes or drops the
+ * merge in a terminal. A merge of anything but this branch is not this task's.
+ */
+export async function getMergeReview(options: MergeReviewOptions): Promise<{ files: string[] } | null> {
+  const { projectDir, branch, git = 'git', env = process.env } = options;
+  const run = gitRunner(projectDir, git, env);
+  const merging = await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD']);
+  const tip = await run(['rev-parse', '--verify', '--quiet', `${branch}^{commit}`]);
+  if (!merging.ok || !tip.ok || merging.stdout !== tip.stdout) return null;
+  try {
+    const { files } = JSON.parse(readFileSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), 'utf-8')) as { files?: unknown };
+    return Array.isArray(files) && files.every((file) => typeof file === 'string') ? { files } : null;
+  } catch {
+    return null;
+  }
+}
+
+const NOTHING_TO_REVIEW = 'No merge is waiting for review. It may have been finished or dropped outside the app.';
+
+/** The user confirmed: the merge commit, with the files as they are now, the user's edits included. */
+export async function commitMergeReview(options: MergeReviewOptions & { message: string }): Promise<MergeTaskBranchResult> {
+  const { projectDir, branch, message, git = 'git', env = process.env } = options;
+  const review = await getMergeReview(options);
+  if (!review) return refused(NOTHING_TO_REVIEW);
+  const run = gitRunner(projectDir, git, env);
+  const added = await run(['add', '--', ...review.files]);
+  if (!added.ok) return refused(added.output);
+  const body = `\n\nConflicts resolved by the model, then confirmed:\n${review.files.map((file) => `- ${file}`).join('\n')}`;
+  const committed = await run(['commit', '-m', `${message}${body}`]);
+  if (!committed.ok) return refused(committed.output);
+  rmSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), { force: true });
+  // Only a branch that is really in the history may be deleted afterwards
+  if (!(await run(['merge-base', '--is-ancestor', branch, 'HEAD'])).ok) {
+    return refused(`"${branch}" is not in the history after the merge commit. The branch was kept.`);
+  }
+  return { status: 'merged' };
+}
+
+/** The user declined: the project goes back to how it was before the merge. */
+export async function cancelMergeReview(options: MergeReviewOptions): Promise<MergeTaskBranchResult> {
+  const { projectDir, git = 'git', env = process.env } = options;
+  if (!(await getMergeReview(options))) return refused(NOTHING_TO_REVIEW);
+  await rollBackMerge(gitRunner(projectDir, git, env), projectDir);
+  return { status: 'cancelled' };
+}
+
+export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<MergeTaskBranchResult> {
+  const { projectDir, branch, worktreePath, stageOnly, git = 'git' } = options;
+  const env = options.env ?? process.env;
+  const baseBranch = options.baseBranch.replace(/^origin\//, '');
+
+  const run = gitRunner(projectDir, git, env);
+  const rollBack = () => rollBackMerge(run, projectDir);
 
   const isPlainFileInProject = (file: string) => {
     const target = join(projectDir, file);
@@ -174,9 +248,18 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   }
   if (!(await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])).ok) return { status: 'up_to_date' };
 
-  // The commit says which files no person has checked, since it goes in without a review
-  const body = resolvedByModel.length ? `\n\nConflicts resolved by the model, not reviewed:\n${resolvedByModel.map((file) => `- ${file}`).join('\n')}` : '';
-  const committed = await run(['commit', '-m', `${options.message}${body}`]);
+  // No one has read what the model wrote: the commit waits for the user
+  if (resolvedByModel.length) {
+    try {
+      writeFileSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), JSON.stringify({ files: resolvedByModel }), 'utf-8');
+    } catch (error) {
+      await rollBack();
+      return refused(error instanceof Error ? error.message : String(error));
+    }
+    return { status: 'needs_review', conflictFiles: resolvedByModel };
+  }
+
+  const committed = await run(['commit', '-m', options.message]);
   if (!committed.ok) {
     await rollBack();
     return refused(committed.output);

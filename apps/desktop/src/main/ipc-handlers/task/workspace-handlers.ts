@@ -20,6 +20,9 @@ import type { TaskWorkspace, WorkspaceAdr, WorkspaceArchitecture, WorkspaceDiagr
 import { ensureAbsolutePath } from '../../utils/path-helpers';
 import { findTaskWorktree } from '../../worktree-paths';
 import { findTaskAndProject } from './shared';
+import { getMergeReview } from '../../ai/merge/git-merge';
+import { getToolPath } from '../../cli-tool-manager';
+import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import {
   buildTimeline,
   mergeCriteria,
@@ -211,7 +214,12 @@ export function registerTaskWorkspaceHandlers(): void {
         } catch {
           return { success: true, data: null };
         }
-        return { success: true, data: await loadTaskWorkspace(specDir) };
+        const workspace = await loadTaskWorkspace(specDir);
+        const { task, project } = findTaskAndProject(taskId, projectId);
+        const mergeReview = task && project
+          ? await getMergeReview({ projectDir: ensureAbsolutePath(project.path), branch: `vibe-teamlead/${task.specId}`, git: getToolPath('git'), env: getIsolatedGitEnv() })
+          : null;
+        return { success: true, data: mergeReview ? { ...workspace, mergeReview } : workspace };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Failed to load task workspace' };
       }

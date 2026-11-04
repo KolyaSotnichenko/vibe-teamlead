@@ -160,6 +160,8 @@ export interface TaskWorkspace {
   security: WorkspaceSecurity;
   /** Why the last QA run ended without approval (qa_outcome.json) */
   qaOutcome?: QaOutcomeInfo;
+  /** A merge the model resolved, waiting for the user's decision */
+  mergeReview?: { files: string[] };
 }
 
 /** What blocked QA, in the words the task window shows */

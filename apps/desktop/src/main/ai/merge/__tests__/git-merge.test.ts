@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mergeTaskBranch, withoutGitHooks } from '../git-merge';
+import { cancelMergeReview, commitMergeReview, getMergeReview, mergeTaskBranch, withoutGitHooks } from '../git-merge';
 
 const BINARY = Buffer.from([0x00, 0x01, 0xa8, 0x10, 0xff, 0xfe, 0x00, 0x80]);
 const BRANCH = 'vibe-teamlead/001-task';
@@ -146,18 +146,80 @@ describe('mergeTaskBranch', () => {
       commitAll(wt, 'task touched shared');
     });
 
-    it('gives the resolver all three versions, only for the conflicted file, and commits the result', async () => {
+    it('gives the resolver all three versions, only for the conflicted file', async () => {
       const resolveConflict = vi.fn(async () => 'both sides');
-      const before = head();
-
-      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'merged' });
-
+      await merge({ resolveConflict });
       expect(resolveConflict.mock.calls).toEqual([[{ file: 'shared.txt', base: 'one\n', ours: 'main side\n', theirs: 'task side\n' }]]);
-      // The model trims its answer; the file keeps its last line's newline
-      expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('both sides\n');
-      expect(readFileSync(join(repo, 'public', 'favicon.ico')).equals(BINARY)).toBe(true);
-      expect(git(repo, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3);
-      expect(git(repo, 'rev-parse', 'HEAD^1')).toBe(before);
+    });
+
+    describe("the model's merge waits for the user", () => {
+      const options = () => ({ projectDir: repo, branch: BRANCH, message: 'Merge the task' });
+      const resolved = () => merge({ resolveConflict: async () => 'both sides' });
+
+      it('no commit yet: the result is staged and the merge stays open', async () => {
+        const before = head();
+        await expect(resolved()).resolves.toMatchObject({ status: 'needs_review', conflictFiles: ['shared.txt'] });
+        expect(head()).toBe(before);
+        // The model trims its answer; the file keeps its last line's newline
+        expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('both sides\n');
+        expect(git(repo, 'diff', '--cached', '--name-only')).toContain('shared.txt');
+        expect(git(repo, 'rev-parse', '--verify', BRANCH)).toBeTruthy();
+        await expect(getMergeReview(options())).resolves.toEqual({ files: ['shared.txt'] });
+      });
+
+      it('confirming makes the merge commit, naming the files, and takes in the user\'s edits', async () => {
+        const before = head();
+        await resolved();
+        writeFileSync(join(repo, 'shared.txt'), 'corrected by hand\n');
+
+        await expect(commitMergeReview(options())).resolves.toMatchObject({ status: 'merged' });
+
+        expect(git(repo, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3);
+        expect(git(repo, 'rev-parse', 'HEAD^1')).toBe(before);
+        expect(git(repo, 'show', 'HEAD:shared.txt')).toBe('corrected by hand');
+        expect(git(repo, 'log', '-1', '--format=%s')).toBe('Merge the task');
+        expect(git(repo, 'log', '-1', '--format=%b')).toBe('Conflicts resolved by the model, then confirmed:\n- shared.txt');
+        await expect(getMergeReview(options())).resolves.toBeNull();
+      });
+
+      it('cancelling puts the project back', async () => {
+        const before = head();
+        await resolved();
+
+        await expect(cancelMergeReview(options())).resolves.toMatchObject({ status: 'cancelled' });
+
+        expect(head()).toBe(before);
+        expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('main side\n');
+        expect(existsSync(join(repo, '.git', 'MERGE_HEAD'))).toBe(false);
+        await expect(getMergeReview(options())).resolves.toBeNull();
+      });
+
+      it('nothing to review once the merge was finished or dropped in a terminal', async () => {
+        await resolved();
+        git(repo, 'merge', '--abort');
+        await expect(getMergeReview(options())).resolves.toBeNull();
+        await expect(commitMergeReview(options())).resolves.toMatchObject({ status: 'refused' });
+        await expect(cancelMergeReview(options())).resolves.toMatchObject({ status: 'refused' });
+      });
+
+      it("another merge in progress isn't this task's, so it is neither committed nor dropped", async () => {
+        await resolved();
+        git(repo, 'merge', '--abort');
+        git(repo, 'checkout', '-q', '-b', 'other', 'HEAD~1');
+        writeFileSync(join(repo, 'shared.txt'), 'other\n');
+        git(repo, 'commit', '-q', '-am', 'other');
+        git(repo, 'checkout', '-q', 'main');
+        expect(() => git(repo, 'merge', 'other')).toThrow();
+
+        await expect(getMergeReview(options())).resolves.toBeNull();
+        await expect(cancelMergeReview(options())).resolves.toMatchObject({ status: 'refused' });
+        expect(existsSync(join(repo, '.git', 'MERGE_HEAD'))).toBe(true);
+      });
+
+      it('stage only stays as it was: staged, for the user to commit', async () => {
+        await expect(merge({ stageOnly: true, resolveConflict: async () => 'both sides' })).resolves.toMatchObject({ status: 'staged' });
+        await expect(getMergeReview(options())).resolves.toBeNull();
+      });
     });
 
     it.each([
@@ -173,11 +235,6 @@ describe('mergeTaskBranch', () => {
       expect(head()).toBe(before);
       expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
       expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('main side\n');
-    });
-
-    it('names the files the model wrote in the commit', async () => {
-      await merge({ resolveConflict: async () => 'both sides' });
-      expect(git(repo, 'log', '-1', '--format=%b')).toBe('Conflicts resolved by the model, not reviewed:\n- shared.txt');
     });
 
     it('runs no hooks on a rollback either', async () => {
@@ -237,7 +294,7 @@ describe('mergeTaskBranch', () => {
       git(repo, 'add', 'a');
       conflictWith(name, () => writeFileSync(join(repo, name), 'main\n'), () => writeFileSync(join(wt, name), 'task\n'));
 
-      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'merged' });
+      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'needs_review' });
 
       expect(readFileSync(join(repo, 'a'), 'utf-8')).toBe('must stay\n');
       expect(readFileSync(join(repo, name), 'utf-8')).toBe('anything\n');
