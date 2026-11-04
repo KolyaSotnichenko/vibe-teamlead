@@ -21,6 +21,8 @@ import type {
 import { projectStore } from '../project-store';
 import { changelogService } from '../changelog-service';
 import { generateChangelog as generateChangelogTS } from '../ai/runners/changelog';
+import { getFeatureSettings } from './feature-settings-helper';
+import type { ModelShorthand, ThinkingLevel } from '../ai/config/types';
 
 // Store cleanup function to remove listeners on subsequent calls
 let cleanupListeners: (() => void) | null = null;
@@ -195,13 +197,16 @@ export function registerChangelogHandlers(
           // Get project name
           const projectName = project.name || path.basename(project.path);
 
-          // Run TypeScript Vercel AI SDK changelog generation
+          const utilityModel = getFeatureSettings('utility');
           const result = await generateChangelogTS({
             projectName,
             version: request.version,
             sourceMode: request.sourceMode,
             tasks: changelogTasks.length > 0 ? changelogTasks : undefined,
             commits: commitsText,
+            // Settings → Agents → Utility, like the changelog service and version suggester
+            modelShorthand: utilityModel.model as ModelShorthand,
+            thinkingLevel: utilityModel.thinkingLevel as ThinkingLevel,
           });
 
           if (mainWindow) {

@@ -3,7 +3,6 @@ import { Check, ChevronDown, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
-import { ScrollArea } from './scroll-area';
 
 export interface ComboboxOption {
   value: string;
@@ -183,7 +182,9 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
     };
 
     return (
-      <Popover open={open} onOpenChange={setOpen}>
+      // modal: the popover owns the scroll lock, so its list scrolls inside dialogs
+      // (a dialog locks wheel scrolling outside itself, and this list is portaled)
+      <Popover open={open} onOpenChange={setOpen} modal>
         <PopoverTrigger asChild disabled={disabled}>
           <button
             ref={ref}
@@ -234,7 +235,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
               onChange={(e) => setSearch(e.target.value)}
               placeholder={searchPlaceholder}
               className={cn(
-                'flex h-10 w-full bg-transparent py-3 px-2 text-sm',
+                'vt-no-ring flex h-10 w-full bg-transparent py-3 px-2 text-sm',
                 'placeholder:text-muted-foreground',
                 'focus:outline-none',
                 'disabled:cursor-not-allowed disabled:opacity-50'
@@ -242,8 +243,9 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
             />
           </div>
 
-          {/* Options list */}
-          <ScrollArea className="max-h-[300px]">
+          {/* Options list: a plain scroller (a Radix ScrollArea with only a max-height
+              never constrains its viewport, so long lists couldn't scroll) */}
+          <div className="max-h-[300px] overflow-y-auto overscroll-contain">
             <div id={listboxId} role="listbox" aria-label={searchPlaceholder || placeholder} className="p-1">
               {filteredOptions.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">
@@ -310,7 +312,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
                 })
               )}
             </div>
-          </ScrollArea>
+          </div>
           {footer && <div className="border-t border-border px-3 py-2">{footer}</div>}
         </PopoverContent>
       </Popover>

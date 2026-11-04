@@ -277,7 +277,7 @@ export function AgentProfileSelector({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">{t('agentProfile.model')}</Label>
+                      <Label className="flex h-5 items-center text-[10px] text-muted-foreground">{t('agentProfile.model')}</Label>
                       <ClaudeModelSelect
                         className="h-8 text-xs"
                         value={currentPhaseModels[phase]}

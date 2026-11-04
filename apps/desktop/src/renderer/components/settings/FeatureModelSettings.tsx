@@ -74,7 +74,7 @@ export function FeatureModelSettings() {
             <div className="grid grid-cols-2 gap-3 max-w-md">
               {/* Model Select */}
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
+                <Label className="flex h-5 items-center text-xs text-muted-foreground">
                   {t('general.model')}
                 </Label>
                 <ClaudeModelSelect

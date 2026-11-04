@@ -1208,8 +1208,10 @@ body {
   }
 }
 
-/* Visible 2px focus ring on every interactive element */
-:where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+/* Visible 2px focus ring on every interactive element.
+   .vt-no-ring: a borderless input inside a bordered control (a search field at the
+   top of an open list) that shows focus by being open, not by a ring around it. */
+:where(button, a, input, select, textarea, [role="button"], [tabindex]):not(.vt-no-ring):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }

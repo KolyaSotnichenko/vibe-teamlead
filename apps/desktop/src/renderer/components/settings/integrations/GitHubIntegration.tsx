@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Github, RefreshCw, KeyRound, Loader2, CheckCircle2, AlertCircle, User, Lock, Globe, ChevronDown, GitBranch } from 'lucide-react';
+import { Github, RefreshCw, Loader2, CheckCircle2, AlertCircle, User, Lock, Globe, ChevronDown, GitBranch } from 'lucide-react';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Switch } from '../../ui/switch';
@@ -59,7 +59,10 @@ export function GitHubIntegration({
   setSettings
 }: GitHubIntegrationProps) {
   const { t } = useTranslation(['settings', 'common']);
-  const [authMode, setAuthMode] = useState<'manual' | 'oauth' | 'oauth-success'>('manual');
+  // Signing in with GitHub is the default; a personal access token is the fallback
+  // for repositories the Vibe Teamlead GitHub App can't reach.
+  const [authMode, setAuthMode] = useState<'manual' | 'oauth' | 'oauth-success'>('oauth');
+  const authModeChosen = useRef(false);
   const [oauthUsername, setOauthUsername] = useState<string | null>(null);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
@@ -73,6 +76,15 @@ export function GitHubIntegration({
   debugLog('Render - authMode:', authMode);
   debugLog('Render - projectPath:', projectPath);
   debugLog('Render - envConfig:', envConfig ? { githubEnabled: envConfig.githubEnabled, hasToken: !!envConfig.githubToken, defaultBranch: envConfig.defaultBranch } : null);
+
+  // A project that already has its own token keeps using it
+  useEffect(() => {
+    if (!envConfig || authModeChosen.current) return;
+    authModeChosen.current = true;
+    if (envConfig.githubToken && envConfig.githubAuthMethod !== 'oauth' && !envConfig.githubToken.startsWith('ghu_')) {
+      setAuthMode('manual');
+    }
+  }, [envConfig]);
 
   // Fetch repos when entering oauth-success mode
   useEffect(() => {
@@ -203,6 +215,13 @@ export function GitHubIntegration({
     // Update the token and auth method
     updateEnvConfig({ githubToken: token, githubAuthMethod: 'oauth' });
 
+    // Fill the repository from the project's origin when it isn't set yet
+    if (!envConfig.githubRepo && projectPath) {
+      void window.electronAPI.detectGitHubRepo(projectPath).then((result) => {
+        if (result.success && result.data) updateEnvConfig({ githubRepo: result.data });
+      }).catch(() => {});
+    }
+
     // Show success state with username
     setOauthUsername(username || null);
     setAuthMode('oauth-success');
@@ -211,6 +230,8 @@ export function GitHubIntegration({
   const handleSwitchToManual = () => {
     setAuthMode('manual');
     setOauthUsername(null);
+    // The signed-in token isn't a personal one: start the token field empty
+    if (envConfig.githubAuthMethod === 'oauth') updateEnvConfig({ githubToken: '', githubAuthMethod: 'pat' });
   };
 
   const handleSwitchToOAuth = () => {
@@ -269,6 +290,7 @@ export function GitHubIntegration({
                     {t('settings:integrations.github.useDifferentToken')}
                   </Button>
                 </div>
+                <p className="mt-3 text-xs text-muted-foreground">{t('settings:integrations.github.tokenWhen')}</p>
               </div>
 
               {/* Repository Dropdown */}
@@ -297,10 +319,8 @@ export function GitHubIntegration({
                   {t('settings:integrations.github.useManualToken')}
                 </Button>
               </div>
-              <GitHubOAuthFlow
-                onSuccess={handleOAuthSuccess}
-                onCancel={handleSwitchToManual}
-              />
+              {/* No Cancel here: the token option is the button above */}
+              <GitHubOAuthFlow onSuccess={handleOAuthSuccess} />
             </div>
           )}
 
@@ -316,7 +336,7 @@ export function GitHubIntegration({
                     onClick={handleSwitchToOAuth}
                     className="gap-2"
                   >
-                    <KeyRound className="h-3 w-3" />
+                    <Github className="h-3 w-3" />
                     {t('settings:integrations.github.useOAuthInstead')}
                   </Button>
                 </div>

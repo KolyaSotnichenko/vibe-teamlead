@@ -12,7 +12,7 @@ import { projectStore } from '../../project-store';
 import { MergeOrchestrator } from '../../ai/merge/orchestrator';
 import { createMergeResolverFn } from '../../ai/runners/merge-resolver';
 import { createPR } from '../../ai/runners/github/pr-creator';
-import type { ModelShorthand } from '../../ai/config/types';
+import type { ModelShorthand, ThinkingLevel } from '../../ai/config/types';
 import { findTaskAndProject } from './shared';
 import { updateRoadmapFeatureOutcome } from '../../utils/roadmap-utils';
 import { getToolPath } from '../../cli-tool-manager';
@@ -2269,11 +2269,15 @@ export function registerWorktreeHandlers(
                   }
 
                   const { generateCommitMessage } = await import('../../ai/runners/commit-message');
+                  // Settings → Agents → Utility, not a fixed model
+                  const utility = getUtilitySettings();
                   suggestedCommitMessage = await generateCommitMessage({
                     projectDir: project.path,
                     specName: task.specId,
                     diffSummary,
                     filesChanged: filesChangedList,
+                    modelShorthand: utility.model as ModelShorthand,
+                    thinkingLevel: utility.thinkingLevel as ThinkingLevel,
                   });
                   debug('Generated commit message:', suggestedCommitMessage?.substring(0, 100));
                 } catch (e) {
@@ -3097,6 +3101,9 @@ export function registerWorktreeHandlers(
           draft: options?.draft,
           ghPath,
           gitPath,
+          // The PR description is written by the Utility model (Settings → Agents)
+          modelShorthand: getUtilitySettings().model as ModelShorthand,
+          thinkingLevel: getUtilitySettings().thinkingLevel as ThinkingLevel,
         });
 
         debug('PR creation result:', result);

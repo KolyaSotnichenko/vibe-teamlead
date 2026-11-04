@@ -254,7 +254,7 @@ export function AgentProfileSettings() {
                     <div className="grid grid-cols-2 gap-3">
                       {/* Model Select */}
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t('agentProfile.model')}</Label>
+                        <Label className="flex h-5 items-center text-xs text-muted-foreground">{t('agentProfile.model')}</Label>
                         <ClaudeModelSelect
                           value={currentPhaseModels[phase]}
                           onChange={(value) => handlePhaseModelChange(phase, value)}

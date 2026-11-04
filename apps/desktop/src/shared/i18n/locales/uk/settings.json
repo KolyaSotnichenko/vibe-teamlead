@@ -361,7 +361,7 @@
       "title": "GitHub",
       "description": "Репозиторій, гілки, PR",
       "integrationTitle": "Інтеграція з GitHub",
-      "integrationDescription": "Підключіть GitHub для відстеження issues",
+      "integrationDescription": "Pull request-и, issues і гілки",
       "syncDescription": "Синхронізація з GitHub Issues",
       "defaultBranch": {
         "label": "Типова гілка",
@@ -998,7 +998,7 @@
     },
     "utility": {
       "label": "Службові",
-      "description": "Повідомлення комітів і розв’язання конфліктів злиття"
+      "description": "Повідомлення комітів, описи PR, changelog і розв’язання конфліктів злиття"
     },
     "naming": {
       "label": "Назви",
@@ -1031,16 +1031,16 @@
     "github": {
       "title": "Інтеграція з GitHub",
       "enableIssues": "Підключити GitHub",
-      "enableIssuesDescription": "Репозиторій і токен для pull request-ів та issues",
-      "connectedViaCli": "Підключено через GitHub CLI",
+      "enableIssuesDescription": "Pull request-и та issues для репозиторію цього проєкту",
+      "connectedViaCli": "Ви ввійшли через GitHub",
       "authenticatedAs": "Автентифіковано як {{username}}",
       "authenticatedViaOAuth": "Автентифіковано через GitHub OAuth (gh CLI)",
-      "useDifferentToken": "Використати інший токен",
+      "useDifferentToken": "Використати персональний токен",
       "authentication": "Автентифікація GitHub",
-      "useManualToken": "Ввести токен вручну",
+      "useManualToken": "Використати персональний токен",
       "personalAccessToken": "Personal Access Token",
-      "useOAuthInstead": "Використати OAuth",
-      "tokenHint": "Створіть токен з областю доступу <code>repo</code> у <link>налаштуваннях GitHub</link>",
+      "useOAuthInstead": "Увійти через GitHub",
+      "tokenHint": "Створіть токен з областю доступу <code>repo</code> у <link>налаштуваннях GitHub</link>. Вхід через GitHub простіший і підходить у більшості випадків.",
       "tokenPlaceholder": "ghp_xxxxxxxx або github_pat_xxxxxxxx",
       "repository": "Репозиторій",
       "enterManually": "Ввести вручну",
@@ -1065,7 +1065,8 @@
       "mainBranchDescription": "Базова гілка для створення worktree задач. Усі нові задачі відгалужуватимуться від неї.",
       "loadingBranches": "Завантаження гілок...",
       "selectMainBranch": "Виберіть основну гілку",
-      "branchHint": "Задачі створюватимуться в гілках на кшталт <code>{{pattern}}</code> від <code>{{branch}}</code>"
+      "branchHint": "Задачі створюватимуться в гілках на кшталт <code>{{pattern}}</code> від <code>{{branch}}</code>",
+      "tokenWhen": "Персональний токен потрібен, лише якщо GitHub App Vibe Teamlead не встановлено в акаунті чи організації цього репозиторію, або коли треба діяти від іншого акаунта."
     },
     "linear": {
       "title": "Інтеграція з Linear",

@@ -361,7 +361,7 @@
       "title": "GitHub",
       "description": "Repository, branches, PRs",
       "integrationTitle": "GitHub Integration",
-      "integrationDescription": "Connect to GitHub for issue tracking",
+      "integrationDescription": "Pull requests, issues and branches",
       "syncDescription": "Sync with GitHub Issues",
       "defaultBranch": {
         "label": "Default Branch",
@@ -994,7 +994,7 @@
     },
     "utility": {
       "label": "Utility",
-      "description": "Commit messages and merge conflict resolution"
+      "description": "Commit messages, PR descriptions, changelog and merge conflict resolution"
     },
     "naming": {
       "label": "AI Naming",
@@ -1027,16 +1027,16 @@
     "github": {
       "title": "GitHub Integration",
       "enableIssues": "Connect GitHub",
-      "enableIssuesDescription": "Repository and token for pull requests and issues",
-      "connectedViaCli": "Connected via GitHub CLI",
+      "enableIssuesDescription": "Pull requests and issues for this project’s repository",
+      "connectedViaCli": "Signed in with GitHub",
       "authenticatedAs": "Authenticated as {{username}}",
       "authenticatedViaOAuth": "Authenticated via GitHub OAuth (gh CLI)",
-      "useDifferentToken": "Use Different Token",
+      "useDifferentToken": "Use a personal access token",
       "authentication": "GitHub Authentication",
-      "useManualToken": "Use Manual Token",
+      "useManualToken": "Use a personal access token",
       "personalAccessToken": "Personal Access Token",
-      "useOAuthInstead": "Use OAuth Instead",
-      "tokenHint": "Create a token with <code>repo</code> scope from <link>GitHub Settings</link>",
+      "useOAuthInstead": "Sign in with GitHub",
+      "tokenHint": "Create a token with <code>repo</code> scope in <link>GitHub Settings</link>. Signing in with GitHub is simpler and covers most cases.",
       "tokenPlaceholder": "ghp_xxxxxxxx or github_pat_xxxxxxxx",
       "repository": "Repository",
       "enterManually": "Enter Manually",
@@ -1061,7 +1061,8 @@
       "mainBranchDescription": "The base branch for creating task worktrees. All new tasks will branch from here.",
       "loadingBranches": "Loading branches...",
       "selectMainBranch": "Select main branch",
-      "branchHint": "Tasks will be created on branches like <code>{{pattern}}</code> from <code>{{branch}}</code>"
+      "branchHint": "Tasks will be created on branches like <code>{{pattern}}</code> from <code>{{branch}}</code>",
+      "tokenWhen": "A personal access token is only needed when the Vibe Teamlead GitHub App isn’t installed on this repository’s account or organisation, or when you want to act as another account."
     },
     "linear": {
       "title": "Linear Integration",

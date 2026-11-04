@@ -53,8 +53,8 @@ export function ThinkingLevelSelect({
         <TooltipTrigger asChild>
           <span
             className={cn(
-              'inline-flex cursor-help items-center rounded',
-              'bg-primary/10 px-1.5 py-0.5',
+              'inline-flex cursor-help items-center',
+              'bg-primary/10 px-1.5 leading-4',
               'text-[9px] font-medium text-primary',
             )}
           >
@@ -72,14 +72,14 @@ export function ThinkingLevelSelect({
   if (reasoningType === 'none') {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5">
+        <div className="flex h-5 items-center gap-1.5">
           <span className="text-xs text-muted-foreground">
             {t('agentProfile.thinkingLevel')}
           </span>
           {renderBadge()}
         </div>
         <Select value={value} onValueChange={onChange} disabled>
-          <SelectTrigger className="h-9">
+          <SelectTrigger>
             <SelectValue placeholder={t('agentProfile.reasoning.noThinking')} />
           </SelectTrigger>
           <SelectContent>
@@ -97,14 +97,14 @@ export function ThinkingLevelSelect({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1.5">
+      <div className="flex h-5 items-center gap-1.5">
         <span className="text-xs text-muted-foreground">
           {t('agentProfile.thinkingLevel')}
         </span>
         {renderBadge()}
       </div>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className="h-9">
+        <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
