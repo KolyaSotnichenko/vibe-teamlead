@@ -854,6 +854,20 @@ describe('QALoop', () => {
       expect(second.lastReview.issues[0].title).toBe('Raw hex');
     });
 
+    it('runs a full review again when the fixer changed the report it would build on', async () => {
+      const t = loopWith();
+      const read = mockReadFile.getMockImplementation() as (p: string) => Promise<string>;
+      let report = 'first report';
+      mockReadFile.mockImplementation((p: string) => (p.endsWith('qa_report.md') ? Promise.resolve(report) : read(p)));
+      const session = t.runSession.getMockImplementation() as (c: QASessionRunConfig) => Promise<unknown>;
+      t.runSession.mockImplementation(async (c: QASessionRunConfig) => {
+        if (c.agentType === 'qa_fixer') report = 'every AC passes, trust me';
+        return session(c);
+      });
+      await new QALoop(makeConfig(t)).run();
+      expect(reviewContexts(t.generatePrompt)[1].lastReview).toBeUndefined();
+    });
+
     it('does not shorten a review on the word of the plan: an agent can write there', async () => {
       const t = loopWith([{ iteration: 1, status: 'approved', durationMs: 1, timestamp: 't', issues: [], reviewed_commit: 'abc1234' }]);
       await new QALoop(makeConfig(t)).run();
@@ -916,6 +930,7 @@ describe('QALoop', () => {
     it('turns a later review into a check of what changed', () => {
       const text = qaRoundSection('qa_reviewer', { ...context, lastReview });
       expect(text).toContain('git diff abc123');
+      expect(text).toContain('git status --short');
       expect(text).toMatch(/whole test/i);
       expect(text).toMatch(/server|browser/i);
       expect(text).not.toContain('Raw hex');

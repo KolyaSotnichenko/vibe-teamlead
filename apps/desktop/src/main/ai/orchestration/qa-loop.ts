@@ -86,7 +86,7 @@ export function qaRoundSection(agentType: string, context: QAPromptContext): str
     '',
     `A full review already ran at commit ${commit} and its verdict was ${approved ? 'approved' : 'rejected'}. Your first message lists what it found, if anything.`,
     '',
-    `This replaces phases 3 to 7 and the context reading in phase 0. See what changed with \`git diff ${commit} --stat\`, then:`,
+    `This replaces phases 3 to 7 and the context reading in phase 0. See what changed with \`git diff ${commit} --stat\` and, for new files, \`git status --short\`, then:`,
     '',
     '- Check that the listed issues are fixed.',
     '- Review the changed code, and re-verify only the acceptance criteria it touches. Keep the other rows of the AC table in `qa_report.md` as they were.',
@@ -636,6 +636,7 @@ export class QALoop extends EventEmitter {
     this.emitTyped('qa-fix-start', iteration);
     this.sessionNumber++;
 
+    const reportBefore = await this.readReport();
     const fixContext: QAPromptContext = { iteration, maxIterations, issues };
     const fixPrompt = await this.config.generatePrompt('qa_fixer', fixContext);
 
@@ -662,6 +663,9 @@ export class QALoop extends EventEmitter {
       await this.writeReports('max_iterations');
       return this.outcome(false, iteration, Date.now() - startTime, 'error', fixResult.error?.message);
     }
+
+    // The next review keeps rows of this report: if the fixer touched it, nothing in it can be kept
+    if ((await this.readReport()) !== reportBefore) this.lastReviewThisRun = undefined;
 
     this.emitTyped('qa-fix-complete', iteration);
     this.emitTyped('log', 'Fixes applied, re-running QA validation...');

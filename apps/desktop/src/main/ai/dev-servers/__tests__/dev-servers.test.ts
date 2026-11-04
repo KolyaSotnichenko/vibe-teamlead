@@ -85,12 +85,12 @@ describe('dev servers', () => {
   it('stopping kills the whole process group, not just the wrapper', async () => {
     const p = project();
     // The shell stays as the wrapper; node is its child, which `kill <wrapper>` would leave behind
-    const started = await startDevServer({ ...p, name: 'web', command: 'node server.js & echo $! > child.pid; wait' });
+    await startDevServer({ ...p, name: 'web', command: 'node server.js & echo $! > child.pid; wait' });
     const child = Number(readFileSync(path.join(p.cwd, 'child.pid'), 'utf-8'));
     expect(alive(child)).toBe(true);
     expect(await stopDevServer('web')).toBe(true);
-    expect(alive(child)).toBe(false);
-    await expect(fetch(started.url)).rejects.toThrow();
+    // An orphan is reaped a moment after it dies. Not checked by port: another test may get it next.
+    await expect.poll(() => alive(child), { timeout: 2000 }).toBe(false);
   });
 
   it('reports the log when a server never listens, and leaves nothing running', async () => {
