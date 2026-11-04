@@ -47,16 +47,14 @@ export const settingsMock = {
   // Claude credential (mock - kept in memory, the key is never echoed back)
   getClaudeCredentialStatus: async () => ({ success: true, data: mockCredential }),
   saveClaudeApiKey: async (apiKey: string) => {
-    mockCredential = {
-      configured: true,
-      source: 'stored',
-      kind: apiKey.startsWith('sk-ant-oat') ? 'subscription-token' : 'api-key',
-      hint: apiKey.trim().slice(-4),
-    };
+    const subscription = apiKey.startsWith('sk-ant-oat');
+    const slot = { configured: true, source: 'stored' as const, kind: subscription ? ('subscription-token' as const) : ('api-key' as const), hint: apiKey.trim().slice(-4) };
+    mockCredential = { ...mockCredential, ...(subscription ? { subscription: slot } : { api: slot, ...slot }) };
     return { success: true, data: mockCredential };
   },
-  clearClaudeApiKey: async () => {
-    mockCredential = { configured: false, source: 'none' };
+  clearClaudeApiKey: async (slot?: 'api' | 'subscription') => {
+    const empty = { configured: false, source: 'none' as const };
+    mockCredential = slot === 'subscription' ? { ...mockCredential, subscription: empty } : { ...mockCredential, ...empty, kind: undefined, hint: undefined, api: empty };
     return { success: true, data: mockCredential };
   },
   testClaudeConnection: async () => ({ success: true, data: { ok: true } }),

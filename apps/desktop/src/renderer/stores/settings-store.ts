@@ -105,8 +105,10 @@ export async function saveSettings(updates: Partial<AppSettings>): Promise<boole
   try {
     const result = await window.electronAPI.saveSettings(updates);
     if (result.success) {
+      // Switching API key ↔ subscription changes the endpoint too
       const endpointChanged =
-        'anthropicBaseUrl' in updates && updates.anthropicBaseUrl !== store.settings.anthropicBaseUrl;
+        ('anthropicBaseUrl' in updates && updates.anthropicBaseUrl !== store.settings.anthropicBaseUrl) ||
+        ('useClaudeSubscription' in updates && updates.useClaudeSubscription !== store.settings.useClaudeSubscription);
       store.updateSettings(updates);
       // The model pickers list the models of the configured endpoint
       if (endpointChanged) invalidateEndpointModels();

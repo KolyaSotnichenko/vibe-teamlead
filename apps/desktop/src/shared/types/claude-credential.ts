@@ -3,7 +3,7 @@
  * The key itself never leaves the main process.
  */
 
-export interface ClaudeCredentialStatus {
+export interface ClaudeCredentialSlotStatus {
   /** A key or token is available */
   configured: boolean;
   /** Where it comes from: saved in the app, the environment, or nowhere */
@@ -14,10 +14,20 @@ export interface ClaudeCredentialStatus {
   hint?: string;
 }
 
+/** The credential sessions use now (top-level fields), plus both slots. */
+export interface ClaudeCredentialStatus extends ClaudeCredentialSlotStatus {
+  /** Which credential the mode picks: the API key or the subscription token */
+  mode?: 'api' | 'subscription';
+  api?: ClaudeCredentialSlotStatus;
+  subscription?: ClaudeCredentialSlotStatus;
+}
+
 /** Optional unsaved values to test instead of the stored ones */
 export interface ClaudeConnectionTestInput {
   apiKey?: string;
   baseUrl?: string;
+  /** Which credential to test (default: the one the current mode uses) */
+  slot?: 'api' | 'subscription';
 }
 
 export interface ClaudeConnectionTestResult {

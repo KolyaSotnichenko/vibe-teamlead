@@ -13,11 +13,12 @@ import type {
   ClaudeModelList,
 } from '../../shared/types/claude-credential';
 import type { IPCResult } from '../../shared/types';
-import { toClaudeAuth } from '../ai/claude-code/auth';
+import { isSubscriptionToken, toClaudeAuth } from '../ai/claude-code/auth';
 import {
   clearClaudeKey,
   getClaudeCredentialStatus,
   resolveClaudeCredential,
+  resolveClaudeCredentialFor,
   saveClaudeKey,
 } from '../ai/claude-code/credential';
 import { listEndpointModels } from '../ai/claude-code/models';
@@ -32,13 +33,16 @@ function errorMessage(error: unknown): string {
 }
 
 async function testConnection(input: ClaudeConnectionTestInput = {}): Promise<ClaudeConnectionTestResult> {
-  const stored = resolveClaudeCredential();
+  const slot = input.slot ?? (isSubscriptionModeEnabled() ? 'subscription' : 'api');
+  const stored = resolveClaudeCredentialFor(slot);
   const key = input.apiKey?.trim() || stored.key;
-  const baseURL = input.baseUrl !== undefined ? input.baseUrl.trim() || undefined : stored.baseURL;
-  const auth = toClaudeAuth(key, baseURL, isSubscriptionModeEnabled());
-  if (auth.rejectedSubscriptionToken) {
-    return { ok: false, error: 'This is a Claude subscription token; turn on personal mode to use it' };
+  const subscription = slot === 'subscription';
+  if (key && subscription !== isSubscriptionToken(key)) {
+    return { ok: false, error: subscription ? 'This is not a subscription token (sk-ant-oat…)' : 'This is a subscription token; choose "Claude subscription" to use it' };
   }
+  // A subscription token always talks to Anthropic; the base URL is for API keys
+  const baseURL = subscription ? undefined : input.baseUrl !== undefined ? input.baseUrl.trim() || undefined : stored.baseURL;
+  const auth = toClaudeAuth(key, baseURL, subscription);
 
   // A custom endpoint (e.g. Ollama) may not serve Claude Haiku: test with a model it lists.
   let model = 'haiku';
@@ -94,9 +98,9 @@ export function registerClaudeCredentialHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CLAUDE_CREDENTIAL_CLEAR,
-    async (): Promise<IPCResult<ClaudeCredentialStatus>> => {
+    async (_event, slot?: 'api' | 'subscription'): Promise<IPCResult<ClaudeCredentialStatus>> => {
       try {
-        clearClaudeKey();
+        clearClaudeKey(slot === 'subscription' || slot === 'api' ? slot : undefined);
         return { success: true, data: getClaudeCredentialStatus() };
       } catch (error) {
         return { success: false, error: errorMessage(error) };

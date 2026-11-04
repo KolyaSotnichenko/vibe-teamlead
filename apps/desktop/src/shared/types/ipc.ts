@@ -306,7 +306,7 @@ export interface ElectronAPI {
   // Claude credential (the key is write-only from the renderer)
   getClaudeCredentialStatus: () => Promise<IPCResult<ClaudeCredentialStatus>>;
   saveClaudeApiKey: (apiKey: string) => Promise<IPCResult<ClaudeCredentialStatus>>;
-  clearClaudeApiKey: () => Promise<IPCResult<ClaudeCredentialStatus>>;
+  clearClaudeApiKey: (slot?: 'api' | 'subscription') => Promise<IPCResult<ClaudeCredentialStatus>>;
   testClaudeConnection: (input?: ClaudeConnectionTestInput) => Promise<IPCResult<ClaudeConnectionTestResult>>;
   /** Models offered by the configured endpoint (Anthropic API or the base URL) */
   listClaudeModels: (options?: { refresh?: boolean }) => Promise<IPCResult<ClaudeModelList>>;

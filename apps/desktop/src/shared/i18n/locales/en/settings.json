@@ -86,7 +86,9 @@
       "failed": "Claude did not answer"
     },
     "errors": {
-      "saveFailed": "The key could not be saved."
+      "saveFailed": "The key could not be saved.",
+      "notSubscriptionToken": "This is not a subscription token — it starts with sk-ant-oat. Put API keys in API key mode.",
+      "isSubscriptionToken": "This is a subscription token. Choose “Claude subscription” above to use it."
     },
     "baseUrl": {
       "label": "Base URL (optional)",
@@ -96,6 +98,22 @@
       "label": "Use my Claude subscription (personal use)",
       "description": "Accept a Claude Pro/Max subscription token (from `claude setup-token`) in place of an API key. For your own machine only — never enable it in a build you share. Limits are shared with your regular Claude usage.",
       "tokenNeedsMode": "The saved credential is a Claude subscription token. Turn on personal mode below, or replace it with an API key."
+    },
+    "subscriptionToken": {
+      "label": "Claude subscription token",
+      "replaceLabel": "Replace the subscription token",
+      "placeholder": "sk-ant-oat01-…",
+      "help": "Run `claude setup-token` in a terminal and paste the token. Stored encrypted in the macOS Keychain.",
+      "remove": "Remove saved token"
+    },
+    "mode": {
+      "label": "Agents run on",
+      "api": "API key",
+      "apiHint": "Anthropic API or a compatible gateway (base URL)",
+      "subscription": "Claude subscription",
+      "subscriptionHint": "Your Pro/Max plan — personal use on your own machine",
+      "savedHint": "Both are kept; switching takes effect when you save settings.",
+      "personalNote": "For your own machine only — never enable it in a build you share. Limits are shared with your regular Claude usage."
     }
   },
   "language": {

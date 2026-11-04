@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pickClaudeCredential } from '../credential';
+import { normalizeStoredCredential, pickClaudeCredential } from '../credential';
 import { pickLegacyClaudeCredential, stripLegacySettings } from '../credential-migration';
 
 describe('pickClaudeCredential', () => {
@@ -20,6 +20,22 @@ describe('pickClaudeCredential', () => {
       baseURL: undefined,
       source: 'environment',
     });
+  });
+
+  it('uses exactly the credential of the chosen mode, never the other one', () => {
+    const both = { storedKey: 'sk-ant-api03-key', storedSubscriptionToken: 'sk-ant-oat01-tok', baseUrlSetting: 'https://gw.example', env: {} };
+    expect(pickClaudeCredential({ ...both, subscriptionMode: false })).toEqual({ key: 'sk-ant-api03-key', baseURL: 'https://gw.example', source: 'stored' });
+    // Subscription mode: the token, and no base URL (subscription calls go to Anthropic)
+    expect(pickClaudeCredential({ ...both, subscriptionMode: true })).toEqual({ key: 'sk-ant-oat01-tok', baseURL: undefined, source: 'stored' });
+    // A missing credential for the chosen mode is "none", not a silent fallback to the other
+    expect(pickClaudeCredential({ storedKey: 'sk-ant-api03-key', env: {}, subscriptionMode: true })).toEqual({ baseURL: undefined, source: 'none' });
+    expect(pickClaudeCredential({ storedSubscriptionToken: 'sk-ant-oat01-tok', env: {}, subscriptionMode: false }).source).toBe('none');
+  });
+
+  it('moves a subscription token saved by older versions into its own slot', () => {
+    expect(normalizeStoredCredential({ apiKey: 'sk-ant-oat01-old' })).toEqual({ subscriptionToken: 'sk-ant-oat01-old' });
+    expect(normalizeStoredCredential({ apiKey: ' mtr_key ', subscriptionToken: 'sk-ant-oat01-t' })).toEqual({ apiKey: 'mtr_key', subscriptionToken: 'sk-ant-oat01-t' });
+    expect(normalizeStoredCredential(undefined)).toEqual({ apiKey: undefined, subscriptionToken: undefined });
   });
 
   it('uses CLAUDE_CODE_OAUTH_TOKEN only in personal mode', () => {

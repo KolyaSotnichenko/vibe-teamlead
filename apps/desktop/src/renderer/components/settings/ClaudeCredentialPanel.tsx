@@ -15,16 +15,23 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { cn } from '../../lib/utils';
 import { invalidateEndpointModels } from '../../hooks/useEndpointModels';
-import type { ClaudeConnectionTestResult, ClaudeCredentialStatus } from '../../../shared/types';
+import type { ClaudeConnectionTestResult, ClaudeCredentialSlotStatus, ClaudeCredentialStatus } from '../../../shared/types';
 
 interface ClaudeCredentialPanelProps {
   status: ClaudeCredentialStatus;
   onStatusChange: (status: ClaudeCredentialStatus) => void;
   /** Base URL to test with (the unsaved value from the form, if any) */
   baseUrl?: string;
+  /** Which credential this panel edits: the API key (default) or the subscription token */
+  slot?: 'api' | 'subscription';
 }
 
-function StatusLine({ status }: { status: ClaudeCredentialStatus }) {
+/** The status of one slot; older main processes only report the active credential. */
+function slotOf(status: ClaudeCredentialStatus, slot: 'api' | 'subscription'): ClaudeCredentialSlotStatus {
+  return (slot === 'subscription' ? status.subscription : status.api) ?? status;
+}
+
+function StatusLine({ status }: { status: ClaudeCredentialSlotStatus }) {
   const { t } = useTranslation('settings');
   const needsKey = !status.configured;
   let text: string;
@@ -49,8 +56,11 @@ function StatusLine({ status }: { status: ClaudeCredentialStatus }) {
   );
 }
 
-export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: ClaudeCredentialPanelProps) {
+export function ClaudeCredentialPanel({ status: fullStatus, onStatusChange, baseUrl, slot = 'api' }: ClaudeCredentialPanelProps) {
   const { t } = useTranslation('settings');
+  const status = slotOf(fullStatus, slot);
+  const subscription = slot === 'subscription';
+  const keyLabel = (key: string) => t(subscription ? `claude.subscriptionToken.${key}` : `claude.apiKey.${key}`);
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState<'save' | 'clear' | 'test' | null>(null);
@@ -61,6 +71,12 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
     setBusy('save');
     setFieldError(null);
     setTestResult(null);
+    // Each field takes its own kind of credential
+    if (subscription !== apiKey.trim().startsWith('sk-ant-oat')) {
+      setFieldError(t(subscription ? 'claude.errors.notSubscriptionToken' : 'claude.errors.isSubscriptionToken'));
+      setBusy(null);
+      return;
+    }
     try {
       const result = await window.electronAPI.saveClaudeApiKey(apiKey);
       if (result.success && result.data) {
@@ -83,7 +99,7 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
     setFieldError(null);
     setTestResult(null);
     try {
-      const result = await window.electronAPI.clearClaudeApiKey();
+      const result = await window.electronAPI.clearClaudeApiKey(slot);
       if (result.success && result.data) {
         onStatusChange(result.data);
         invalidateEndpointModels();
@@ -99,7 +115,8 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
     try {
       const result = await window.electronAPI.testClaudeConnection({
         apiKey: apiKey.trim() || undefined,
-        baseUrl,
+        baseUrl: subscription ? undefined : baseUrl,
+        slot,
       });
       setTestResult(result.success && result.data ? result.data : { ok: false, error: result.error });
     } catch (error) {
@@ -117,7 +134,7 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
 
       <div className="space-y-2">
         <Label htmlFor="claudeApiKey" className="text-sm font-medium text-foreground">
-          {status.source === 'stored' ? t('claude.apiKey.replaceLabel') : t('claude.apiKey.label')}
+          {status.source === 'stored' ? keyLabel('replaceLabel') : keyLabel('label')}
         </Label>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -126,7 +143,7 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
               type={showKey ? 'text' : 'password'}
               autoComplete="off"
               spellCheck={false}
-              placeholder={t('claude.apiKey.placeholder')}
+              placeholder={keyLabel('placeholder')}
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
@@ -154,7 +171,7 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
           <p className="text-sm text-destructive">{fieldError}</p>
         ) : (
           <p id="claudeApiKeyHelp" className="text-sm text-muted-foreground">
-            {t('claude.apiKey.help')}
+            {keyLabel('help')}
           </p>
         )}
       </div>
@@ -166,7 +183,7 @@ export function ClaudeCredentialPanel({ status, onStatusChange, baseUrl }: Claud
         </Button>
         {status.source === 'stored' && (
           <Button variant="ghost" onClick={handleClear} disabled={busy !== null}>
-            {t('claude.apiKey.remove')}
+            {keyLabel('remove')}
           </Button>
         )}
       </div>

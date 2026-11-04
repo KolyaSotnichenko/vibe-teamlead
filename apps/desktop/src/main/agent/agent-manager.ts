@@ -17,6 +17,7 @@ import { resetStuckSubtasks } from '../ipc-handlers/task/plan-file-utils';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../shared/constants';
 import { projectStore } from '../project-store';
 import { type ResolvedClaudeCredential, resolveClaudeCredential } from '../ai/claude-code/credential';
+import { isSubscriptionModeEnabled } from '../ai/claude-code/subscription-setting';
 import { isUsableModel, resolveModelId } from '../ai/config/phase-config';
 import type { AgentExecutorConfig, SerializableSessionConfig, SerializedSecurityProfile } from '../ai/agent/types';
 import { getSecurityProfile } from '../ai/security/security-profile';
@@ -57,7 +58,7 @@ export class AgentManager extends EventEmitter {
   private requireClaudeAuth(taskId: string): ResolvedClaudeCredential | null {
     const auth = resolveClaudeCredential();
     if (!auth.key) {
-      this.emit('error', taskId, 'No Claude credentials configured. Add an Anthropic API key in Settings > Claude before starting tasks.');
+      this.emit('error', taskId, isSubscriptionModeEnabled() ? 'No Claude subscription token saved. Add it in Settings > Claude (Claude subscription), or switch to API key.' : 'No Claude credentials configured. Add an Anthropic API key in Settings > Claude before starting tasks.');
       return null;
     }
     return auth;

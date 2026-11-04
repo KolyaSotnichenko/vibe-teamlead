@@ -40,7 +40,7 @@ export interface SettingsAPI {
   // Claude credential (the key is write-only from the renderer)
   getClaudeCredentialStatus: () => Promise<IPCResult<ClaudeCredentialStatus>>;
   saveClaudeApiKey: (apiKey: string) => Promise<IPCResult<ClaudeCredentialStatus>>;
-  clearClaudeApiKey: () => Promise<IPCResult<ClaudeCredentialStatus>>;
+  clearClaudeApiKey: (slot?: 'api' | 'subscription') => Promise<IPCResult<ClaudeCredentialStatus>>;
   testClaudeConnection: (input?: ClaudeConnectionTestInput) => Promise<IPCResult<ClaudeConnectionTestResult>>;
   /** Models offered by the configured endpoint (Anthropic API or the base URL) */
   listClaudeModels: (options?: { refresh?: boolean }) => Promise<IPCResult<ClaudeModelList>>;
@@ -92,8 +92,8 @@ export const createSettingsAPI = (): SettingsAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_GET_STATUS),
   saveClaudeApiKey: (apiKey: string): Promise<IPCResult<ClaudeCredentialStatus>> =>
     ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_SAVE, apiKey),
-  clearClaudeApiKey: (): Promise<IPCResult<ClaudeCredentialStatus>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_CLEAR),
+  clearClaudeApiKey: (slot?: 'api' | 'subscription'): Promise<IPCResult<ClaudeCredentialStatus>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_CLEAR, slot),
   testClaudeConnection: (input?: ClaudeConnectionTestInput): Promise<IPCResult<ClaudeConnectionTestResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_CREDENTIAL_TEST, input),
   listClaudeModels: (options?: { refresh?: boolean }): Promise<IPCResult<ClaudeModelList>> =>
