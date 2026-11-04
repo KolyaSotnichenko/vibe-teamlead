@@ -26,6 +26,7 @@ import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from '
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { buildSecurityHooks } from './security-hooks';
+import { buildBackgroundTaskHooks } from './background-tasks';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
@@ -238,6 +239,9 @@ export function buildQueryOptions(
     .filter(Boolean)
     .join('\n');
 
+  // Hold the final stop until the agent has stopped the background tasks it started
+  const background = tools.includes('Bash') ? buildBackgroundTaskHooks() : undefined;
+
   const options: Options = {
     model: config.model,
     cwd: config.toolContext.cwd,
@@ -250,6 +254,9 @@ export function buildQueryOptions(
     allowDangerouslySkipPermissions: true,
     hooks: {
       PreToolUse: [...buildSecurityHooks(config.toolContext), buildAskUserHook(extras.askUser)],
+      ...(background
+        ? { PostToolUse: background.PostToolUse, PostToolUseFailure: background.PostToolUseFailure, Stop: background.Stop }
+        : {}),
     },
     skills,
     maxTurns: config.maxSteps,

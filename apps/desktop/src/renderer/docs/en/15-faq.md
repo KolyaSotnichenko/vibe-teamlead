@@ -85,3 +85,7 @@ The Report a problem button at the top of this page opens the repository's issue
 ## "Noted: … process was stopped by the background timeout" in the logs
 
 An agent started a dev server in the background and didn't close its background task when it finished. That task kept the session open until it timed out, and the agent was woken up again just to acknowledge it. Nothing was broken, but the session ended later and spent an extra turn. Agents now stop their background commands with TaskStop before reporting, so these lines shouldn't appear in new runs.
+
+## "Noted: the dev-server process … was stopped by the background timeout"
+
+Agents start dev servers and watchers as background tasks (QA does this to test the API or the UI). A task left running keeps the session open, and when it times out the agent wakes up for one more turn just to say so. That's harmless but costs tokens. Agents are told to stop every background task with TaskStop before finishing. The app also checks: if an agent tries to finish while tasks it started are still running, it is asked once to stop them first.
