@@ -21,7 +21,8 @@ const APP_FOLDER = '.vibe-teamlead';
 
 function refuseLinkOnTheWay(file: string): void {
   const parts = dirname(file).split(sep);
-  const start = parts.lastIndexOf(APP_FOLDER);
+  // The first one: a task's worktree has its own inside the project's
+  const start = parts.indexOf(APP_FOLDER);
   if (start === -1) return;
   for (let i = start; i < parts.length; i++) {
     const folder = parts.slice(0, i + 1).join(sep);
@@ -36,6 +37,7 @@ export async function writeFileReplacing(file: string, data: string, _encoding?:
   const temporary = temporaryFor(file);
   try {
     await writeFile(temporary, data, NEW_FILE_ONLY);
+    refuseLinkOnTheWay(file); // Narrows the window; Node can't open a path without following links
     await rename(temporary, file);
   } catch (error) {
     await rm(temporary, { force: true });
@@ -48,6 +50,7 @@ export function writeFileReplacingSync(file: string, data: string, _encoding?: '
   const temporary = temporaryFor(file);
   try {
     writeFileSync(temporary, data, NEW_FILE_ONLY);
+    refuseLinkOnTheWay(file);
     renameSync(temporary, file);
   } catch (error) {
     rmSync(temporary, { force: true });

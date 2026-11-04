@@ -59,6 +59,16 @@ describe.each([
     expect(readdirSync(outside)).toEqual([]);
   });
 
+  it("refuses a link anywhere from the project's app folder down, also on a task's worktree path", async () => {
+    const project = dir();
+    const outside = dir();
+    mkdirSync(join(project, '.vibe-teamlead', 'worktrees', 'tasks'), { recursive: true });
+    symlinkSync(outside, join(project, '.vibe-teamlead', 'worktrees', 'tasks', '001'));
+    const file = join(project, '.vibe-teamlead', 'worktrees', 'tasks', '001', '.vibe-teamlead', 'specs', '001', 'a.json');
+
+    await expect(write(file, 'x')).rejects.toThrow(/link/i);
+  });
+
   it("doesn't mind links above the app's folder: the project may live behind one", async () => {
     const real = dir();
     mkdirSync(join(real, '.vibe-teamlead', 'specs'), { recursive: true });
