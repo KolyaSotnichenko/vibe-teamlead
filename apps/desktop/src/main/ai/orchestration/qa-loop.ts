@@ -34,7 +34,7 @@ import type { Phase } from '../config/types';
 import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
-import type { GateReport } from '../security/gates';
+import type { GateFinding, GateReport } from '../security/gates';
 import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
 
 // =============================================================================
@@ -47,7 +47,7 @@ export { DEFAULT_QA_ITERATIONS };
 /** Stop after this many consecutive errors without progress */
 const MAX_CONSECUTIVE_ERRORS = 3;
 
-/** Number of times an issue must recur before escalation */
+/** Rounds an issue must appear in before escalation: the fixer gets two tries at it */
 const RECURRING_ISSUE_THRESHOLD = 3;
 
 // =============================================================================
@@ -60,7 +60,8 @@ type QAStatus = 'approved' | 'rejected' | 'fixes_applied' | 'unknown';
 /** A single QA issue found during review */
 export interface QAIssue {
   type?: 'critical' | 'warning';
-  title: string;
+  /** Reviewers may leave it out: the schema only requires a description */
+  title?: string;
   description?: string;
   location?: string;
   fix_required?: string;
@@ -117,6 +118,66 @@ export function designIssues(findings: DesignFinding[]): QAIssue[] {
     location: `${file}:${list[0].line}`,
     fix_required: 'Use the design system tokens (colours, radius, shadows) and components instead; see design_check.md and the Design system section of your instructions.',
   }));
+}
+
+/**
+ * Gate findings as QA issues: one per file for secrets, so the fixer gets a short
+ * list and one leaking file is one problem. Pure — tested directly.
+ */
+export function gateIssues(findings: GateFinding[]): QAIssue[] {
+  const issues: QAIssue[] = [];
+  const secrets = new Map<string, GateFinding[]>();
+  for (const f of findings) {
+    if (f.gate !== 'gitleaks') continue;
+    const file = f.file ?? '';
+    secrets.set(file, [...(secrets.get(file) ?? []), f]);
+  }
+  const done = new Set<string>();
+  for (const f of findings) {
+    if (f.gate === 'gitleaks') {
+      const file = f.file ?? '';
+      if (done.has(file)) continue;
+      done.add(file);
+      const list = secrets.get(file) ?? [];
+      issues.push({
+        type: 'critical',
+        title: `Secrets: ${list.length} finding${list.length === 1 ? '' : 's'} in ${file || 'the working tree'}`,
+        description: list.map((x) => (x.line ? `line ${x.line}: ${x.title}` : x.title)).join('\n'),
+        location: f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : undefined,
+        fix_required: 'Remove the secret from code and history; load it from configuration; tell the user to rotate it.',
+      });
+      continue;
+    }
+    issues.push({
+      type: 'critical',
+      title: f.title,
+      description: f.detail,
+      location: f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : undefined,
+      fix_required: 'Upgrade to a fixed version or replace the dependency, then re-run the tests.',
+    });
+  }
+  return issues;
+}
+
+/**
+ * What makes two issues the same problem: the file without its line, and the
+ * title without a finding count. Pure.
+ */
+function issueKey(issue: QAIssue): string {
+  const where = (issue.location ?? '').replace(/:[\d,-]+$/, '').trim().toLowerCase();
+  const what = (issue.title ?? issue.description ?? '')
+    .toLowerCase()
+    .replace(/\b\d+ (violation|finding)s?\b/g, '$1s')
+    .trim();
+  return `${where}|${what}`;
+}
+
+/** The current issues seen in RECURRING_ISSUE_THRESHOLD rounds or more; `history` includes this round. Pure. */
+function findRecurring(history: QAIterationRecord[], current: QAIssue[]): QAIssue[] {
+  return current.filter((issue) => {
+    const key = issueKey(issue);
+    return history.filter((round) => round.issues.some((i) => issueKey(i) === key)).length >= RECURRING_ISSUE_THRESHOLD;
+  });
 }
 
 /** design_check.md for the reviewer, the fixer and the Workspace. Pure. */
@@ -260,6 +321,9 @@ export class QALoop extends EventEmitter {
         await this.processHumanFeedback();
       }
 
+      // Rounds of earlier runs count too: a restart must not hide a recurring issue
+      this.iterationHistory = await this.loadIterationHistory();
+
       // Main QA loop
       let consecutiveErrors = 0;
       let lastErrorContext: QAErrorContext | undefined;
@@ -275,7 +339,7 @@ export class QALoop extends EventEmitter {
         // Security gates first, so the reviewer and fixer see their findings
         const securityIssues = await this.runGates();
         const designBlocking = await this.runDesignCheck();
-        const gateIssues = [...securityIssues, ...designBlocking];
+        const blockers = [...securityIssues, ...designBlocking];
 
         // Run QA reviewer. The previous verdict is cleared first so a reviewer that
         // fails to write one can never be read as approving.
@@ -310,7 +374,7 @@ export class QALoop extends EventEmitter {
 
         this.lastReviewerApproved = status === 'approved';
         const reviewerIssues = status === 'rejected' ? issues : [];
-        if (gateIssues.length && status !== 'unknown') {
+        if (blockers.length && status !== 'unknown') {
           if (status === 'approved') {
             // Say which check blocked it: the reviewer approved
             if (securityIssues.length) this.emitTyped('log', `Security gates blocked approval: ${securityIssues.length} finding(s)`);
@@ -318,12 +382,12 @@ export class QALoop extends EventEmitter {
           }
           status = 'rejected';
           const known = new Set(issues.map((i) => i.title));
-          issues = [...issues, ...gateIssues.filter((i) => !known.has(i.title))];
+          issues = [...issues, ...blockers.filter((i) => !known.has(i.title))];
         }
         this.lastBlocking = [
-          ...securityIssues.map((i) => ({ source: 'security' as const, title: i.title, location: i.location })),
+          ...securityIssues.map((i) => ({ source: 'security' as const, title: i.title ?? '', location: i.location })),
           ...this.lastDesignFindings.map((f) => ({ source: 'design' as const, title: f.message, location: `${f.file}:${f.line}`, match: f.match })),
-          ...reviewerIssues.map((i) => ({ source: 'qa' as const, title: i.title, location: i.location })),
+          ...reviewerIssues.map((i) => ({ source: 'qa' as const, title: i.title ?? i.description ?? '', location: i.location })),
         ];
         const iterationDuration = Date.now() - iterationStart;
 
@@ -341,11 +405,11 @@ export class QALoop extends EventEmitter {
           await this.recordIteration(iteration, 'rejected', issues, iterationDuration);
 
           // Check for recurring issues
-          if (this.hasRecurringIssues(issues)) {
+          const recurring = findRecurring(this.iterationHistory, issues);
+          if (recurring.length) {
             this.emitTyped('log', 'Recurring issues detected — escalating to human review');
-            const recurringIssues = this.getRecurringIssues(issues);
             try {
-              const escalationReport = generateEscalationReport(this.iterationHistory, recurringIssues);
+              const escalationReport = generateEscalationReport(this.iterationHistory, recurring);
               await writeFile(join(this.config.specDir, 'QA_ESCALATION.md'), escalationReport, 'utf-8');
             } catch {
               // Non-fatal
@@ -461,15 +525,7 @@ export class QALoop extends EventEmitter {
       if (report.ran.length) {
         this.emitTyped('log', `Security gates (${report.ran.join(', ')}): ${report.findings.length ? `${report.findings.length} finding(s)` : 'clear'}`);
       }
-      return report.findings.map((f) => ({
-        type: 'critical' as const,
-        title: f.title,
-        description: f.detail,
-        location: f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : undefined,
-        fix_required: f.gate === 'gitleaks'
-          ? 'Remove the secret from code and history; load it from configuration; tell the user to rotate it.'
-          : 'Upgrade to a fixed version or replace the dependency, then re-run the tests.',
-      }));
+      return gateIssues(report.findings);
     } catch (error) {
       this.emitTyped('log', `Security gates failed to run: ${error instanceof Error ? error.message : String(error)}`);
       return [];
@@ -600,34 +656,20 @@ export class QALoop extends EventEmitter {
   }
 
   // ===========================================================================
-  // Recurring Issue Detection
+  // Iteration History
   // ===========================================================================
 
-  /**
-   * Check if current issues are recurring (appeared RECURRING_ISSUE_THRESHOLD+ times).
-   */
-  private hasRecurringIssues(currentIssues: QAIssue[]): boolean {
-    if (currentIssues.length === 0) return false;
-
-    // Count occurrences of each issue title across history
-    const titleCounts = new Map<string, number>();
-    for (const record of this.iterationHistory) {
-      for (const issue of record.issues) {
-        const title = issue.title.toLowerCase().trim();
-        titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
-      }
+  /** Rounds recorded by earlier runs; entries an agent wrote into the plan by hand are skipped. */
+  private async loadIterationHistory(): Promise<QAIterationRecord[]> {
+    try {
+      const raw = await readFile(join(this.config.specDir, 'implementation_plan.json'), 'utf-8');
+      const plan = safeParseJson<{ qa_iteration_history?: QAIterationRecord[] }>(raw);
+      return (plan?.qa_iteration_history ?? []).filter(
+        (r) => Array.isArray(r.issues) && ['approved', 'rejected', 'error'].includes(r.status),
+      );
+    } catch {
+      return [];
     }
-
-    // Check if any current issue exceeds threshold
-    for (const issue of currentIssues) {
-      const title = issue.title.toLowerCase().trim();
-      const count = (titleCounts.get(title) ?? 0) + 1; // +1 for current occurrence
-      if (count >= RECURRING_ISSUE_THRESHOLD) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   /**
@@ -676,31 +718,6 @@ export class QALoop extends EventEmitter {
     } catch {
       // Non-fatal — iteration is still tracked in memory
     }
-  }
-
-  /**
-   * Collect issues that are considered "recurring" from history.
-   */
-  private getRecurringIssues(currentIssues: QAIssue[]): QAIssue[] {
-    const recurring: QAIssue[] = [];
-    const titleCounts = new Map<string, number>();
-
-    for (const record of this.iterationHistory) {
-      for (const issue of record.issues) {
-        const key = issue.title.toLowerCase().trim();
-        titleCounts.set(key, (titleCounts.get(key) ?? 0) + 1);
-      }
-    }
-
-    for (const issue of currentIssues) {
-      const key = issue.title.toLowerCase().trim();
-      const count = (titleCounts.get(key) ?? 0) + 1;
-      if (count >= RECURRING_ISSUE_THRESHOLD) {
-        recurring.push(issue);
-      }
-    }
-
-    return recurring;
   }
 
   /**

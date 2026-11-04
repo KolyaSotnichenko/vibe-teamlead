@@ -43,7 +43,7 @@ vi.mock('../../schema', () => ({
   })),
 }));
 
-import { designIssues, QALoop } from '../qa-loop';
+import { designIssues, gateIssues, QALoop } from '../qa-loop';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
 
@@ -544,6 +544,80 @@ describe('QALoop', () => {
   // -------------------------------------------------------------------------
   // Security gates
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // Recurrence counts rounds, across runs
+  // -------------------------------------------------------------------------
+
+  describe('recurring issues', () => {
+    /** The reviewer rejects with these issues every time; the plan may already hold earlier rounds. */
+    function rejecting(issues: Array<Record<string, unknown>>, history: unknown[] = []) {
+      const plan = JSON.stringify({
+        phases: [{ subtasks: [{ status: 'completed' }] }],
+        qa_iteration_history: history,
+        qa_signoff: { status: 'rejected', issues_found: issues },
+      });
+      const fresh = JSON.stringify({ phases: [{ subtasks: [{ status: 'completed' }] }], qa_iteration_history: history });
+      let reviewed = false;
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(reviewed ? plan : fresh);
+        return Promise.reject(new Error('ENOENT'));
+      });
+      return vi.fn().mockImplementation(async () => {
+        reviewed = true;
+        return makeSessionResult('completed');
+      });
+    }
+
+    const agents = (run: ReturnType<typeof vi.fn>) => (run.mock.calls as Array<[QASessionRunConfig]>).map((c) => c[0].agentType);
+
+    it('gives the fixer two tries: an issue escalates on its third round, not its second', async () => {
+      const runSession = rejecting([{ title: 'Broken login', location: 'a.ts:1' }]);
+      const outcome = await new QALoop(makeConfig({ runSession })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer', 'qa_fixer', 'qa_reviewer', 'qa_fixer', 'qa_reviewer']);
+      expect(outcome.reason).toBe('recurring_issues');
+    });
+
+    it('does not count identical titles within one round as recurring', async () => {
+      const same = Array.from({ length: 7 }, () => ({ title: 'Secret detected', location: 'x.json:1' }));
+      const runSession = rejecting(same);
+      await new QALoop(makeConfig({ runSession, maxIterations: 1 })).run();
+      expect(mockWriteFile.mock.calls.some((c) => String(c[0]).endsWith('QA_ESCALATION.md'))).toBe(false);
+    });
+
+    it('treats a moved line and a changed count as the same issue', async () => {
+      const history = [1, 2].map((n) => ({
+        iteration: n, status: 'rejected', durationMs: 1, timestamp: 't',
+        issues: [{ title: `Design system: ${n} violations in a.css`, location: `a.css:${n}` }],
+      }));
+      const runSession = rejecting([{ title: 'Design system: 3 violations in a.css', location: 'a.css:9' }], history);
+      const outcome = await new QALoop(makeConfig({ runSession })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer']);
+      expect(outcome.reason).toBe('recurring_issues');
+    });
+
+    it('remembers earlier runs and ignores hand-written history entries', async () => {
+      const round = { iteration: 1, status: 'rejected', durationMs: 1, timestamp: 't', issues: [{ title: 'Broken login', location: 'a.ts:1' }] };
+      const runSession = rejecting([{ title: 'Broken login', location: 'a.ts:1' }], [round, { status: 'fixes_applied' }, round]);
+      const outcome = await new QALoop(makeConfig({ runSession })).run();
+      expect(agents(runSession)).toEqual(['qa_reviewer']);
+      expect(outcome.reason).toBe('recurring_issues');
+    });
+
+    it('does not fail on an issue without a title', async () => {
+      const runSession = rejecting([{ description: 'something' }]);
+      const outcome = await new QALoop(makeConfig({ runSession, maxIterations: 1 })).run();
+      expect(outcome.reason).toBe('max_iterations');
+    });
+  });
+
+  it('turns gate findings into one issue per leaking file', () => {
+    const leak = (line: number, file = 'a.json') => ({ gate: 'gitleaks' as const, key: `gitleaks:r:${file}:${line}`, title: 'Secret detected', file, line });
+    const osv = { gate: 'osv-scanner' as const, key: 'osv:glob@1:GHSA', title: 'Vulnerable dependency: glob', file: 'pnpm-lock.yaml' };
+    const issues = gateIssues([leak(1), leak(2), leak(3, 'b.json'), osv]);
+    expect(issues.map((i) => i.title)).toEqual(['Secrets: 2 findings in a.json', 'Secrets: 1 finding in b.json', 'Vulnerable dependency: glob']);
+    expect(issues[0].location).toBe('a.json:1');
+  });
 
   it('does not approve while security gates have findings, then approves once clear', async () => {
     let sessionCallCount = 0;

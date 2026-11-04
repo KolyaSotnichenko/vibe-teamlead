@@ -188,7 +188,7 @@ export function generateQAReport(
       report += `\n#### Issues\n\n`;
       for (const issue of record.issues) {
         const typeTag = issue.type ? ` \`[${issue.type.toUpperCase()}]\`` : '';
-        report += `- **${issue.title}**${typeTag}\n`;
+        report += `- **${issue.title ?? issue.description ?? 'Issue'}**${typeTag}\n`;
         if (issue.location) {
           report += `  - Location: \`${issue.location}\`\n`;
         }
@@ -230,7 +230,7 @@ export function generateEscalationReport(
   const totalIterations = iterations.length;
   const totalIssues = iterations.reduce((sum, r) => sum + r.issues.length, 0);
   const uniqueIssueTitles = new Set(
-    iterations.flatMap((r) => r.issues.map((i) => i.title.toLowerCase())),
+    iterations.flatMap((r) => r.issues.map((i) => (i.title ?? i.description ?? '').toLowerCase())),
   ).size;
   const approvedCount = iterations.filter((r) => r.status === 'approved').length;
   const fixSuccessRate = totalIterations > 0 ? (approvedCount / totalIterations).toFixed(1) : '0';
@@ -239,7 +239,7 @@ export function generateEscalationReport(
   const titleCounts = new Map<string, number>();
   for (const record of iterations) {
     for (const issue of record.issues) {
-      const key = issue.title.toLowerCase().trim();
+      const key = (issue.title ?? issue.description ?? '').toLowerCase().trim();
       titleCounts.set(key, (titleCounts.get(key) ?? 0) + 1);
     }
   }
@@ -250,7 +250,7 @@ export function generateEscalationReport(
   let report = `# QA Escalation — Human Intervention Required
 
 **Generated**: ${now}
-**Iteration**: ${totalIterations}/${DEFAULT_QA_ITERATIONS}
+**Rounds so far**: ${totalIterations}
 **Reason**: Recurring issues detected (${RECURRING_ISSUE_THRESHOLD}+ occurrences)
 
 ## Summary
@@ -268,7 +268,7 @@ These issues have appeared ${RECURRING_ISSUE_THRESHOLD}+ times without being res
 
   for (let i = 0; i < recurringIssues.length; i++) {
     const issue = recurringIssues[i];
-    report += `### ${i + 1}. ${issue.title}\n\n`;
+    report += `### ${i + 1}. ${issue.title ?? issue.description ?? 'Issue'}\n\n`;
     report += `- **Location**: ${issue.location ?? 'N/A'}\n`;
     report += `- **Type**: ${issue.type ?? 'N/A'}\n`;
     if (issue.description) {

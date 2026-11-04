@@ -36,7 +36,7 @@ flowchart TD
 
 - Gate findings block approval, even if the reviewer said "ok".
 - The app writes a `qa_report.md` report (with the AC table) and a manual test plan.
-- If the same problem repeats over several iterations, the task is escalated to you.
+- If the same problem comes back in three rounds, including rounds of earlier QA runs, the task is escalated to you, so the fixer gets two tries at it.
 
 ## Strix (Security QA)
 
