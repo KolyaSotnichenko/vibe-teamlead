@@ -639,6 +639,44 @@ describe('QALoop', () => {
       expect(reviews[1][1].lastReview).toBeUndefined();
     });
 
+    it.each([
+      ['cut off by its limit', 'max_steps', false],
+      ['finished with no verdict', 'completed', true],
+    ] as const)('a shortened review %s leaves nothing for the next one to build on', async (_name, secondOutcome, verdictSession) => {
+      let plan = completedPlan();
+      let report: string | null = null;
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(plan);
+        if (p.endsWith('qa_report.md') && report) return Promise.resolve(report);
+        return Promise.reject(new Error('ENOENT'));
+      });
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      let n = 0;
+      const runSession = vi.fn(async (config: QASessionRunConfig) => {
+        n++;
+        // 1: a finished review rejects. 2: the fixer. 3: the shortened review stops without a verdict.
+        if (n === 1) plan = completedPlan('rejected');
+        if (n === 3) {
+          report = 'edited by the shortened review';
+          return makeSessionResult(secondOutcome);
+        }
+        // The session asked for the lost verdict gives none; the review after it approves
+        if (config.agentType === 'qa_reviewer' && n > (verdictSession ? 4 : 3)) plan = completedPlan('approved');
+        return makeSessionResult('completed');
+      });
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt, currentCommit: async () => 'abc123' })).run();
+
+      expect(outcome.approved).toBe(true);
+      const reviews = (generatePrompt.mock.calls as Array<[string, { lastReview?: unknown }]>).filter(([agent]) => agent === 'qa_reviewer');
+      expect(reviews).toHaveLength(3);
+      expect(reviews[1][1].lastReview).toBeTruthy();
+      expect(reviews[2][1].lastReview).toBeUndefined();
+    });
+
     it.each(['the cut-off review', 'the verdict session'])('stopping during %s leaves no approval for the next run to trust', async (when) => {
       const { mkdtempSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
       const { tmpdir } = await import('node:os');

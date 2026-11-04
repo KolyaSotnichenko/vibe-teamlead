@@ -578,10 +578,11 @@ export class QALoop extends EventEmitter {
         const issues = signoff?.issues_found ?? [];
 
         this.lastReviewerApproved = status === 'approved';
-        // A cut-off review didn't look at everything, so the next one can't build on it
-        if (reviewEnded && reviewedCommit && (status === 'approved' || status === 'rejected')) {
-          this.lastReviewThisRun = { commit: reviewedCommit, approved: status === 'approved', issues };
-        }
+        // Only a finished review with a verdict can shorten the next one. Any other may
+        // have left its report half edited, so the next review starts over.
+        this.lastReviewThisRun = reviewEnded && reviewedCommit && (status === 'approved' || status === 'rejected')
+          ? { commit: reviewedCommit, approved: status === 'approved', issues }
+          : undefined;
         this.lastBlocking = (status === 'rejected' ? issues : []).map((i) => ({
           source: 'qa' as const,
           title: i.title ?? i.description ?? '',
