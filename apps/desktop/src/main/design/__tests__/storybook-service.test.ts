@@ -1,11 +1,12 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../env-utils', () => ({ getAugmentedEnv: () => ({ ...process.env }) }));
 
-import { installDependencies, needsInstall, packageManagerOf, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
+import { freePort, installDependencies, needsInstall, packageManagerOf, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
 
 const dir = () => mkdtempSync(path.join(tmpdir(), 'vtl-sb-'));
 
@@ -65,3 +66,19 @@ describe('storybook command', () => {
     expect(storybookArgs('npm', undefined, 6006)).toEqual(['exec', '--', 'storybook', 'dev', '-p', '6006', '--ci']);
   });
 });
+
+describe('free port', () => {
+  it('falls back to a real port the OS picked when the preferred one is taken (never 0)', async () => {
+    const busy = createServer();
+    await new Promise<void>((r) => busy.listen(0, '127.0.0.1', () => r()));
+    const taken = (busy.address() as { port: number }).port;
+    try {
+      const port = await freePort(taken);
+      expect(port).not.toBe(taken);
+      expect(port).toBeGreaterThan(0);
+    } finally {
+      busy.close();
+    }
+  });
+});
+

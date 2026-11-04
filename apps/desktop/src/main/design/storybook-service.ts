@@ -21,14 +21,22 @@ interface Running {
 const servers = new Map<string, Running>();
 const START_TIMEOUT_MS = 180_000;
 
-function freePort(preferred = 6006): Promise<number> {
+/**
+ * A free port: the preferred one, or one the OS picks. Port 0 asks the OS, so
+ * the answer is the port it actually bound, never 0 (Storybook refuses 0).
+ */
+export function freePort(preferred = 6006): Promise<number> {
   const tryPort = (port: number) =>
     new Promise<number>((resolve, reject) => {
       const server = createServer();
       server.once('error', reject);
-      server.listen(port, '127.0.0.1', () => server.close(() => resolve(port)));
+      server.listen(port, '127.0.0.1', () => {
+        const address = server.address();
+        const bound = typeof address === 'object' && address ? address.port : port;
+        server.close(() => resolve(bound));
+      });
     });
-  return tryPort(preferred).catch(() => tryPort(0).then((p) => p));
+  return tryPort(preferred).catch(() => tryPort(0));
 }
 
 /** The URL once Storybook prints it (or answers on the port). Pure parser — tested directly. */

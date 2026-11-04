@@ -67,7 +67,28 @@ function useProjectUsage(projectId: string | null): ProjectUsageSummary | null {
 export function ProjectUsage({ projectId }: { projectId: string | null }) {
   const { t, i18n } = useTranslation('common');
   const usage = useProjectUsage(projectId);
-  if (!usage || usage.sessions === 0) return null;
+  if (!usage) return null;
+
+  // Nothing counted yet: still shown, so it's clear where the numbers will appear
+  if (usage.sessions === 0) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="electron-no-drag flex h-8 items-center gap-1 px-2 font-mono text-xs tabular-nums text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label={t('usage.ariaLabel', { tokens: '0' })}
+          >
+            0<span className="text-[10px] uppercase tracking-wide opacity-70">{t('usage.tokensShort')}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" sideOffset={6} className="w-72 p-4">
+          <p className="text-sm font-medium text-foreground">{t('usage.title')}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('usage.empty')}</p>
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   const hasCost = usage.pricedTokens > 0;
   const kinds = [

@@ -1647,6 +1647,7 @@
     },
     "costApi": "for {{tokens}} tokens through the Anthropic API, as Claude Code reported it.",
     "costGateway": "{{tokens}} tokens went through {{gateway}}. Your gateway prices them; see its billing.",
-    "costSubscription": "{{tokens}} tokens under your Claude subscription, with no per-token price."
+    "costSubscription": "{{tokens}} tokens under your Claude subscription, with no per-token price.",
+    "empty": "Nothing counted yet. Every agent session in this project adds its tokens when it ends, starting with sessions that began after this feature arrived (tasks already running keep the old code until they restart)."
   }
 }
