@@ -46,6 +46,7 @@ export class ProjectStore {
   private data: StoreData;
   private tasksCache: Map<string, TasksCacheEntry> = new Map();
   private readonly CACHE_TTL_MS = 3000; // 3 seconds TTL for task cache
+  private isTaskRunning: (taskId: string) => boolean = () => false;
 
   constructor() {
     // Store in app's userData directory
@@ -612,6 +613,11 @@ export class ProjectStore {
     return tasks;
   }
 
+  /** The agent manager lives elsewhere; a running task's status is never stale. */
+  setRunningTaskCheck(check: (taskId: string) => boolean): void {
+    this.isTaskRunning = check;
+  }
+
   /**
    * Correct stale task status when all subtasks are completed but status wasn't persisted.
    * Extracted from loadTasksFromSpecsDir to keep read/write separation clear.
@@ -629,7 +635,7 @@ export class ProjectStore {
     planPath: string,
     taskName: string
   ): { status: TaskStatus; reviewReason: ReviewReason | undefined } {
-    if (subtasks.length === 0 || hasJsonError) {
+    if (subtasks.length === 0 || hasJsonError || this.isTaskRunning(taskName)) {
       return { status: finalStatus, reviewReason: finalReviewReason };
     }
 

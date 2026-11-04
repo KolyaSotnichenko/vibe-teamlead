@@ -371,6 +371,44 @@ describe('ProjectStore', () => {
       expect(tasks[0].status).toBe('backlog');
     });
 
+    describe('a task with every subtask done but still marked in progress', () => {
+      function writeStalePlan(): string {
+        const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '009-stale');
+        mkdirSync(specsDir, { recursive: true });
+        const planPath = path.join(specsDir, 'implementation_plan.json');
+        writeFileSync(planPath, JSON.stringify({
+          feature: 'Stale',
+          status: 'in_progress',
+          phases: [{ phase: 1, name: 'P', subtasks: [{ id: 's1', description: 'S', status: 'completed' }] }],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        }));
+        return planPath;
+      }
+
+      it('is left alone while it runs', async () => {
+        const planPath = writeStalePlan();
+        const { ProjectStore } = await import('../project-store');
+        const store = new ProjectStore();
+        store.setRunningTaskCheck((id) => id === '009-stale');
+        const project = store.addProject(TEST_PROJECT_PATH);
+
+        expect(store.getTasks(project.id)[0].status).toBe('in_progress');
+        expect(JSON.parse(readFileSync(planPath, 'utf-8')).status).toBe('in_progress');
+      });
+
+      it('goes to human review once nothing runs it', async () => {
+        const planPath = writeStalePlan();
+        const { ProjectStore } = await import('../project-store');
+        const store = new ProjectStore();
+        store.setRunningTaskCheck(() => false);
+        const project = store.addProject(TEST_PROJECT_PATH);
+
+        expect(store.getTasks(project.id)[0].status).toBe('human_review');
+        expect(JSON.parse(readFileSync(planPath, 'utf-8')).status).toBe('human_review');
+      });
+    });
+
     it('should determine status as ai_review when all subtasks completed', async () => {
       const specsDir = path.join(TEST_PROJECT_PATH, '.vibe-teamlead', 'specs', '003-complete');
       mkdirSync(specsDir, { recursive: true });

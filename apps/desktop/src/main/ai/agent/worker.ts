@@ -49,6 +49,7 @@ import { getPhaseThinking, resolvePhaseModel } from '../config/phase-config';
 import { TaskLogWriter, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
+import { runStandaloneQa } from './standalone-qa';
 import {
   detectProjectCapabilities,
   getQaToolsSection,
@@ -995,21 +996,14 @@ async function runQALoop(session: SerializableSessionConfig, toolContext: ToolCo
   postLog('Starting QA validation loop');
   logWriter?.startPhase('qa');
 
-  const outcome = await runQualityAssurance(session, toolContext);
-
-  if (logWriter) {
-    logWriter.endPhase('qa', outcome.approved);
-    logWriter.flush();
-  }
-
-  if (outcome.approved) {
-    postTaskEvent('QA_PASSED');
-  } else if (outcome.reason === 'max_iterations' || outcome.reason === 'security_findings') {
-    // Both go to human review with the reports attached.
-    postTaskEvent('QA_MAX_ITERATIONS');
-  } else {
-    postTaskEvent('QA_AGENT_ERROR', { error: outcome.error });
-  }
+  const outcome = await runStandaloneQa(async () => {
+    const result = await runQualityAssurance(session, toolContext);
+    if (logWriter) {
+      logWriter.endPhase('qa', result.approved);
+      logWriter.flush();
+    }
+    return result;
+  }, postTaskEvent);
 
   await releaseTaskResources(session);
   postFinalResult(outcome.approved, outcome.totalIterations, outcome.durationMs, outcome.error);

@@ -57,6 +57,7 @@ import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
+import { projectStore } from './project-store';
 import { TerminalManager } from './terminal-manager';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
@@ -435,6 +436,7 @@ app.whenReady().then(() => {
 
   // Initialize agent manager
   agentManager = new AgentManager();
+  projectStore.setRunningTaskCheck((taskId) => agentManager?.isRunning(taskId) ?? false);
 
   // Load settings and configure agent manager with the prompts path
   // Uses EAFP pattern (try/catch) instead of LBYL (existsSync) to avoid TOCTOU race conditions
