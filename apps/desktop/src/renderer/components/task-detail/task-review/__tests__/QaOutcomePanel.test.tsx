@@ -62,6 +62,19 @@ describe('QaOutcomePanel', () => {
     expect(buttons[0].textContent).toContain('box-shadow');
   });
 
+  it('never runs a regular expression from the tokens to decide what is allowed', async () => {
+    setup(
+      {
+        approved: false, reason: 'recurring_issues', iterations: 1, reviewerApproved: false, at: '',
+        blocking: [{ source: 'design', title: 'No gradients', location: 'a.css:1', match: 'linear-gradient(' }],
+      },
+      [{ pattern: '.*', message: 'matches anything' }],
+    );
+    expect(await screen.findByRole('button', { name: /qaOutcome.allow / })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('qaOutcome.allowed')).not.toBeInTheDocument();
+  });
+
   it('says when a check keeps repeating itself', async () => {
     setup({
       approved: false, reason: 'recurring_issues', iterations: 1, reviewerApproved: false, checksRepeat: true, at: 'now',

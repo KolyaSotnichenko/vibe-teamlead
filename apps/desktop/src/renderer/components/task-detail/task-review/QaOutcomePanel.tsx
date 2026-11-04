@@ -18,17 +18,12 @@ export function exactPattern(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** The matches the tokens already allow, the same way the design check reads them. Pure. */
+/**
+ * The matches Allow already wrote to the tokens. Compared as text: agents can edit the
+ * tokens, and running their regular expressions here could hang the window. Pure.
+ */
 function matchesAllowed(matches: string[], patterns: Array<{ pattern: string }> = []): string[] {
-  return matches.filter((match) =>
-    patterns.some(({ pattern }) => {
-      try {
-        return new RegExp(pattern).test(match);
-      } catch {
-        return false;
-      }
-    }),
-  );
+  return matches.filter((match) => patterns.some(({ pattern }) => pattern === exactPattern(match)));
 }
 
 export function QaOutcomePanel({ task }: { task: Task }) {
