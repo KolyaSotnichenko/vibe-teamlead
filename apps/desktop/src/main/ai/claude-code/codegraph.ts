@@ -7,11 +7,13 @@
  * agents' edits during the session.
  */
 
-import { execFileSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 import type { McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk';
+
+import { excludeFromGit } from '../../utils/git-exclude';
 
 /** MCP key → tools appear as mcp__codegraph__* */
 export const CODEGRAPH_SERVER_KEY = 'codegraph';
@@ -48,19 +50,7 @@ export function codegraphMcpServer(bin: string, projectDir: string): McpStdioSer
 
 /** Keep `.codegraph/` out of commits without touching the project's .gitignore. */
 export function excludeIndexFromGit(projectDir: string): void {
-  try {
-    const raw = execFileSync('git', ['rev-parse', '--git-path', 'info/exclude'], {
-      cwd: projectDir,
-      encoding: 'utf-8',
-    }).trim();
-    const excludePath = isAbsolute(raw) ? raw : join(projectDir, raw);
-    const current = existsSync(excludePath) ? readFileSync(excludePath, 'utf-8') : '';
-    if (current.split('\n').some((line) => line.trim() === `${INDEX_DIR}/`)) return;
-    mkdirSync(dirname(excludePath), { recursive: true });
-    appendFileSync(excludePath, `${current && !current.endsWith('\n') ? '\n' : ''}${INDEX_DIR}/\n`);
-  } catch {
-    // Not a git repository — nothing to exclude from.
-  }
+  excludeFromGit(projectDir, `${INDEX_DIR}/`);
 }
 
 /** Per project directory: the indexing result (true = ready), shared by concurrent sessions. */

@@ -24,6 +24,7 @@ import {
 import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
+import { excludeFromGit } from '../../utils/git-exclude';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
@@ -2088,8 +2089,9 @@ export function registerWorktreeHandlers(
             debug('Applied merge to project:', applied);
 
             if (applied) {
-              // Stage all changed files
+              // Stage all changed files (the app's own folder isn't one of them)
               try {
+                excludeFromGit(project.path, `${project.autoBuildPath || '.vibe-teamlead'}/`);
                 execFileSync(getToolPath('git'), ['add', '-A'], {
                   cwd: project.path,
                   encoding: 'utf-8',
@@ -2431,6 +2433,8 @@ export function registerWorktreeHandlers(
         let uncommittedFiles: string[] = [];
         if (isGitWorkTree(project.path)) {
           try {
+            // The app's own folder is not the user's unfinished work
+            excludeFromGit(project.path, `${project.autoBuildPath || '.vibe-teamlead'}/`);
             refreshGitIndex(project.path);
 
             const gitStatus = execFileSync(getToolPath('git'), ['status', '--porcelain'], {

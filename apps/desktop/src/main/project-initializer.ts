@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } fr
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { getToolPath } from './cli-tool-manager';
+import { excludeFromGit } from './utils/git-exclude';
 
 /**
  * Debug logging - only logs when DEBUG=true or in development mode
@@ -309,6 +310,8 @@ export function initializeProject(projectPath: string): InitializationResult {
       if (!existsSync(keep)) writeFileSync(keep, '', 'utf-8');
     }
     ensureGitignoreEntries(projectPath, GITIGNORE_ENTRIES);
+    // A branch may bring its own .gitignore without the entry; this one stays
+    excludeFromGit(projectPath, '.vibe-teamlead/');
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Could not create the .vibe-teamlead folder' };
   }
