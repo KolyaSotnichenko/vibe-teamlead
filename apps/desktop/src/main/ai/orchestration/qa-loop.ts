@@ -36,6 +36,7 @@ import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import type { GateFinding, GateReport } from '../security/gates';
 import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
+import { approvalHolds, clearApproval, recordApproval } from './qa-approval';
 import { writeFileReplacing, writeFileReplacingSync } from '../safe-write';
 
 // =============================================================================
@@ -209,6 +210,8 @@ export interface QALoopConfig {
   runDesignCheck?: () => Promise<{ findings: DesignFinding[]; mode: DesignQaMode }>;
   /** HEAD of the build, so a later review can look at what changed since this one */
   currentCommit?: () => Promise<string | undefined>;
+  /** Where approvals are recorded and the state of the code they hold for; see qa-approval.ts */
+  approvals?: { dir: string; fingerprint: () => Promise<string | undefined> };
 }
 
 /** One QA issue per file with design-check findings. Pure — tested directly. */
@@ -442,8 +445,11 @@ export class QALoop extends EventEmitter {
       if (!rerun && !hasHumanFeedback) {
         const currentStatus = await this.readQASignoff();
         if (currentStatus?.status === 'approved') {
-          this.emitTyped('log', 'Build already approved by QA');
-          return this.outcome(true, 0, Date.now() - startTime);
+          if (await this.approvalStillHolds()) {
+            this.emitTyped('log', 'Build already approved by QA');
+            return this.outcome(true, 0, Date.now() - startTime);
+          }
+          this.emitTyped('log', 'The plan says approved, but not for this exact code: reviewing again');
         }
       }
 
@@ -451,6 +457,9 @@ export class QALoop extends EventEmitter {
       if (hasHumanFeedback) {
         await this.processHumanFeedback();
       }
+
+      // A new review: whatever was approved before no longer speaks for this run
+      if (this.config.approvals) clearApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir);
 
       // Rounds of earlier runs count too: a restart must not hide a recurring issue
       this.iterationHistory = await this.loadIterationHistory();
@@ -595,6 +604,10 @@ export class QALoop extends EventEmitter {
         if (status === 'approved') {
           await this.recordIteration(iteration, 'approved', [], iterationDuration, { reviewed_commit: reviewedCommit });
           await this.writeReports('approved');
+          if (this.config.approvals) {
+            const fingerprint = await this.config.approvals.fingerprint();
+            recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint);
+          }
           return this.outcome(true, iteration, Date.now() - startTime);
         }
 
@@ -779,6 +792,13 @@ export class QALoop extends EventEmitter {
   }
 
   /** Remove qa_signoff from implementation_plan.json (no-op when absent). */
+  /** Did this app record an approval for the code as it is now? */
+  private async approvalStillHolds(): Promise<boolean> {
+    const { approvals } = this.config;
+    if (!approvals) return false;
+    return approvalHolds(approvals.dir, this.config.projectDir, this.config.specDir, await approvals.fingerprint());
+  }
+
   private async clearQASignoff(): Promise<void> {
     const planPath = join(this.config.specDir, 'implementation_plan.json');
     try {

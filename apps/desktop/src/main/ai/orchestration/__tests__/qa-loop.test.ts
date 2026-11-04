@@ -47,6 +47,7 @@ vi.mock('../../schema', () => ({
 
 import { validateStructuredOutput } from '../../schema';
 import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection } from '../qa-loop';
+import { approvalHolds, recordApproval } from '../qa-approval';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
 
@@ -133,24 +134,92 @@ describe('QALoop', () => {
   // Already approved
   // -------------------------------------------------------------------------
 
-  it('returns approved immediately when QA signoff is already "approved"', async () => {
-    const plan = completedPlan('approved');
+  describe('an approval from an earlier run', () => {
+    async function approvals(fingerprint: string | undefined = 'code-1') {
+      const { mkdtempSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      return { dir: mkdtempSync(path.join(tmpdir(), 'vtl-approvals-')), fingerprint: async () => fingerprint };
+    }
 
-    mockReadFile.mockImplementation((path: string) => {
-      if (path.endsWith('implementation_plan.json')) return Promise.resolve(plan);
-      // QA_FIX_REQUEST.md does not exist
-      return Promise.reject(new Error('ENOENT'));
+    function planSays(initial: string) {
+      let plan = initial;
+      mockReadFile.mockImplementation((p: string) =>
+        p.endsWith('implementation_plan.json') ? Promise.resolve(plan) : Promise.reject(new Error('ENOENT')),
+      );
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      return { approve: () => { plan = completedPlan('approved'); } };
+    }
+
+    it('counts when the app recorded it for this exact code: no agents run', async () => {
+      const store = await approvals();
+      recordApproval(store.dir, PROJECT_DIR, SPEC_DIR, 'code-1');
+      planSays(completedPlan('approved'));
+      const runSession = vi.fn();
+
+      const outcome = await new QALoop(makeConfig({ runSession, approvals: store })).run();
+
+      expect(outcome).toMatchObject({ approved: true, totalIterations: 0 });
+      expect(runSession).not.toHaveBeenCalled();
     });
 
-    const config = makeConfig();
-    const loop = new QALoop(config);
-    const outcome = await loop.run();
+    it('in the plan alone, which agents can edit, it does not count: the review runs', async () => {
+      const store = await approvals();
+      const { approve } = planSays(completedPlan('approved'));
+      const runSession = vi.fn(async () => {
+        approve();
+        return makeSessionResult('completed');
+      });
 
-    expect(outcome.approved).toBe(true);
-    expect(outcome.totalIterations).toBe(0);
-    // runSession should NOT have been called (short-circuit)
-    expect(config.runSession).not.toHaveBeenCalled();
+      const outcome = await new QALoop(makeConfig({ runSession, approvals: store })).run();
+
+      expect(runSession).toHaveBeenCalledTimes(1);
+      expect(outcome).toMatchObject({ approved: true, totalIterations: 1 });
+    });
+
+    it('does not count once the code has changed', async () => {
+      const store = await approvals('code-2');
+      recordApproval(store.dir, PROJECT_DIR, SPEC_DIR, 'code-1');
+      const { approve } = planSays(completedPlan('approved'));
+      const runSession = vi.fn(async () => {
+        approve();
+        return makeSessionResult('completed');
+      });
+
+      await new QALoop(makeConfig({ runSession, approvals: store })).run();
+
+      expect(runSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('a finished approval is recorded, and the next run needs no agents', async () => {
+      const store = await approvals();
+      const { approve } = planSays(completedPlan());
+      const runSession = vi.fn(async () => {
+        approve();
+        return makeSessionResult('completed');
+      });
+
+      await new QALoop(makeConfig({ runSession, approvals: store })).run();
+      expect(approvalHolds(store.dir, PROJECT_DIR, SPEC_DIR, 'code-1')).toBe(true);
+
+      await new QALoop(makeConfig({ runSession, approvals: store })).run();
+      expect(runSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('a new review drops the record, so a rejection leaves nothing to trust', async () => {
+      const store = await approvals('code-2');
+      recordApproval(store.dir, PROJECT_DIR, SPEC_DIR, 'code-2');
+      planSays(completedPlan());
+      const runSession = vi.fn(async () => makeSessionResult('cancelled'));
+
+      await new QALoop(makeConfig({ runSession, approvals: store })).run();
+
+      expect(approvalHolds(store.dir, PROJECT_DIR, SPEC_DIR, 'code-2')).toBe(false);
+    });
   });
+
 
   // -------------------------------------------------------------------------
   // QA approved on first iteration

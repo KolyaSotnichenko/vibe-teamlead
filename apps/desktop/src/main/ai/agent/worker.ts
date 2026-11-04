@@ -48,6 +48,7 @@ import { TaskLogWriter, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import { runStandaloneQa } from './standalone-qa';
+import { qaApprovalsDir, workTreeFingerprint } from '../orchestration/qa-approval';
 import { clearTurnLimits } from '../claude-code/turn-limits';
 import {
   detectProjectCapabilities,
@@ -935,6 +936,7 @@ async function runQualityAssurance(
       : undefined,
 
     currentCommit: () => currentCommit(session.projectDir),
+    approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
 
     generatePrompt: async (agentType, context) => {
       const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session);
