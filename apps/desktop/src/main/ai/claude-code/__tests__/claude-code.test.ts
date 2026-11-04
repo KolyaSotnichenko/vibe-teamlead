@@ -3,7 +3,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import { SessionAccumulator } from '../event-mapper';
-import { buildEnv, buildQueryOptions, mcpStartupProblems, resolveBuiltinTools, runAgentSession } from '../runner';
+import { buildEnv, buildQueryOptions, mcpStartupProblems, sessionSummary, resolveBuiltinTools, runAgentSession } from '../runner';
 import { evaluatePreToolUse } from '../security-hooks';
 import type { SessionConfig, StreamEvent } from '../../session/types';
 import type { ToolContext } from '../../tools/types';
@@ -153,6 +153,17 @@ describe('buildEnv', () => {
       delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       delete process.env.ANTHROPIC_AUTH_TOKEN;
     }
+  });
+});
+
+describe('session summary in the task log', () => {
+  it('shows turns, tool calls and tokens by kind, and flags missing caching and the turn limit', () => {
+    expect(sessionSummary('coder', 'completed', 42, 61, { promptTokens: 2_100_000, completionTokens: 18_000, cacheReadTokens: 1_950_000, cacheCreationTokens: 90_000 }, 200)).toBe(
+      'coder session completed: 42 turns, 61 tool calls · tokens in 60K, cache read 1.95M, cache write 90K, out 18K',
+    );
+    const line = sessionSummary('qa_reviewer', 'max_steps', 200, 250, { promptTokens: 9_000_000, completionTokens: 40_000 }, 200);
+    expect(line).toContain('no prompt caching');
+    expect(line).toContain('stopped at the 200-turn limit');
   });
 });
 

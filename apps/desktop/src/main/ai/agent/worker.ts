@@ -22,6 +22,7 @@ import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import type { MemoryRequest } from './types';
+import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
@@ -416,6 +417,8 @@ async function assemblePrompt(
   session: SerializableSessionConfig,
   /** Extra text to find memories for (e.g. the subtask) */
   memoryFocus?: string,
+  /** The coder's subtask: a subtask that touches no UI files gets a pointer instead of the whole design system */
+  subtask?: { filesToCreate?: string[]; filesToModify?: string[] },
 ): Promise<string> {
   const basePrompt = loadRolePrompt(promptName)
     ?? buildFallbackPrompt(promptName as AgentType, session.specDir, session.projectDir);
@@ -441,7 +444,7 @@ async function assemblePrompt(
     projectDir: session.projectDir,
     projectInstructions: cachedProjectInstructions,
   });
-  const design = designSection(promptName, session);
+  const design = designSection(promptName, session, subtask);
   const memory = await memorySection(session, memoryFocus);
   return [prompt, design, memory].filter(Boolean).join('\n\n');
 }
@@ -449,11 +452,22 @@ async function assemblePrompt(
 /** Agents that shape or check UI get the design system (and anti-slop rules for UI projects). */
 const DESIGN_BUILDERS = new Set(['spec_writer', 'spec_quick', 'spec_critic', 'architect', 'planner', 'coder', 'qa_fixer', 'followup_planner']);
 
-function designSection(promptName: string, session: SerializableSessionConfig): string {
+function designSection(
+  promptName: string,
+  session: SerializableSessionConfig,
+  subtask?: { filesToCreate?: string[]; filesToModify?: string[] },
+): string {
   const qa = promptName === 'qa_reviewer';
   if (!qa && !DESIGN_BUILDERS.has(promptName)) return '';
   const info = session.designSystem;
   if (!info) return '';
+  // Every coder turn re-sends the system prompt: an API or data subtask doesn't need the whole UI document
+  const files = [...(subtask?.filesToCreate ?? []), ...(subtask?.filesToModify ?? [])];
+  if (promptName === 'coder' && files.length > 0 && !files.some(isUiFile)) {
+    return info.exists && info.markdownPath
+      ? `## Design system\n\nThis subtask's files are not UI files. If you do change UI, read \`${info.markdownPath}\` first and follow it exactly.`
+      : '';
+  }
   const caps = projectCapabilities(session);
   const hasUi = caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native;
   if (!info.exists && !hasUi && !info.storybook.enabled) return '';
@@ -463,6 +477,15 @@ function designSection(promptName: string, session: SerializableSessionConfig): 
 // =============================================================================
 // Single Session Runner
 // =============================================================================
+
+/** Most turns one session of an agent may take (Claude Code maxTurns). */
+const TURN_LIMITS: Partial<Record<AgentType, number>> = {
+  coder: 200,
+  qa_reviewer: 200,
+  qa_fixer: 200,
+  planner: 120,
+  architect: 120,
+};
 
 /** The model for one phase (see resolvePhaseModel). */
 const phaseModel = resolvePhaseModel;
@@ -509,7 +532,9 @@ async function runSingleSession(
     ...(helperNames.length && baseSession.subagents?.model ? { subagentModel: baseSession.subagents.model } : {}),
     initialMessages,
     toolContext,
-    maxSteps: baseSession.maxSteps,
+    // A session that goes past its limit is almost always looping, and every turn re-sends
+    // the whole conversation; the orchestrator retries the subtask with a fresh context.
+    maxSteps: Math.min(baseSession.maxSteps, TURN_LIMITS[agentType] ?? baseSession.maxSteps),
     thinkingLevel: phaseThinking as SessionConfig['thinkingLevel'],
     abortSignal: abortController.signal,
     specDir,
@@ -687,7 +712,7 @@ async function runBuildOrchestrator(
 
     generatePrompt: async (agentType, _phase, context) => {
       const promptName = agentType === 'coder' ? 'coder' : agentType;
-      let prompt = await assemblePrompt(promptName, session, context.subtask?.description);
+      let prompt = await assemblePrompt(promptName, session, context.subtask?.description, context.subtask);
 
       // Inject schema validation error feedback on retry so the planner knows what to fix
       if (context.planningRetryContext) {

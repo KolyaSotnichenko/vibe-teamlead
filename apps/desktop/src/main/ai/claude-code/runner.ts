@@ -271,6 +271,32 @@ export function toOutputJsonSchema(schema: z.ZodType): Record<string, unknown> {
  * Never throws for model/auth/limit problems — those come back as an outcome
  * on the SessionResult so the orchestrator can decide what to do next.
  */
+const kTokens = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : String(n));
+
+/**
+ * One line per finished session for the task log: turns, tool calls and
+ * tokens by kind, so a session that burns tokens is visible. Pure — tested directly.
+ */
+export function sessionSummary(
+  agentType: string,
+  outcome: string,
+  turns: number,
+  toolCalls: number,
+  usage: { promptTokens: number; completionTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number },
+  maxTurns: number,
+): string {
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const cacheWrite = usage.cacheCreationTokens ?? 0;
+  const input = Math.max(0, usage.promptTokens - cacheRead - cacheWrite);
+  const parts = [
+    `${agentType} session ${outcome}: ${turns} turn${turns === 1 ? '' : 's'}, ${toolCalls} tool call${toolCalls === 1 ? '' : 's'}`,
+    `tokens in ${kTokens(input)}, cache read ${kTokens(cacheRead)}, cache write ${kTokens(cacheWrite)}, out ${kTokens(usage.completionTokens)}`,
+  ];
+  if (usage.promptTokens > 50_000 && cacheRead === 0) parts.push('no prompt caching (every turn paid the whole context)');
+  if (outcome === 'max_steps') parts.push(`stopped at the ${maxTurns}-turn limit`);
+  return parts.join(' · ');
+}
+
 /**
  * Lines for MCP servers that did not start (their tools are missing, and
  * the agent gets "No such tool available" when it calls them). Pure — tested directly.
@@ -368,6 +394,8 @@ export async function runAgentSession(
     costUsd: acc.costUsd ?? 0,
     ...billingOf(config.auth),
   });
+
+  options.onLog?.(sessionSummary(config.agentType, outcome, acc.stepsExecuted, acc.toolCallCount, acc.usage, config.maxSteps));
 
   return {
     outcome,
