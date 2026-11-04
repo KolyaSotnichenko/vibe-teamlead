@@ -24,6 +24,7 @@ import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions
 import type { MemoryRequest } from './types';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
+import { subtaskSkills } from '../claude-code/skills';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
 import type {
@@ -507,6 +508,8 @@ async function runSingleSession(
   initialUserMessage?: string,
   skipPhaseLogging = false,
   outputSchema?: import('zod').ZodSchema,
+  /** Skills for this session on top of the agent's own */
+  extraSkills?: string[],
 ): Promise<SessionResult> {
   const phaseThinking = await getPhaseThinking(specDir, phase);
   const model = await phaseModel(specDir, phase, baseSession.modelId);
@@ -522,6 +525,7 @@ async function runSingleSession(
   const helperNames = Object.keys(helpers);
   if (helperNames.length) postLog(`Subagents available: ${helperNames.join(', ')} (${baseSession.subagents?.model || 'same model'})`);
   const helpersSection = helpersPromptSection(helpers);
+  if (extraSkills?.length) postLog(`Extra skills: ${extraSkills.join(', ')}`);
 
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
@@ -532,6 +536,7 @@ async function runSingleSession(
     ...(helperNames.length && baseSession.subagents?.model ? { subagentModel: baseSession.subagents.model } : {}),
     initialMessages,
     toolContext,
+    ...(extraSkills?.length ? { extraSkills } : {}),
     // A session that goes past its limit is almost always looping, and every turn re-sends
     // the whole conversation; the orchestrator retries the subtask with a fresh context.
     maxSteps: Math.min(baseSession.maxSteps, TURN_LIMITS[agentType] ?? baseSession.maxSteps),
@@ -695,6 +700,8 @@ async function runBuildOrchestrator(
 ): Promise<void> {
   postLog('Starting BuildOrchestrator pipeline (planning → coding → QA)');
 
+  // frontend-design for coder subtasks that build UI, decided when the subtask's prompt is built
+  const uiSkills = new Map<string, string[]>();
   const orchestrator = new BuildOrchestrator({
     specDir: session.specDir,
     projectDir: session.projectDir,
@@ -712,6 +719,16 @@ async function runBuildOrchestrator(
 
     generatePrompt: async (agentType, _phase, context) => {
       const promptName = agentType === 'coder' ? 'coder' : agentType;
+      if (agentType === 'coder' && context.subtask) {
+        const caps = projectCapabilities(session);
+        uiSkills.set(
+          context.subtask.id,
+          subtaskSkills([...(context.subtask.filesToCreate ?? []), ...(context.subtask.filesToModify ?? [])], {
+            isUiFile,
+            projectHasUi: !!(caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native),
+          }),
+        );
+      }
       let prompt = await assemblePrompt(promptName, session, context.subtask?.description, context.subtask);
 
       // Inject schema validation error feedback on retry so the planner knows what to fix
@@ -744,6 +761,7 @@ async function runBuildOrchestrator(
         kickoffMessage,
         true, // skipPhaseLogging — orchestrator manages phase start/end
         runConfig.outputSchema,
+        runConfig.agentType === 'coder' && runConfig.subtaskId ? uiSkills.get(runConfig.subtaskId) : undefined,
       );
     },
 

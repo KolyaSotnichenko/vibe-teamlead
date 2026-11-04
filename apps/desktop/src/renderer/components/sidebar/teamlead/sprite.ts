@@ -90,9 +90,10 @@ function arm(D: Draw, side: -1 | 1, pose: ArmPose, f: number): void {
     if (f % 2) D('b', x + side, ARM_Y - ARM_H - 1, 1, ARM_H);
     else D('b', x, ARM_Y - ARM_H, 1, ARM_H);
   } else if (pose === 'type') {
-    D('b', x, ARM_Y, 1, 2);
-    // Hands on the laptop lid, pressing in turn
-    D('b', x - 2 * side, ARM_Y + 2 - ((f + (side > 0 ? 1 : 0)) % 2));
+    // Forearm, then a two-pixel hand that taps the keys: down on the keyboard edge, up over the lid
+    const down = (side < 0 ? [1, 0, 0, 1] : [0, 1, 0, 1])[f % 4];
+    D('b', x, ARM_Y, 1, 3);
+    D('b', side < 0 ? x + 1 : x - 2, ARM_Y + 2 + down, 2, 1);
   } else if (pose === 'hold') D('b', x, ARM_Y, 1, 2);
   else if (pose === 'head') D('b', x, ARM_Y - ARM_H - (f % 2), 1, ARM_H + (f % 2));
 }
@@ -150,9 +151,11 @@ export function drawFrame(mood: TeamleadMood, f: number): Grid {
       break;
     case 'working':
       eyes(D, 'low');
-      // Laptop: lid seen from behind, then the base
-      D('s', 5, 10, 6, 3);
-      D('s', 4, 13, 8, 1);
+      // Laptop seen from behind: a dark lid with a light rim and a small mark, the keyboard below
+      D('s', 4, 10, 8, 4);
+      D('d', 5, 11, 6, 2);
+      D('s', 7, 11, 2, 1);
+      D('b', 3, 14, 10, 1);
       arm(D, -1, 'type', f);
       arm(D, 1, 'type', f);
       break;

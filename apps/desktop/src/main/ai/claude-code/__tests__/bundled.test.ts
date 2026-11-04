@@ -8,7 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { codegraphMcpServer, excludeIndexFromGit } from '../codegraph';
 import { buildQueryOptions } from '../runner';
-import { skillsForAgent } from '../skills';
+import { FRONTEND_DESIGN_SKILL, skillsForAgent, subtaskSkills } from '../skills';
+import { isUiFile } from '../../design/design-lint';
 import { type AgentQuestion, buildAskUserHook } from '../user-questions';
 import type { SessionConfig } from '../../session/types';
 
@@ -109,6 +110,60 @@ describe('bundled tools in query options', () => {
     expect(options.mcpServers).not.toHaveProperty('codegraph');
     expect(options.plugins).toBeUndefined();
     expect(options.skills).toEqual([]);
+  });
+});
+
+describe('frontend-design for UI subtasks', () => {
+  const base: SessionConfig = {
+    agentType: 'coder',
+    model: 'claude-sonnet-4-6',
+    auth: { apiKey: 'sk-ant-test' },
+    systemPrompt: 'You are the coder.',
+    initialMessages: [{ role: 'user', content: 'go' }],
+    toolContext: { cwd: '/work', projectDir: '/work', specDir: '/work/spec', securityProfile: undefined as never },
+    maxSteps: 10,
+    specDir: '/work/spec',
+    projectDir: '/work',
+    bundled: { superpowersDir: '/r/superpowers', frontendDesignDir: '/r/frontend-design' },
+  };
+
+  it('picks the skill for subtasks that touch UI files, or name none in a UI project', () => {
+    const opts = { isUiFile, projectHasUi: false };
+    expect(subtaskSkills(['src/components/Login.tsx', 'src/api/auth.ts'], opts)).toEqual([FRONTEND_DESIGN_SKILL]);
+    expect(subtaskSkills(['src/api/auth.ts', 'src/api/__tests__/auth.test.ts'], { ...opts, projectHasUi: true })).toEqual([]);
+    expect(subtaskSkills([], { ...opts, projectHasUi: true })).toEqual([FRONTEND_DESIGN_SKILL]);
+    expect(subtaskSkills([], opts)).toEqual([]);
+  });
+
+  it('loads the plugin, adds the skill and says the design system comes first', () => {
+    const options = buildQueryOptions({ ...base, extraSkills: [FRONTEND_DESIGN_SKILL] }, new AbortController(), { codegraphReady: false });
+    expect(options.plugins).toContainEqual({ type: 'local', path: '/r/frontend-design' });
+    expect(options.skills).toContain(FRONTEND_DESIGN_SKILL);
+    expect(options.skills).toContain('superpowers:test-driven-development');
+    const append = (options.systemPrompt as { append: string }).append;
+    expect(append).toMatch(/design system and the spec come first/);
+  });
+
+  it('ships the plugin under the name the skill id uses', () => {
+    const root = join(__dirname, '..', '..', '..', '..', '..', 'vendor', 'frontend-design');
+    expect(JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf-8')).name).toBe(FRONTEND_DESIGN_SKILL.split(':')[0]);
+    expect(readFileSync(join(root, 'skills', 'frontend-design', 'SKILL.md'), 'utf-8')).toMatch(/^name: frontend-design$/m);
+    expect(readFileSync(join(root, 'LICENSE.txt'), 'utf-8')).toMatch(/Apache License/);
+    const pkg = JSON.parse(readFileSync(join(root, '..', '..', 'package.json'), 'utf-8'));
+    expect(pkg.build.extraResources).toContainEqual({ from: 'vendor/frontend-design', to: 'plugins/frontend-design' });
+  });
+
+  it('leaves other sessions and builds without the plugin alone', () => {
+    const plain = buildQueryOptions(base, new AbortController(), { codegraphReady: false });
+    expect(plain.plugins).not.toContainEqual({ type: 'local', path: '/r/frontend-design' });
+    expect(plain.skills).not.toContain(FRONTEND_DESIGN_SKILL);
+    const missing = buildQueryOptions(
+      { ...base, bundled: { superpowersDir: '/r/superpowers' }, extraSkills: [FRONTEND_DESIGN_SKILL] },
+      new AbortController(),
+      { codegraphReady: false },
+    );
+    expect(missing.skills).not.toContain(FRONTEND_DESIGN_SKILL);
+    expect((missing.systemPrompt as { append: string }).append).not.toMatch(/frontend-design skill/);
   });
 });
 

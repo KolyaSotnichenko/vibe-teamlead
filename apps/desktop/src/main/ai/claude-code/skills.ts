@@ -38,6 +38,26 @@ export function skillsForAgent(agentType: AgentType, availablePlugins?: Readonly
   return skills.filter((skill) => availablePlugins.has(skill.split(':')[0]));
 }
 
+/** Anthropic's frontend-design skill, for coder sessions that build UI. */
+export const FRONTEND_DESIGN_SKILL = 'frontend-design:frontend-design';
+
+/**
+ * Skills a coder session gets on top of its usual ones, for this subtask:
+ * frontend-design when the subtask touches UI files, or names no files in a
+ * project that has a UI. Pure.
+ */
+export function subtaskSkills(
+  files: string[],
+  opts: { isUiFile: (file: string) => boolean; projectHasUi: boolean },
+): string[] {
+  const ui = files.length > 0 ? files.some(opts.isUiFile) : opts.projectHasUi;
+  return ui ? [FRONTEND_DESIGN_SKILL] : [];
+}
+
+export const FRONTEND_DESIGN_INSTRUCTIONS = `
+## frontend-design skill
+This subtask builds UI: load the frontend-design skill (Skill tool) before writing UI code. The project's design system and the spec come first: where they set colours, type, spacing, radii or components, follow them exactly and use the skill for the rest (hierarchy, layout, copy, motion restraint, not looking templated). Don't run its plan-and-critique passes as a separate deliverable or replace the project's look; keep the TDD workflow.`;
+
 export const SUPERPOWERS_INSTRUCTIONS = `
 ## Superpowers skills
 Superpowers skills are available through the Skill tool; use them when they apply. They are methods, not the workflow: where a skill prescribes file locations, worktrees, branches, commits or follow-up plans, follow THIS role's instructions instead (spec files belong in the spec directory; the app manages worktrees, branches and merges).`;

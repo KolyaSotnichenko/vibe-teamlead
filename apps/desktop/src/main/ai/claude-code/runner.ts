@@ -26,7 +26,7 @@ import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from '
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { buildSecurityHooks } from './security-hooks';
-import { skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
+import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
 /** Claude Code built-in tools Vibe Teamlead agents may be given */
@@ -210,11 +210,20 @@ export function buildQueryOptions(
     plugins.push({ type: 'local', path: bundled.drawioPluginDir, skipMcpDiscovery: true });
     availablePlugins.add('drawio');
   }
-  const skills = config.skillsOverride
-    ? config.skillsOverride.filter((s) => availablePlugins.has(s.split(':')[0]))
-    : skillsForAgent(config.agentType, availablePlugins);
+  if (bundled.frontendDesignDir && config.extraSkills?.includes(FRONTEND_DESIGN_SKILL)) {
+    plugins.push({ type: 'local', path: bundled.frontendDesignDir });
+    availablePlugins.add('frontend-design');
+  }
+  const available = (s: string) => availablePlugins.has(s.split(':')[0]);
+  const baseSkills = config.skillsOverride ? config.skillsOverride.filter(available) : skillsForAgent(config.agentType, availablePlugins);
+  const skills = [...baseSkills, ...(config.extraSkills ?? []).filter((s) => available(s) && !baseSkills.includes(s))];
 
-  const append = [config.systemPrompt, ASK_USER_INSTRUCTIONS, skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '']
+  const append = [
+    config.systemPrompt,
+    ASK_USER_INSTRUCTIONS,
+    skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '',
+    skills.includes(FRONTEND_DESIGN_SKILL) ? FRONTEND_DESIGN_INSTRUCTIONS : '',
+  ]
     .filter(Boolean)
     .join('\n');
 

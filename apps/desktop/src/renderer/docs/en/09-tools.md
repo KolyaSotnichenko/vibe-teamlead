@@ -10,4 +10,5 @@
 | **Linear** | Working with Linear issues (if connected). |
 | **Your own MCP servers** | Added in MCP Overview and assigned to agents. |
 | **Superpowers** (bundled plugin) | A set of Claude Code skills: TDD, debugging, planning and more. |
+| **frontend-design** (bundled plugin) | Anthropic's frontend-design skill (Apache-2.0). Coder sessions get it when the subtask touches UI files (`.tsx`, `.css`, `.vue` …), or names no files in a project with a UI. The project's design system and the spec come first; the skill covers hierarchy, layout, copy and not looking templated. API and data subtasks don't load it. |
 | **architecture skill** | The standard for the architecture document, diagrams and the review loop, for the architect. |

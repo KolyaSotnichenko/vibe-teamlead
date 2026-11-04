@@ -210,6 +210,10 @@
         "to": "plugins/vibe-teamlead-skills"
       },
       {
+        "from": "vendor/frontend-design",
+        "to": "plugins/frontend-design"
+      },
+      {
         "from": "vendor/drawio-viewer",
         "to": "drawio-viewer"
       },

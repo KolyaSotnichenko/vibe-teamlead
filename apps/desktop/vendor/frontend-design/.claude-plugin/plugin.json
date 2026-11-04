@@ -1,0 +1,12 @@
+{
+  "name": "frontend-design",
+  "displayName": "Frontend design",
+  "description": "Anthropic's frontend-design skill: distinctive, intentional visual design for new or reworked UI.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Anthropic"
+  },
+  "homepage": "https://github.com/anthropics/skills/tree/main/skills/frontend-design",
+  "repository": "https://github.com/anthropics/skills",
+  "license": "Apache-2.0"
+}

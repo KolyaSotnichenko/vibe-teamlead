@@ -13,6 +13,7 @@
  *   <Resources>/plugins/superpowers/
  *   <Resources>/plugins/drawio/
  *   <Resources>/plugins/vibe-teamlead-skills/
+ *   <Resources>/plugins/frontend-design/
  *   <Resources>/drawio-viewer/viewer-static.min.js
  *   <Resources>/codegraph/bin/codegraph
  *   <Resources>/scanners/{gitleaks,osv-scanner}
@@ -34,6 +35,8 @@ export interface BundledTools {
   drawioPluginDir?: string;
   /** Vibe Teamlead house skills plugin (architecture, …) */
   vibeSkillsDir?: string;
+  /** Anthropic's frontend-design skill (anthropics/skills, Apache-2.0), for UI subtasks */
+  frontendDesignDir?: string;
   /** draw.io offline viewer script, used to render diagrams for review */
   drawioViewerScript?: string;
   /** mermaid.min.js, to check and render .mmd diagrams for the architect */
@@ -79,6 +82,7 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     superpowersDir: firstExisting([join(resourcesPath, 'plugins', 'superpowers')]),
     drawioPluginDir: firstExisting([join(resourcesPath, 'plugins', 'drawio')]),
     vibeSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'vibe-teamlead-skills')]),
+    frontendDesignDir: firstExisting([join(resourcesPath, 'plugins', 'frontend-design')]),
     drawioViewerScript: firstExisting([join(resourcesPath, 'drawio-viewer', 'viewer-static.min.js')]),
     mermaidScript: firstExisting([join(resourcesPath, 'mermaid', 'mermaid.min.js')]),
     codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', 'codegraph')]),
@@ -102,6 +106,7 @@ export function resolveDevTools(appRoot: string): BundledTools {
     superpowersDir: firstExisting([join(appRoot, 'vendor', 'superpowers')]),
     drawioPluginDir: firstExisting([join(appRoot, 'vendor', 'drawio')]),
     vibeSkillsDir: firstExisting([join(appRoot, 'vendor', 'vibe-teamlead-skills')]),
+    frontendDesignDir: firstExisting([join(appRoot, 'vendor', 'frontend-design')]),
     drawioViewerScript: firstExisting([join(appRoot, 'vendor', 'drawio-viewer', 'viewer-static.min.js')]),
     mermaidScript: firstExisting(
       [resolveFromPackage('mermaid', join('dist', 'mermaid.min.js'))].filter((p): p is string => !!p),
