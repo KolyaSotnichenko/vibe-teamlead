@@ -264,10 +264,12 @@ export function isDevServerCommand(command: string): boolean {
   return new RegExp(`${start}\\s*(?:${script}|${known})`).test(command.trim());
 }
 
+const isTaskWorktree = (dir: string) => dir.includes(`${sep}.vibe-teamlead${sep}worktrees${sep}`);
+
 /** Containers a task worktree started, from `docker ps` lines of "<id> <compose working dir>". Pure. */
 export function containersOfWorktree(ps: string, worktree: string): string[] {
   // Never the user's own containers: only a folder the app created for a task
-  if (!worktree.includes(`${sep}.vibe-teamlead${sep}worktrees${sep}`)) return [];
+  if (!isTaskWorktree(worktree)) return [];
   const ids: string[] = [];
   for (const line of ps.split('\n')) {
     const [id, dir] = line.trim().split(/\s+/, 2);
@@ -281,6 +283,7 @@ export function containersOfWorktree(ps: string, worktree: string): string[] {
  * back with their data), so they don't hold ports for the next task.
  */
 export async function stopWorktreeContainers(worktree: string): Promise<void> {
+  if (!isTaskWorktree(worktree)) return;
   const docker = findOnPath('docker', searchPath());
   if (!docker || !existsSync(worktree)) return;
   const env = { ...process.env, PATH: searchPath() };

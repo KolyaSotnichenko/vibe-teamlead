@@ -42,6 +42,17 @@ describe('dev server tools', () => {
     await expect(start({ command: 'node server.js', env: { PATH: '/tmp' } }, context())).resolves.toMatch(/^Error:.*PATH/);
   });
 
+  it('does not let the port variable or package-manager settings do it either', async () => {
+    await expect(start({ command: 'node server.js', port_env: 'NODE_OPTIONS' }, context())).resolves.toMatch(/^Error:.*NODE_OPTIONS/);
+    for (const key of ['BASH_FUNC_x%%', 'npm_config_script_shell', 'GIT_SSH_COMMAND', 'PYTHONPATH', 'RUBYOPT', 'PERL5OPT', 'JAVA_TOOL_OPTIONS']) {
+      await expect(start({ command: 'node server.js', env: { [key]: 'x' } }, context())).resolves.toMatch(/^Error:/);
+    }
+  });
+
+  it('still takes ordinary app settings', async () => {
+    await expect(start({ command: 'node server.js', env: { DATABASE_URL: 'x', NEXT_PUBLIC_API: 'y' } }, context())).resolves.toMatch(/^Started/);
+  });
+
   it('turns a failed start into an answer the agent can read', async () => {
     await expect(start({ command: 'echo nope; exit 1' }, context())).resolves.toMatch(/^Error:.*nope/s);
   });

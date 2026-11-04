@@ -38,7 +38,7 @@ import type { SessionConfig, StreamEvent, SessionResult } from '../session/types
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
-import { killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
+import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
@@ -596,6 +596,9 @@ async function run(): Promise<void> {
 
   postLog(`Starting agent session: type=${session.agentType}, model=${session.modelId}`);
 
+  // A worker that was killed can't stop its servers; this task's next worker does
+  if (session.specDir) cleanUpLeftovers(session.specDir);
+
   try {
     const securityProfile = buildSecurityProfile(session);
     const toolContext = buildToolContext(session, securityProfile);
@@ -626,6 +629,8 @@ async function run(): Promise<void> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     postError(`Agent session failed: ${message}`);
+  } finally {
+    await releaseTaskResources(session);
   }
 }
 

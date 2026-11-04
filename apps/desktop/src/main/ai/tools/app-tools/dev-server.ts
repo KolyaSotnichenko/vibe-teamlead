@@ -16,7 +16,7 @@ import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
 
 /** These change what the command runs or loads, which the command check could not see. */
-const FORBIDDEN_ENV = /^(PATH|NODE_OPTIONS|NODE_PATH|LD_.*|DYLD_.*|BASH_ENV|ENV|SHELL|HOME)$/;
+const FORBIDDEN_ENV = /^(PATH|NODE_OPTIONS|NODE_PATH|LD_.*|DYLD_.*|BASH_ENV|BASH_FUNC_.*|ENV|SHELL|HOME|NPM_CONFIG_.*|GIT_.*|PYTHON.*|RUBY.*|PERL.*|JAVA_.*)$/i;
 
 export const startDevServerTool = Tool.define({
   metadata: {
@@ -39,7 +39,7 @@ export const startDevServerTool = Tool.define({
     if (!allowed) return `Error: command not allowed: ${reason}`;
     const cwd = input.cwd ? (isAbsolute(input.cwd) ? resolve(input.cwd) : resolve(context.cwd, input.cwd)) : context.cwd;
     if (!isPathContained(cwd, context.cwd).contained) return `Error: ${input.cwd} is outside the worktree`;
-    const forbidden = Object.keys(input.env ?? {}).find((key) => FORBIDDEN_ENV.test(key));
+    const forbidden = [...Object.keys(input.env ?? {}), input.port_env ?? ''].find((key) => FORBIDDEN_ENV.test(key));
     if (forbidden) return `Error: ${forbidden} can't be set for a dev server`;
     try {
       const server = await startDevServer({
