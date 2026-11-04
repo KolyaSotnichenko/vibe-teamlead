@@ -36,6 +36,10 @@ If the task folder couldn't be fully deleted, it is marked as orphaned in Worktr
 
 While a task builds, the agents write their logs, QA report, security results and architecture into the task folder's copy inside the worktree. Before a worktree is removed (merge, discard) the app now copies them back into the project. Tasks merged before this fix lost that data with their worktree; it can't be recovered.
 
+## A task in Human Review with "Has Errors"
+
+QA couldn't approve the task and, after the fixer's attempts, handed it to you. The reason is in Workspace → Security and in `qa_report.md`. Describe what to fix in "Request Changes" and the fixer and QA run again. You can also merge as is if the findings don't worry you.
+
 ## The Create PR button is disabled
 
 A PR needs a GitHub remote (`origin`). Add it in the project (`git remote add origin …`) or connect GitHub in Settings → GitHub. Merging into the main branch works without it.

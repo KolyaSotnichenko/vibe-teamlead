@@ -109,7 +109,14 @@ export async function resolveBaseRef(cwd: string): Promise<string | undefined> {
   return undefined;
 }
 
-/** Files changed relative to the base: committed, uncommitted and untracked. */
+/**
+ * The app's own folder in the project (specs, task logs, worktrees). It is not
+ * the build's code: task logs quote test tokens from the agents' runs, so
+ * scanning it blocked QA on findings no fixer can resolve.
+ */
+export const isAppDataPath = (file: string): boolean => /(^|\/)\.vibe-teamlead\//.test(file.replace(/\\/g, '/'));
+
+/** Files changed relative to the base: committed, uncommitted and untracked (not the app's own folder). */
 export async function changedFiles(cwd: string, baseRef?: string): Promise<string[]> {
   const files = new Set<string>();
   const collect = (result: RunResult) => {
@@ -118,7 +125,7 @@ export async function changedFiles(cwd: string, baseRef?: string): Promise<strin
   };
   collect(await git(['diff', '--name-only', '--diff-filter=ACMR', baseRef ?? 'HEAD'], cwd));
   collect(await git(['ls-files', '--others', '--exclude-standard'], cwd));
-  return [...files];
+  return [...files].filter((f) => !isAppDataPath(f));
 }
 
 function dedupe(findings: GateFinding[]): GateFinding[] {
@@ -200,7 +207,8 @@ async function runGitleaks(
       assertRan(await runProcess(bin, ['dir', ...common, '--report-path', report, tree], options), 'gitleaks', [0]);
       findings.push(...parseGitleaks(await readReport(report), tree));
     }
-    return dedupe(findings);
+    // Also for commits that added the app's folder
+    return dedupe(findings.filter((f) => !f.file || !isAppDataPath(f.file)));
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

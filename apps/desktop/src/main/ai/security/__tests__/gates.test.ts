@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -107,6 +107,32 @@ echo "{\\"results\\":[{\\"packages\\":[$pkg}]}]}"`,
     expect(keys).toContain('osv:left-pad@1.0.0:GHSA-new');
     expect(keys).not.toContain('osv:left-pad@1.0.0:GHSA-old');
     expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('BLOCKED');
+  });
+
+  it("ignores the app's own folder (task logs quote the agents' test tokens)", async () => {
+    const dir = repo();
+    // The project doesn't ignore .vibe-teamlead/, so its task logs show as untracked
+    mkdirSync(join(dir, '.vibe-teamlead', 'specs', '003-auth'), { recursive: true });
+    writeFileSync(join(dir, '.vibe-teamlead', 'specs', '003-auth', 'task_logs.json'), '{"token":"sk_test_123"}');
+    const base = await resolveBaseRef(dir);
+    expect(await changedFiles(dir, base)).not.toContain('.vibe-teamlead/specs/003-auth/task_logs.json');
+
+    // A scanner that flags every file it is given, and a commit that touched the folder
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const gitleaks = fakeScanner(
+      bin,
+      'gitleaks',
+      `mode="$1"; while [ $# -gt 0 ]; do case "$1" in --report-path) out="$2"; shift;; esac; last="$1"; shift; done
+if [ "$mode" = dir ]; then
+  printf '[' > "$out"; sep=''; for f in $(cd "$last" && find . -type f | sed 's|^./||'); do printf '%s{"RuleID":"generic-api-key","File":"%s/%s","StartLine":1}' "$sep" "$last" "$f" >> "$out"; sep=','; done; printf ']' >> "$out"
+else echo '[{"RuleID":"generic-api-key","File":".vibe-teamlead/specs/003-auth/task_logs.json","StartLine":3,"Commit":"abcdef1234"}]' > "$out"; fi`,
+    );
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const report = await runSecurityGates({ projectDir: dir, specDir, gitleaksBin: gitleaks });
+
+    const files = report.findings.map((f) => f.file);
+    expect(files).toContain('config.ts');
+    expect(files.filter((f) => f?.includes('.vibe-teamlead'))).toEqual([]);
   });
 
   it('skips missing scanners instead of failing', async () => {
