@@ -219,6 +219,8 @@ export interface ToolCallEvent {
   toolName: string;
   toolCallId: string;
   args: Record<string, unknown>;
+  /** Set when a subagent made the call: the id of the Agent tool call it runs under */
+  parentToolCallId?: string;
 }
 
 /** Tool execution completed */
@@ -229,6 +231,8 @@ export interface ToolResultEvent {
   result: unknown;
   durationMs: number;
   isError: boolean;
+  /** Set when a subagent made the call (see ToolCallEvent) */
+  parentToolCallId?: string;
 }
 
 /** An agentic step completed (model turn + tool calls) */

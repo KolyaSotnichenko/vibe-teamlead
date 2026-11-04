@@ -603,7 +603,22 @@
     "selected_one": "задачу вибрано",
     "selected_few": "задачі вибрано",
     "selected_many": "задач вибрано",
-    "selected_other": "задачі вибрано"
+    "selected_other": "задачі вибрано",
+    "subagents": {
+      "count_one": "{{count}} субагент",
+      "count_few": "{{count}} субагенти",
+      "count_many": "{{count}} субагентів",
+      "count_other": "{{count}} субагента",
+      "working_one": "Працює субагент: {{names}}",
+      "working_few": "Працюють субагенти: {{names}}",
+      "working_many": "Працюють субагенти: {{names}}",
+      "working_other": "Працюють субагенти: {{names}}",
+      "names": {
+        "explorer": "дослідник",
+        "test_runner": "тести",
+        "reviewer": "рев'юер"
+      }
+    }
   },
   "overview": {
     "pipeline": {
@@ -959,7 +974,8 @@
       "editing": "Редагування",
       "writing": "Запис",
       "running": "Виконання",
-      "command": "Команда"
+      "command": "Команда",
+      "subagent": "Субагент"
     },
     "done": "Готово",
     "hideOutput": "Сховати вивід",

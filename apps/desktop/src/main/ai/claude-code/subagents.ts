@@ -79,3 +79,89 @@ export async function buildSubagents(
   }
   return agents;
 }
+
+// =============================================================================
+// Helper subagents for the planner, coder and QA
+// =============================================================================
+
+/** Settings → Agents → Subagents */
+export interface SubagentSettings {
+  enabled: boolean;
+  /** Model of the helpers; empty = the agent's own model */
+  model: string;
+}
+
+export const DEFAULT_SUBAGENT_SETTINGS: SubagentSettings = { enabled: true, model: '' };
+
+type HelperName = 'explorer' | 'test_runner' | 'reviewer';
+
+interface HelperSpec {
+  description: string;
+  tools: string[];
+  prompt: string;
+}
+
+const REPORT_RULES = `Report back in under 300 words: findings first, then file paths with line numbers. No preamble. You run inside an isolated task worktree; stay in it.`;
+
+/** The helpers. Read-only except the test runner's Bash (still under the session's command allowlist). */
+export const HELPER_SUBAGENTS: Record<HelperName, HelperSpec> = {
+  explorer: {
+    description:
+      'Read-only codebase search. Use it to find where something is defined or used, how a module works, or which files a change touches, instead of reading many files yourself.',
+    tools: ['Read', 'Glob', 'Grep'],
+    prompt: `You are a codebase explorer. Answer the question you are given by searching and reading the code (Glob, Grep, Read). Do not change anything. ${REPORT_RULES}`,
+  },
+  test_runner: {
+    description:
+      'Runs test, lint, typecheck or build commands and reports only what failed (test name, file:line, error). Use it for long test runs so their output stays out of your context.',
+    tools: ['Bash', 'Read', 'Glob', 'Grep'],
+    prompt: `You are a test runner. Run exactly the commands you are given (or the project's test command if none), then report: pass/fail counts and, for each failure, the test name, file:line and the essential error lines. Do not edit files or try to fix anything. ${REPORT_RULES}`,
+  },
+  reviewer: {
+    description:
+      'Reviews the current changes (git diff) against the subtask or acceptance criteria and reports concrete problems: bugs, missed criteria, missing tests. Use it before marking work complete.',
+    tools: ['Bash', 'Read', 'Glob', 'Grep'],
+    prompt: `You are a code reviewer. Inspect the changes with \`git diff\` and \`git status\` (read-only git only) and the files they touch. Check them against what you were asked to verify. Report only real problems, most severe first, each with file:line and why it is wrong. If there are none, say so. Do not edit files. ${REPORT_RULES}`,
+  },
+};
+
+/** Which helpers each pipeline agent gets. */
+const HELPERS_BY_AGENT: Partial<Record<AgentType, HelperName[]>> = {
+  planner: ['explorer'],
+  coder: ['explorer', 'test_runner', 'reviewer'],
+  qa_reviewer: ['explorer', 'test_runner'],
+  qa_fixer: ['explorer', 'test_runner', 'reviewer'],
+};
+
+/** Helper subagents for one session, or none when they are off or the agent has none. */
+export function helperSubagents(agentType: AgentType, settings: SubagentSettings | undefined): Record<string, AgentDefinition> {
+  const s = settings ?? DEFAULT_SUBAGENT_SETTINGS;
+  if (!s.enabled) return {};
+  const agents: Record<string, AgentDefinition> = {};
+  for (const name of HELPERS_BY_AGENT[agentType] ?? []) {
+    const spec = HELPER_SUBAGENTS[name];
+    agents[name] = {
+      description: spec.description,
+      prompt: spec.prompt,
+      tools: spec.tools,
+      model: s.model || 'inherit',
+    };
+  }
+  return agents;
+}
+
+/** Tells the agent which helpers it has and when to use them. Empty when it has none. */
+export function helpersPromptSection(agents: Record<string, AgentDefinition>): string {
+  const names = Object.keys(agents);
+  if (names.length === 0) return '';
+  const lines = names.map((n) => `- \`${n}\`: ${agents[n].description}`);
+  return [
+    '## HELPER SUBAGENTS',
+    '',
+    'You can delegate to these subagents with the Agent tool (`subagent_type`). Each runs in its own context and returns a short report, which keeps your context for the actual work. Give each one a precise, self-contained instruction.',
+    '',
+    ...lines,
+    '',
+    'Delegate searches across many files, long test runs and the final self-review. Do the edits yourself: subagents never change files. Run independent helpers in parallel (several Agent calls in one message).',
+  ].join('\n');
+}

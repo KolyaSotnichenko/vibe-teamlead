@@ -29,6 +29,8 @@ export interface ExecutionProgressData {
   message?: string;
   // FIX (ACS-203): Track completed phases to prevent phase overlaps
   completedPhases?: CompletablePhase[];
+  /** Helper subagents working right now (explorer, test_runner, reviewer) */
+  activeSubagents?: string[];
 }
 
 export type ProcessType = 'spec-creation' | 'task-execution' | 'qa-process';

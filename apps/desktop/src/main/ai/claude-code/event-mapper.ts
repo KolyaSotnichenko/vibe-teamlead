@@ -127,6 +127,24 @@ export class SessionAccumulator {
           this.assistantError = message.error;
           this.assistantErrorText = errorTextOf(message.message.content as ContentBlockLike[]);
         }
+        // A subagent's own turns: only its tool calls are reported (under the Agent call),
+        // its text and steps are not the agent's
+        const parent = (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? undefined;
+        if (parent) {
+          for (const block of message.message.content as ContentBlockLike[]) {
+            if (block.type !== 'tool_use' || !block.id || !block.name) continue;
+            this.toolCallCount += 1;
+            this.toolStarts.set(block.id, { name: block.name, startedAt: Date.now() });
+            this.emit({
+              type: 'tool-call',
+              toolName: block.name,
+              toolCallId: block.id,
+              args: (block.input ?? {}) as Record<string, unknown>,
+              parentToolCallId: parent,
+            });
+          }
+          return;
+        }
         const id = message.message.id;
         if (id !== this.currentMessageId) {
           this.finishStep();
@@ -154,6 +172,7 @@ export class SessionAccumulator {
       case 'user': {
         const content = message.message.content;
         if (!Array.isArray(content)) return;
+        const parentId = (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? undefined;
         for (const block of content as ContentBlockLike[]) {
           if (block.type !== 'tool_result' || !block.tool_use_id) continue;
           const start = this.toolStarts.get(block.tool_use_id);
@@ -165,6 +184,7 @@ export class SessionAccumulator {
             result: toolResultText(block.content),
             durationMs: start ? Date.now() - start.startedAt : 0,
             isError: block.is_error === true,
+            ...(parentId ? { parentToolCallId: parentId } : {}),
           });
         }
         return;

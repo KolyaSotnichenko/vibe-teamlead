@@ -13,6 +13,8 @@ interface ClaudeModelSelectProps {
   disabled?: boolean;
   id?: string;
   className?: string;
+  /** Shown when no model is chosen (default: "Select a model") */
+  placeholder?: string;
 }
 
 /** Host of an endpoint URL, for group headers ("localhost:11434"). */
@@ -55,7 +57,7 @@ export function buildModelOptions(
  * endpoint (Anthropic API or the base URL, e.g. Ollama), or any typed id.
  * A stored model of a removed provider shows the placeholder.
  */
-export function ClaudeModelSelect({ value, onChange, disabled, id, className }: ClaudeModelSelectProps) {
+export function ClaudeModelSelect({ value, onChange, disabled, id, className, placeholder }: ClaudeModelSelectProps) {
   const { t } = useTranslation('settings');
   const { list, loading, refresh } = useEndpointModels();
 
@@ -102,7 +104,7 @@ export function ClaudeModelSelect({ value, onChange, disabled, id, className }: 
       onValueChange={onChange}
       options={options}
       disabled={disabled}
-      placeholder={t('agentProfile.selectModel')}
+      placeholder={placeholder ?? t('agentProfile.selectModel')}
       searchPlaceholder={t('modelPicker.search')}
       emptyMessage={t('modelPicker.empty')}
       customValueLabel={(typed) => t('modelPicker.useCustom', { id: typed })}

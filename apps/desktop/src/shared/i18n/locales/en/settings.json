@@ -1093,5 +1093,15 @@
   "memorySettings": {
     "howItWorks": "After each subtask the app saves what the coder learned (gotchas, patterns, what didn't work). Before the architect, planner, coder and QA start, the memories most relevant to their task go into their prompt, and they can search and add memories themselves. Memory is local, per project, in ~/.vibe-teamlead/memories.",
     "whereToSee": "See what's stored in Context → Memories. The embedding model finds memories by meaning; without one they are still saved and found by keywords."
+  },
+  "subagents": {
+    "title": "Subagents",
+    "description": "Helpers the planner, coder and QA delegate to: an explorer that searches the code, a test runner, and a reviewer of the changes. Each works in its own context and returns a short report.",
+    "enable": "Use subagents",
+    "enableHint": "Subtasks still run one at a time; subagents never change files.",
+    "model": "Subagent model",
+    "sameModel": "Use the agent's model",
+    "sameModelPlaceholder": "Same model as the agent",
+    "modelHint": "A cheaper, faster model is usually enough for searching and running tests. The model must be served by your endpoint."
   }
 }

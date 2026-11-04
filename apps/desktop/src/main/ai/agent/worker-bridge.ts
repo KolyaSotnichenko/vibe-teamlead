@@ -30,10 +30,12 @@ import { ProgressTracker } from '../session/progress-tracker';
 import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import { readStrixSettings } from '../security/strix-setting';
+import { readSubagentSettings } from '../claude-code/subagent-setting';
 import { loadDesignSystem } from '../design/design-system';
 import { projectStore } from '../../project-store';
 import { resolvePromptsDir } from '../prompts/prompt-loader';
 import type { AgentAnswers } from '../claude-code/user-questions';
+import type { StreamEvent } from '../session/types';
 
 // ESM-compatible __dirname
 /** The project's design system for the agents; never blocks a session. */
@@ -132,6 +134,7 @@ export class WorkerBridge extends EventEmitter {
         bundled,
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
         securityQa: config.session.securityQa ?? readStrixSettings(),
+        subagents: config.session.subagents ?? readSubagentSettings(),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
       },
       promptsDir: resolvePromptsDir(),
@@ -231,6 +234,7 @@ export class WorkerBridge extends EventEmitter {
       case 'stream-event':
         // Feed the progress tracker; progress is emitted only when it changes.
         this.progressTracker.processEvent(message.data);
+        this.trackSubagents(message.data);
         this.emitProgressFromTracker(message.taskId, message.projectId);
         // Agent text goes to the log line by line, not per token.
         if (message.data.type === 'text-delta') {
@@ -338,9 +342,24 @@ export class WorkerBridge extends EventEmitter {
    * Convert ProgressTracker state into an ExecutionProgressData event
    * and emit it to listeners.
    */
+  /** Agent tool calls in flight → their subagent (for the board card) */
+  private activeSubagents = new Map<string, string>();
+
+  private trackSubagents(event: StreamEvent): void {
+    if (event.type === 'tool-call' && event.toolName === 'Agent' && !event.parentToolCallId) {
+      const name = typeof event.args?.subagent_type === 'string' ? event.args.subagent_type : 'subagent';
+      this.activeSubagents.set(event.toolCallId, name);
+    } else if (event.type === 'tool-result' && event.toolName === 'Agent') {
+      this.activeSubagents.delete(event.toolCallId);
+    } else if (event.type === 'error') {
+      this.activeSubagents.clear();
+    }
+  }
+
   private emitProgressFromTracker(taskId: string, projectId?: string): void {
     const state = this.progressTracker.state;
-    const key = `${state.currentPhase}|${state.currentSubtask ?? ''}|${state.currentMessage ?? ''}|${state.completedPhases.length}`;
+    const subagents = [...this.activeSubagents.values()];
+    const key = `${state.currentPhase}|${state.currentSubtask ?? ''}|${state.currentMessage ?? ''}|${state.completedPhases.length}|${subagents.join(',')}`;
     if (key === this.lastProgressKey) return;
     this.lastProgressKey = key;
     const progressData: ExecutionProgressData = {
@@ -350,6 +369,7 @@ export class WorkerBridge extends EventEmitter {
       currentSubtask: state.currentSubtask ?? undefined,
       message: state.currentMessage,
       completedPhases: state.completedPhases as ExecutionProgressData['completedPhases'],
+      activeSubagents: subagents,
     };
     this.emitTyped('execution-progress', taskId, progressData, projectId);
   }

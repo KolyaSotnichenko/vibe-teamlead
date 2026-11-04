@@ -22,7 +22,7 @@ import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import type { MemoryRequest } from './types';
-import { buildSubagents, SPEC_SPECIALISTS } from '../claude-code/subagents';
+import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
 import type {
@@ -494,11 +494,18 @@ async function runSingleSession(
     ? [{ role: 'user' as const, content: initialUserMessage }]
     : baseSession.initialMessages;
 
+  // Helper subagents (explorer, test runner, reviewer), unless turned off in Settings → Agents
+  const helpers = helperSubagents(agentType, baseSession.subagents);
+  const helperNames = Object.keys(helpers);
+  if (helperNames.length) postLog(`Subagents available: ${helperNames.join(', ')} (${baseSession.subagents?.model || 'same model'})`);
+  const helpersSection = helpersPromptSection(helpers);
+
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
     agentType,
     model,
-    systemPrompt,
+    systemPrompt: helpersSection ? `${systemPrompt}\n\n${helpersSection}` : systemPrompt,
+    ...(helperNames.length ? { agents: helpers } : {}),
     initialMessages,
     toolContext,
     maxSteps: baseSession.maxSteps,

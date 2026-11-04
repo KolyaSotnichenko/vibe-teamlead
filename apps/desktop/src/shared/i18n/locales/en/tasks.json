@@ -597,7 +597,18 @@
     "full": "Full",
     "selectedInColumn": "{{count}} selected",
     "selected_one": "task selected",
-    "selected_other": "tasks selected"
+    "selected_other": "tasks selected",
+    "subagents": {
+      "count_one": "{{count}} subagent",
+      "count_other": "{{count}} subagents",
+      "working_one": "Subagent working: {{names}}",
+      "working_other": "Subagents working: {{names}}",
+      "names": {
+        "explorer": "explorer",
+        "test_runner": "test runner",
+        "reviewer": "reviewer"
+      }
+    }
   },
   "overview": {
     "pipeline": {
@@ -925,7 +936,8 @@
       "editing": "Editing",
       "writing": "Writing",
       "running": "Running",
-      "command": "Command"
+      "command": "Command",
+      "subagent": "Subagent"
     },
     "done": "Done",
     "hideOutput": "Hide output",

@@ -34,6 +34,8 @@ export interface ExecutionProgress {
   // When a phase completes, it's added to this array before transitioning to the next phase
   // This ensures that planning is marked complete before coding starts, etc.
   completedPhases?: CompletablePhase[];  // Phases that have successfully completed
+  /** Helper subagents working right now (explorer, test_runner, reviewer) */
+  activeSubagents?: string[];
 }
 
 export interface Subtask {
@@ -75,6 +77,10 @@ export interface TaskLogEntry {
   phase: TaskLogPhase;
   tool_name?: string;
   tool_input?: string;
+  /** Tool call id: pairs a tool_start with its tool_end */
+  tool_use_id?: string;
+  /** The helper subagent that made this tool call (explorer, test_runner, ...) */
+  subagent?: string;
   subtask_id?: string;
   session?: number;
   // Fields for expandable detail view

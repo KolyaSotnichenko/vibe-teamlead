@@ -269,6 +269,10 @@ export interface AppSettings {
    * Security QA: run a Strix penetration test after QA approves (needs Docker,
    * Strix and an API key). Off by default — it spends LLM budget.
    */
+  /** Helper subagents (explorer, test runner, reviewer) for the planner, coder and QA */
+  subagentsEnabled?: boolean;
+  /** Model of the helper subagents; empty = the same model as the agent */
+  subagentModel?: string;
   securityQaEnabled?: boolean;
   securityQaScanMode?: 'quick' | 'standard' | 'deep';
   securityQaFailOn?: 'critical' | 'high' | 'medium' | 'low';

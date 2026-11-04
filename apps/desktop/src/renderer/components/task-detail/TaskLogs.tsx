@@ -15,6 +15,7 @@ import {
   Search,
   FolderSearch,
   Wrench,
+  Bot,
   Info,
   Brain,
   Cpu
@@ -67,14 +68,28 @@ export type LogItem =
 export function pairToolEntries(entries: TaskLogEntry[]): LogItem[] {
   const items: LogItem[] = [];
   const open = new Map<string, Array<{ kind: 'tool'; start: TaskLogEntry; end?: TaskLogEntry }>>();
+  // Calls with an id pair exactly (subagents run calls in parallel); older logs pair by name, in order
+  const byId = new Map<string, { kind: 'tool'; start: TaskLogEntry; end?: TaskLogEntry }>();
   for (const entry of entries) {
     if (entry.type === 'tool_start' && entry.tool_name) {
       const item = { kind: 'tool' as const, start: entry };
       items.push(item);
+      if (entry.tool_use_id) {
+        byId.set(entry.tool_use_id, item);
+        continue;
+      }
       const queue = open.get(entry.tool_name) ?? [];
       queue.push(item);
       open.set(entry.tool_name, queue);
       continue;
+    }
+    if (entry.type === 'tool_end' && entry.tool_use_id && byId.has(entry.tool_use_id)) {
+      const item = byId.get(entry.tool_use_id);
+      byId.delete(entry.tool_use_id);
+      if (item) {
+        item.end = entry;
+        continue;
+      }
     }
     if (entry.type === 'tool_end' && entry.tool_name) {
       const item = open.get(entry.tool_name)?.shift();
@@ -358,6 +373,8 @@ function toolInfo(toolName: string, t: (key: string) => string) {
       return { icon: FileCode, label: t('tasks:logs.tools.writing'), color: TOOL_ROW_CLASS };
     case 'Bash':
       return { icon: Terminal, label: t('tasks:logs.tools.command'), color: TOOL_ROW_CLASS };
+    case 'Agent':
+      return { icon: Bot, label: t('tasks:logs.tools.subagent'), color: TOOL_ROW_CLASS };
     default: {
       // mcp__server__tool → "tool" (the server name adds nothing for the reader)
       const mcp = toolName.match(/^mcp__[^_]+(?:[-_][^_]+)*?__(.+)$/);
@@ -373,10 +390,15 @@ function ToolCallRow({ start, end, live }: { start: TaskLogEntry; end?: TaskLogE
   const { icon: Icon, label, color } = toolInfo(start.tool_name ?? '', t);
   const detail = end?.detail;
   const pending = !end && live;
+  // A subagent's own tool calls sit indented under its Agent row, tagged with its name
+  const nested = Boolean(start.subagent);
   return (
-    <div className="flex flex-col">
+    <div className={cn('flex flex-col', nested && 'ml-5 border-l border-border pl-2')}>
       <div className={cn('flex items-center gap-2 px-2 py-1 text-xs min-w-0', color)}>
         <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+        {nested && (
+          <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{start.subagent}</span>
+        )}
         <span className="font-medium shrink-0">{label}</span>
         {start.tool_input && (
           <span className="font-mono text-muted-foreground truncate min-w-0" title={start.tool_input}>

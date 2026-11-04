@@ -108,7 +108,7 @@ export const mockTasks: Task[] = [
       sub('subtask-6', 'Export chart as PNG', 'pending')
     ],
     logs: ['[INFO] Starting task...', '[INFO] Subtask 3 completed', '[INFO] Working on subtask 4...'],
-    executionProgress: { phase: 'coding', phaseProgress: 50, overallProgress: 55, currentSubtask: 'subtask-4', message: 'Iteration 7 (coding)', startedAt: new Date(Date.now() - 52 * MIN), completedPhases: ['planning'] },
+    executionProgress: { phase: 'coding', phaseProgress: 50, overallProgress: 55, currentSubtask: 'subtask-4', message: 'Iteration 7 (coding)', startedAt: new Date(Date.now() - 52 * MIN), completedPhases: ['planning'], activeSubagents: ['explorer', 'test_runner'] },
     metadata: { category: 'feature', complexity: 'medium', baseBranch: 'main', sourceType: 'roadmap' },
     createdAt: new Date(Date.now() - 3600000),
     updatedAt: new Date(Date.now() - 2 * MIN)

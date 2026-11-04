@@ -130,14 +130,24 @@ export class TaskLogWriter {
         this.accumulateText(event.text, logPhase);
         break;
 
-      case 'tool-call':
+      case 'tool-call': {
         // Flush pending text before the tool call entry
         this.flushPendingText();
-        this.writeToolStart(logPhase, event.toolName, this.extractToolInput(event.toolName, event.args));
+        if (event.toolName === 'Agent' && typeof event.args.subagent_type === 'string') {
+          this.subagentCalls.set(event.toolCallId, event.args.subagent_type);
+        }
+        this.writeToolStart(logPhase, event.toolName, this.extractToolInput(event.toolName, event.args), {
+          tool_use_id: event.toolCallId,
+          ...this.subagentOf(event.parentToolCallId),
+        });
         break;
+      }
 
       case 'tool-result':
-        this.writeToolEnd(logPhase, event.toolName, event.isError, event.result);
+        this.writeToolEnd(logPhase, event.toolName, event.isError, event.result, {
+          tool_use_id: event.toolCallId,
+          ...this.subagentOf(event.parentToolCallId),
+        });
         break;
 
       case 'step-finish':
@@ -214,11 +224,20 @@ export class TaskLogWriter {
     this.data.phases[phase].entries.push(entry);
   }
 
-  private writeToolStart(phase: TaskLogPhase, toolName: string, toolInput?: string): void {
+  /** Agent tool call id → the subagent it started */
+  private subagentCalls = new Map<string, string>();
+
+  private subagentOf(parentToolCallId: string | undefined): Partial<TaskLogEntry> {
+    if (!parentToolCallId) return {};
+    return { subagent: this.subagentCalls.get(parentToolCallId) ?? 'subagent' };
+  }
+
+  private writeToolStart(phase: TaskLogPhase, toolName: string, toolInput?: string, extra: Partial<TaskLogEntry> = {}): void {
     const content = `[${toolName}] ${toolInput || ''}`.trim();
     this.addEntry(phase, 'tool_start', content, {
       tool_name: toolName,
       tool_input: toolInput,
+      ...extra,
     });
     this.save();
   }
@@ -227,7 +246,8 @@ export class TaskLogWriter {
     phase: TaskLogPhase,
     toolName: string,
     isError: boolean,
-    result: unknown
+    result: unknown,
+    extra: Partial<TaskLogEntry> = {}
   ): void {
     const status = isError ? 'Error' : 'Done';
     const content = `[${toolName}] ${status}`;
@@ -243,6 +263,7 @@ export class TaskLogWriter {
     this.addEntry(phase, 'tool_end', content, {
       tool_name: toolName,
       ...(detail ? { detail, collapsed: true } : {}),
+      ...extra,
     });
     this.save();
   }
@@ -311,6 +332,12 @@ export class TaskLogWriter {
         return typeof args.url === 'string' ? truncate(args.url) : undefined;
       case 'WebSearch':
         return typeof args.query === 'string' ? truncate(args.query) : undefined;
+      case 'Agent': {
+        // "explorer · Find where invoices are exported"
+        const who = typeof args.subagent_type === 'string' ? args.subagent_type : 'subagent';
+        const what = typeof args.description === 'string' ? args.description : '';
+        return truncate(what ? `${who} · ${what}` : who);
+      }
       default: {
         // Generic: try common field names
         const value = args.file_path ?? args.path ?? args.command ?? args.query ?? args.pattern;

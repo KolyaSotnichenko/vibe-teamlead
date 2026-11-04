@@ -7,6 +7,7 @@ import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
 import { AgentProfileSettings } from './AgentProfileSettings';
 import { FeatureModelSettings } from './FeatureModelSettings';
+import { ClaudeModelSelect } from './ClaudeModelSelect';
 import type {
   AppSettings,
   ToolDetectionResult
@@ -122,6 +123,46 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
           <div className="space-y-8">
             <AgentProfileSettings />
             <FeatureModelSettings />
+          </div>
+        </SettingsSection>
+
+        {/* Helper subagents for the planner, coder and QA */}
+        <SettingsSection title={t('subagents.title')} description={t('subagents.description')}>
+          <div className="max-w-md space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="subagentsEnabled" className="text-sm font-medium text-foreground">{t('subagents.enable')}</Label>
+                <p className="text-xs text-muted-foreground">{t('subagents.enableHint')}</p>
+              </div>
+              <Switch
+                id="subagentsEnabled"
+                checked={settings.subagentsEnabled !== false}
+                onCheckedChange={(checked) => onSettingsChange({ ...settings, subagentsEnabled: checked })}
+              />
+            </div>
+            {settings.subagentsEnabled !== false && (
+              <div className="space-y-1.5">
+                <div className="flex h-5 items-center justify-between">
+                  <Label htmlFor="subagentModel" className="text-xs text-muted-foreground">{t('subagents.model')}</Label>
+                  {settings.subagentModel && (
+                    <button
+                      type="button"
+                      className="text-xs text-foreground underline-offset-4 hover:underline"
+                      onClick={() => onSettingsChange({ ...settings, subagentModel: '' })}
+                    >
+                      {t('subagents.sameModel')}
+                    </button>
+                  )}
+                </div>
+                <ClaudeModelSelect
+                  id="subagentModel"
+                  value={settings.subagentModel ?? ''}
+                  onChange={(value) => onSettingsChange({ ...settings, subagentModel: value })}
+                  placeholder={t('subagents.sameModelPlaceholder')}
+                />
+                <p className="text-xs text-muted-foreground">{t('subagents.modelHint')}</p>
+              </div>
+            )}
           </div>
         </SettingsSection>
 

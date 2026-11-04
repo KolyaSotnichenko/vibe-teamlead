@@ -38,6 +38,7 @@ import { useToast } from '../hooks/use-toast';
 import type { Task, TaskStatus } from '../../shared/types';
 import { StageTicks, SubtaskBar } from './board/StageMarks';
 import { countSubtasks, formatSince, getTaskStage, type TaskStageInfo } from './board/task-stage';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 // Catastrophic stuck detection interval (ms).
 // XState handles all normal process-exit transitions via PROCESS_EXITED events.
@@ -93,6 +94,7 @@ function taskCardPropsAreEqual(prevProps: TaskCardProps, nextProps: TaskCardProp
     prevTask.executionProgress?.message === nextTask.executionProgress?.message &&
     prevTask.executionProgress?.currentSubtask === nextTask.executionProgress?.currentSubtask &&
     prevTask.executionProgress?.completedPhases?.length === nextTask.executionProgress?.completedPhases?.length &&
+    (prevTask.executionProgress?.activeSubagents ?? []).join() === (nextTask.executionProgress?.activeSubagents ?? []).join() &&
     prevTask.subtasks.length === nextTask.subtasks.length &&
     prevTask.metadata?.fastMode === nextTask.metadata?.fastMode &&
     prevTask.metadata?.priority === nextTask.metadata?.priority &&
@@ -125,6 +127,28 @@ function Chip({ tone, children }: { tone: ChipTone; children: React.ReactNode })
     >
       {children}
     </span>
+  );
+}
+
+/** Helper subagents working right now: a pulsing mark and how many, names on hover. */
+function SubagentsBadge({ names }: { names: string[] }) {
+  const { t } = useTranslation('tasks');
+  const list = names.map((n) => t(`board.subagents.names.${n}`, { defaultValue: n.replace(/_/g, ' ') })).join(', ');
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="flex shrink-0 items-center gap-1 font-mono text-[10px] tabular-nums text-muted-foreground"
+          aria-label={t('board.subagents.working', { count: names.length, names: list })}
+        >
+          <span aria-hidden className="h-1.5 w-1.5 animate-pulse bg-foreground" />
+          {t('board.subagents.count', { count: names.length })}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="font-mono text-xs">
+        {t('board.subagents.working', { count: names.length, names: list })}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -405,6 +429,9 @@ export const TaskCard = memo(function TaskCard({
             <span className={cn('shrink-0 font-semibold', stage.running ? 'text-foreground' : 'text-muted-foreground')}>{role}</span>
             {detail && <span className="truncate text-muted-foreground">{detail}</span>}
           </span>
+          {stage.running && (task.executionProgress?.activeSubagents?.length ?? 0) > 0 && (
+            <SubagentsBadge names={task.executionProgress?.activeSubagents ?? []} />
+          )}
           {chip && <Chip tone={chip.tone}>{chip.label}</Chip>}
         </div>
 

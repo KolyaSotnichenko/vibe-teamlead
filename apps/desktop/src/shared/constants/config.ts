@@ -41,6 +41,8 @@ export const DEFAULT_APP_SETTINGS = {
   autoUpdateAutoBuild: true,
   autoNameTerminals: true,
   useClaudeSubscription: false,
+  subagentsEnabled: true,
+  subagentModel: '',
   securityQaEnabled: false,
   securityQaScanMode: 'quick' as const,
   securityQaFailOn: 'high' as const,

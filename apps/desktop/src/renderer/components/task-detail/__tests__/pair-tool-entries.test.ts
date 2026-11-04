@@ -28,4 +28,14 @@ describe('pairToolEntries', () => {
     expect(items[1]).toMatchObject({ kind: 'tool', start: { tool_input: 'sleep' } });
     expect(items[1].kind === 'tool' && items[1].end).toBeUndefined();
   });
+
+  it('pairs calls by id when they have one (subagents run calls in parallel)', () => {
+    const a = { ...start('Read', 1, 'a.ts'), tool_use_id: 'x' } as TaskLogEntry;
+    const b = { ...start('Read', 2, 'b.ts'), tool_use_id: 'y', subagent: 'explorer' } as TaskLogEntry;
+    const items = pairToolEntries([a, b, { ...end('Read', 3, 'B'), tool_use_id: 'y' } as TaskLogEntry, { ...end('Read', 4, 'A'), tool_use_id: 'x' } as TaskLogEntry]);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ start: { tool_input: 'a.ts' }, end: { detail: 'A' } });
+    expect(items[1]).toMatchObject({ start: { tool_input: 'b.ts', subagent: 'explorer' }, end: { detail: 'B' } });
+  });
 });
+
