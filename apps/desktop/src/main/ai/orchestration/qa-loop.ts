@@ -534,6 +534,8 @@ export class QALoop extends EventEmitter {
         });
 
         if (reviewResult.outcome === 'cancelled') {
+          // Whatever it recorded came from an unfinished review; a later run must not trust it
+          await this.clearQASignoff();
           return this.outcome(false, iteration, Date.now() - startTime, 'cancelled');
         }
 
@@ -559,22 +561,25 @@ export class QALoop extends EventEmitter {
               cliThinking: this.config.cliThinking,
             });
             if (result.outcome === 'cancelled') {
+              await this.clearQASignoff();
               return this.outcome(false, iteration, Date.now() - startTime, 'cancelled');
             }
             signoff = await this.readQASignoff();
-            // Only a review that ended by itself can pass: this one was cut off
-            if (reviewResult.outcome === 'max_steps' && this.resolveQAStatus(signoff) === 'approved') {
-              this.emitTyped('log', 'The review was cut off by its turn limit, so its approval does not count; running it again');
-              await this.clearQASignoff();
-              signoff = null;
-            }
           }
+        }
+        // Only a review that ended by itself can pass, however its approval got recorded
+        const reviewEnded = reviewResult.outcome === 'completed';
+        if (!reviewEnded && this.resolveQAStatus(signoff) === 'approved') {
+          this.emitTyped('log', `The review did not finish (${reviewResult.outcome}), so its approval does not count; running it again`);
+          await this.clearQASignoff();
+          signoff = null;
         }
         const status = this.resolveQAStatus(signoff);
         const issues = signoff?.issues_found ?? [];
 
         this.lastReviewerApproved = status === 'approved';
-        if (reviewedCommit && (status === 'approved' || status === 'rejected')) {
+        // A cut-off review didn't look at everything, so the next one can't build on it
+        if (reviewEnded && reviewedCommit && (status === 'approved' || status === 'rejected')) {
           this.lastReviewThisRun = { commit: reviewedCommit, approved: status === 'approved', issues };
         }
         this.lastBlocking = (status === 'rejected' ? issues : []).map((i) => ({

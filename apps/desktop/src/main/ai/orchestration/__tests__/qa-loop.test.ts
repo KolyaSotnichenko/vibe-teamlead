@@ -593,6 +593,86 @@ describe('QALoop', () => {
       expect(generatePrompt).toHaveBeenCalledTimes(1);
     });
 
+    it('an approval written during a session that did not end by itself does not count either', async () => {
+      const inner = sessions([true, true], false);
+      let n = 0;
+      const runSession = vi.fn(async (config: QASessionRunConfig) => {
+        const result = await inner(config);
+        return n++ === 0 ? makeSessionResult('max_steps') : result;
+      });
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt })).run();
+      expect(outcome.approved).toBe(true);
+      expect(runSession).toHaveBeenCalledTimes(2);
+      expect(generatePrompt).toHaveBeenCalledTimes(2);
+    });
+
+    it('a rejection from a cut-off review leads to a full review, not a shortened one', async () => {
+      let plan = completedPlan();
+      let report: string | null = null;
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(plan);
+        if (p.endsWith('qa_report.md') && report) return Promise.resolve(report);
+        return Promise.reject(new Error('ENOENT'));
+      });
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      let n = 0;
+      const runSession = vi.fn(async (config: QASessionRunConfig) => {
+        n++;
+        if (n === 1) {
+          report = 'partial report';
+          return makeSessionResult('max_steps');
+        }
+        if (n === 2) plan = completedPlan('rejected');
+        if (config.agentType === 'qa_reviewer' && n > 3) plan = completedPlan('approved');
+        return makeSessionResult('completed');
+      });
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt, currentCommit: async () => 'abc123' })).run();
+
+      expect(outcome.approved).toBe(true);
+      const reviews = (generatePrompt.mock.calls as Array<[string, { lastReview?: unknown }]>).filter(([agent]) => agent === 'qa_reviewer');
+      expect(reviews).toHaveLength(2);
+      expect(reviews[1][1].lastReview).toBeUndefined();
+    });
+
+    it.each(['the cut-off review', 'the verdict session'])('stopping during %s leaves no approval for the next run to trust', async (when) => {
+      const { mkdtempSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      let plan = completedPlan();
+      let report: string | null = null;
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(plan);
+        if (p.endsWith('qa_report.md') && report) return Promise.resolve(report);
+        return Promise.reject(new Error('ENOENT'));
+      });
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      let n = 0;
+      const runSession = vi.fn(async () => {
+        n++;
+        plan = completedPlan('approved');
+        if (when === 'the cut-off review') return makeSessionResult('cancelled');
+        if (n === 1) {
+          plan = completedPlan();
+          report = 'partial report';
+          return makeSessionResult('max_steps');
+        }
+        return makeSessionResult('cancelled');
+      });
+      const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qacancel-'));
+
+      const outcome = await new QALoop(makeConfig({ specDir, runSession })).run();
+
+      expect(outcome.reason).toBe('cancelled');
+      expect(JSON.parse(plan).qa_signoff).toBeUndefined();
+    });
+
     it('a reviewer stopped at the limit with no report at all: the review runs again', async () => {
       const inner = sessions([false, true], false);
       let n = 0;
