@@ -16,7 +16,7 @@
  * - Human feedback processing (QA_FIX_REQUEST.md)
  */
 
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'events';
@@ -413,6 +413,13 @@ export class QALoop extends EventEmitter {
   async run(): Promise<QAOutcome> {
     const startTime = Date.now();
     const maxIterations = this.config.maxIterations ?? DEFAULT_QA_ITERATIONS;
+
+    // The last run's result stops being true now; the task window must not show it as this run's
+    try {
+      rmSync(join(this.config.specDir, 'qa_outcome.json'), { force: true });
+    } catch {
+      // informational
+    }
 
     try {
       // Verify build is complete

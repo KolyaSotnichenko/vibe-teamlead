@@ -239,6 +239,32 @@ describe('QALoop', () => {
     expect(warned.report).toContain('report only');
   });
 
+  it('a new run drops the previous outcome, so nothing reads it as this run\'s', async () => {
+    const { existsSync, mkdtempSync, readFileSync, writeFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const { tmpdir } = await import('node:os');
+    const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
+    const outcomeFile = path.join(specDir, 'qa_outcome.json');
+    writeFileSync(outcomeFile, JSON.stringify({ approved: false, blocking: [{ source: 'design', title: 'old' }] }));
+    let seenDuringReview: boolean | undefined;
+    let calls = 0;
+    mockReadFile.mockReset();
+    mockWriteFile.mockReset().mockResolvedValue(undefined);
+    mockReadFile.mockImplementation((p: string) => {
+      if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+      return Promise.reject(new Error('ENOENT'));
+    });
+    const runSession = vi.fn().mockImplementation(async () => {
+      calls++;
+      seenDuringReview = existsSync(outcomeFile);
+      return makeSessionResult('completed');
+    });
+
+    await new QALoop(makeConfig({ specDir, runSession, maxIterations: 1 })).run();
+
+    expect(seenDuringReview).toBe(false);
+    expect(JSON.parse(readFileSync(outcomeFile, 'utf-8'))).toMatchObject({ approved: true, blocking: [] });
+  });
+
   it('records why QA ended without approval: the design check blocked', async () => {
     const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
     const { tmpdir } = await import('node:os');

@@ -18,6 +18,19 @@ export function exactPattern(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** The matches the tokens already allow, the same way the design check reads them. Pure. */
+function matchesAllowed(matches: string[], patterns: Array<{ pattern: string }> = []): string[] {
+  return matches.filter((match) =>
+    patterns.some(({ pattern }) => {
+      try {
+        return new RegExp(pattern).test(match);
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
 export function QaOutcomePanel({ task }: { task: Task }) {
   const { t } = useTranslation('tasks');
   const [outcome, setOutcome] = useState<QaOutcomeInfo | null>(null);
@@ -29,7 +42,16 @@ export function QaOutcomePanel({ task }: { task: Task }) {
     let cancelled = false;
     window.electronAPI
       ?.getTaskWorkspace?.(task.id, task.projectId)
-      .then((r) => !cancelled && r?.success && setOutcome(r.data?.qaOutcome ?? null))
+      .then(async (r) => {
+        if (cancelled || !r?.success) return;
+        const loaded = r.data?.qaOutcome ?? null;
+        setOutcome(loaded);
+        // Allowed earlier (the outcome predates it): say so instead of offering it again
+        const matches = (loaded?.blocking ?? []).flatMap((b) => (b.source === 'design' && b.match ? [b.match] : []));
+        if (!matches.length) return;
+        const design = await window.electronAPI.design.get(task.projectId);
+        if (!cancelled && design.success) setAllowed(new Set(matchesAllowed(matches, design.data?.tokens?.allowedPatterns)));
+      })
       .catch(() => {});
     return () => {
       cancelled = true;
