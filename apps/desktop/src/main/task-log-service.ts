@@ -159,6 +159,14 @@ export class TaskLogService extends EventEmitter {
   }
 
   /**
+   * Merged logs of a task's two spec directories (the project's and the
+   * worktree's). Used to keep the coding and QA logs when the worktree goes away.
+   */
+  mergeSpecDirLogs(mainSpecDir: string, worktreeSpecDir: string): TaskLogs | null {
+    return this.mergeLogs(this.loadLogsFromPath(mainSpecDir), this.loadLogsFromPath(worktreeSpecDir), mainSpecDir);
+  }
+
+  /**
    * Load and merge task logs from main spec dir and worktree spec dir
    * Planning phase logs are in main spec dir, coding/validation logs may be in worktree
    *

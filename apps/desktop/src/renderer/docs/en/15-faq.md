@@ -32,6 +32,10 @@ While the pentest runs, the Strix Docker container is busy. This is normal; the 
 
 If the task folder couldn't be fully deleted, it is marked as orphaned in Worktrees. You can't merge it or create a PR from it, only delete it with the Delete button. If deletion fails, the app shows an error.
 
+## After merge the coding logs and the Security tab are empty
+
+While a task builds, the agents write their logs, QA report, security results and architecture into the task folder's copy inside the worktree. Before a worktree is removed (merge, discard) the app now copies them back into the project. Tasks merged before this fix lost that data with their worktree; it can't be recovered.
+
 ## The Create PR button is disabled
 
 A PR needs a GitHub remote (`origin`). Add it in the project (`git remote add origin …`) or connect GitHub in Settings → GitHub. Merging into the main branch works without it.

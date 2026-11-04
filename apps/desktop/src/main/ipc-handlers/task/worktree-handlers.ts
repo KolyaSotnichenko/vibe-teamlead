@@ -2222,6 +2222,7 @@ export function registerWorktreeHandlers(
                     projectPath: project.path,
                     specId: task.specId,
                     logPrefix: '[TASK_WORKTREE_MERGE]',
+                    specsRelPath: getSpecsDir(project.autoBuildPath),
                     deleteBranch: true
                   });
 
@@ -2575,6 +2576,7 @@ export function registerWorktreeHandlers(
           projectPath: project.path,
           specId: task.specId,
           logPrefix: '[TASK_WORKTREE_DISCARD]',
+          specsRelPath: getSpecsDir(project.autoBuildPath),
           deleteBranch: true
         });
 

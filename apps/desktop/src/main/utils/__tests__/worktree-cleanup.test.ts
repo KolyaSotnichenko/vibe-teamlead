@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -81,5 +81,41 @@ describe('makeTreeWritable', () => {
     expect(mode(store)).toBe(0o755);
     expect(mode(file)).toBe(0o644);
     expect(mode(outside)).toBe(0o444);
+  });
+});
+
+describe('cleanupWorktree keeps the task spec folder', () => {
+  const phase = (name: string, status: string, entries: string[]) => ({
+    phase: name, status, started_at: null, completed_at: null,
+    entries: entries.map((content, i) => ({ timestamp: `2026-11-04T10:0${i}:00.000Z`, type: 'text', content, phase: name })),
+  });
+  const logs = (planning: string[], coding: string[], validation: string[], codingStatus = 'completed') => JSON.stringify({
+    spec_id: '003-x', created_at: '2026-11-04T10:00:00.000Z', updated_at: '2026-11-04T11:00:00.000Z',
+    phases: { planning: phase('planning', 'completed', planning), coding: phase('coding', codingStatus, coding), validation: phase('validation', codingStatus, validation) },
+  });
+
+  it('copies coding/QA logs and the security results back to the project before deleting the worktree', async () => {
+    const { dir, tasks } = project();
+    const wt = path.join(tasks, '003-x');
+    git(dir, 'worktree', 'add', '-q', '-b', 'vibe-teamlead/003-x', wt, 'main');
+    const mainSpec = path.join(dir, '.vibe-teamlead', 'specs', '003-x');
+    const wtSpec = path.join(wt, '.vibe-teamlead', 'specs', '003-x');
+    mkdirSync(mainSpec, { recursive: true });
+    mkdirSync(path.join(wtSpec, 'architecture'), { recursive: true });
+    writeFileSync(path.join(mainSpec, 'task_logs.json'), logs(['spec written'], [], [], 'pending'));
+    writeFileSync(path.join(wtSpec, 'task_logs.json'), logs(['spec written', 'plan ready'], ['subtask 1 done'], ['QA approved']));
+    writeFileSync(path.join(wtSpec, 'security_gates.json'), '{"findings":[]}');
+    writeFileSync(path.join(wtSpec, 'architecture', 'architecture.md'), '# Arch');
+
+    const result = await cleanupWorktree({ worktreePath: wt, projectPath: dir, specId: '003-x' });
+
+    expect(result.success).toBe(true);
+    expect(existsSync(wt)).toBe(false);
+    const kept = JSON.parse(readFileSync(path.join(mainSpec, 'task_logs.json'), 'utf-8'));
+    expect(kept.phases.coding.entries.map((e: { content: string }) => e.content)).toEqual(['subtask 1 done']);
+    expect(kept.phases.validation.entries.map((e: { content: string }) => e.content)).toEqual(['QA approved']);
+    expect(kept.phases.planning.entries.map((e: { content: string }) => e.content)).toEqual(['spec written', 'plan ready']);
+    expect(readFileSync(path.join(mainSpec, 'security_gates.json'), 'utf-8')).toBe('{"findings":[]}');
+    expect(readFileSync(path.join(mainSpec, 'architecture', 'architecture.md'), 'utf-8')).toBe('# Arch');
   });
 });

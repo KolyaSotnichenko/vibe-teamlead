@@ -18,9 +18,10 @@
 import { execFileSync } from 'child_process';
 import { rm } from 'fs/promises';
 import { existsSync, realpathSync } from 'fs';
-import { chmod, lstat, readdir } from 'fs/promises';
+import { chmod, cp, lstat, mkdir, readdir, writeFile } from 'fs/promises';
 import path from 'path';
-import { isTaskBranch } from '../../shared/constants/config';
+import { getSpecsDir, isTaskBranch } from '../../shared/constants/config';
+import { taskLogService } from '../task-log-service';
 import { getToolPath } from '../cli-tool-manager';
 import { stopStorybooksUnder } from '../design/storybook-service';
 import { getIsolatedGitEnv } from './git-isolation';
@@ -48,6 +49,8 @@ export interface WorktreeCleanupOptions {
   maxRetries?: number;
   /** Delay between retries in milliseconds (default: 500) */
   retryDelay?: number;
+  /** Specs folder relative to the project (project.autoBuildPath + "/specs"); defaults to .vibe-teamlead/specs */
+  specsRelPath?: string;
 }
 
 /**
@@ -106,6 +109,42 @@ function getWorktreeBranch(worktreePath: string, specId: string, timeout: number
  */
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Copies the task's spec folder from the worktree back to the project before
+ * the worktree is deleted. While a task builds, the agents write their logs,
+ * QA report, security results, design check and architecture into the
+ * worktree's copy (the specs folder is not in git, so a merge doesn't carry
+ * it); without this, a merged task showed only planning logs and an empty
+ * Security tab. task_logs.json is merged (planning lives in the project's
+ * copy, coding and QA in the worktree's); everything else is the worktree's
+ * newer version.
+ */
+export async function preserveTaskSpec(
+  worktreePath: string,
+  projectPath: string,
+  specId: string,
+  specsRelPath: string = getSpecsDir(undefined)
+): Promise<void> {
+  const worktreeSpecDir = path.join(worktreePath, specsRelPath, specId);
+  if (!existsSync(worktreeSpecDir)) return;
+  const mainSpecDir = path.join(projectPath, specsRelPath, specId);
+  const mergedLogs = existsSync(path.join(worktreeSpecDir, 'task_logs.json'))
+    ? taskLogService.mergeSpecDirLogs(mainSpecDir, worktreeSpecDir)
+    : null;
+
+  await mkdir(mainSpecDir, { recursive: true });
+  const topLogs = path.join(worktreeSpecDir, 'task_logs.json');
+  await cp(worktreeSpecDir, mainSpecDir, {
+    recursive: true,
+    force: true,
+    // Only regular files and folders: a symlink could point anywhere
+    filter: async (src) => src !== topLogs && !(await lstat(src)).isSymbolicLink(),
+  });
+  if (mergedLogs) {
+    await writeFile(path.join(mainSpecDir, 'task_logs.json'), JSON.stringify(mergedLogs, null, 2));
+  }
 }
 
 /**
@@ -228,7 +267,8 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
     branchName,
     timeout = 30000,
     maxRetries = 3,
-    retryDelay = 500
+    retryDelay = 500,
+    specsRelPath
   } = options;
 
   const warnings: string[] = [];
@@ -257,7 +297,18 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
     console.warn(`${logPrefix} Associated branch: ${branch}`);
   }
 
-  // 2. Delete the worktree directory manually
+  // 2. Keep the task's logs and reports (only task worktrees have a spec folder)
+  if (specId && isPathWithinBase(worktreePath, taskBase) && existsSync(worktreePath)) {
+    try {
+      await preserveTaskSpec(worktreePath, projectPath, specId, specsRelPath);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(`${logPrefix} Could not copy the task's spec folder back: ${msg}`);
+      warnings.push(`Task logs and reports were not kept: ${msg}`);
+    }
+  }
+
+  // 3. Delete the worktree directory manually
   // This is required because `git worktree remove --force` fails on Windows
   // when the directory contains untracked files (node_modules, build artifacts, etc.)
   if (existsSync(worktreePath)) {
@@ -279,7 +330,7 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
     console.warn(`${logPrefix} Worktree directory already deleted`);
   }
 
-  // 3. Prune git's internal worktree references
+  // 4. Prune git's internal worktree references
   // After manual deletion, git still thinks the worktree exists in .git/worktrees/
   // Running prune cleans up these stale references
   try {
@@ -297,7 +348,7 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
     warnings.push(`Worktree prune failed: ${msg}`);
   }
 
-  // 4. Delete the branch if requested
+  // 5. Delete the branch if requested
   // Only ever delete the task's own branch (or the one the caller named)
   const deletable = !!branch && (branch === branchName || isTaskBranch(branch));
   if (deleteBranch && branch && !deletable) {
