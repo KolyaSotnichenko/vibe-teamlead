@@ -141,6 +141,11 @@ export function qaRoundData(agentType: string, context: QAPromptContext): string
   return quoteFindings(lines);
 }
 
+/** A review cut off by its limit may have written only part of a report */
+const SIGNOFF_AFTER_LIMIT = `
+
+Your review session ran out of turns, so the report may be unfinished. If it doesn't show a finished review, with a status and every acceptance criterion checked, record no verdict and stop: the review will run again.`;
+
 const SIGNOFF_KICKOFF = 'Record the verdict from qa_report.md with update_qa_status, then stop.';
 
 // =============================================================================
@@ -534,7 +539,7 @@ export class QALoop extends EventEmitter {
 
         // Read QA signoff from implementation_plan.json
         let signoff = await this.readQASignoff();
-        if (!signoff && reviewResult.outcome === 'completed') {
+        if (!signoff && (reviewResult.outcome === 'completed' || reviewResult.outcome === 'max_steps')) {
           const report = await this.readReport();
           if (report !== null && report !== reportBefore) {
             // The review is done, only its verdict is missing: don't repeat the whole review
@@ -543,7 +548,7 @@ export class QALoop extends EventEmitter {
             const result = await this.config.runSession({
               agentType: 'qa_reviewer',
               phase: 'qa',
-              systemPrompt: SIGNOFF_PROMPT,
+              systemPrompt: reviewResult.outcome === 'max_steps' ? `${SIGNOFF_PROMPT}${SIGNOFF_AFTER_LIMIT}` : SIGNOFF_PROMPT,
               kickoffMessage: SIGNOFF_KICKOFF,
               kickoffData: quoteFindings([`Why it was not recorded: ${cleanForMessage(this.signoffProblem)}`]),
               specDir: this.config.specDir,

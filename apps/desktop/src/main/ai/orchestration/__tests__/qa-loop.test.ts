@@ -545,6 +545,36 @@ describe('QALoop', () => {
       });
     }
 
+    it('a reviewer stopped at the turn limit: asks for the verdict, but only a finished report may give one', async () => {
+      const inner = sessions([false, true], true);
+      let n = 0;
+      const runSession = vi.fn(async (config: QASessionRunConfig) => {
+        const result = await inner(config);
+        return n++ === 0 ? makeSessionResult('max_steps') : result;
+      });
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt })).run();
+      expect(outcome.approved).toBe(true);
+      expect(generatePrompt).toHaveBeenCalledTimes(1);
+      const second = (runSession.mock.calls as Array<[QASessionRunConfig]>)[1][0];
+      expect(second.systemPrompt).toContain('mcp__vibe-teamlead__update_qa_status');
+      expect(second.systemPrompt).toMatch(/ran out of turns/);
+      expect(second.systemPrompt).toMatch(/no verdict/i);
+    });
+
+    it('a reviewer stopped at the limit with no report at all: the review runs again', async () => {
+      const inner = sessions([false, true], false);
+      let n = 0;
+      const runSession = vi.fn(async (config: QASessionRunConfig) => {
+        const result = await inner(config);
+        return n++ === 0 ? makeSessionResult('max_steps') : result;
+      });
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt })).run();
+      expect(outcome.approved).toBe(true);
+      expect(generatePrompt).toHaveBeenCalledTimes(2);
+    });
+
     it('asks only for the signoff when the reviewer wrote its report, not for a whole new review', async () => {
       const runSession = sessions([false, true], true);
       const generatePrompt = vi.fn().mockResolvedValue('full prompt');
