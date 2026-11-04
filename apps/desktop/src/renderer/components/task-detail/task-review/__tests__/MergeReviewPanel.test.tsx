@@ -79,6 +79,12 @@ describe('MergeReviewPanel', () => {
     expect(await screen.findByText('mergeReview.noDifference')).toBeInTheDocument();
     cleanup();
 
+    setup(['a.ts'], undefined, { success: true, data: { diff: 'diff --git a/a.ts b/a.ts\nold mode 100644\nnew mode 100755\n', truncated: false } });
+    fireEvent.click(await screen.findByRole('button', { name: 'a.ts' }));
+    expect(await screen.findByText('mergeReview.cannotShow')).toBeInTheDocument();
+    expect(screen.queryByText('mergeReview.noDifference')).not.toBeInTheDocument();
+    cleanup();
+
     setup(['a.ts'], undefined, { success: false, error: 'boom' });
     fireEvent.click(await screen.findByRole('button', { name: 'a.ts' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');

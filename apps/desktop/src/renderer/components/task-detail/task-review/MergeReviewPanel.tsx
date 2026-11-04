@@ -79,7 +79,9 @@ function FileDiff({ task, file }: { task: Task; file: string }) {
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!error && !result && <p className="text-xs text-muted-foreground">{t('mergeReview.loading')}</p>}
-      {result && !lines.length && <p className="text-xs text-muted-foreground">{t('mergeReview.noDifference')}</p>}
+      {result && !lines.length && (
+        <p className="text-xs text-muted-foreground">{t(result.diff.trim() ? 'mergeReview.cannotShow' : 'mergeReview.noDifference')}</p>
+      )}
       {lines.length > 0 && (
         <div className="max-h-96 overflow-auto border border-border font-mono text-xs">
           {lines.map((line, i) => (

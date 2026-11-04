@@ -227,6 +227,14 @@ describe('mergeTaskBranch', () => {
         expect(task?.diff).toContain('+both sides');
       });
 
+      it("shows the text even when the branch's .gitattributes calls the file binary", async () => {
+        writeFileSync(join(wt, '.gitattributes'), 'shared.txt -diff\n');
+        commitAll(wt, 'task hides the file from diffs');
+        await resolved();
+        const result = await getMergeReviewDiff({ ...options(), file: 'shared.txt', against: 'project' });
+        expect(result?.diff).toContain('+both sides');
+      });
+
       it("the diff follows the user's edits", async () => {
         await resolved();
         writeFileSync(join(repo, 'shared.txt'), 'corrected by hand\n');

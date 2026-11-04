@@ -159,7 +159,8 @@ const MAX_DIFF_CHARS = 256 * 1024;
 /**
  * A reviewed file against the project's branch (what the merge changes there) or
  * the task (what the model changed in its version), with the user's edits. Only
- * files in the review. Plain diff: a branch's .gitattributes can't pick a driver.
+ * files in the review. Plain diff: a branch's .gitattributes can't pick a driver
+ * or call the file binary to hide its text.
  */
 export async function getMergeReviewDiff(
   options: MergeReviewOptions & { file: string; against: 'project' | 'task' },
@@ -169,7 +170,7 @@ export async function getMergeReviewDiff(
   if (!review?.files.includes(file)) return null;
   const run = gitRunner(projectDir, git, env);
   const result = await run([
-    '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-textconv',
+    '--literal-pathspecs', 'diff', '--text', '--no-color', '--no-ext-diff', '--no-textconv',
     against === 'project' ? 'HEAD' : 'MERGE_HEAD', '--', file,
   ]);
   if (!result.ok) return null;
