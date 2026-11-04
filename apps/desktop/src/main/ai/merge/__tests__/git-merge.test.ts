@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +26,7 @@ describe('mergeTaskBranch', () => {
       worktreePath: wt,
       message: 'Merge the task',
       stageOnly: false,
-      resolveConflicts: async () => new Map(),
+      resolveConflict: async () => undefined,
       ...over,
     });
 
@@ -120,18 +120,21 @@ describe('mergeTaskBranch', () => {
       expect(readFileSync(join(repo, 'new.txt'), 'utf-8')).toBe('my own new file\n');
     });
 
-    it("when the project's commit hook rejects it, with the hook's words", async () => {
-      const hook = join(repo, '.git', 'hooks', 'pre-commit');
-      writeFileSync(hook, '#!/bin/sh\necho "lint failed" >&2\nexit 1\n');
-      chmodSync(hook, 0o755);
-      const before = head();
-      const result = await merge();
-      expect(result.status).toBe('refused');
-      expect(result.message).toContain('lint failed');
-      expect(head()).toBe(before);
-      expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
-      expect(existsSync(join(repo, '.git', 'MERGE_HEAD'))).toBe(false);
-    });
+  });
+
+  it('runs no hooks: a branch could bring its own, and they would run outside the agents\' limits', async () => {
+    const marker = join(repo, 'hook-ran');
+    mkdirSync(join(wt, 'hooks'));
+    for (const name of ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit', 'pre-merge-commit', 'post-merge']) {
+      writeFileSync(join(wt, 'hooks', name), `#!/bin/sh\ntouch "${marker}"\nexit 1\n`);
+      chmodSync(join(wt, 'hooks', name), 0o755);
+    }
+    commitAll(wt, 'task brings hooks');
+    git(repo, 'config', 'core.hooksPath', 'hooks');
+
+    await expect(merge()).resolves.toMatchObject({ status: 'merged' });
+
+    expect(existsSync(marker)).toBe(false);
   });
 
   describe('conflicts', () => {
@@ -142,13 +145,14 @@ describe('mergeTaskBranch', () => {
       commitAll(wt, 'task touched shared');
     });
 
-    it('sends only the conflicted files to the resolver and commits the result', async () => {
-      const resolveConflicts = vi.fn(async () => new Map([['shared.txt', 'both sides\n']]));
+    it('gives the resolver all three versions, only for the conflicted file, and commits the result', async () => {
+      const resolveConflict = vi.fn(async () => 'both sides');
       const before = head();
 
-      await expect(merge({ resolveConflicts })).resolves.toMatchObject({ status: 'merged' });
+      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'merged' });
 
-      expect(resolveConflicts).toHaveBeenCalledWith(['shared.txt']);
+      expect(resolveConflict.mock.calls).toEqual([[{ file: 'shared.txt', base: 'one\n', ours: 'main side\n', theirs: 'task side\n' }]]);
+      // The model trims its answer; the file keeps its last line's newline
       expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('both sides\n');
       expect(readFileSync(join(repo, 'public', 'favicon.ico')).equals(BINARY)).toBe(true);
       expect(git(repo, 'rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3);
@@ -156,13 +160,14 @@ describe('mergeTaskBranch', () => {
     });
 
     it.each([
-      ['nothing back', new Map<string, string>()],
-      ['conflict markers', new Map([['shared.txt', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> task\n']])],
-      ['damaged binary text', new Map([['shared.txt', 'a�b']])],
-      ['an empty file', new Map([['shared.txt', '']])],
+      ['nothing back', undefined],
+      ['conflict markers', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> task\n'],
+      ['damaged binary text', 'a\uFFFDb'],
+      ['an empty file', ''],
+      ['the file wrapped in a code fence', '```\nboth\n```'],
     ])('rolls back and names the file when the resolver gives %s', async (_name, resolved) => {
       const before = head();
-      const result = await merge({ resolveConflicts: async () => resolved });
+      const result = await merge({ resolveConflict: async () => resolved });
       expect(result).toMatchObject({ status: 'conflicts', conflictFiles: ['shared.txt'] });
       expect(head()).toBe(before);
       expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
@@ -170,7 +175,7 @@ describe('mergeTaskBranch', () => {
     });
 
     it('rolls back when the resolver fails', async () => {
-      const result = await merge({ resolveConflicts: async () => { throw new Error('no model'); } });
+      const result = await merge({ resolveConflict: async () => { throw new Error('no model'); } });
       expect(result.status).toBe('conflicts');
       expect(existsSync(join(repo, '.git', 'MERGE_HEAD'))).toBe(false);
     });
@@ -180,6 +185,45 @@ describe('mergeTaskBranch', () => {
       expect(result.status).toBe('conflicts');
       expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
       expect(existsSync(join(repo, '.git', 'SQUASH_MSG'))).toBe(false);
+    });
+  });
+
+  describe('conflicts the resolver must never see', () => {
+    const resolveConflict = vi.fn(async () => 'anything');
+    beforeEach(() => resolveConflict.mockClear());
+
+    const conflictWith = (file: string, mainSide: () => void, taskSide?: () => void) => {
+      mainSide();
+      git(repo, 'add', '--', file);
+      git(repo, 'commit', '-q', '-m', 'main side');
+      if (taskSide) {
+        taskSide();
+        commitAll(wt, 'task side');
+      }
+    };
+
+    it('a symlink: a write through it could land outside the project', async () => {
+      const outside = join(mkdtempSync(join(tmpdir(), 'vtl-outside-')), 'secret');
+      writeFileSync(outside, 'untouched');
+      conflictWith('link', () => symlinkSync('shared.txt', join(repo, 'link')), () => symlinkSync(outside, join(wt, 'link')));
+
+      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'conflicts', conflictFiles: ['link'] });
+
+      expect(resolveConflict).not.toHaveBeenCalled();
+      expect(readFileSync(outside, 'utf-8')).toBe('untouched');
+    });
+
+    it('a binary file', async () => {
+      conflictWith('logo.png', () => writeFileSync(join(repo, 'logo.png'), Buffer.from([0, 1, 2])), () => writeFileSync(join(wt, 'logo.png'), Buffer.from([0, 3, 4])));
+      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'conflicts', conflictFiles: ['logo.png'] });
+      expect(resolveConflict).not.toHaveBeenCalled();
+    });
+
+    it('a file one side deleted', async () => {
+      conflictWith('gone.txt', () => writeFileSync(join(repo, 'gone.txt'), 'main keeps and edits\n'));
+      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'conflicts', conflictFiles: ['gone.txt'] });
+      expect(resolveConflict).not.toHaveBeenCalled();
+      expect(readFileSync(join(repo, 'gone.txt'), 'utf-8')).toBe('main keeps and edits\n');
     });
   });
 

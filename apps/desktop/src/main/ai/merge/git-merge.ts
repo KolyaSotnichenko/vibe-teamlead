@@ -5,8 +5,20 @@
  */
 
 import { execFile } from 'node:child_process';
-import { rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, rmSync, writeFileSync } from 'node:fs';
+import { devNull } from 'node:os';
 import { isAbsolute, join } from 'node:path';
+
+/** The three versions of a text file in conflict, as git holds them */
+export interface MergeConflictVersions {
+  file: string;
+  /** Empty when both sides added the file */
+  base: string;
+  /** The project's branch */
+  ours: string;
+  /** The task */
+  theirs: string;
+}
 
 export interface MergeTaskBranchOptions {
   projectDir: string;
@@ -17,8 +29,8 @@ export interface MergeTaskBranchOptions {
   message: string;
   /** Leave the result staged for the user to commit */
   stageOnly: boolean;
-  /** File path → merged text, for the files git couldn't merge. Missing means unresolved. */
-  resolveConflicts: (files: string[]) => Promise<Map<string, string>>;
+  /** The merged text of a file git couldn't merge. Nothing means unresolved. */
+  resolveConflict: (conflict: MergeConflictVersions) => Promise<string | undefined>;
   git?: string;
   env?: NodeJS.ProcessEnv;
 }
@@ -30,9 +42,21 @@ export interface MergeTaskBranchResult {
   conflictFiles?: string[];
 }
 
-/** Text a resolver must not hand back as a merged file. Pure. */
-function isUsableMerge(content: string | undefined): content is string {
-  return !!content && !content.includes('\0') && !content.includes('�') && !/^(<{7}|>{7}) /m.test(content);
+/**
+ * Hooks stay off: `core.hooksPath` can point into the repository, so the branch
+ * could bring the hooks that run here, outside the limits agents work under.
+ */
+const NO_HOOKS = ['-c', `core.hooksPath=${devNull}`];
+
+const REGULAR_FILE = new Set(['100644', '100755']);
+
+/** Not text the resolver can read: a null byte, or bytes that aren't valid UTF-8. Pure. */
+const isBinary = (content: string) => content.includes('\0') || content.includes('\uFFFD');
+
+/** What a resolver must not hand back as a merged file. Pure. */
+function isUsableMerge(content: string | undefined, versions: MergeConflictVersions): content is string {
+  if (!content || isBinary(content) || /^(<{7}|>{7}) /m.test(content)) return false;
+  return !content.startsWith('```') || versions.ours.startsWith('```') || versions.theirs.startsWith('```');
 }
 
 export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<MergeTaskBranchResult> {
@@ -40,9 +64,9 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   const baseBranch = options.baseBranch.replace(/^origin\//, '');
 
   const run = (args: string[], cwd = projectDir) =>
-    new Promise<{ ok: boolean; stdout: string; output: string }>((resolve) => {
+    new Promise<{ ok: boolean; raw: string; stdout: string; output: string }>((resolve) => {
       execFile(git, args, { cwd, env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-        resolve({ ok: !error, stdout: stdout.trim(), output: `${stderr}\n${stdout}`.trim() });
+        resolve({ ok: !error, raw: stdout, stdout: stdout.trim(), output: `${stderr}\n${stdout}`.trim() });
       });
     });
   const refused = (message: string): MergeTaskBranchResult => ({ status: 'refused', message });
@@ -51,6 +75,24 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
     await run(['reset', '--merge']);
     const squashMsg = (await run(['rev-parse', '--git-path', 'SQUASH_MSG'])).stdout;
     if (squashMsg) rmSync(isAbsolute(squashMsg) ? squashMsg : join(projectDir, squashMsg), { force: true });
+  };
+
+  /** Only text files both sides still have reach the resolver; the rest stay for the user. */
+  const resolveOne = async (file: string, versions: Map<string, { mode: string; blob: string }>): Promise<string | undefined> => {
+    const ours = versions.get('2');
+    const theirs = versions.get('3');
+    if (!ours || !theirs || [...versions.values()].some(({ mode }) => !REGULAR_FILE.has(mode))) return undefined;
+    if (lstatSync(join(projectDir, file), { throwIfNoEntry: false })?.isSymbolicLink()) return undefined;
+    const read = async (blob?: string) => (blob ? (await run(['cat-file', 'blob', blob])).raw : '');
+    const conflict = { file, base: await read(versions.get('1')?.blob), ours: await read(ours.blob), theirs: await read(theirs.blob) };
+    if (isBinary(conflict.base) || isBinary(conflict.ours) || isBinary(conflict.theirs)) return undefined;
+    try {
+      const resolved = await options.resolveConflict(conflict);
+      if (!isUsableMerge(resolved, conflict)) return undefined;
+      return conflict.ours.endsWith('\n') && !resolved.endsWith('\n') ? `${resolved}\n` : resolved;
+    } catch {
+      return undefined;
+    }
   };
 
   const current = (await run(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout;
@@ -63,27 +105,34 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
 
   if (worktreePath && (await run(['status', '--porcelain', '--untracked-files=no'], worktreePath)).stdout) {
     await run(['add', '-u'], worktreePath);
-    const saved = await run(['commit', '--no-verify', '-m', 'Changes left uncommitted at merge'], worktreePath);
+    const saved = await run([...NO_HOOKS, 'commit', '-m', 'Changes left uncommitted at merge'], worktreePath);
     if (!saved.ok) return refused(saved.output);
   }
 
-  const merge = await run(['merge', '--no-commit', ...(stageOnly ? ['--squash'] : ['--no-ff']), branch]);
+  const merge = await run([...NO_HOOKS, 'merge', '--no-commit', ...(stageOnly ? ['--squash'] : ['--no-ff']), branch]);
   if (!merge.ok) {
-    const conflictFiles = (await run(['diff', '--name-only', '--diff-filter=U'])).stdout.split('\n').filter(Boolean);
+    // Stage 1 is the base, 2 the project's branch, 3 the task
+    const stages = new Map<string, Map<string, { mode: string; blob: string }>>();
+    for (const entry of (await run(['ls-files', '--unmerged', '-z'])).raw.split('\0').filter(Boolean)) {
+      const [info, file] = entry.split('\t');
+      const [mode, blob, stage] = info.split(' ');
+      if (!stages.has(file)) stages.set(file, new Map());
+      stages.get(file)?.set(stage, { mode, blob });
+    }
+    const conflictFiles = [...stages.keys()];
     // No conflicts means git declined to start, and has changed nothing
     if (!conflictFiles.length) return refused(merge.output);
 
-    let resolved = new Map<string, string>();
-    try {
-      resolved = await options.resolveConflicts(conflictFiles);
-    } catch {
-      // Treated as unresolved below
+    const merged = new Map<string, string>();
+    for (const [file, versions] of stages) {
+      const resolved = await resolveOne(file, versions);
+      if (resolved === undefined) {
+        await rollBack();
+        return { status: 'conflicts', conflictFiles };
+      }
+      merged.set(file, resolved);
     }
-    if (!conflictFiles.every((file) => isUsableMerge(resolved.get(file)))) {
-      await rollBack();
-      return { status: 'conflicts', conflictFiles };
-    }
-    for (const file of conflictFiles) writeFileSync(join(projectDir, file), resolved.get(file) as string, 'utf-8');
+    for (const [file, content] of merged) writeFileSync(join(projectDir, file), content, 'utf-8');
     const added = await run(['add', '--', ...conflictFiles]);
     if (!added.ok) {
       await rollBack();
@@ -97,7 +146,7 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   }
   if (!(await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])).ok) return { status: 'up_to_date' };
 
-  const committed = await run(['commit', '-m', options.message]);
+  const committed = await run([...NO_HOOKS, 'commit', '-m', options.message]);
   if (!committed.ok) {
     await rollBack();
     return refused(committed.output);
