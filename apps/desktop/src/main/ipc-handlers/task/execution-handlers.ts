@@ -5,6 +5,7 @@ import path from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { spawnSync, execFileSync } from 'child_process';
 import { getToolPath } from '../../cli-tool-manager';
+import { requestQaRerun } from '../../ai/orchestration/qa-rerun';
 import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
@@ -352,7 +353,8 @@ export function registerTaskExecutionHandlers(
       taskId: string,
       approved: boolean,
       feedback?: string,
-      images?: ImageAttachment[]
+      images?: ImageAttachment[],
+      options?: { rerunOnly?: boolean }
     ): Promise<IPCResult> => {
       // Find task and project
       const { task, project } = findTaskAndProject(taskId);
@@ -499,7 +501,8 @@ export function registerTaskExecutionHandlers(
         }
 
         try {
-          writeFileSync(
+          if (options?.rerunOnly) requestQaRerun(targetSpecDir);
+          else writeFileSync(
             fixRequestPath,
             `# QA Fix Request\n\nStatus: REJECTED\n\n## Feedback\n\n${feedback || 'No feedback provided'}${imageReferences}\n\nCreated at: ${new Date().toISOString()}\n`,
             'utf-8'

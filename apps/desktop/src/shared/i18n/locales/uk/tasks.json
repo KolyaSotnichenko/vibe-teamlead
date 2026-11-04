@@ -1035,7 +1035,6 @@
     "next": "Далі: опишіть, що виправити, у «Request Changes», запустіть QA ще раз або злийте як є, якщо знахідки вас не турбують.",
     "nextWithDesign": "Далі: якщо дизайн-знахідка — це те, що ваша дизайн-система дозволяє, дозвольте її тут (виняток піде в токени) і запустіть QA ще раз. Інакше опишіть, що виправити, у «Request Changes» або злийте як є.",
     "rerun": "Запустити QA ще раз",
-    "rerunFeedback": "Run QA again. No code changes are requested: the design system or the checks were updated since the last run. Fix only what QA finds now.",
     "unrecorded": "Цей прогін QA закінчився до того, як застосунок почав записувати причину. Подивіться Workspace → Security і design_check.md у «Файлах»: рев'юер міг схвалити, а заблокували перевірки безпеки чи дизайн-перевірка. Запустіть QA ще раз, щоб побачити причини тут."
   }
 }

@@ -42,7 +42,7 @@ describe('QaOutcomePanel', () => {
     expect(tokens.allowedPatterns[0].pattern).toBe('repeating-linear-gradient\\(');
     expect(await screen.findByText('qaOutcome.allowed')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'qaOutcome.rerun' }));
-    await waitFor(() => expect(submitReview).toHaveBeenCalledWith('t1', false, 'qaOutcome.rerunFeedback'));
+    await waitFor(() => expect(submitReview).toHaveBeenCalledWith('t1', false, undefined, undefined, { rerunOnly: true }));
   });
 
   it('explains a run from before the outcome was recorded', async () => {

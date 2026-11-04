@@ -817,10 +817,11 @@ export async function submitReview(
   taskId: string,
   approved: boolean,
   feedback?: string,
-  images?: ImageAttachment[]
+  images?: ImageAttachment[],
+  options?: { rerunOnly?: boolean }
 ): Promise<boolean> {
   try {
-    const result = await window.electronAPI.submitReview(taskId, approved, feedback, images);
+    const result = await window.electronAPI.submitReview(taskId, approved, feedback, images, options);
     if (result.success) {
       return true;
     }

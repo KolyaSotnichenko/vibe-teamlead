@@ -492,6 +492,26 @@ describe('QALoop', () => {
   // Human feedback processing
   // -------------------------------------------------------------------------
 
+  it('Run QA again goes straight to the reviewer: no fixer, and an old approval does not end it', async () => {
+    let reviewed = false;
+    const runSession = vi.fn().mockImplementation(async () => {
+      reviewed = true;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((p: string) => {
+      if (p.endsWith('QA_RERUN')) return Promise.resolve('x');
+      if (p.endsWith('QA_FIX_REQUEST.md')) return Promise.resolve('left behind by an earlier reviewer');
+      if (p.endsWith('implementation_plan.json')) return Promise.resolve(completedPlan('approved'));
+      return Promise.reject(new Error('ENOENT'));
+    });
+    const outcome = await new QALoop(makeConfig({ runSession })).run();
+    expect(reviewed).toBe(true);
+    expect((runSession.mock.calls as Array<[QASessionRunConfig]>).map((c) => c[0].agentType)).toEqual(['qa_reviewer']);
+    expect(mockUnlink).toHaveBeenCalledWith(path.join(SPEC_DIR, 'QA_RERUN'));
+    expect(mockUnlink).toHaveBeenCalledWith(path.join(SPEC_DIR, 'QA_FIX_REQUEST.md'));
+    expect(outcome.approved).toBe(true);
+  });
+
   it('processes QA_FIX_REQUEST.md before running the review loop', async () => {
     // QA_FIX_REQUEST.md exists
     mockReadFile.mockImplementation((path: string) => {

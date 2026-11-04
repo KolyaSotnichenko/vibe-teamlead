@@ -40,7 +40,8 @@ export interface TaskAPI {
     taskId: string,
     approved: boolean,
     feedback?: string,
-    images?: ImageAttachment[]
+    images?: ImageAttachment[],
+    options?: { rerunOnly?: boolean }
   ) => Promise<IPCResult>;
   updateTaskStatus: (
     taskId: string,
@@ -134,9 +135,10 @@ export const createTaskAPI = (): TaskAPI => ({
     taskId: string,
     approved: boolean,
     feedback?: string,
-    images?: ImageAttachment[]
+    images?: ImageAttachment[],
+    options?: { rerunOnly?: boolean }
   ): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW, taskId, approved, feedback, images),
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_REVIEW, taskId, approved, feedback, images, options),
 
   updateTaskStatus: (
     taskId: string,

@@ -28,6 +28,7 @@ import {
   generateQAReport,
   mergeQAReport,
 } from './qa-reports';
+import { QA_RERUN_FILE } from './qa-rerun';
 
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
@@ -309,9 +310,12 @@ export class QALoop extends EventEmitter {
         return this.outcome(false, 0, Date.now() - startTime, 'error', 'Build not complete');
       }
 
+      // "Run QA again": straight to a fresh review, whatever earlier runs left behind
+      const rerun = await this.consumeRerunRequest();
+
       // Check if already approved (unless human feedback pending)
-      const hasHumanFeedback = await this.hasHumanFeedback();
-      if (!hasHumanFeedback) {
+      const hasHumanFeedback = !rerun && (await this.hasHumanFeedback());
+      if (!rerun && !hasHumanFeedback) {
         const currentStatus = await this.readQASignoff();
         if (currentStatus?.status === 'approved') {
           this.emitTyped('log', 'Build already approved by QA');
@@ -628,6 +632,18 @@ export class QALoop extends EventEmitter {
     } catch {
       return false;
     }
+  }
+
+  /** True when the user asked for a fresh review; removes the request. */
+  private async consumeRerunRequest(): Promise<boolean> {
+    try {
+      await readFile(join(this.config.specDir, QA_RERUN_FILE), 'utf-8');
+    } catch {
+      return false;
+    }
+    await unlink(join(this.config.specDir, QA_RERUN_FILE)).catch(() => {});
+    await unlink(join(this.config.specDir, 'QA_FIX_REQUEST.md')).catch(() => {});
+    return true;
   }
 
   /**

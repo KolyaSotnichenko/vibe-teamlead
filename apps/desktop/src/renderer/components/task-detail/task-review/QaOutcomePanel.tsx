@@ -64,7 +64,7 @@ export function QaOutcomePanel({ task }: { task: Task }) {
   const rerun = async () => {
     setBusy(true);
     try {
-      await submitReview(task.id, false, t('qaOutcome.rerunFeedback'));
+      await submitReview(task.id, false, undefined, undefined, { rerunOnly: true });
     } finally {
       setBusy(false);
     }
