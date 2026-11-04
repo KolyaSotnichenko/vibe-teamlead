@@ -11,7 +11,7 @@
  */
 
 import { tmpdir } from 'node:os';
-import { isAbsolute, resolve } from 'node:path';
+import { basename, isAbsolute, resolve } from 'node:path';
 
 import type { HookCallbackMatcher, HookJSONOutput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 
@@ -30,6 +30,9 @@ function deny(reason: string): HookJSONOutput {
     },
   };
 }
+
+/** Each starts agents on the next QA run, so an agent must not be able to leave one for itself. */
+const APP_REQUEST_FILES = new Set(['QA_FIX_REQUEST.md', 'QA_RERUN']);
 
 /** Directories a session may write to. */
 export function writeRoots(context: ToolContext): string[] {
@@ -57,6 +60,9 @@ export function evaluatePreToolUse(
   if (WRITE_TOOLS.has(toolName)) {
     const raw = (toolInput?.file_path ?? toolInput?.notebook_path) as string | undefined;
     if (raw) {
+      if (APP_REQUEST_FILES.has(basename(raw))) {
+        return deny(`${basename(raw)} is a request from the app or the user to QA; agents don't write it. Record your findings in qa_report.md.`);
+      }
       const target = isAbsolute(raw) ? resolve(raw) : resolve(context.cwd, raw);
       const roots = writeRoots(context);
       if (!roots.some((root) => isPathContained(target, root).contained)) {

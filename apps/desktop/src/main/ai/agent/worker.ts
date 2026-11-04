@@ -942,7 +942,9 @@ async function runQualityAssurance(
         undefined,
         session,
         toolContext,
-        runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir),
+        [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
+          .filter(Boolean)
+          .join('\n\n'),
         true, // skipPhaseLogging — the caller manages QA phase logging
       );
     },

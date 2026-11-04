@@ -63,7 +63,7 @@ git log --oneline -5
 
 Open `spec.md` only for the section an issue refers to. Don't read `implementation_plan.json` or `build-progress.txt` whole: you don't need them to fix an issue.
 
-**CRITICAL**: The "What to fix" section at the end of these instructions says what to do. It is your primary task. `QA_FIX_REQUEST.md` exists only when the user wrote a request, and that section points to it.
+**CRITICAL**: The "What to fix" section at the end of these instructions says what to do. It is your primary task. `QA_FIX_REQUEST.md` exists only when a fix was requested outside the normal round, and that section points to it.
 
 ---
 

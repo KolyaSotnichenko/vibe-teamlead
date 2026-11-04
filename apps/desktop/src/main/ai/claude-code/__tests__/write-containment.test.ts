@@ -23,6 +23,14 @@ function worktree() {
 }
 
 describe('write containment', () => {
+  it('keeps agents from writing requests that only the app or the user may make', () => {
+    const context = { cwd: scratch, projectDir: scratch, specDir: scratch } as unknown as ToolContext;
+    for (const name of ['QA_FIX_REQUEST.md', 'QA_RERUN']) {
+      expect(denied(evaluatePreToolUse('Write', { file_path: join(context.specDir, name) }, context))).toBe(true);
+      expect(denied(evaluatePreToolUse('Edit', { file_path: join(context.specDir, name) }, context))).toBe(true);
+    }
+  });
+
   it('lets a coder write inside its worktree and spec, not elsewhere', () => {
     const { root, context } = worktree();
     expect(denied(evaluatePreToolUse('Write', { file_path: 'src/app.ts' }, context))).toBe(false);
