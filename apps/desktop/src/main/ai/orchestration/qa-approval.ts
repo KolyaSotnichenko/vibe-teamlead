@@ -66,8 +66,8 @@ function newFileState(path: string): string | undefined {
 
 /**
  * The state of the code: HEAD, uncommitted edits and new files. Undefined when git
- * can't say, was told to skip a file, or a new file can't be read in full (a nested
- * repository, a huge file): then no approval is reused, and QA reviews again.
+ * can't say, was told to skip a file, or some code can't be read in full (a nested
+ * repository, a huge new file): then no approval is reused, and QA reviews again.
  * Ignored files don't count: they never reach the task's commits.
  */
 export async function workTreeFingerprint(cwd: string): Promise<string | undefined> {
@@ -75,13 +75,16 @@ export async function workTreeFingerprint(cwd: string): Promise<string | undefin
     new Promise<string | undefined>((done) => {
       execFile('git', args, { cwd, encoding: 'utf-8', maxBuffer: 256 * 1024 * 1024 }, (error, stdout) => done(error ? undefined : stdout));
     });
-  const [head, diff, untracked, tracked] = await Promise.all([
+  const [head, diff, untracked, tracked, stages] = await Promise.all([
     git(['rev-parse', 'HEAD']),
-    git(['diff', '--no-color', '--no-ext-diff', '--no-textconv', 'HEAD', ...NOT_THE_APP]),
+    git(['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--ignore-submodules=none', 'HEAD', ...NOT_THE_APP]),
     git(['ls-files', '--others', '--exclude-standard', '-z', ...NOT_THE_APP]),
     git(['ls-files', '-v', '-z']),
+    git(['ls-files', '-s', '-z']),
   ]);
-  if (head === undefined || diff === undefined || untracked === undefined || tracked === undefined) return undefined;
+  if (head === undefined || diff === undefined || untracked === undefined || tracked === undefined || stages === undefined) return undefined;
+  // Mode 160000 is a nested repository: only its commit shows, not the files in it
+  if (stages.split('\0').some((entry) => entry.startsWith('160000 '))) return undefined;
   // `ls-files -v`: S is skip-worktree, a lowercase tag is assume-unchanged
   if (tracked.split('\0').some((entry) => /^(S|[a-z]) /.test(entry))) return undefined;
   const hash = createHash('sha256').update(head).update('\0').update(diff).update('\0');

@@ -103,6 +103,16 @@ describe('workTreeFingerprint', () => {
     await expect(workTreeFingerprint(repo)).resolves.toBeUndefined();
   });
 
+  it('is unknown with a nested repository added to git: only its commit shows, not its files', async () => {
+    const nested = join(repo, 'vendor');
+    mkdirSync(nested);
+    const inner = (...args: string[]) => execFileSync('git', args, { cwd: nested, stdio: 'ignore' });
+    inner('init', '-q');
+    inner('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'first');
+    git('add', 'vendor');
+    await expect(workTreeFingerprint(repo)).resolves.toBeUndefined();
+  });
+
   it('is unknown with a new file too big to read', async () => {
     const huge = join(repo, 'huge.bin');
     writeFileSync(huge, '');
