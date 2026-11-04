@@ -8,16 +8,17 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { RefreshCw } from 'lucide-react';
-import type { Task, TaskWorkspace } from '../../../../shared/types';
+import type { Task, TaskStorybookStatus, TaskWorkspace } from '../../../../shared/types';
 import { cn } from '../../../lib/utils';
 import { ArchitectureTab } from './ArchitectureTab';
 import { SecurityTab } from './SecurityTab';
 import { SpecTab } from './SpecTab';
+import { StorybookTab } from './StorybookTab';
 import { EmptyState } from './workspace-ui';
 
 const PlanTab = lazy(() => import('./PlanTab'));
 
-type Section = 'spec' | 'plan' | 'architecture' | 'security';
+type Section = 'spec' | 'plan' | 'architecture' | 'security' | 'storybook';
 
 function useTaskWorkspace(task: Task) {
   const [workspace, setWorkspace] = useState<TaskWorkspace | null>(null);
@@ -60,6 +61,19 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
   const [section, setSection] = useState<Section>('spec');
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Storybook of the task's worktree: the tab appears when the worktree has one
+  const [storybook, setStorybook] = useState<TaskStorybookStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void window.electronAPI.design
+      ?.taskStorybookStatus?.(task.id, task.projectId)
+      .then((r) => !cancelled && r?.success && r.data && setStorybook(r.data))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, task.projectId, task.status]);
+  const sections: Section[] = ['spec', 'plan', 'architecture', 'security', ...(storybook?.worktree && storybook.detected ? (['storybook'] as const) : [])];
 
   // Each section starts at its top
   // biome-ignore lint/correctness/useExhaustiveDependencies: section is the intended trigger
@@ -84,6 +98,7 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
         plan: workspace.plan?.phases.reduce((n, p) => n + p.subtasks.length, 0),
         architecture: workspace.architecture.diagrams.length + workspace.architecture.adrs.length || undefined,
         security: undefined,
+        storybook: undefined,
       }
     : {};
   const failing = workspace?.spec?.criteria.filter((c) => c.status === 'fail').length ?? 0;
@@ -96,7 +111,7 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
     <TabsPrimitive.Root value={section} onValueChange={(v) => setSection(v as Section)} className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3">
         <TabsPrimitive.List aria-label={t('tasks:workspace.sections.label')} className="inline-flex border border-foreground">
-          {(['spec', 'plan', 'architecture', 'security'] as const).map((key, i) => (
+          {sections.map((key, i) => (
             <TabsPrimitive.Trigger key={key} value={key} className={cn(tabClass, i > 0 && 'border-l border-foreground')}>
               {t(`tasks:workspace.tabs.${key}`)}
               {counts[key] !== undefined && <span className="ml-2 font-mono text-[11px] opacity-70">{counts[key]}</span>}
@@ -165,6 +180,11 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
               <TabsPrimitive.Content value="security" className="focus-visible:outline-none">
                 <SecurityTab workspace={workspace} />
               </TabsPrimitive.Content>
+              {storybook?.detected && (
+                <TabsPrimitive.Content value="storybook" className="focus-visible:outline-none">
+                  <StorybookTab taskId={task.id} projectId={task.projectId} status={storybook} onStatus={setStorybook} />
+                </TabsPrimitive.Content>
+              )}
             </>
           )}
         </div>

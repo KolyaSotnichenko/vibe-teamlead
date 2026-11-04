@@ -4,6 +4,7 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 
@@ -110,4 +111,72 @@ export function runningStorybook(projectPath: string, dir: string | undefined): 
 export function stopAllStorybooks(): void {
   for (const running of servers.values()) running.child?.kill('SIGTERM');
   servers.clear();
+}
+
+/** Stop every server running from a folder inside `root` (a worktree being removed). */
+export function stopStorybooksUnder(root: string): void {
+  const base = path.resolve(root);
+  for (const [key, running] of servers) {
+    if (key === base || key.startsWith(`${base}${path.sep}`)) {
+      running.child?.kill('SIGTERM');
+      servers.delete(key);
+    }
+  }
+}
+
+export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+
+/** The package manager a folder uses, from its lockfile (npm when none). */
+export function packageManagerOf(root: string): PackageManager {
+  if (existsSync(path.join(root, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(path.join(root, 'yarn.lock'))) return 'yarn';
+  if (existsSync(path.join(root, 'bun.lockb')) || existsSync(path.join(root, 'bun.lock'))) return 'bun';
+  return 'npm';
+}
+
+/** Dependencies are missing when neither the Storybook folder nor the root has node_modules. */
+export function needsInstall(root: string, dir: string): boolean {
+  return !existsSync(path.join(root, dir, 'node_modules')) && !existsSync(path.join(root, 'node_modules'));
+}
+
+const installs = new Map<string, Promise<void>>();
+const INSTALL_TIMEOUT_MS = 15 * 60 * 1000;
+
+/** Install the dependencies of `root` (once at a time per folder); `onLine` gets the latest output line. */
+export function installDependencies(root: string, onLine?: (line: string) => void): Promise<void> {
+  const key = path.resolve(root);
+  const existing = installs.get(key);
+  if (existing) return existing;
+  const pm = packageManagerOf(key);
+  const job = new Promise<void>((resolve, reject) => {
+    onLine?.(`${pm} install`);
+    const child = spawn(pm, ['install'], { cwd: key, env: { ...getAugmentedEnv(), CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let tail = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`${pm} install did not finish within ${INSTALL_TIMEOUT_MS / 60000} minutes.`));
+    }, INSTALL_TIMEOUT_MS);
+    const onData = (chunk: Buffer) => {
+      tail = (tail + chunk.toString()).slice(-4000);
+      const last = tail.trim().split('\n').pop()?.trim();
+      if (last) onLine?.(last.slice(0, 200));
+    };
+    child.stdout?.on('data', onData);
+    child.stderr?.on('data', onData);
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`${pm} install failed (${code ?? 'signal'}).\n${tail.slice(-800)}`));
+    });
+  }).finally(() => installs.delete(key));
+  installs.set(key, job);
+  return job;
+}
+
+export function isInstalling(root: string): boolean {
+  return installs.has(path.resolve(root));
 }

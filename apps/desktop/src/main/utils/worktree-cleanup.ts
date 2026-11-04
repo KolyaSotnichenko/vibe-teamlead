@@ -21,6 +21,7 @@ import { existsSync, realpathSync } from 'fs';
 import path from 'path';
 import { isTaskBranch } from '../../shared/constants/config';
 import { getToolPath } from '../cli-tool-manager';
+import { stopStorybooksUnder } from '../design/storybook-service';
 import { getIsolatedGitEnv } from './git-isolation';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
 
@@ -198,6 +199,8 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
   } = options;
 
   const warnings: string[] = [];
+  // A Storybook started for this task's review must not keep files open in the folder
+  stopStorybooksUnder(worktreePath);
 
   // Security: Validate that worktreePath is within the expected worktree directories
   // This prevents path traversal attacks and accidental deletion of wrong directories

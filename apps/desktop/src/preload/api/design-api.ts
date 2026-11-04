@@ -19,4 +19,7 @@ export const createDesignAPI = (): DesignAPI => ({
   },
   startStorybook: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.STORYBOOK_START, projectId),
   stopStorybook: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.STORYBOOK_STOP, projectId),
+  taskStorybookStatus: (taskId, projectId) => ipcRenderer.invoke(IPC_CHANNELS.STORYBOOK_TASK_STATUS, taskId, projectId),
+  startTaskStorybook: (taskId, projectId) => ipcRenderer.invoke(IPC_CHANNELS.STORYBOOK_TASK_START, taskId, projectId),
+  stopTaskStorybook: (taskId, projectId) => ipcRenderer.invoke(IPC_CHANNELS.STORYBOOK_TASK_STOP, taskId, projectId),
 });

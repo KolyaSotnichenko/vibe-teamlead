@@ -36,6 +36,7 @@
 | **Workspace → Plan** | The subtask dependency graph (left to right or top to bottom, toggle in the corner) and a timeline of what happened. |
 | **Workspace → Architecture** | Diagrams (draw.io diagrams open in draw.io), `architecture.md` with embedded diagrams, ADRs. |
 | **Workspace → Security** | Gate and Strix results: findings with severity. |
+| **Workspace → Storybook** | The Storybook of the task's worktree — the components live, before merging (shown when the worktree has Storybook). |
 | **Subtasks** | The list of subtasks and their statuses. |
 | **Logs** | What each agent did, by phase (planning, coding, review): tool calls, command output, errors. |
 | **Files** | Spec files. |

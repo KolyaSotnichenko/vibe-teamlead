@@ -7,10 +7,20 @@
 import { type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DesignBrief, DesignDirection, DesignSystemInfo, DesignTokens, IPCResult } from '../../shared/types';
+import type { DesignBrief, DesignDirection, DesignSystemInfo, DesignTokens, IPCResult, TaskStorybookStatus } from '../../shared/types';
 import { extractDesignSystem, proposeDirections, writeDesignSystem } from '../ai/design/design-agent';
 import { loadDesignSystem, saveDesignSystem } from '../ai/design/design-system';
-import { runningStorybook, startStorybook, stopStorybook } from '../design/storybook-service';
+import {
+  installDependencies,
+  isInstalling,
+  needsInstall,
+  runningStorybook,
+  startStorybook,
+  stopStorybook,
+} from '../design/storybook-service';
+import { detectStorybook } from '../ai/design/design-system';
+import { findTaskWorktree } from '../worktree-paths';
+import { findTaskAndProject } from './task/shared';
 import { projectStore } from '../project-store';
 
 function errorMessage(error: unknown): string {
@@ -24,6 +34,29 @@ export function designInfo(projectId: string): DesignSystemInfo | null {
   const info = loadDesignSystem(project.path, project.settings);
   const url = runningStorybook(project.path, info.storybook.dir);
   return url ? { ...info, storybook: { ...info.storybook, running: { url } } } : info;
+}
+
+/** The task's worktree and the Storybook in it. */
+function taskWorktree(taskId: string, projectId: string): { worktree: string | null } {
+  const { task, project } = findTaskAndProject(taskId, projectId);
+  if (!task || !project) throw new Error('Task not found');
+  return { worktree: findTaskWorktree(project.path, task.specId) };
+}
+
+export function taskStorybookStatus(taskId: string, projectId: string): TaskStorybookStatus {
+  const { worktree } = taskWorktree(taskId, projectId);
+  if (!worktree) return { worktree: false, detected: false, needsInstall: false, installing: false };
+  const sb = detectStorybook(worktree, true);
+  const url = runningStorybook(worktree, sb.dir);
+  return {
+    worktree: true,
+    detected: sb.detected,
+    dir: sb.dir,
+    script: sb.script,
+    needsInstall: sb.detected && sb.dir !== undefined ? needsInstall(worktree, sb.dir) : false,
+    installing: isInstalling(worktree),
+    running: url ? { url } : undefined,
+  };
 }
 
 export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null): void {
@@ -134,4 +167,39 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
         return undefined;
       }),
   );
+
+  ipcMain.handle(IPC_CHANNELS.STORYBOOK_TASK_STATUS, async (_e, taskId: string, projectId: string): Promise<IPCResult<TaskStorybookStatus>> => {
+    try {
+      return { success: true, data: taskStorybookStatus(taskId, projectId) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.STORYBOOK_TASK_START, async (_e, taskId: string, projectId: string): Promise<IPCResult<{ url: string }>> => {
+    try {
+      const { worktree } = taskWorktree(taskId, projectId);
+      if (!worktree) throw new Error("This task has no worktree (it was merged or discarded). Use the project's Storybook in Context → Design system.");
+      const sb = detectStorybook(worktree, true);
+      if (!sb.detected || !sb.dir) throw new Error("There is no Storybook in this task's worktree yet.");
+      const progress = (message: string) => getMainWindow()?.webContents.send(IPC_CHANNELS.DESIGN_PROGRESS, { projectId: `task:${taskId}`, message });
+      // A worktree starts without node_modules: install once (they stay until the worktree is removed)
+      if (needsInstall(worktree, sb.dir)) await installDependencies(worktree, progress);
+      progress('Starting Storybook…');
+      return { success: true, data: { url: await startStorybook(worktree, sb.dir, sb.script) } };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.STORYBOOK_TASK_STOP, async (_e, taskId: string, projectId: string): Promise<IPCResult> => {
+    try {
+      const { worktree } = taskWorktree(taskId, projectId);
+      const sb = worktree ? detectStorybook(worktree, true) : undefined;
+      if (worktree && sb?.dir) stopStorybook(worktree, sb.dir);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
 }

@@ -110,6 +110,19 @@ export interface DesignProgressEvent {
   message: string;
 }
 
+/** Storybook of a task's worktree (review components before merging) */
+export interface TaskStorybookStatus {
+  /** The task has a worktree */
+  worktree: boolean;
+  detected: boolean;
+  dir?: string;
+  script?: string;
+  /** Dependencies are not installed in the worktree yet */
+  needsInstall: boolean;
+  installing: boolean;
+  running?: { url: string };
+}
+
 /** window.electronAPI.design */
 export interface DesignAPI {
   get: (projectId: string) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
@@ -125,4 +138,9 @@ export interface DesignAPI {
   /** Start the project's Storybook dev server (or return the running one) */
   startStorybook: (projectId: string) => Promise<import('./common').IPCResult<{ url: string }>>;
   stopStorybook: (projectId: string) => Promise<import('./common').IPCResult>;
+  /** Storybook of a task's worktree */
+  taskStorybookStatus: (taskId: string, projectId: string) => Promise<import('./common').IPCResult<TaskStorybookStatus>>;
+  /** Install the worktree's dependencies if needed, then start its Storybook; progress arrives as onProgress with projectId `task:<taskId>` */
+  startTaskStorybook: (taskId: string, projectId: string) => Promise<import('./common').IPCResult<{ url: string }>>;
+  stopTaskStorybook: (taskId: string, projectId: string) => Promise<import('./common').IPCResult>;
 }

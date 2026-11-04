@@ -409,7 +409,8 @@
       "spec": "Spec",
       "plan": "Plan",
       "architecture": "Architecture",
-      "security": "Security"
+      "security": "Security",
+      "storybook": "Storybook"
     },
     "sections": {
       "label": "Workspace sections"
@@ -529,6 +530,18 @@
       "emptyBody": "Secret and dependency scans run before every QA review. If Security QA is on in Settings, a Strix penetration test runs after QA approves.",
       "noGates": "The gates run before the first QA review.",
       "noPentest": "Security QA (Strix) is off, or QA has not approved yet. Turn it on in Settings → Agent Settings."
+    },
+    "storybook": {
+      "intro": "This task's components, live, before you merge: the Storybook of the task's worktree, with controls and addons. It reloads as the agents change files.",
+      "start": "Start Storybook",
+      "installAndStart": "Install dependencies and start",
+      "installNote": "The task's worktree has no dependencies installed yet. The first start installs them there (it takes a few minutes and disk space; they are removed with the worktree).",
+      "starting": "Starting…",
+      "stop": "Stop",
+      "openBrowser": "Open in browser",
+      "failed": "Storybook did not start.",
+      "notRunningTitle": "Storybook is not running",
+      "notRunningBody": "Start it to browse and try the components this task added or changed."
     }
   },
   "board": {

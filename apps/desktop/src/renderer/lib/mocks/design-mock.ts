@@ -124,4 +124,7 @@ export const designMock: DesignAPI = {
   onProgress: () => () => {},
   startStorybook: async () => ({ success: false, error: 'Storybook runs only in the desktop app.' }),
   stopStorybook: async () => ({ success: true }),
+  taskStorybookStatus: async () => ({ success: true, data: { worktree: true, detected: true, dir: 'apps/web', script: 'storybook', needsInstall: true, installing: false } }),
+  startTaskStorybook: async () => ({ success: false, error: 'Storybook runs only in the desktop app.' }),
+  stopTaskStorybook: async () => ({ success: true }),
 };
