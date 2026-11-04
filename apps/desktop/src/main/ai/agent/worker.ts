@@ -936,7 +936,7 @@ async function runQualityAssurance(
         undefined,
         session,
         toolContext,
-        buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir),
+        runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir),
         true, // skipPhaseLogging — the caller manages QA phase logging
       );
     },
@@ -1416,9 +1416,9 @@ function buildKickoffMessage(agentType: AgentType, specDir: string, projectDir: 
     case 'coder':
       return `Read ${specDir}/implementation_plan.json and implement the next pending subtask. Project root: ${projectDir}. After completing the subtask, update its status to "completed" in implementation_plan.json.`;
     case 'qa_reviewer':
-      return `Review the implementation in ${projectDir} against the specification in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with a clear "Status: PASSED" or "Status: FAILED" line.`;
+      return `Review the implementation in ${projectDir} against the specification in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with a clear "Status: PASSED" or "Status: FAILED" line, then record the verdict with update_qa_status.`;
     case 'qa_fixer':
-      return `Read ${specDir}/qa_report.md for the issues found by QA review. Fix all issues in ${projectDir}. After fixing, update ${specDir}/qa_report.md to indicate fixes have been applied.`;
+      return `Read ${specDir}/qa_report.md for the issues found by QA review. Fix all issues in ${projectDir}. After fixing, call update_qa_status with status "fixes_applied". Don't edit qa_report.md: it belongs to the reviewer.`;
     default:
       return `Complete the task described in your system prompt. Spec directory: ${specDir}. Project directory: ${projectDir}`;
   }

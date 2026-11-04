@@ -29,6 +29,8 @@ export interface ToolContext {
   securityProfile: SecurityProfile;
   /** Optional abort signal for cancellation */
   abortSignal?: AbortSignal;
+  /** The agent this session runs, for tools that differ per agent */
+  agentType?: string;
   /** If set, Write/Edit tools can only write within these directories */
   allowedWritePaths?: string[];
   /** Render a .drawio file to PNG (main process); available to the architect */

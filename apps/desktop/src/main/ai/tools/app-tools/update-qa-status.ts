@@ -19,6 +19,7 @@ import { z } from 'zod/v3';
 import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
 import { safeParseJson } from '../../../utils/json-repair';
+import { QASignoffSchema } from '../../schema/qa-signoff';
 
 // ---------------------------------------------------------------------------
 // Input Schema
@@ -77,6 +78,9 @@ export const updateQaStatusTool = Tool.define({
   inputSchema,
   execute: (input, context) => {
     const { status, issues: issuesStr, tests_passed: testsStr } = input;
+    if (status === 'approved' && context.agentType === 'qa_fixer') {
+      return "Error: only the QA reviewer can approve. Use status 'fixes_applied'; the reviewer checks your fixes next.";
+    }
     const planFile = path.join(context.specDir, 'implementation_plan.json');
 
     if (!fs.existsSync(planFile)) {
@@ -110,12 +114,13 @@ export const updateQaStatusTool = Tool.define({
 
     // Increment qa_session on new review or rejection
     const current = plan.qa_signoff;
-    let qaSession = current?.qa_session ?? 0;
+    // Agents have written other things here by hand; `++` on a string gives NaN, which JSON turns into null
+    let qaSession = typeof current?.qa_session === 'number' && Number.isFinite(current.qa_session) ? current.qa_session : 0;
     if (status === 'in_review' || status === 'rejected') {
       qaSession++;
     }
 
-    plan.qa_signoff = {
+    const signoff: QASignoff = {
       status,
       qa_session: qaSession,
       issues_found: issues,
@@ -123,6 +128,12 @@ export const updateQaStatusTool = Tool.define({
       timestamp: new Date().toISOString(),
       ready_for_qa_revalidation: status === 'fixes_applied',
     };
+    // The QA loop reads the plan with this schema: tell the agent now rather than lose the verdict later
+    const checked = QASignoffSchema.safeParse(signoff);
+    if (!checked.success) {
+      return `Error: invalid QA status, nothing recorded: ${checked.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}. Pass issues as a JSON array of objects with title, location and description.`;
+    }
+    plan.qa_signoff = signoff;
     plan.last_updated = new Date().toISOString();
 
     try {

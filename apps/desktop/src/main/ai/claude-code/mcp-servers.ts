@@ -72,7 +72,7 @@ export function buildMcpServers(
   for (const id of getRequiredMcpServers(agentType, resolveOptions)) {
     if (id === 'vibe-teamlead') {
       servers[APP_TOOLS_SERVER_KEY] = createBuildToolsServer(
-        context,
+        { ...context, agentType },
         agentConfig.appTools,
       );
       continue;

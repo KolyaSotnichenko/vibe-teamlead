@@ -400,26 +400,9 @@ QA Fix Session: [N]"
 
 ---
 
-## PHASE 7: UPDATE IMPLEMENTATION PLAN
+## PHASE 7: RECORD YOUR FIXES
 
-Update `implementation_plan.json` to signal fixes are complete:
-
-```json
-{
-  "qa_signoff": {
-    "status": "fixes_applied",
-    "timestamp": "[ISO timestamp]",
-    "fix_session": [session-number],
-    "issues_fixed": [
-      {
-        "title": "[Issue title]",
-        "fix_commit": "[commit hash]"
-      }
-    ],
-    "ready_for_qa_revalidation": true
-  }
-}
-```
+Call `mcp__vibe-teamlead__update_qa_status` with `status: "fixes_applied"` to signal fixes are complete. Don't edit `implementation_plan.json` by hand, and don't set `approved`: only the reviewer can.
 
 ---
 

@@ -43,6 +43,7 @@ vi.mock('../../schema', () => ({
   })),
 }));
 
+import { validateStructuredOutput } from '../../schema';
 import { designIssues, gateIssues, QALoop } from '../qa-loop';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
@@ -491,6 +492,69 @@ describe('QALoop', () => {
   // -------------------------------------------------------------------------
   // Human feedback processing
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // The review finished but its verdict did not get recorded
+  // -------------------------------------------------------------------------
+
+  describe('lost signoff', () => {
+    /** Each run in `sign` says whether that session leaves an approved signoff; reviewers may write a report. */
+    function sessions(sign: boolean[], writesReport: boolean) {
+      let n = 0;
+      let report: string | null = null;
+      let plan = completedPlan();
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(plan);
+        if (p.endsWith('qa_report.md') && report) return Promise.resolve(report);
+        return Promise.reject(new Error('ENOENT'));
+      });
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      return vi.fn().mockImplementation(async () => {
+        if (writesReport) report = `report ${n}`;
+        if (sign[n++]) plan = completedPlan('approved');
+        return makeSessionResult('completed');
+      });
+    }
+
+    it('asks only for the signoff when the reviewer wrote its report, not for a whole new review', async () => {
+      const runSession = sessions([false, true], true);
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      const outcome = await new QALoop(makeConfig({ runSession, generatePrompt })).run();
+      expect(outcome.approved).toBe(true);
+      expect(generatePrompt).toHaveBeenCalledTimes(1);
+      const second = (runSession.mock.calls as Array<[QASessionRunConfig]>)[1][0];
+      expect(second.agentType).toBe('qa_reviewer');
+      expect(second.systemPrompt).toContain('mcp__vibe-teamlead__update_qa_status');
+      expect(second.kickoffMessage).toBeTruthy();
+    });
+
+    it('runs a full review again when there is no new report', async () => {
+      const runSession = sessions([false, true], false);
+      const generatePrompt = vi.fn().mockResolvedValue('full prompt');
+      await new QALoop(makeConfig({ runSession, generatePrompt })).run();
+      expect(generatePrompt).toHaveBeenCalledTimes(2);
+    });
+
+    it('says why a signoff in the plan could not be read', async () => {
+      vi.mocked(validateStructuredOutput).mockReturnValue({ valid: false, errors: ['qa_session: expected number'], raw: {} } as never);
+      try {
+        const events: string[] = [];
+        const plan = completedPlan('approved');
+        mockReadFile.mockImplementation((p: string) =>
+          p.endsWith('implementation_plan.json') ? Promise.resolve(plan) : Promise.reject(new Error('ENOENT')),
+        );
+        const loop = new QALoop(makeConfig({ maxIterations: 1 }));
+        loop.on('log', (m: string) => events.push(m));
+        await loop.run();
+        expect(events.some((m) => m.includes('qa_session: expected number'))).toBe(true);
+      } finally {
+        vi.mocked(validateStructuredOutput).mockImplementation(((data: unknown) => ({ valid: true, data })) as never);
+      }
+    });
+  });
 
   it('Run QA again goes straight to the reviewer: no fixer, and an old approval does not end it', async () => {
     let reviewed = false;

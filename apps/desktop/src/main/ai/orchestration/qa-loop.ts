@@ -51,6 +51,17 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 /** Rounds an issue must appear in before escalation: the fixer gets two tries at it */
 const RECURRING_ISSUE_THRESHOLD = 3;
 
+/** The reviewer finished its report but the verdict was lost: ask for the verdict alone. Pure. */
+export function signoffPrompt(problem: string): string {
+  return `You are the QA reviewer. Your review is finished and its report is in qa_report.md in the spec directory, but your verdict was not recorded: ${problem}
+
+Read the status in qa_report.md, then record that same verdict with mcp__vibe-teamlead__update_qa_status: status "approved" or "rejected", and for rejected, issues as a JSON array of objects with title, location and description. If the tool returns an error, correct the call and try again.
+
+Do nothing else: no checks, no servers, no file edits. The verdict is your whole job in this session.`;
+}
+
+const SIGNOFF_KICKOFF = 'Record the verdict from qa_report.md with update_qa_status, then stop.';
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -223,6 +234,8 @@ export interface QASessionRunConfig {
   abortSignal?: AbortSignal;
   cliModel?: string;
   cliThinking?: string;
+  /** First message of the session, when it isn't the agent's usual one */
+  kickoffMessage?: string;
 }
 
 /** Events emitted by the QA loop */
@@ -283,6 +296,8 @@ export class QALoop extends EventEmitter {
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
   private lastDesignFindings: DesignFinding[] = [];
   private lastGateKeys: string[] = [];
+  /** Why the last read of qa_signoff found no verdict */
+  private signoffProblem = '';
 
   constructor(config: QALoopConfig) {
     super();
@@ -353,6 +368,7 @@ export class QALoop extends EventEmitter {
         // fails to write one can never be read as approving.
         await this.clearQASignoff();
         this.sessionNumber++;
+        const reportBefore = await this.readReport();
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', {
           iteration,
           maxIterations,
@@ -376,7 +392,31 @@ export class QALoop extends EventEmitter {
         }
 
         // Read QA signoff from implementation_plan.json
-        const signoff = await this.readQASignoff();
+        let signoff = await this.readQASignoff();
+        if (!signoff && reviewResult.outcome === 'completed') {
+          const report = await this.readReport();
+          if (report !== null && report !== reportBefore) {
+            // The review is done, only its verdict is missing: don't repeat the whole review
+            this.emitTyped('log', `Reviewer verdict not recorded (${this.signoffProblem}); asking for it`);
+            this.sessionNumber++;
+            const result = await this.config.runSession({
+              agentType: 'qa_reviewer',
+              phase: 'qa',
+              systemPrompt: signoffPrompt(this.signoffProblem),
+              kickoffMessage: SIGNOFF_KICKOFF,
+              specDir: this.config.specDir,
+              projectDir: this.config.projectDir,
+              sessionNumber: this.sessionNumber,
+              abortSignal: this.config.abortSignal,
+              cliModel: this.config.cliModel,
+              cliThinking: this.config.cliThinking,
+            });
+            if (result.outcome === 'cancelled') {
+              return this.outcome(false, iteration, Date.now() - startTime, 'cancelled');
+            }
+            signoff = await this.readQASignoff();
+          }
+        }
         let status = this.resolveQAStatus(signoff);
         let issues = signoff?.issues_found ?? [];
 
@@ -475,7 +515,8 @@ export class QALoop extends EventEmitter {
 
         // status === 'unknown' — QA agent didn't update implementation_plan.json
         consecutiveErrors++;
-        const errorMsg = 'QA agent did not update implementation_plan.json with qa_signoff';
+        const errorMsg = `QA verdict not recorded: ${this.signoffProblem}`;
+        this.emitTyped('log', errorMsg);
         await this.recordIteration(iteration, 'error', [{ title: 'QA error', description: errorMsg }], iterationDuration);
 
         lastErrorContext = {
@@ -561,14 +602,28 @@ export class QALoop extends EventEmitter {
       const planPath = join(this.config.specDir, 'implementation_plan.json');
       const raw = await readFile(planPath, 'utf-8');
       const plan = safeParseJson<{ qa_signoff?: unknown }>(raw);
-      if (!plan) return null;
+      if (!plan) {
+        this.signoffProblem = 'implementation_plan.json could not be parsed';
+        return null;
+      }
       const qa_signoff = plan.qa_signoff;
-      if (!qa_signoff) return null;
+      if (!qa_signoff) {
+        this.signoffProblem = 'there is no qa_signoff in implementation_plan.json';
+        return null;
+      }
       const result = validateStructuredOutput(qa_signoff, QASignoffSchema);
-      return result.valid && result.data ? (result.data as QASignoff) : null;
-    } catch {
+      if (result.valid && result.data) return result.data as QASignoff;
+      this.signoffProblem = `qa_signoff in implementation_plan.json is invalid: ${(result.errors ?? []).join('; ')}`;
+      return null;
+    } catch (error) {
+      this.signoffProblem = `implementation_plan.json could not be read: ${error instanceof Error ? error.message : String(error)}`;
       return null;
     }
+  }
+
+  /** The reviewer's qa_report.md, or null when there is none. */
+  private async readReport(): Promise<string | null> {
+    return readFile(join(this.config.specDir, 'qa_report.md'), 'utf-8').catch(() => null);
   }
 
   /** Remove qa_signoff from implementation_plan.json (no-op when absent). */

@@ -60,7 +60,7 @@ grep -A 100 "## QA Acceptance Criteria" spec.md
 
 Before this session the app ran gitleaks (secrets) and OSV-Scanner (newly introduced vulnerable dependencies) on what this build changed. Read `security_gates.md` in the spec directory.
 
-- If its status is **BLOCKED**, the review cannot pass: list every finding under Issues Found as critical and set `qa_signoff.status` to `rejected`. The app enforces this even if you approve.
+- If its status is **BLOCKED**, the review cannot pass: list every finding under Issues Found as critical and record the verdict as `rejected` (Phase 9). The app enforces this even if you approve.
 - If a gate was skipped, say so in the report; review those areas (secrets in code and config, new dependencies) by hand.
 
 ---
@@ -500,28 +500,13 @@ spec.md has checklists (`- [ ]`) such as "This Task Will", "Success Criteria" an
 
 Change only the checkbox and the appended note; never reword, add or remove items.
 
-## PHASE 9: UPDATE IMPLEMENTATION PLAN
+## PHASE 9: RECORD THE VERDICT
+
+Record every verdict with the tool `mcp__vibe-teamlead__update_qa_status`. It is the only way to record one: don't edit `implementation_plan.json` by hand. If it returns an error, correct the call and try again; the loop cannot see a verdict the tool did not accept.
 
 ### If APPROVED:
 
-Update `implementation_plan.json` to record QA sign-off:
-
-```json
-{
-  "qa_signoff": {
-    "status": "approved",
-    "timestamp": "[ISO timestamp]",
-    "qa_session": [session-number],
-    "report_file": "qa_report.md",
-    "tests_passed": {
-      "unit": "[X/Y]",
-      "integration": "[X/Y]",
-      "e2e": "[X/Y]"
-    },
-    "verified_by": "qa_agent"
-  }
-}
-```
+Call `mcp__vibe-teamlead__update_qa_status` with `status: "approved"` and `tests_passed` as a JSON string, e.g. `{"unit": "[X/Y]", "integration": "[X/Y]", "e2e": "[X/Y]"}`.
 
 Save the QA report:
 ```bash
@@ -572,26 +557,7 @@ EOF
 # Only commit actual code fixes to the project
 ```
 
-Update `implementation_plan.json`:
-
-```json
-{
-  "qa_signoff": {
-    "status": "rejected",
-    "timestamp": "[ISO timestamp]",
-    "qa_session": [session-number],
-    "issues_found": [
-      {
-        "type": "critical",
-        "title": "[Issue title]",
-        "location": "[file:line]",
-        "fix_required": "[Description]"
-      }
-    ],
-    "fix_request_file": "QA_FIX_REQUEST.md"
-  }
-}
-```
+Then call `mcp__vibe-teamlead__update_qa_status` with `status: "rejected"` and `issues` as a JSON string: an array of objects with `type`, `title`, `location` and `fix_required`.
 
 ---
 
@@ -615,7 +581,7 @@ All acceptance criteria verified:
 - Regression check: PASS
 
 The implementation is production-ready.
-Sign-off recorded in implementation_plan.json.
+Sign-off recorded with update_qa_status.
 
 Ready for merge to {{BASE_BRANCH}}.
 ```
