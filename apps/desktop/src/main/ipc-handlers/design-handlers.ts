@@ -14,10 +14,13 @@ import {
   installDependencies,
   isInstalling,
   needsInstall,
+  packageManagerOf,
   runningStorybook,
   startStorybook,
   stopStorybook,
+  touchesStorybook,
 } from '../design/storybook-service';
+import { changedFiles, resolveBaseRef } from '../ai/security/gates';
 import { detectStorybook } from '../ai/design/design-system';
 import { findTaskWorktree } from '../worktree-paths';
 import { findTaskAndProject } from './task/shared';
@@ -43,14 +46,19 @@ function taskWorktree(taskId: string, projectId: string): { worktree: string | n
   return { worktree: findTaskWorktree(project.path, task.specId) };
 }
 
-export function taskStorybookStatus(taskId: string, projectId: string): TaskStorybookStatus {
+export async function taskStorybookStatus(taskId: string, projectId: string): Promise<TaskStorybookStatus> {
   const { worktree } = taskWorktree(taskId, projectId);
   if (!worktree) return { worktree: false, detected: false, needsInstall: false, installing: false };
   const sb = detectStorybook(worktree, true);
   const url = runningStorybook(worktree, sb.dir);
+  // Only a task that changes the UI Storybook shows gets the tab (not an API-only task)
+  const touchesUi = sb.detected && sb.dir !== undefined
+    ? touchesStorybook(await changedFiles(worktree, await resolveBaseRef(worktree)), sb.dir)
+    : false;
   return {
     worktree: true,
-    detected: sb.detected,
+    detected: sb.detected && (touchesUi || url !== undefined),
+    packageManager: packageManagerOf(worktree),
     dir: sb.dir,
     script: sb.script,
     needsInstall: sb.detected && sb.dir !== undefined ? needsInstall(worktree, sb.dir) : false,
@@ -170,7 +178,7 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
 
   ipcMain.handle(IPC_CHANNELS.STORYBOOK_TASK_STATUS, async (_e, taskId: string, projectId: string): Promise<IPCResult<TaskStorybookStatus>> => {
     try {
-      return { success: true, data: taskStorybookStatus(taskId, projectId) };
+      return { success: true, data: await taskStorybookStatus(taskId, projectId) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }

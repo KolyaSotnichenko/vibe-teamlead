@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../env-utils', () => ({ getAugmentedEnv: () => ({ ...process.env }) }));
 
-import { installDependencies, needsInstall, packageManagerOf, storybookUrlFromOutput } from '../storybook-service';
+import { installDependencies, needsInstall, packageManagerOf, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
 
 const dir = () => mkdtempSync(path.join(tmpdir(), 'vtl-sb-'));
 
@@ -39,4 +39,29 @@ describe('storybook service', () => {
     await expect(first).rejects.toThrow(/npm install failed/);
     expect(lines[0]).toBe('npm install');
   }, 120_000);
+});
+
+describe('task Storybook relevance', () => {
+  it('shows only for tasks that change UI files the Storybook shows', () => {
+    expect(touchesStorybook(['apps/api/src/users.controller.ts', 'apps/api/prisma/schema.prisma'], 'apps/web')).toBe(false);
+    expect(touchesStorybook(['apps/web/src/Button.tsx'], 'apps/web')).toBe(true);
+    expect(touchesStorybook(['apps/web/src/Button.stories.tsx'], 'apps/web')).toBe(true);
+    // a .tsx outside the Storybook folder doesn't count
+    expect(touchesStorybook(['apps/mobile/App.tsx'], 'apps/web')).toBe(false);
+    expect(touchesStorybook(['apps/webhooks/x.tsx'], 'apps/web')).toBe(false);
+    // tests and non-UI files inside the folder don't count
+    expect(touchesStorybook(['apps/web/src/Button.test.tsx', 'apps/web/src/api.ts'], 'apps/web')).toBe(false);
+    // Storybook at the root: any UI file
+    expect(touchesStorybook(['src/Card.tsx'], '.')).toBe(true);
+    expect(touchesStorybook(['src/server.ts'], '.')).toBe(false);
+  });
+});
+
+describe('storybook command', () => {
+  it('uses the project package manager; only npm needs -- before the flags', () => {
+    expect(storybookArgs('npm', 'storybook', 6006)).toEqual(['run', 'storybook', '--', '-p', '6006', '--ci']);
+    expect(storybookArgs('pnpm', 'storybook', 6006)).toEqual(['run', 'storybook', '-p', '6006', '--ci']);
+    expect(storybookArgs('pnpm', undefined, 6006)).toEqual(['exec', 'storybook', 'dev', '-p', '6006', '--ci']);
+    expect(storybookArgs('npm', undefined, 6006)).toEqual(['exec', '--', 'storybook', 'dev', '-p', '6006', '--ci']);
+  });
 });

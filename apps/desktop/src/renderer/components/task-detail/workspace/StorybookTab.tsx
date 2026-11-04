@@ -56,7 +56,7 @@ export function StorybookTab({ taskId, projectId, status, onStatus }: {
       <SectionHeader
         id="ws-storybook"
         title="Storybook"
-        meta={`${status.dir}${status.script ? ` · npm run ${status.script}` : ''}`}
+        meta={`${status.dir}${status.script ? ` · ${status.packageManager ?? 'npm'} run ${status.script}` : ''}`}
         action={
           url ? (
             <div className="flex gap-2">

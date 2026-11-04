@@ -9,6 +9,8 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 
 import { getAugmentedEnv } from '../env-utils';
+import { findOnPath, searchPath } from '../platform/exec';
+import { isUiFile } from '../ai/design/design-lint';
 
 interface Running {
   child?: ChildProcess;
@@ -45,13 +47,13 @@ export function startStorybook(projectPath: string, dir: string, script: string 
   entry.ready = (async () => {
     const port = await freePort();
     const url = `http://localhost:${port}`;
-    // npm run <script> -- -p PORT --ci (no browser); without a script, the CLI directly
-    const args = script
-      ? ['run', script, '--', '-p', String(port), '--ci']
-      : ['exec', '--', 'storybook', 'dev', '-p', String(port), '--ci'];
-    const child = spawn('npm', args, {
+    // The project's own package manager, found where a Finder-launched app can't
+    // see it (nvm, Homebrew, pnpm's home): a bare PATH gave "spawn npm ENOENT"
+    const pm = packageManagerOf(projectPath);
+    const env = toolEnv();
+    const child = spawn(findOnPath(pm, env.PATH) ?? pm, storybookArgs(pm, script, port), {
       cwd: key,
-      env: { ...getAugmentedEnv(), BROWSER: 'none', CI: '1' },
+      env: { ...env, BROWSER: 'none', CI: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     entry.child = child;
@@ -126,6 +128,36 @@ export function stopStorybooksUnder(root: string): void {
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
+/** Environment for package-manager processes: the app's env with the full tool PATH. */
+function toolEnv(): Record<string, string> {
+  const env = getAugmentedEnv();
+  return { ...env, PATH: searchPath(env.PATH ? env.PATH.split(path.delimiter) : []) };
+}
+
+/**
+ * Arguments that start Storybook on `port` without opening a browser. npm needs
+ * `--` before the script's own flags; pnpm, yarn and bun pass them through.
+ * Without a script, the storybook CLI runs directly. Pure — tested directly.
+ */
+export function storybookArgs(pm: PackageManager, script: string | undefined, port: number): string[] {
+  const flags = ['-p', String(port), '--ci'];
+  if (script) return pm === 'npm' ? ['run', script, '--', ...flags] : ['run', script, ...flags];
+  if (pm === 'npm') return ['exec', '--', 'storybook', 'dev', ...flags];
+  if (pm === 'bun') return ['x', 'storybook', 'dev', ...flags];
+  if (pm === 'yarn') return ['storybook', 'dev', ...flags];
+  return ['exec', 'storybook', 'dev', ...flags];
+}
+
+/**
+ * Whether a task's changes reach the UI that Storybook shows: a UI file
+ * (components, styles, stories) inside the Storybook's folder, or anywhere when
+ * Storybook is at the root. An API-only task has none. Pure — tested directly.
+ */
+export function touchesStorybook(changed: string[], dir: string): boolean {
+  const base = dir.replace(/^\.(\/|$)/, '').replace(/\/+$/, '');
+  return changed.some((file) => isUiFile(file) && (!base || file === base || file.startsWith(`${base}/`)));
+}
+
 /** The package manager a folder uses, from its lockfile (npm when none). */
 export function packageManagerOf(root: string): PackageManager {
   if (existsSync(path.join(root, 'pnpm-lock.yaml'))) return 'pnpm';
@@ -150,7 +182,8 @@ export function installDependencies(root: string, onLine?: (line: string) => voi
   const pm = packageManagerOf(key);
   const job = new Promise<void>((resolve, reject) => {
     onLine?.(`${pm} install`);
-    const child = spawn(pm, ['install'], { cwd: key, env: { ...getAugmentedEnv(), CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const env = toolEnv();
+    const child = spawn(findOnPath(pm, env.PATH) ?? pm, ['install'], { cwd: key, env: { ...env, CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let tail = '';
     const timer = setTimeout(() => {
       child.kill('SIGTERM');

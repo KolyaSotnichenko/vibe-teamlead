@@ -114,7 +114,10 @@ export interface DesignProgressEvent {
 export interface TaskStorybookStatus {
   /** The task has a worktree */
   worktree: boolean;
+  /** The worktree has a Storybook and the task changed UI files it shows */
   detected: boolean;
+  /** Package manager of the worktree (from its lockfile), for the command shown */
+  packageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
   dir?: string;
   script?: string;
   /** Dependencies are not installed in the worktree yet */
