@@ -45,7 +45,7 @@ import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking, resolvePhaseModel } from '../config/phase-config';
-import { TaskLogWriter } from '../logging/task-log-writer';
+import { TaskLogWriter, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import {
@@ -513,7 +513,8 @@ async function runSingleSession(
 ): Promise<SessionResult> {
   const phaseThinking = await getPhaseThinking(specDir, phase);
   const model = await phaseModel(specDir, phase, baseSession.modelId);
-  postLog(`${agentType} on ${model} (${phase})`);
+  const sessionLog = taskLogger(postLog, logWriter, phase);
+  sessionLog(`${agentType} on ${model} (${phase})`);
 
   // Build initial messages: use provided kickoff message, or fall back to session messages
   const initialMessages = initialUserMessage
@@ -525,7 +526,7 @@ async function runSingleSession(
   const helperNames = Object.keys(helpers);
   if (helperNames.length) postLog(`Subagents available: ${helperNames.join(', ')} (${baseSession.subagents?.model || 'same model'})`);
   const helpersSection = helpersPromptSection(helpers);
-  if (extraSkills?.length) postLog(`Extra skills: ${extraSkills.join(', ')}`);
+  if (extraSkills?.length) sessionLog(`Extra skills: ${extraSkills.join(', ')}`);
 
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
@@ -563,7 +564,7 @@ async function runSingleSession(
     sessionResult = await runAgentSession(sessionConfig, {
       onEvent: relayEvents(phase),
       askUser: askUserFor(sessionConfig.agentType),
-      onLog: postLog,
+      onLog: sessionLog,
     });
   } catch (error) {
     // Ensure log cleanup happens on failure
@@ -942,7 +943,7 @@ async function runQualityAssurance(
     },
   });
 
-  qaLoop.on('log', (message: string) => postLog(message));
+  qaLoop.on('log', taskLogger(postLog, logWriter, 'qa'));
   if (hooks) {
     qaLoop.on('qa-iteration-start', hooks.onReview);
     qaLoop.on('qa-fix-start', hooks.onFix);

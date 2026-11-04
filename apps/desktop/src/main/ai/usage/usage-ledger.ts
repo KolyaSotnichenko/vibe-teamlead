@@ -30,6 +30,12 @@ export interface UsageEntry {
   billing: UsageBilling;
   /** Host of the gateway, for billing 'gateway' */
   gateway?: string;
+  /** The task, when the session belongs to one */
+  specId?: string;
+  outcome?: string;
+  turns?: number;
+  toolCalls?: number;
+  durationMs?: number;
 }
 
 /**

@@ -10,7 +10,7 @@
 
 import { isMainThread } from 'node:worker_threads';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -443,6 +443,11 @@ export async function runAgentSession(
     cacheWrite: acc.usage.cacheCreationTokens ?? 0,
     costUsd: acc.costUsd ?? 0,
     ...billingOf(config.auth),
+    ...(config.specDir ? { specId: basename(config.specDir) } : {}),
+    outcome,
+    turns: acc.stepsExecuted,
+    toolCalls: acc.toolCallCount,
+    durationMs: Date.now() - startTime,
   });
 
   options.onLog?.(sessionSummary(config.agentType, outcome, acc.stepsExecuted, acc.toolCallCount, acc.usage, config.maxSteps));

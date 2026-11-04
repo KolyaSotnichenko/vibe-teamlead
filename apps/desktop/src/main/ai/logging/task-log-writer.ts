@@ -41,6 +41,26 @@ function toLogPhase(phase: Phase | undefined): TaskLogPhase {
 }
 
 // =============================================================================
+// Task logger
+// =============================================================================
+
+/**
+ * A log line that outlives the session: sent to the live log and kept in
+ * task_logs.json. For what explains a run afterwards (which agent ran, how its
+ * session ended, an MCP server that didn't start, a check that blocked approval).
+ */
+export function taskLogger(
+  post: (line: string) => void,
+  writer: Pick<TaskLogWriter, 'logText'> | null | undefined,
+  phase: Phase,
+): (line: string) => void {
+  return (line) => {
+    post(line);
+    writer?.logText(line, phase, 'info');
+  };
+}
+
+// =============================================================================
 // TaskLogWriter
 // =============================================================================
 
@@ -172,6 +192,7 @@ export class TaskLogWriter {
    * Write a plain text log message to the current phase.
    */
   logText(content: string, phase?: Phase, entryType: TaskLogEntryType = 'text'): void {
+    this.flushPendingText();
     const logPhase = phase ? toLogPhase(phase) : this.currentPhase;
     this.addEntry(logPhase, entryType, content);
     this.save();

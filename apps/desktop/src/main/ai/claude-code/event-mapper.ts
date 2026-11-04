@@ -73,6 +73,16 @@ export function toTokenUsage(usage: UsageLike | null | undefined): TokenUsage {
   };
 }
 
+function addTokenUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+  return {
+    promptTokens: a.promptTokens + b.promptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    totalTokens: a.totalTokens + b.totalTokens,
+    cacheReadTokens: (a.cacheReadTokens ?? 0) + (b.cacheReadTokens ?? 0),
+    cacheCreationTokens: (a.cacheCreationTokens ?? 0) + (b.cacheCreationTokens ?? 0),
+  };
+}
+
 function toolResultText(content: unknown): unknown {
   if (!Array.isArray(content)) return content;
   const texts = content
@@ -197,7 +207,9 @@ export class SessionAccumulator {
       case 'result':
         this.finishStep();
         this.result = message;
-        this.usage = toTokenUsage(message.usage as UsageLike);
+        // A session can wake up after its result (a background task ended) and end with
+        // another one. Each carries only its own tokens; the cost is a running total.
+        this.usage = addTokenUsage(this.usage, toTokenUsage(message.usage as UsageLike));
         this.costUsd = message.total_cost_usd;
         this.emit({ type: 'usage-update', usage: this.usage });
         return;
