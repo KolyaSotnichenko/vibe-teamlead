@@ -126,7 +126,7 @@ describe('browser tools section', () => {
 
   it('tells QA there are none, and why, so it never probes for one', () => {
     expect(browserToolsSection('qa_reviewer', ['context7'], { is_web_frontend: false })).toMatch(/None \(this project has no web or desktop UI\)\. Don't call/);
-    expect(browserToolsSection('qa_fixer', [], { is_web_frontend: true })).toMatch(/turned off or not bundled/);
+    expect(browserToolsSection('qa_fixer', [], { is_web_frontend: true })).toMatch(/turned off, not bundled in this build, or could not start/);
   });
 
   it('is only for QA, and reaches the QA system prompt', () => {

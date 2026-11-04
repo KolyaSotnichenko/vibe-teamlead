@@ -237,11 +237,11 @@
         "to": "browser-mcp/node_modules/@playwright/mcp"
       },
       {
-        "from": "../../node_modules/playwright",
+        "from": "../../node_modules/@playwright/mcp/node_modules/playwright",
         "to": "browser-mcp/node_modules/playwright"
       },
       {
-        "from": "../../node_modules/playwright-core",
+        "from": "../../node_modules/@playwright/mcp/node_modules/playwright-core",
         "to": "browser-mcp/node_modules/playwright-core"
       },
       {

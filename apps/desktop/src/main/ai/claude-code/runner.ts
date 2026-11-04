@@ -25,6 +25,7 @@ import { isSubscriptionToken } from './auth';
 import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from './codegraph';
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
+import { removeBrokenBrowserServers } from './browser-servers';
 import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
@@ -75,9 +76,9 @@ export function browserToolsSection(
     return `\n## Browser tools in this session\nAvailable: ${have.map((k) => `\`mcp__${k}__*\``).join(', ')}. No other browser tools exist (no Puppeteer).`;
   }
   const why = caps?.is_web_frontend || caps?.is_electron
-    ? 'the browser server is turned off or not bundled in this build'
+    ? 'the browser server is turned off, not bundled in this build, or could not start'
     : 'this project has no web or desktop UI';
-  return `\n## Browser tools in this session\nNone (${why}). Don't call any \`mcp__playwright__*\`, \`mcp__electron__*\` or Puppeteer tool. Skip visual verification, verify behaviour with tests, \`curl\` and the code, and say in the report that visual checks were not possible.`;
+  return `\n## Browser tools in this session\nNone (${why}). Don't call any \`mcp__playwright__*\`, \`mcp__chrome-devtools__*\`, \`mcp__electron__*\` or Puppeteer tool. Skip visual verification, verify behaviour with tests, \`curl\` and the code, and say in the report that visual checks were not possible.`;
 }
 
 export interface RunnerOptions {
@@ -203,6 +204,8 @@ export interface QueryExtras {
   askUser?: AskUserHandler;
   /** CodeGraph index is ready for this session's working directory */
   codegraphReady?: boolean;
+  /** A browser server that won't be in this session */
+  onProblem?: (message: string) => void;
 }
 
 export function buildQueryOptions(
@@ -218,7 +221,7 @@ export function buildQueryOptions(
   const mcpServers =
     tools.length === 0
       ? {}
-      : buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
+      : removeBrokenBrowserServers(buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
           specDir: config.specDir,
           memoryMcpUrl: config.memoryMcpUrl,
           linearApiKey: config.linearApiKey,
@@ -228,7 +231,7 @@ export function buildQueryOptions(
             nodeRuntime: bundled.nodeRuntime,
           },
           browserOutputDir: config.specDir ? join(config.specDir, 'qa-browser') : undefined,
-        });
+        }), extras.onProblem);
   if (bundled.codegraphBin && extras.codegraphReady && tools.includes('Read')) {
     mcpServers[CODEGRAPH_SERVER_KEY] = codegraphMcpServer(bundled.codegraphBin, config.toolContext.cwd);
   }
@@ -419,7 +422,7 @@ export async function runAgentSession(
   try {
     const stream = query({
       prompt: buildPrompt(config),
-      options: buildQueryOptions(config, abortController, { askUser: options.askUser, codegraphReady }),
+      options: buildQueryOptions(config, abortController, { askUser: options.askUser, codegraphReady, onProblem: options.onLog }),
     });
     for await (const message of stream) {
       acc.handle(message);
