@@ -10,8 +10,9 @@
  * file (or creates a RESUME file) to signal that execution can continue.
  */
 
-import { existsSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, unlinkSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeFileReplacingSync } from '../safe-write';
 
 // =============================================================================
 // Constants — see apps/desktop/src/main/ai/orchestration/pause-handler.ts
@@ -120,7 +121,7 @@ export function writeRateLimitPauseFile(
     resetTimestamp,
     error,
   };
-  writeFileSync(join(specDir, RATE_LIMIT_PAUSE_FILE), JSON.stringify(data, null, 2), 'utf8');
+  writeFileReplacingSync(join(specDir, RATE_LIMIT_PAUSE_FILE), JSON.stringify(data, null, 2), 'utf8');
 }
 
 /**
@@ -133,7 +134,7 @@ export function writeAuthPauseFile(specDir: string, error: string): void {
     error,
     requiresAction: 're-authenticate',
   };
-  writeFileSync(join(specDir, AUTH_FAILURE_PAUSE_FILE), JSON.stringify(data, null, 2), 'utf8');
+  writeFileReplacingSync(join(specDir, AUTH_FAILURE_PAUSE_FILE), JSON.stringify(data, null, 2), 'utf8');
 }
 
 /**

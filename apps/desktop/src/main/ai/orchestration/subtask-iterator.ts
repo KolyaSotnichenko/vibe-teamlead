@@ -7,7 +7,7 @@
  * the coder agent session, and tracks completion/retry/stuck state.
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { runProcess } from '../../platform/exec';
@@ -20,8 +20,8 @@ import {
   writeAuthPauseFile,
   writeRateLimitPauseFile,
   waitForAuthResume,
-  waitForRateLimitResume,
-} from './pause-handler';
+  waitForRateLimitResume } from './pause-handler';
+import { writeFileReplacing } from '../safe-write';
 
 // =============================================================================
 // Types
@@ -321,7 +321,7 @@ async function ensureSubtaskMarkedCompleted(
     }
 
     if (updated) {
-      await writeFile(planPath, JSON.stringify(plan, null, 2));
+      await writeFileReplacing(planPath, JSON.stringify(plan, null, 2));
     }
   } catch {
     // Non-fatal: if we can't update the plan the loop will retry or mark stuck
@@ -357,7 +357,7 @@ export async function restampExecutionPhase(
     if (plan.executionPhase !== phase) {
       plan.executionPhase = phase;
       plan.updated_at = new Date().toISOString();
-      await writeFile(planPath, JSON.stringify(plan, null, 2));
+      await writeFileReplacing(planPath, JSON.stringify(plan, null, 2));
     }
   } catch {
     // Non-fatal
@@ -388,7 +388,7 @@ async function syncPhasesToMain(
     mainPlan.phases = worktreePlan.phases;
     mainPlan.updated_at = new Date().toISOString();
 
-    await writeFile(mainPlanPath, JSON.stringify(mainPlan, null, 2));
+    await writeFileReplacing(mainPlanPath, JSON.stringify(mainPlan, null, 2));
   } catch (err) {
     // Non-fatal: the exit handler will do a final definitive sync.
     // Log so we can diagnose subtask-status-not-updating issues.

@@ -11,7 +11,7 @@
  * defined in phase-protocol.ts.
  */
 
-import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'events';
 
@@ -19,8 +19,7 @@ import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import {
   isTerminalPhase,
   isValidPhaseTransition,
-  type CompletablePhase,
-} from '../../../shared/constants/phase-protocol';
+  type CompletablePhase } from '../../../shared/constants/phase-protocol';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import {
@@ -29,12 +28,12 @@ import {
   validateAndNormalizeJsonFile,
   repairJsonWithLLM,
   buildValidationRetryPrompt,
-  IMPLEMENTATION_PLAN_SCHEMA_HINT,
-} from '../schema';
+  IMPLEMENTATION_PLAN_SCHEMA_HINT } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import { iterateSubtasks } from './subtask-iterator';
 import type { SubtaskIteratorConfig, SubtaskResult } from './subtask-iterator';
+import { writeFileReplacing } from '../safe-write';
 
 // =============================================================================
 // Constants
@@ -433,7 +432,7 @@ export class BuildOrchestrator extends EventEmitter {
       if (result.structuredOutput) {
         const structuredPlanPath = join(this.config.specDir, 'implementation_plan.json');
         try {
-          await writeFile(structuredPlanPath, JSON.stringify(result.structuredOutput, null, 2));
+          await writeFileReplacing(structuredPlanPath, JSON.stringify(result.structuredOutput, null, 2));
           this.emitTyped('log', 'Wrote implementation plan from structured output (schema-guaranteed)');
         } catch {
           // Non-fatal — fall through to file-based validation
@@ -673,7 +672,7 @@ export class BuildOrchestrator extends EventEmitter {
       }
 
       if (updated) {
-        await writeFile(planPath, JSON.stringify(plan, null, 2));
+        await writeFileReplacing(planPath, JSON.stringify(plan, null, 2));
         this.emitTyped('log', 'Reset all subtask statuses to "pending" after planning');
       }
     } catch {

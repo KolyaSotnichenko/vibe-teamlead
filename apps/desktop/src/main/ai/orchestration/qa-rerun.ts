@@ -3,12 +3,13 @@
  * request is a marker file the next QA run consumes. No Electron imports.
  */
 
-import { rmSync, writeFileSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeFileReplacingSync } from '../safe-write';
 
 export const QA_RERUN_FILE = 'QA_RERUN';
 
 export function requestQaRerun(specDir: string): void {
-  writeFileSync(join(specDir, QA_RERUN_FILE), new Date().toISOString(), 'utf-8');
+  writeFileReplacingSync(join(specDir, QA_RERUN_FILE), new Date().toISOString(), 'utf-8');
   rmSync(join(specDir, 'QA_FIX_REQUEST.md'), { force: true });
 }

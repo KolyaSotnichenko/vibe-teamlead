@@ -15,11 +15,12 @@
  */
 
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
 import { type RunResult, runProcess } from '../../platform/exec';
+import { writeFileReplacing } from '../safe-write';
 
 export type GateName = 'gitleaks' | 'osv-scanner';
 
@@ -388,8 +389,8 @@ export async function runSecurityGates(options: GateOptions): Promise<GateReport
   }
 
   try {
-    await writeFile(join(specDir, 'security_gates.json'), JSON.stringify(report, null, 2), 'utf-8');
-    await writeFile(join(specDir, 'security_gates.md'), formatGateReport(report), 'utf-8');
+    await writeFileReplacing(join(specDir, 'security_gates.json'), JSON.stringify(report, null, 2), 'utf-8');
+    await writeFileReplacing(join(specDir, 'security_gates.md'), formatGateReport(report), 'utf-8');
   } catch {
     // Non-fatal: the gate result is still returned to the orchestrator.
   }

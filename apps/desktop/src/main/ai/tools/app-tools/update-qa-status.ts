@@ -20,6 +20,7 @@ import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
 import { safeParseJson } from '../../../utils/json-repair';
 import { QASignoffSchema } from '../../schema/qa-signoff';
+import { writeFileReplacingSync } from '../../safe-write';
 
 // ---------------------------------------------------------------------------
 // Input Schema
@@ -137,9 +138,7 @@ export const updateQaStatusTool = Tool.define({
     plan.last_updated = new Date().toISOString();
 
     try {
-      const tmp = `${planFile}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(plan, null, 2), 'utf-8');
-      fs.renameSync(tmp, planFile);
+      writeFileReplacingSync(planFile, JSON.stringify(plan, null, 2));
       return `Updated QA status to '${status}' (session ${qaSession})`;
     } catch (e) {
       return `Error writing implementation_plan.json: ${e}`;

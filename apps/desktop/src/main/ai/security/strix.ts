@@ -12,12 +12,12 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
 import { findOnPath, runProcess, searchPath } from '../../platform/exec';
 import { isSubscriptionToken } from '../claude-code/auth';
+import { writeFileReplacing } from '../safe-write';
 
 export type StrixScanMode = 'quick' | 'standard' | 'deep';
 export type StrixSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -265,8 +265,8 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   const workDir = join(specDir, 'security');
   const finish = async (result: StrixResult): Promise<StrixResult> => {
     try {
-      await writeFile(join(specDir, 'security_qa.json'), JSON.stringify({ ...result, settings }, null, 2), 'utf-8');
-      await writeFile(join(specDir, 'security_qa.md'), formatStrixReport(result, settings, specDir), 'utf-8');
+      await writeFileReplacing(join(specDir, 'security_qa.json'), JSON.stringify({ ...result, settings }, null, 2), 'utf-8');
+      await writeFileReplacing(join(specDir, 'security_qa.md'), formatStrixReport(result, settings, specDir), 'utf-8');
     } catch {
       // Non-fatal
     }
@@ -288,7 +288,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
 
   mkdirSync(workDir, { recursive: true });
   const instructionFile = join(workDir, 'instructions.md');
-  await writeFile(
+  await writeFileReplacing(
     instructionFile,
     [
       'This is a white-box test of a feature branch built by an AI team. Test only what changed.',

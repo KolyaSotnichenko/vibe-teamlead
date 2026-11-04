@@ -15,11 +15,12 @@
  *   qa       → validation
  */
 
-import { writeFileSync, readFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { TaskLogs, TaskLogPhase, TaskLogPhaseStatus, TaskLogEntry, TaskLogEntryType } from '../../../shared/types';
 import type { StreamEvent } from '../session/types';
 import type { Phase } from '../config/types';
+import { writeFileReplacingSync } from '../safe-write';
 
 // =============================================================================
 // Phase Mapping
@@ -404,11 +405,7 @@ export class TaskLogWriter {
         mkdirSync(dir, { recursive: true });
       }
 
-      // Atomic-like write: write to temp file then rename
-      const tmpFile = `${this.logFile}.tmp`;
-      writeFileSync(tmpFile, JSON.stringify(this.data, null, 2), 'utf-8');
-      // renameSync is atomic on same filesystem (POSIX)
-      renameSync(tmpFile, this.logFile);
+      writeFileReplacingSync(this.logFile, JSON.stringify(this.data, null, 2));
     } catch {
       // Non-fatal: log write failures don't break execution
       // (The UI will just show an empty log section)

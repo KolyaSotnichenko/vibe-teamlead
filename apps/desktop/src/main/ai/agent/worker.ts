@@ -15,7 +15,6 @@ import { parentPort, workerData } from 'worker_threads';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
 
 import { toClaudeAuth } from '../claude-code/auth';
 import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
@@ -32,8 +31,7 @@ import type {
   WorkerMessage,
   MainToWorkerMessage,
   SerializableSessionConfig,
-  WorkerTaskEventMessage,
-} from './types';
+  WorkerTaskEventMessage } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
@@ -58,10 +56,10 @@ import {
   loadProjectIndex,
   loadProjectInstructions,
   setPromptsDir,
-  tryLoadPrompt,
-} from '../prompts/prompt-loader';
+  tryLoadPrompt } from '../prompts/prompt-loader';
 import type { ProjectCapabilities } from '../prompts/types';
 import { buildProjectIndex, runProjectIndexer } from '../project/project-indexer';
+import { writeFileReplacing } from '../safe-write';
 
 // =============================================================================
 // Validation
@@ -1069,7 +1067,7 @@ async function runSecurityQa(
     }
 
     // Hand the findings to the fixer through the human-feedback path, then re-review.
-    await writeFile(join(session.specDir, 'QA_FIX_REQUEST.md'), formatFixRequest(result, settings, session.specDir), 'utf-8');
+    await writeFileReplacing(join(session.specDir, 'QA_FIX_REQUEST.md'), formatFixRequest(result, settings, session.specDir), 'utf-8');
     outcome = await qaLoop.run();
     if (!outcome.approved) return outcome;
   }

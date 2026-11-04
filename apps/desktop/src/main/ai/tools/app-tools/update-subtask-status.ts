@@ -15,6 +15,7 @@ import { z } from 'zod/v3';
 import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
 import { safeParseJson } from '../../../utils/json-repair';
+import { writeFileReplacingSync } from '../../safe-write';
 
 // ---------------------------------------------------------------------------
 // Input Schema
@@ -50,9 +51,7 @@ interface ImplementationPlan {
 }
 
 function writeJsonAtomic(filePath: string, data: unknown): void {
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
-  fs.renameSync(tmp, filePath);
+  writeFileReplacingSync(filePath, JSON.stringify(data, null, 2));
 }
 
 function updateSubtaskInPlan(

@@ -16,8 +16,8 @@
  * - Human feedback processing (QA_FIX_REQUEST.md)
  */
 
-import { rmSync, writeFileSync } from 'node:fs';
-import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'events';
 
@@ -26,8 +26,7 @@ import {
   generateEscalationReport,
   generateManualTestPlan,
   generateQAReport,
-  mergeQAReport,
-} from './qa-reports';
+  mergeQAReport } from './qa-reports';
 import { QA_RERUN_FILE } from './qa-rerun';
 
 import type { AgentType } from '../config/agent-configs';
@@ -37,6 +36,7 @@ import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import type { GateFinding, GateReport } from '../security/gates';
 import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
+import { writeFileReplacing, writeFileReplacingSync } from '../safe-write';
 
 // =============================================================================
 // Constants
@@ -709,7 +709,7 @@ export class QALoop extends EventEmitter {
     try {
       const { findings, mode } = await this.config.runDesignCheck();
       if (mode === 'off') return [];
-      await writeFile(join(this.config.specDir, 'design_check.md'), formatDesignCheck(findings, mode), 'utf-8').catch(() => {});
+      await writeFileReplacing(join(this.config.specDir, 'design_check.md'), formatDesignCheck(findings, mode), 'utf-8').catch(() => {});
       this.emitTyped('log', `Design check: ${findings.length ? `${findings.length} finding(s)${mode === 'warn' ? ' (warn only)' : ''}` : 'clear'}`);
       if (mode !== 'block') {
         this.lastDesignFindings = [];
@@ -785,7 +785,7 @@ export class QALoop extends EventEmitter {
       const plan = safeParseJson<Record<string, unknown>>(await readFile(planPath, 'utf-8'));
       if (!plan || !('qa_signoff' in plan)) return;
       delete plan.qa_signoff;
-      await writeFile(planPath, JSON.stringify(plan, null, 2), 'utf-8');
+      await writeFileReplacing(planPath, JSON.stringify(plan, null, 2), 'utf-8');
     } catch {
       // Unreadable plan: the reviewer's own write decides.
     }
@@ -953,7 +953,7 @@ export class QALoop extends EventEmitter {
         last_status: status,
       };
 
-      await writeFile(planPath, JSON.stringify(plan, null, 2), 'utf-8');
+      await writeFileReplacing(planPath, JSON.stringify(plan, null, 2), 'utf-8');
     } catch {
       // Non-fatal — iteration is still tracked in memory
     }
@@ -962,7 +962,7 @@ export class QALoop extends EventEmitter {
   /** QA_ESCALATION.md and the final reports. Never throws. */
   private async escalate(issues: QAIssue[]): Promise<void> {
     try {
-      await writeFile(join(this.config.specDir, 'QA_ESCALATION.md'), generateEscalationReport(this.iterationHistory, issues), 'utf-8');
+      await writeFileReplacing(join(this.config.specDir, 'QA_ESCALATION.md'), generateEscalationReport(this.iterationHistory, issues), 'utf-8');
     } catch {
       // Non-fatal
     }
@@ -981,14 +981,14 @@ export class QALoop extends EventEmitter {
       const reportPath = join(specDir, 'qa_report.md');
       const agentReport = await readFile(reportPath, 'utf-8').catch(() => null);
       const qaReport = mergeQAReport(agentReport, generateQAReport(this.iterationHistory, finalStatus));
-      await writeFile(reportPath, qaReport, 'utf-8');
+      await writeFileReplacing(reportPath, qaReport, 'utf-8');
     } catch {
       // Non-fatal
     }
 
     try {
       const manualTestPlan = await generateManualTestPlan(specDir, projectDir);
-      await writeFile(join(specDir, 'MANUAL_TEST_PLAN.md'), manualTestPlan, 'utf-8');
+      await writeFileReplacing(join(specDir, 'MANUAL_TEST_PLAN.md'), manualTestPlan, 'utf-8');
     } catch {
       // Non-fatal
     }
@@ -1026,7 +1026,7 @@ export class QALoop extends EventEmitter {
         at: new Date().toISOString(),
       };
       try {
-        writeFileSync(join(this.config.specDir, 'qa_outcome.json'), JSON.stringify(info, null, 2), 'utf-8');
+        writeFileReplacingSync(join(this.config.specDir, 'qa_outcome.json'), JSON.stringify(info, null, 2), 'utf-8');
       } catch {
         // informational
       }

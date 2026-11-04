@@ -13,6 +13,8 @@ vi.mock('node:fs/promises', () => ({
   readFile: (...args: unknown[]) => mockReadFile(...args),
   writeFile: (...args: unknown[]) => mockWriteFile(...args),
   unlink: (...args: unknown[]) => mockUnlink(...args),
+  rename: async () => {},
+  rm: async () => {},
 }));
 
 vi.mock('../../utils/json-repair', () => ({

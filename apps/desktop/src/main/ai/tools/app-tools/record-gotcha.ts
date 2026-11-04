@@ -14,6 +14,7 @@ import { z } from 'zod/v3';
 
 import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
+import { writeFileReplacingSync } from '../../safe-write';
 
 // ---------------------------------------------------------------------------
 // Input Schema
@@ -68,7 +69,9 @@ export const recordGotchaTool = Tool.define({
       }
       entry += '\n';
 
-      fs.writeFileSync(gotchasFile, header + entry, { flag: isNew ? 'w' : 'a', encoding: 'utf-8' });
+      // Whatever is at this path may be a link an agent left: its target isn't ours to read
+      const previous = !isNew && !fs.lstatSync(gotchasFile).isSymbolicLink() ? fs.readFileSync(gotchasFile, 'utf-8') : '';
+      writeFileReplacingSync(gotchasFile, previous + header + entry);
 
       return `Recorded gotcha: ${gotcha}`;
     } catch (e) {

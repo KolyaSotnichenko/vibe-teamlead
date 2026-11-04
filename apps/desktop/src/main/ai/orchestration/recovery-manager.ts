@@ -11,10 +11,11 @@
  * - Detect circular fixes (same error repeated)
  */
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { safeParseJson } from '../../utils/json-repair';
+import { writeFileReplacing } from '../safe-write';
 
 // =============================================================================
 // Constants
@@ -353,7 +354,7 @@ export class RecoveryManager {
       ``,
     ];
 
-    await writeFile(progressPath, lines.join('\n'), 'utf-8');
+    await writeFileReplacing(progressPath, lines.join('\n'), 'utf-8');
   }
 
   /**
@@ -391,7 +392,7 @@ export class RecoveryManager {
 
   private async saveAttemptHistory(history: AttemptHistory): Promise<void> {
     history.metadata.lastUpdated = new Date().toISOString();
-    await writeFile(this.attemptHistoryPath, JSON.stringify(history, null, 2), 'utf-8');
+    await writeFileReplacing(this.attemptHistoryPath, JSON.stringify(history, null, 2), 'utf-8');
   }
 
   private createEmptyHistory(): AttemptHistory {

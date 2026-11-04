@@ -14,7 +14,7 @@
  * into the next phase's kickoff message, eliminating redundant file re-reads.
  */
 
-import { readFile, writeFile, access } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'events';
 
@@ -28,10 +28,10 @@ import {
   ComplexityAssessmentOutputSchema,
   ImplementationPlanOutputSchema,
   buildValidationRetryPrompt,
-  IMPLEMENTATION_PLAN_SCHEMA_HINT,
-} from '../schema';
+  IMPLEMENTATION_PLAN_SCHEMA_HINT } from '../schema';
 import type { ZodSchema } from 'zod';
 import type { SessionResult } from '../session/types';
+import { writeFileReplacing } from '../safe-write';
 
 // =============================================================================
 // Constants
@@ -487,7 +487,7 @@ export class SpecOrchestrator extends EventEmitter {
         if (isPlanningPhase && result.structuredOutput) {
           const planPath = join(this.config.specDir, 'implementation_plan.json');
           try {
-            await writeFile(planPath, JSON.stringify(result.structuredOutput, null, 2));
+            await writeFileReplacing(planPath, JSON.stringify(result.structuredOutput, null, 2));
             this.emitTyped('log', `Wrote implementation plan from structured output (schema-guaranteed)`);
           } catch (writeErr) {
             this.emitTyped('log', `Failed to write structured output plan: ${writeErr}`);

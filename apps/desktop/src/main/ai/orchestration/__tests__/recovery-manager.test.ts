@@ -11,7 +11,10 @@ const mockMkdir = vi.fn();
 
 vi.mock('node:fs/promises', () => ({
   readFile: (...args: unknown[]) => mockReadFile(...args),
-  writeFile: (...args: unknown[]) => mockWriteFile(...args),
+  // Safe writes go through a randomly named file: the tests look at where it ends up
+  writeFile: (file: string, data: string) => mockWriteFile(file.replace(/\.[0-9a-f]{16}\./, ''), data, 'utf-8'),
+  rename: async () => {},
+  rm: async () => {},
   mkdir: (...args: unknown[]) => mockMkdir(...args),
 }));
 

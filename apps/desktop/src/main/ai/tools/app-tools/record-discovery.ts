@@ -15,6 +15,7 @@ import { z } from 'zod/v3';
 import { safeParseJson } from '../../../utils/json-repair';
 import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
+import { writeFileReplacingSync } from '../../safe-write';
 
 // ---------------------------------------------------------------------------
 // Input Schema
@@ -78,9 +79,7 @@ export const recordDiscoveryTool = Tool.define({
       };
       codebaseMap.last_updated = new Date().toISOString();
 
-      const tmp = `${mapFile}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(codebaseMap, null, 2), 'utf-8');
-      fs.renameSync(tmp, mapFile);
+      writeFileReplacingSync(mapFile, JSON.stringify(codebaseMap, null, 2));
 
       return `Recorded discovery for '${file_path}': ${description}`;
     } catch (e) {

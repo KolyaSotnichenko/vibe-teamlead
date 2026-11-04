@@ -8,12 +8,13 @@
  */
 
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync } from 'node:fs';
 import { createConnection, createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 
 import { findOnPath, runProcess, searchPath } from '../../platform/exec';
+import { writeFileReplacingSync } from '../safe-write';
 
 export interface StartOptions {
   name: string;
@@ -133,7 +134,7 @@ function saveList(specDir: string): void {
     const list = [...running.values()]
       .filter((s) => s.specDir === specDir)
       .map(({ name, pid, startedAt, port, logPath }) => ({ name, pid, startedAt, port, logPath }));
-    writeFileSync(listFile(specDir), JSON.stringify(list, null, 2), 'utf-8');
+    writeFileReplacingSync(listFile(specDir), JSON.stringify(list, null, 2), 'utf-8');
   } catch {
     // The list only helps clean up after a killed run
   }
@@ -186,7 +187,7 @@ export function cleanUpLeftovers(specDir: string): void {
     if (cwd === root || cwd.startsWith(`${root}${sep}`)) signalGroup(pid, 'SIGKILL');
   }
   try {
-    writeFileSync(listFile(specDir), '[]', 'utf-8');
+    writeFileReplacingSync(listFile(specDir), '[]', 'utf-8');
   } catch {
     // Same as above
   }

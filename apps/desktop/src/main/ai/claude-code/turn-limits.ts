@@ -5,10 +5,10 @@
  * Electron imports.
  */
 
-import { randomBytes } from 'node:crypto';
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { writeFileReplacingSync } from '../safe-write';
 import type { TurnLimitHit } from '../../../shared/types/task-workspace';
 
 export const TURN_LIMITS_FILE = 'turn_limits.json';
@@ -47,14 +47,10 @@ export function recordTurnLimit(specDir: string, hit: { agentType: string; subta
   } else {
     hits.push({ agentType: hit.agentType, ...(hit.subtaskId ? { subtaskId: hit.subtaskId } : {}), limit: hit.limit, count: 1 });
   }
-  // A new file renamed into place: a link an agent left at this path gets replaced,
-  // not written through. Created only if the random name doesn't exist yet.
-  const temporary = `${file}.${randomBytes(6).toString('hex')}`;
   try {
-    writeFileSync(temporary, JSON.stringify(hits, null, 2), { encoding: 'utf-8', flag: 'wx' });
-    renameSync(temporary, file);
+    writeFileReplacingSync(file, JSON.stringify(hits, null, 2));
   } catch {
-    rmSync(temporary, { force: true });
+    // informational
   }
 }
 
