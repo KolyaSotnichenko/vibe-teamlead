@@ -10,6 +10,7 @@ export * from './project';
 export * from './task';
 export * from './task-workspace';
 export * from './brief';
+export * from './usage';
 export * from './tools-check';
 export * from './agent-questions';
 export * from './kanban';

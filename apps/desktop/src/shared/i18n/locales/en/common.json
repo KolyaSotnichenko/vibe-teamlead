@@ -1578,5 +1578,33 @@
       "failedLoadProjects": "Failed to load projects",
       "failedLoadTeams": "Failed to load teams"
     }
+  },
+  "usage": {
+    "ariaLabel": "Tokens spent on this project: {{tokens}}",
+    "tokensShort": "tok",
+    "title": "Spent on this project",
+    "since": "since {{date}}",
+    "tokens": "tokens",
+    "sessions_one": "{{count}} agent session",
+    "sessions_other": "{{count}} agent sessions",
+    "kinds": {
+      "input": "Input",
+      "output": "Output",
+      "cacheRead": "Cache read",
+      "cacheWrite": "Cache write"
+    },
+    "byAgent": "By agent",
+    "roles": {
+      "spec": "Spec",
+      "architect": "Architect",
+      "planner": "Planner",
+      "coder": "Coder",
+      "qa": "QA",
+      "qaFixer": "QA fixer",
+      "other": "Other"
+    },
+    "costApi": "for {{tokens}} tokens through the Anthropic API, as Claude Code reported it.",
+    "costGateway": "{{tokens}} tokens went through {{gateway}}. Your gateway prices them; see its billing.",
+    "costSubscription": "{{tokens}} tokens under your Claude subscription, with no per-token price."
   }
 }

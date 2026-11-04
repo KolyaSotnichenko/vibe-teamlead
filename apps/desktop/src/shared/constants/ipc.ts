@@ -98,6 +98,9 @@ export const IPC_CHANNELS = {
   STORYBOOK_TASK_STATUS: 'design:taskStorybookStatus',
   STORYBOOK_TASK_START: 'design:taskStorybookStart',
   STORYBOOK_TASK_STOP: 'design:taskStorybookStop',
+
+  // Token usage per project
+  USAGE_GET: 'usage:get',
   TASK_WORKSPACE_GET_IMAGE: 'task:workspaceGetImage',  // A diagram PNG of the spec dir as a data URL
   TASK_WORKSPACE_OPEN_FILE: 'task:workspaceOpenFile',  // Open a .drawio inside the spec dir with the default app
 

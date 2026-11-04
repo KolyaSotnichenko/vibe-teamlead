@@ -9,6 +9,7 @@
 import { toolsMock } from './mocks/tools-mock';
 import { briefMock } from './mocks/brief-mock';
 import { designMock } from './mocks/design-mock';
+import { usageMock } from './mocks/usage-mock';
 import type { ElectronAPI } from '../../shared/types';
 import {
   projectMock,
@@ -211,6 +212,7 @@ const browserMockAPI: ElectronAPI = {
   // Brief import
   brief: briefMock,
   design: designMock,
+  usage: usageMock,
 
   // External tools check
   tools: toolsMock,

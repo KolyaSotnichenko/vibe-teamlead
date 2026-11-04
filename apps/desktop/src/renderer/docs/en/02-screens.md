@@ -4,6 +4,7 @@
 
 | Screen | What's there |
 |---|---|
+| **Project tabs** (top) | Open projects; the "+" adds one. Next to it: tokens spent on the project (and the Anthropic API cost); click for the breakdown by kind of token and by agent. Gateway and subscription tokens are counted but not priced here. |
 | **Kanban Board** | Tasks by column: *Planning → Queue → In Progress → AI Review → Human Review → Done* (plus *PR Created* and *Error*). The board updates live. Queued tasks start on their own, within the limit on parallel tasks. |
 | **Agent Terminals** | Claude Code terminals, each in its own worktree, for manual work alongside the agents. New terminal: ⌘T. |
 | **Worktrees** | An isolated copy of the repository for each task: how many commits ahead, how many files changed. This is also where you find Merge, Create PR, Copy Path and Delete. Folders left behind after a failed cleanup are marked as orphaned. |

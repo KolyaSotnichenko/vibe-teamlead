@@ -16,6 +16,7 @@ import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import { searchPath } from '../../platform/exec';
+import { billingOf, recordUsage } from '../usage/usage-ledger';
 import { getAgentConfig } from '../config/agent-configs';
 import { MODEL_ID_MAP } from '../config/types';
 import { ErrorCode } from '../session/error-classifier';
@@ -337,6 +338,19 @@ export async function runAgentSession(
     const parsed = config.outputSchema.safeParse(acc.result.structured_output);
     if (parsed.success) structuredOutput = parsed.data as Record<string, unknown>;
   }
+
+  // Token usage per project (header counter); best effort, never fails the session
+  await recordUsage(config.toolContext.projectDir ?? config.toolContext.cwd, {
+    at: new Date().toISOString(),
+    agentType: config.agentType,
+    model: config.model,
+    input: Math.max(0, acc.usage.promptTokens - (acc.usage.cacheReadTokens ?? 0) - (acc.usage.cacheCreationTokens ?? 0)),
+    output: acc.usage.completionTokens,
+    cacheRead: acc.usage.cacheReadTokens ?? 0,
+    cacheWrite: acc.usage.cacheCreationTokens ?? 0,
+    costUsd: acc.costUsd ?? 0,
+    ...billingOf(config.auth),
+  });
 
   return {
     outcome,

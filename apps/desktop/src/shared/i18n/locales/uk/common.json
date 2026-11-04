@@ -1645,5 +1645,35 @@
       "failedLoadProjects": "Не вдалося завантажити проєкти",
       "failedLoadTeams": "Не вдалося завантажити команди"
     }
+  },
+  "usage": {
+    "ariaLabel": "Токенів витрачено на проєкт: {{tokens}}",
+    "tokensShort": "ток",
+    "title": "Витрачено на проєкт",
+    "since": "з {{date}}",
+    "tokens": "токенів",
+    "sessions_one": "{{count}} сесія агентів",
+    "sessions_few": "{{count}} сесії агентів",
+    "sessions_many": "{{count}} сесій агентів",
+    "sessions_other": "{{count}} сесії агентів",
+    "kinds": {
+      "input": "Вхід",
+      "output": "Вихід",
+      "cacheRead": "Читання кешу",
+      "cacheWrite": "Запис кешу"
+    },
+    "byAgent": "За агентами",
+    "roles": {
+      "spec": "Специфікація",
+      "architect": "Архітектор",
+      "planner": "Планувальник",
+      "coder": "Кодер",
+      "qa": "QA",
+      "qaFixer": "QA-фіксер",
+      "other": "Інше"
+    },
+    "costApi": "за {{tokens}} токенів через Anthropic API, як порахував Claude Code.",
+    "costGateway": "{{tokens}} токенів пройшли через {{gateway}}. Їх рахує ваш шлюз — дивіться його білінг.",
+    "costSubscription": "{{tokens}} токенів у межах підписки Claude, без ціни за токен."
   }
 }
