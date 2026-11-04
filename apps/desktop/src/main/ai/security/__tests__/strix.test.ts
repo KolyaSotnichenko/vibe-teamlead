@@ -2,7 +2,14 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// The machine's real Strix and Docker must stay out of the tests: finding them would run them
+const lookup = vi.hoisted(() => ({ nothingInstalled: false }));
+vi.mock('../../../platform/exec', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../platform/exec')>();
+  return { ...actual, findOnPath: (...args: Parameters<typeof actual.findOnPath>) => (lookup.nothingInstalled ? undefined : actual.findOnPath(...args)) };
+});
 
 import {
   buildStrixArgs,
@@ -80,6 +87,7 @@ describe('runStrix', () => {
   const originalPath = process.env.PATH;
   afterEach(() => {
     process.env.PATH = originalPath;
+    lookup.nothingInstalled = false;
   });
 
   function fakeBin(name: string, script: string, dir: string) {
@@ -94,10 +102,9 @@ describe('runStrix', () => {
     const base = { projectDir: specDir, specDir, settings, model: 'claude-sonnet-4-6' };
     expect((await runStrix(base)).status).toBe('skipped');
     expect((await runStrix({ ...base, apiKey: 'sk-ant-oat01-x' })).reason).toMatch(/API key/);
-    process.env.PATH = mkdtempSync(join(tmpdir(), 'vtl-empty-'));
+    lookup.nothingInstalled = true;
     const missing = await runStrix({ ...base, apiKey: 'sk-ant-api-x', strixBin: undefined });
-    // Strix may exist in a common install dir on a dev machine; only assert when it doesn't.
-    if (missing.status === 'skipped') expect(missing.reason).toMatch(/not installed|Docker/);
+    expect(missing).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/not installed/) });
     expect(readFileSync(join(specDir, 'security_qa.md'), 'utf-8')).toContain('Security QA');
   });
 
