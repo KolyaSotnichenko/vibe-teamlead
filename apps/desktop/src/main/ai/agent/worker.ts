@@ -37,7 +37,7 @@ import type {
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
-import { resolveBaseRef, runSecurityGates } from '../security/gates';
+import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
@@ -922,6 +922,8 @@ async function runQualityAssurance(
           return { findings: lintAddedLines(files, tokens), mode };
         }
       : undefined,
+
+    currentCommit: () => currentCommit(session.projectDir),
 
     generatePrompt: async (agentType, context) => {
       const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session);

@@ -38,6 +38,7 @@ flowchart TD
 
 - The review runs only when the checks are clear: findings go straight to the fixer, which gets one round at each. If the same finding is back, the task comes to you at once. In Review you can allow a design finding the design system permits, then run QA again.
 - The app writes a `qa_report.md` report (with the AC table) and a manual test plan.
+- The first review is a full one. A later one looks at what changed since the last: the earlier issues, the changed code and the acceptance criteria it touches, plus one whole test run.
 - If the same problem comes back in three rounds, including rounds of earlier QA runs, the task is escalated to you, so the fixer gets two tries at it.
 
 ## Strix (Security QA)

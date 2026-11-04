@@ -97,6 +97,12 @@ export function isLockfile(path: string): boolean {
 }
 
 /** Merge-base of HEAD with the repository's default branch, if any. */
+/** HEAD of the checkout, or undefined outside git. */
+export async function currentCommit(cwd: string): Promise<string | undefined> {
+  const head = await git(['rev-parse', 'HEAD'], cwd);
+  return head.code === 0 ? head.stdout.trim() || undefined : undefined;
+}
+
 export async function resolveBaseRef(cwd: string): Promise<string | undefined> {
   const candidates: string[] = [];
   const originHead = await git(['rev-parse', '--abbrev-ref', 'origin/HEAD'], cwd);

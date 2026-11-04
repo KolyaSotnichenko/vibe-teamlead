@@ -819,6 +819,57 @@ describe('QALoop', () => {
     });
   });
 
+  describe('repeat reviews', () => {
+    function loopWith(history: unknown[] = []) {
+      const state = { plan: { phases: [{ subtasks: [{ status: 'completed' }] }], qa_iteration_history: history } as Record<string, unknown> };
+      let reviews = 0;
+      mockReadFile.mockImplementation((p: string) =>
+        p.endsWith('implementation_plan.json') ? Promise.resolve(JSON.stringify(state.plan)) : Promise.reject(new Error('ENOENT')),
+      );
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) state.plan = JSON.parse(data);
+        return Promise.resolve();
+      });
+      const runSession = vi.fn().mockImplementation(async (c: QASessionRunConfig) => {
+        if (c.agentType === 'qa_reviewer') {
+          state.plan.qa_signoff = reviews++ === 0 && !history.length
+            ? { status: 'rejected', issues_found: [{ title: 'Raw hex', location: 'a.tsx:5' }] }
+            : { status: 'approved', issues_found: [] };
+        }
+        return makeSessionResult('completed');
+      });
+      return { runSession, generatePrompt: vi.fn().mockResolvedValue('prompt'), currentCommit: vi.fn().mockResolvedValue('abc123') };
+    }
+
+    const reviewContexts = (generatePrompt: ReturnType<typeof vi.fn>) => generatePrompt.mock.calls.filter((c) => c[0] === 'qa_reviewer').map((c) => c[1]);
+
+    it('the first review is a full one, the next knows the commit and the issues of the last', async () => {
+      const t = loopWith();
+      await new QALoop(makeConfig(t)).run();
+      const [first, second] = reviewContexts(t.generatePrompt);
+      expect(first.lastReview).toBeUndefined();
+      expect(second.lastReview).toMatchObject({ commit: 'abc123', approved: false });
+      expect(second.lastReview.issues[0].title).toBe('Raw hex');
+    });
+
+    it('remembers the last review across runs', async () => {
+      const t = loopWith([{ iteration: 1, status: 'rejected', durationMs: 1, timestamp: 't', issues: [{ title: 'Old' }], reviewed_commit: 'old999' }]);
+      await new QALoop(makeConfig(t)).run();
+      expect(reviewContexts(t.generatePrompt)[0].lastReview).toMatchObject({ commit: 'old999' });
+    });
+
+    it('a round where the checks stopped the review does not count as a review', async () => {
+      const t = loopWith();
+      let rounds = 0;
+      const runDesignCheck = async () => ({
+        findings: rounds++ === 0 ? [{ rule: 'gradient' as const, file: 'a.css', line: 1, match: 'x', message: 'm' }] : [],
+        mode: 'block' as const,
+      });
+      await new QALoop(makeConfig({ ...t, runDesignCheck })).run();
+      expect(reviewContexts(t.generatePrompt)[0].lastReview).toBeUndefined();
+    });
+  });
+
   describe('qaRoundSection', () => {
     const context = { iteration: 1, maxIterations: 5 };
 
@@ -835,6 +886,30 @@ describe('QALoop', () => {
 
     it('says nothing for a first review', () => {
       expect(qaRoundSection('qa_reviewer', context)).toBe('');
+    });
+
+    it('tells the fixer to verify narrowly', () => {
+      const text = qaRoundSection('qa_fixer', { ...context, issues: [{ title: 'Typo' }] });
+      expect(text).toMatch(/tests? (for|of) what you changed/i);
+      expect(text).toMatch(/server/i);
+    });
+
+    it('turns a later review into a check of what changed', () => {
+      const text = qaRoundSection('qa_reviewer', {
+        ...context,
+        lastReview: { commit: 'abc123', approved: false, issues: [{ title: 'Raw hex', location: 'a.tsx:5' }] },
+      });
+      expect(text).toContain('git diff abc123');
+      expect(text).toContain('Raw hex');
+      expect(text).toMatch(/whole test/i);
+      expect(text).toMatch(/server|browser/i);
+    });
+
+    it('passes on why the last attempt failed', () => {
+      const previousError = { errorType: 'x', errorMessage: 'no signoff', consecutiveErrors: 1, expectedAction: 'Call the tool' };
+      const text = qaRoundSection('qa_reviewer', { ...context, previousError });
+      expect(text).toContain('no signoff');
+      expect(text).toContain('Call the tool');
     });
   });
 

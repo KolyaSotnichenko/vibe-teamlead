@@ -79,10 +79,36 @@ export function qaRoundSection(agentType: string, context: QAPromptContext): str
       '',
       ...list,
       '',
+      'Verify narrowly: run the tests for what you changed, then the whole test command once before you finish. Start a server or a browser only if the fix is in the UI or an API it calls and tests can\'t show it.',
+      '',
       "If a finding can't be fixed in the code (a false positive, or something the design system allows), leave it, don't edit the reports or the check's output, and say so in your final message. The app shows it to the user.",
     ].join('\n');
   }
-  return '';
+  const parts: string[] = [];
+  if (context.previousError) {
+    parts.push(`## The last attempt failed\n\n${context.previousError.errorMessage}\n\n${context.previousError.expectedAction}`);
+  }
+  if (context.lastReview) {
+    const { commit, approved, issues } = context.lastReview;
+    const list = issues.map((i) => `- ${i.title ?? i.description ?? 'Issue'}${i.location ? ` (${i.location})` : ''}`);
+    parts.push(
+      [
+        '## This is a repeat review',
+        '',
+        `A full review already ran at commit ${commit} and its verdict was ${approved ? 'approved' : 'rejected'}.`,
+        ...(list.length ? ['', 'It listed:', ...list] : []),
+        '',
+        `This replaces phases 3 to 7 and the context reading in phase 0. See what changed with \`git diff ${commit} --stat\`, then:`,
+        '',
+        '- Check that the issues above are fixed.',
+        '- Review the changed code, and re-verify only the acceptance criteria it touches. Keep the other rows of the AC table in `qa_report.md` as they were.',
+        '- Run the whole test command once, plus build and lint if the project has them.',
+        '- Start a server or a browser only if the changes touch the UI or an API it calls.',
+        '- If the diff is empty, run nothing: keep the report and record the same verdict, unless the earlier issues say otherwise.',
+      ].join('\n'),
+    );
+  }
+  return parts.join('\n\n');
 }
 
 const SIGNOFF_KICKOFF = 'Record the verdict from qa_report.md with update_qa_status, then stop.';
@@ -113,6 +139,8 @@ export interface QAIterationRecord {
   timestamp: string;
   /** What the gates found this round, independent of line numbers */
   gate_keys?: string[];
+  /** The commit a reviewer's verdict in this round is about */
+  reviewed_commit?: string;
 }
 
 /** Configuration for the QA loop */
@@ -144,6 +172,8 @@ export interface QALoopConfig {
    * only reported (design_check.md in the spec dir).
    */
   runDesignCheck?: () => Promise<{ findings: DesignFinding[]; mode: DesignQaMode }>;
+  /** HEAD of the build, so a later review can look at what changed since this one */
+  currentCommit?: () => Promise<string | undefined>;
 }
 
 /** One QA issue per file with design-check findings. Pure — tested directly. */
@@ -240,6 +270,8 @@ export interface QAPromptContext {
   previousError?: QAErrorContext;
   /** For the fixer: what this round found */
   issues?: QAIssue[];
+  /** For the reviewer: the last review that reached a verdict */
+  lastReview?: { commit: string; approved: boolean; issues: QAIssue[] };
 }
 
 /** Error context for self-correction feedback */
@@ -409,7 +441,7 @@ export class QALoop extends EventEmitter {
 
           const gateKeys = this.lastGateKeys;
           const seenBefore = new Set(this.iterationHistory.flatMap((r) => r.gate_keys ?? []));
-          await this.recordIteration(iteration, 'rejected', blockers, Date.now() - iterationStart, gateKeys);
+          await this.recordIteration(iteration, 'rejected', blockers, Date.now() - iterationStart, { gate_keys: gateKeys });
 
           // Nothing new, and the fixer already had a round at these: another can't help
           // (a false positive, say). Only the user can settle it.
@@ -430,10 +462,12 @@ export class QALoop extends EventEmitter {
         // Run QA reviewer
         this.sessionNumber++;
         const reportBefore = await this.readReport();
+        const reviewedCommit = await this.config.currentCommit?.().catch(() => undefined);
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', {
           iteration,
           maxIterations,
           previousError: lastErrorContext,
+          lastReview: this.lastReview(),
         });
 
         const reviewResult = await this.config.runSession({
@@ -492,7 +526,7 @@ export class QALoop extends EventEmitter {
         this.emitTyped('qa-review-complete', iteration, status, issues);
 
         if (status === 'approved') {
-          await this.recordIteration(iteration, 'approved', [], iterationDuration);
+          await this.recordIteration(iteration, 'approved', [], iterationDuration, { reviewed_commit: reviewedCommit });
           await this.writeReports('approved');
           return this.outcome(true, iteration, Date.now() - startTime);
         }
@@ -500,7 +534,7 @@ export class QALoop extends EventEmitter {
         if (status === 'rejected') {
           consecutiveErrors = 0;
           lastErrorContext = undefined;
-          await this.recordIteration(iteration, 'rejected', issues, iterationDuration);
+          await this.recordIteration(iteration, 'rejected', issues, iterationDuration, { reviewed_commit: reviewedCommit });
 
           // Check for recurring issues
           const recurring = findRecurring(this.iterationHistory, issues);
@@ -788,6 +822,13 @@ export class QALoop extends EventEmitter {
   // Iteration History
   // ===========================================================================
 
+  /** The latest round a reviewer finished, for the next review to build on. */
+  private lastReview(): QAPromptContext['lastReview'] {
+    const round = [...this.iterationHistory].reverse().find((r) => r.reviewed_commit);
+    if (!round?.reviewed_commit) return undefined;
+    return { commit: round.reviewed_commit, approved: round.status === 'approved', issues: round.issues };
+  }
+
   /** Rounds recorded by earlier runs; entries an agent wrote into the plan by hand are skipped. */
   private async loadIterationHistory(): Promise<QAIterationRecord[]> {
     try {
@@ -809,7 +850,7 @@ export class QALoop extends EventEmitter {
     status: 'approved' | 'rejected' | 'error',
     issues: QAIssue[],
     durationMs: number,
-    gateKeys?: string[],
+    extra: Pick<QAIterationRecord, 'gate_keys' | 'reviewed_commit'> = {},
   ): Promise<void> {
     const record: QAIterationRecord = {
       iteration,
@@ -817,7 +858,7 @@ export class QALoop extends EventEmitter {
       issues,
       durationMs,
       timestamp: new Date().toISOString(),
-      ...(gateKeys?.length ? { gate_keys: gateKeys } : {}),
+      ...extra,
     };
 
     this.iterationHistory.push(record);
