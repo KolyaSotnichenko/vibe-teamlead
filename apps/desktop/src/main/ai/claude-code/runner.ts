@@ -271,6 +271,16 @@ export function toOutputJsonSchema(schema: z.ZodType): Record<string, unknown> {
  * Never throws for model/auth/limit problems — those come back as an outcome
  * on the SessionResult so the orchestrator can decide what to do next.
  */
+/**
+ * Lines for MCP servers that did not start (their tools are missing, and
+ * the agent gets "No such tool available" when it calls them). Pure — tested directly.
+ */
+export function mcpStartupProblems(servers: Array<{ name: string; status: string }> | undefined): string[] {
+  return (servers ?? [])
+    .filter((s) => s.status === 'failed' || s.status === 'needs-auth')
+    .map((s) => `MCP server "${s.name}" did not start (${s.status}): its tools are not available in this session.`);
+}
+
 export async function runAgentSession(
   config: SessionConfig,
   options: RunnerOptions = {},
@@ -327,6 +337,9 @@ export async function runAgentSession(
     });
     for await (const message of stream) {
       acc.handle(message);
+      if (message.type === 'system' && message.subtype === 'init') {
+        for (const line of mcpStartupProblems(message.mcp_servers)) options.onLog?.(line);
+      }
     }
   } catch (error) {
     thrown = error;

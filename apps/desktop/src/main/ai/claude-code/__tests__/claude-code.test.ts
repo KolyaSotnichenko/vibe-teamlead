@@ -3,7 +3,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import { SessionAccumulator } from '../event-mapper';
-import { buildEnv, buildQueryOptions, resolveBuiltinTools, runAgentSession } from '../runner';
+import { buildEnv, buildQueryOptions, mcpStartupProblems, resolveBuiltinTools, runAgentSession } from '../runner';
 import { evaluatePreToolUse } from '../security-hooks';
 import type { SessionConfig, StreamEvent } from '../../session/types';
 import type { ToolContext } from '../../tools/types';
@@ -153,6 +153,20 @@ describe('buildEnv', () => {
       delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       delete process.env.ANTHROPIC_AUTH_TOKEN;
     }
+  });
+});
+
+describe('MCP servers that did not start', () => {
+  it('are reported, so "No such tool" in the logs has a cause', () => {
+    expect(mcpStartupProblems([
+      { name: 'playwright', status: 'failed' },
+      { name: 'context7', status: 'connected' },
+      { name: 'linear-server', status: 'needs-auth' },
+    ])).toEqual([
+      'MCP server "playwright" did not start (failed): its tools are not available in this session.',
+      'MCP server "linear-server" did not start (needs-auth): its tools are not available in this session.',
+    ]);
+    expect(mcpStartupProblems(undefined)).toEqual([]);
   });
 });
 

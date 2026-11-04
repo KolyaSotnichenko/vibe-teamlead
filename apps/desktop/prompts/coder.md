@@ -718,10 +718,10 @@ curl -X [method] [url] -H "Content-Type: application/json" -d '[body]'
 **Browser Verification:**
 ```
 # For verification.type = "browser"
-# Use puppeteer tools:
-1. puppeteer_navigate to verification.url
-2. puppeteer_screenshot to capture state
-3. Check all items in verification.checks
+# You have no browser tools (QA checks the UI in a browser). Instead:
+1. Cover the checks with the project's component or end-to-end tests (Testing Library, Playwright, Cypress), run with Bash
+2. Start the dev server and check the page answers (curl) when the checks need it
+3. Note in your summary which checks only a browser can confirm, so QA looks at them
 ```
 
 **E2E Verification:**

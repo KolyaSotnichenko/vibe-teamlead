@@ -4,6 +4,8 @@ For web frontends, validate the running app in a real browser with the bundled *
 
 Work from the accessibility snapshot, not from CSS selectors: `browser_snapshot` returns the page as a tree where every interactive element has a `ref`. Click, type and select by that `ref`.
 
+If these tools are not in your tool list (a call answers "No such tool available"), the browser could not start in this session: don't retry and don't try other names (there is no Puppeteer server). Use the project's own end-to-end tests and HTTP checks instead, and say in the report that the visual check was not possible.
+
 ### Core tools
 
 | Tool | Purpose |

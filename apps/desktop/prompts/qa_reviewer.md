@@ -196,14 +196,16 @@ Check the PROJECT CAPABILITIES section above for available startup commands.
    ```
    Wait 15 seconds, then retry `get_electron_window_info`.
 
-**For web frontends** (if Puppeteer tools are available):
+**For web frontends** (when the Playwright browser tools `mcp__playwright__*` are in your tool list):
 1. Start dev server using the dev_command from the startup commands above
 2. Wait for the server to be listening on the expected port
-3. Navigate with Puppeteer:
+3. Navigate:
    ```
-   Tool: mcp__puppeteer__puppeteer_navigate
+   Tool: mcp__playwright__browser_navigate
    Args: {"url": "http://localhost:[port]"}
    ```
+
+If no browser tools are in your tool list (a call answers "No such tool available"), don't try other tool names: there is no Puppeteer or other browser server. Verify UI behaviour with the project's own end-to-end tests (e.g. its Playwright or Cypress suite, run with Bash), HTTP checks (`curl`) and the code, and write in the report that visual verification was not possible in this session.
 
 ### 4.2: Capture and Verify Screenshots
 
@@ -212,21 +214,21 @@ For EACH visual success criterion in the spec:
 2. Set up test conditions (e.g., create long text to test overflow)
 3. Take a screenshot:
    - Electron: `mcp__electron__take_screenshot`
-   - Web: `mcp__puppeteer__puppeteer_screenshot`
+   - Web: `mcp__playwright__browser_take_screenshot`
 4. Examine the screenshot and verify the criterion is met
 5. Document: "[Criterion]: VERIFIED via screenshot" or "FAILED: [what you observed]"
 
 ### 4.3: Check Console for Errors
 
 - Electron: `mcp__electron__read_electron_logs` with `{"logType": "console", "lines": 50}`
-- Web: `mcp__puppeteer__puppeteer_evaluate` with `{"script": "window.__consoleErrors || []"}`
+- Web: `mcp__playwright__browser_console_messages`
 
 ### 4.4: Document Findings
 
 ```
 VISUAL VERIFICATION:
 - Verification required: YES/NO (reason: [which UI files changed or "no UI files in diff"])
-- Application started: YES/NO (method: [Electron MCP / Puppeteer / N/A])
+- Application started: YES/NO (method: [Electron MCP / Playwright MCP / project e2e tests / N/A])
 - Screenshots captured: [count]
 - Visual criteria verified:
   - "[criterion 1]": PASS/FAIL
