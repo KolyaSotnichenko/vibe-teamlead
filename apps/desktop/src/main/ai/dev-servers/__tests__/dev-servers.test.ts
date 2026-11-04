@@ -1,11 +1,12 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  cleanUpLeftovers,
   containersOfWorktree,
   isDevServerCommand,
   startDevServer,
@@ -112,17 +113,49 @@ describe('dev servers', () => {
     const file = path.join(p.specDir, 'dev-servers', 'servers.json');
     expect(existsSync(file)).toBe(true);
     const [entry] = JSON.parse(readFileSync(file, 'utf-8'));
-    const { spawn } = await import('node:child_process');
     // An unrelated process that happens to have a listed pid, with another start time
     const other = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
     writeFileSync(file, JSON.stringify([{ ...entry, pid: other.pid, startedAt: 'long ago' }, entry]));
-    const { cleanUpLeftovers } = await import('../dev-servers');
     cleanUpLeftovers(p.specDir);
     expect(alive(other.pid as number)).toBe(true);
     expect(execFileSync('ps', ['-o', 'pid=', '-p', String(other.pid)]).toString().trim()).toBe(String(other.pid));
     process.kill(-(other.pid as number), 'SIGKILL');
     await new Promise((r) => setTimeout(r, 300));
     await expect(fetch(started.url)).rejects.toThrow();
+  });
+});
+
+describe('cleanUpLeftovers with a list an agent could have written', () => {
+  const list = (specDir: string, content: string) => {
+    mkdirSync(path.join(specDir, 'dev-servers'), { recursive: true });
+    writeFileSync(path.join(specDir, 'dev-servers', 'servers.json'), content);
+  };
+
+  it.each(['{}', 'null', '"x"', '[1, null, {"pid": "7"}]', 'not json'])('survives %s', (content) => {
+    const { specDir } = project();
+    list(specDir, content);
+    expect(() => cleanUpLeftovers(specDir)).not.toThrow();
+  });
+
+  it("leaves alone a process that isn't running in this task's folder", async () => {
+    const { specDir } = project();
+    const elsewhere = realpathSync(mkdtempSync(path.join(tmpdir(), 'vtl-other-')));
+    const other = spawn('sleep', ['30'], { detached: true, stdio: 'ignore', cwd: elsewhere });
+    const startedAt = execFileSync('ps', ['-o', 'lstart=', '-p', String(other.pid)]).toString().trim();
+    list(specDir, JSON.stringify([{ pid: other.pid, startedAt }]));
+    cleanUpLeftovers(specDir);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(alive(other.pid as number)).toBe(true);
+    process.kill(-(other.pid as number), 'SIGKILL');
+  });
+
+  it('stops a leftover that does run in this folder', async () => {
+    const { specDir } = project();
+    const left = spawn('sleep', ['30'], { detached: true, stdio: 'ignore', cwd: specDir });
+    const startedAt = execFileSync('ps', ['-o', 'lstart=', '-p', String(left.pid)]).toString().trim();
+    list(specDir, JSON.stringify([{ pid: left.pid, startedAt }]));
+    cleanUpLeftovers(specDir);
+    await expect.poll(() => alive(left.pid as number), { timeout: 2000 }).toBe(false);
   });
 });
 

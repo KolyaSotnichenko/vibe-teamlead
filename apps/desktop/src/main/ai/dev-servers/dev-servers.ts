@@ -8,7 +8,7 @@
  */
 
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createConnection, createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
@@ -51,6 +51,7 @@ interface Server {
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MAX_LISTED = 50;
 const running = new Map<string, Server>();
 const cleaned = new Set<string>();
 
@@ -136,19 +137,47 @@ function saveList(specDir: string): void {
   }
 }
 
+/** Working folder of a process, or '' when it can't be told. */
+function processCwd(pid: number): string {
+  try {
+    const out = execFileSync('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], { encoding: 'utf-8' });
+    return /^n(.+)$/m.exec(out)?.[1] ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** The task's folder: the worktree a spec directory sits in, or the spec directory itself. */
+function taskRoot(specDir: string): string {
+  const marker = `${sep}.vibe-teamlead${sep}specs${sep}`;
+  const at = specDir.lastIndexOf(marker);
+  const root = at > 0 ? specDir.slice(0, at) : specDir;
+  try {
+    return realpathSync(root);
+  } catch {
+    return root;
+  }
+}
+
 /**
- * Stop servers a killed run left behind. A listed pid is only signalled if it is
- * still the same process: pids get reused.
+ * Stop servers a killed run left behind. Agents can write to this list and pids
+ * get reused, so a listed pid is only signalled if it is still the same process
+ * and it runs in this task's folder. Best effort: never throws.
  */
 export function cleanUpLeftovers(specDir: string): void {
-  let list: Array<{ pid: number; startedAt: string }> = [];
+  let list: unknown;
   try {
     list = JSON.parse(readFileSync(listFile(specDir), 'utf-8'));
   } catch {
     return;
   }
-  for (const { pid, startedAt } of list) {
-    if (Number.isInteger(pid) && pid > 1 && startedAt && processStart(pid) === startedAt) signalGroup(pid, 'SIGKILL');
+  const root = taskRoot(specDir);
+  for (const entry of Array.isArray(list) ? list.slice(0, MAX_LISTED) : []) {
+    const { pid, startedAt } = (entry ?? {}) as { pid?: unknown; startedAt?: unknown };
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 1 || typeof startedAt !== 'string' || !startedAt) continue;
+    if (processStart(pid) !== startedAt) continue;
+    const cwd = processCwd(pid);
+    if (cwd === root || cwd.startsWith(`${root}${sep}`)) signalGroup(pid, 'SIGKILL');
   }
   try {
     writeFileSync(listFile(specDir), '[]', 'utf-8');
