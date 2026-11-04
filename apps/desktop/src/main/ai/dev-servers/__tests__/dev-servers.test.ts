@@ -149,6 +149,19 @@ describe('cleanUpLeftovers with a list an agent could have written', () => {
     process.kill(-(other.pid as number), 'SIGKILL');
   });
 
+  it("never reaches the user's own processes when the spec sits in the main project", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'vtl-main-')));
+    const specDir = path.join(root, '.vibe-teamlead', 'specs', '001-x');
+    mkdirSync(specDir, { recursive: true });
+    const mine = spawn('sleep', ['30'], { detached: true, stdio: 'ignore', cwd: root });
+    const startedAt = execFileSync('ps', ['-o', 'lstart=', '-p', String(mine.pid)]).toString().trim();
+    list(specDir, JSON.stringify([{ pid: mine.pid, startedAt }]));
+    cleanUpLeftovers(specDir);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(alive(mine.pid as number)).toBe(true);
+    process.kill(-(mine.pid as number), 'SIGKILL');
+  });
+
   it('stops a leftover that does run in this folder', async () => {
     const { specDir } = project();
     const left = spawn('sleep', ['30'], { detached: true, stdio: 'ignore', cwd: specDir });

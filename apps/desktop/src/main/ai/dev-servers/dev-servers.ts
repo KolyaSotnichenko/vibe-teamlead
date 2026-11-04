@@ -50,6 +50,8 @@ interface Server {
   child?: ChildProcess;
 }
 
+const isTaskWorktree = (dir: string) => dir.includes(`${sep}.vibe-teamlead${sep}worktrees${sep}`);
+
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_LISTED = 50;
 const running = new Map<string, Server>();
@@ -147,11 +149,15 @@ function processCwd(pid: number): string {
   }
 }
 
-/** The task's folder: the worktree a spec directory sits in, or the spec directory itself. */
+/**
+ * The task's own folder: the worktree a spec directory sits in. In the main project
+ * only the spec directory: the project also holds the user's processes and other tasks.
+ */
 function taskRoot(specDir: string): string {
   const marker = `${sep}.vibe-teamlead${sep}specs${sep}`;
   const at = specDir.lastIndexOf(marker);
-  const root = at > 0 ? specDir.slice(0, at) : specDir;
+  const worktree = at > 0 ? specDir.slice(0, at) : '';
+  const root = isTaskWorktree(worktree) ? worktree : specDir;
   try {
     return realpathSync(root);
   } catch {
@@ -292,8 +298,6 @@ export function isDevServerCommand(command: string): boolean {
   const known = String.raw`(?:(?:pnpm|npx|yarn)\s+(?:exec\s+)?)?(?:next\s+dev|nest\s+start|vite(?:\s+dev)?(?=\s*(?:$|[;&|]))|storybook\s+dev)`;
   return new RegExp(`${start}\\s*(?:${script}|${known})`).test(command.trim());
 }
-
-const isTaskWorktree = (dir: string) => dir.includes(`${sep}.vibe-teamlead${sep}worktrees${sep}`);
 
 /** Containers a task worktree started, from `docker ps` lines of "<id> <compose working dir>". Pure. */
 export function containersOfWorktree(ps: string, worktree: string): string[] {
