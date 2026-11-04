@@ -44,6 +44,14 @@ const CLAUDE_CODE_TOOLS = new Set([
   'NotebookEdit',
 ]);
 
+/**
+ * A background command left running keeps the session open until it times
+ * out, then wakes the agent for one more full-context turn just to say so.
+ */
+export const BACKGROUND_INSTRUCTIONS = `
+## Background processes
+Start long-running commands (dev servers, watchers, emulators) with Bash \`run_in_background\` and keep the task id it returns. Stop each one with TaskStop as soon as you no longer need it, and always before your final report. Killing the process by PID is not enough: the background task stays open, keeps this session alive and wakes you up later for nothing.`;
+
 export interface RunnerOptions {
   /** Callback for streaming events (text, tool calls, progress) */
   onEvent?: SessionEventCallback;
@@ -64,6 +72,8 @@ export function resolveBuiltinTools(configTools: readonly string[], hasSubagents
     }
   }
   if (tools.has('Write') || tools.has('Edit')) tools.add('TodoWrite');
+  // Background commands (dev servers, watchers) must be stoppable, or they hold the session open
+  if (tools.has('Bash')) tools.add('TaskStop');
   if (hasSubagents) tools.add('Agent');
   tools.add('Skill');
   tools.add('AskUserQuestion');
@@ -223,6 +233,7 @@ export function buildQueryOptions(
     ASK_USER_INSTRUCTIONS,
     skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '',
     skills.includes(FRONTEND_DESIGN_SKILL) ? FRONTEND_DESIGN_INSTRUCTIONS : '',
+    tools.includes('Bash') ? BACKGROUND_INSTRUCTIONS : '',
   ]
     .filter(Boolean)
     .join('\n');

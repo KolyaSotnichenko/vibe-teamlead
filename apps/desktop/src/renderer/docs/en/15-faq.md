@@ -81,3 +81,7 @@ Settings → Debug & Logs. Logs for a single task are in the Logs tab of the tas
 ## Report a problem
 
 The Report a problem button at the top of this page opens the repository's issues.
+
+## "Noted: … process was stopped by the background timeout" in the logs
+
+An agent started a dev server in the background and didn't close its background task when it finished. That task kept the session open until it timed out, and the agent was woken up again just to acknowledge it. Nothing was broken, but the session ended later and spent an extra turn. Agents now stop their background commands with TaskStop before reporting, so these lines shouldn't appear in new runs.

@@ -105,6 +105,15 @@ describe('bundled tools in query options', () => {
     expect(options.hooks?.PreToolUse).toHaveLength(2);
   });
 
+  it('lets agents with Bash stop their background commands, and tells them to', () => {
+    const options = buildQueryOptions(config, new AbortController(), { codegraphReady: false });
+    expect(options.tools).toContain('TaskStop');
+    expect((options.systemPrompt as { append: string }).append).toMatch(/Stop each one with TaskStop/);
+    const noBash = buildQueryOptions({ ...config, toolsOverride: ['Read', 'Grep'] }, new AbortController(), { codegraphReady: false });
+    expect(noBash.tools).not.toContain('TaskStop');
+    expect((noBash.systemPrompt as { append: string }).append).not.toMatch(/Background processes/);
+  });
+
   it('skips CodeGraph when the index is not ready and skills when Superpowers is absent', () => {
     const options = buildQueryOptions({ ...config, bundled: {} }, new AbortController(), { codegraphReady: false });
     expect(options.mcpServers).not.toHaveProperty('codegraph');
