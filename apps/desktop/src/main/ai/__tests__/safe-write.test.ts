@@ -1,4 +1,4 @@
-import { linkSync, lstatSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -41,6 +41,33 @@ describe.each([
     await write(join(d, 'a.json'), 'new');
 
     expect(readFileSync(outside, 'utf-8')).toBe('untouched');
+  });
+
+  it.each([
+    ['a folder inside the spec directory', ['.vibe-teamlead', 'specs', '001', 'memory']],
+    ['the spec directory', ['.vibe-teamlead', 'specs', '001']],
+    ["the app's folder itself", ['.vibe-teamlead']],
+  ])('refuses to write through a link at %s', async (_name, parts) => {
+    const project = dir();
+    const outside = dir();
+    mkdirSync(join(project, ...parts.slice(0, -1)), { recursive: true });
+    symlinkSync(outside, join(project, ...parts));
+    const file = join(project, '.vibe-teamlead', 'specs', '001', 'memory', 'a.json');
+
+    await expect(write(file, 'x')).rejects.toThrow(/link/i);
+
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it("doesn't mind links above the app's folder: the project may live behind one", async () => {
+    const real = dir();
+    mkdirSync(join(real, '.vibe-teamlead', 'specs'), { recursive: true });
+    const alias = join(dir(), 'alias');
+    symlinkSync(real, alias);
+
+    await write(join(alias, '.vibe-teamlead', 'specs', 'a.json'), 'x');
+
+    expect(existsSync(join(real, '.vibe-teamlead', 'specs', 'a.json'))).toBe(true);
   });
 
   it('reports a failure and cleans up', async () => {
