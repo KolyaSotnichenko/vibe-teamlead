@@ -19,7 +19,8 @@
     "gitlabIssues": "GitLab Issues",
     "gitlabMRs": "GitLab MR",
     "worktrees": "Worktree",
-    "agentTools": "Огляд MCP"
+    "agentTools": "Огляд MCP",
+    "docs": "Документація"
   },
   "actions": {
     "settings": "Налаштування",
@@ -106,5 +107,11 @@
     "review": "Готово до перевірки",
     "queued": "У черзі",
     "idle": "Простій — запустіть задачу, щоб команда взялася до роботи"
+  },
+  "docs": {
+    "title": "Документація",
+    "search": "Пошук у документації",
+    "nothingFound": "Нічого не знайдено",
+    "reportProblem": "Повідомити про проблему"
   }
 }

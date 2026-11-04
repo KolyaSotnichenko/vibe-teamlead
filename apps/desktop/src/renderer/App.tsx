@@ -1,3 +1,4 @@
+import { DocsView } from './components/docs/DocsView';
 import { useState, useEffect } from 'react';
 import { AgentQuestionPanel } from './components/agent-questions/AgentQuestionPanel';
 import { initAgentQuestions } from './stores/agent-questions-store';
@@ -840,7 +841,10 @@ export function App() {
 
           {/* Main content area */}
           <main className="flex-1 overflow-hidden">
-            {selectedProject ? (
+            {/* Documentation needs no project */}
+            {activeView === 'docs' ? (
+              <DocsView />
+            ) : selectedProject ? (
               <>
                 {activeView === 'kanban' && (
                   <KanbanBoard

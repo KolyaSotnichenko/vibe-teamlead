@@ -16,6 +16,7 @@ import {
   Sparkles,
   GitBranch,
   HelpCircle,
+  BookMarked,
   Wrench,
   PanelLeft,
   PanelLeftClose,
@@ -47,7 +48,7 @@ import { TeamStatus } from './sidebar/TeamStatus';
 import { BriefImportDialog } from './brief-import';
 import type { GitStatus } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -76,7 +77,8 @@ const baseNavItems: NavItem[] = [
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C', group: 'knowledge' },
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L', group: 'knowledge' },
-  { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M', group: 'knowledge' }
+  { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M', group: 'knowledge' },
+  { id: 'docs', labelKey: 'navigation:items.docs', icon: BookMarked, shortcut: 'H', group: 'knowledge' }
 ];
 
 const githubNavItems: NavItem[] = [
@@ -273,7 +275,8 @@ export function Sidebar({
         type="button"
         key={item.id}
         onClick={() => handleNavClick(item.id)}
-        disabled={!selectedProjectId}
+        // Documentation works without a project
+        disabled={!selectedProjectId && item.id !== 'docs'}
         aria-keyshortcuts={item.shortcut}
         className={cn(
           // DESIGN-SYSTEM sidebar item: muted on ink; active = ink-hover fill,
@@ -445,7 +448,7 @@ export function Sidebar({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => window.open('https://github.com/KolyaSotnichenko/vibe-teamlead/issues', '_blank')}
+                  onClick={() => onViewChange?.('docs')}
                   aria-label={t('tooltips.help')}
                   className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
                 >

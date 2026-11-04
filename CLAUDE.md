@@ -18,6 +18,7 @@ Vibe Teamlead 2.0 is a macOS Electron app in which a team of Claude Code agents 
 - **i18n.** User-facing UI text uses `react-i18next` keys (`apps/desktop/src/shared/i18n/locales/`). The locales are `en` and `uk` (Ukrainian); add or change every key in both. `uk` needs all four plural forms (`_one`, `_few`, `_many`, `_other`) wherever `en` has `_one`/`_other`; `src/shared/i18n/__tests__/locale-parity.test.ts` enforces key and placeholder parity.
 - **macOS first.** Release targets are macOS arm64 and x64. Use `apps/desktop/src/main/platform/` helpers instead of `process.platform`.
 - **No `console.log` in production code.**
+- **User docs.** The in-app Documentation page renders `apps/desktop/src/renderer/docs/{en,uk}/NN-topic.md` (same files in both languages; a test checks parity). When a mechanism changes, update its page in both languages.
 
 ## Layout
 

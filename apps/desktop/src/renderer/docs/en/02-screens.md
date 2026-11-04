@@ -1,0 +1,41 @@
+# App screens
+
+## Build
+
+| Screen | What's there |
+|---|---|
+| **Kanban Board** | Tasks by column: *Planning → Queue → In Progress → AI Review → Human Review → Done* (plus *PR Created* and *Error*). The board updates live. Queued tasks start on their own, within the limit on parallel tasks. |
+| **Agent Terminals** | Claude Code terminals, each in its own worktree, for manual work alongside the agents. New terminal: ⌘T. |
+| **Worktrees** | An isolated copy of the repository for each task: how many commits ahead, how many files changed. This is also where you find Merge, Create PR, Copy Path and Delete. Folders left behind after a failed cleanup are marked as orphaned. |
+| **GitHub Issues / PRs**, **GitLab Issues / MRs** | Appear when GitHub or GitLab is connected: turn an issue into a task, AI review of pull requests. |
+
+## Plan
+
+| Screen | What's there |
+|---|---|
+| **Roadmap** | Product roadmap: the agents analyze the project (and, optionally, competitors) and propose features by priority. A feature can be turned into a task. |
+| **Ideation** | Idea generation by type: code improvements, quality, documentation, performance, security, UI/UX. An idea can be turned into a task. |
+| **Insights** | A chat about your code. The agent reads the project (through CodeGraph and files), sees the memory and can remember new things. You can see which tools it calls. |
+
+## Knowledge
+
+| Screen | What's there |
+|---|---|
+| **Context → Project Index** | The project "passport": services, frameworks, test commands, ports. The Analyze Project button. |
+| **Context → Memories** | What the agents have remembered about this project. |
+| **Context → Design system** | The project's UI rules and tokens, the design check in QA, Storybook (see "Design system and Storybook"). |
+| **Changelog** | Generate a changelog from completed tasks, git history or a branch comparison. |
+| **MCP Overview** | Which MCP servers and tools each agent has; your own MCP servers; toggles for Context7, Linear and browser tools. |
+
+## Task window
+
+| Tab | What's there |
+|---|---|
+| **Overview** | Description, status, subtask progress, the Start, Stop, Merge and PR buttons. |
+| **Workspace → Spec** | Acceptance criteria with QA results (✓ / ✗ / not verified) and what covers them; `spec.md` with checked checkboxes. |
+| **Workspace → Plan** | The subtask dependency graph (left to right or top to bottom, toggle in the corner) and a timeline of what happened. |
+| **Workspace → Architecture** | Diagrams (draw.io diagrams open in draw.io), `architecture.md` with embedded diagrams, ADRs. |
+| **Workspace → Security** | Gate and Strix results: findings with severity. |
+| **Subtasks** | The list of subtasks and their statuses. |
+| **Logs** | What each agent did, by phase (planning, coding, review): tool calls, command output, errors. |
+| **Files** | Spec files. |
