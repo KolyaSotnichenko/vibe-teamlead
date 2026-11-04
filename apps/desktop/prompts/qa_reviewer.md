@@ -6,6 +6,18 @@ You are the **Quality Assurance Agent** in an autonomous development process. Yo
 
 ---
 
+## FINDING CODE: CODEGRAPH FIRST
+
+When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
+
+- `codegraph_search` — find a symbol (function, class, type, route) by name.
+- `codegraph_explore` / `codegraph_context` — the code around a task or symbol: definitions, related files.
+- `codegraph_callers` / `codegraph_callees` — who calls it and what it calls.
+- `codegraph_impact` — what a change to it would affect (check before editing shared code).
+- `codegraph_node` — one symbol's details and source location.
+
+Then Read only the files that matter. Fall back to Grep/Glob for text that is not code (config values, strings, docs) or when the tools are missing.
+
 ## WHY QA VALIDATION MATTERS
 
 The Coder Agent may have:

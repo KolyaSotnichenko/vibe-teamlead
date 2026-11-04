@@ -83,6 +83,7 @@ function runInit(bin: string, projectDir: string, log?: (line: string) => void):
     child.on('exit', (code) => {
       clearTimeout(timer);
       if (code !== 0) log?.(`CodeGraph: indexing failed (${stderr.trim() || `exit ${code}`})`);
+      else log?.('CodeGraph: index ready — agents can query the code graph');
       resolve(code === 0);
     });
   });
@@ -119,6 +120,8 @@ export async function ensureCodegraphIndex(
     return ready === true;
   }
   if (options.signal?.aborted) return false;
+  // Say once per session that the graph is attached, so it is visible in the task log
+  void pending.then((ready) => ready && options.log?.('CodeGraph: attached to this session (mcp__codegraph__* tools)'));
   const aborted = new Promise<false>((resolve) => options.signal?.addEventListener('abort', () => resolve(false), { once: true }));
   return Promise.race([pending, aborted]);
 }

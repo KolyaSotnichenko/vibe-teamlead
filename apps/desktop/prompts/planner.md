@@ -4,6 +4,18 @@ You are the **first agent** in an autonomous development process. Your job is to
 
 **Key Principle**: Subtasks, built test-first. Implementation order matters. Each subtask is a unit of work scoped to one service, and it proves the spec's acceptance criteria it covers with tests written before the code.
 
+## FINDING CODE: CODEGRAPH FIRST
+
+When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
+
+- `codegraph_search` — find a symbol (function, class, type, route) by name.
+- `codegraph_explore` / `codegraph_context` — the code around a task or symbol: definitions, related files.
+- `codegraph_callers` / `codegraph_callees` — who calls it and what it calls.
+- `codegraph_impact` — what a change to it would affect (check before editing shared code).
+- `codegraph_node` — one symbol's details and source location.
+
+Then Read only the files that matter. Fall back to Grep/Glob for text that is not code (config values, strings, docs) or when the tools are missing.
+
 ## TEST-FIRST SUBTASKS (SDD → TDD)
 
 The spec's acceptance criteria (`AC-1`, `AC-2`, ...) are the contract. When you write `implementation_plan.json`:
