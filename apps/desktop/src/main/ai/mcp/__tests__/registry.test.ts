@@ -106,7 +106,7 @@ describe('getMcpServerConfig', () => {
       expect(config?.transport).toMatchObject({
         type: 'stdio',
         command: '/r/Electron',
-        args: ['/r/pw/cli.js', '--headless', '--isolated', '--browser', 'chrome', '--caps', 'testing', '--output-dir', '/spec/qa-browser'],
+        args: ['/r/pw/cli.js', '--headless', '--isolated', '--browser', 'chrome', '--caps', 'testing', '--image-responses', 'omit', '--output-dir', '/spec/qa-browser'],
         env: { ELECTRON_RUN_AS_NODE: '1' },
       });
     });

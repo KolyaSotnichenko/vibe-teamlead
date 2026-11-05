@@ -199,8 +199,8 @@ For EACH visual success criterion in the spec:
 2. Set up test conditions (e.g., create long text to test overflow)
 3. Take a screenshot:
    - Electron: `mcp__electron__take_screenshot`
-   - Web: your browser tool's screenshot
-4. Examine the screenshot and verify the criterion is met
+   - Web: `mcp__playwright__browser_take_screenshot` with a `filename` under the spec's `qa-browser/` directory (e.g. `qa-browser/ac-3-overflow.png`). The tool returns no image, only the path.
+4. Read the file once with the Read tool, examine it and verify the criterion is met. Don't read it again later: note what you saw.
 5. Document: "[Criterion]: VERIFIED via screenshot" or "FAILED: [what you observed]"
 
 ### 4.3: Check Console for Errors
