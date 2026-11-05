@@ -16,7 +16,7 @@ import { z } from 'zod';
 // Subtask Status Enum
 // =============================================================================
 
-const SUBTASK_STATUS_VALUES = ['pending', 'in_progress', 'completed', 'blocked', 'failed'] as const;
+export const SUBTASK_STATUS_VALUES = ['pending', 'in_progress', 'completed', 'blocked', 'failed'] as const;
 
 /**
  * Coerces common status variations to canonical values.
