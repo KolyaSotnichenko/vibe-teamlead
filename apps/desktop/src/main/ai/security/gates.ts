@@ -8,7 +8,9 @@
  *   (compared with the same lockfile at the base, so pre-existing issues don't
  *   block the task).
  * - Semgrep (only when installed on the machine; it is a Python package, not
- *   bundled): its registry rules, ERROR severity, on the changed files.
+ *   bundled): the registry's default pack plus the packs of the changed files'
+ *   languages, ERROR severity, on the changed files. Bad output fails the
+ *   gate (never "ran clean"); files it could not parse make the run partial.
  *
  * Findings are hard gates: QA cannot approve while any remain. Results are
  * written to <spec>/security_gates.json and security_gates.md for the QA agents
@@ -19,7 +21,7 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 
 import { type RunResult, runProcess, searchPath } from '../../platform/exec';
 import { withoutGitLocation } from '../../platform/git-env';
@@ -41,6 +43,8 @@ export interface GateReport {
   ran: GateName[];
   /** Gates that did not run (not installed, nothing to scan) or failed */
   skipped: { gate: GateName; reason: string }[];
+  /** Gates that ran but could not cover everything (files a scanner could not parse) */
+  partial?: { gate: GateName; reason: string }[];
   findings: GateFinding[];
   baseRef?: string;
 }
@@ -54,6 +58,8 @@ export interface GateOptions {
   semgrepBin?: string;
   /** Semgrep fetches rules and scans whole files: its own, longer limit */
   semgrepTimeoutMs?: number;
+  /** Largest Semgrep JSON output accepted; anything at the cap fails the gate */
+  semgrepMaxOutput?: number;
   /** Base to diff against; resolved from the default branch when omitted */
   baseRef?: string;
   signal?: AbortSignal;
@@ -61,8 +67,11 @@ export interface GateOptions {
 
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
 const SEMGREP_TIMEOUT_MS = 10 * 60 * 1000;
+const SEMGREP_MAX_OUTPUT = 16 * 1024 * 1024;
 
 class GateFailure extends Error {}
+/** The gate did not run for a reason that is nobody's fault: no network, nothing to scan. */
+class GateSkipped extends Error {}
 
 function git(args: string[], cwd: string): Promise<RunResult> {
   return runProcess('git', args, { cwd, timeoutMs: 30_000 });
@@ -131,15 +140,19 @@ export async function resolveBaseRef(cwd: string): Promise<string | undefined> {
  */
 export const isAppDataPath = (file: string): boolean => /(^|\/)\.vibe-teamlead\//.test(file.replace(/\\/g, '/'));
 
-/** Files changed relative to the base: committed, uncommitted and untracked (not the app's own folder). */
+/**
+ * Files changed relative to the base: committed, uncommitted and untracked (not
+ * the app's own folder). NUL-separated, so a name with a space, a quote or a
+ * non-ASCII character comes back exactly as git has it.
+ */
 export async function changedFiles(cwd: string, baseRef?: string): Promise<string[]> {
   const files = new Set<string>();
   const collect = (result: RunResult) => {
     if (result.code !== 0) return;
-    for (const f of result.stdout.split('\n')) if (f.trim()) files.add(f.trim());
+    for (const f of result.stdout.split('\0')) if (f) files.add(f);
   };
-  collect(await git(['diff', '--name-only', '--diff-filter=ACMR', baseRef ?? 'HEAD'], cwd));
-  collect(await git(['ls-files', '--others', '--exclude-standard'], cwd));
+  collect(await git(['diff', '--name-only', '-z', '--diff-filter=ACMR', baseRef ?? 'HEAD'], cwd));
+  collect(await git(['ls-files', '--others', '--exclude-standard', '-z'], cwd));
   return [...files].filter((f) => !isAppDataPath(f));
 }
 
@@ -333,18 +346,64 @@ interface SemgrepOutput {
     start?: { line?: number; col?: number };
     extra?: { message?: string; severity?: string };
   }[];
+  errors?: { message?: string; path?: string; type?: string }[];
 }
 
-/** Parse Semgrep JSON: one finding per ERROR result (the scan is run with --severity ERROR, but check anyway). */
-export function parseSemgrep(json: string): GateFinding[] {
+/** Registry rule packs by file extension; p/default always runs. */
+const SEMGREP_PACKS: Record<string, string> = {
+  '.ts': 'p/typescript',
+  '.tsx': 'p/typescript',
+  '.mts': 'p/typescript',
+  '.cts': 'p/typescript',
+  '.js': 'p/javascript',
+  '.jsx': 'p/javascript',
+  '.mjs': 'p/javascript',
+  '.cjs': 'p/javascript',
+  '.py': 'p/python',
+  '.go': 'p/golang',
+  '.rs': 'p/rust',
+  '.java': 'p/java',
+  '.kt': 'p/kotlin',
+  '.rb': 'p/ruby',
+  '.php': 'p/php',
+  '.cs': 'p/csharp',
+  '.c': 'p/c',
+  '.h': 'p/c',
+  '.cpp': 'p/cpp',
+  '.cc': 'p/cpp',
+  '.hpp': 'p/cpp',
+  '.scala': 'p/scala',
+  '.swift': 'p/swift',
+};
+
+/**
+ * `p/default` plus one pack per language among the files, sorted. Explicit
+ * packs, never `--config auto`: auto refuses to run with metrics off. Pure.
+ */
+export function semgrepPacks(files: string[]): string[] {
+  const packs = new Set<string>();
+  for (const file of files) {
+    const pack = SEMGREP_PACKS[extname(file).toLowerCase()];
+    if (pack) packs.add(pack);
+  }
+  return ['p/default', ...[...packs].sort()];
+}
+
+/**
+ * Parse Semgrep JSON: one finding per ERROR result (the scan is run with
+ * --severity ERROR, but check anyway) and the files its scan errors name.
+ * Output that is not Semgrep's throws a GateFailure: the gate fails closed.
+ */
+export function parseSemgrep(json: string): { findings: GateFinding[]; errorFiles: string[] } {
   let out: SemgrepOutput;
   try {
-    out = JSON.parse(json || '{}');
+    out = JSON.parse(json);
   } catch {
-    return [];
+    throw new GateFailure('Semgrep output is not valid JSON');
   }
+  if (!out || typeof out !== 'object' || !Array.isArray(out.results)) throw new GateFailure('Semgrep output has no results array');
   const findings: GateFinding[] = [];
-  for (const r of out.results ?? []) {
+  for (const r of out.results) {
     if ((r.extra?.severity ?? 'ERROR').toUpperCase() !== 'ERROR') continue;
     const rule = r.check_id ?? 'semgrep';
     const file = r.path;
@@ -358,28 +417,42 @@ export function parseSemgrep(json: string): GateFinding[] {
       line,
     });
   }
-  return dedupe(findings);
+  const errorFiles = [...new Set((out.errors ?? []).map((e) => e.path).filter((p): p is string => typeof p === 'string' && p.length > 0))];
+  return { findings: dedupe(findings), errorFiles };
 }
-
-/** A rules download that failed: no network, a registry outage. Skipped with the reason, never a failure. */
-class SemgrepUnavailable extends Error {}
 
 const NETWORK_ERROR = /network|registry|download|connection|resolve host|timed out while|semgrep\.dev|ssl|proxy|offline/i;
 
-async function runSemgrep(bin: string, cwd: string, files: string[], timeoutMs: number, signal?: AbortSignal): Promise<GateFinding[]> {
+interface SemgrepRun {
+  findings: GateFinding[];
+  /** Files Semgrep reported errors for (partial parse, timeout per file) */
+  errorFiles: string[];
+}
+
+async function runSemgrep(
+  bin: string,
+  cwd: string,
+  files: string[],
+  limits: { timeoutMs: number; maxOutput: number },
+  signal?: AbortSignal,
+): Promise<SemgrepRun> {
+  // A listed file that is gone was deleted: nothing of it to scan
   const existing = files.filter((f) => existsSync(join(cwd, f)));
-  if (!existing.length) return [];
+  if (!existing.length) throw new GateSkipped('nothing to scan');
+  const config = semgrepPacks(existing).flatMap((pack) => ['--config', pack]);
   const result = await runProcess(
     bin,
-    ['scan', '--config', 'auto', '--severity', 'ERROR', '--json', '--quiet', '--metrics=off', '--', ...existing],
-    { cwd, signal, timeoutMs, env: { ...withoutGitLocation(), PATH: searchPath(), SEMGREP_SEND_METRICS: 'off' } },
+    // --disable-nosem: a "nosemgrep" comment in agent-written code must not hide a finding
+    ['scan', ...config, '--severity', 'ERROR', '--json', '--quiet', '--metrics=off', '--disable-nosem', '--', ...existing],
+    { cwd, signal, timeoutMs: limits.timeoutMs, maxOutput: limits.maxOutput, env: { ...withoutGitLocation(), PATH: searchPath(), SEMGREP_SEND_METRICS: 'off' } },
   );
   // 0: clean or findings (without --error); 1: findings with --error. Anything else is a problem.
   if (!result.aborted && !result.timedOut && !result.error && result.code !== 0 && result.code !== 1) {
     const detail = result.stderr.trim().split('\n').filter(Boolean).pop() ?? '';
-    if (NETWORK_ERROR.test(result.stderr)) throw new SemgrepUnavailable(`Semgrep could not fetch its rules (network or registry): ${detail}`);
+    if (NETWORK_ERROR.test(result.stderr)) throw new GateSkipped(`Semgrep could not fetch its rules (network or registry): ${detail}`);
   }
   assertRan(result, 'Semgrep', [0, 1]);
+  if (result.stdout.length >= limits.maxOutput) throw new GateFailure('Semgrep output exceeded the size limit');
   return parseSemgrep(result.stdout);
 }
 
@@ -397,6 +470,7 @@ export function formatGateReport(report: GateReport): string {
     `Ran: ${report.ran.length ? report.ran.join(', ') : 'none'}`,
   );
   for (const s of report.skipped) lines.push(`Skipped ${s.gate}: ${s.reason}`);
+  for (const p of report.partial ?? []) lines.push(`Partial ${p.gate}: ${p.reason}`);
   if (report.findings.length) {
     lines.push('', '## Findings', '');
     for (const f of report.findings) {
@@ -422,7 +496,7 @@ async function runGate(report: GateReport, gate: GateName, scan: () => Promise<G
     report.ran.push(gate);
     report.findings.push(...findings);
   } catch (error) {
-    if (error instanceof SemgrepUnavailable) {
+    if (error instanceof GateSkipped) {
       report.skipped.push({ gate, reason: error.message });
       return;
     }
@@ -467,7 +541,20 @@ export async function runSecurityGates(options: GateOptions): Promise<GateReport
     } else if (!files.length) {
       report.skipped.push({ gate: 'semgrep', reason: 'no files changed' });
     } else {
-      await runGate(report, 'semgrep', () => runSemgrep(semgrepBin, projectDir, files, options.semgrepTimeoutMs ?? SEMGREP_TIMEOUT_MS, signal));
+      await runGate(report, 'semgrep', async () => {
+        const run = await runSemgrep(
+          semgrepBin,
+          projectDir,
+          files,
+          { timeoutMs: options.semgrepTimeoutMs ?? SEMGREP_TIMEOUT_MS, maxOutput: options.semgrepMaxOutput ?? SEMGREP_MAX_OUTPUT },
+          signal,
+        );
+        if (run.errorFiles.length) {
+          const n = run.errorFiles.length;
+          (report.partial ??= []).push({ gate: 'semgrep', reason: `could not scan ${n} file${n === 1 ? '' : 's'}: ${run.errorFiles.join(', ')}` });
+        }
+        return run.findings;
+      });
     }
   }
 

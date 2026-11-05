@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { changedFiles, formatGateReport, isLockfile, parseGitleaks, parseOsv, parseSemgrep, resolveBaseRef, runSecurityGates } from '../gates';
+import { changedFiles, formatGateReport, isLockfile, parseGitleaks, parseOsv, parseSemgrep, resolveBaseRef, runSecurityGates, semgrepPacks } from '../gates';
 
 function repo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'vtl-gates-'));
@@ -66,7 +66,8 @@ describe('gate parsers', () => {
       ],
       errors: [],
     };
-    const findings = parseSemgrep(JSON.stringify(semgrep));
+    const { findings, errorFiles } = parseSemgrep(JSON.stringify(semgrep));
+    expect(errorFiles).toEqual([]);
     expect(findings).toEqual([
       {
         gate: 'semgrep',
@@ -76,7 +77,16 @@ describe('gate parsers', () => {
         line: 12,
       },
     ]);
-    expect(parseSemgrep('not json')).toEqual([]);
+    expect(() => parseSemgrep('not json')).toThrow(/not valid JSON/);
+    expect(() => parseSemgrep('{"errors":[]}')).toThrow(/no results/);
+    const partial = parseSemgrep(JSON.stringify({ results: [], errors: [{ message: 'Syntax error', path: 'src/broken.ts', type: 'PartialParsing' }, { message: 'no path' }] }));
+    expect(partial.errorFiles).toEqual(['src/broken.ts']);
+  });
+
+  it('picks Semgrep rule packs for the languages of the changed files', () => {
+    expect(semgrepPacks(['src/a.ts', 'src/b.tsx', 'README.md'])).toEqual(['p/default', 'p/typescript']);
+    expect(semgrepPacks(['api/app.py', 'web/index.js', 'cmd/main.go', 'lib.rs'])).toEqual(['p/default', 'p/golang', 'p/javascript', 'p/python', 'p/rust']);
+    expect(semgrepPacks(['docs/x.md'])).toEqual(['p/default']);
   });
 
   it('recognises lockfiles by name', () => {
@@ -182,8 +192,10 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(report.ran).toEqual(['semgrep']);
     expect(report.findings).toEqual([expect.objectContaining({ gate: 'semgrep', key: 'semgrep:js.sqli:config.ts:1', file: 'config.ts', line: 1, title: 'js.sqli: SQL built from input' })]);
     const args = readFileSync(join(bin, 'args'), 'utf-8').trim().split(' ');
-    expect(args.slice(0, 9)).toEqual(['scan', '--config', 'auto', '--severity', 'ERROR', '--json', '--quiet', '--metrics=off', '--']);
-    expect(args.slice(9).sort()).toEqual(['config.ts', 'new.ts', 'package-lock.json']);
+    // Explicit registry packs, never --config auto (which refuses to run with metrics off)
+    const sep = args.indexOf('--');
+    expect(args.slice(0, sep)).toEqual(['scan', '--config', 'p/default', '--config', 'p/typescript', '--severity', 'ERROR', '--json', '--quiet', '--metrics=off', '--disable-nosem']);
+    expect(args.slice(sep + 1).sort()).toEqual(['config.ts', 'new.ts', 'package-lock.json']);
     expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('[semgrep] js.sqli: SQL built from input');
   });
 
@@ -208,6 +220,65 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     const broken = fakeScanner(bin, 'semgrep-broken', 'echo "invalid rule" >&2; exit 7');
     const crashed = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: broken });
     expect(crashed.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep exited with code 7: invalid rule' });
+  });
+
+  it('fails closed on output it cannot read', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const garbage = fakeScanner(bin, 'semgrep-garbage', 'echo "<html>oops</html>"');
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: garbage });
+    expect(report.ran).not.toContain('semgrep');
+    expect(report.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep output is not valid JSON' });
+    const noResults = fakeScanner(bin, 'semgrep-noresults', "echo '{\"errors\":[]}'");
+    const report2 = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: noResults });
+    expect(report2.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep output has no results array' });
+    const huge = fakeScanner(bin, 'semgrep-huge', `printf '{"results":[],"errors":[],"pad":"'; yes x | head -n 300 | tr -d '\\n'; printf '"}\\n'`);
+    const report3 = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: huge, semgrepMaxOutput: 200 });
+    expect(report3.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep output exceeded the size limit' });
+  });
+
+  it('reports a partial scan when Semgrep could not parse some files, and still surfaces findings', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const semgrep = fakeScanner(
+      bin,
+      'semgrep',
+      `echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1},"extra":{"message":"SQL","severity":"ERROR"}}],"errors":[{"message":"Syntax error at line 3","path":"new.ts","type":"PartialParsing"}]}'`,
+    );
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: semgrep });
+    expect(report.ran).toEqual(['semgrep']);
+    expect(report.findings.map((f) => f.key)).toEqual(['semgrep:js.sqli:config.ts:1']);
+    expect(report.partial).toEqual([{ gate: 'semgrep', reason: 'could not scan 1 file: new.ts' }]);
+    expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('Partial semgrep: could not scan 1 file: new.ts');
+  });
+
+  it('lists changed file names with spaces and non-ASCII characters exactly', async () => {
+    const dir = repo();
+    writeFileSync(join(dir, 'with space.ts'), 'x');
+    writeFileSync(join(dir, 'файл.ts'), 'y');
+    const files = await changedFiles(dir, await resolveBaseRef(dir));
+    expect(files).toContain('with space.ts');
+    expect(files).toContain('файл.ts');
+    expect(files.every((f) => !f.startsWith('"'))).toBe(true);
+  });
+
+  it('is skipped, not clean, when nothing listed as changed is there to scan', async () => {
+    const dir = repo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: dir });
+    // The only change left is a dangling symlink: listed by git, nothing on disk to scan
+    g('rm', '-q', 'config.ts');
+    g('commit', '-qm', 'remove');
+    writeFileSync(join(dir, 'package-lock.json'), '{"v":1}\n');
+    rmSync(join(dir, 'new.ts'));
+    symlinkSync(join(dir, 'missing-target'), join(dir, 'link.ts'));
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const semgrep = fakeScanner(mkdtempSync(join(tmpdir(), 'vtl-bin-')), 'semgrep', "echo '{\"results\":[],\"errors\":[]}'");
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: semgrep });
+    expect(await changedFiles(dir, await resolveBaseRef(dir))).toEqual(['link.ts']);
+    expect(report.ran).not.toContain('semgrep');
+    expect(report.skipped).toContainEqual({ gate: 'semgrep', reason: 'nothing to scan' });
   });
 
   it('has nothing to scan when no file changed', async () => {
