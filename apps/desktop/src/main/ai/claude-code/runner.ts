@@ -30,6 +30,7 @@ import { recordTurnLimit } from './turn-limits';
 import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
+import { pickHostEnv, SESSION_HOST_ENV } from './host-env';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
@@ -123,28 +124,6 @@ function buildPrompt(config: SessionConfig): string {
   return userTurns.length > 0 ? userTurns.join('\n\n') : 'Begin the task described in your instructions.';
 }
 
-/** Host variables Claude Code and MCP servers legitimately need. */
-const INHERITED_ENV = [
-  'PATH',
-  'HOME',
-  'USER',
-  'LOGNAME',
-  'SHELL',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'TMPDIR',
-  'TERM',
-  'HTTPS_PROXY',
-  'HTTP_PROXY',
-  'NO_PROXY',
-  'https_proxy',
-  'http_proxy',
-  'no_proxy',
-  'NODE_EXTRA_CA_CERTS',
-  'SSL_CERT_FILE',
-] as const;
-
 /** Claude Code variables that pick the model behind an alias or for background calls. */
 const MODEL_ALIAS_ENV = [
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
@@ -168,10 +147,7 @@ export function defaultClaudeConfigDir(): string {
  * Claude Code gets its own config directory.
  */
 export function buildEnv(config: SessionConfig): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = {};
-  for (const key of INHERITED_ENV) {
-    if (process.env[key]) env[key] = process.env[key];
-  }
+  const env: Record<string, string | undefined> = pickHostEnv(SESSION_HOST_ENV);
   // An app started from Finder gets a bare PATH: add Homebrew, Docker Desktop,
   // nvm/volta/pnpm and friends so agents' Bash (docker, pnpm, node) and stdio
   // MCP servers (npx) find what the user has installed.

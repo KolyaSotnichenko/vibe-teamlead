@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { HookInput } from '@anthropic-ai/claude-agent-sdk';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildFormatLintHook,
+  formatAndLint,
   formatLintLines,
   lintFeedback,
   parseBiomeGithub,
@@ -263,5 +264,44 @@ describe('format-lint hook in query options', () => {
     expect(editMatchers(buildQueryOptions({ ...config, agentType: 'qa_reviewer' }, new AbortController()))).toHaveLength(0);
     expect(editMatchers(buildQueryOptions({ ...config, agentType: 'planner' }, new AbortController()))).toHaveLength(0);
     expect(editMatchers(buildQueryOptions({ ...config, formatOnEdit: false }, new AbortController()))).toHaveLength(0);
+  });
+});
+
+describe('environment of the project tools', () => {
+  it('is minimal: PATH, HOME, TMPDIR and locale only, never the app process secrets', async () => {
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      ANTHROPIC_API_KEY: 'sk-ant-secret',
+      CLAUDE_CODE_OAUTH_TOKEN: 'tok',
+      GITHUB_TOKEN: 'gh',
+      GH_TOKEN: 'gh2',
+      MY_SECRET: 'x',
+      SOME_KEY: 'y',
+      NODE_OPTIONS: '--require evil',
+      GOFLAGS: '-mod=vendor',
+    });
+    try {
+      const seen: NodeJS.ProcessEnv[] = [];
+      const run = vi.fn(async (_cmd: string, _args: string[], options: { env?: NodeJS.ProcessEnv }) => {
+        seen.push(options.env ?? {});
+        return { code: 0, stdout: '[]', stderr: '', timedOut: false, aborted: false };
+      });
+      const lookup: ToolLookup = { exists: (p) => p.endsWith('/node_modules/.bin/eslint'), onPath: (n) => (n === 'go' ? '/usr/local/go/bin/go' : undefined) };
+      await formatAndLint('/p/src/a.ts', '/p', { run, lookup });
+      await formatAndLint('/p/cmd/main.go', '/p', { run, lookup });
+      expect(seen.length).toBe(3);
+      for (const env of seen) {
+        expect(Object.keys(env).filter((k) => /TOKEN|KEY|SECRET|ANTHROPIC|CLAUDE|GITHUB/i.test(k))).toEqual([]);
+        expect(env.NODE_OPTIONS).toBeUndefined();
+        expect(env.GOFLAGS).toBeUndefined();
+        expect(env.PATH).toBeTruthy();
+        expect(env.HOME).toBe(process.env.HOME);
+        expect(Object.keys(env).every((k) => ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'GOTOOLCHAIN'].includes(k))).toBe(true);
+      }
+      expect(seen[2].GOTOOLCHAIN).toBe('local');
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+      Object.assign(process.env, saved);
+    }
   });
 });

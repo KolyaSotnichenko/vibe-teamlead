@@ -6,6 +6,11 @@
  * later. Nothing is said when the file is clean; no tool is ever installed
  * or taken from a global install, only the project's node_modules, venv or
  * PATH (go, ruff).
+ *
+ * Trust: these are the project's own tools, agent-writable like everything
+ * else in the worktree, so they run at the same trust level as the agent's
+ * Bash, and with a minimal environment: PATH, HOME, TMPDIR and the locale,
+ * never the app process's credentials, tokens or NODE_OPTIONS (host-env.ts).
  */
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -15,6 +20,7 @@ import type { HookCallbackMatcher, HookInput, HookJSONOutput } from '@anthropic-
 
 import { findOnPath, type RunOptions, type RunResult, runProcess, searchPath } from '../../platform/exec';
 import { isPathContained } from '../security/path-containment';
+import { pickHostEnv, TOOL_HOST_ENV } from './host-env';
 
 /** Agents that write project code and get lint feedback after each edit. */
 export const FORMAT_LINT_AGENTS = new Set(['coder', 'qa_fixer']);
@@ -42,6 +48,8 @@ export interface ToolPlan {
   cmd: string;
   args: string[];
   cwd: string;
+  /** Extra variables for this tool, on top of the minimal environment */
+  env?: Record<string, string>;
   /** Lint tools: findings from the process output */
   parse?: (result: RunResult, cwd: string, projectDir: string) => LintLine[];
 }
@@ -133,8 +141,10 @@ export function planTools(file: string, projectDir: string, lookup: ToolLookup):
     const gofmt = lookup.onPath('gofmt') ?? (go ? join(dirname(go), 'gofmt') : undefined);
     if (go && gofmt) {
       const pkg = dirname(file);
-      plan.push({ name: 'gofmt', formats: true, cmd: gofmt, args: ['-w', file], cwd: pkg });
-      plan.push({ name: 'go vet', formats: false, cmd: go, args: ['vet', '.'], cwd: pkg, parse: (r, cwd, root) => parseGoVet(r.stderr || r.stdout, cwd, root) });
+      // GOTOOLCHAIN=local: never download another toolchain; GOFLAGS stays unset
+      const env = { GOTOOLCHAIN: 'local' };
+      plan.push({ name: 'gofmt', formats: true, cmd: gofmt, args: ['-w', file], cwd: pkg, env });
+      plan.push({ name: 'go vet', formats: false, cmd: go, args: ['vet', '.'], cwd: pkg, env, parse: (r, cwd, root) => parseGoVet(r.stderr || r.stdout, cwd, root) });
     }
   }
   return plan;
@@ -328,11 +338,12 @@ export async function formatAndLint(file: string, projectDir: string, options: P
   const timeoutMs = options.timeoutMs ?? TOOL_TIMEOUT_MS;
   const run = options.run ?? runProcess;
   const outcome: LintOutcome = { reformatted: [], lint: [], timedOut: [], timeoutMs };
-  const env = { ...process.env, PATH: searchPath() };
+  // The project's tools get a minimal environment, never the app's own (see the module header)
+  const baseEnv = { ...pickHostEnv(TOOL_HOST_ENV), PATH: searchPath() };
   const shown = relFile(file, projectDir);
   for (const tool of planTools(file, projectDir, options.lookup ?? fsLookup)) {
     const before = tool.formats ? contentOf(file) : undefined;
-    const result = await run(tool.cmd, tool.args, { cwd: tool.cwd, env, timeoutMs, maxOutput: 1024 * 1024 });
+    const result = await run(tool.cmd, tool.args, { cwd: tool.cwd, env: { ...baseEnv, ...tool.env }, timeoutMs, maxOutput: 1024 * 1024 });
     if (result.timedOut) {
       outcome.timedOut.push(tool.name);
       continue;
