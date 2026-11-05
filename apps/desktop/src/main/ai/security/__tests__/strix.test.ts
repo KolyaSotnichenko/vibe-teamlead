@@ -309,6 +309,44 @@ exit 0`,
       });
     });
 
+    describe('when the worktree differs from its last commit in kind', () => {
+      it('takes a file where the commit has a folder', async () => {
+        const { project, run } = await scan();
+        mkdirSync(join(project, 'dir'));
+        writeFileSync(join(project, 'dir', 'x'), 'tracked\n');
+        git(project, 'add', '-A');
+        git(project, 'commit', '-q', '-m', 'folder');
+        rmSync(join(project, 'dir'), { recursive: true });
+        writeFileSync(join(project, 'dir'), 'now a file\n');
+        const { result } = await run();
+        expect(result.status).toBe('clear');
+      });
+
+      it('takes a folder where the commit has a file', async () => {
+        const { project, run } = await scan();
+        writeFileSync(join(project, 'dir'), 'a file\n');
+        git(project, 'add', '-A');
+        git(project, 'commit', '-q', '-m', 'file');
+        rmSync(join(project, 'dir'));
+        mkdirSync(join(project, 'dir'));
+        writeFileSync(join(project, 'dir', 'x'), 'in the folder\n');
+        const { result, seen } = await run();
+        expect(result.status).toBe('clear');
+        expect(seen('through')).toBe('in the folder');
+      });
+
+      it('skips a named pipe in the spec folder instead of hanging on it', async () => {
+        const { specDir, run } = await scan();
+        rmSync(join(specDir, 'spec.md'));
+        execFileSync('mkfifo', [join(specDir, 'spec.md')]);
+        execFileSync('mkfifo', [join(specDir, 'architecture', 'pipe')]);
+        const { result, seen } = await run();
+        expect(result.status).toBe('clear');
+        expect(seen('spec')).toBe('');
+        expect(seen('design')).toBe('the design');
+      }, 10_000);
+    });
+
     it('removes the copy afterwards', async () => {
       const { specDir, run } = await scan();
       const { seen } = await run();

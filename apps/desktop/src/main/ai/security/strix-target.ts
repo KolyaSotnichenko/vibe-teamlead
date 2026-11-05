@@ -60,15 +60,12 @@ export async function prepareStrixTarget(options: StrixTargetOptions): Promise<S
   if (!changed.ok || !added.ok) throw new Error('git could not list the uncommitted changes');
   for (const file of [...changed.stdout.split('\0'), ...added.stdout.split('\0')].filter(Boolean)) {
     // A linked folder in the worktree could reach any file on this machine: that file isn't the task's
-    const stat = linkedFolderOn(projectDir, file) ? undefined : lstatSync(join(projectDir, file), { throwIfNoEntry: false });
+    const stat = notAFolderOn(projectDir, file) ? undefined : lstatSync(join(projectDir, file), { throwIfNoEntry: false });
     if (stat && !stat.isFile()) continue;
-    // The copy's links come from the branch, and could aim the write anywhere: the worktree has no link here
-    let link = linkedFolderOn(path, file);
-    while (link) {
-      rmSync(link);
-      link = linkedFolderOn(path, file);
-    }
-    rmSync(join(path, file), { force: true });
+    // The copy's links come from the branch, and could aim the write anywhere. The worktree has folders here.
+    for (let blocked = notAFolderOn(path, file); blocked; blocked = notAFolderOn(path, file)) rmSync(blocked);
+    // Doesn't follow a link: removes the link itself
+    rmSync(join(path, file), { recursive: true, force: true });
     if (stat) {
       mkdirSync(dirname(join(path, file)), { recursive: true });
       copyFileSync(join(projectDir, file), join(path, file));
@@ -79,22 +76,26 @@ export async function prepareStrixTarget(options: StrixTargetOptions): Promise<S
   const docs = join(path, TASK_DOCS_DIR);
   rmSync(docs, { recursive: true, force: true });
   mkdirSync(docs);
-  // Agents can write in the spec folder: a link there could reach any file on this machine
-  const notALink = (from: string) => !lstatSync(from).isSymbolicLink();
+  // Agents can write in the spec folder: a link there could reach any file on this machine, and a pipe would hang
+  const fileOrFolder = (from: string) => {
+    const stat = lstatSync(from);
+    return stat.isFile() || stat.isDirectory();
+  };
   const spec = join(specDir, 'spec.md');
-  if (existsSync(spec) && notALink(spec)) copyFileSync(spec, join(docs, 'spec.md'));
+  if (lstatSync(spec, { throwIfNoEntry: false })?.isFile()) copyFileSync(spec, join(docs, 'spec.md'));
   const architecture = join(specDir, 'architecture');
-  if (existsSync(architecture)) cpSync(architecture, join(docs, 'architecture'), { recursive: true, filter: notALink });
+  if (lstatSync(architecture, { throwIfNoEntry: false })?.isDirectory()) cpSync(architecture, join(docs, 'architecture'), { recursive: true, filter: fileOrFolder });
 
   return { path, diffBase: diffBase ? await baseCommit(git, projectDir, path, diffBase) : undefined };
 }
 
-/** The first folder on the way to `file` that is a symbolic link, if any. */
-function linkedFolderOn(root: string, file: string): string | undefined {
+/** The first thing on the way to `file` that isn't a real folder (a link, a file), if any. */
+function notAFolderOn(root: string, file: string): string | undefined {
   let current = root;
   for (const part of file.split('/').slice(0, -1)) {
     current = join(current, part);
-    if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) return current;
+    const stat = lstatSync(current, { throwIfNoEntry: false });
+    if (stat && !stat.isDirectory()) return current;
   }
   return undefined;
 }
