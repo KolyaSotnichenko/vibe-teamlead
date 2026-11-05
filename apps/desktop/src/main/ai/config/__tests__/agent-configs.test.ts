@@ -287,6 +287,21 @@ describe('getRequiredMcpServers', () => {
     expect(off).not.toContain('chrome-devtools');
   });
 
+  it('drops the browser servers for QA when the task changed no UI file, and keeps them when unknown', () => {
+    const web = { is_web_frontend: true, is_electron: false };
+    for (const agent of ['qa_reviewer', 'qa_fixer'] as const) {
+      const off = getRequiredMcpServers(agent, { projectCapabilities: web, taskTouchesUi: false });
+      expect(off).not.toContain('playwright');
+      expect(off).not.toContain('chrome-devtools');
+      expect(off).not.toContain('browser');
+      expect(off).toContain('vibe-teamlead');
+      expect(getRequiredMcpServers(agent, { projectCapabilities: web, taskTouchesUi: true })).toContain('playwright');
+      expect(getRequiredMcpServers(agent, { projectCapabilities: web })).toContain('playwright');
+    }
+    const electron = getRequiredMcpServers('qa_reviewer', { projectCapabilities: { is_electron: true }, electronMcpEnabled: true, taskTouchesUi: false });
+    expect(electron).not.toContain('electron');
+  });
+
   it('should filter context7 when explicitly disabled', () => {
     const servers = getRequiredMcpServers('spec_researcher', {
       context7Enabled: false,

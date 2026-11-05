@@ -580,6 +580,12 @@ export interface McpServerResolveOptions {
    * frontends. They are bundled, headless and isolated, so on by default.
    */
   browserMcpEnabled?: boolean;
+  /**
+   * Whether the task changed UI files. `false` drops the dynamic "browser"
+   * server for this session (QA verifies UI only when UI changed); undefined
+   * means unknown, and the server stays.
+   */
+  taskTouchesUi?: boolean;
   /** Whether Context7 is enabled (default: true) */
   context7Enabled?: boolean;
   /** Per-agent MCP additions (comma-separated server names) */
@@ -628,7 +634,7 @@ export function getRequiredMcpServers(
   if (browserIdx !== -1) {
     servers.splice(browserIdx, 1);
     const caps = options.projectCapabilities;
-    if (caps) {
+    if (caps && options.taskTouchesUi !== false) {
       if (caps.is_electron && options.electronMcpEnabled) {
         servers.push('electron');
       } else if (caps.is_web_frontend && !caps.is_electron && options.browserMcpEnabled !== false) {

@@ -77,6 +77,8 @@ export interface SerializableSessionConfig {
     linearEnabled?: boolean;
     electronMcpEnabled?: boolean;
     browserMcpEnabled?: boolean;
+    /** Set per QA session in the worker: false when the task changed no UI file */
+    taskTouchesUi?: boolean;
     projectCapabilities?: {
       is_electron?: boolean;
       is_web_frontend?: boolean;

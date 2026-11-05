@@ -5,7 +5,7 @@
 | **Vibe Teamlead tools** (`mcp__vibe-teamlead__*`) | Subtask status, build progress, recording discoveries and pitfalls, QA status, memory (`search_memory`, `remember`), diagram rendering (`render_diagram`: draw.io/Mermaid → PNG). |
 | **CodeGraph** (`mcp__codegraph__*`) | Code map. |
 | **Context7** | Current library documentation (hosted HTTP server). Helps avoid writing against an outdated API. Optionally with the `CONTEXT7_API_KEY` key. |
-| **Browser** (Playwright / Chrome DevTools MCP) | QA checks the UI. |
+| **Browser** (Playwright / Chrome DevTools MCP) | QA checks the UI. Started only when the task changed UI files. |
 | **Electron MCP** | QA for Electron apps. |
 | **Linear** | Working with Linear issues (if connected). |
 | **Your own MCP servers** | Added in MCP Overview and assigned to agents. |

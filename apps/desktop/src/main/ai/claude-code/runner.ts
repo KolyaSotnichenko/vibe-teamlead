@@ -70,15 +70,19 @@ export function browserToolsSection(
   agentType: string,
   serverKeys: string[],
   caps: { is_web_frontend?: boolean; is_electron?: boolean } | undefined,
+  /** false when the task changed no UI file, so the servers were left out on purpose */
+  taskTouchesUi?: boolean,
 ): string {
   if (!QA_AGENTS.has(agentType)) return '';
   const have = serverKeys.filter((k) => k === 'playwright' || k === 'electron' || k === 'chrome-devtools');
   if (have.length) {
     return `\n## Browser tools in this session\nAvailable: ${have.map((k) => `\`mcp__${k}__*\``).join(', ')}. No other browser tools exist (no Puppeteer).`;
   }
-  const why = caps?.is_web_frontend || caps?.is_electron
-    ? 'the browser server is turned off, not bundled in this build, or could not start'
-    : 'this project has no web or desktop UI';
+  const why = !(caps?.is_web_frontend || caps?.is_electron)
+    ? 'this project has no web or desktop UI'
+    : taskTouchesUi === false
+      ? 'this task changed no UI file, so visual verification is N/A'
+      : 'the browser server is turned off, not bundled in this build, or could not start';
   return `\n## Browser tools in this session\nNone (${why}). Don't call any \`mcp__playwright__*\`, \`mcp__chrome-devtools__*\`, \`mcp__electron__*\` or Puppeteer tool. Skip visual verification, verify behaviour with tests, \`curl\` and the code, and say in the report that visual checks were not possible.`;
 }
 
@@ -267,7 +271,7 @@ export function buildQueryOptions(
     skills.includes(FRONTEND_DESIGN_SKILL) ? FRONTEND_DESIGN_INSTRUCTIONS : '',
     tools.includes('Bash') ? BACKGROUND_INSTRUCTIONS : '',
     tools.includes('Bash') ? CONTEXT_INSTRUCTIONS : '',
-    browserToolsSection(config.agentType, Object.keys(mcpServers), config.mcpOptions?.projectCapabilities),
+    browserToolsSection(config.agentType, Object.keys(mcpServers), config.mcpOptions?.projectCapabilities, config.mcpOptions?.taskTouchesUi),
   ]
     .filter(Boolean)
     .join('\n');

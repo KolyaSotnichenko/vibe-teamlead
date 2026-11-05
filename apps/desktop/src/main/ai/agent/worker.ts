@@ -37,6 +37,7 @@ import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orc
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { withoutGitHooks } from '../merge/git-merge';
+import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
 import { runProcess } from '../../platform/exec';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
@@ -375,6 +376,7 @@ function claudeSessionBase(session: SerializableSessionConfig): Pick<
       linearEnabled: session.mcpOptions?.linearEnabled ?? false,
       electronMcpEnabled: session.mcpOptions?.electronMcpEnabled ?? false,
       browserMcpEnabled: session.mcpOptions?.browserMcpEnabled ?? true,
+      taskTouchesUi: session.mcpOptions?.taskTouchesUi,
       projectCapabilities: session.mcpOptions?.projectCapabilities ?? projectCapabilities(session),
       agentMcpAdd: session.mcpOptions?.agentMcpAdd,
       agentMcpRemove: session.mcpOptions?.agentMcpRemove,
@@ -939,8 +941,12 @@ async function runQualityAssurance(
       return [prompt, qaRoundSection(agentType, context)].filter(Boolean).join('\n\n');
     },
 
-    runSession: (runConfig) => {
+    runSession: async (runConfig) => {
       postLog(`Running ${runConfig.agentType} session (session=${runConfig.sessionNumber})`);
+      // Browser tools only when the task changed UI files (the fixer may add some between sessions)
+      const touchesUi = await uiChangedSince(() => changedFilesSinceBase(session.projectDir));
+      if (touchesUi === false) qaLog(`Browser tools are off for this ${runConfig.agentType} session: no UI file changed in this task.`);
+      const qaSession = touchesUi === undefined ? session : { ...session, mcpOptions: { ...session.mcpOptions, taskTouchesUi: touchesUi } };
       return runSingleSession(
         runConfig.agentType,
         runConfig.phase,
@@ -949,7 +955,7 @@ async function runQualityAssurance(
         runConfig.projectDir,
         runConfig.sessionNumber,
         undefined,
-        session,
+        qaSession,
         toolContext,
         [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
           .filter(Boolean)

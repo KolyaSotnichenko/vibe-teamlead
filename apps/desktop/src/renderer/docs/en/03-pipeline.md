@@ -40,6 +40,7 @@ flowchart TD
 - The review runs only when the checks are clear: findings go straight to the fixer, which gets one round at each. If the same finding is back, the task comes to you at once. In Review you can allow a design finding the design system permits, then run QA again.
 - The app writes a `qa_report.md` report (with the AC table) and a manual test plan.
 - Dev servers run through the app: agents ask for one and get its URL. It gets a free port, is reused by later sessions of the task and stops with the task, along with the containers the task started (`docker compose up` brings those back with their data).
+- Browser tools (Playwright, Chrome DevTools, Electron MCP) are started for the reviewer and the fixer only when the task changed UI files; for a backend-only change they stay off and the review verifies behaviour with tests and the code.
 - The first review is a full one. A later one in the same run looks at what changed since the last: the earlier issues, the changed code and the acceptance criteria it touches, plus one whole test run.
 - A QA run has at most 2 review rounds: when the first review rejects, the fixer gets one round, and if the second review still rejects, the task goes to you for review.
 - The QA fixer edits code like the coder, so it runs on the Coding model and thinking level from your agent profile, not the QA ones; its logs still appear in the QA phase.
