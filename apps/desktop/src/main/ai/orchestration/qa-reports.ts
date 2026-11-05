@@ -17,8 +17,12 @@ import { join } from 'node:path';
 
 import type { QAIssue, QAIterationRecord } from './qa-loop';
 
-/** Review ⇄ fix rounds before QA hands the task to a human. */
-export const DEFAULT_QA_ITERATIONS = 5;
+/**
+ * Review rounds before QA hands the task to a human: the fixer gets one round
+ * between them. Each round re-reads the task, so more rounds cost more than
+ * they fix; the user settles what two rounds couldn't.
+ */
+export const DEFAULT_QA_ITERATIONS = 2;
 
 // =============================================================================
 // Constants

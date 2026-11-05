@@ -28,7 +28,7 @@ vi.mock('../../utils/json-repair', () => ({
 }));
 
 vi.mock('../qa-reports', () => ({
-  DEFAULT_QA_ITERATIONS: 5,
+  DEFAULT_QA_ITERATIONS: 2,
   generateQAReport: vi.fn(() => '# QA Report'),
   mergeQAReport: vi.fn((agent: string | null, summary: string) => (agent ? `${agent}\n${summary}` : summary)),
   generateEscalationReport: vi.fn(() => '# Escalation Report'),

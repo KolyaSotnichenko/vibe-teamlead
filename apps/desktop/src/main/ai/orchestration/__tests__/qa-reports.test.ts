@@ -18,6 +18,7 @@ vi.mock('node:fs', () => ({
 }));
 
 import {
+  DEFAULT_QA_ITERATIONS,
   generateQAReport,
   generateEscalationReport,
   generateManualTestPlan,
@@ -55,6 +56,12 @@ function makeIssue(title: string, opts: Partial<QAIssue> = {}): QAIssue {
 // ---------------------------------------------------------------------------
 // generateQAReport
 // ---------------------------------------------------------------------------
+
+describe('DEFAULT_QA_ITERATIONS', () => {
+  it('gives QA two review rounds before the task goes to the user', () => {
+    expect(DEFAULT_QA_ITERATIONS).toBe(2);
+  });
+});
 
 describe('generateQAReport', () => {
   it('produces a report with APPROVED status label', () => {
