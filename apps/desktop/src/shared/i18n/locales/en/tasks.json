@@ -988,6 +988,8 @@
     "startFailed": "Could not start: an agent is still working on this task, or its merge is waiting for your confirmation. Commit or cancel the merge first.",
     "noTokens": "This project's design system has no tokens file to add the exception to.",
     "more": "…and {{count}} more",
+    "reviewerChanged_one": "The QA reviewer changed {{count}} project file it must not touch: {{files}}. It is left as is; review it in Files.",
+    "reviewerChanged_other": "The QA reviewer changed {{count}} project files it must not touch: {{files}}. They are left as is; review them in Files.",
     "next": "Next: describe what to fix under Request Changes, run QA again, or merge as is if the findings don't worry you.",
     "nextWithDesign": "Next: if a design finding is something your design system allows, allow it here (it goes into the design tokens) and run QA again. Otherwise describe what to fix under Request Changes, or merge as is.",
     "rerun": "Run QA again",

@@ -18,7 +18,7 @@
 
 import { rmSync } from 'node:fs';
 import { readFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { EventEmitter } from 'events';
 
 import {
@@ -35,7 +35,7 @@ import type { Phase } from '../config/types';
 import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
-import type { GateFinding, GateReport } from '../security/gates';
+import { type GateFinding, type GateReport, isAppDataPath } from '../security/gates';
 import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
 import { approvalHolds, clearApproval, recordApproval } from './qa-approval';
 import { writeFileReplacing, writeFileReplacingSync } from '../safe-write';
@@ -213,6 +213,42 @@ export interface QALoopConfig {
   currentCommit?: () => Promise<string | undefined>;
   /** Where approvals are recorded and the state of the code they hold for; see qa-approval.ts */
   approvals?: { dir: string; fingerprint: () => Promise<string | undefined> };
+  /**
+   * `git status --porcelain --untracked-files=all` of the worktree, or undefined
+   * when it can't be read. Taken before and after each reviewer session: the
+   * reviewer must not change project files, and the hook can't see Bash writes.
+   */
+  workTreeStatus?: () => Promise<string | undefined>;
+}
+
+/** The porcelain status of each path (`XY path`, or `XY old -> new`). */
+function statusByPath(porcelain: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of porcelain.split('\n')) {
+    if (line.length < 4) continue;
+    out.set(line.slice(3), line.slice(0, 2));
+  }
+  return out;
+}
+
+/**
+ * The project files whose git status differs between two porcelain snapshots,
+ * leaving out the spec directory and the app's own folder. Nothing is reverted:
+ * the files are reported, and the user decides. Pure — tested directly.
+ */
+export function reviewerChangedFiles(before: string, after: string, dirs: { projectDir: string; specDir: string }): string[] {
+  const specRel = relative(dirs.projectDir, dirs.specDir).replace(/\\/g, '/');
+  const excluded = (file: string) => {
+    const path = file.replace(/^"|"$/g, '').replace(/\\/g, '/');
+    return isAppDataPath(path) || (!specRel.startsWith('..') && (path === specRel || path.startsWith(`${specRel}/`)));
+  };
+  const was = statusByPath(before);
+  const now = statusByPath(after);
+  const changed: string[] = [];
+  for (const file of new Set([...was.keys(), ...now.keys()])) {
+    if (was.get(file) !== now.get(file) && !excluded(file)) changed.push(file);
+  }
+  return changed;
 }
 
 /** One QA issue per file with design-check findings. Pure — tested directly. */
@@ -394,6 +430,8 @@ export class QALoop extends EventEmitter {
   private iterationHistory: QAIterationRecord[] = [];
   private lastReviewerApproved = false;
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
+  /** Project files the reviewer changed during this run (see noteReviewerChanges) */
+  private reviewerChangedFiles: string[] = [];
   private lastDesignFindings: DesignFinding[] = [];
   private checksRepeat = false;
   /**
@@ -532,6 +570,7 @@ export class QALoop extends EventEmitter {
         };
         const reviewPrompt = await this.config.generatePrompt('qa_reviewer', reviewContext);
 
+        const statusBefore = await this.config.workTreeStatus?.();
         const reviewResult = await this.config.runSession({
           agentType: 'qa_reviewer',
           phase: 'qa',
@@ -544,6 +583,7 @@ export class QALoop extends EventEmitter {
           cliModel: this.config.cliModel,
           cliThinking: this.config.cliThinking,
         });
+        await this.noteReviewerChanges(statusBefore);
 
         if (reviewResult.outcome === 'cancelled') {
           // Whatever it recorded came from an unfinished review; a later run must not trust it
@@ -797,6 +837,21 @@ export class QALoop extends EventEmitter {
   /** The reviewer's qa_report.md, or null when there is none. */
   private async readReport(): Promise<string | null> {
     return readFile(join(this.config.specDir, 'qa_report.md'), 'utf-8').catch(() => null);
+  }
+
+  /** Project files the reviewer changed, by its own Bash: logged and recorded, never reverted. */
+  private async noteReviewerChanges(statusBefore: string | undefined): Promise<void> {
+    if (statusBefore === undefined) return;
+    const statusAfter = await this.config.workTreeStatus?.();
+    if (statusAfter === undefined) return;
+    const files = reviewerChangedFiles(statusBefore, statusAfter, { projectDir: this.config.projectDir, specDir: this.config.specDir });
+    if (!files.length) return;
+    for (const file of files) if (!this.reviewerChangedFiles.includes(file)) this.reviewerChangedFiles.push(file);
+    const shown = files.slice(0, 10).join(', ') + (files.length > 10 ? `, … (${files.length - 10} more)` : '');
+    this.emitTyped(
+      'log',
+      `The QA reviewer changed ${files.length} project file${files.length === 1 ? '' : 's'} it must not touch: ${shown}. They are left as is; review them in the task's Files tab.`,
+    );
   }
 
   /** The reviewer's first message: acceptance criteria and subtask table instead of the whole spec and plan. */
@@ -1058,6 +1113,7 @@ export class QALoop extends EventEmitter {
         ...(this.checksRepeat ? { checksRepeat: true } : {}),
         blocking: approved ? [] : this.lastBlocking,
         ...(error ? { error } : {}),
+        ...(this.reviewerChangedFiles.length ? { reviewerChangedFiles: [...this.reviewerChangedFiles] } : {}),
         at: new Date().toISOString(),
       };
       try {

@@ -46,7 +46,7 @@ vi.mock('../../schema', () => ({
 }));
 
 import { validateStructuredOutput } from '../../schema';
-import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection } from '../qa-loop';
+import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection, reviewerChangedFiles } from '../qa-loop';
 import { approvalHolds, recordApproval } from '../qa-approval';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
@@ -376,6 +376,82 @@ describe('QALoop', () => {
 
     expect(seenDuringReview).toBe(false);
     expect(JSON.parse(readFileSync(outcomeFile, 'utf-8'))).toMatchObject({ approved: true, blocking: [] });
+  });
+
+  describe('project files the reviewer changed', () => {
+    it('are the paths whose status differs between two porcelain snapshots, outside the spec directory', () => {
+      const before = ' M src/app.ts\n?? .vibe-teamlead/specs/001-feature/qa_report.md\nA  src/new.ts\n';
+      const after = [
+        ' M src/app.ts',
+        'MM src/new.ts',
+        '?? src/fix.ts',
+        ' M .vibe-teamlead/specs/001-feature/spec.md',
+        '?? .vibe-teamlead/specs/001-feature/qa-browser/a.png',
+        '?? .vibe-teamlead/task_logs/x.json',
+        'R  src/old.ts -> src/renamed.ts',
+        '?? "src/with space.ts"',
+      ].join('\n');
+      expect(reviewerChangedFiles(before, after, { projectDir: PROJECT_DIR, specDir: SPEC_DIR })).toEqual([
+        'src/new.ts',
+        'src/fix.ts',
+        'src/old.ts -> src/renamed.ts',
+        '"src/with space.ts"',
+      ]);
+      expect(reviewerChangedFiles(after, after, { projectDir: PROJECT_DIR, specDir: SPEC_DIR })).toEqual([]);
+      // A file the reviewer reverted to clean is a change too
+      expect(reviewerChangedFiles(' M src/app.ts\n', '', { projectDir: PROJECT_DIR, specDir: SPEC_DIR })).toEqual(['src/app.ts']);
+    });
+
+    it('are logged and recorded on the outcome, and left as they are', async () => {
+      const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
+      let calls = 0;
+      mockReadFile.mockReset();
+      mockWriteFile.mockReset().mockResolvedValue(undefined);
+      const runSession = vi.fn().mockImplementation(async () => {
+        calls++;
+        return makeSessionResult('completed');
+      });
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+        return Promise.reject(new Error('ENOENT'));
+      });
+      const workTreeStatus = vi.fn(async () => (calls === 0 ? '' : ' M src/app.ts\n?? src/hotfix.ts\n?? .vibe-teamlead/specs/x/qa_report.md\n'));
+      const logs: string[] = [];
+      const loop = new QALoop(makeConfig({ specDir, projectDir: '/p', runSession, maxIterations: 1, workTreeStatus }));
+      loop.on('log', (line: string) => logs.push(line));
+      const outcome = await loop.run();
+
+      expect(outcome.approved).toBe(true);
+      expect(workTreeStatus).toHaveBeenCalledTimes(2);
+      expect(logs).toContain('The QA reviewer changed 2 project files it must not touch: src/app.ts, src/hotfix.ts. They are left as is; review them in the task\'s Files tab.');
+      const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
+      expect(recorded.reviewerChangedFiles).toEqual(['src/app.ts', 'src/hotfix.ts']);
+    });
+
+    it('are not recorded when nothing changed or the status could not be read', async () => {
+      const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
+      let calls = 0;
+      mockReadFile.mockReset();
+      mockWriteFile.mockReset().mockResolvedValue(undefined);
+      const runSession = vi.fn().mockImplementation(async () => {
+        calls++;
+        return makeSessionResult('completed');
+      });
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+        return Promise.reject(new Error('ENOENT'));
+      });
+      const logs: string[] = [];
+      const loop = new QALoop(makeConfig({ specDir, runSession, maxIterations: 1, workTreeStatus: async () => (calls === 0 ? ' M a.ts\n' : undefined) }));
+      loop.on('log', (line: string) => logs.push(line));
+      await loop.run();
+      expect(logs.some((l) => l.includes('must not touch'))).toBe(false);
+      expect(JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8')).reviewerChangedFiles).toBeUndefined();
+    });
   });
 
   it('records why QA ended without approval: the design check blocked', async () => {

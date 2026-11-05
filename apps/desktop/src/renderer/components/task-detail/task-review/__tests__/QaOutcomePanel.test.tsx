@@ -92,6 +92,18 @@ describe('QaOutcomePanel', () => {
     expect(await screen.findByText('qaOutcome.reason.checksRepeat')).toBeInTheDocument();
   });
 
+  it('names the project files the reviewer changed, even when QA approved', async () => {
+    setup({ approved: true, iterations: 1, reviewerApproved: true, at: '', blocking: [], reviewerChangedFiles: ['src/app.ts', 'src/fix.ts'] });
+    expect(await screen.findByText('qaOutcome.reviewerChanged {"count":2,"files":"src/app.ts, src/fix.ts"}')).toBeInTheDocument();
+    expect(screen.queryByText('qaOutcome.title')).not.toBeInTheDocument();
+  });
+
+  it('shows the changed files with the reasons when QA did not approve', async () => {
+    setup({ approved: false, reason: 'max_iterations', iterations: 2, reviewerApproved: false, at: '', blocking: [], reviewerChangedFiles: ['src/app.ts'] });
+    expect(await screen.findByText(/qaOutcome.reason.max_iterations/)).toBeInTheDocument();
+    expect(screen.getByText('qaOutcome.reviewerChanged {"count":1,"files":"src/app.ts"}')).toBeInTheDocument();
+  });
+
   it('explains a run from before the outcome was recorded', async () => {
     setup(undefined);
     expect(await screen.findByText('qaOutcome.unrecorded')).toBeInTheDocument();

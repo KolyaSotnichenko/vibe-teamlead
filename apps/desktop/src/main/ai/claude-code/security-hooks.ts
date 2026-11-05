@@ -8,9 +8,13 @@
  *   directory), otherwise to the working directory (the task's worktree), the
  *   spec directory and the temp directory. Symlinks are resolved, so a link
  *   inside the worktree can't point a write outside it.
- * - The QA reviewer reviews; the QA fixer fixes. The reviewer writes only in
- *   the spec directory (its report, the spec checklists, screenshots) and
- *   neither stages nor commits: a problem in the code is a finding for the fixer.
+ * - The QA reviewer reviews; the QA fixer fixes. For the reviewer this is a
+ *   role guard against drifting into the fixer's job, not a sandbox: it denies
+ *   Write/Edit/MultiEdit/NotebookEdit outside the spec directory and every git
+ *   command that isn't on a short read-only list. Bash can still write files
+ *   (sed -i, cat >, redirections), which this hook does not inspect; the QA loop
+ *   compares the worktree's git status before and after the session and
+ *   reports the project files the reviewer changed.
  */
 
 import { tmpdir } from 'node:os';
@@ -27,39 +31,53 @@ const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
 const REVIEWER_RULE = "The QA reviewer doesn't change project code: record this as an issue in qa_report.md for the QA fixer.";
 
-/** Git subcommands that change the index or the history; the reviewer only looks. */
-const REVIEWER_GIT_DENIED = new Set(['add', 'commit']);
+/** Git subcommands that only read; the reviewer gets no other. */
+const REVIEWER_GIT_ALLOWED = new Set([
+  'diff', 'log', 'show', 'status', 'rev-parse', 'ls-files', 'blame', 'grep',
+  'describe', 'rev-list', 'cat-file', 'name-rev', 'merge-base',
+]);
 
-/** Global git options that take a value, so the subcommand comes after it. */
-const GIT_OPTIONS_WITH_VALUE = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace', '--exec-path']);
+/** `git branch` arguments that only list; anything else may create, rename or delete one. */
+const BRANCH_LIST_ARGS = ['--list', '-a', '-r', '-v', '--show-current'];
 
-/** The git subcommand of one command segment, or null when it isn't a git command. */
-function gitSubcommand(segment: string): string | null {
-  const tokens = segment.trim().split(/\s+/);
-  const start = tokens.findIndex((t) => t === 'git' || t.endsWith('/git'));
-  if (start === -1) return null;
-  let skipNext = false;
-  for (const token of tokens.slice(start + 1)) {
-    if (skipNext) {
-      skipNext = false;
-      continue;
-    }
-    if (GIT_OPTIONS_WITH_VALUE.has(token)) {
-      skipNext = true;
-      continue;
-    }
-    if (token.startsWith('-')) continue;
-    return token;
-  }
-  return null;
+/** Global git options that alias commands or point git at another repository. */
+const GIT_OPTIONS_DENIED = ['-c', '--config-env', '-C', '--git-dir', '--work-tree', '--exec-path'];
+
+/** Interpreters and runners that can hide a git command inside their arguments. */
+const WRAPPERS = new Set(['sh', 'bash', 'zsh', 'eval', 'xargs', 'env']);
+
+const isGit = (token: string) => token === 'git' || token.endsWith('/git');
+
+/**
+ * Is this one segment of a Bash command read-only git, or no git at all? A
+ * best-effort tokenizer on whitespace: the segment splitter and this don't
+ * understand every quoting form, so a wrapper with git anywhere in it is denied
+ * outright rather than parsed.
+ */
+function reviewerSegmentAllowed(segment: string): boolean {
+  const tokens = segment.trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  const command = tokens[0].replace(/^.*\//, '');
+  if (WRAPPERS.has(command)) return !/\bgit\b/.test(segment);
+  const start = tokens.findIndex(isGit);
+  if (start === -1) return true;
+  const args = tokens.slice(start + 1);
+  if (args.some((t) => GIT_OPTIONS_DENIED.some((opt) => t === opt || t.startsWith(`${opt}=`)))) return false;
+  const subIndex = args.findIndex((t) => !t.startsWith('-'));
+  if (subIndex === -1) return false;
+  const sub = args[subIndex];
+  const rest = args.slice(subIndex + 1);
+  if (REVIEWER_GIT_ALLOWED.has(sub)) return true;
+  if (sub === 'branch') return rest.every((t) => BRANCH_LIST_ARGS.some((ok) => t === ok || t.startsWith(`${ok}=`)));
+  if (sub === 'stash') return rest[0] === 'list' || rest[0] === 'show';
+  if (sub === 'remote') return rest.length === 1 && rest[0] === '-v';
+  if (sub === 'worktree') return rest[0] === 'list';
+  return false;
 }
 
-/** Exported for unit tests: does this Bash command stage or commit? */
+/** Exported for unit tests: does this Bash command do anything with git besides reading? */
 export function reviewerBashDenied(command: string): boolean {
-  return splitCommandSegments(command).some((segment) => {
-    const sub = gitSubcommand(segment);
-    return sub !== null && REVIEWER_GIT_DENIED.has(sub);
-  });
+  return splitCommandSegments(command).some((segment) => !reviewerSegmentAllowed(segment));
 }
 
 function deny(reason: string): HookJSONOutput {
@@ -97,7 +115,7 @@ export function evaluatePreToolUse(
     }
     const command = typeof toolInput?.command === 'string' ? toolInput.command : '';
     if (context.agentType === 'qa_reviewer' && reviewerBashDenied(command)) {
-      return deny(`git add and git commit are denied. ${REVIEWER_RULE}`);
+      return deny(`Only read-only git commands (diff, log, show, status, blame, …) are allowed here. ${REVIEWER_RULE}`);
     }
     return {};
   }

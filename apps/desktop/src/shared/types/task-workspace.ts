@@ -191,5 +191,7 @@ export interface QaOutcomeInfo {
     match?: string;
   }>;
   error?: string;
+  /** Project files the QA reviewer changed although it must not; left as they are for the user to review */
+  reviewerChangedFiles?: string[];
   at: string;
 }

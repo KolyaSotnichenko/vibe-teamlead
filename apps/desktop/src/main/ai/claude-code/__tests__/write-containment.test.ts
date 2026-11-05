@@ -78,14 +78,69 @@ describe('write containment', () => {
       expect(denied(evaluatePreToolUse('Write', { file_path: join(specDir, '..', '..', '..', 'package.json') }, context))).toBe(true);
     });
 
-    it('cannot stage or commit, but can still look at git', () => {
+    it('can only look at git: read-only subcommands pass, everything else is a finding for the fixer', () => {
       const { context } = reviewer();
-      for (const command of ['git commit -m "fix: thing"', 'git add .', 'git status && git commit -am x', 'cd src; git add -A', 'git -C /tmp/x commit --amend']) {
+      const deniedCommands = [
+        'git commit -m "fix: thing"',
+        'git add .',
+        'git status && git commit -am x',
+        'cd src; git add -A',
+        'git -C /tmp/x commit --amend',
+        'git -c alias.x=commit x',
+        'git --config-env=alias.x=X x',
+        'git --git-dir=/tmp/x/.git status',
+        'sh -c "git commit -m x"',
+        'bash -c "git status"',
+        'eval "git add ."',
+        'echo commit | xargs git',
+        'env GIT_DIR=/x git status',
+        'git branch -D x',
+        'git branch -m old new',
+        'git branch new-branch',
+        'git stash',
+        'git stash pop',
+        'git checkout -- .',
+        'git restore src/app.ts',
+        'git reset --hard',
+        'git push',
+        'git remote add x https://example.com/x.git',
+        'git worktree add ../x',
+        'git tag v1',
+        'git',
+      ];
+      for (const command of deniedCommands) {
         const out = evaluatePreToolUse('Bash', { command }, context);
         expect(denied(out), command).toBe(true);
-        expect(reason(out)).toContain('QA fixer');
+        expect(reason(out), command).toContain('QA fixer');
       }
-      for (const command of ['git diff main...HEAD --name-status', 'git status --short', 'git log --oneline -5', 'git stash list', 'npm test']) {
+      const allowedCommands = [
+        'git diff main...HEAD --name-status',
+        'git diff',
+        'git status --short',
+        'git log --oneline -5',
+        'git show HEAD:package.json',
+        'git rev-parse HEAD',
+        'git ls-files src',
+        'git blame -L 1,5 src/app.ts',
+        'git grep -n TODO -- src',
+        'git branch',
+        'git branch --list',
+        'git branch -a -v',
+        'git branch --show-current',
+        'git stash list',
+        'git stash show -p stash@{0}',
+        'git remote -v',
+        'git worktree list',
+        'git describe --tags',
+        'git rev-list --count HEAD',
+        'git cat-file -p HEAD',
+        'git name-rev HEAD',
+        'git merge-base HEAD main',
+        'git status | head -20',
+        'cd src && git diff --stat',
+        'npm test',
+      ];
+      for (const command of allowedCommands) {
         expect(denied(evaluatePreToolUse('Bash', { command }, context)), command).toBe(false);
       }
     });

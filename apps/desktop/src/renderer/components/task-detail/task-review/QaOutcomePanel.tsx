@@ -108,7 +108,17 @@ export function QaOutcomePanel({ task }: { task: Task }) {
       </section>
     );
   }
-  if (!outcome || outcome.approved) return null;
+  if (!outcome) return null;
+  const changedFiles = outcome.reviewerChangedFiles ?? [];
+  const changedNotice = changedFiles.length > 0 && (
+    <p className="px-4 py-2 text-xs text-muted-foreground">
+      {t('qaOutcome.reviewerChanged', { count: changedFiles.length, files: changedFiles.join(', ') })}
+    </p>
+  );
+  // Approved: nothing blocked it, but files the reviewer touched are still worth a look
+  if (outcome.approved) {
+    return changedNotice ? <section aria-label={t('qaOutcome.title')} className="border border-border">{changedNotice}</section> : null;
+  }
 
   const reasonText = outcome.checksRepeat
     ? t('qaOutcome.reason.checksRepeat')
@@ -157,6 +167,8 @@ export function QaOutcomePanel({ task }: { task: Task }) {
           })}
         </div>
       )}
+
+      {changedNotice}
 
       {error && <p role="alert" className="px-4 pb-2 text-sm text-destructive">{error}</p>}
 
