@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -97,6 +98,13 @@ describe('runStrix', () => {
     return path;
   }
 
+  function gitProject() {
+    const project = mkdtempSync(join(tmpdir(), 'vtl-strix-project-'));
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project });
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'first'], { cwd: project });
+    return project;
+  }
+
   it('skips without an API key, with a subscription token, or without Strix', async () => {
     const specDir = mkdtempSync(join(tmpdir(), 'vtl-strix-'));
     const base = { projectDir: specDir, specDir, settings, model: 'claude-sonnet-4-6' };
@@ -106,6 +114,138 @@ describe('runStrix', () => {
     const missing = await runStrix({ ...base, apiKey: 'sk-ant-api-x', strixBin: undefined });
     expect(missing).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/not installed/) });
     expect(readFileSync(join(specDir, 'security_qa.md'), 'utf-8')).toContain('Security QA');
+  });
+
+  describe('what Strix gets to work on', () => {
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+    function taskFolder() {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'vtl-strix-task-')));
+      const project = join(root, 'my-task');
+      mkdirSync(project);
+      git(project, 'init', '-q', '-b', 'main');
+      git(project, 'config', 'user.email', 't@t');
+      git(project, 'config', 'user.name', 't');
+      writeFileSync(join(project, '.gitignore'), '.env\nnode_modules/\n.vibe-teamlead/\n');
+      writeFileSync(join(project, 'tracked.txt'), 'committed\n');
+      git(project, 'add', '-A');
+      git(project, 'commit', '-q', '-m', 'base');
+      git(project, 'checkout', '-q', '-b', 'task');
+      writeFileSync(join(project, 'feature.txt'), 'the task\n');
+      git(project, 'add', '-A');
+      git(project, 'commit', '-q', '-m', 'task');
+      const specDir = join(project, '.vibe-teamlead', 'specs', '001');
+      mkdirSync(join(specDir, 'architecture'), { recursive: true });
+      writeFileSync(join(specDir, 'spec.md'), 'the spec\n');
+      writeFileSync(join(specDir, 'architecture', 'a.md'), 'the design\n');
+      return { project, specDir };
+    }
+
+    /** A Strix that reports what it sees, then does what the real one did to the folder it was given */
+    function scanner(bin: string) {
+      return fakeBin(
+        'strix',
+        `while [ $# -gt 0 ]; do
+  [ "$1" = "--target" ] && T="$2"
+  [ "$1" = "--diff-base" ] && B="$2"
+  [ "$1" = "--instruction-file" ] && I="$2"
+  shift
+done
+echo "target=$T"
+echo "name=$(basename "$T")"
+echo "changed=$(git -C "$T" diff --name-only "$B"...HEAD | tr '\\n' ',')"
+echo "tracked=$(cat "$T/tracked.txt")"
+echo "untracked=$(cat "$T/new.txt" 2>/dev/null)"
+echo "secret=$(cat "$T/.env" 2>/dev/null)"
+echo "spec=$(cat "$T/.vibe-teamlead-task/spec.md")"
+echo "design=$(cat "$T/.vibe-teamlead-task/architecture/a.md")"
+grep -q '.vibe-teamlead-task/spec.md' "$I" && echo "told=yes"
+echo "storeDir: /workspace/x" >> "$T/tracked.txt"
+echo stray > "$T/stray.txt"
+mkdir -p "$T/node_modules" && echo linux > "$T/node_modules/native"
+exit 0`,
+        bin,
+      );
+    }
+
+    async function scan() {
+      const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+      fakeBin('docker', 'exit 0', bin);
+      process.env.PATH = `${bin}:${originalPath}`;
+      const task = taskFolder();
+      const run = async (over: Partial<Parameters<typeof runStrix>[0]> = {}) => {
+        const logs: string[] = [];
+        const result = await runStrix({ projectDir: task.project, specDir: task.specDir, settings, model: 'm', apiKey: 'sk-ant-api-x', strixBin: scanner(bin), diffBase: 'main', onLog: (l) => logs.push(l), ...over });
+        const seen = (key: string) => logs.find((l) => l.startsWith(`[strix] ${key}=`))?.slice(`[strix] ${key}=`.length);
+        return { result, seen, logs };
+      };
+      return { ...task, run };
+    }
+
+    it('leaves the task folder as it was: no edits, no stray files, no foreign dependencies', async () => {
+      const { project, run } = await scan();
+      mkdirSync(join(project, 'node_modules'));
+      writeFileSync(join(project, 'node_modules', 'native'), 'macos\n');
+      const { result, seen } = await run();
+      expect(result.status).toBe('clear');
+      expect(seen('target')).not.toBe(project);
+      expect(git(project, 'status', '--porcelain')).toBe('');
+      expect(readFileSync(join(project, 'tracked.txt'), 'utf-8')).toBe('committed\n');
+      expect(existsSync(join(project, 'stray.txt'))).toBe(false);
+      expect(readFileSync(join(project, 'node_modules', 'native'), 'utf-8')).toBe('macos\n');
+    });
+
+    it('sees the task as QA approved it, with its diff, spec and folder name', async () => {
+      const { seen } = await (await scan()).run();
+      expect(seen('name')).toBe('my-task');
+      expect(seen('changed')).toBe('feature.txt,');
+      expect(seen('spec')).toBe('the spec');
+      expect(seen('design')).toBe('the design');
+      expect(seen('told')).toBe('yes');
+    });
+
+    it('sees uncommitted work too, but not ignored files such as .env', async () => {
+      const { project, run } = await scan();
+      writeFileSync(join(project, 'tracked.txt'), 'edited\n');
+      writeFileSync(join(project, 'new.txt'), 'brand new\n');
+      writeFileSync(join(project, '.env'), 'TOKEN=secret\n');
+      const { seen } = await run();
+      expect(seen('tracked')).toBe('edited');
+      expect(seen('untracked')).toBe('brand new');
+      expect(seen('secret')).toBe('');
+    });
+
+    it("finds a base that only exists as the project's remote branch", async () => {
+      const { project, run } = await scan();
+      git(project, 'update-ref', 'refs/remotes/origin/main', 'main');
+      const { seen } = await run({ diffBase: 'origin/main' });
+      expect(seen('changed')).toBe('feature.txt,');
+    });
+
+    it('works from a task worktree, the way tasks really run', async () => {
+      const { project, run } = await scan();
+      const worktree = join(project, '.vibe-teamlead', 'worktrees', 'my-worktree');
+      git(project, 'worktree', 'add', '-q', '-b', 'task-2', worktree, 'task');
+      const { result, seen } = await run({ projectDir: worktree });
+      expect(result.status).toBe('clear');
+      expect(seen('name')).toBe('my-worktree');
+      expect(seen('changed')).toBe('feature.txt,');
+      expect(git(worktree, 'status', '--porcelain')).toBe('');
+    });
+
+    it('removes the copy afterwards', async () => {
+      const { specDir, run } = await scan();
+      const { seen } = await run();
+      expect(seen('target')).toBeTruthy();
+      expect(existsSync(seen('target') as string)).toBe(false);
+      expect(existsSync(join(specDir, 'security', 'target'))).toBe(false);
+    });
+
+    it('reports an error, not a clean scan, when no copy can be made', async () => {
+      const { specDir, run } = await scan();
+      const { result } = await run({ projectDir: join(specDir, 'not-a-repo') });
+      expect(result).toMatchObject({ status: 'error', reason: expect.stringMatching(/copy/) });
+    });
   });
 
   it('runs Strix and reports blocking findings from its SARIF', async () => {
@@ -125,7 +265,7 @@ echo "found 2"; exit 2`,
     );
     process.env.PATH = `${bin}:${originalPath}`;
     const logs: string[] = [];
-    const result = await runStrix({ projectDir: specDir, specDir, settings, model: 'claude-sonnet-4-6', apiKey: 'sk-ant-api-x', strixBin: strix, onLog: (l) => logs.push(l) });
+    const result = await runStrix({ projectDir: gitProject(), specDir, settings, model: 'claude-sonnet-4-6', apiKey: 'sk-ant-api-x', strixBin: strix, onLog: (l) => logs.push(l) });
 
     expect(result.status).toBe('findings');
     expect(result.costUsd).toBe(1.25);
@@ -141,7 +281,7 @@ echo "found 2"; exit 2`,
     fakeBin('docker', 'exit 0', bin);
     process.env.PATH = `${bin}:${originalPath}`;
     const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
-    const opts = { projectDir: specDir, specDir, settings, model: 'claude-sonnet-4-6', apiKey: 'sk-ant-api-x' };
+    const opts = { projectDir: gitProject(), specDir, settings, model: 'claude-sonnet-4-6', apiKey: 'sk-ant-api-x' };
     expect((await runStrix({ ...opts, strixBin: fakeBin('strix-ok', 'exit 0', bin) })).status).toBe('clear');
     expect((await runStrix({ ...opts, strixBin: fakeBin('strix-bad', 'exit 1', bin) })).status).toBe('error');
   });

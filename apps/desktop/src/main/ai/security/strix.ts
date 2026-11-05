@@ -18,6 +18,7 @@ import { join, relative } from 'node:path';
 import { findOnPath, runProcess, searchPath } from '../../platform/exec';
 import { isSubscriptionToken } from '../claude-code/auth';
 import { writeFileReplacing } from '../safe-write';
+import { prepareStrixTarget, removeStrixTarget, type StrixTarget, TASK_DOCS_DIR } from './strix-target';
 
 export type StrixScanMode = 'quick' | 'standard' | 'deep';
 export type StrixSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -287,17 +288,6 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
 
   mkdirSync(workDir, { recursive: true });
-  const instructionFile = join(workDir, 'instructions.md');
-  await writeFileReplacing(
-    instructionFile,
-    [
-      'This is a white-box test of a feature branch built by an AI team. Test only what changed.',
-      `The feature specification (with acceptance criteria) is at ${join(specDir, 'spec.md')}; the architecture, if any, is under ${join(specDir, 'architecture')}.`,
-      'Report only vulnerabilities you can demonstrate with a proof of concept. Do not modify the source code.',
-    ].join('\n'),
-    'utf-8',
-  );
-
   const env: NodeJS.ProcessEnv = {
     PATH: strixPath(),
     HOME: process.env.HOME ?? homedir(),
@@ -310,6 +300,26 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     STRIX_TELEMETRY: '0',
   };
 
+  let target: StrixTarget;
+  try {
+    target = await prepareStrixTarget({ projectDir: options.projectDir, specDir, parentDir: workDir, diffBase: options.diffBase, env, signal });
+  } catch (error) {
+    removeStrixTarget(workDir);
+    if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
+    return finish({ status: 'error', reason: `Strix did not run: could not make a copy of the task (${error instanceof Error ? error.message : String(error)})`, findings: [] });
+  }
+
+  const instructionFile = join(workDir, 'instructions.md');
+  await writeFileReplacing(
+    instructionFile,
+    [
+      'This is a white-box test of a feature branch built by an AI team. Test only what changed.',
+      `The feature specification (with acceptance criteria) is at ${TASK_DOCS_DIR}/spec.md in the target; the architecture, if any, is under ${TASK_DOCS_DIR}/architecture.`,
+      'Report only vulnerabilities you can demonstrate with a proof of concept. Do not modify the source code.',
+    ].join('\n'),
+    'utf-8',
+  );
+
   options.onLog?.(
     `Security QA: Strix ${settings.scanMode} scan of changed code on ${strixModel(options.model)} (budget $${settings.maxBudgetUsd}, ` +
       `up to ${Math.round(STRIX_TIMEOUT_MS[settings.scanMode] / 60_000)} min). It runs in Docker; its progress follows as [strix] lines.`,
@@ -320,7 +330,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     options.onLog?.(`Security QA: Strix still running (${Math.round((Date.now() - startedAt) / 60_000)} min)`);
   }, HEARTBEAT_MS);
   heartbeat.unref?.();
-  const run = await runProcess(strix, buildStrixArgs(options, instructionFile), {
+  const run = await runProcess(strix, buildStrixArgs({ ...options, projectDir: target.path, diffBase: target.diffBase }, instructionFile), {
     cwd: workDir,
     env,
     signal,
@@ -330,7 +340,10 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     onLine: (line) => {
       if (line.trim()) options.onLog?.(`[strix] ${line.trim()}`);
     },
-  }).finally(() => clearInterval(heartbeat));
+  }).finally(() => {
+    clearInterval(heartbeat);
+    removeStrixTarget(workDir);
+  });
   const code: number | 'cancelled' = run.aborted ? 'cancelled' : run.timedOut ? -2 : run.code;
 
   if (code === 'cancelled') return finish({ status: 'cancelled', findings: [] });
