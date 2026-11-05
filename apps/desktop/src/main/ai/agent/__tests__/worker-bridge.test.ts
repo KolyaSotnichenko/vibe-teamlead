@@ -47,6 +47,7 @@ const mockProcessEvent = vi.fn();
 vi.mock('../../session/progress-tracker', () => ({
   ProgressTracker: class {
     processEvent = mockProcessEvent;
+    forcePhase = vi.fn();
     state = {
       currentPhase: 'initializing' as const,
       currentSubtask: null,
@@ -254,6 +255,24 @@ describe('WorkerBridge', () => {
       getWorker().emit('message', msg);
 
       expect(handler).toHaveBeenCalledWith('task-123', progressData, 'proj-456');
+    });
+
+    it("tells the tracker about the orchestrator's phase, so later stream events don't send a stale one", async () => {
+      const { ProgressTracker } = await vi.importActual<typeof import('../../session/progress-tracker')>('../../session/progress-tracker');
+      const handler = vi.fn();
+      bridge.on('execution-progress', handler);
+      bridge.spawn(createConfig());
+      (bridge as unknown as { progressTracker: unknown }).progressTracker = new ProgressTracker();
+      const send = (m: unknown) => getWorker().emit('message', { taskId: 'task-123', projectId: 'proj-456', ...(m as object) });
+
+      send({ type: 'execution-progress', data: { phase: 'coding', phaseProgress: 0, overallProgress: 0, message: 'Coding' } });
+      send({ type: 'execution-progress', data: { phase: 'qa_review', phaseProgress: 0, overallProgress: 0, message: 'Running QA review' } });
+      handler.mockClear();
+      // The reviewer starts a helper subagent: the card's state changes, the phase doesn't
+      send({ type: 'stream-event', data: { type: 'tool-call', toolName: 'Agent', toolCallId: 'a1', args: { subagent_type: 'test_runner' } } });
+
+      expect(handler).toHaveBeenCalled();
+      for (const [, progress] of handler.mock.calls) expect(progress.phase).toBe('qa_review');
     });
 
     it('feeds stream-events to progress tracker and emits progress', () => {

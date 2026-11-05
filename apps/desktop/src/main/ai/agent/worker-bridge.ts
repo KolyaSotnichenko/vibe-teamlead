@@ -234,6 +234,9 @@ export class WorkerBridge extends EventEmitter {
         break;
 
       case 'execution-progress':
+        // The orchestrator knows the phase. Without this the tracker keeps its own, and the next
+        // change it reports (a subagent starting) would send a stale phase back into the plan file.
+        this.progressTracker.forcePhase(message.data.phase, message.data.message ?? '', message.data.currentSubtask);
         this.emitTyped('execution-progress', message.taskId, message.data, message.projectId);
         break;
 
