@@ -34,6 +34,7 @@ import type { SessionResult } from '../session/types';
 import { iterateSubtasks } from './subtask-iterator';
 import type { SubtaskIteratorConfig, SubtaskResult } from './subtask-iterator';
 import { writeFileReplacing } from '../safe-write';
+import type { ArchitectMode } from '../../../shared/types/settings';
 
 // =============================================================================
 // Constants
@@ -74,6 +75,17 @@ const PHASE_CONFIG_MAP: Record<BuildPhase, Phase> = {
   qa_fixing: 'qa',
 } as const;
 
+/**
+ * Whether the architect should design the task under the Architect setting:
+ * 'always' and 'never' decide alone; 'complex' (the default) wants it for
+ * tasks assessed complex, and for tasks without a readable assessment.
+ */
+export function architectWanted(mode: ArchitectMode | undefined, complexity: string | undefined): boolean {
+  if (mode === 'always') return true;
+  if (mode === 'never') return false;
+  return complexity === undefined || complexity === 'complex';
+}
+
 /** Configuration for the build orchestrator */
 export interface BuildOrchestratorConfig {
   /** Spec directory path (e.g., .vibe-teamlead/specs/001-feature/) */
@@ -90,6 +102,8 @@ export interface BuildOrchestratorConfig {
   maxIterations?: number;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
+  /** When the architect designs before the planner (default: complex tasks only) */
+  architectMode?: ArchitectMode;
   /** Callback to generate the system prompt for a given agent type and phase */
   generatePrompt: (agentType: AgentType, phase: BuildPhase, context: PromptContext) => Promise<string>;
   /** Callback to run an agent session */
@@ -332,25 +346,26 @@ export class BuildOrchestrator extends EventEmitter {
   // ===========================================================================
 
   /**
-   * Whether the task needs an architecture pass: only complex tasks get one,
-   * and not when the architecture has already been written (resumed builds).
-   * Without a readable assessment the task is treated as complex.
+   * Whether the task needs an architecture pass (see architectWanted), and not
+   * when the architecture has already been written (resumed builds).
    */
   private async needsArchitecture(): Promise<boolean> {
+    if (this.config.architectMode === 'never') return false;
     try {
       await readFile(join(this.config.specDir, 'architecture', 'architecture.md'), 'utf-8');
       return false;
     } catch {
       // not written yet
     }
+    let complexity: string | undefined;
     try {
       const raw = await readFile(join(this.config.specDir, 'complexity_assessment.json'), 'utf-8');
       const assessment = safeParseJson(raw) as { complexity?: string } | null;
-      if (assessment) return assessment.complexity === 'complex';
+      if (assessment) complexity = assessment.complexity;
     } catch {
-      // no assessment — treat as complex
+      // no assessment
     }
-    return true;
+    return architectWanted(this.config.architectMode, complexity);
   }
 
   /**

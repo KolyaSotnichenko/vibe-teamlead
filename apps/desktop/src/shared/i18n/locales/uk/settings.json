@@ -192,6 +192,18 @@
     "dataPathPlaceholder": ".vibe-teamlead (типово)",
     "autoNameTerminals": "Автоматично називати термінали",
     "autoNameTerminalsDescription": "Генерувати за допомогою AI змістовні назви вкладок термінала на основі їхньої активності",
+    "architect": "Архітектор",
+    "architectDescription": "Коли архітектор проєктує рішення (architecture.md, ADR, діаграми) перед планувальником.",
+    "architectMode": {
+      "always": "Для кожної задачі",
+      "complex": "Лише для складних задач",
+      "never": "Ніколи"
+    },
+    "architectModeHint": {
+      "always": "architecture.md, ADR і діаграми для кожної задачі; повільніше й дорожче.",
+      "complex": "Лише для задач, які оцінка складності визнала складними (типово).",
+      "never": "Планувальник працює безпосередньо за спекою."
+    },
     "securityQa": "Security QA (Strix)",
     "securityQaDescription": "Після схвалення QA тест на проникнення Strix намагається зламати код, змінений задачею. Знахідки повертаються виправнику QA. Потрібні Docker, Strix (uv tool install strix-agent) і API-ключ Anthropic; має власний бюджет LLM.",
     "securityQaScanMode": "Сканування",

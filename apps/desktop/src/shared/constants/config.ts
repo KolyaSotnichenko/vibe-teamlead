@@ -47,6 +47,7 @@ export const DEFAULT_APP_SETTINGS = {
   securityQaScanMode: 'quick' as const,
   securityQaFailOn: 'high' as const,
   securityQaMaxBudgetUsd: 5,
+  architectMode: 'complex' as const,
   onboardingCompleted: false,
   notifications: {
     onTaskComplete: true,

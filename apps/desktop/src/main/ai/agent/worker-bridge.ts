@@ -31,6 +31,7 @@ import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import { readStrixSettings } from '../security/strix-setting';
 import { readSubagentSettings } from '../claude-code/subagent-setting';
+import { readArchitectMode } from '../orchestration/architect-setting';
 import { loadDesignSystem } from '../design/design-system';
 import { projectStore } from '../../project-store';
 import { resolvePromptsDir } from '../prompts/prompt-loader';
@@ -135,6 +136,7 @@ export class WorkerBridge extends EventEmitter {
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
         securityQa: config.session.securityQa ?? readStrixSettings(),
         subagents: config.session.subagents ?? readSubagentSettings(),
+        architectMode: config.session.architectMode ?? readArchitectMode(),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
       },
       promptsDir: resolvePromptsDir(),

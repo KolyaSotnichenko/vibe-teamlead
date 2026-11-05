@@ -7,7 +7,7 @@
 | **Terminal Fonts** | Terminal fonts. |
 | **Claude** | Access mode (API key / subscription), keys, base URL, connection test. |
 | **Tools** | Status of bundled and external tools (scanners, Chrome, Docker, Strix, CodeGraph). |
-| **Agent Settings** | Model profile, phase and feature models, Security QA (Strix). |
+| **Agent Settings** | Model profile, phase and feature models, Architect (every task / complex tasks only / never), Security QA (Strix). |
 | **Memory** | Enable/disable, embedding model. |
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
 | **Project → General** | The project's agent model, CLAUDE.md, notifications. |

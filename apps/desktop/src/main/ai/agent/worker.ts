@@ -711,6 +711,7 @@ async function runBuildOrchestrator(
     projectDir: session.projectDir,
     sourceSpecDir: session.sourceSpecDir,
     abortSignal: abortController.signal,
+    architectMode: session.architectMode,
 
     // What each coder session learned goes to the project's memory
     insightModel: await phaseModel(session.specDir, 'coding', session.modelId),
@@ -1102,6 +1103,7 @@ async function runSpecOrchestrator(
     taskDescription,
     projectIndex: projectIndexContent,
     abortSignal: abortController.signal,
+    architectMode: session.architectMode,
 
     generatePrompt: async (_agentType, phase, context) => {
       const promptName = specPhaseToPromptName(phase);

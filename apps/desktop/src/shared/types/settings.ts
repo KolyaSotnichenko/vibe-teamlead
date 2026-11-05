@@ -170,6 +170,11 @@ export interface ColorThemeDefinition {
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'xhigh';
 
 // Model type shorthand
+/** When the architect agent runs: always, only for complex tasks, or never */
+export type ArchitectMode = 'always' | 'complex' | 'never';
+export const ARCHITECT_MODES: readonly ArchitectMode[] = ['always', 'complex', 'never'];
+export const DEFAULT_ARCHITECT_MODE: ArchitectMode = 'complex';
+
 export type ModelTypeShort = 'haiku' | 'sonnet' | 'opus' | 'opus-1m' | 'opus-4.5';
 
 /** Widened model type: Claude shorthands + any arbitrary model ID */
@@ -280,6 +285,11 @@ export interface AppSettings {
   securityQaFailOn?: 'critical' | 'high' | 'medium' | 'low';
   /** Spend cap per scan, USD */
   securityQaMaxBudgetUsd?: number;
+  /**
+   * When the architect designs before the planner: for every task, only for
+   * tasks the complexity assessment rates complex (default), or never.
+   */
+  architectMode?: ArchitectMode;
   // API keys used by memory embeddings (OpenAI, Google)
   globalOpenAIApiKey?: string;
   globalGoogleApiKey?: string;

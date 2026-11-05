@@ -14,7 +14,7 @@ What happens in each phase:
 - **Discovery / context:** the agents study the existing code so the spec matches the real project.
 - **Research:** libraries and APIs are checked against current documentation (Context7).
 - **Self-critique:** a separate agent looks for holes in the spec.
-- **Architecture:** only for complex tasks. The architect writes `architecture.md`, ADRs and diagrams before the planner; standard tasks are planned from the spec alone.
+- **Architecture:** for complex tasks by default. The architect writes `architecture.md`, ADRs and diagrams before the planner; simple and standard tasks are planned from the spec alone. The **Architect** option in Settings → Agent Settings changes this: *every task* (the architect designs before the planner in every tier; a simple task gets a planner session after the quick spec so the plan follows the design), *complex tasks only* (default) or *never*.
 - **Validation:** a check that the spec and plan are consistent and ready for work.
 
 ## Spec-driven + test-first

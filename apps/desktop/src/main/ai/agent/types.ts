@@ -62,6 +62,8 @@ export interface SerializableSessionConfig {
   securityQa?: import('../security/strix').StrixSettings;
   /** Helper subagents: on/off and their model (resolved in the main process) */
   subagents?: import('../claude-code/subagents').SubagentSettings;
+  /** When the architect runs (resolved in the main process from the app settings) */
+  architectMode?: import('../../../shared/types/settings').ArchitectMode;
   /** The project's design system (resolved in the main process; .vibe-teamlead/ is not in worktrees) */
   designSystem?: import('../../../shared/types').DesignSystemInfo;
   /** The app's Claude credential: an API key, or a subscription token (personal mode only) */

@@ -192,6 +192,18 @@
     "dataPathPlaceholder": ".vibe-teamlead (default)",
     "autoNameTerminals": "Automatically name terminals",
     "autoNameTerminalsDescription": "Use AI to generate descriptive names for terminal tabs based on their activity",
+    "architect": "Architect",
+    "architectDescription": "When the architect designs the solution (architecture.md, ADRs, diagrams) before the planner.",
+    "architectMode": {
+      "always": "Every task",
+      "complex": "Complex tasks only",
+      "never": "Never"
+    },
+    "architectModeHint": {
+      "always": "architecture.md, ADRs and diagrams for every task; slower and costs more.",
+      "complex": "Only for tasks the complexity assessment rates complex (default).",
+      "never": "The planner works straight from the spec."
+    },
     "securityQa": "Security QA (Strix)",
     "securityQaDescription": "After QA approves, a Strix penetration test tries to exploit the code this task changed. Findings go back to the QA fixer. Needs Docker, Strix (uv tool install strix-agent) and an Anthropic API key; uses its own LLM budget.",
     "securityQaScanMode": "Scan",

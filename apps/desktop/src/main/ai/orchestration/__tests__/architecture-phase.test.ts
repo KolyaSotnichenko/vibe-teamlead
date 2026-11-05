@@ -4,12 +4,13 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { BuildOrchestrator } from '../build-orchestrator';
+import type { ArchitectMode } from '../../../../shared/types/settings';
+import { BuildOrchestrator, architectWanted } from '../build-orchestrator';
 
-function orchestrator(specDir: string, runSession = vi.fn().mockResolvedValue({ outcome: 'completed' })) {
+function orchestrator(specDir: string, runSession = vi.fn().mockResolvedValue({ outcome: 'completed' }), architectMode?: ArchitectMode) {
   const generatePrompt = vi.fn().mockResolvedValue('prompt');
   const runQA = vi.fn().mockResolvedValue({ approved: true });
-  const o = new BuildOrchestrator({ specDir, projectDir: specDir, generatePrompt, runSession, runQA });
+  const o = new BuildOrchestrator({ specDir, projectDir: specDir, generatePrompt, runSession, runQA, architectMode });
   return { o: o as unknown as { runArchitecturePhase(): Promise<void> }, runSession, generatePrompt };
 }
 
@@ -50,6 +51,43 @@ describe('architecture phase', () => {
     const dir = mkdtempSync(join(tmpdir(), 'vtl-ap-'));
     const { o } = orchestrator(dir, vi.fn().mockRejectedValue(new Error('boom')));
     await expect(o.runArchitecturePhase()).resolves.toBeUndefined();
+  });
+
+  it('"always" runs the architect for simple tasks, "never" skips complex ones', async () => {
+    const always = orchestrator(specDir(JSON.stringify({ complexity: 'simple' })), undefined, 'always');
+    await always.o.runArchitecturePhase();
+    expect(always.runSession).toHaveBeenCalledWith(expect.objectContaining({ agentType: 'architect' }));
+
+    const never = orchestrator(specDir(JSON.stringify({ complexity: 'complex' })), undefined, 'never');
+    await never.o.runArchitecturePhase();
+    expect(never.runSession).not.toHaveBeenCalled();
+  });
+
+  it('"always" still skips an already-designed spec', async () => {
+    const designed = specDir(JSON.stringify({ complexity: 'simple' }));
+    mkdirSync(join(designed, 'architecture'));
+    writeFileSync(join(designed, 'architecture', 'architecture.md'), '# Architecture');
+    const { o, runSession } = orchestrator(designed, undefined, 'always');
+    await o.runArchitecturePhase();
+    expect(runSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('architectWanted', () => {
+  it('"complex" (and the default) wants the architect only for complex or unassessed tasks', () => {
+    for (const mode of ['complex', undefined] as const) {
+      expect(architectWanted(mode, 'complex')).toBe(true);
+      expect(architectWanted(mode, undefined)).toBe(true);
+      expect(architectWanted(mode, 'standard')).toBe(false);
+      expect(architectWanted(mode, 'simple')).toBe(false);
+    }
+  });
+
+  it('"always" and "never" ignore the assessment', () => {
+    for (const complexity of ['simple', 'standard', 'complex', undefined] as const) {
+      expect(architectWanted('always', complexity)).toBe(true);
+      expect(architectWanted('never', complexity)).toBe(false);
+    }
   });
 });
 
@@ -102,5 +140,36 @@ describe('spec pipeline architecture phase', () => {
     expect(phases.indexOf('architecture')).toBeGreaterThan(phases.indexOf('spec_writing'));
     expect(COMPLEXITY_PHASES.standard).not.toContain('architecture');
     expect(COMPLEXITY_PHASES.simple).not.toContain('architecture');
+  });
+
+  describe('specPhasesFor', () => {
+    it('"complex" and the default keep the tier lists', async () => {
+      const { COMPLEXITY_PHASES, specPhasesFor } = await import('../spec-orchestrator');
+      for (const tier of ['simple', 'standard', 'complex'] as const) {
+        expect(specPhasesFor(tier, 'complex')).toEqual(COMPLEXITY_PHASES[tier]);
+        expect(specPhasesFor(tier, undefined)).toEqual(COMPLEXITY_PHASES[tier]);
+        expect(specPhasesFor(tier, undefined)).not.toBe(COMPLEXITY_PHASES[tier]);
+      }
+    });
+
+    it('"never" drops the architecture phase from every tier', async () => {
+      const { COMPLEXITY_PHASES, specPhasesFor } = await import('../spec-orchestrator');
+      for (const tier of ['simple', 'standard', 'complex'] as const) {
+        expect(specPhasesFor(tier, 'never')).not.toContain('architecture');
+        expect(specPhasesFor(tier, 'never')).toEqual(COMPLEXITY_PHASES[tier].filter((p) => p !== 'architecture'));
+      }
+    });
+
+    it('"always" designs right before planning in every tier', async () => {
+      const { specPhasesFor } = await import('../spec-orchestrator');
+      for (const tier of ['simple', 'standard', 'complex'] as const) {
+        const phases = specPhasesFor(tier, 'always');
+        expect(phases.filter((p) => p === 'architecture')).toHaveLength(1);
+        expect(phases.indexOf('architecture')).toBe(phases.indexOf('planning') - 1);
+      }
+      // Simple tasks: the quick spec writes the spec the architect reads, then the planner re-plans from the architecture
+      expect(specPhasesFor('simple', 'always')).toEqual(['quick_spec', 'architecture', 'planning', 'validation']);
+      expect(specPhasesFor('standard', 'always')).toEqual(['discovery', 'requirements', 'spec_writing', 'architecture', 'planning', 'validation']);
+    });
   });
 });

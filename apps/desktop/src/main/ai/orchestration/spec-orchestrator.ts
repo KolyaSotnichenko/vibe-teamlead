@@ -32,6 +32,7 @@ import {
 import type { ZodSchema } from 'zod';
 import type { SessionResult } from '../session/types';
 import { writeFileReplacing } from '../safe-write';
+import type { ArchitectMode } from '../../../shared/types/settings';
 
 // =============================================================================
 // Constants
@@ -107,6 +108,30 @@ export const COMPLEXITY_PHASES: Record<ComplexityTier, SpecPhase[]> = {
   ],
 } as const;
 
+/**
+ * The phases a tier runs under the Architect setting (a fresh array):
+ * - 'complex' (the default) keeps the tier lists above;
+ * - 'never' drops the architecture phase everywhere;
+ * - 'always' designs right before planning in every tier. The simple tier has no
+ *   planner — quick_spec writes the spec and the plan together — and the architect
+ *   needs the spec, so it runs after quick_spec and a planning phase follows it:
+ *   the planner re-plans from the spec and the architecture, so the plan follows
+ *   the design (one more session, which "always" accepts).
+ */
+export function specPhasesFor(tier: ComplexityTier, architectMode: ArchitectMode | undefined): SpecPhase[] {
+  const phases = [...COMPLEXITY_PHASES[tier]];
+  if (architectMode === 'never') return phases.filter((p) => p !== 'architecture');
+  if (architectMode !== 'always' || phases.includes('architecture')) return phases;
+  const planningIdx = phases.indexOf('planning');
+  if (planningIdx !== -1) {
+    phases.splice(planningIdx, 0, 'architecture');
+  } else {
+    const afterQuickSpec = phases.indexOf('quick_spec') + 1;
+    phases.splice(afterQuickSpec, 0, 'architecture', 'planning');
+  }
+  return phases;
+}
+
 /** Maps each phase to the output files it typically produces */
 const PHASE_OUTPUTS: Partial<Record<SpecPhase, string[]>> = {
   discovery: ['context.json'],
@@ -133,6 +158,8 @@ export interface SpecOrchestratorConfig {
   complexityOverride?: ComplexityTier;
   /** Whether to use AI for complexity assessment (default: true) */
   useAiAssessment?: boolean;
+  /** When the architect designs before the planner (default: complex tasks only) */
+  architectMode?: ArchitectMode;
   /** Pre-generated project index JSON content (injected into all phases) */
   projectIndex?: string;
   /** CLI model override */
@@ -327,7 +354,7 @@ export class SpecOrchestrator extends EventEmitter {
       // ===================================================================
       // Step 2: Determine and run phases based on assessed complexity
       // ===================================================================
-      const phasesToRun = [...COMPLEXITY_PHASES[complexity]];
+      const phasesToRun = specPhasesFor(complexity, this.config.architectMode);
 
       // Inject research/self-critique if flagged but not already in the tier
       if (this.assessment?.needs_research && !phasesToRun.includes('research')) {

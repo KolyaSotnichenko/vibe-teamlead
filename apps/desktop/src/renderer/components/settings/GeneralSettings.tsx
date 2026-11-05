@@ -203,6 +203,28 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                   onCheckedChange={(checked) => onSettingsChange({ ...settings, autoNameTerminals: checked })}
                 />
               </div>
+              <div className="space-y-1 max-w-md">
+                <Label htmlFor="architectMode" className="text-sm font-medium text-foreground">
+                  {t('general.architect')}
+                </Label>
+                <p className="text-sm text-muted-foreground">{t('general.architectDescription')}</p>
+                <Select
+                  value={settings.architectMode ?? 'complex'}
+                  onValueChange={(value) => onSettingsChange({ ...settings, architectMode: value as AppSettings['architectMode'] })}
+                >
+                  <SelectTrigger id="architectMode" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['always', 'complex', 'never'] as const).map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {t(`general.architectMode.${mode}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{t(`general.architectModeHint.${settings.architectMode ?? 'complex'}`)}</p>
+              </div>
               <div className="flex items-center justify-between max-w-md">
                 <div className="space-y-1">
                   <Label htmlFor="securityQaEnabled" className="text-sm font-medium text-foreground">

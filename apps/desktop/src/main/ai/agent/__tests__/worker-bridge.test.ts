@@ -72,6 +72,10 @@ vi.mock('../../memory/agent-memory', () => ({
 // The project's design system is read from the project store (Electron app paths)
 vi.mock('../../../project-store', () => ({ projectStore: { getProject: () => undefined } }));
 
+// The architect setting is read from the app settings file
+const { readArchitectMode } = vi.hoisted(() => ({ readArchitectMode: vi.fn(() => 'never') }));
+vi.mock('../../orchestration/architect-setting', () => ({ readArchitectMode }));
+
 // Import after mocks
 import { WorkerBridge } from '../worker-bridge';
 
@@ -137,6 +141,19 @@ describe('WorkerBridge', () => {
     it('throws if worker already active', () => {
       bridge.spawn(createConfig());
       expect(() => bridge.spawn(createConfig())).toThrow('already has an active worker');
+    });
+
+    it('fills the architect mode from the app settings unless the session sets it', () => {
+      bridge.spawn(createConfig());
+      const session = (getWorker() as unknown as { workerData: { session: { architectMode?: string } } }).workerData.session;
+      expect(session.architectMode).toBe('never');
+      expect(readArchitectMode).toHaveBeenCalled();
+
+      bridge = new WorkerBridge();
+      const config = createConfig();
+      config.session.architectMode = 'always';
+      bridge.spawn(config);
+      expect((getWorker() as unknown as { workerData: { session: { architectMode?: string } } }).workerData.session.architectMode).toBe('always');
     });
   });
 
