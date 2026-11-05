@@ -332,8 +332,9 @@ export class BuildOrchestrator extends EventEmitter {
   // ===========================================================================
 
   /**
-   * Whether the task needs an architecture pass: skipped for simple tasks and
-   * when the architecture has already been written (resumed builds).
+   * Whether the task needs an architecture pass: only complex tasks get one,
+   * and not when the architecture has already been written (resumed builds).
+   * Without a readable assessment the task is treated as complex.
    */
   private async needsArchitecture(): Promise<boolean> {
     try {
@@ -345,9 +346,9 @@ export class BuildOrchestrator extends EventEmitter {
     try {
       const raw = await readFile(join(this.config.specDir, 'complexity_assessment.json'), 'utf-8');
       const assessment = safeParseJson(raw) as { complexity?: string } | null;
-      if (assessment?.complexity === 'simple') return false;
+      if (assessment) return assessment.complexity === 'complex';
     } catch {
-      // no assessment — treat as non-trivial
+      // no assessment — treat as complex
     }
     return true;
   }

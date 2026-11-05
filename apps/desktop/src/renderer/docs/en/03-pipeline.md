@@ -7,13 +7,14 @@ First, the **complexity assessor** determines the task's level:
 | Level | Phases |
 |---|---|
 | **Simple** | quick spec → validation |
-| **Standard** | discovery → requirements → spec → **architecture** → plan → validation |
+| **Standard** | discovery → requirements → spec → plan → validation |
 | **Complex** | discovery → requirements → research → context → spec → self-critique → **architecture** → plan → validation |
 
 What happens in each phase:
 - **Discovery / context:** the agents study the existing code so the spec matches the real project.
 - **Research:** libraries and APIs are checked against current documentation (Context7).
 - **Self-critique:** a separate agent looks for holes in the spec.
+- **Architecture:** only for complex tasks. The architect writes `architecture.md`, ADRs and diagrams before the planner; standard tasks are planned from the spec alone.
 - **Validation:** a check that the spec and plan are consistent and ready for work.
 
 ## Spec-driven + test-first

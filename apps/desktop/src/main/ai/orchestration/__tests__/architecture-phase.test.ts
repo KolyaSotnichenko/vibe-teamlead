@@ -14,21 +14,32 @@ function orchestrator(specDir: string, runSession = vi.fn().mockResolvedValue({ 
 }
 
 describe('architecture phase', () => {
-  it('runs the architect for non-trivial tasks', async () => {
+  function specDir(assessment?: string): string {
     const dir = mkdtempSync(join(tmpdir(), 'vtl-ap-'));
-    const { o, runSession, generatePrompt } = orchestrator(dir);
+    if (assessment !== undefined) writeFileSync(join(dir, 'complexity_assessment.json'), assessment);
+    return dir;
+  }
+
+  it('runs the architect for complex tasks', async () => {
+    const { o, runSession, generatePrompt } = orchestrator(specDir(JSON.stringify({ complexity: 'complex' })));
     await o.runArchitecturePhase();
     expect(generatePrompt).toHaveBeenCalledWith('architect', 'planning', expect.objectContaining({ attemptCount: 0 }));
     expect(runSession).toHaveBeenCalledWith(expect.objectContaining({ agentType: 'architect', phase: 'planning' }));
   });
 
-  it('skips simple tasks and already-designed specs', async () => {
-    const simple = mkdtempSync(join(tmpdir(), 'vtl-ap-'));
-    writeFileSync(join(simple, 'complexity_assessment.json'), JSON.stringify({ complexity: 'simple' }));
-    const designed = mkdtempSync(join(tmpdir(), 'vtl-ap-'));
+  it('runs the architect when the assessment is missing or unreadable', async () => {
+    for (const dir of [specDir(), specDir('not json')]) {
+      const { o, runSession } = orchestrator(dir);
+      await o.runArchitecturePhase();
+      expect(runSession).toHaveBeenCalledWith(expect.objectContaining({ agentType: 'architect' }));
+    }
+  });
+
+  it('skips simple and standard tasks and already-designed specs', async () => {
+    const designed = specDir(JSON.stringify({ complexity: 'complex' }));
     mkdirSync(join(designed, 'architecture'));
     writeFileSync(join(designed, 'architecture', 'architecture.md'), '# Architecture');
-    for (const dir of [simple, designed]) {
+    for (const dir of [specDir(JSON.stringify({ complexity: 'simple' })), specDir(JSON.stringify({ complexity: 'standard' })), designed]) {
       const { o, runSession } = orchestrator(dir);
       await o.runArchitecturePhase();
       expect(runSession).not.toHaveBeenCalled();
@@ -83,14 +94,13 @@ describe('QA phase', () => {
 });
 
 describe('spec pipeline architecture phase', () => {
-  it('designs the architecture before planning for standard and complex tasks, not simple ones', async () => {
+  it('designs the architecture before planning for complex tasks only', async () => {
     const { COMPLEXITY_PHASES } = await import('../spec-orchestrator');
-    for (const tier of ['standard', 'complex'] as const) {
-      const phases = COMPLEXITY_PHASES[tier];
-      expect(phases).toContain('architecture');
-      expect(phases.indexOf('architecture')).toBe(phases.indexOf('planning') - 1);
-      expect(phases.indexOf('architecture')).toBeGreaterThan(phases.indexOf('spec_writing'));
-    }
+    const phases = COMPLEXITY_PHASES.complex;
+    expect(phases).toContain('architecture');
+    expect(phases.indexOf('architecture')).toBe(phases.indexOf('planning') - 1);
+    expect(phases.indexOf('architecture')).toBeGreaterThan(phases.indexOf('spec_writing'));
+    expect(COMPLEXITY_PHASES.standard).not.toContain('architecture');
     expect(COMPLEXITY_PHASES.simple).not.toContain('architecture');
   });
 });

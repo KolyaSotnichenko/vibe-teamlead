@@ -88,12 +88,12 @@ const PHASE_AGENT_MAP: Record<SpecPhase, AgentType> = {
  * - SIMPLE: skip discovery & requirements entirely — quick_spec handles everything.
  * - STANDARD: discovery builds context.json, requirements gathers formal reqs,
  *   then spec_writing + planning. 'context' phase removed (redundant with discovery).
- * - COMPLEX: full pipeline including research and self-critique.
+ * - COMPLEX: full pipeline including research, self-critique and architecture.
  */
 export const COMPLEXITY_PHASES: Record<ComplexityTier, SpecPhase[]> = {
   simple: ['quick_spec', 'validation'],
-  // The architect designs before the planner so the plan follows the architecture
-  standard: ['discovery', 'requirements', 'spec_writing', 'architecture', 'planning', 'validation'],
+  standard: ['discovery', 'requirements', 'spec_writing', 'planning', 'validation'],
+  // Only complex tasks get an architect; it designs before the planner so the plan follows the architecture
   complex: [
     'discovery',
     'requirements',
