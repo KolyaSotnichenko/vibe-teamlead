@@ -170,22 +170,16 @@ describe('createMergeResolverFn', () => {
     expect(result).toBe('merged content');
   });
 
-  it('returned function resolves to empty string when LLM returns empty', async () => {
+  it('returned function says so when the model returns nothing', async () => {
     mockRunClaudeTask.mockResolvedValue({ text: '   ' });
 
-    const fn = createMergeResolverFn();
-    const result = await fn('system', 'conflict');
-
-    expect(result).toBe('');
+    await expect(createMergeResolverFn()('system', 'conflict')).rejects.toThrow('Empty response from AI');
   });
 
-  it('returned function resolves to empty string on error (does not throw)', async () => {
-    mockRunClaudeTask.mockRejectedValue(new Error('timeout'));
+  it("returned function passes on the call's error: the user has to see why", async () => {
+    mockRunClaudeTask.mockRejectedValue(new Error('API Error: 429 busy'));
 
-    const fn = createMergeResolverFn();
-    const result = await fn('system', 'conflict');
-
-    expect(result).toBe('');
+    await expect(createMergeResolverFn()('system', 'conflict')).rejects.toThrow('API Error: 429 busy');
   });
 
   it('uses provided modelShorthand and thinkingLevel', async () => {

@@ -372,7 +372,7 @@ describe('mergeTaskBranch', () => {
       ['conflict markers', '<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> task\n'],
       ['damaged binary text', 'a\uFFFDb'],
       ['an empty file', ''],
-      ['the file wrapped in a code fence', '```\nboth\n```'],
+      ['several code fences, which could be the file or a talk about it', '```\nboth\n```\nand\n```\nmore\n```'],
     ])('rolls back and names the file when the resolver gives %s', async (_name, resolved) => {
       const before = head();
       const result = await merge({ resolveConflict: async () => resolved });
@@ -380,6 +380,32 @@ describe('mergeTaskBranch', () => {
       expect(head()).toBe(before);
       expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
       expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('main side\n');
+    });
+
+    it.each([
+      ['fence with a language', '```ts\nboth\nsides\n```'],
+      ['bare fence', '```\nboth\nsides\n```'],
+      ['fence and a trailing line break', '```\nboth\nsides\n```\n'],
+    ])('takes the file out of a code fence around the whole answer: %s', async (_name, resolved) => {
+      await expect(merge({ resolveConflict: async () => resolved })).resolves.toMatchObject({ status: 'needs_review' });
+      expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('both\nsides\n');
+    });
+
+    it.each<[string, () => Promise<string | undefined>, RegExp]>([
+      ['the error the model call failed with', async () => { throw new Error('API Error: 429 busy'); }, /shared\.txt.*API Error: 429 busy/],
+      ['that nothing came back', async () => undefined, /shared\.txt.*returned nothing/],
+      ['that the answer still has conflict markers', async () => '<<<<<<< HEAD\nx\n>>>>>>> task\n', /shared\.txt.*conflict markers/],
+      ['that the answer is not plain text', async () => 'a�b', /shared\.txt.*not plain text/],
+      ['that the fences make the answer unclear', async () => '```\na\n```\nb\n```\nc\n```', /shared\.txt.*code fence/],
+    ])('says why the model did not resolve it: %s', async (_name, resolveConflict, why) => {
+      const result = await merge({ resolveConflict });
+      expect(result.status).toBe('conflicts');
+      expect(result.message).toMatch(why);
+    });
+
+    it('cuts a very long error', async () => {
+      const result = await merge({ resolveConflict: async () => { throw new Error('x'.repeat(5000)); } });
+      expect(result.message?.length).toBeLessThan(500);
     });
 
     it('runs no hooks on a rollback either', async () => {
@@ -447,7 +473,9 @@ describe('mergeTaskBranch', () => {
 
     it('a binary file', async () => {
       conflictWith('logo.png', () => writeFileSync(join(repo, 'logo.png'), Buffer.from([0, 1, 2])), () => writeFileSync(join(wt, 'logo.png'), Buffer.from([0, 3, 4])));
-      await expect(merge({ resolveConflict })).resolves.toMatchObject({ status: 'conflicts', conflictFiles: ['logo.png'] });
+      const result = await merge({ resolveConflict });
+      expect(result).toMatchObject({ status: 'conflicts', conflictFiles: ['logo.png'] });
+      expect(result.message).toMatch(/logo\.png.*only a person/);
       expect(resolveConflict).not.toHaveBeenCalled();
     });
 

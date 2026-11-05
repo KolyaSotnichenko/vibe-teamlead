@@ -92,7 +92,7 @@ export async function resolveMergeConflict(
  *
  * @param modelShorthand - Model to use (defaults to 'haiku')
  * @param thinkingLevel - Thinking level (defaults to 'low')
- * @returns Async function that resolves conflicts
+ * @returns Async function that resolves conflicts, and throws with the reason when it can't
  */
 export function createMergeResolverFn(
   modelShorthand: ModelShorthand = 'haiku',
@@ -105,6 +105,8 @@ export function createMergeResolverFn(
       modelShorthand,
       thinkingLevel,
     });
+    // Empty text would hide why: the user sees this reason on the task
+    if (!result.success) throw new Error(result.error ?? 'The model did not resolve the conflict');
     return result.text;
   };
 }

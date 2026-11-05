@@ -43,7 +43,7 @@ export interface MergeTaskBranchOptions {
 export interface MergeTaskBranchResult {
   /** needs_review: the model resolved conflicts; staged, with the merge left open for the user */
   status: 'merged' | 'staged' | 'up_to_date' | 'needs_review' | 'cancelled' | 'conflicts' | 'refused';
-  /** Why it was refused, in git's or the hook's words */
+  /** Why it was refused, in git's or the hook's words; for conflicts, why they stayed */
   message?: string;
   conflictFiles?: string[];
 }
@@ -72,11 +72,30 @@ const REGULAR_FILE = new Set(['100644', '100755']);
 /** Not text the resolver can read: a null byte, or bytes that aren't valid UTF-8. Pure. */
 const isBinary = (content: string) => content.includes('\0') || content.includes('\uFFFD');
 
-/** What a resolver must not hand back as a merged file. Pure. */
-function isUsableMerge(content: string | undefined, versions: MergeConflictVersions): content is string {
-  if (!content || isBinary(content) || /^(<{7}|>{7}) /m.test(content)) return false;
-  return !content.startsWith('```') || versions.ours.startsWith('```') || versions.theirs.startsWith('```');
+const hasOuterFence = (versions: MergeConflictVersions) => versions.ours.startsWith('```') || versions.theirs.startsWith('```');
+
+/**
+ * The file out of a code fence around the whole answer, which models add despite
+ * being told not to. A fence inside it leaves the answer as it is: what is the file
+ * and what is a talk about it can't be told apart. Pure.
+ */
+function withoutOuterFence(content: string, versions: MergeConflictVersions): string {
+  if (hasOuterFence(versions)) return content;
+  const inner = /^```[^\n]*\n([\s\S]*\n)?```\s*$/.exec(content);
+  return inner && !/^```/m.test(inner[1] ?? '') ? (inner[1] ?? '') : content;
 }
+
+/** Why a resolver's answer can't be the merged file, if so. Pure. */
+function whyUnusable(content: string | undefined, versions: MergeConflictVersions): string | undefined {
+  if (!content) return 'the model returned nothing';
+  if (isBinary(content)) return 'the answer is not plain text';
+  if (/^(<{7}|>{7}) /m.test(content)) return 'the answer still has conflict markers';
+  if (content.startsWith('```') && !hasOuterFence(versions)) return 'the answer has code fences besides the file';
+  return undefined;
+}
+
+const MAX_REASON_CHARS = 300;
+const ONLY_A_PERSON = 'only a person can merge this kind of file';
 
 type GitRun = ReturnType<typeof gitRunner>;
 
@@ -210,20 +229,22 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   };
 
   /** Only text files both sides still have reach the resolver; the rest stay for the user. */
-  const resolveOne = async (file: string, versions: Map<string, { mode: string; blob: string }>): Promise<string | undefined> => {
+  const resolveOne = async (file: string, versions: Map<string, { mode: string; blob: string }>): Promise<{ merged: string } | { why: string }> => {
     const ours = versions.get('2');
     const theirs = versions.get('3');
-    if (!ours || !theirs || [...versions.values()].some(({ mode }) => !REGULAR_FILE.has(mode))) return undefined;
+    if (!ours || !theirs || [...versions.values()].some(({ mode }) => !REGULAR_FILE.has(mode))) return { why: ONLY_A_PERSON };
     const read = async (blob?: string) => (blob ? (await run(['cat-file', 'blob', blob])).raw : '');
     const conflict = { file, base: await read(versions.get('1')?.blob), ours: await read(ours.blob), theirs: await read(theirs.blob) };
-    if (isBinary(conflict.base) || isBinary(conflict.ours) || isBinary(conflict.theirs)) return undefined;
+    if (isBinary(conflict.base) || isBinary(conflict.ours) || isBinary(conflict.theirs)) return { why: ONLY_A_PERSON };
     try {
-      if (!isPlainFileInProject(file)) return undefined;
-      const resolved = await options.resolveConflict(conflict);
-      if (!isUsableMerge(resolved, conflict)) return undefined;
-      return conflict.ours.endsWith('\n') && !resolved.endsWith('\n') ? `${resolved}\n` : resolved;
-    } catch {
-      return undefined;
+      if (!isPlainFileInProject(file)) return { why: ONLY_A_PERSON };
+      const answer = await options.resolveConflict(conflict);
+      const resolved = answer && withoutOuterFence(answer, conflict);
+      const why = whyUnusable(resolved, conflict);
+      if (why || !resolved) return { why: why ?? 'the model returned nothing' };
+      return { merged: conflict.ours.endsWith('\n') && !resolved.endsWith('\n') ? `${resolved}\n` : resolved };
+    } catch (error) {
+      return { why: (error instanceof Error ? error.message : String(error)).slice(0, MAX_REASON_CHARS) };
     }
   };
 
@@ -274,8 +295,8 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
     const merged = new Map<string, string>();
     for (const [file, versions] of stages) {
       const resolved = await resolveOne(file, versions);
-      if (resolved === undefined) return undoThen({ status: 'conflicts', conflictFiles });
-      merged.set(file, resolved);
+      if ('why' in resolved) return undoThen({ status: 'conflicts', conflictFiles, message: `${file}: ${resolved.why.replace(/\.$/, '')}` });
+      merged.set(file, resolved.merged);
     }
     try {
       for (const [file, content] of merged) writeFileSync(join(projectDir, file), content, 'utf-8');

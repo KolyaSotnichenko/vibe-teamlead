@@ -2103,7 +2103,7 @@ export function registerWorktreeHandlers(
 
         if (mergeResult.status === 'conflicts') {
           conflictFiles = mergeResult.conflictFiles;
-          mergeError = `Could not merge automatically: ${(conflictFiles ?? []).join(', ')}. Nothing was changed. Resolve the conflicts on the task branch and merge again.`;
+          mergeError = `Could not merge automatically: ${(conflictFiles ?? []).join(', ')}. ${mergeResult.message ?? 'The model did not resolve them'}. Nothing was changed. Resolve the conflicts on the task branch and merge again.`;
         } else if (mergeResult.status === 'refused') {
           mergeError = mergeResult.message ?? 'Merge failed';
         } else {
