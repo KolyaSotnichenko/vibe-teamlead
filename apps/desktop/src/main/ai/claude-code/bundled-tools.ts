@@ -17,6 +17,8 @@
  *   <Resources>/drawio-viewer/viewer-static.min.js
  *   <Resources>/codegraph/bin/codegraph
  *   <Resources>/scanners/{gitleaks,osv-scanner}
+ *
+ * Semgrep is not bundled (a Python package): it is used only when found on PATH.
  *   <Resources>/browser-mcp/node_modules/{@playwright/mcp,playwright,playwright-core,chrome-devtools-mcp}
  */
 
@@ -53,6 +55,8 @@ export interface BundledTools {
   gitleaksBin?: string;
   /** OSV-Scanner binary (vulnerable dependency gate) */
   osvScannerBin?: string;
+  /** Semgrep, when installed on this machine (static analysis gate); never bundled */
+  semgrepBin?: string;
 }
 
 const PLAYWRIGHT_CLI = 'cli.js';
@@ -91,6 +95,7 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     nodeRuntime: process.execPath,
     gitleaksBin: firstExisting([join(resourcesPath, 'scanners', 'gitleaks')]),
     osvScannerBin: firstExisting([join(resourcesPath, 'scanners', 'osv-scanner')]),
+    semgrepBin: findOnPath('semgrep'),
   };
 }
 
@@ -125,6 +130,7 @@ export function resolveDevTools(appRoot: string): BundledTools {
     nodeRuntime: process.execPath,
     gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', 'gitleaks')]) ?? findOnPath('gitleaks'),
     osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', 'osv-scanner')]) ?? findOnPath('osv-scanner'),
+    semgrepBin: findOnPath('semgrep'),
   };
 }
 

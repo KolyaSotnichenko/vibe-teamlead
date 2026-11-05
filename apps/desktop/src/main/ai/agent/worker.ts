@@ -918,6 +918,7 @@ async function runQualityAssurance(
         specDir: session.specDir,
         gitleaksBin: session.bundled?.gitleaksBin,
         osvScannerBin: session.bundled?.osvScannerBin,
+        semgrepBin: session.bundled?.semgrepBin,
         signal: abortController.signal,
       }),
 

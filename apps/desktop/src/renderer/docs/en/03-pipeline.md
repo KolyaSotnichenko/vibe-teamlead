@@ -29,7 +29,7 @@ What happens in each phase:
 
 ```mermaid
 flowchart TD
-  G["Gates: gitleaks + OSV-Scanner + design check"] -->|"clear"| R["QA reviewer"]
+  G["Gates: gitleaks + OSV-Scanner + Semgrep + design check"] -->|"clear"| R["QA reviewer"]
   G -->|"findings"| F
   G -->|"same findings again"| ESC
   R -->|"approved"| OK["Ready for your review"]
@@ -38,6 +38,7 @@ flowchart TD
   R -->|"too many iterations or the same issue again"| ESC["Escalation to you"]
 ```
 
+- The checks are gitleaks (secrets), OSV-Scanner (vulnerable dependencies), Semgrep (static analysis of the changed files with its registry rules, ERROR severity; it runs only when Semgrep is installed on the Mac, `brew install semgrep` or `pip install semgrep`, and is skipped otherwise or when its rules can't be fetched) and the design check. The reviewer is told not to repeat those scans by hand and to look for what they can't see: authorization, tenant isolation, trust boundaries.
 - The review runs only when the checks are clear: findings go straight to the fixer, which gets one round at each. If the same finding is back, the task comes to you at once. In Review you can allow a design finding the design system permits, then run QA again.
 - The app writes a `qa_report.md` report (with the AC table) and a manual test plan.
 - Dev servers run through the app: agents ask for one and get its URL. It gets a free port, is reused by later sessions of the task and stops with the task, along with the containers the task started (`docker compose up` brings those back with their data).

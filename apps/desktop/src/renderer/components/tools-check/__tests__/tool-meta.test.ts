@@ -6,7 +6,7 @@ import type { ToolCheck } from '../../../../shared/types';
 describe('summarize', () => {
   it('reports what each area needs on a fresh Mac', () => {
     expect(summarize(sampleToolChecks)).toEqual([
-      { area: 'security_gates', blockers: [{ id: 'osv-scanner', notRunning: false }] },
+      { area: 'security_gates', blockers: [{ id: 'osv-scanner', notRunning: false }, { id: 'semgrep', notRunning: false }] },
       { area: 'browser_qa', blockers: [] },
       {
         area: 'security_qa',
@@ -34,11 +34,13 @@ describe('gateSkipFix', () => {
       kind: 'install',
       command: 'brew install osv-scanner',
     });
+    expect(gateSkipFix('semgrep', 'Semgrep is not installed')).toEqual({ tool: 'semgrep', kind: 'install', command: 'brew install semgrep' });
   });
 
   it('gives no fix when the gate was skipped for another reason', () => {
     expect(gateSkipFix('osv-scanner', 'no lockfiles to scan')).toBeNull();
-    expect(gateSkipFix('semgrep', 'semgrep is not available')).toBeNull();
+    expect(gateSkipFix('semgrep', 'Semgrep could not fetch its rules (network or registry): Failed to download configuration')).toBeNull();
+    expect(gateSkipFix('design', 'design is not available')).toBeNull();
   });
 });
 

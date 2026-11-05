@@ -528,7 +528,7 @@ export function parseSecurityGates(raw: unknown): WorkspaceSecurity['gates'] {
     findings: findings.flatMap((f) => {
       if (!f || typeof f !== 'object') return [];
       const x = f as Record<string, unknown>;
-      const source = x.gate === 'osv-scanner' ? 'osv-scanner' : 'gitleaks';
+      const source = x.gate === 'osv-scanner' ? 'osv-scanner' : x.gate === 'semgrep' ? 'semgrep' : 'gitleaks';
       const file = str(x.file);
       return [{ source, title: str(x.title) ?? 'Finding', location: file ? `${file}${typeof x.line === 'number' ? `:${x.line}` : ''}` : undefined, detail: str(x.detail), blocking: true }];
     }),

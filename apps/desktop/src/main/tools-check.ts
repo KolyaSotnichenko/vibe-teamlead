@@ -37,9 +37,10 @@ export async function checkTools(): Promise<ToolCheck[]> {
   const dockerBin = findOnPath('docker', strixPath());
   const chrome = findChrome();
 
-  const [gitleaks, osv, strix, dockerRunning] = await Promise.all([
+  const [gitleaks, osv, semgrep, strix, dockerRunning] = await Promise.all([
     installed(bundled.gitleaksBin),
     installed(bundled.osvScannerBin),
+    installed(bundled.semgrepBin),
     installed(strixBin),
     dockerBin ? dockerAvailable() : Promise.resolve(false),
   ]);
@@ -69,6 +70,15 @@ export async function checkTools(): Promise<ToolCheck[]> {
       status: osv.status === 'ready' && bundled.osvScannerBin?.includes('/scanners/') ? 'bundled' : osv.status,
       installCommand: 'brew install osv-scanner',
       installUrl: 'https://google.github.io/osv-scanner/installation/',
+      neededFor: 'security_gates',
+      optional: true,
+    },
+    {
+      // Never bundled (a Python package): used when installed
+      id: 'semgrep',
+      ...semgrep,
+      installCommand: 'brew install semgrep',
+      installUrl: 'https://semgrep.dev/docs/getting-started/quickstart',
       neededFor: 'security_gates',
       optional: true,
     },

@@ -11,6 +11,7 @@ export const TOOL_NAMES: Record<ToolId, string> = {
   codegraph: 'CodeGraph',
   gitleaks: 'gitleaks',
   'osv-scanner': 'OSV-Scanner',
+  semgrep: 'Semgrep',
   chrome: 'Google Chrome',
   docker: 'Docker',
   strix: 'Strix',
@@ -74,15 +75,16 @@ export interface SkipFix {
 const INSTALL_COMMANDS: Partial<Record<ToolId, string>> = {
   gitleaks: 'brew install gitleaks',
   'osv-scanner': 'brew install osv-scanner',
+  semgrep: 'brew install semgrep',
   strix: 'uv tool install strix-agent',
   docker: 'brew install --cask docker',
 };
 
 const UNAVAILABLE = /not (available|installed|found)/i;
 
-/** A gate (gitleaks / OSV-Scanner) skipped because its scanner is not on this Mac. */
+/** A gate (gitleaks / OSV-Scanner / Semgrep) skipped because its scanner is not on this Mac. */
 export function gateSkipFix(gate: string, reason: string): SkipFix | null {
-  if ((gate === 'gitleaks' || gate === 'osv-scanner') && UNAVAILABLE.test(reason)) {
+  if ((gate === 'gitleaks' || gate === 'osv-scanner' || gate === 'semgrep') && UNAVAILABLE.test(reason)) {
     return { tool: gate, kind: 'install', command: INSTALL_COMMANDS[gate] as string };
   }
   return null;

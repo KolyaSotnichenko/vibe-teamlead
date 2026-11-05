@@ -1131,6 +1131,13 @@ describe('QALoop', () => {
     expect(issues[0].location).toBe('a.json:1');
   });
 
+  it('turns each Semgrep finding into a blocking issue with the rule and the line', () => {
+    const finding = { gate: 'semgrep' as const, key: 'semgrep:js.sqli:src/db.ts:12', title: 'js.sqli: SQL built from input', file: 'src/db.ts', line: 12 };
+    const issues = gateIssues([finding]);
+    expect(issues).toEqual([expect.objectContaining({ type: 'critical', title: 'js.sqli: SQL built from input', location: 'src/db.ts:12' })]);
+    expect(issues[0].fix_required).toMatch(/Semgrep/);
+  });
+
   // -------------------------------------------------------------------------
   // Checks come first: no review while they have findings
   // -------------------------------------------------------------------------

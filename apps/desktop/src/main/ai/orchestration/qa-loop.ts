@@ -179,7 +179,7 @@ export interface QALoopConfig {
   /** Callback to run an agent session */
   runSession: (config: QASessionRunConfig) => Promise<SessionResult>;
   /**
-   * Security gates (gitleaks, OSV-Scanner) run before every review. Findings
+   * Security gates (gitleaks, OSV-Scanner, Semgrep when installed) run before every review. Findings
    * are hard gates: QA cannot approve while any remain.
    */
   runGates?: () => Promise<GateReport>;
@@ -247,7 +247,10 @@ export function gateIssues(findings: GateFinding[]): QAIssue[] {
       title: f.title,
       description: f.detail,
       location: f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : undefined,
-      fix_required: 'Upgrade to a fixed version or replace the dependency, then re-run the tests.',
+      fix_required:
+        f.gate === 'semgrep'
+          ? 'Fix the code the Semgrep rule points at (the rule id names the weakness); do not silence the rule. Re-run the tests.'
+          : 'Upgrade to a fixed version or replace the dependency, then re-run the tests.',
     });
   }
   return issues;

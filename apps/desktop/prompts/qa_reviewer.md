@@ -332,19 +332,14 @@ If issues are found, add them to the QA report as they indicate the implementati
 
 ### 6.1: Security Review
 
-Check for common vulnerabilities:
+The security gates already ran before this review: gitleaks (secrets), OSV-Scanner (vulnerable dependencies) and, when it is installed, Semgrep (injection, unsafe APIs, dangerous calls such as `eval`, `innerHTML`, `shell=True`) on the changed files. Their result is in `security_gates.md` in the spec directory; findings block approval on their own. Don't repeat those scans with grep.
 
-```bash
-# Look for security issues
-grep -r "eval(" --include="*.js" --include="*.ts" .
-grep -r "innerHTML" --include="*.js" --include="*.ts" .
-grep -r "dangerouslySetInnerHTML" --include="*.tsx" --include="*.jsx" .
-grep -r "exec(" --include="*.py" .
-grep -r "shell=True" --include="*.py" .
+Look only for logic-level issues the scanners can't see, in the code this task changed:
+- authorization: every new route, handler or query checks who may do this (role, ownership), not just that someone is logged in;
+- tenant isolation: queries and lookups are scoped to the caller's tenant/account, never by an id the client can change;
+- trust boundaries: input crossing from the client, a webhook, a file or another service is validated at the boundary, and what is sent back doesn't leak more than the caller should see.
 
-# Check for hardcoded secrets
-grep -rE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]+['\"]" --include="*.py" --include="*.js" --include="*.ts" .
-```
+If `security_gates.md` says Semgrep was skipped, say so in the report; if it is not installed, the user can add it with `brew install semgrep` or `pip install semgrep`.
 
 ### 6.2: Pattern Compliance
 

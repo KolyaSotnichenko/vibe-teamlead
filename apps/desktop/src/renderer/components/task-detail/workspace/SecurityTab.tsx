@@ -1,5 +1,5 @@
 /**
- * Security section of the task workspace: the hard gates (gitleaks, OSV-Scanner)
+ * Security section of the task workspace: the hard gates (gitleaks, OSV-Scanner, Semgrep)
  * that run before every QA review, and the Strix penetration test after approval.
  */
 

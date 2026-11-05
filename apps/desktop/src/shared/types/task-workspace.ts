@@ -116,7 +116,7 @@ export interface WorkspaceArchitecture {
 }
 
 export interface WorkspaceSecurityFinding {
-  source: 'gitleaks' | 'osv-scanner' | 'strix';
+  source: 'gitleaks' | 'osv-scanner' | 'semgrep' | 'strix';
   title: string;
   /** Strix severity; gate findings are always blocking */
   severity?: string;
@@ -126,7 +126,7 @@ export interface WorkspaceSecurityFinding {
 }
 
 export interface WorkspaceSecurity {
-  /** gitleaks + OSV-Scanner, from security_gates.json (runs before every QA review) */
+  /** gitleaks + OSV-Scanner + Semgrep (when installed), from security_gates.json (runs before every QA review) */
   gates?: {
     ran: string[];
     skipped: { gate: string; reason: string }[];

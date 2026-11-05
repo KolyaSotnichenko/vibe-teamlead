@@ -5,7 +5,7 @@
 
 import type { IPCResult } from './common';
 
-export type ToolId = 'claude-code' | 'codegraph' | 'gitleaks' | 'osv-scanner' | 'chrome' | 'docker' | 'strix';
+export type ToolId = 'claude-code' | 'codegraph' | 'gitleaks' | 'osv-scanner' | 'semgrep' | 'chrome' | 'docker' | 'strix';
 
 /**
  * - bundled: ships inside the app

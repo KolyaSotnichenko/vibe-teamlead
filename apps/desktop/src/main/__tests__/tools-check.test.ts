@@ -38,6 +38,7 @@ describe('checkTools', () => {
     expect(tools['claude-code'].status).toBe('bundled');
     expect(tools.gitleaks).toMatchObject({ status: 'ready', version: 'v8.28.0', installCommand: 'brew install gitleaks' });
     expect(tools['osv-scanner'].status).toBe('missing');
+    expect(tools.semgrep).toMatchObject({ status: 'missing', installCommand: 'brew install semgrep', neededFor: 'security_gates', optional: true });
     expect(tools.docker.status).toBe('not_running');
     expect(tools.strix).toMatchObject({ status: 'missing', installCommand: 'uv tool install strix-agent', optional: true });
   });

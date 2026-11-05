@@ -7,6 +7,8 @@
  * - OSV-Scanner: known vulnerabilities newly introduced in changed lockfiles
  *   (compared with the same lockfile at the base, so pre-existing issues don't
  *   block the task).
+ * - Semgrep (only when installed on the machine; it is a Python package, not
+ *   bundled): its registry rules, ERROR severity, on the changed files.
  *
  * Findings are hard gates: QA cannot approve while any remain. Results are
  * written to <spec>/security_gates.json and security_gates.md for the QA agents
@@ -19,10 +21,11 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
-import { type RunResult, runProcess } from '../../platform/exec';
+import { type RunResult, runProcess, searchPath } from '../../platform/exec';
+import { withoutGitLocation } from '../../platform/git-env';
 import { writeFileReplacing } from '../safe-write';
 
-export type GateName = 'gitleaks' | 'osv-scanner';
+export type GateName = 'gitleaks' | 'osv-scanner' | 'semgrep';
 
 export interface GateFinding {
   gate: GateName;
@@ -47,12 +50,17 @@ export interface GateOptions {
   specDir: string;
   gitleaksBin?: string;
   osvScannerBin?: string;
+  /** Semgrep, when found on PATH (never bundled) */
+  semgrepBin?: string;
+  /** Semgrep fetches rules and scans whole files: its own, longer limit */
+  semgrepTimeoutMs?: number;
   /** Base to diff against; resolved from the default branch when omitted */
   baseRef?: string;
   signal?: AbortSignal;
 }
 
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
+const SEMGREP_TIMEOUT_MS = 10 * 60 * 1000;
 
 class GateFailure extends Error {}
 
@@ -315,6 +323,67 @@ async function runOsv(
 }
 
 // ---------------------------------------------------------------------------
+// Semgrep
+// ---------------------------------------------------------------------------
+
+interface SemgrepOutput {
+  results?: {
+    check_id?: string;
+    path?: string;
+    start?: { line?: number; col?: number };
+    extra?: { message?: string; severity?: string };
+  }[];
+}
+
+/** Parse Semgrep JSON: one finding per ERROR result (the scan is run with --severity ERROR, but check anyway). */
+export function parseSemgrep(json: string): GateFinding[] {
+  let out: SemgrepOutput;
+  try {
+    out = JSON.parse(json || '{}');
+  } catch {
+    return [];
+  }
+  const findings: GateFinding[] = [];
+  for (const r of out.results ?? []) {
+    if ((r.extra?.severity ?? 'ERROR').toUpperCase() !== 'ERROR') continue;
+    const rule = r.check_id ?? 'semgrep';
+    const file = r.path;
+    const line = r.start?.line;
+    const message = (r.extra?.message ?? '').trim().split('\n')[0];
+    findings.push({
+      gate: 'semgrep',
+      key: `semgrep:${rule}:${file ?? ''}:${line ?? 0}`,
+      title: message ? `${rule}: ${message}` : rule,
+      file,
+      line,
+    });
+  }
+  return dedupe(findings);
+}
+
+/** A rules download that failed: no network, a registry outage. Skipped with the reason, never a failure. */
+class SemgrepUnavailable extends Error {}
+
+const NETWORK_ERROR = /network|registry|download|connection|resolve host|timed out while|semgrep\.dev|ssl|proxy|offline/i;
+
+async function runSemgrep(bin: string, cwd: string, files: string[], timeoutMs: number, signal?: AbortSignal): Promise<GateFinding[]> {
+  const existing = files.filter((f) => existsSync(join(cwd, f)));
+  if (!existing.length) return [];
+  const result = await runProcess(
+    bin,
+    ['scan', '--config', 'auto', '--severity', 'ERROR', '--json', '--quiet', '--metrics=off', '--', ...existing],
+    { cwd, signal, timeoutMs, env: { ...withoutGitLocation(), PATH: searchPath(), SEMGREP_SEND_METRICS: 'off' } },
+  );
+  // 0: clean or findings (without --error); 1: findings with --error. Anything else is a problem.
+  if (!result.aborted && !result.timedOut && !result.error && result.code !== 0 && result.code !== 1) {
+    const detail = result.stderr.trim().split('\n').filter(Boolean).pop() ?? '';
+    if (NETWORK_ERROR.test(result.stderr)) throw new SemgrepUnavailable(`Semgrep could not fetch its rules (network or registry): ${detail}`);
+  }
+  assertRan(result, 'Semgrep', [0, 1]);
+  return parseSemgrep(result.stdout);
+}
+
+// ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
 
@@ -340,6 +409,7 @@ export function formatGateReport(report: GateReport): string {
       '',
       '- Secrets: remove the value from code and history, load it from configuration or the environment, and treat it as leaked (tell the user to rotate it).',
       '- Vulnerable dependencies: upgrade to a fixed version, or pick a different package. Re-run the tests after changing dependencies.',
+      '- Semgrep findings: fix the code the rule points at (the rule id says what it is: injection, unsafe deserialization, …); do not silence the rule. Re-run the tests.',
     );
   }
   return `${lines.join('\n')}\n`;
@@ -352,6 +422,10 @@ async function runGate(report: GateReport, gate: GateName, scan: () => Promise<G
     report.ran.push(gate);
     report.findings.push(...findings);
   } catch (error) {
+    if (error instanceof SemgrepUnavailable) {
+      report.skipped.push({ gate, reason: error.message });
+      return;
+    }
     if (!(error instanceof GateFailure)) throw error;
     report.skipped.push({ gate, reason: `failed — ${error.message}` });
   }
@@ -366,12 +440,13 @@ export async function runSecurityGates(options: GateOptions): Promise<GateReport
     report.skipped.push(
       { gate: 'gitleaks', reason: 'not a git repository' },
       { gate: 'osv-scanner', reason: 'not a git repository' },
+      { gate: 'semgrep', reason: 'not a git repository' },
     );
   } else {
     const baseRef = options.baseRef ?? (await resolveBaseRef(projectDir));
     report.baseRef = baseRef;
     const files = await changedFiles(projectDir, baseRef);
-    const { gitleaksBin, osvScannerBin } = options;
+    const { gitleaksBin, osvScannerBin, semgrepBin } = options;
 
     if (gitleaksBin) {
       await runGate(report, 'gitleaks', () => runGitleaks(gitleaksBin, projectDir, baseRef, files, signal));
@@ -385,6 +460,14 @@ export async function runSecurityGates(options: GateOptions): Promise<GateReport
       report.skipped.push({ gate: 'osv-scanner', reason: 'no dependency lockfiles changed' });
     } else {
       await runGate(report, 'osv-scanner', () => runOsv(osvScannerBin, projectDir, baseRef, files, signal));
+    }
+
+    if (!semgrepBin) {
+      report.skipped.push({ gate: 'semgrep', reason: 'Semgrep is not installed' });
+    } else if (!files.length) {
+      report.skipped.push({ gate: 'semgrep', reason: 'no files changed' });
+    } else {
+      await runGate(report, 'semgrep', () => runSemgrep(semgrepBin, projectDir, files, options.semgrepTimeoutMs ?? SEMGREP_TIMEOUT_MS, signal));
     }
   }
 

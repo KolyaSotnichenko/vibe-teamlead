@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { changedFiles, formatGateReport, isLockfile, parseGitleaks, parseOsv, resolveBaseRef, runSecurityGates } from '../gates';
+import { changedFiles, formatGateReport, isLockfile, parseGitleaks, parseOsv, parseSemgrep, resolveBaseRef, runSecurityGates } from '../gates';
 
 function repo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'vtl-gates-'));
@@ -56,6 +56,27 @@ describe('gate parsers', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({ key: 'osv:lodash@4.17.20:GHSA-1', file: 'package-lock.json', detail: 'Prototype pollution' });
     expect(findings[0].title).toContain('CVSS 7.4');
+  });
+
+  it('parses Semgrep JSON into one blocking finding per ERROR result', () => {
+    const semgrep = {
+      results: [
+        { check_id: 'javascript.express.security.injection.tainted-sql-string', path: 'src/db.ts', start: { line: 12, col: 5 }, extra: { message: 'Detected SQL statement built from user input.', severity: 'ERROR' } },
+        { check_id: 'javascript.lang.security.audit.detect-eval', path: 'src/util.ts', start: { line: 3, col: 1 }, extra: { message: 'eval is dangerous', severity: 'WARNING' } },
+      ],
+      errors: [],
+    };
+    const findings = parseSemgrep(JSON.stringify(semgrep));
+    expect(findings).toEqual([
+      {
+        gate: 'semgrep',
+        key: 'semgrep:javascript.express.security.injection.tainted-sql-string:src/db.ts:12',
+        title: 'javascript.express.security.injection.tainted-sql-string: Detected SQL statement built from user input.',
+        file: 'src/db.ts',
+        line: 12,
+      },
+    ]);
+    expect(parseSemgrep('not json')).toEqual([]);
   });
 
   it('recognises lockfiles by name', () => {
@@ -141,7 +162,66 @@ else echo '[{"RuleID":"generic-api-key","File":".vibe-teamlead/specs/003-auth/ta
     const report = await runSecurityGates({ projectDir: dir, specDir });
     expect(report.ran).toEqual([]);
     expect(report.findings).toEqual([]);
-    expect(report.skipped.map((s) => s.gate)).toEqual(['gitleaks', 'osv-scanner']);
+    expect(report.skipped.map((s) => s.gate)).toEqual(['gitleaks', 'osv-scanner', 'semgrep']);
+    expect(report.skipped.find((s) => s.gate === 'semgrep')?.reason).toBe('Semgrep is not installed');
+  });
+});
+
+describe('Semgrep gate', () => {
+  it('scans only the changed files and blocks on ERROR findings', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const semgrep = fakeScanner(
+      bin,
+      'semgrep',
+      `echo "$@" > "${bin}/args"
+echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"col":1},"extra":{"message":"SQL built from input","severity":"ERROR"}},{"check_id":"js.warn","path":"new.ts","start":{"line":1,"col":1},"extra":{"message":"meh","severity":"WARNING"}}],"errors":[]}'`,
+    );
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: semgrep });
+    expect(report.ran).toEqual(['semgrep']);
+    expect(report.findings).toEqual([expect.objectContaining({ gate: 'semgrep', key: 'semgrep:js.sqli:config.ts:1', file: 'config.ts', line: 1, title: 'js.sqli: SQL built from input' })]);
+    const args = readFileSync(join(bin, 'args'), 'utf-8').trim().split(' ');
+    expect(args.slice(0, 9)).toEqual(['scan', '--config', 'auto', '--severity', 'ERROR', '--json', '--quiet', '--metrics=off', '--']);
+    expect(args.slice(9).sort()).toEqual(['config.ts', 'new.ts', 'package-lock.json']);
+    expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('[semgrep] js.sqli: SQL built from input');
+  });
+
+  it('is skipped, not failed, when the rules cannot be fetched', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const semgrep = fakeScanner(bin, 'semgrep', 'echo "Failed to download configuration. HINT: check your network connection" >&2; exit 2');
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: semgrep });
+    expect(report.ran).not.toContain('semgrep');
+    expect(report.findings).toEqual([]);
+    expect(report.skipped).toContainEqual({ gate: 'semgrep', reason: 'Semgrep could not fetch its rules (network or registry): Failed to download configuration. HINT: check your network connection' });
+  });
+
+  it('is skipped when it times out or crashes', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const slow = fakeScanner(bin, 'semgrep-slow', 'exec sleep 5');
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const timedOut = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: slow, semgrepTimeoutMs: 100 });
+    expect(timedOut.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep timed out' });
+    const broken = fakeScanner(bin, 'semgrep-broken', 'echo "invalid rule" >&2; exit 7');
+    const crashed = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: broken });
+    expect(crashed.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep exited with code 7: invalid rule' });
+  });
+
+  it('has nothing to scan when no file changed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vtl-gates-'));
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: dir });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    writeFileSync(join(dir, 'README.md'), '# app\n');
+    g('add', '.');
+    g('commit', '-qm', 'base');
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: '/nonexistent/semgrep' });
+    expect(report.skipped).toContainEqual({ gate: 'semgrep', reason: 'no files changed' });
   });
 });
 

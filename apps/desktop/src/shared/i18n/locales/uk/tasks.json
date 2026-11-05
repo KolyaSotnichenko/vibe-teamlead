@@ -512,7 +512,7 @@
     },
     "security": {
       "gatesTitle": "Безпекові перевірки",
-      "gatesMeta": "gitleaks · OSV-Scanner · перед кожною перевіркою QA",
+      "gatesMeta": "gitleaks · OSV-Scanner · Semgrep (якщо встановлено) · перед кожною перевіркою QA",
       "gatesClear": "Чисто — у змінах цієї задачі немає секретів і нових вразливих залежностей.",
       "gatesBlocked": "Знахідок, що блокують QA до виправлення: {{count}}.",
       "skipped": "Пропущено {{gate}}: {{reason}}",

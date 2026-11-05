@@ -508,7 +508,7 @@
     },
     "security": {
       "gatesTitle": "Security gates",
-      "gatesMeta": "gitleaks · OSV-Scanner · before every QA review",
+      "gatesMeta": "gitleaks · OSV-Scanner · Semgrep (when installed) · before every QA review",
       "gatesClear": "Clear — no secrets or newly introduced vulnerable dependencies in what this task changed.",
       "gatesBlocked": "{{count}} finding(s) block QA until they are fixed.",
       "skipped": "Skipped {{gate}}: {{reason}}",
