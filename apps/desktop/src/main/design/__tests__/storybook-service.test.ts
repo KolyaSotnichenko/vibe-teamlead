@@ -1,12 +1,18 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../env-utils', () => ({ getAugmentedEnv: () => ({ ...process.env }) }));
 
-import { freePort, installDependencies, needsInstall, packageManagerOf, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
+const fakePm = vi.hoisted(() => ({ path: undefined as string | undefined }));
+vi.mock('../../platform/exec', async (importActual) => {
+  const actual = await importActual<typeof import('../../platform/exec')>();
+  return { ...actual, findOnPath: (name: string, searched?: string) => fakePm.path ?? actual.findOnPath(name, searched) };
+});
+
+import { freePort, installDependencies, needsInstall, packageManagerOf, startStorybook, stopAllStorybooks, stopStorybook, stopStorybooksUnder, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
 
 const dir = () => mkdtempSync(path.join(tmpdir(), 'vtl-sb-'));
 
@@ -40,6 +46,44 @@ describe('storybook service', () => {
     await expect(first).rejects.toThrow(/npm install failed/);
     expect(lines[0]).toBe('npm install');
   }, 120_000);
+});
+
+describe('stopping a Storybook', () => {
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  afterEach(() => {
+    fakePm.path = undefined;
+    stopAllStorybooks();
+  });
+
+  /** As pnpm does it: the package manager is a wrapper, and the server is a process below it */
+  const started = async () => {
+    const project = dir();
+    const pidFile = path.join(project, 'server.pid');
+    fakePm.path = path.join(project, 'fake-pm');
+    writeFileSync(fakePm.path, `#!/bin/sh\nsh -c 'echo $$ > "${pidFile}"; echo "Local: http://localhost:6006/"; exec sleep 60' &\nwait\n`);
+    chmodSync(fakePm.path, 0o755);
+    await startStorybook(project, '.', undefined);
+    return { project, pid: Number(readFileSync(pidFile, 'utf-8')) };
+  };
+
+  it.each([
+    ['the Stop button', (project: string) => stopStorybook(project, '.')],
+    ['quitting the app', () => stopAllStorybooks()],
+    ['removing the worktree', (project: string) => stopStorybooksUnder(project)],
+  ])('%s ends the server, not only the package manager in front of it', async (_name, stop) => {
+    const { project, pid } = await started();
+    expect(alive(pid)).toBe(true);
+    stop(project);
+    await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 3000 });
+  });
 });
 
 describe('task Storybook relevance', () => {

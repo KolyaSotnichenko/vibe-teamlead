@@ -9,6 +9,7 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 
 import { getAugmentedEnv } from '../env-utils';
+import { isWindows } from '../platform';
 import { findOnPath, searchPath } from '../platform/exec';
 import { isUiFile } from '../ai/design/design-lint';
 
@@ -20,6 +21,20 @@ interface Running {
 
 const servers = new Map<string, Running>();
 const START_TIMEOUT_MS = 180_000;
+
+/**
+ * The server is several processes below the package manager, and a signal to the
+ * package manager alone leaves it running. It starts as a group, and stops as one.
+ */
+function stopTree(child: ChildProcess | undefined): void {
+  if (!child) return;
+  try {
+    if (child.pid && !isWindows()) process.kill(-child.pid, 'SIGTERM');
+    else child.kill('SIGTERM');
+  } catch {
+    // Already gone
+  }
+}
 
 /**
  * A free port: the preferred one, or one the OS picks. Port 0 asks the OS, so
@@ -63,6 +78,7 @@ export function startStorybook(projectPath: string, dir: string, script: string 
       cwd: key,
       env: { ...env, BROWSER: 'none', CI: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: !isWindows(),
     });
     entry.child = child;
     entry.url = url;
@@ -70,7 +86,7 @@ export function startStorybook(projectPath: string, dir: string, script: string 
     return new Promise<string>((resolve, reject) => {
       let output = '';
       const timer = setTimeout(() => {
-        child.kill('SIGTERM');
+        stopTree(child);
         reject(new Error(`Storybook did not start within ${START_TIMEOUT_MS / 1000}s.${output ? `\n${output.slice(-800)}` : ''}`));
       }, START_TIMEOUT_MS);
       const onData = (chunk: Buffer) => {
@@ -106,7 +122,7 @@ export function stopStorybook(projectPath: string, dir: string): void {
   const key = path.resolve(projectPath, dir);
   const running = servers.get(key);
   if (running) {
-    running.child?.kill('SIGTERM');
+    stopTree(running.child);
     servers.delete(key);
   }
 }
@@ -119,7 +135,7 @@ export function runningStorybook(projectPath: string, dir: string | undefined): 
 }
 
 export function stopAllStorybooks(): void {
-  for (const running of servers.values()) running.child?.kill('SIGTERM');
+  for (const running of servers.values()) stopTree(running.child);
   servers.clear();
 }
 
@@ -128,7 +144,7 @@ export function stopStorybooksUnder(root: string): void {
   const base = path.resolve(root);
   for (const [key, running] of servers) {
     if (key === base || key.startsWith(`${base}${path.sep}`)) {
-      running.child?.kill('SIGTERM');
+      stopTree(running.child);
       servers.delete(key);
     }
   }
