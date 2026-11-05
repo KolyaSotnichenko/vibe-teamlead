@@ -128,6 +128,8 @@ interface PlanSubtask {
 export async function iterateSubtasks(
   config: SubtaskIteratorConfig,
 ): Promise<SubtaskIteratorResult> {
+  await reopenGivenUpSubtasks(config.specDir);
+
   const attemptCounts = new Map<string, number>();
   const stuckSubtasks: string[] = [];
   const stoppedAtLimit = new Set<string>();
@@ -242,7 +244,12 @@ export async function iterateSubtasks(
     // coder is told to update implementation_plan.json itself, but doesn't always.
     // One stopped at its turn limit isn't: the subtask stays open for a new session.
     if (result.outcome === 'completed' || result.outcome === 'max_steps') {
-      if (result.outcome === 'completed') await ensureSubtaskMarkedCompleted(config.specDir, subtask.id);
+      const gaveUp = result.outcome === 'completed' && (await ensureSubtaskMarkedCompleted(config.specDir, subtask.id));
+      // Trying again in this run wouldn't change why it gave up: the build stops and names it
+      if (gaveUp) {
+        stuckSubtasks.push(subtask.id);
+        config.onSubtaskStuck?.(subtaskInfo, 'The coder could not finish it and said why in the plan');
+      }
 
       // Re-stamp executionPhase on the worktree plan after the coder session.
       // The coder model's Edit/Write calls can overwrite executionPhase with a
@@ -290,16 +297,20 @@ export async function iterateSubtasks(
  *
  * Only ADD/UPDATE fields — never removes existing data.
  */
+/** Statuses a coder sets when it can't finish its subtask; a session ending doesn't overrule them. */
+const GAVE_UP: ReadonlySet<string> = new Set(['failed', 'blocked']);
+
 async function ensureSubtaskMarkedCompleted(
   specDir: string,
   subtaskId: string,
-): Promise<void> {
+): Promise<boolean> {
   const planPath = join(specDir, 'implementation_plan.json');
   try {
     const raw = await readFile(planPath, 'utf-8');
     const plan = safeParseJson<ImplementationPlan>(raw);
-    if (!plan) return; // JSON corrupt beyond repair
+    if (!plan) return false; // JSON corrupt beyond repair
     let updated = false;
+    let gaveUp = false;
 
     for (const phase of plan.phases) {
       for (const subtask of phase.subtasks) {
@@ -311,7 +322,9 @@ async function ensureSubtaskMarkedCompleted(
         }
 
         // Mark this specific subtask as completed if it isn't already
-        if (subtask.id === subtaskId && subtask.status !== 'completed') {
+        if (subtask.id === subtaskId && GAVE_UP.has(subtask.status)) {
+          gaveUp = true;
+        } else if (subtask.id === subtaskId && subtask.status !== 'completed') {
           subtask.status = 'completed';
           (subtask as PlanSubtask & { completed_at?: string }).completed_at =
             new Date().toISOString();
@@ -323,8 +336,34 @@ async function ensureSubtaskMarkedCompleted(
     if (updated) {
       await writeFileReplacing(planPath, JSON.stringify(plan, null, 2));
     }
+    return gaveUp;
   } catch {
     // Non-fatal: if we can't update the plan the loop will retry or mark stuck
+    return false;
+  }
+}
+
+/**
+ * A new run gives subtasks an earlier session gave up on another try. Nothing else
+ * would pick them up, and the build would end in "Build not complete" on every Resume.
+ */
+async function reopenGivenUpSubtasks(specDir: string): Promise<void> {
+  const planPath = join(specDir, 'implementation_plan.json');
+  try {
+    const plan = safeParseJson<ImplementationPlan>(await readFile(planPath, 'utf-8'));
+    if (!plan) return;
+    let updated = false;
+    for (const phase of plan.phases) {
+      for (const subtask of phase.subtasks) {
+        if (GAVE_UP.has(subtask.status)) {
+          subtask.status = 'pending';
+          updated = true;
+        }
+      }
+    }
+    if (updated) await writeFileReplacing(planPath, JSON.stringify(plan, null, 2));
+  } catch {
+    // Non-fatal: the loop reads the plan again and reports what it finds
   }
 }
 

@@ -77,3 +77,39 @@ describe('codingFailure', () => {
     expect(codingFailure([])).toBeUndefined();
   });
 });
+
+describe('a coder session that gives up on its subtask', () => {
+  const setStatus = (planPath: string, status: string) => {
+    const plan = JSON.parse(readFileSync(planPath, 'utf-8'));
+    plan.phases[0].subtasks[0].status = status;
+    writeFileSync(planPath, JSON.stringify(plan));
+  };
+
+  it.each(['failed', 'blocked'])('is not counted as done when it says %s: it ends stuck, once, and others still run', async (given) => {
+    const gaveUp = (planPath: string) => {
+      setStatus(planPath, given);
+      return 'completed' as const;
+    };
+    const { config, runSubtaskSession, onSubtaskStuck, status } = setup([gaveUp, 'completed'], ['s1', 's2']);
+
+    const result = await iterateSubtasks(config);
+
+    expect(status('s1')).toBe(given);
+    expect(result.stuckSubtasks).toEqual(['s1']);
+    expect(onSubtaskStuck).toHaveBeenCalledTimes(1);
+    expect(runSubtaskSession).toHaveBeenCalledTimes(2);
+    expect(status('s2')).toBe('completed');
+  });
+
+  it('gets another try on the next run, so Resume is not a dead end', async () => {
+    const { config, runSubtaskSession, status } = setup(['completed']);
+    setStatus(join(config.specDir, 'implementation_plan.json'), 'failed');
+
+    const result = await iterateSubtasks(config);
+
+    expect(runSubtaskSession).toHaveBeenCalledTimes(1);
+    expect(status()).toBe('completed');
+    expect(result.stuckSubtasks).toEqual([]);
+  });
+});
+
