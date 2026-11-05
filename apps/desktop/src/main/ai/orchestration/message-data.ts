@@ -5,6 +5,8 @@
  * is told to read as a description. Pure, no Electron imports.
  */
 
+import { randomBytes } from 'node:crypto';
+
 /** One line of text from outside our code, safe to quote in a message. Pure. */
 export function cleanForMessage(text: string | undefined, max = 300): string {
   const clean = (text ?? '')
@@ -27,4 +29,22 @@ export function quoteFindings(lines: string[]): string {
     ...lines,
     '</qa_findings>',
   ].join('\n');
+}
+
+const TRUNCATED = '\n… (truncated)';
+
+/**
+ * A block of repository text for the first message: a boundary the text can't
+ * know, so it can't close the block, a one-line notice that it is data, and a
+ * cap on the whole including `after`, a line of ours that follows the block.
+ * Pure apart from the boundary.
+ */
+export function dataBlock(options: { tagPrefix: string; source: string; notice: string; body: string; max: number; after?: string }): string {
+  const { tagPrefix, source, notice, max, after = '' } = options;
+  const tag = `${tagPrefix}_${randomBytes(8).toString('hex')}`;
+  const open = `<${tag} source="${source}">\n${notice}`;
+  const close = `</${tag}>`;
+  const room = max - (open.length + close.length + after.length + TRUNCATED.length + 4);
+  const body = options.body.length > room ? `${options.body.slice(0, room)}${TRUNCATED}` : options.body;
+  return (after ? [open, body, close, '', after] : [open, body, close]).join('\n');
 }

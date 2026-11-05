@@ -38,6 +38,7 @@ import type {
   WorkerTaskEventMessage } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
+import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
@@ -787,7 +788,9 @@ async function runBuildOrchestrator(
           ? { ...toolContext, allowedWritePaths: [runConfig.specDir] }
           : toolContext;
       // Build a kickoff message for the agent so it has a task to act on
-      const kickoffMessage = buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir);
+      const kickoffMessage = [buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
+        .filter(Boolean)
+        .join('\n\n');
       return runSingleSession(
         runConfig.agentType,
         runConfig.phase,
@@ -1471,7 +1474,7 @@ function buildKickoffMessage(agentType: AgentType, specDir: string, projectDir: 
     case 'architect':
       return `Read the spec at ${specDir}/spec.md and the project at ${projectDir}, then design the architecture: write ${specDir}/architecture/architecture.md, ADRs under ${specDir}/architecture/adr/ and draw.io diagrams under ${specDir}/architecture/diagrams/, rendering each diagram with render_diagram and fixing layout problems before you finish.`;
     case 'coder':
-      return `Read ${specDir}/implementation_plan.json and implement the subtask your instructions name (without one, the next pending subtask). Project root: ${projectDir}. After completing it, update its status to "completed" in implementation_plan.json and end your turn.`;
+      return coderKickoffMessage(projectDir);
     case 'qa_reviewer':
       return `Review the implementation in ${projectDir} against the specification in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with a clear "Status: PASSED" or "Status: FAILED" line, then record the verdict with update_qa_status.`;
     case 'qa_fixer':

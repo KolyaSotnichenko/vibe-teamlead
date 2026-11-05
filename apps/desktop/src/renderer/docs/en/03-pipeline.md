@@ -21,7 +21,7 @@ What happens in each phase:
 
 - Each acceptance criterion has an ID (`AC-n`) and a test level.
 - A plan subtask says which test to write first and which ACs it covers.
-- The coder works in a red → green → refactor loop and commits each subtask. Each subtask gets its own session with a clean context and that subtask's memories and skills.
+- The coder works in a red → green → refactor loop and commits each subtask. Each subtask gets its own session with a clean context and that subtask's memories and skills; its first message carries the subtask's plan entry and the acceptance criteria it names, and the agent opens the full plan or spec only when it needs more.
 - After every file the coder (or the QA fixer) writes, the project's own formatter and linter run on it (prettier/ESLint or Biome from the project's `node_modules`, ruff from its venv, gofmt/go vet) and the findings go straight back to the agent, so it fixes them at once instead of running the whole lint suite or spending a QA round on them. Nothing is installed: a project without such a tool gets no check. The switch is in Settings → Agent Settings.
 - QA builds a table "AC → test → does it actually verify it → result". If an AC has no test, the test verifies nothing, or it fails, that is an issue, and QA will not approve the work.
 

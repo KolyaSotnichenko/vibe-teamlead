@@ -31,6 +31,7 @@ import {
   IMPLEMENTATION_PLAN_SCHEMA_HINT } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
+import { coderKickoffContext } from './coder-kickoff';
 import { iterateSubtasks } from './subtask-iterator';
 import type { SubtaskIteratorConfig, SubtaskResult } from './subtask-iterator';
 import { writeFileReplacing } from '../safe-write';
@@ -171,6 +172,8 @@ export interface SessionRunConfig {
   cliThinking?: string;
   /** Optional Zod schema for structured output (uses AI SDK Output.object()) */
   outputSchema?: import('zod').ZodSchema;
+  /** Quoted repository data that follows the kickoff message */
+  kickoffData?: string;
 }
 
 /** Events emitted by the build orchestrator */
@@ -567,6 +570,7 @@ export class BuildOrchestrator extends EventEmitter {
           abortSignal: this.config.abortSignal,
           cliModel: this.config.cliModel,
           cliThinking: this.config.cliThinking,
+          kickoffData: await this.coderKickoff(subtask.id),
         });
       },
       onSubtaskComplete: (subtask, result) => {
@@ -600,6 +604,13 @@ export class BuildOrchestrator extends EventEmitter {
 
     this.markPhaseCompleted('coding');
     return { success: true };
+  }
+
+  /** A coder session's first message: its subtask and acceptance criteria instead of the whole plan and spec. */
+  private async coderKickoff(subtaskId: string): Promise<string> {
+    const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
+    const [plan, spec] = await Promise.all([read('implementation_plan.json'), read('spec.md')]);
+    return coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir });
   }
 
   /**
