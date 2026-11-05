@@ -76,6 +76,10 @@ vi.mock('../../../project-store', () => ({ projectStore: { getProject: () => und
 const { readArchitectMode } = vi.hoisted(() => ({ readArchitectMode: vi.fn(() => 'never') }));
 vi.mock('../../orchestration/architect-setting', () => ({ readArchitectMode }));
 
+// The format-and-lint switch is read from the app settings file
+const { isFormatOnEditEnabled } = vi.hoisted(() => ({ isFormatOnEditEnabled: vi.fn(() => false) }));
+vi.mock('../../claude-code/format-setting', () => ({ isFormatOnEditEnabled }));
+
 // Import after mocks
 import { WorkerBridge } from '../worker-bridge';
 
@@ -154,6 +158,18 @@ describe('WorkerBridge', () => {
       config.session.architectMode = 'always';
       bridge.spawn(config);
       expect((getWorker() as unknown as { workerData: { session: { architectMode?: string } } }).workerData.session.architectMode).toBe('always');
+    });
+
+    it('fills the format-and-lint switch from the app settings unless the session sets it', () => {
+      bridge.spawn(createConfig());
+      expect((getWorker() as unknown as { workerData: { session: { formatOnEdit?: boolean } } }).workerData.session.formatOnEdit).toBe(false);
+      expect(isFormatOnEditEnabled).toHaveBeenCalled();
+
+      bridge = new WorkerBridge();
+      const config = createConfig();
+      config.session.formatOnEdit = true;
+      bridge.spawn(config);
+      expect((getWorker() as unknown as { workerData: { session: { formatOnEdit?: boolean } } }).workerData.session.formatOnEdit).toBe(true);
     });
   });
 

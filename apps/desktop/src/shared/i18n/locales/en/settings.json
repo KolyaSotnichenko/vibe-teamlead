@@ -204,6 +204,8 @@
       "complex": "Only for tasks the complexity assessment rates complex (default).",
       "never": "The planner works straight from the spec."
     },
+    "formatOnEdit": "Format and lint after each edit",
+    "formatOnEditDescription": "After every file the coder or QA fixer writes, the project's own formatter and linter (prettier/ESLint or Biome, ruff, gofmt/go vet) run on it and the findings go straight back to the agent. Nothing is installed: when the project has no such tool, nothing runs.",
     "securityQa": "Security QA (Strix)",
     "securityQaDescription": "After QA approves, a Strix penetration test tries to exploit the code this task changed. Findings go back to the QA fixer. Needs Docker, Strix (uv tool install strix-agent) and an Anthropic API key; uses its own LLM budget.",
     "securityQaScanMode": "Scan",

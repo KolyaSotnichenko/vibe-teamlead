@@ -227,6 +227,19 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
               </div>
               <div className="flex items-center justify-between max-w-md">
                 <div className="space-y-1">
+                  <Label htmlFor="formatOnEdit" className="text-sm font-medium text-foreground">
+                    {t('general.formatOnEdit')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{t('general.formatOnEditDescription')}</p>
+                </div>
+                <Switch
+                  id="formatOnEdit"
+                  checked={settings.formatOnEdit !== false}
+                  onCheckedChange={(checked) => onSettingsChange({ ...settings, formatOnEdit: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between max-w-md">
+                <div className="space-y-1">
                   <Label htmlFor="securityQaEnabled" className="text-sm font-medium text-foreground">
                     {t('general.securityQa')}
                   </Label>

@@ -364,10 +364,11 @@ function projectCapabilities(session: SerializableSessionConfig): ProjectCapabil
 /** Fields every Claude Code session shares, derived from the worker config. */
 function claudeSessionBase(session: SerializableSessionConfig): Pick<
   SessionConfig,
-  'auth' | 'mcpOptions' | 'memoryMcpUrl' | 'linearApiKey' | 'bundled'
+  'auth' | 'mcpOptions' | 'memoryMcpUrl' | 'linearApiKey' | 'bundled' | 'formatOnEdit'
 > {
   return {
     bundled: session.bundled,
+    formatOnEdit: session.formatOnEdit,
     auth: toClaudeAuth(session.apiKey, session.baseURL, session.allowSubscriptionLogin === true),
     mcpOptions: {
       context7Enabled: session.mcpOptions?.context7Enabled ?? true,

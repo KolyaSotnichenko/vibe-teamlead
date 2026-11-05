@@ -29,6 +29,7 @@ import { removeBrokenBrowserServers } from './browser-servers';
 import { recordTurnLimit } from './turn-limits';
 import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
+import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
@@ -278,6 +279,12 @@ export function buildQueryOptions(
 
   // Hold the final stop until the agent has stopped the background tasks it started
   const background = tools.includes('Bash') ? buildBackgroundTaskHooks() : undefined;
+  // Format and lint each file the coder / QA fixer writes, with the project's own tools
+  const formatLint =
+    config.formatOnEdit !== false && FORMAT_LINT_AGENTS.has(config.agentType) && (tools.includes('Edit') || tools.includes('Write'))
+      ? buildFormatLintHook({ agentType: config.agentType, cwd: config.toolContext.cwd, projectDir: config.toolContext.projectDir })
+      : undefined;
+  const postToolUse = [...(background?.PostToolUse ?? []), ...(formatLint ? [formatLint] : [])];
 
   const options: Options = {
     model: config.model,
@@ -295,9 +302,8 @@ export function buildQueryOptions(
         buildAskUserHook(extras.askUser),
         ...(tools.includes('Bash') && getAgentConfig(config.agentType).appTools?.includes('mcp__vibe-teamlead__start_dev_server') ? [buildDevServerGuard()] : []),
       ],
-      ...(background
-        ? { PostToolUse: background.PostToolUse, PostToolUseFailure: background.PostToolUseFailure, Stop: background.Stop }
-        : {}),
+      ...(postToolUse.length ? { PostToolUse: postToolUse } : {}),
+      ...(background ? { PostToolUseFailure: background.PostToolUseFailure, Stop: background.Stop } : {}),
     },
     skills,
     maxTurns: config.maxSteps,

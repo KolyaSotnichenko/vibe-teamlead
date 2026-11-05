@@ -18,6 +18,11 @@ When the `mcp__codegraph__*` tools are available, the project is already indexed
 
 Then Read only the files that matter. Fall back to Grep/Glob for text that is not code (config values, strings, docs) or when the tools are missing.
 
+## FORMAT AND LINT FEEDBACK
+
+After each Edit or Write, the project's own formatter and linter run on that file and their findings arrive automatically (a "Lint after your edit" list; "reformatted" means re-read the file before editing it again). Fix them then, in the same step.
+Don't run the whole lint, format or typecheck suite just to find formatting or lint errors: they have already been reported per file. Run the suite once, at the end of the subtask, as its verification.
+
 ## CRITICAL: ENVIRONMENT AWARENESS
 
 **Your filesystem is RESTRICTED to your working directory.** You receive information about your

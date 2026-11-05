@@ -290,6 +290,11 @@ export interface AppSettings {
    * tasks the complexity assessment rates complex (default), or never.
    */
   architectMode?: ArchitectMode;
+  /**
+   * After each file the coder or QA fixer writes, run the project's own
+   * formatter and linter on it and feed the findings back. On unless false.
+   */
+  formatOnEdit?: boolean;
   // API keys used by memory embeddings (OpenAI, Google)
   globalOpenAIApiKey?: string;
   globalGoogleApiKey?: string;

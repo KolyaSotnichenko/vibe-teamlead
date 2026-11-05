@@ -91,6 +91,8 @@ export interface SessionConfig {
   bundled?: BundledTools;
   /** Claude Code config directory (defaults to ~/.vibe-teamlead/claude-code) */
   claudeConfigDir?: string;
+  /** Format and lint each file the coder / QA fixer writes (Settings → Agent Settings; on unless false) */
+  formatOnEdit?: boolean;
   /** Spec directory for the current task */
   specDir: string;
   /** Project directory root */
