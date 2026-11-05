@@ -35,6 +35,7 @@ import { TASK_STATUS_LABELS } from '../../../shared/constants';
 import { TaskEditDialog } from '../TaskEditDialog';
 import { useTaskDetail } from './hooks/useTaskDetail';
 import { TaskWarnings } from './TaskWarnings';
+import { SecurityQaNotice } from './SecurityQaNotice';
 import { TurnLimitNotice } from './TurnLimitNotice';
 import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
@@ -474,7 +475,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
               </div>
 
               {/* Warnings - compact inline */}
-              <div className="mt-3 empty:hidden">
+              <div className="mt-3 space-y-3 empty:hidden">
+                <SecurityQaNotice task={task} />
                 <TurnLimitNotice task={task} />
               </div>
               {(state.isStuck || state.isIncomplete) && (

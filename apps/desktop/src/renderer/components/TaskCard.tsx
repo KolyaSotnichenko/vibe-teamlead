@@ -39,6 +39,7 @@ import type { Task, TaskStatus } from '../../shared/types';
 import { StageTicks, SubtaskBar } from './board/StageMarks';
 import { countSubtasks, formatSince, getTaskStage, type TaskStageInfo } from './board/task-stage';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { useSecurityQaError } from './task-detail/useSecurityQaError';
 
 // Catastrophic stuck detection interval (ms).
 // XState handles all normal process-exit transitions via PROCESS_EXITED events.
@@ -310,6 +311,8 @@ export const TaskCard = memo(function TaskCard({
     }
   };
 
+  const securityQaError = useSecurityQaError(task);
+
   // Chip: why the task stands where it stands (word always shown, never colour alone)
   const chip: { tone: ChipTone; label: string } | null = (() => {
     if (isStuck) return { tone: 'attention', label: t('labels.needsRecovery') };
@@ -323,6 +326,7 @@ export const TaskCard = memo(function TaskCard({
       if (reason === 'qa_rejected') return { tone: 'attention', label: t('reviewReason.qaIssues') };
       if (reason === 'plan_review') return { tone: 'outline', label: t('reviewReason.approvePlan') };
       if (reason === 'stopped') return { tone: 'outline', label: t('reviewReason.stopped') };
+      if (reason === 'completed' && securityQaError) return { tone: 'attention', label: t('board.chip.securityQaFailed') };
       if (reason === 'completed') return { tone: 'outline', label: t('board.chip.qaPassed') };
     }
     if (isArchived) return { tone: 'low', label: t('status.archived') };

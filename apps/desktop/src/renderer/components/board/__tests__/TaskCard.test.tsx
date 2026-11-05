@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { Task } from '../../../../shared/types';
 
@@ -67,6 +67,28 @@ describe('TaskCard', () => {
     expect(screen.getByText('1/3')).toBeInTheDocument();
     expect(screen.getByText('board.worktree')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /board\.stage\.position/ })).toBeInTheDocument();
+  });
+
+  describe('a task whose pentest did not finish', () => {
+    const inReview = (overrides: Partial<Task> = {}) =>
+      task({ status: 'human_review', reviewReason: 'completed', executionProgress: { phase: 'complete', phaseProgress: 100, overallProgress: 100 }, ...overrides });
+    const answers = (data: unknown) => {
+      (window as unknown as { electronAPI: unknown }).electronAPI = { getTaskSecurityQaError: vi.fn(async () => ({ success: true, data })) };
+    };
+
+    it('says so instead of only QA passed', async () => {
+      answers({ reason: 'Strix exited with code 1' });
+      render(<TaskCard task={inReview()} onClick={vi.fn()} />);
+      expect(await screen.findByText('board.chip.securityQaFailed')).toBeInTheDocument();
+      expect(screen.queryByText('board.chip.qaPassed')).not.toBeInTheDocument();
+    });
+
+    it('stays QA passed when the scan had no error', async () => {
+      answers(null);
+      render(<TaskCard task={inReview()} onClick={vi.fn()} />);
+      await waitFor(() => expect(window.electronAPI.getTaskSecurityQaError).toHaveBeenCalled());
+      expect(screen.getByText('board.chip.qaPassed')).toBeInTheDocument();
+    });
   });
 
   it('stops a running task without opening it', () => {

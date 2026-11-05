@@ -166,6 +166,13 @@ export async function loadTaskWorkspace(specDir: string): Promise<TaskWorkspace>
   };
 }
 
+/** Why the task's pentest did not finish; null when it did, or never ran. */
+export async function loadSecurityQaError(specDir: string): Promise<{ reason?: string } | null> {
+  const pentest = parseSecurityQa(await readJson(path.join(specDir, 'security_qa.json')), specDir);
+  if (pentest?.status !== 'error') return null;
+  return pentest.reason ? { reason: pentest.reason } : {};
+}
+
 /**
  * Where the task's spec files are now: while the task builds in its worktree,
  * the agents (QA reports, security results, architecture) write the worktree's
@@ -248,6 +255,18 @@ export function registerTaskWorkspaceHandlers(): void {
         return { success: false, error: error instanceof Error ? error.message : 'Failed to load task workspace' };
       }
     }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_SECURITY_QA_ERROR,
+    async (_, taskId: string, projectId?: string): Promise<IPCResult<{ reason?: string } | null>> => {
+      try {
+        const specDir = resolveSpecDir(taskId, projectId);
+        return { success: true, data: specDir ? await loadSecurityQaError(specDir) : null };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    },
   );
 
   ipcMain.handle(

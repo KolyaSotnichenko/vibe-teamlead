@@ -589,7 +589,8 @@
         "auth": "Sign-in needed"
       },
       "failed": "Failed",
-      "qaPassed": "QA passed"
+      "qaPassed": "QA passed",
+      "securityQaFailed": "Security QA didn't finish"
     },
     "subtasksAria": "{{done}} of {{total}} subtasks done",
     "worktree": "worktree",
@@ -1012,6 +1013,10 @@
     "truncated": "The diff is too long to show in full. See the rest in your editor.",
     "diffFailed": "Could not load the diff.",
     "cannotShow": "This file differs, but the changes can't be shown here. Check it in your editor."
+  },
+  "securityQa": {
+    "title": "Security QA didn't finish",
+    "body": "QA approved this task, but the pentest stopped early, so it hasn't been tested for attacks. You can still merge it."
   },
   "turnLimit": {
     "title": "A session stopped at its turn limit",

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { isInside, loadTaskWorkspace, resolveSpecFile } from '../workspace-handlers';
+import { isInside, loadSecurityQaError, loadTaskWorkspace, resolveSpecFile } from '../workspace-handlers';
 
 describe('loadTaskWorkspace', () => {
   let dir: string;
@@ -84,5 +84,26 @@ describe('resolveSpecFile', () => {
     expect(await resolveSpecFile(spec, 42)).toBeNull();
     rmSync(spec, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  });
+});
+
+describe('loadSecurityQaError', () => {
+  const specWith = (content: string | undefined) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'vtl-security-qa-'));
+    if (content !== undefined) writeFileSync(path.join(dir, 'security_qa.json'), content);
+    return dir;
+  };
+
+  it('gives the reason when the scan ended in an error', async () => {
+    const dir = specWith(JSON.stringify({ status: 'error', reason: 'Strix exited with code 1', findings: [] }));
+    await expect(loadSecurityQaError(dir)).resolves.toEqual({ reason: 'Strix exited with code 1' });
+  });
+
+  it.each(['clear', 'findings', 'skipped', 'cancelled'])('is nothing for a %s scan', async (status) => {
+    await expect(loadSecurityQaError(specWith(JSON.stringify({ status, findings: [] })))).resolves.toBeNull();
+  });
+
+  it('is nothing when there was no scan', async () => {
+    await expect(loadSecurityQaError(specWith(undefined))).resolves.toBeNull();
   });
 });
