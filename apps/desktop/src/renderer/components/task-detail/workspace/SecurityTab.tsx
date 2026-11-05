@@ -108,6 +108,9 @@ export function SecurityTab({ workspace }: { workspace: TaskWorkspace }) {
               <p className="text-sm text-muted-foreground">{t('tasks:workspace.security.gatesClear')}</p>
             )}
             {gatesBlocked && <p className="text-sm text-destructive">{t('tasks:workspace.security.gatesBlocked', { count: gates.findings.length })}</p>}
+            {(gates.partial ?? []).map((p) => (
+              <Notice key={`partial-${p.gate}`}>{t('tasks:workspace.security.partial', { gate: p.gate, reason: p.reason })}</Notice>
+            ))}
             {gates.skipped.map((s) => {
               const fix = gateSkipFix(s.gate, s.reason);
               return (

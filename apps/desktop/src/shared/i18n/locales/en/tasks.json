@@ -512,6 +512,7 @@
       "gatesClear": "Clear — no secrets or newly introduced vulnerable dependencies in what this task changed.",
       "gatesBlocked": "{{count}} finding(s) block QA until they are fixed.",
       "skipped": "Skipped {{gate}}: {{reason}}",
+      "partial": "Partial {{gate}}: {{reason}}. Review those files yourself; the gate did not cover them.",
       "pentestTitle": "Penetration test",
       "pentestMeta": "Strix · {{mode}} scan · blocks at {{failOn}}",
       "cost": "spent ${{cost}}",

@@ -79,8 +79,17 @@ describe('gate parsers', () => {
     ]);
     expect(() => parseSemgrep('not json')).toThrow(/not valid JSON/);
     expect(() => parseSemgrep('{"errors":[]}')).toThrow(/no results/);
-    const partial = parseSemgrep(JSON.stringify({ results: [], errors: [{ message: 'Syntax error', path: 'src/broken.ts', type: 'PartialParsing' }, { message: 'no path' }] }));
+    const partial = parseSemgrep(JSON.stringify({ results: [], errors: [{ message: 'Syntax error', path: 'src/broken.ts', type: 'PartialParsing' }, { message: 'rule x\nis <bad>', type: 'InvalidRule' }] }));
     expect(partial.errorFiles).toEqual(['src/broken.ts']);
+    expect(partial.generalErrors).toEqual(['InvalidRule: rule x is ‹bad›']);
+  });
+
+  it('shows a partial run as not clean in the report', () => {
+    const partial = { ran: ['semgrep' as const], skipped: [], partial: [{ gate: 'semgrep' as const, reason: 'could not scan 2 files: a.ts, b.ts' }], findings: [] };
+    const md = formatGateReport(partial);
+    expect(md).toContain('**Status: CLEAR (PARTIAL: semgrep could not scan 2 files: a.ts, b.ts)**');
+    expect(md).toContain('Partial semgrep: could not scan 2 files: a.ts, b.ts');
+    expect(formatGateReport({ ...partial, findings: [{ gate: 'semgrep', key: 'k', title: 'x: y', file: 'a.ts', line: 1 }] })).toContain('**Status: BLOCKED**');
   });
 
   it('picks Semgrep rule packs for the languages of the changed files', () => {
@@ -252,6 +261,34 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(report.findings.map((f) => f.key)).toEqual(['semgrep:js.sqli:config.ts:1']);
     expect(report.partial).toEqual([{ gate: 'semgrep', reason: 'could not scan 1 file: new.ts' }]);
     expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('Partial semgrep: could not scan 1 file: new.ts');
+  });
+
+  it('counts errors without a path, cleans file names, lists only scanned files, and fails when every file errored', async () => {
+    const dir = repo();
+    writeFileSync(join(dir, 'odd<x>.ts'), 'x');
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    // One error without a path, one for a file that was not in the scan (its name is not repeated), one for a scanned file with an odd name.
+    // printf, not echo: sh's echo turns the \n of the JSON string into a real newline.
+    const general = fakeScanner(
+      bin,
+      'semgrep-general',
+      `printf '%s\\n' '{"results":[],"errors":[{"message":"Timeout <x>","type":"Timeout"},{"message":"bad","path":"ghost\\n\`.ts","type":"PartialParsing"},{"message":"bad","path":"odd<x>.ts","type":"PartialParsing"}]}'`,
+    );
+    const report = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: general });
+    expect(report.ran).toEqual(['semgrep']);
+    expect(report.partial).toEqual([{ gate: 'semgrep', reason: 'Timeout: Timeout ‹x›; could not scan 1 file: odd‹x›.ts; 1 error for a file outside the scan' }]);
+    const md = readFileSync(join(specDir, 'security_gates.md'), 'utf-8');
+    expect(md).toContain('**Status: CLEAR (PARTIAL: semgrep Timeout: Timeout ‹x›; could not scan 1 file: odd‹x›.ts; 1 error for a file outside the scan)**');
+    expect(md).not.toContain('ghost');
+    const all = fakeScanner(
+      bin,
+      'semgrep-all',
+      `echo '{"results":[],"errors":[{"message":"e","path":"config.ts"},{"message":"e","path":"new.ts"},{"message":"e","path":"package-lock.json"},{"message":"e","path":"odd<x>.ts"}]}'`,
+    );
+    const failed = await runSecurityGates({ projectDir: dir, specDir, semgrepBin: all });
+    expect(failed.ran).not.toContain('semgrep');
+    expect(failed.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep could not scan any of the 4 files' });
   });
 
   it('lists changed file names with spaces and non-ASCII characters exactly', async () => {

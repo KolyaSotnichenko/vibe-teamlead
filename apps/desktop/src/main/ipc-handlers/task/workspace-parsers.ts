@@ -518,13 +518,16 @@ function str(value: unknown): string | undefined {
 
 export function parseSecurityGates(raw: unknown): WorkspaceSecurity['gates'] {
   if (!raw || typeof raw !== 'object') return undefined;
-  const r = raw as { ran?: unknown; skipped?: unknown; findings?: unknown };
+  const r = raw as { ran?: unknown; skipped?: unknown; partial?: unknown; findings?: unknown };
   const findings = Array.isArray(r.findings) ? r.findings : [];
+  const gateNotes = (list: unknown): { gate: string; reason: string }[] =>
+    Array.isArray(list)
+      ? list.flatMap((s) => (s && typeof s === 'object' && str((s as { gate?: unknown }).gate) ? [{ gate: String((s as { gate: string }).gate), reason: str((s as { reason?: unknown }).reason) ?? '' }] : []))
+      : [];
   return {
     ran: Array.isArray(r.ran) ? r.ran.filter((x): x is string => typeof x === 'string') : [],
-    skipped: Array.isArray(r.skipped)
-      ? r.skipped.flatMap((s) => (s && typeof s === 'object' && str((s as { gate?: unknown }).gate) ? [{ gate: String((s as { gate: string }).gate), reason: str((s as { reason?: unknown }).reason) ?? '' }] : []))
-      : [],
+    skipped: gateNotes(r.skipped),
+    partial: gateNotes(r.partial),
     findings: findings.flatMap((f) => {
       if (!f || typeof f !== 'object') return [];
       const x = f as Record<string, unknown>;

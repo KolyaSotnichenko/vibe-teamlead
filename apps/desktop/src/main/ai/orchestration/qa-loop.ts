@@ -752,7 +752,8 @@ export class QALoop extends EventEmitter {
       const report = await this.config.runGates();
       for (const skipped of report.skipped) this.emitTyped('log', `Security gate skipped (${skipped.gate}): ${skipped.reason}`);
       if (report.ran.length) {
-        this.emitTyped('log', `Security gates (${report.ran.join(', ')}): ${report.findings.length ? `${report.findings.length} finding(s)` : 'clear'}`);
+        const partial = (report.partial ?? []).map((p) => `; partial ${p.gate}: ${p.reason}`).join('');
+        this.emitTyped('log', `Security gates (${report.ran.join(', ')}): ${report.findings.length ? `${report.findings.length} finding(s)` : 'clear'}${partial}`);
       }
       // The last part of a gitleaks key is the line, which moves with any edit
       this.lastGateKeys.push(...report.findings.map((f) => f.key.replace(/:\d+$/, '')));

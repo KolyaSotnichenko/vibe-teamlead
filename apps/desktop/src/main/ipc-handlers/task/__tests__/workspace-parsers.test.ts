@@ -277,6 +277,10 @@ describe('security artifacts', () => {
     });
     expect(gates?.findings).toEqual([expect.objectContaining({ source: 'gitleaks', location: 'a.ts:3', blocking: true })]);
     expect(gates?.skipped[0].gate).toBe('osv-scanner');
+    expect(gates?.partial).toEqual([]);
+    expect(parseSecurityGates({ ran: ['semgrep'], skipped: [], partial: [{ gate: 'semgrep', reason: 'could not scan 1 file: a.ts' }, { nope: 1 }], findings: [] })?.partial).toEqual([
+      { gate: 'semgrep', reason: 'could not scan 1 file: a.ts' },
+    ]);
 
     const pentest = parseSecurityQa(
       {

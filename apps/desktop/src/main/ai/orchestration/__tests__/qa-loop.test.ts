@@ -1160,6 +1160,26 @@ describe('QALoop', () => {
     expect(issues[0].location).toBe('a.json:1');
   });
 
+  it('logs a partial gate run next to the result', async () => {
+    let sessionCallCount = 0;
+    const runSession = vi.fn().mockImplementation(async () => {
+      sessionCallCount++;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      if (path.endsWith('implementation_plan.json')) {
+        return Promise.resolve(sessionCallCount === 0 ? completedPlan() : completedPlan('approved'));
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+    const runGates = async () => ({ ran: ['semgrep' as const], skipped: [], partial: [{ gate: 'semgrep' as const, reason: 'could not scan 1 file: a.ts' }], findings: [] });
+    const loop = new QALoop(makeConfig({ runSession, runGates }));
+    const logs: string[] = [];
+    loop.on('log', (line: string) => logs.push(line));
+    expect((await loop.run()).approved).toBe(true);
+    expect(logs).toContain('Security gates (semgrep): clear; partial semgrep: could not scan 1 file: a.ts');
+  });
+
   it('turns each Semgrep finding into a blocking issue with the rule and the line', () => {
     const finding = { gate: 'semgrep' as const, key: 'semgrep:js.sqli:src/db.ts:12', title: 'js.sqli: SQL built from input', file: 'src/db.ts', line: 12 };
     const issues = gateIssues([finding]);

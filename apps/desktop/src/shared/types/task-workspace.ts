@@ -130,6 +130,8 @@ export interface WorkspaceSecurity {
   gates?: {
     ran: string[];
     skipped: { gate: string; reason: string }[];
+    /** Gates that ran but could not cover everything (files Semgrep could not parse) */
+    partial?: { gate: string; reason: string }[];
     findings: WorkspaceSecurityFinding[];
   };
   /** Strix penetration test, from security_qa.json (after QA approval) */

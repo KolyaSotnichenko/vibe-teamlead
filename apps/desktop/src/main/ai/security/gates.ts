@@ -10,7 +10,9 @@
  * - Semgrep (only when installed on the machine; it is a Python package, not
  *   bundled): the registry's default pack plus the packs of the changed files'
  *   languages, ERROR severity, on the changed files. Bad output fails the
- *   gate (never "ran clean"); files it could not parse make the run partial.
+ *   gate (never "ran clean"); files it could not parse, and errors about the
+ *   run itself, make the run partial ("CLEAR (PARTIAL: …)", never "CLEAR");
+ *   a run that covered none of the files fails.
  *
  * Findings are hard gates: QA cannot approve while any remain. Results are
  * written to <spec>/security_gates.json and security_gates.md for the QA agents
@@ -25,6 +27,7 @@ import { basename, dirname, extname, join } from 'node:path';
 
 import { type RunResult, runProcess, searchPath } from '../../platform/exec';
 import { withoutGitLocation } from '../../platform/git-env';
+import { cleanForMessage } from '../orchestration/message-data';
 import { writeFileReplacing } from '../safe-write';
 
 export type GateName = 'gitleaks' | 'osv-scanner' | 'semgrep';
@@ -394,7 +397,7 @@ export function semgrepPacks(files: string[]): string[] {
  * --severity ERROR, but check anyway) and the files its scan errors name.
  * Output that is not Semgrep's throws a GateFailure: the gate fails closed.
  */
-export function parseSemgrep(json: string): { findings: GateFinding[]; errorFiles: string[] } {
+export function parseSemgrep(json: string): SemgrepRun {
   let out: SemgrepOutput;
   try {
     out = JSON.parse(json);
@@ -417,16 +420,48 @@ export function parseSemgrep(json: string): { findings: GateFinding[]; errorFile
       line,
     });
   }
-  const errorFiles = [...new Set((out.errors ?? []).map((e) => e.path).filter((p): p is string => typeof p === 'string' && p.length > 0))];
-  return { findings: dedupe(findings), errorFiles };
+  const errorFiles: string[] = [];
+  const generalErrors: string[] = [];
+  for (const e of out.errors ?? []) {
+    if (!e || typeof e !== 'object') continue;
+    if (typeof e.path === 'string' && e.path.length > 0) {
+      if (!errorFiles.includes(e.path)) errorFiles.push(e.path);
+      continue;
+    }
+    // An error about the run itself (a rule, a timeout, the registry): its text is data
+    const text = [cleanForMessage(e.type, 60), cleanForMessage(e.message, 200)].filter(Boolean).join(': ');
+    if (text && !generalErrors.includes(text)) generalErrors.push(text);
+  }
+  return { findings: dedupe(findings), errorFiles, generalErrors };
 }
 
 const NETWORK_ERROR = /network|registry|download|connection|resolve host|timed out while|semgrep\.dev|ssl|proxy|offline/i;
 
 interface SemgrepRun {
   findings: GateFinding[];
-  /** Files Semgrep reported errors for (partial parse, timeout per file) */
+  /** Files Semgrep reported errors for (partial parse, timeout per file), as named in its output */
   errorFiles: string[];
+  /** Errors without a file ("type: message", cleaned): the run did not cover everything */
+  generalErrors: string[];
+}
+
+/**
+ * Why a Semgrep run was partial, or undefined when it covered every file.
+ * Only names from the scanned list are repeated (cleaned); an error naming
+ * another file is counted. Throws a GateFailure when no scanned file was
+ * covered at all. Pure.
+ */
+export function semgrepPartialReason(run: Pick<SemgrepRun, 'errorFiles' | 'generalErrors'>, scanned: string[]): string | undefined {
+  const scannedSet = new Set(scanned);
+  const failed = run.errorFiles.filter((f) => scannedSet.has(f));
+  const outside = run.errorFiles.length - failed.length;
+  if (scanned.length && failed.length === scanned.length) {
+    throw new GateFailure(`Semgrep could not scan any of the ${scanned.length} file${scanned.length === 1 ? '' : 's'}`);
+  }
+  const parts = [...run.generalErrors];
+  if (failed.length) parts.push(`could not scan ${failed.length} file${failed.length === 1 ? '' : 's'}: ${failed.map((f) => cleanForMessage(f, 200)).join(', ')}`);
+  if (outside) parts.push(`${outside} error${outside === 1 ? '' : 's'} for ${outside === 1 ? 'a file' : 'files'} outside the scan`);
+  return parts.length ? parts.join('; ') : undefined;
 }
 
 async function runSemgrep(
@@ -435,7 +470,7 @@ async function runSemgrep(
   files: string[],
   limits: { timeoutMs: number; maxOutput: number },
   signal?: AbortSignal,
-): Promise<SemgrepRun> {
+): Promise<SemgrepRun & { scanned: string[] }> {
   // A listed file that is gone was deleted: nothing of it to scan
   const existing = files.filter((f) => existsSync(join(cwd, f)));
   if (!existing.length) throw new GateSkipped('nothing to scan');
@@ -453,7 +488,7 @@ async function runSemgrep(
   }
   assertRan(result, 'Semgrep', [0, 1]);
   if (result.stdout.length >= limits.maxOutput) throw new GateFailure('Semgrep output exceeded the size limit');
-  return parseSemgrep(result.stdout);
+  return { ...parseSemgrep(result.stdout), scanned: existing };
 }
 
 // ---------------------------------------------------------------------------
@@ -462,10 +497,13 @@ async function runSemgrep(
 
 export function formatGateReport(report: GateReport): string {
   const lines = ['# Security gates', ''];
+  const partial = report.partial ?? [];
   lines.push(
     report.findings.length
       ? `**Status: BLOCKED** — ${report.findings.length} finding(s) must be fixed before QA can approve.`
-      : '**Status: CLEAR**',
+      : partial.length
+        ? `**Status: CLEAR (PARTIAL: ${partial.map((p) => `${p.gate} ${p.reason}`).join('; ')})**`
+        : '**Status: CLEAR**',
     '',
     `Ran: ${report.ran.length ? report.ran.join(', ') : 'none'}`,
   );
@@ -474,7 +512,7 @@ export function formatGateReport(report: GateReport): string {
   if (report.findings.length) {
     lines.push('', '## Findings', '');
     for (const f of report.findings) {
-      const where = f.file ? ` — \`${f.file}${f.line ? `:${f.line}` : ''}\`` : '';
+      const where = f.file ? ` — \`${cleanForMessage(f.file, 200)}${f.line ? `:${f.line}` : ''}\`` : '';
       lines.push(`- [${f.gate}] ${f.title}${where}${f.detail ? `. ${f.detail}` : ''}`);
     }
     lines.push(
@@ -549,10 +587,8 @@ export async function runSecurityGates(options: GateOptions): Promise<GateReport
           { timeoutMs: options.semgrepTimeoutMs ?? SEMGREP_TIMEOUT_MS, maxOutput: options.semgrepMaxOutput ?? SEMGREP_MAX_OUTPUT },
           signal,
         );
-        if (run.errorFiles.length) {
-          const n = run.errorFiles.length;
-          (report.partial ??= []).push({ gate: 'semgrep', reason: `could not scan ${n} file${n === 1 ? '' : 's'}: ${run.errorFiles.join(', ')}` });
-        }
+        const partial = semgrepPartialReason(run, run.scanned);
+        if (partial) (report.partial ??= []).push({ gate: 'semgrep', reason: partial });
         return run.findings;
       });
     }

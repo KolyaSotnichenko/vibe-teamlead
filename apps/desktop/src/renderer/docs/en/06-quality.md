@@ -5,7 +5,7 @@
 | **TDD + AC** | Every requirement has a test; QA checks that the test actually holds it. |
 | **gitleaks** | Secrets in the code block approval. |
 | **OSV-Scanner** | Vulnerable dependencies block approval. |
-| **Semgrep** | Static analysis of the changed files (injection, unsafe APIs; its registry rules at ERROR severity) blocks approval. Runs only when Semgrep is installed (`brew install semgrep` or `pip install semgrep`); otherwise, or when its rules can't be fetched, the gate is skipped and the report says so. |
+| **Semgrep** | Static analysis of the changed files (injection, unsafe APIs; its registry rules at ERROR severity) blocks approval. Runs only when Semgrep is installed (`brew install semgrep` or `pip install semgrep`); otherwise, or when its rules can't be fetched, the gate is skipped and the report says so. When Semgrep could not parse some of the files, or reported an error about the run itself, the report says "CLEAR (PARTIAL: …)" and the Security tab names what was not covered, so you can look at those files yourself; if it could not scan any of the files, the gate counts as failed. |
 | **Design check** | A static check of added UI lines against the design system tokens + a screenshot review (see "Design system and Storybook"). |
 | **Browser check** | QA opens the app in Chrome (Playwright / DevTools MCP), takes screenshots and reads the console. |
 | **Strix** | Pentest in Docker (optional). |

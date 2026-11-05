@@ -22,6 +22,13 @@ const workspace = (security: TaskWorkspace['security']): TaskWorkspace => ({
   security,
 });
 
+describe('SecurityTab partial gates', () => {
+  it('says which files a gate could not scan', () => {
+    render(<SecurityTab workspace={workspace({ gates: { ran: ['semgrep'], skipped: [], partial: [{ gate: 'semgrep', reason: 'could not scan 1 file: a.ts' }], findings: [] } })} />);
+    expect(screen.getByText('tasks:workspace.security.partial {"gate":"semgrep","reason":"could not scan 1 file: a.ts"}')).toBeInTheDocument();
+  });
+});
+
 describe('SecurityTab skipped hints', () => {
   it('adds the install command and Settings → Tools to a gate skipped for a missing scanner', () => {
     render(
