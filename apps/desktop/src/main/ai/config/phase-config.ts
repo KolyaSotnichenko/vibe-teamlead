@@ -22,6 +22,7 @@ import {
   DEFAULT_PHASE_THINKING,
 } from './types';
 import { REMOVED_PROVIDER_MODELS } from '../../../shared/constants/models';
+import type { AgentType } from './agent-configs';
 
 // ============================================
 // Spec Phase Thinking Levels
@@ -207,6 +208,15 @@ export async function getPhaseModel(
   }
 
   return resolveModelId(DEFAULT_PHASE_MODELS[phase]);
+}
+
+/**
+ * The phase whose model and thinking level an agent runs on. The QA fixer
+ * edits code like the coder, so it uses the coding phase's settings even
+ * though it runs (and logs) in the QA phase. Pure.
+ */
+export function modelPhaseFor(agentType: AgentType, phase: Phase): Phase {
+  return agentType === 'qa_fixer' ? 'coding' : phase;
 }
 
 /**

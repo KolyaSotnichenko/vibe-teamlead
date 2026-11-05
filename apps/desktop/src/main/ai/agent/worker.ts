@@ -43,7 +43,7 @@ import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
-import { getPhaseThinking, resolvePhaseModel } from '../config/phase-config';
+import { getPhaseThinking, modelPhaseFor, resolvePhaseModel } from '../config/phase-config';
 import { TaskLogWriter, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
@@ -514,10 +514,12 @@ async function runSingleSession(
   /** Skills for this session on top of the agent's own */
   extraSkills?: string[],
 ): Promise<SessionResult> {
-  const phaseThinking = await getPhaseThinking(specDir, phase);
-  const model = await phaseModel(specDir, phase, baseSession.modelId);
+  // The QA fixer edits code, so it runs on the coding model; the log stays in the QA phase
+  const modelPhase = modelPhaseFor(agentType, phase);
+  const phaseThinking = await getPhaseThinking(specDir, modelPhase);
+  const model = await phaseModel(specDir, modelPhase, baseSession.modelId);
   const sessionLog = taskLogger(postLog, logWriter, phase);
-  sessionLog(`${agentType} on ${model} (${phase})`);
+  sessionLog(`${agentType} on ${model} (${phase}${modelPhase !== phase ? `, ${modelPhase} model` : ''})`);
 
   // Build initial messages: use provided kickoff message, or fall back to session messages
   const initialMessages = initialUserMessage

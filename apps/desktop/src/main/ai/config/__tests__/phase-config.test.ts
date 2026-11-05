@@ -233,6 +233,16 @@ describe('isUsableModel', () => {
   });
 });
 
+describe('modelPhaseFor', () => {
+  it('runs the QA fixer on the coding model and thinking, every other agent on its own phase', async () => {
+    const { modelPhaseFor } = await import('../phase-config');
+    expect(modelPhaseFor('qa_fixer', 'qa')).toBe('coding');
+    expect(modelPhaseFor('qa_reviewer', 'qa')).toBe('qa');
+    expect(modelPhaseFor('coder', 'coding')).toBe('coding');
+    expect(modelPhaseFor('planner', 'planning')).toBe('planning');
+  });
+});
+
 describe('resolvePhaseModel', () => {
   it("uses each phase's own model from the task metadata", async () => {
     const { mkdtempSync, writeFileSync } = await import('node:fs');
