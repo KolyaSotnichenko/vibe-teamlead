@@ -295,6 +295,12 @@ export interface AppSettings {
    * formatter and linter on it and feed the findings back. On unless false.
    */
   formatOnEdit?: boolean;
+  /**
+   * Language servers (TypeScript/JavaScript and Python bundled; gopls,
+   * rust-analyzer, clangd when installed) for the coder and QA fixer. On
+   * unless false; turn off on very large repositories if memory is a problem.
+   */
+  lspEnabled?: boolean;
   // API keys used by memory embeddings (OpenAI, Google)
   globalOpenAIApiKey?: string;
   globalGoogleApiKey?: string;

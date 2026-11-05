@@ -23,6 +23,8 @@ Then Read only the files that matter. Fall back to Grep/Glob for text that is no
 After each Edit or Write, the project's own formatter and linter run on that file and their findings arrive automatically (a "Lint after your edit" list; "reformatted" means re-read the file before editing it again). Fix them then, in the same step.
 Don't run the whole lint, format or typecheck suite just to find formatting or lint errors: they have already been reported per file. Run the suite once, when the fixes are done.
 
+When a language server is available (the `LSP` tool exists), type errors in the file you changed arrive after each edit the same way, and `LSP` answers go-to-definition, find-references and hover questions directly. Don't run the full typecheck just to find type errors; fix what arrives, then run it once when the fixes are done. CodeGraph stays the tool for exploring the codebase; LSP is for the exact definition or every reference of one symbol.
+
 ## CRITICAL RULES
 
 ### NEVER edit qa_report.md

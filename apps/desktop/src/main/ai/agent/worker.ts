@@ -23,6 +23,10 @@ import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions
 import type { MemoryRequest } from './types';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
+import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
+import { languagesFromIndex, lspLogLine, lspServersFor, scanProjectLanguages } from '../claude-code/lsp-registry';
+import { defaultClaudeConfigDir } from '../claude-code/runner';
+import { findOnPath } from '../../platform/exec';
 import { subtaskSkills } from '../claude-code/skills';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
@@ -361,6 +365,31 @@ function projectCapabilities(session: SerializableSessionConfig): ProjectCapabil
   return cachedCapabilities;
 }
 
+/** The generated LSP plugin for this task's project, or undefined; computed once per worker. */
+let lspPluginCache: { dir?: string; line: string } | undefined;
+
+/**
+ * Language servers for a coder / QA fixer session: which follows the
+ * project's languages (project_index.json, else a scan of the worktree).
+ */
+function lspPluginFor(agentType: string, session: SerializableSessionConfig, projectDir: string, log: (line: string) => void): string | undefined {
+  if (!lspPluginDecision(agentType, session.lspEnabled)) return undefined;
+  if (!lspPluginCache) {
+    try {
+      let languages = languagesFromIndex(loadProjectIndex(projectDir));
+      if (!languages.length) languages = languagesFromIndex(loadProjectIndex(session.projectDir));
+      if (!languages.length) languages = scanProjectLanguages(projectDir);
+      const selection = lspServersFor(languages, session.bundled ?? {}, (name) => findOnPath(name));
+      const dir = selection.servers.length ? writeLspPlugin(defaultClaudeConfigDir(), selection.servers) : undefined;
+      lspPluginCache = { dir, line: lspLogLine(selection) };
+    } catch (error) {
+      lspPluginCache = { line: `LSP: none (${error instanceof Error ? error.message : String(error)})` };
+    }
+  }
+  log(lspPluginCache.line);
+  return lspPluginCache.dir;
+}
+
 /** Fields every Claude Code session shares, derived from the worker config. */
 function claudeSessionBase(session: SerializableSessionConfig): Pick<
   SessionConfig,
@@ -527,6 +556,7 @@ async function runSingleSession(
   if (helperNames.length) postLog(`Subagents available: ${helperNames.join(', ')} (${baseSession.subagents?.model || 'same model'})`);
   const helpersSection = helpersPromptSection(helpers);
   if (extraSkills?.length) sessionLog(`Extra skills: ${extraSkills.join(', ')}`);
+  const lspPluginDir = lspPluginFor(agentType, baseSession, projectDir, sessionLog);
 
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
@@ -538,6 +568,7 @@ async function runSingleSession(
     initialMessages,
     toolContext,
     ...(extraSkills?.length ? { extraSkills } : {}),
+    ...(lspPluginDir ? { lspPluginDir } : {}),
     // See TURN_LIMITS: a looping session is cut off and the subtask retried with a fresh context
     maxSteps: Math.min(baseSession.maxSteps, TURN_LIMITS[agentType] ?? baseSession.maxSteps),
     thinkingLevel: phaseThinking as SessionConfig['thinkingLevel'],

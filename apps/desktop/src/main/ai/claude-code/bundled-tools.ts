@@ -20,6 +20,7 @@
  *
  * Semgrep is not bundled (a Python package): it is used only when found on PATH.
  *   <Resources>/browser-mcp/node_modules/{@playwright/mcp,playwright,playwright-core,chrome-devtools-mcp}
+ *   <Resources>/lsp/node_modules/{typescript-language-server,typescript,pyright}  (run on codegraph/node)
  */
 
 import { existsSync } from 'node:fs';
@@ -57,10 +58,20 @@ export interface BundledTools {
   osvScannerBin?: string;
   /** Semgrep, when installed on this machine (static analysis gate); never bundled */
   semgrepBin?: string;
+  /** Node binary that runs the bundled language servers (CodeGraph's own) */
+  lspNode?: string;
+  /** typescript-language-server entry point (lib/cli.mjs) */
+  typescriptLanguageServer?: string;
+  /** typescript's lib folder: the server's fallback tsserver when the project has no typescript */
+  typescriptLib?: string;
+  /** pyright language server entry point (langserver.index.js) */
+  pyrightLangserver?: string;
 }
 
 const PLAYWRIGHT_CLI = 'cli.js';
 const DEVTOOLS_CLI = join('build', 'src', 'bin', 'chrome-devtools-mcp.js');
+const TS_SERVER_CLI = join('lib', 'cli.mjs');
+const PYRIGHT_SERVER = 'langserver.index.js';
 
 function platformTarget(): string {
   return `${process.platform}-${process.arch}`;
@@ -96,8 +107,14 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     gitleaksBin: firstExisting([join(resourcesPath, 'scanners', 'gitleaks')]),
     osvScannerBin: firstExisting([join(resourcesPath, 'scanners', 'osv-scanner')]),
     semgrepBin: findOnPath('semgrep'),
+    lspNode: firstExisting([join(resourcesPath, 'codegraph', 'node')]),
+    typescriptLanguageServer: firstExisting([join(resourcesPath, 'lsp', 'node_modules', 'typescript-language-server', TS_SERVER_CLI)]),
+    typescriptLib: firstExisting([join(resourcesPath, 'lsp', 'node_modules', 'typescript', 'lib')]),
+    pyrightLangserver: firstExisting([join(resourcesPath, 'lsp', 'node_modules', 'pyright', PYRIGHT_SERVER)]),
   };
 }
+
+const defined = (p: string | undefined): p is string => !!p;
 
 /** Development: resolve from node_modules and the repo's vendor/ folder. */
 export function resolveDevTools(appRoot: string): BundledTools {
@@ -131,6 +148,10 @@ export function resolveDevTools(appRoot: string): BundledTools {
     gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', 'gitleaks')]) ?? findOnPath('gitleaks'),
     osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', 'osv-scanner')]) ?? findOnPath('osv-scanner'),
     semgrepBin: findOnPath('semgrep'),
+    lspNode: firstExisting([resolveFromPackage(`@colbymchenry/codegraph-${target}`, 'node')].filter(defined)),
+    typescriptLanguageServer: firstExisting([resolveFromPackage('typescript-language-server', TS_SERVER_CLI)].filter(defined)),
+    typescriptLib: firstExisting([resolveFromPackage('typescript', 'lib')].filter(defined)),
+    pyrightLangserver: firstExisting([resolveFromPackage('pyright', PYRIGHT_SERVER)].filter(defined)),
   };
 }
 

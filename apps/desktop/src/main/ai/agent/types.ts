@@ -66,6 +66,8 @@ export interface SerializableSessionConfig {
   architectMode?: import('../../../shared/types/settings').ArchitectMode;
   /** Format and lint after each edit of the coder / QA fixer (resolved in the main process; on unless false) */
   formatOnEdit?: boolean;
+  /** Language servers for the coder / QA fixer (resolved in the main process; on unless false) */
+  lspEnabled?: boolean;
   /** The project's design system (resolved in the main process; .vibe-teamlead/ is not in worktrees) */
   designSystem?: import('../../../shared/types').DesignSystemInfo;
   /** The app's Claude credential: an API key, or a subscription token (personal mode only) */

@@ -49,6 +49,7 @@ export const DEFAULT_APP_SETTINGS = {
   securityQaMaxBudgetUsd: 5,
   architectMode: 'complex' as const,
   formatOnEdit: true,
+  lspEnabled: true,
   onboardingCompleted: false,
   notifications: {
     onTaskComplete: true,

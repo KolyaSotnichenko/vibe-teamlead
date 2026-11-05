@@ -240,6 +240,20 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
               </div>
               <div className="flex items-center justify-between max-w-md">
                 <div className="space-y-1">
+                  <Label htmlFor="lspEnabled" className="text-sm font-medium text-foreground">
+                    {t('general.lsp')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{t('general.lspDescription')}</p>
+                  <p className="text-xs text-muted-foreground">{t('general.lspHint')}</p>
+                </div>
+                <Switch
+                  id="lspEnabled"
+                  checked={settings.lspEnabled !== false}
+                  onCheckedChange={(checked) => onSettingsChange({ ...settings, lspEnabled: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between max-w-md">
+                <div className="space-y-1">
                   <Label htmlFor="securityQaEnabled" className="text-sm font-medium text-foreground">
                     {t('general.securityQa')}
                   </Label>

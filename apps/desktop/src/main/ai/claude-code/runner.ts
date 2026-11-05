@@ -170,6 +170,8 @@ export function buildEnv(config: SessionConfig): Record<string, string | undefin
   // Settings → Agents → Subagents: the model of subagents the agent starts itself
   if (config.subagentModel) env.CLAUDE_CODE_SUBAGENT_MODEL = config.subagentModel;
   env.CLAUDE_CONFIG_DIR = config.claudeConfigDir ?? defaultClaudeConfigDir();
+  // The LSP tool is behind a feature flag in some Claude Code versions; harmless where it isn't
+  if (config.lspPluginDir) env.ENABLE_LSP_TOOL = '1';
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
   env.DISABLE_TELEMETRY = '1';
   return env;
@@ -236,6 +238,11 @@ export function buildQueryOptions(
   if (bundled.frontendDesignDir && config.extraSkills?.includes(FRONTEND_DESIGN_SKILL)) {
     plugins.push({ type: 'local', path: bundled.frontendDesignDir });
     availablePlugins.add('frontend-design');
+  }
+  // Language servers (lsp-registry.ts): diagnostics after edits and the LSP tool
+  if (config.lspPluginDir) {
+    plugins.push({ type: 'local', path: config.lspPluginDir });
+    if (!tools.includes('LSP')) tools.push('LSP');
   }
   const available = (s: string) => availablePlugins.has(s.split(':')[0]);
   const baseSkills = config.skillsOverride ? config.skillsOverride.filter(available) : skillsForAgent(config.agentType, availablePlugins);

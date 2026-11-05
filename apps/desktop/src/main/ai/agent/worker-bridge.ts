@@ -29,6 +29,7 @@ import type { SessionResult } from '../session/types';
 import { ProgressTracker } from '../session/progress-tracker';
 import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isFormatOnEditEnabled } from '../claude-code/format-setting';
+import { isLspEnabled } from '../claude-code/lsp-setting';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import { readStrixSettings } from '../security/strix-setting';
 import { readSubagentSettings } from '../claude-code/subagent-setting';
@@ -139,6 +140,7 @@ export class WorkerBridge extends EventEmitter {
         subagents: config.session.subagents ?? readSubagentSettings(),
         architectMode: config.session.architectMode ?? readArchitectMode(),
         formatOnEdit: config.session.formatOnEdit ?? isFormatOnEditEnabled(),
+        lspEnabled: config.session.lspEnabled ?? isLspEnabled(),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
       },
       promptsDir: resolvePromptsDir(),

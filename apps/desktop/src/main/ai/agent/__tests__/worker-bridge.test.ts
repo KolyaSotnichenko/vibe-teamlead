@@ -79,6 +79,8 @@ vi.mock('../../orchestration/architect-setting', () => ({ readArchitectMode }));
 // The format-and-lint switch is read from the app settings file
 const { isFormatOnEditEnabled } = vi.hoisted(() => ({ isFormatOnEditEnabled: vi.fn(() => false) }));
 vi.mock('../../claude-code/format-setting', () => ({ isFormatOnEditEnabled }));
+const { isLspEnabled } = vi.hoisted(() => ({ isLspEnabled: vi.fn(() => false) }));
+vi.mock('../../claude-code/lsp-setting', () => ({ isLspEnabled }));
 
 // Import after mocks
 import { WorkerBridge } from '../worker-bridge';
@@ -170,6 +172,17 @@ describe('WorkerBridge', () => {
       config.session.formatOnEdit = true;
       bridge.spawn(config);
       expect((getWorker() as unknown as { workerData: { session: { formatOnEdit?: boolean } } }).workerData.session.formatOnEdit).toBe(true);
+    });
+
+    it('fills the language-servers switch from the app settings unless the session sets it', () => {
+      bridge.spawn(createConfig());
+      expect((getWorker() as unknown as { workerData: { session: { lspEnabled?: boolean } } }).workerData.session.lspEnabled).toBe(false);
+      expect(isLspEnabled).toHaveBeenCalled();
+      bridge = new WorkerBridge();
+      const config = createConfig();
+      config.session.lspEnabled = true;
+      bridge.spawn(config);
+      expect((getWorker() as unknown as { workerData: { session: { lspEnabled?: boolean } } }).workerData.session.lspEnabled).toBe(true);
     });
   });
 
