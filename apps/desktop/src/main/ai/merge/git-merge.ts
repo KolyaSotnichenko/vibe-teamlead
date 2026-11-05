@@ -93,10 +93,21 @@ async function gitPath(run: GitRun, projectDir: string, name: string): Promise<s
   return isAbsolute(raw) ? raw : join(projectDir, raw);
 }
 
-async function rollBackMerge(run: GitRun, projectDir: string): Promise<void> {
-  await run(['reset', '--merge']);
+const ROLLBACK_ATTEMPTS = 5;
+const ROLLBACK_WAIT_MS = 200;
+const STILL_OPEN = 'The merge could not be undone, so the project is still in the middle of it. Nothing is committed. Run "git reset --merge" in the project, then try again.';
+
+/** False when git could not undo the merge: another git command can hold the index for a moment. */
+async function rollBackMerge(run: GitRun, projectDir: string): Promise<boolean> {
+  let undone = false;
+  for (let attempt = 0; attempt < ROLLBACK_ATTEMPTS && !undone; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, ROLLBACK_WAIT_MS));
+    undone = (await run(['reset', '--merge'])).ok;
+  }
+  if (!undone) return false;
   rmSync(await gitPath(run, projectDir, 'SQUASH_MSG'), { force: true });
   rmSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), { force: true });
+  return true;
 }
 
 export interface MergeReviewOptions {
@@ -150,8 +161,7 @@ export async function commitMergeReview(options: MergeReviewOptions & { message:
 export async function cancelMergeReview(options: MergeReviewOptions): Promise<MergeTaskBranchResult> {
   const { projectDir, git = 'git', env = process.env } = options;
   if (!(await getMergeReview(options))) return refused(NOTHING_TO_REVIEW);
-  await rollBackMerge(gitRunner(projectDir, git, env), projectDir);
-  return { status: 'cancelled' };
+  return (await rollBackMerge(gitRunner(projectDir, git, env), projectDir)) ? { status: 'cancelled' } : refused(STILL_OPEN);
 }
 
 const MAX_DIFF_CHARS = 256 * 1024;
@@ -184,7 +194,8 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   const baseBranch = options.baseBranch.replace(/^origin\//, '');
 
   const run = gitRunner(projectDir, git, env);
-  const rollBack = () => rollBackMerge(run, projectDir);
+  /** Undo the merge and report `result`, unless the merge is still open: then that is what the user must hear. */
+  const undoThen = async (result: MergeTaskBranchResult) => ((await rollBackMerge(run, projectDir)) ? result : refused(STILL_OPEN));
 
   const isPlainFileInProject = (file: string) => {
     const target = join(projectDir, file);
@@ -218,6 +229,11 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   if (!(await run(['rev-parse', '--verify', '--quiet', `${branch}^{commit}`])).ok) {
     return refused(`The task branch "${branch}" was not found.`);
   }
+  // Its conflicts aren't this task's to resolve, and undoing them would lose someone's work
+  const merging = (await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])).ok;
+  if (merging || (await run(['ls-files', '--unmerged'])).stdout) {
+    return refused('The project is already in the middle of a merge. Finish it, or drop it with "git merge --abort", and merge again.');
+  }
 
   if (worktreePath && (await run(['status', '--porcelain', '--untracked-files=no'], worktreePath)).stdout) {
     await run(['add', '-u'], worktreePath);
@@ -246,24 +262,17 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
     const merged = new Map<string, string>();
     for (const [file, versions] of stages) {
       const resolved = await resolveOne(file, versions);
-      if (resolved === undefined) {
-        await rollBack();
-        return { status: 'conflicts', conflictFiles };
-      }
+      if (resolved === undefined) return undoThen({ status: 'conflicts', conflictFiles });
       merged.set(file, resolved);
     }
     try {
       for (const [file, content] of merged) writeFileSync(join(projectDir, file), content, 'utf-8');
     } catch (error) {
-      await rollBack();
-      return refused(error instanceof Error ? error.message : String(error));
+      return undoThen(refused(error instanceof Error ? error.message : String(error)));
     }
     resolvedByModel = conflictFiles;
     const added = await run(['--literal-pathspecs', 'add', '--', ...conflictFiles]);
-    if (!added.ok) {
-      await rollBack();
-      return refused(added.output);
-    }
+    if (!added.ok) return undoThen(refused(added.output));
   }
 
   if (stageOnly) {
@@ -277,17 +286,13 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
     try {
       writeFileSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), JSON.stringify({ files: resolvedByModel }), 'utf-8');
     } catch (error) {
-      await rollBack();
-      return refused(error instanceof Error ? error.message : String(error));
+      return undoThen(refused(error instanceof Error ? error.message : String(error)));
     }
     return { status: 'needs_review', conflictFiles: resolvedByModel };
   }
 
   const committed = await run(['commit', '-m', options.message]);
-  if (!committed.ok) {
-    await rollBack();
-    return refused(committed.output);
-  }
+  if (!committed.ok) return undoThen(refused(committed.output));
   // Only a branch that is really in the history may be deleted afterwards
   if (!(await run(['merge-base', '--is-ancestor', branch, 'HEAD'])).ok) {
     return refused(`"${branch}" is not in "${baseBranch}" after the merge commit. The branch was kept.`);

@@ -146,6 +146,68 @@ describe('mergeTaskBranch', () => {
       commitAll(wt, 'task touched shared');
     });
 
+    describe('when the merge has to be undone', () => {
+      const lock = () => join(repo, '.git', 'index.lock');
+      const merging = () => existsSync(join(repo, '.git', 'MERGE_HEAD'));
+
+      it('does not say nothing changed when git could not undo it', async () => {
+        const result = await merge({
+          resolveConflict: async () => {
+            writeFileSync(lock(), '');
+            return undefined;
+          },
+        });
+        expect(merging()).toBe(true);
+        expect(result.status).toBe('refused');
+        expect(result.message).toMatch(/git reset --merge/);
+      });
+
+      it('waits out a moment when something else holds the index', async () => {
+        const result = await merge({
+          resolveConflict: async () => {
+            writeFileSync(lock(), '');
+            setTimeout(() => rmSync(lock()), 150);
+            return undefined;
+          },
+        });
+        expect(result).toMatchObject({ status: 'conflicts', conflictFiles: ['shared.txt'] });
+        expect(merging()).toBe(false);
+        expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
+      });
+
+      it('a cancelled review is not reported as cancelled when it stayed open', async () => {
+        await merge({ resolveConflict: async () => 'both sides' });
+        writeFileSync(lock(), '');
+        const result = await cancelMergeReview({ projectDir: repo, branch: BRANCH });
+        expect(result.status).toBe('refused');
+        expect(result.message).toMatch(/git reset --merge/);
+      });
+    });
+
+    describe('a merge that is already open', () => {
+      beforeEach(() => {
+        git(repo, 'checkout', '-q', '-b', 'mine', 'HEAD~1');
+        writeFileSync(join(repo, 'shared.txt'), 'my side\n');
+        git(repo, 'commit', '-q', '-am', 'my change');
+        git(repo, 'checkout', '-q', 'main');
+        try {
+          git(repo, 'merge', '--no-commit', 'mine');
+        } catch {
+          // Stops on the conflict: this merge is the user's to finish
+        }
+      });
+
+      it("is left alone: the resolver never sees the user's conflict, and it isn't undone", async () => {
+        const mine = git(repo, 'rev-parse', 'mine');
+        const resolveConflict = vi.fn(async () => undefined);
+        const result = await merge({ resolveConflict });
+        expect(result.status).toBe('refused');
+        expect(resolveConflict).not.toHaveBeenCalled();
+        expect(git(repo, 'rev-parse', 'MERGE_HEAD')).toBe(mine);
+        expect(git(repo, 'diff', '--name-only', '--diff-filter=U')).toBe('shared.txt');
+      });
+    });
+
     it('gives the resolver all three versions, only for the conflicted file', async () => {
       const resolveConflict = vi.fn(async () => 'both sides');
       await merge({ resolveConflict });
