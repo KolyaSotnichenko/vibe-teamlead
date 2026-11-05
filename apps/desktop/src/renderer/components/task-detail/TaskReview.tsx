@@ -13,6 +13,7 @@ import {
 } from './task-review';
 import { QaOutcomePanel } from './task-review/QaOutcomePanel';
 import { MergeReviewPanel } from './task-review/MergeReviewPanel';
+import { isIncompleteHumanReview } from '../../stores/task-store';
 
 interface TaskReviewProps {
   task: Task;
@@ -108,6 +109,8 @@ export function TaskReview({
   onShowPRDialog,
   onCreatePR
 }: TaskReviewProps) {
+  // Nothing built yet: the only way forward is the Resume the task window offers
+  const nothingBuilt = isIncompleteHumanReview(task);
   return (
     <div className="space-y-4">
       {/* Section divider */}
@@ -161,22 +164,26 @@ export function TaskReview({
           onSwitchToTerminals={onSwitchToTerminals}
           onOpenInbuiltTerminal={onOpenInbuiltTerminal}
         />
-      ) : (
+      ) : nothingBuilt ? null : (
         <NoWorkspaceMessage task={task} onClose={onClose} />
       )}
 
-      {/* Why QA did not approve (only after QA ended without approval) */}
-      <QaOutcomePanel task={task} />
+      {!nothingBuilt && (
+        <>
+          {/* Why QA did not approve (only after QA ended without approval) */}
+          <QaOutcomePanel task={task} />
 
-      {/* QA Feedback Section */}
-      <QAFeedbackSection
-        feedback={feedback}
-        isSubmitting={isSubmitting}
-        onFeedbackChange={onFeedbackChange}
-        onReject={onReject}
-        images={images}
-        onImagesChange={onImagesChange}
-      />
+          {/* QA Feedback Section */}
+          <QAFeedbackSection
+            feedback={feedback}
+            isSubmitting={isSubmitting}
+            onFeedbackChange={onFeedbackChange}
+            onReject={onReject}
+            images={images}
+            onImagesChange={onImagesChange}
+          />
+        </>
+      )}
 
       {/* Discard Confirmation Dialog */}
       <DiscardDialog

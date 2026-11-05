@@ -397,6 +397,11 @@ export function registerTaskExecutionHandlers(
           project
         );
       } else {
+        // Starting QA kills whatever runs for this task, and an agent at work has nothing to review yet
+        if (agentManager.isRunning(taskId)) {
+          return { success: false, error: 'An agent is still working on this task' };
+        }
+
         // Reset and discard all changes from worktree merge in main
         // The worktree still has all changes, so nothing is lost
         if (hasWorktree) {
