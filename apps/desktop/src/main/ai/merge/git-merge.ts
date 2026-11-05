@@ -234,6 +234,8 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   if (merging || (await run(['ls-files', '--unmerged'])).stdout) {
     return refused('The project is already in the middle of a merge. Finish it, or drop it with "git merge --abort", and merge again.');
   }
+  // No merge is open, so a review mark is left from one dropped outside the app: it must not vouch for this one
+  rmSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), { force: true });
 
   if (worktreePath && (await run(['status', '--porcelain', '--untracked-files=no'], worktreePath)).stdout) {
     await run(['add', '-u'], worktreePath);

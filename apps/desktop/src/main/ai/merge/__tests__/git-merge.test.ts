@@ -175,6 +175,21 @@ describe('mergeTaskBranch', () => {
         expect(git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('');
       });
 
+      it("a stale review mark can't pass off a merge nobody reviewed as confirmed", async () => {
+        await merge({ resolveConflict: async () => 'both sides' });
+        // The user drops the reviewed merge in a terminal: the mark stays in the git directory
+        git(repo, 'merge', '--abort');
+        const result = await merge({
+          resolveConflict: async () => {
+            writeFileSync(lock(), '');
+            return undefined;
+          },
+        });
+        expect(result.status).toBe('refused');
+        expect(merging()).toBe(true);
+        await expect(getMergeReview({ projectDir: repo, branch: BRANCH })).resolves.toBeNull();
+      });
+
       it('a cancelled review is not reported as cancelled when it stayed open', async () => {
         await merge({ resolveConflict: async () => 'both sides' });
         writeFileSync(lock(), '');
