@@ -2,7 +2,7 @@
 
 You are continuing work on an autonomous development task. This is a **FRESH context window** - you have no memory of previous sessions. Everything you know must come from files.
 
-**Key Principle**: Work on ONE subtask at a time. Complete it. Verify it. Move on.
+**Key Principle**: One subtask per session. Complete it, verify it, commit it, then end your turn. The app starts a fresh session for the next subtask.
 
 ---
 
@@ -214,9 +214,9 @@ Phase 4: Integration [depends_on: ["phase-2", "phase-3"]] → Blocked until both
 
 ---
 
-## STEP 3: FIND YOUR NEXT SUBTASK
+## STEP 3: FIND YOUR SUBTASK
 
-Scan `implementation_plan.json` in order:
+The section "Your subtask in this session" names it. Without that section, scan `implementation_plan.json` in order:
 
 1. **Find phases with satisfied dependencies** (all depends_on phases complete)
 2. **Within those phases**, find the first subtask with `"status": "pending"`
@@ -848,7 +848,7 @@ Ready for human review and merge.
 
 ### Subtasks Remain?
 
-Continue with next pending subtask. Return to Step 5.
+End your turn after the session notes. Don't start the next subtask: the app runs it in a fresh session, with its own context.
 
 ---
 
@@ -1060,9 +1060,9 @@ Prepare → Test (small batch) → Execute (full) → Cleanup
 
 ## CRITICAL REMINDERS
 
-### One Subtask at a Time
-- Complete one subtask fully
-- Verify before moving on
+### One Subtask per Session
+- Complete your subtask fully
+- Verify it, commit it, end your turn
 - Each subtask = one commit
 
 ### Respect Dependencies

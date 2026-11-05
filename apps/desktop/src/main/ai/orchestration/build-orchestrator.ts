@@ -247,6 +247,19 @@ export function codingFailure(stuckSubtasks: string[]): string | undefined {
   return `Not finished after ${MAX_SUBTASK_RETRIES} attempts: ${stuckSubtasks.join(', ')}. Resume the task to try again, or split these subtasks.`;
 }
 
+/**
+ * Which subtask this session is for. Memories and skills are chosen per subtask, so a session
+ * that goes on to the next one works without them, and its turn limit gets reported against the
+ * subtask it started with. The id comes from a plan agents can edit. Pure.
+ */
+export function assignedSubtaskSection(subtaskId: string): string {
+  const id = /^[\w.-]{1,64}$/.test(subtaskId) ? `\`${subtaskId}\`` : 'the first pending subtask in the plan';
+  return `
+
+## Your subtask in this session
+Work only on ${id}. When it is verified, committed and marked completed, write your session notes and end your turn, even if other subtasks are pending: the app starts a fresh session for the next one.`;
+}
+
 const CONTINUE_SUBTASK = `
 
 ## Continuing this subtask
@@ -546,7 +559,7 @@ export class BuildOrchestrator extends EventEmitter {
         return this.config.runSession({
           agentType: 'coder',
           phase: 'coding',
-          systemPrompt: continuing ? `${prompt}${CONTINUE_SUBTASK}` : prompt,
+          systemPrompt: `${prompt}${assignedSubtaskSection(subtask.id)}${continuing ? CONTINUE_SUBTASK : ''}`,
           specDir: this.config.specDir,
           projectDir: this.config.projectDir,
           subtaskId: subtask.id,

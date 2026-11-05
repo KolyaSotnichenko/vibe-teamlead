@@ -1471,7 +1471,7 @@ function buildKickoffMessage(agentType: AgentType, specDir: string, projectDir: 
     case 'architect':
       return `Read the spec at ${specDir}/spec.md and the project at ${projectDir}, then design the architecture: write ${specDir}/architecture/architecture.md, ADRs under ${specDir}/architecture/adr/ and draw.io diagrams under ${specDir}/architecture/diagrams/, rendering each diagram with render_diagram and fixing layout problems before you finish.`;
     case 'coder':
-      return `Read ${specDir}/implementation_plan.json and implement the next pending subtask. Project root: ${projectDir}. After completing the subtask, update its status to "completed" in implementation_plan.json.`;
+      return `Read ${specDir}/implementation_plan.json and implement the subtask your instructions name (without one, the next pending subtask). Project root: ${projectDir}. After completing it, update its status to "completed" in implementation_plan.json and end your turn.`;
     case 'qa_reviewer':
       return `Review the implementation in ${projectDir} against the specification in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with a clear "Status: PASSED" or "Status: FAILED" line, then record the verdict with update_qa_status.`;
     case 'qa_fixer':
