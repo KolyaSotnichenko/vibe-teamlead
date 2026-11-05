@@ -107,6 +107,26 @@ describe('write containment', () => {
         'git worktree add ../x',
         'git tag v1',
         'git',
+        // Options before the subcommand, other than the pager and lock ones
+        'git --no-replace-objects status',
+        'git --literal-pathspecs -c x=y diff',
+        'GIT_DIR=/tmp/x git status',
+        'PAGER="sh -c id" git log',
+        // Options on allowed subcommands that write or run programs
+        'git diff --output=/tmp/x',
+        'git diff --output /tmp/x',
+        'git log -O/tmp/orderfile',
+        'git diff -O=/tmp/x',
+        'git grep --open-files-in-pager',
+        'git diff --ext-diff',
+        'git diff --textconv',
+        'git diff --no-index a b',
+        // git hidden in a substitution, quotes or a second line
+        'echo $(git commit -m x)',
+        'echo `git add .`',
+        "echo 'git add .' | sh",
+        'echo "git commit"',
+        'ls\ngit commit -m x',
       ];
       for (const command of deniedCommands) {
         const out = evaluatePreToolUse('Bash', { command }, context);
@@ -138,7 +158,11 @@ describe('write containment', () => {
         'git merge-base HEAD main',
         'git status | head -20',
         'cd src && git diff --stat',
+        'git --no-pager log -3',
+        'git -P diff',
+        'git --no-optional-locks status',
         'npm test',
+        'echo "no version control here"',
       ];
       for (const command of allowedCommands) {
         expect(denied(evaluatePreToolUse('Bash', { command }, context)), command).toBe(false);

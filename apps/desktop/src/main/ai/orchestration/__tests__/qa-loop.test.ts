@@ -46,7 +46,7 @@ vi.mock('../../schema', () => ({
 }));
 
 import { validateStructuredOutput } from '../../schema';
-import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection, reviewerChangedFiles } from '../qa-loop';
+import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection } from '../qa-loop';
 import { approvalHolds, recordApproval } from '../qa-approval';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
@@ -379,78 +379,110 @@ describe('QALoop', () => {
   });
 
   describe('project files the reviewer changed', () => {
-    it('are the paths whose status differs between two porcelain snapshots, outside the spec directory', () => {
-      const before = ' M src/app.ts\n?? .vibe-teamlead/specs/001-feature/qa_report.md\nA  src/new.ts\n';
-      const after = [
-        ' M src/app.ts',
-        'MM src/new.ts',
-        '?? src/fix.ts',
-        ' M .vibe-teamlead/specs/001-feature/spec.md',
-        '?? .vibe-teamlead/specs/001-feature/qa-browser/a.png',
-        '?? .vibe-teamlead/task_logs/x.json',
-        'R  src/old.ts -> src/renamed.ts',
-        '?? "src/with space.ts"',
-      ].join('\n');
-      expect(reviewerChangedFiles(before, after, { projectDir: PROJECT_DIR, specDir: SPEC_DIR })).toEqual([
-        'src/new.ts',
-        'src/fix.ts',
-        'src/old.ts -> src/renamed.ts',
-        '"src/with space.ts"',
-      ]);
-      expect(reviewerChangedFiles(after, after, { projectDir: PROJECT_DIR, specDir: SPEC_DIR })).toEqual([]);
-      // A file the reviewer reverted to clean is a change too
-      expect(reviewerChangedFiles(' M src/app.ts\n', '', { projectDir: PROJECT_DIR, specDir: SPEC_DIR })).toEqual(['src/app.ts']);
-    });
+    const snap = (head: string, files: Record<string, string>) => ({ head, files });
+    function approvingRun(specDir: string) {
+      let calls = 0;
+      mockReadFile.mockReset();
+      mockWriteFile.mockReset().mockResolvedValue(undefined);
+      mockReadFile.mockImplementation((p: string) => {
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+        return Promise.reject(new Error('ENOENT'));
+      });
+      const runSession = vi.fn().mockImplementation(async () => {
+        calls++;
+        return makeSessionResult('completed');
+      });
+      const logs: string[] = [];
+      const run = async (workTreeSnapshot: QALoopConfig['workTreeSnapshot'], session = runSession) => {
+        const loop = new QALoop(makeConfig({ specDir, projectDir: '/p', runSession: session, maxIterations: 1, workTreeSnapshot }));
+        loop.on('log', (line: string) => logs.push(line));
+        return loop.run();
+      };
+      return { run, logs, calls: () => calls };
+    }
 
     it('are logged and recorded on the outcome, and left as they are', async () => {
       const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
       const { tmpdir } = await import('node:os');
       const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
-      let calls = 0;
-      mockReadFile.mockReset();
-      mockWriteFile.mockReset().mockResolvedValue(undefined);
-      const runSession = vi.fn().mockImplementation(async () => {
-        calls++;
-        return makeSessionResult('completed');
-      });
-      mockReadFile.mockImplementation((p: string) => {
-        if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
-        return Promise.reject(new Error('ENOENT'));
-      });
-      const workTreeStatus = vi.fn(async () => (calls === 0 ? '' : ' M src/app.ts\n?? src/hotfix.ts\n?? .vibe-teamlead/specs/x/qa_report.md\n'));
-      const logs: string[] = [];
-      const loop = new QALoop(makeConfig({ specDir, projectDir: '/p', runSession, maxIterations: 1, workTreeStatus }));
-      loop.on('log', (line: string) => logs.push(line));
-      const outcome = await loop.run();
+      const { run, logs, calls } = approvingRun(specDir);
+      const workTreeSnapshot = vi.fn(async () =>
+        calls() === 0
+          ? snap('h1', { 'src/app.ts': 'a1' })
+          : snap('h1', { 'src/app.ts': 'a2', 'src/hotfix.ts': 'new', '.vibe-teamlead/specs/x/qa_report.md': 'r' }),
+      );
+      const outcome = await run(workTreeSnapshot);
 
       expect(outcome.approved).toBe(true);
-      expect(workTreeStatus).toHaveBeenCalledTimes(2);
-      expect(logs).toContain('The QA reviewer changed 2 project files it must not touch: src/app.ts, src/hotfix.ts. They are left as is; review them in the task\'s Files tab.');
+      expect(workTreeSnapshot).toHaveBeenCalledTimes(2);
+      expect(logs).toContain("The QA reviewer changed 2 project files it must not touch: src/app.ts, src/hotfix.ts. They are left as is; review them in the task's Files tab.");
       const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
       expect(recorded.reviewerChangedFiles).toEqual(['src/app.ts', 'src/hotfix.ts']);
+      expect(recorded.reviewerChangesUnknown).toBeUndefined();
     });
 
-    it('are not recorded when nothing changed or the status could not be read', async () => {
+    it('mention a commit the reviewer made', async () => {
+      const { mkdtempSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { run, logs, calls } = approvingRun(mkdtempSync(path.join(tmpdir(), 'vtl-qaout-')));
+      await run(async () => snap(calls() === 0 ? 'h1' : 'h2', {}));
+      expect(logs.some((l) => l.includes('made a commit'))).toBe(true);
+    });
+
+    it('are unknown, never "none", when a snapshot fails', async () => {
       const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
       const { tmpdir } = await import('node:os');
       const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
-      let calls = 0;
-      mockReadFile.mockReset();
-      mockWriteFile.mockReset().mockResolvedValue(undefined);
-      const runSession = vi.fn().mockImplementation(async () => {
-        calls++;
-        return makeSessionResult('completed');
+      const { run, logs, calls } = approvingRun(specDir);
+      await run(async () => (calls() === 0 ? snap('h1', { 'a.ts': 'x' }) : { error: 'git status exited with code 128' }));
+      expect(logs).toContain('Could not check whether the reviewer changed project files: git status exited with code 128');
+      const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
+      expect(recorded.reviewerChangesUnknown).toBe(true);
+      expect(recorded.reviewerChangedFiles).toBeUndefined();
+    });
+
+    it('are compared even when the reviewer session throws', async () => {
+      const { mkdtempSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { run, logs } = approvingRun(mkdtempSync(path.join(tmpdir(), 'vtl-qaout-')));
+      let taken = 0;
+      const workTreeSnapshot = vi.fn(async () => (taken++ === 0 ? snap('h1', {}) : snap('h1', { 'src/app.ts': 'x' })));
+      const throwing = vi.fn(async () => {
+        throw new Error('session crashed');
       });
+      const outcome = await run(workTreeSnapshot, throwing);
+      expect(outcome.reason).toBe('error');
+      expect(workTreeSnapshot).toHaveBeenCalledTimes(2);
+      expect(logs.some((l) => l.includes('must not touch: src/app.ts'))).toBe(true);
+    });
+
+    it('are compared around the session that only records a lost verdict', async () => {
+      let plan = completedPlan();
+      let report: string | null = null;
+      mockReadFile.mockReset();
+      mockWriteFile.mockReset();
       mockReadFile.mockImplementation((p: string) => {
-        if (p.endsWith('implementation_plan.json')) return Promise.resolve(calls === 0 ? completedPlan() : completedPlan('approved'));
+        if (p.endsWith('implementation_plan.json')) return Promise.resolve(plan);
+        if (p.endsWith('qa_report.md') && report) return Promise.resolve(report);
         return Promise.reject(new Error('ENOENT'));
       });
-      const logs: string[] = [];
-      const loop = new QALoop(makeConfig({ specDir, runSession, maxIterations: 1, workTreeStatus: async () => (calls === 0 ? ' M a.ts\n' : undefined) }));
-      loop.on('log', (line: string) => logs.push(line));
-      await loop.run();
-      expect(logs.some((l) => l.includes('must not touch'))).toBe(false);
-      expect(JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8')).reviewerChangedFiles).toBeUndefined();
+      mockWriteFile.mockImplementation((p: string, data: string) => {
+        if (p.endsWith('implementation_plan.json')) plan = data;
+        return Promise.resolve();
+      });
+      let n = 0;
+      const runSession = vi.fn(async (config: QASessionRunConfig) => {
+        n++;
+        // 1: the review writes a report but no verdict. 2: the verdict session records it.
+        if (n === 1) report = 'report without a verdict';
+        if (n === 2 && config.kickoffMessage) plan = completedPlan('approved');
+        return makeSessionResult('completed');
+      });
+      const workTreeSnapshot = vi.fn(async () => snap('h1', {}));
+      const outcome = await new QALoop(makeConfig({ runSession, workTreeSnapshot, currentCommit: async () => 'abc123' })).run();
+      expect(outcome.approved).toBe(true);
+      expect(runSession).toHaveBeenCalledTimes(2);
+      expect(workTreeSnapshot).toHaveBeenCalledTimes(4);
     });
   });
 

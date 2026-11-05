@@ -12,9 +12,10 @@
  *   role guard against drifting into the fixer's job, not a sandbox: it denies
  *   Write/Edit/MultiEdit/NotebookEdit outside the spec directory and every git
  *   command that isn't on a short read-only list. Bash can still write files
- *   (sed -i, cat >, redirections), which this hook does not inspect; the QA loop
- *   compares the worktree's git status before and after the session and
- *   reports the project files the reviewer changed.
+ *   (sed -i, cat >, redirections), which this hook does not inspect, and the
+ *   git check is a best-effort tokenizer, not a shell parser. The real backstop
+ *   is the QA loop's content snapshot of the worktree before and after each
+ *   reviewer session (reviewer-changes.ts), which reports what the reviewer changed.
  */
 
 import { tmpdir } from 'node:os';
@@ -40,33 +41,43 @@ const REVIEWER_GIT_ALLOWED = new Set([
 /** `git branch` arguments that only list; anything else may create, rename or delete one. */
 const BRANCH_LIST_ARGS = ['--list', '-a', '-r', '-v', '--show-current'];
 
-/** Global git options that alias commands or point git at another repository. */
-const GIT_OPTIONS_DENIED = ['-c', '--config-env', '-C', '--git-dir', '--work-tree', '--exec-path'];
+/** The only options allowed before the subcommand; -c, -C, --git-dir and the rest alias or redirect. */
+const GIT_LEADING_OK = new Set(['--no-pager', '-p', '-P', '--no-optional-locks']);
+
+/** Options of read-only subcommands that write a file or run a program. */
+const SUB_OPTIONS_DENIED = ['--output', '-O', '--open-files-in-pager', '--ext-diff', '--textconv', '--no-index'];
 
 /** Interpreters and runners that can hide a git command inside their arguments. */
 const WRAPPERS = new Set(['sh', 'bash', 'zsh', 'eval', 'xargs', 'env']);
 
 const isGit = (token: string) => token === 'git' || token.endsWith('/git');
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/** git named inside a substitution or quotes: whatever it does, it isn't visible to the tokenizer. */
+const GIT_HIDDEN = [/\$\([^)]*\bgit\b/, /`[^`]*\bgit\b/, /"[^"]*\bgit\b[^"]*"/, /'[^']*\bgit\b[^']*'/];
 
 /**
  * Is this one segment of a Bash command read-only git, or no git at all? A
  * best-effort tokenizer on whitespace: the segment splitter and this don't
- * understand every quoting form, so a wrapper with git anywhere in it is denied
- * outright rather than parsed.
+ * understand every quoting form, so a wrapper, a substitution, quotes or a
+ * second line with git in it are denied outright rather than parsed.
  */
 function reviewerSegmentAllowed(segment: string): boolean {
+  if (!/\bgit\b/.test(segment)) return true;
+  if (segment.includes('\n') || GIT_HIDDEN.some((re) => re.test(segment))) return false;
   const tokens = segment.trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length) return true;
   const command = tokens[0].replace(/^.*\//, '');
-  if (WRAPPERS.has(command)) return !/\bgit\b/.test(segment);
+  if (WRAPPERS.has(command)) return false;
   const start = tokens.findIndex(isGit);
   if (start === -1) return true;
+  if (tokens.slice(0, start).some((t) => ENV_ASSIGNMENT.test(t))) return false;
   const args = tokens.slice(start + 1);
-  if (args.some((t) => GIT_OPTIONS_DENIED.some((opt) => t === opt || t.startsWith(`${opt}=`)))) return false;
   const subIndex = args.findIndex((t) => !t.startsWith('-'));
   if (subIndex === -1) return false;
+  if (args.slice(0, subIndex).some((t) => !GIT_LEADING_OK.has(t))) return false;
   const sub = args[subIndex];
   const rest = args.slice(subIndex + 1);
+  if (rest.some((t) => SUB_OPTIONS_DENIED.some((opt) => t === opt || t.startsWith(`${opt}=`) || (opt === '-O' && t.startsWith('-O'))))) return false;
   if (REVIEWER_GIT_ALLOWED.has(sub)) return true;
   if (sub === 'branch') return rest.every((t) => BRANCH_LIST_ARGS.some((ok) => t === ok || t.startsWith(`${ok}=`)));
   if (sub === 'stash') return rest[0] === 'list' || rest[0] === 'show';

@@ -110,10 +110,11 @@ export function QaOutcomePanel({ task }: { task: Task }) {
   }
   if (!outcome) return null;
   const changedFiles = outcome.reviewerChangedFiles ?? [];
-  const changedNotice = changedFiles.length > 0 && (
-    <p className="px-4 py-2 text-xs text-muted-foreground">
-      {t('qaOutcome.reviewerChanged', { count: changedFiles.length, files: changedFiles.join(', ') })}
-    </p>
+  const changedNotice = (changedFiles.length > 0 || outcome.reviewerChangesUnknown) && (
+    <div className="space-y-1 px-4 py-2 text-xs text-muted-foreground">
+      {changedFiles.length > 0 && <p>{t('qaOutcome.reviewerChanged', { count: changedFiles.length, files: changedFiles.join(', ') })}</p>}
+      {outcome.reviewerChangesUnknown && <p>{t('qaOutcome.reviewerChangesUnknown')}</p>}
+    </div>
   );
   // Approved: nothing blocked it, but files the reviewer touched are still worth a look
   if (outcome.approved) {

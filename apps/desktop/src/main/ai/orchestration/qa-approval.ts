@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
 import { writeFileReplacingSync } from '../safe-write';
+import { readOnlyGitArgs } from './reviewer-changes';
 
 export function qaApprovalsDir(): string {
   return join(homedir(), '.vibe-teamlead', 'qa-approvals');
@@ -73,7 +74,7 @@ function newFileState(path: string): string | undefined {
 export async function workTreeFingerprint(cwd: string): Promise<string | undefined> {
   const git = (args: string[]) =>
     new Promise<string | undefined>((done) => {
-      execFile('git', args, { cwd, encoding: 'utf-8', maxBuffer: 256 * 1024 * 1024 }, (error, stdout) => done(error ? undefined : stdout));
+      execFile('git', readOnlyGitArgs(args), { cwd, encoding: 'utf-8', maxBuffer: 256 * 1024 * 1024 }, (error, stdout) => done(error ? undefined : stdout));
     });
   const [head, diff, untracked, tracked, stages] = await Promise.all([
     git(['rev-parse', 'HEAD']),

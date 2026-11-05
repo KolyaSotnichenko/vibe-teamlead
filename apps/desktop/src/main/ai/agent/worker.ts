@@ -36,9 +36,8 @@ import type { SessionConfig, StreamEvent, SessionResult } from '../session/types
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
-import { withoutGitHooks } from '../merge/git-merge';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
-import { runProcess } from '../../platform/exec';
+import { takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
@@ -934,7 +933,7 @@ async function runQualityAssurance(
 
     currentCommit: () => currentCommit(session.projectDir),
     approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
-    workTreeStatus: () => workTreeStatus(session.projectDir),
+    workTreeSnapshot: () => takeWorkTreeSnapshot(session.projectDir),
 
     generatePrompt: async (agentType, context) => {
       const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session);
@@ -973,18 +972,6 @@ async function runQualityAssurance(
 
   const outcome = await qaLoop.run();
   return outcome.approved && session.securityQa?.enabled ? runSecurityQa(session, qaLoop, outcome) : outcome;
-}
-
-/**
- * The worktree's porcelain status, for the before/after comparison around a
- * reviewer session. Run with the merge module's hook-free git environment and
- * without the GIT_DIR-style variables that can point git at another repository.
- */
-async function workTreeStatus(cwd: string): Promise<string | undefined> {
-  const env = withoutGitHooks(process.env);
-  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete env[name];
-  const result = await runProcess('git', ['status', '--porcelain', '--untracked-files=all'], { cwd, env, timeoutMs: 60_000 });
-  return result.code === 0 ? result.stdout : undefined;
 }
 
 /** What agents left running for this task must not outlive it or hold ports for the next one. */

@@ -193,5 +193,7 @@ export interface QaOutcomeInfo {
   error?: string;
   /** Project files the QA reviewer changed although it must not; left as they are for the user to review */
   reviewerChangedFiles?: string[];
+  /** A worktree snapshot failed, so whether the reviewer changed project files is unknown */
+  reviewerChangesUnknown?: boolean;
   at: string;
 }

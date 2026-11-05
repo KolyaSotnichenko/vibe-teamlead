@@ -98,6 +98,11 @@ describe('QaOutcomePanel', () => {
     expect(screen.queryByText('qaOutcome.title')).not.toBeInTheDocument();
   });
 
+  it('says when it could not check what the reviewer changed', async () => {
+    setup({ approved: true, iterations: 1, reviewerApproved: true, at: '', blocking: [], reviewerChangesUnknown: true });
+    expect(await screen.findByText('qaOutcome.reviewerChangesUnknown')).toBeInTheDocument();
+  });
+
   it('shows the changed files with the reasons when QA did not approve', async () => {
     setup({ approved: false, reason: 'max_iterations', iterations: 2, reviewerApproved: false, at: '', blocking: [], reviewerChangedFiles: ['src/app.ts'] });
     expect(await screen.findByText(/qaOutcome.reason.max_iterations/)).toBeInTheDocument();
