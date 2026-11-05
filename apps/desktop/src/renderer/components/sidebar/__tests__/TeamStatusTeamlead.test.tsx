@@ -15,22 +15,46 @@ vi.mock('../teamlead/droid-voice', async (orig) => ({ ...(await orig<object>()),
 import { useSettingsStore } from '../../../stores/settings-store';
 import { useTaskStore } from '../../../stores/task-store';
 import { TeamStatus } from '../TeamStatus';
+import { HELLO_FOR_MS } from '../teamlead/mood';
 
 const task = (id: string, status: string, reviewReason?: string) => ({ id, projectId: 'p1', status, reviewReason, subtasks: [] });
 const setTasks = (tasks: unknown[]) => act(() => useTaskStore.setState({ tasks: tasks as never }));
 const mood = () => document.querySelector('[data-mood]')?.getAttribute('data-mood');
+const afterGreeting = () => act(() => void vi.advanceTimersByTime(HELLO_FOR_MS + 50));
 
 beforeEach(() => {
+  vi.useFakeTimers();
   speak.mockClear();
   useSettingsStore.setState((s) => ({ settings: { ...s.settings, teamleadVoice: true } }));
   useTaskStore.setState({ tasks: [] as never });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('TeamStatus teamlead', () => {
+  it('waves when the app opens, silently, then shows the mood without a sound', () => {
+    setTasks([task('a', 'human_review', 'errors')]);
+    render(<TeamStatus projectId="p1" collapsed={false} />);
+    expect(mood()).toBe('hello');
+    afterGreeting();
+    expect(mood()).toBe('error');
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it("doesn't take finished tasks loading at startup for a merge", () => {
+    render(<TeamStatus projectId="p1" collapsed={false} />);
+    afterGreeting();
+    setTasks([task('a', 'done'), task('b', 'pr_created')]);
+    expect(mood()).toBe('idle');
+    expect(speak).not.toHaveBeenCalled();
+  });
+
   it('shows the mood for the project, silently at first, then speaks when it changes', () => {
     setTasks([task('a', 'in_progress')]);
     render(<TeamStatus projectId="p1" collapsed={false} />);
+    afterGreeting();
     expect(mood()).toBe('working');
     expect(screen.getByText('teamStatus.mood.working:1')).toBeInTheDocument();
     expect(speak).not.toHaveBeenCalled();
@@ -45,23 +69,20 @@ describe('TeamStatus teamlead', () => {
   });
 
   it('celebrates a merge, then goes back', () => {
-    vi.useFakeTimers();
-    try {
-      setTasks([task('a', 'human_review', 'completed')]);
-      render(<TeamStatus projectId="p1" collapsed={false} />);
-      setTasks([task('a', 'done')]);
-      expect(mood()).toBe('done');
-      expect(speak).toHaveBeenLastCalledWith('laugh');
-      act(() => void vi.advanceTimersByTime(2500));
-      expect(mood()).toBe('idle');
-    } finally {
-      vi.useRealTimers();
-    }
+    setTasks([task('a', 'human_review', 'completed')]);
+    render(<TeamStatus projectId="p1" collapsed={false} />);
+    afterGreeting();
+    setTasks([task('a', 'done')]);
+    expect(mood()).toBe('done');
+    expect(speak).toHaveBeenLastCalledWith('laugh');
+    act(() => void vi.advanceTimersByTime(2500));
+    expect(mood()).toBe('idle');
   });
 
   it('waves back when clicked, and stays quiet with the voice off', () => {
     useSettingsStore.setState((s) => ({ settings: { ...s.settings, teamleadVoice: false } }));
     render(<TeamStatus projectId="p1" collapsed={false} />);
+    afterGreeting();
     expect(mood()).toBe('idle');
     fireEvent.click(screen.getByRole('button', { name: /teamStatus.teamleadLabel/ }));
     expect(mood()).toBe('hello');
@@ -71,6 +92,7 @@ describe('TeamStatus teamlead', () => {
   it('ignores other projects', () => {
     setTasks([{ ...task('a', 'in_progress'), projectId: 'p2' }]);
     render(<TeamStatus projectId="p1" collapsed={false} />);
+    afterGreeting();
     expect(mood()).toBe('idle');
   });
 });

@@ -91,6 +91,12 @@ describe('droid voice', () => {
     expect(phraseFor('working', 'queued')).toBeNull();
   });
 
+  it('says nothing when a greeting ends: the mood under it is not news', () => {
+    expect(phraseFor('hello', 'error')).toBeNull();
+    expect(phraseFor('hello', 'review')).toBeNull();
+    expect(phraseFor('hello', 'working')).toBeNull();
+  });
+
   it('keeps phrases short', () => {
     for (const phrase of Object.keys(PHRASES) as Array<keyof typeof PHRASES>) {
       expect(phraseMs(phrase), phrase).toBeLessThan(800);

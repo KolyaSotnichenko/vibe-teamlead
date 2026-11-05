@@ -117,6 +117,10 @@ export function TeamStatus({ projectId, collapsed }: { projectId: string | null;
   );
 }
 
+function isShipped(status: string): boolean {
+  return status === 'done' || status === 'pr_created';
+}
+
 const MOOD_COUNT: Partial<Record<TeamleadMood, keyof ReturnType<typeof countMood> | 'waiting'>> = {
   working: 'coding',
   qa: 'qa',
@@ -128,37 +132,39 @@ const MOOD_COUNT: Partial<Record<TeamleadMood, keyof ReturnType<typeof countMood
 
 /**
  * The teamlead's mood for a project, with the short-lived moods (a fresh
- * merge, a greeting) and falling asleep after a quiet hour. Speaks when the
+ * merge, a greeting on opening or a click) and falling asleep after a quiet hour. Speaks when the
  * mood changes, if the voice is on; switching projects is silent.
  */
 function useTeamleadMood(projectId: string | null, waiting: number) {
   const counts = useTaskStore(
     useShallow((s) => countMood(projectId ? s.tasks.filter((task) => task.projectId === projectId) : [])),
   );
-  const shipped = useTaskStore((s) =>
+  const taskIds = (s: ReturnType<typeof useTaskStore.getState>, shippedOnes: boolean) =>
     projectId
       ? s.tasks
-          .filter((task) => task.projectId === projectId && (task.status === 'done' || task.status === 'pr_created'))
+          .filter((task) => task.projectId === projectId && isShipped(task.status) === shippedOnes)
           .map((task) => task.id)
           .sort()
           .join(',')
-      : '',
-  );
+      : '';
+  const shipped = useTaskStore((s) => taskIds(s, true));
+  const unshipped = useTaskStore((s) => taskIds(s, false));
   const voiceOn = useSettingsStore((s) => s.settings.teamleadVoice !== false);
   const [mergedUntil, setMergedUntil] = useState(0);
-  const [helloUntil, setHelloUntil] = useState(0);
+  // Opening the app: he waves, as he does when clicked
+  const [helloUntil, setHelloUntil] = useState(() => Date.now() + HELLO_FOR_MS);
   const [quietSince, setQuietSince] = useState(() => Date.now());
   const [, setTick] = useState(0);
 
-  // A task newly done or turned into a PR: a short celebration
-  const seenShipped = useRef<{ project: string | null; ids: Set<string> } | null>(null);
+  // A task seen unfinished that is now done or a PR: a short celebration. Tasks loading
+  // already finished (at startup, on switching projects) were never seen unfinished.
+  const seenUnshipped = useRef<{ project: string | null; ids: Set<string> } | null>(null);
   useEffect(() => {
-    const ids = new Set(shipped ? shipped.split(',') : []);
-    const prev = seenShipped.current;
-    seenShipped.current = { project: projectId, ids };
-    if (!prev || prev.project !== projectId) return;
-    if ([...ids].some((id) => !prev.ids.has(id))) setMergedUntil(Date.now() + DONE_FOR_MS);
-  }, [shipped, projectId]);
+    const prev = seenUnshipped.current;
+    seenUnshipped.current = { project: projectId, ids: new Set(unshipped ? unshipped.split(',') : []) };
+    if (prev?.project !== projectId || !shipped) return;
+    if (shipped.split(',').some((id) => prev.ids.has(id))) setMergedUntil(Date.now() + DONE_FOR_MS);
+  }, [shipped, unshipped, projectId]);
 
   const signature = `${projectId}|${counts.coding}|${counts.qa}|${counts.queued}|${counts.review}|${counts.errors}|${waiting}`;
   useEffect(() => {

@@ -73,10 +73,11 @@ const RESTING: TeamleadMood[] = ['idle', 'sleep', 'queued'];
 
 /**
  * What to say when the mood changes, or nothing. The first mood after the
- * panel appears (or after switching projects) is silent. Pure.
+ * panel appears (or after switching projects) and the mood a greeting gives
+ * way to are silent. Pure.
  */
 export function phraseFor(prev: TeamleadMood | null, next: TeamleadMood): Phrase | null {
-  if (prev === null || prev === next) return null;
+  if (prev === null || prev === 'hello' || prev === next) return null;
   switch (next) {
     case 'waiting':
       return 'question';

@@ -4,7 +4,7 @@
 
 | Screen | What's there |
 |---|---|
-| **Team now** (sidebar) | The pixel teamlead shows what the team is doing, one mood at a time, by priority: an error, a question for you, a task to review, work, QA, the queue, rest. After an hour with nothing going on he falls asleep; after a merge he jumps for joy. Click him to say hi. He chirps like a droid when an agent asks a question, a task is ready or fails, and after a merge. The voice is turned off in Settings → Notifications → Teamlead voice. The counts are below him. |
+| **Team now** (sidebar) | The pixel teamlead shows what the team is doing, one mood at a time, by priority: an error, a question for you, a task to review, work, QA, the queue, rest. After an hour with nothing going on he falls asleep; after a merge he jumps for joy. He waves when the app opens; click him to say hi. He chirps like a droid when an agent asks a question, a task is ready or fails, and after a merge. The voice is turned off in Settings → Notifications → Teamlead voice. The counts are below him. |
 | **Project tabs** (top) | Open projects; the "+" adds one. Next to it: tokens spent on the project (and the Anthropic API cost); click for the breakdown by kind of token and by agent. Gateway and subscription tokens are counted but not priced here. |
 | **Kanban Board** | Tasks by column: *Planning → Queue → In Progress → AI Review → Human Review → Done* (plus *PR Created* and *Error*). The board updates live. Queued tasks start on their own, within the limit on parallel tasks. |
 | **Agent Terminals** | Claude Code terminals, each in its own worktree, for manual work alongside the agents. New terminal: ⌘T. |
