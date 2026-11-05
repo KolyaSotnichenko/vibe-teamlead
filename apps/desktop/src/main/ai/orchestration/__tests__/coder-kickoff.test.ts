@@ -192,6 +192,26 @@ describe('referencedCriteria', () => {
   });
 });
 
+describe('referencedCriteria on numbers a plan can make up', () => {
+  it('takes no number past six digits for a reference', () => {
+    expect(referencedCriteria('AC-1234567')).toEqual([]);
+    expect(referencedCriteria('AC-9007199254740992')).toEqual([]);
+    expect(referencedCriteria('AC-999999')).toEqual([999999]);
+    expect(referencedCriteria('AC-5..AC-1234567')).toEqual([5]);
+  });
+
+  it('stops at the cap across many ranges', () => {
+    const many = Array.from({ length: 50 }, (_, i) => `AC-${i * 100 + 1}..AC-${i * 100 + 100}`).join(', ');
+    const ids = referencedCriteria(many);
+    expect(ids).toHaveLength(200);
+    expect(ids.slice(0, 2)).toEqual([1, 2]);
+  });
+
+  it('returns promptly from a range past 2^53, where counting up never advances', () => {
+    expect(referencedCriteria('AC-9007199254740992..AC-9007199254740993')).toEqual([]);
+  });
+});
+
 describe('findPlanSubtask', () => {
   it('finds the entry and its phase, or null', () => {
     expect(findPlanSubtask(PLAN, 'subtask-2-2')?.phase.name).toBe('Limiter core');

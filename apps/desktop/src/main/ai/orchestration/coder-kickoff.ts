@@ -57,6 +57,8 @@ const DESCRIPTION_MAX = 4000;
 const VALUE_MAX = 300;
 /** A longer "range" is a typo, not a range: only its two ends count. */
 const RANGE_MAX = 100;
+/** Across all references; the plan is agent-editable, and the text is capped later anyway. */
+const CRITERIA_MAX = 200;
 const SUBTASK_ID = /^[\w.-]{1,64}$/;
 
 const entryId = (s: PlanSubtaskEntry): string => (typeof s.id === 'string' ? s.id : typeof s.subtask_id === 'string' ? s.subtask_id : '');
@@ -82,20 +84,25 @@ export function findPlanSubtask(plan: string | null, subtaskId: string): FoundSu
 /**
  * The criteria a text names, in order of first mention. Handles `AC-1..AC-13`,
  * `AC-1..3`, `AC-1 … AC-17`, `AC-01 through AC-06`; a bare number after "to" or
- * "-" is a count ("AC-5 to 8 roles"), not the end of a range. Pure.
+ * "-" is a count ("AC-5 to 8 roles"), not the end of a range. Past six digits
+ * it isn't a reference: beyond 2^53 counting up a range would never advance. Pure.
  */
 export function referencedCriteria(text: string): number[] {
   const found = new Set<number>();
-  const reference = /\bAC-(\d+)(?:\s*(?:(?:\.{2,3}|…|–|—)\s*(?:AC-)?|(?:-|to|through)\s*AC-)(\d+))?/g;
+  const add = (id: number) => {
+    if (found.size < CRITERIA_MAX) found.add(id);
+  };
+  const reference = /\bAC-(\d{1,6})(?!\d)(?:\s*(?:(?:\.{2,3}|…|–|—)\s*(?:AC-)?|(?:-|to|through)\s*AC-)(\d{1,6})(?!\d))?/g;
   for (const match of text.matchAll(reference)) {
     const start = Number(match[1]);
     const end = match[2] === undefined ? start : Number(match[2]);
     if (end < start || end - start > RANGE_MAX) {
-      found.add(start);
-      found.add(end);
+      add(start);
+      add(end);
     } else {
-      for (let n = start; n <= end; n++) found.add(n);
+      for (let n = start; n <= end; n++) add(n);
     }
+    if (found.size >= CRITERIA_MAX) break;
   }
   return [...found];
 }
