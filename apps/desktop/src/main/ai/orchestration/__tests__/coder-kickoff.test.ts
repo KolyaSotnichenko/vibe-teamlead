@@ -233,4 +233,48 @@ describe('a coder session', () => {
     expect(data.kickoffData).toContain('AC-2 Given a client at its limit');
     expect(data.kickoffData).toContain('Test first: tests/limiter.test.ts');
   });
+
+  it('carries the code context too, and logs through the build', async () => {
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-ck-'));
+    writeFileSync(join(specDir, 'implementation_plan.json'), PLAN);
+    const controller = new AbortController();
+    const runSession = vi.fn(async () => {
+      controller.abort();
+      return { outcome: 'completed' };
+    });
+    const subtaskCodeContext = vi.fn(async (_subtask: unknown, log: (line: string) => void) => {
+      log('CodeGraph context for subtask-2-2: 1.0 KB');
+      return 'CODE-BLOCK';
+    });
+    const o = new BuildOrchestrator({
+      specDir,
+      projectDir: specDir,
+      abortSignal: controller.signal,
+      generatePrompt: vi.fn().mockResolvedValue('prompt'),
+      runSession,
+      runQA: vi.fn().mockResolvedValue({ approved: true }),
+      subtaskCodeContext,
+    } as never);
+    const logs: string[] = [];
+    o.on('log', (line: string) => logs.push(line));
+    await (o as unknown as { runCodingPhase(): Promise<unknown> }).runCodingPhase();
+    const [config] = runSession.mock.calls[0] as unknown as [{ kickoffData: string }];
+    expect(subtaskCodeContext.mock.calls[0][0]).toMatchObject({ id: 'subtask-2-2', files_to_modify: ['src/app.ts'] });
+    expect(config.kickoffData).toContain('Test first: tests/limiter.test.ts');
+    expect(config.kickoffData.endsWith('CODE-BLOCK')).toBe(true);
+    expect(logs).toContain('CodeGraph context for subtask-2-2: 1.0 KB');
+  });
+
+  it("logs that there is no code context when the plan doesn't have the subtask", async () => {
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-ck-'));
+    writeFileSync(join(specDir, 'implementation_plan.json'), PLAN);
+    const subtaskCodeContext = vi.fn();
+    const o = new BuildOrchestrator({ specDir, projectDir: specDir, subtaskCodeContext } as never);
+    const logs: string[] = [];
+    o.on('log', (line: string) => logs.push(line));
+    const data = await (o as unknown as { coderKickoff(id: string): Promise<string> }).coderKickoff('subtask-9-9');
+    expect(data).toMatch(/read .*implementation_plan\.json/i);
+    expect(subtaskCodeContext).not.toHaveBeenCalled();
+    expect(logs).toEqual(['CodeGraph context for subtask-9-9: none (the subtask is not in the plan)']);
+  });
 });

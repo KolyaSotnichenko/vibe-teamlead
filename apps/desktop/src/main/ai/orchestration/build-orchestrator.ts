@@ -31,7 +31,8 @@ import {
   IMPLEMENTATION_PLAN_SCHEMA_HINT } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
-import { coderKickoffContext } from './coder-kickoff';
+import { coderKickoffContext, findPlanSubtask, type PlanSubtaskEntry } from './coder-kickoff';
+import { cleanForMessage } from './message-data';
 import { iterateSubtasks } from './subtask-iterator';
 import type { SubtaskIteratorConfig, SubtaskResult } from './subtask-iterator';
 import { writeFileReplacing } from '../safe-write';
@@ -123,6 +124,8 @@ export interface BuildOrchestratorConfig {
   /** Model for insight extraction (the task's model) */
   insightModel?: string;
   runQA: (hooks: QAPhaseHooks) => Promise<{ approved: boolean; error?: string }>;
+  /** The code a coder session starts with, as a block for its first message ('' for none). Never rejects. */
+  subtaskCodeContext?: (subtask: PlanSubtaskEntry, log: (line: string) => void) => Promise<string>;
   /** Optional callback for syncing spec to source (worktree mode) */
   syncSpecToSource?: (specDir: string, sourceSpecDir: string) => Promise<boolean>;
   /** Optional callback to get a resolved LanguageModel for lightweight repair calls */
@@ -606,11 +609,20 @@ export class BuildOrchestrator extends EventEmitter {
     return { success: true };
   }
 
-  /** A coder session's first message: its subtask and acceptance criteria instead of the whole plan and spec. */
+  /** A coder session's first message: its subtask, its acceptance criteria and the code, instead of the agent reading its way there. */
   private async coderKickoff(subtaskId: string): Promise<string> {
     const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
     const [plan, spec] = await Promise.all([read('implementation_plan.json'), read('spec.md')]);
-    return coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir });
+    const context = coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir });
+    const found = findPlanSubtask(plan, subtaskId);
+    const log = (line: string) => this.emitTyped('log', line);
+    if (!this.config.subtaskCodeContext) return context;
+    if (!found) {
+      log(`CodeGraph context for ${cleanForMessage(subtaskId, 64)}: none (the subtask is not in the plan)`);
+      return context;
+    }
+    const code = await this.config.subtaskCodeContext(found.subtask, log);
+    return [context, code].filter(Boolean).join('\n\n');
   }
 
   /**

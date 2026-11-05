@@ -38,6 +38,7 @@ import type {
   WorkerTaskEventMessage } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
+import { subtaskCodeContext } from '../orchestration/coder-code-context';
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
@@ -757,6 +758,9 @@ async function runBuildOrchestrator(
         if (reply.ok && count > 0) postLog(`Saved ${count} memor${count === 1 ? 'y' : 'ies'} from subtask ${insights.subtask_id}`);
       });
     },
+
+    subtaskCodeContext: (subtask, log) =>
+      subtaskCodeContext({ bin: session.bundled?.codegraphBin, projectDir: toolContext.cwd, subtask, signal: abortController.signal, log }),
 
     generatePrompt: async (agentType, _phase, context) => {
       const promptName = agentType === 'coder' ? 'coder' : agentType;
