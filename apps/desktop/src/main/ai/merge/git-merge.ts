@@ -24,8 +24,13 @@ export interface MergeTaskBranchOptions {
   projectDir: string;
   branch: string;
   baseBranch: string;
-  /** The task's worktree: its uncommitted edits to tracked files are part of the task */
+  /** The task's worktree */
   worktreePath?: string;
+  /**
+   * Whether QA approved the worktree exactly as it is now: only then are its
+   * uncommitted edits part of the task. Anything else may be what nobody has read.
+   */
+  uncommittedApproved?: () => Promise<boolean>;
   message: string;
   /** Leave the result staged for the user to commit */
   stageOnly: boolean;
@@ -238,6 +243,11 @@ export async function mergeTaskBranch(options: MergeTaskBranchOptions): Promise<
   rmSync(await gitPath(run, projectDir, MERGE_REVIEW_FILE), { force: true });
 
   if (worktreePath && (await run(['status', '--porcelain', '--untracked-files=no'], worktreePath)).stdout) {
+    if (!(await options.uncommittedApproved?.())) {
+      const files = (await run(['diff', '--name-only', 'HEAD'], worktreePath)).stdout.split('\n').filter(Boolean);
+      const shown = files.slice(0, 10).join(', ') + (files.length > 10 ? ` and ${files.length - 10} more` : '');
+      return refused(`The task's folder has uncommitted changes QA did not review: ${shown}. Nothing was changed. Commit them on the task branch if you want them, or discard them, then merge again.`);
+    }
     await run(['add', '-u'], worktreePath);
     const saved = await run(['commit', '-m', 'Changes left uncommitted at merge'], worktreePath);
     if (!saved.ok) return refused(saved.output);

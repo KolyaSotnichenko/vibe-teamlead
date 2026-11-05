@@ -26,6 +26,7 @@ import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
 import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelMergeReview, commitMergeReview, mergeTaskBranch } from '../../ai/merge/git-merge';
+import { approvedAsItIs } from '../../ai/orchestration/qa-approval';
 import { randomBytes } from 'crypto';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
@@ -2071,6 +2072,7 @@ export function registerWorktreeHandlers(
           ...taskBranch,
           baseBranch: effectiveBaseBranch,
           worktreePath: worktreePath ?? undefined,
+          uncommittedApproved: async () => (worktreePath ? approvedAsItIs(worktreePath, task.specId) : false),
           message: mergeMessage,
           stageOnly: options?.noCommit === true,
           resolveConflict: async ({ file, base, ours, theirs }) => {

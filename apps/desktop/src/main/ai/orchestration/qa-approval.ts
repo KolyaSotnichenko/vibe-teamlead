@@ -34,6 +34,11 @@ export function approvalHolds(dir: string, projectDir: string, specDir: string, 
   }
 }
 
+/** Whether QA approved this task's folder exactly as it is now. */
+export async function approvedAsItIs(projectDir: string, specDir: string, dir = qaApprovalsDir()): Promise<boolean> {
+  return approvalHolds(dir, projectDir, specDir, await workTreeFingerprint(projectDir));
+}
+
 /** Never throws: without a record, a later run simply reviews again. */
 export function recordApproval(dir: string, projectDir: string, specDir: string, fingerprint: string | undefined): void {
   if (!fingerprint) return;

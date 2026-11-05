@@ -80,14 +80,42 @@ describe('mergeTaskBranch', () => {
     expect(existsSync(join(repo, 'notes.txt'))).toBe(true);
   });
 
-  it("takes in the worktree's uncommitted edits to tracked files, not its stray files", async () => {
-    writeFileSync(join(wt, 'new.txt'), 'edited after the last commit\n');
-    writeFileSync(join(wt, 'stray.mjs'), 'left by QA\n');
+  describe("the worktree's uncommitted edits", () => {
+    beforeEach(() => {
+      writeFileSync(join(wt, 'new.txt'), 'edited after the last commit\n');
+    });
 
-    await expect(merge()).resolves.toMatchObject({ status: 'merged' });
+    it('are part of the task when QA approved them, stray files are not', async () => {
+      writeFileSync(join(wt, 'stray.mjs'), 'left by QA\n');
 
-    expect(readFileSync(join(repo, 'new.txt'), 'utf-8')).toBe('edited after the last commit\n');
-    expect(existsSync(join(repo, 'stray.mjs'))).toBe(false);
+      await expect(merge({ uncommittedApproved: async () => true })).resolves.toMatchObject({ status: 'merged' });
+
+      expect(readFileSync(join(repo, 'new.txt'), 'utf-8')).toBe('edited after the last commit\n');
+      expect(existsSync(join(repo, 'stray.mjs'))).toBe(false);
+    });
+
+    it.each([
+      ['QA never saw them', async () => false],
+      ['nobody could say', undefined],
+    ])('stop the merge when %s, and name the files', async (_name, uncommittedApproved) => {
+      const before = head();
+      const tip = git(repo, 'rev-parse', BRANCH);
+
+      const result = await merge({ uncommittedApproved });
+
+      expect(result.status).toBe('refused');
+      expect(result.message).toContain('new.txt');
+      expect(head()).toBe(before);
+      expect(git(repo, 'rev-parse', BRANCH)).toBe(tip);
+      expect(readFileSync(join(wt, 'new.txt'), 'utf-8')).toBe('edited after the last commit\n');
+    });
+
+    it('do not ask anything when there are none', async () => {
+      git(wt, 'checkout', '--', 'new.txt');
+      const uncommittedApproved = vi.fn(async () => false);
+      await expect(merge({ uncommittedApproved })).resolves.toMatchObject({ status: 'merged' });
+      expect(uncommittedApproved).not.toHaveBeenCalled();
+    });
   });
 
   describe('refuses and changes nothing', () => {

@@ -4,11 +4,29 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { approvalHolds, clearApproval, recordApproval, workTreeFingerprint } from '../qa-approval';
+import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint } from '../qa-approval';
 
 const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'vtl-approval-')));
 
 describe('the approval record', () => {
+  it('vouches for a folder only as QA saw it, by spec id or spec folder', async () => {
+    const dir = tmp();
+    const project = tmp();
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: project, stdio: 'ignore' });
+    git('init', '-q');
+    writeFileSync(join(project, 'a.txt'), 'one\n');
+    git('add', '-A');
+    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'first');
+    writeFileSync(join(project, 'a.txt'), 'reviewed\n');
+    expect(await approvedAsItIs(project, '001', dir)).toBe(false);
+
+    recordApproval(dir, project, join(project, 'specs', '001'), await workTreeFingerprint(project));
+    expect(await approvedAsItIs(project, '001', dir)).toBe(true);
+
+    writeFileSync(join(project, 'a.txt'), 'changed after the review\n');
+    expect(await approvedAsItIs(project, '001', dir)).toBe(false);
+  });
+
   it('holds only for the same project, spec and code', () => {
     const dir = tmp();
     recordApproval(dir, '/p', '/p/specs/001', 'code-1');
