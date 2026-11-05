@@ -393,8 +393,8 @@ describe('QALoop', () => {
         return makeSessionResult('completed');
       });
       const logs: string[] = [];
-      const run = async (workTreeSnapshot: QALoopConfig['workTreeSnapshot'], session = runSession) => {
-        const loop = new QALoop(makeConfig({ specDir, projectDir: '/p', runSession: session, maxIterations: 1, workTreeSnapshot }));
+      const run = async (workTreeSnapshot: QALoopConfig['workTreeSnapshot'], session = runSession, committedFiles?: QALoopConfig['committedFiles']) => {
+        const loop = new QALoop(makeConfig({ specDir, projectDir: '/p', runSession: session, maxIterations: 1, workTreeSnapshot, committedFiles }));
         loop.on('log', (line: string) => logs.push(line));
         return loop.run();
       };
@@ -427,6 +427,35 @@ describe('QALoop', () => {
       const { run, logs, calls } = approvingRun(mkdtempSync(path.join(tmpdir(), 'vtl-qaout-')));
       await run(async () => snap(calls() === 0 ? 'h1' : 'h2', {}));
       expect(logs.some((l) => l.includes('made a commit'))).toBe(true);
+    });
+
+    it('list the files of a commit the reviewer made, which git status no longer shows, and record the commit', async () => {
+      const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
+      const { run, logs, calls } = approvingRun(specDir);
+      const committedFiles = vi.fn(async () => ['src/app.ts', 'src/committed.ts']);
+      const outcome = await run(async () => snap(calls() === 0 ? 'h1' : 'h2', {}), undefined, committedFiles);
+
+      expect(outcome.approved).toBe(true);
+      expect(committedFiles).toHaveBeenCalledWith('h1', 'h2');
+      expect(logs.some((l) => l.includes('src/app.ts, src/committed.ts'))).toBe(true);
+      const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
+      expect(recorded.reviewerChangedFiles).toEqual(['src/app.ts', 'src/committed.ts']);
+      expect(recorded.reviewerCommitted).toEqual({ from: 'h1', to: 'h2' });
+      expect(recorded.reviewerChangesUnknown).toBeUndefined();
+    });
+
+    it('are unknown when the files of the reviewer commit cannot be listed', async () => {
+      const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+      const { tmpdir } = await import('node:os');
+      const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qaout-'));
+      const { run, logs, calls } = approvingRun(specDir);
+      await run(async () => snap(calls() === 0 ? 'h1' : 'h2', {}), undefined, async () => undefined);
+      expect(logs.some((l) => l.includes('could not list the files of the commit'))).toBe(true);
+      const recorded = JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'));
+      expect(recorded.reviewerCommitted).toEqual({ from: 'h1', to: 'h2' });
+      expect(recorded.reviewerChangesUnknown).toBe(true);
     });
 
     it('are unknown, never "none", when a snapshot fails', async () => {

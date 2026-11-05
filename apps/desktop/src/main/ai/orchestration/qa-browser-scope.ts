@@ -7,8 +7,10 @@
  */
 
 import { runProcess } from '../../platform/exec';
+import { withoutGitLocation } from '../../platform/git-env';
 import { isUiFile } from '../design/design-lint';
 import { isAppDataPath, resolveBaseRef } from '../security/gates';
+import { readOnlyGitArgs } from './reviewer-changes';
 
 /** Does any changed file need a browser to verify? Pure. */
 export const taskTouchesUi = (changedFiles: string[]): boolean => changedFiles.some(isUiFile);
@@ -23,9 +25,11 @@ export async function uiChangedSince(listChanged: () => Promise<string[] | undef
 export async function changedFilesSinceBase(projectDir: string): Promise<string[] | undefined> {
   const base = await resolveBaseRef(projectDir);
   if (!base) return undefined;
-  const git = (args: string[]) => runProcess('git', args, { cwd: projectDir, timeoutMs: 60_000 });
+  // Read-only, no external diff or textconv tools from the project's git config, and
+  // not pointed at another repository by an inherited GIT_DIR
+  const git = (args: string[]) => runProcess('git', readOnlyGitArgs(args), { cwd: projectDir, env: withoutGitLocation(), timeoutMs: 60_000 });
   const [diff, untracked] = await Promise.all([
-    git(['diff', '--name-only', '--diff-filter=ACMR', base]),
+    git(['diff', '--name-only', '--no-ext-diff', '--no-textconv', '--diff-filter=ACMR', base]),
     git(['ls-files', '--others', '--exclude-standard']),
   ]);
   if (diff.code !== 0 || untracked.code !== 0) return undefined;

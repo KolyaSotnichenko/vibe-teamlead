@@ -195,5 +195,7 @@ export interface QaOutcomeInfo {
   reviewerChangedFiles?: string[];
   /** A worktree snapshot failed, so whether the reviewer changed project files is unknown */
   reviewerChangesUnknown?: boolean;
+  /** The QA reviewer made a commit: HEAD before its first session and after its last; left as is */
+  reviewerCommitted?: { from: string; to: string };
   at: string;
 }

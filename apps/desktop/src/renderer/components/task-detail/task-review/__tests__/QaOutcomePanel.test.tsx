@@ -98,6 +98,11 @@ describe('QaOutcomePanel', () => {
     expect(screen.queryByText('qaOutcome.title')).not.toBeInTheDocument();
   });
 
+  it('names a commit the reviewer made, by short hashes', async () => {
+    setup({ approved: true, iterations: 1, reviewerApproved: true, at: '', blocking: [], reviewerCommitted: { from: 'abc1234567890', to: 'def5678901234' } });
+    expect(await screen.findByText('qaOutcome.reviewerCommitted {"from":"abc1234","to":"def5678"}')).toBeInTheDocument();
+  });
+
   it('says when it could not check what the reviewer changed', async () => {
     setup({ approved: true, iterations: 1, reviewerApproved: true, at: '', blocking: [], reviewerChangesUnknown: true });
     expect(await screen.findByText('qaOutcome.reviewerChangesUnknown')).toBeInTheDocument();

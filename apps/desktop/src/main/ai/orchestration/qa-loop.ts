@@ -199,6 +199,11 @@ export interface QALoopConfig {
    * must not change project files, and the hook can't see Bash writes.
    */
   workTreeSnapshot?: () => Promise<SnapshotResult>;
+  /**
+   * The files a commit range touched: when the reviewer commits, git status
+   * no longer lists them. undefined when git can't say.
+   */
+  committedFiles?: (from: string, to: string) => Promise<string[] | undefined>;
 }
 
 /** One QA issue per file with design-check findings. Pure — tested directly. */
@@ -387,6 +392,8 @@ export class QALoop extends EventEmitter {
   private reviewerChangedFiles: string[] = [];
   /** A snapshot failed, so whether the reviewer changed files is not known */
   private reviewerChangesUnknown = false;
+  /** The first and last HEAD of the reviewer's commits, when it made any */
+  private reviewerCommitted?: { from: string; to: string };
   private lastDesignFindings: DesignFinding[] = [];
   private checksRepeat = false;
   /**
@@ -814,8 +821,20 @@ export class QALoop extends EventEmitter {
       this.emitTyped('log', `Could not check whether the reviewer changed project files: ${'error' in before ? before.error : (after as { error: string }).error}`);
       return;
     }
-    const { files, headMoved } = reviewerChangedFiles(before, after, { projectDir: this.config.projectDir, specDir: this.config.specDir });
-    if (headMoved) this.emitTyped('log', 'The QA reviewer made a commit (HEAD moved during its session). It is left as is; review it in the task\'s history.');
+    // A reviewer commit takes its files out of git status: list them from the commit range
+    let committed: string[] = [];
+    if (before.head !== after.head) {
+      this.reviewerCommitted = { from: this.reviewerCommitted?.from ?? before.head, to: after.head };
+      const short = (sha: string) => sha.slice(0, 7);
+      const listed = this.config.committedFiles ? await this.config.committedFiles(before.head, after.head).catch(() => undefined) : undefined;
+      if (listed) committed = listed;
+      else this.reviewerChangesUnknown = true;
+      this.emitTyped(
+        'log',
+        `The QA reviewer made a commit (${short(before.head)} → ${short(after.head)}). It is left as is; review it in the task's history.${listed ? '' : ' The app could not list the files of the commit.'}`,
+      );
+    }
+    const { files } = reviewerChangedFiles(before, after, { projectDir: this.config.projectDir, specDir: this.config.specDir }, committed);
     if (!files.length) return;
     for (const file of files) if (!this.reviewerChangedFiles.includes(file)) this.reviewerChangedFiles.push(file);
     const shown = files.slice(0, 10).join(', ') + (files.length > 10 ? `, … (${files.length - 10} more)` : '');
@@ -1086,6 +1105,7 @@ export class QALoop extends EventEmitter {
         ...(error ? { error } : {}),
         ...(this.reviewerChangedFiles.length ? { reviewerChangedFiles: [...this.reviewerChangedFiles] } : {}),
         ...(this.reviewerChangesUnknown ? { reviewerChangesUnknown: true } : {}),
+        ...(this.reviewerCommitted ? { reviewerCommitted: { ...this.reviewerCommitted } } : {}),
         at: new Date().toISOString(),
       };
       try {

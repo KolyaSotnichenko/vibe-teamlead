@@ -52,12 +52,21 @@ export function parsePorcelainZ(output: string): string[] {
   return paths;
 }
 
-/** What the working tree holds at a path: a content hash, a link target, or "deleted". */
-function contentHash(file: string): string {
+/** git's stdout is kept up to this many characters; output that long is not a complete listing. */
+const MAX_GIT_OUTPUT = 64 * 1024 * 1024;
+
+/**
+ * What the working tree holds at a path: a content hash, a link target,
+ * "deleted", or the mode of a FIFO, socket or device, which is never read (a
+ * synchronous read of a FIFO blocks until something writes to it). A
+ * directory (a nested repository or submodule) has no content to hash.
+ */
+function contentHash(file: string): string | { directory: true } {
   const stat = lstatSync(file, { throwIfNoEntry: false });
   if (!stat) return 'deleted';
   if (stat.isSymbolicLink()) return `link:${readlinkSync(file)}`;
-  if (stat.isDirectory()) return 'directory';
+  if (stat.isDirectory()) return { directory: true };
+  if (!stat.isFile()) return `special:${stat.mode}`;
   if (stat.size > MAX_HASHED_FILE) return `big:${stat.size}:${stat.mtimeMs}`;
   try {
     return createHash('sha1').update(readFileSync(file)).digest('hex');
@@ -66,29 +75,55 @@ function contentHash(file: string): string {
   }
 }
 
+/** The error of a git query that did not complete, or undefined. */
+function gitFailure(name: string, result: Awaited<ReturnType<typeof runProcess>>): string | undefined {
+  if (result.error) return `${name} could not start: ${result.error}`;
+  if (result.timedOut) return `${name} timed out`;
+  if (result.code !== 0) return `${name} exited with code ${result.code}${result.stderr.trim() ? `: ${result.stderr.trim().split('\n').pop()}` : ''}`;
+  // runProcess keeps the first maxOutput characters silently; a listing that long is cut off
+  if (result.stdout.length >= MAX_GIT_OUTPUT) return `${name} output was truncated`;
+  return undefined;
+}
+
+const gitQuery = (cwd: string, args: string[]) => runProcess('git', readOnlyGitArgs(args), { cwd, timeoutMs: 60_000, maxOutput: MAX_GIT_OUTPUT });
+
 /** HEAD and the content of every path git status lists; an error when git can't say. */
 export async function takeWorkTreeSnapshot(cwd: string): Promise<SnapshotResult> {
-  const git = (args: string[]) => runProcess('git', readOnlyGitArgs(args), { cwd, timeoutMs: 60_000, maxOutput: 64 * 1024 * 1024 });
-  const [head, status] = await Promise.all([git(['rev-parse', 'HEAD']), git(['status', '--porcelain=v1', '-z', '--untracked-files=all'])]);
+  const [head, status] = await Promise.all([gitQuery(cwd, ['rev-parse', 'HEAD']), gitQuery(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])]);
   for (const [name, result] of [['git rev-parse', head], ['git status', status]] as const) {
-    if (result.error) return { error: `${name} could not start: ${result.error}` };
-    if (result.timedOut) return { error: `${name} timed out` };
-    if (result.code !== 0) return { error: `${name} exited with code ${result.code}${result.stderr.trim() ? `: ${result.stderr.trim().split('\n').pop()}` : ''}` };
+    const error = gitFailure(name, result);
+    if (error) return { error };
   }
-  const files: Record<string, string> = {};
-  for (const path of parsePorcelainZ(status.stdout)) files[path] = contentHash(join(cwd, path));
+  const files: Record<string, string> = Object.create(null);
+  for (const path of parsePorcelainZ(status.stdout)) {
+    const hash = contentHash(join(cwd, path));
+    if (typeof hash !== 'string') return { error: `submodule or directory entry: ${path}` };
+    files[path] = hash;
+  }
   return { head: head.stdout.trim(), files };
 }
 
 /**
- * The paths whose content differs between two snapshots, leaving out the
- * task's spec directory and the worktree's root `.vibe-teamlead/` folder, and
- * whether HEAD moved (the reviewer made a commit). Pure — tested directly.
+ * The files a commit range touched: what a reviewer commit took out of git
+ * status. undefined when git can't say (then the loop reports "unknown").
+ */
+export async function listCommittedFiles(cwd: string, from: string, to: string): Promise<string[] | undefined> {
+  const diff = await gitQuery(cwd, ['diff', '--name-only', '--no-ext-diff', '--no-textconv', '-z', from, to]);
+  if (gitFailure('git diff', diff)) return undefined;
+  return diff.stdout.split('\0').filter(Boolean);
+}
+
+/**
+ * The paths whose content differs between two snapshots, plus the files of
+ * the commit the reviewer made when HEAD moved (they no longer show in git
+ * status), leaving out the task's spec directory and the worktree's root
+ * `.vibe-teamlead/` folder. Pure — tested directly.
  */
 export function reviewerChangedFiles(
   before: WorkTreeSnapshot,
   after: WorkTreeSnapshot,
   dirs: { projectDir: string; specDir: string },
+  committed: string[] = [],
 ): { files: string[]; headMoved: boolean } {
   const specRel = relative(dirs.projectDir, dirs.specDir).replace(/\\/g, '/');
   const excluded = (file: string) => {
@@ -99,5 +134,6 @@ export function reviewerChangedFiles(
   for (const file of new Set([...Object.keys(before.files), ...Object.keys(after.files)])) {
     if (before.files[file] !== after.files[file] && !excluded(file)) files.push(file);
   }
+  for (const file of committed) if (!excluded(file) && !files.includes(file)) files.push(file);
   return { files, headMoved: before.head !== after.head };
 }

@@ -41,7 +41,7 @@ import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orc
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
-import { takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
+import { listCommittedFiles, takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
@@ -967,6 +967,7 @@ async function runQualityAssurance(
     currentCommit: () => currentCommit(session.projectDir),
     approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
     workTreeSnapshot: () => takeWorkTreeSnapshot(session.projectDir),
+    committedFiles: (from, to) => listCommittedFiles(session.projectDir, from, to),
 
     generatePrompt: async (agentType, context) => {
       const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session);

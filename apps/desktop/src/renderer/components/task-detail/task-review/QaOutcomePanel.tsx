@@ -110,9 +110,11 @@ export function QaOutcomePanel({ task }: { task: Task }) {
   }
   if (!outcome) return null;
   const changedFiles = outcome.reviewerChangedFiles ?? [];
-  const changedNotice = (changedFiles.length > 0 || outcome.reviewerChangesUnknown) && (
+  const committed = outcome.reviewerCommitted;
+  const changedNotice = (changedFiles.length > 0 || outcome.reviewerChangesUnknown || committed) && (
     <div className="space-y-1 px-4 py-2 text-xs text-muted-foreground">
       {changedFiles.length > 0 && <p>{t('qaOutcome.reviewerChanged', { count: changedFiles.length, files: changedFiles.join(', ') })}</p>}
+      {committed && <p>{t('qaOutcome.reviewerCommitted', { from: committed.from.slice(0, 7), to: committed.to.slice(0, 7) })}</p>}
       {outcome.reviewerChangesUnknown && <p>{t('qaOutcome.reviewerChangesUnknown')}</p>}
     </div>
   );
