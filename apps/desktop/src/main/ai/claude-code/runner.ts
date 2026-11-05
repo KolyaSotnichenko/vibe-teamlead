@@ -287,7 +287,7 @@ export function buildQueryOptions(
     allowDangerouslySkipPermissions: true,
     hooks: {
       PreToolUse: [
-        ...buildSecurityHooks(config.toolContext),
+        ...buildSecurityHooks({ ...config.toolContext, agentType: config.agentType }),
         buildAskUserHook(extras.askUser),
         ...(tools.includes('Bash') && getAgentConfig(config.agentType).appTools?.includes('mcp__vibe-teamlead__start_dev_server') ? [buildDevServerGuard()] : []),
       ],
