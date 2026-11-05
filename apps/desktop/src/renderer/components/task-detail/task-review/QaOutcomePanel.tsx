@@ -80,8 +80,10 @@ export function QaOutcomePanel({ task }: { task: Task }) {
 
   const rerun = async () => {
     setBusy(true);
+    setError(null);
     try {
-      await submitReview(task.id, false, undefined, undefined, { rerunOnly: true });
+      const started = await submitReview(task.id, false, undefined, undefined, { rerunOnly: true });
+      if (!started) setError(t('qaOutcome.startFailed'));
     } finally {
       setBusy(false);
     }
@@ -96,6 +98,7 @@ export function QaOutcomePanel({ task }: { task: Task }) {
           <h3 id="qa-outcome" className="text-sm font-semibold text-foreground">{t('qaOutcome.title')}</h3>
           <p className="mt-0.5 text-sm text-muted-foreground">{t('qaOutcome.unrecorded')}</p>
         </header>
+        {error && <p role="alert" className="px-4 pt-2 text-sm text-destructive">{error}</p>}
         <footer className="border-t border-border px-4 py-3">
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void rerun()}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />

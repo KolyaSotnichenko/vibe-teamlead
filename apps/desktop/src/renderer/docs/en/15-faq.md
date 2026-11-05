@@ -44,6 +44,10 @@ QA couldn't approve the task and, after the fixer's attempts, handed it to you. 
 - "Run QA again" re-runs the fixer and QA.
 - To have something specific fixed, describe it in "Request Changes". You can also merge as is.
 
+A run cut off before any code was written has nothing to review, so the task window offers "Resume" instead: coding starts from the plan already written.
+
+These actions don't touch your project's uncommitted files. While a merge of the task waits for your confirmation, commit or cancel it first.
+
 Tasks that failed before this panel existed show a short note and the "Run QA again" button. The details are still in Workspace → Security and in `qa_report.md`.
 
 ## Storybook opens without styles

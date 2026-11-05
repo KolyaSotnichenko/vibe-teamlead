@@ -29,6 +29,15 @@ function setup(outcome: QaOutcomeInfo | undefined, allowedPatterns?: Array<{ pat
 afterEach(cleanup);
 
 describe('QaOutcomePanel', () => {
+  it('says so when QA could not be started', async () => {
+    setup({ approved: false, reason: 'max_iterations', iterations: 1, reviewerApproved: false, at: '', blocking: [] });
+    submitReview.mockResolvedValueOnce(false);
+    await screen.findByText(/qaOutcome.reason.max_iterations/);
+    fireEvent.click(screen.getByRole('button', { name: 'qaOutcome.rerun' }));
+    await waitFor(() => expect(submitReview).toHaveBeenCalled());
+    expect(await screen.findByRole('alert')).toHaveTextContent('qaOutcome.startFailed');
+  });
+
   it('says the reviewer approved but the design check blocked, and allows the exact finding in the tokens', async () => {
     const { save } = setup({
       approved: false, reason: 'recurring_issues', iterations: 3, reviewerApproved: true, at: '',

@@ -985,6 +985,7 @@
     "allowed": "allowed in the design system",
     "allowedBy": "Allowed from the review of \"{{title}}\"",
     "allowFailed": "Could not update the design tokens.",
+    "startFailed": "Could not start: an agent is still working on this task, or its merge is waiting for your confirmation. Commit or cancel the merge first.",
     "noTokens": "This project's design system has no tokens file to add the exception to.",
     "more": "…and {{count}} more",
     "next": "Next: describe what to fix under Request Changes, run QA again, or merge as is if the findings don't worry you.",

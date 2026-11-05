@@ -135,8 +135,13 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       return;
     }
     state.setIsSubmitting(true);
-    await submitReview(task.id, false, state.feedback, state.feedbackImages);
+    const started = await submitReview(task.id, false, state.feedback, state.feedbackImages);
     state.setIsSubmitting(false);
+    if (!started) {
+      // Keep what the user wrote: nothing was sent
+      toast({ title: t('tasks:qaOutcome.startFailed'), variant: 'destructive' });
+      return;
+    }
     state.setFeedback('');
     state.setFeedbackImages([]);
   };

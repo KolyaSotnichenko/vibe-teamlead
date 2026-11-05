@@ -3,9 +3,10 @@ import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/con
 import type { IPCResult, TaskStartOptions, TaskStatus, ImageAttachment } from '../../../shared/types';
 import path from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { spawnSync, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { getToolPath } from '../../cli-tool-manager';
 import { requestQaRerun } from '../../ai/orchestration/qa-rerun';
+import { getMergeReview } from '../../ai/merge/git-merge';
 import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
@@ -402,44 +403,10 @@ export function registerTaskExecutionHandlers(
           return { success: false, error: 'An agent is still working on this task' };
         }
 
-        // Reset and discard all changes from worktree merge in main
-        // The worktree still has all changes, so nothing is lost
-        if (hasWorktree) {
-          // Step 1: Unstage all changes
-          const resetResult = spawnSync(getToolPath('git'), ['reset', 'HEAD'], {
-            cwd: project.path,
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            env: getIsolatedGitEnv()
-          });
-          if (resetResult.status === 0) {
-            console.log('[TASK_REVIEW] Unstaged changes in main');
-          }
-
-          // Step 2: Discard all working tree changes (restore to pre-merge state)
-          const checkoutResult = spawnSync(getToolPath('git'), ['checkout', '--', '.'], {
-            cwd: project.path,
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            env: getIsolatedGitEnv()
-          });
-          if (checkoutResult.status === 0) {
-            console.log('[TASK_REVIEW] Discarded working tree changes in main');
-          }
-
-          // Step 3: Clean untracked files that came from the merge
-          // IMPORTANT: Exclude .vibe-teamlead directory to preserve specs and worktree data
-          const cleanResult = spawnSync(getToolPath('git'), ['clean', '-fd', '-e', '.vibe-teamlead'], {
-            cwd: project.path,
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            env: getIsolatedGitEnv()
-          });
-          if (cleanResult.status === 0) {
-            console.log('[TASK_REVIEW] Cleaned untracked files in main (excluding .vibe-teamlead)');
-          }
-
-          console.log('[TASK_REVIEW] Main branch restored to pre-merge state');
+        // A merge waiting for confirmation is the user's to finish or cancel: fixes would land after it
+        const mergeReview = await getMergeReview({ projectDir: project.path, branch: `vibe-teamlead/${task.specId}`, git: getToolPath('git'), env: getIsolatedGitEnv() });
+        if (mergeReview) {
+          return { success: false, error: 'A merge of this task is waiting for your confirmation. Commit or cancel it first.' };
         }
 
         // Write feedback for QA fixer - write to WORKTREE spec dir if it exists
