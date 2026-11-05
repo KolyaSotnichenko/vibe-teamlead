@@ -3,9 +3,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { clearTurnLimits, parseTurnLimits, recordTurnLimit, TURN_LIMITS_FILE } from '../turn-limits';
+import { clearTurnLimits, parseTurnLimits, recordTurnLimit, TURN_LIMITS, TURN_LIMITS_FILE } from '../turn-limits';
 
 const dir = () => mkdtempSync(join(tmpdir(), 'vtl-turns-'));
+
+describe('turn limits per agent', () => {
+  it('gives a coder session 120 turns, QA 200, planner and architect 120', () => {
+    expect(TURN_LIMITS).toEqual({ coder: 120, qa_reviewer: 200, qa_fixer: 200, planner: 120, architect: 120 });
+  });
+});
 
 describe('turn limit records', () => {
   it('adds one per session, grouped by agent and subtask', () => {

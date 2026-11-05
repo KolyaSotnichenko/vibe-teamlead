@@ -9,7 +9,22 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { writeFileReplacingSync } from '../safe-write';
+import type { AgentType } from '../config/agent-configs';
 import type { TurnLimitHit } from '../../../shared/types/task-workspace';
+
+/**
+ * Most turns one session of an agent may take (Claude Code maxTurns). A session
+ * past its limit is almost always looping, and every turn re-sends the whole
+ * conversation; the orchestrator retries the subtask with a fresh context. A
+ * subtask that needs more than 120 coder turns is one the planner cut too large.
+ */
+export const TURN_LIMITS: Partial<Record<AgentType, number>> = {
+  coder: 120,
+  qa_reviewer: 200,
+  qa_fixer: 200,
+  planner: 120,
+  architect: 120,
+};
 
 export const TURN_LIMITS_FILE = 'turn_limits.json';
 

@@ -49,7 +49,7 @@ import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import { runStandaloneQa } from './standalone-qa';
 import { qaApprovalsDir, workTreeFingerprint } from '../orchestration/qa-approval';
-import { clearTurnLimits } from '../claude-code/turn-limits';
+import { clearTurnLimits, TURN_LIMITS } from '../claude-code/turn-limits';
 import {
   detectProjectCapabilities,
   getQaToolsSection,
@@ -482,15 +482,6 @@ function designSection(
 // Single Session Runner
 // =============================================================================
 
-/** Most turns one session of an agent may take (Claude Code maxTurns). */
-const TURN_LIMITS: Partial<Record<AgentType, number>> = {
-  coder: 200,
-  qa_reviewer: 200,
-  qa_fixer: 200,
-  planner: 120,
-  architect: 120,
-};
-
 /** The model for one phase (see resolvePhaseModel). */
 const phaseModel = resolvePhaseModel;
 
@@ -543,8 +534,7 @@ async function runSingleSession(
     initialMessages,
     toolContext,
     ...(extraSkills?.length ? { extraSkills } : {}),
-    // A session that goes past its limit is almost always looping, and every turn re-sends
-    // the whole conversation; the orchestrator retries the subtask with a fresh context.
+    // See TURN_LIMITS: a looping session is cut off and the subtask retried with a fresh context
     maxSteps: Math.min(baseSession.maxSteps, TURN_LIMITS[agentType] ?? baseSession.maxSteps),
     thinkingLevel: phaseThinking as SessionConfig['thinkingLevel'],
     abortSignal: abortController.signal,
