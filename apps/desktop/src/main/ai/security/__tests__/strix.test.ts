@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -157,8 +157,9 @@ echo "changed=$(git -C "$T" diff --name-only "$B"...HEAD | tr '\\n' ',')"
 echo "tracked=$(cat "$T/tracked.txt")"
 echo "untracked=$(cat "$T/new.txt" 2>/dev/null)"
 echo "secret=$(cat "$T/.env" 2>/dev/null)"
-echo "spec=$(cat "$T/.vibe-teamlead-task/spec.md")"
-echo "design=$(cat "$T/.vibe-teamlead-task/architecture/a.md")"
+echo "through=$(cat "$T/dir/x" 2>/dev/null)"
+echo "spec=$(cat "$T/.vibe-teamlead-task/spec.md" 2>/dev/null)"
+echo "design=$(cat "$T/.vibe-teamlead-task/architecture/a.md" 2>/dev/null)"
 grep -q '.vibe-teamlead-task/spec.md' "$I" && echo "told=yes"
 echo "storeDir: /workspace/x" >> "$T/tracked.txt"
 echo stray > "$T/stray.txt"
@@ -231,6 +232,81 @@ exit 0`,
       expect(seen('name')).toBe('my-worktree');
       expect(seen('changed')).toBe('feature.txt,');
       expect(git(worktree, 'status', '--porcelain')).toBe('');
+    });
+
+    describe('links a branch or a worktree can hold', () => {
+      const outside = () => realpathSync(mkdtempSync(join(tmpdir(), 'vtl-outside-')));
+      const commitLink = (project: string, name: string, to: string) => {
+        symlinkSync(to, join(project, name));
+        git(project, 'add', '-A');
+        git(project, 'commit', '-q', '-m', 'link');
+      };
+
+      it('do not carry a new file out of the copy through a linked folder', async () => {
+        const { project, run } = await scan();
+        const away = outside();
+        commitLink(project, 'link', away);
+        rmSync(join(project, 'link'));
+        mkdirSync(join(project, 'link'));
+        writeFileSync(join(project, 'link', 'evil.txt'), 'written\n');
+        const { result } = await run();
+        expect(result.status).toBe('clear');
+        expect(existsSync(join(away, 'evil.txt'))).toBe(false);
+      });
+
+      it('do not carry an edit out of the copy through a linked file', async () => {
+        const { project, run } = await scan();
+        const away = outside();
+        writeFileSync(join(away, 'victim'), 'untouched\n');
+        commitLink(project, 'file', join(away, 'victim'));
+        rmSync(join(project, 'file'));
+        writeFileSync(join(project, 'file'), 'written\n');
+        await run();
+        expect(readFileSync(join(away, 'victim'), 'utf-8')).toBe('untouched\n');
+      });
+
+      it('do not carry a deletion out of the copy', async () => {
+        const { project, run } = await scan();
+        const away = outside();
+        writeFileSync(join(away, 'victim'), 'untouched\n');
+        mkdirSync(join(project, 'link'));
+        writeFileSync(join(project, 'link', 'victim'), 'tracked\n');
+        git(project, 'add', '-A');
+        git(project, 'commit', '-q', '-m', 'folder');
+        rmSync(join(project, 'link'), { recursive: true });
+        symlinkSync(away, join(project, 'link'));
+        await run();
+        expect(readFileSync(join(away, 'victim'), 'utf-8')).toBe('untouched\n');
+      });
+
+      it('do not redirect the task documents', async () => {
+        const { project, run } = await scan();
+        const away = outside();
+        commitLink(project, '.vibe-teamlead-task', away);
+        const { seen } = await run();
+        expect(existsSync(join(away, 'spec.md'))).toBe(false);
+        expect(seen('spec')).toBe('the spec');
+      });
+
+      it('do not bring a file from outside the task into the sandbox', async () => {
+        const { project, specDir, run } = await scan();
+        const away = outside();
+        writeFileSync(join(away, 'x'), 'private\n');
+        mkdirSync(join(project, 'dir'));
+        writeFileSync(join(project, 'dir', 'x'), 'tracked\n');
+        git(project, 'add', '-A');
+        git(project, 'commit', '-q', '-m', 'folder');
+        rmSync(join(project, 'dir'), { recursive: true });
+        symlinkSync(away, join(project, 'dir'));
+        rmSync(join(specDir, 'spec.md'));
+        symlinkSync(join(away, 'x'), join(specDir, 'spec.md'));
+        rmSync(join(specDir, 'architecture', 'a.md'));
+        symlinkSync(join(away, 'x'), join(specDir, 'architecture', 'a.md'));
+        const { seen } = await run();
+        expect(seen('through')).toBe('');
+        expect(seen('spec')).toBe('');
+        expect(seen('design')).toBe('');
+      });
     });
 
     it('removes the copy afterwards', async () => {
