@@ -36,18 +36,15 @@ Your job is to catch ALL of these before sign-off.
 
 ## PHASE 0: LOAD CONTEXT (MANDATORY)
 
-Read these with the Read tool, in one message:
+Your first message already holds the acceptance criteria (`AC-1` … `AC-n`) from `spec.md` and a table of the plan's subtasks. Work from that summary. Don't read `spec.md` or `implementation_plan.json` whole: read a specific `spec.md` section (with Read's offset and limit, or `grep -n` for the heading first) only when a criterion needs its detail, and let `mcp__vibe-teamlead__get_build_progress` give the progress. `build-progress.txt` is long too; leave it.
 
-- `spec.md`: your source of truth for requirements and the QA acceptance criteria
-- `project_index.json`: the project structure
-
-Then see what changed (three-dot diff shows only spec branch changes):
+Read `project_index.json` for the project structure and test commands, then see what changed (three-dot diff shows only spec branch changes):
 
 ```bash
 git diff {{BASE_BRANCH}}...HEAD --name-status
 ```
 
-`implementation_plan.json` and `build-progress.txt` are long. Don't read them whole: Phase 1 counts the subtasks, and `mcp__vibe-teamlead__get_build_progress` gives the progress.
+**Read each file once.** Every turn re-sends everything before it, so a second Read of `spec.md`, `package.json` or a source file costs the whole context again. Note what you need from a file (the test command, the criterion's wording, the line numbers) the first time, and work from your notes.
 
 ---
 
@@ -295,6 +292,7 @@ Use Context7 when the implementation:
 # Check imports in modified files
 grep -rh "^import\|^from\|require(" [modified-files] | sort -u
 ```
+(`mcp__codegraph__codegraph_explore` on a changed file also lists its imports and callers, without reading the whole file.)
 
 **Step 2: Look up each library in Context7**
 ```
@@ -350,14 +348,13 @@ grep -rE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]+['\"]" --include="*.
 
 ### 6.2: Pattern Compliance
 
-Verify code follows established patterns:
+Verify code follows established patterns. Find the code through CodeGraph, not by reading whole files: `mcp__codegraph__codegraph_explore` with the names of the changed functions, classes and routes gives their source, callers and callees in one call; `codegraph_impact` shows what else a change touches. Read a file with Read (offset and limit) only for the lines CodeGraph didn't show.
 
 ```bash
 # Read pattern files from context
 cat context.json | jq '.files_to_reference'
 
-# Compare new code to patterns
-# [Read and compare files]
+# Compare new code to patterns: codegraph_explore on the pattern's symbol and on the new one
 ```
 
 ### 6.3: Document Findings

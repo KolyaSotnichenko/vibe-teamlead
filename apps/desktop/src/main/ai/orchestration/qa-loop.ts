@@ -27,6 +27,7 @@ import {
   generateManualTestPlan,
   generateQAReport,
   mergeQAReport } from './qa-reports';
+import { qaKickoffContext } from './qa-kickoff';
 import { QA_RERUN_FILE } from './qa-rerun';
 
 import type { AgentType } from '../config/agent-configs';
@@ -535,7 +536,7 @@ export class QALoop extends EventEmitter {
           agentType: 'qa_reviewer',
           phase: 'qa',
           systemPrompt: reviewPrompt,
-          kickoffData: qaRoundData('qa_reviewer', reviewContext),
+          kickoffData: [await this.reviewerKickoff(), qaRoundData('qa_reviewer', reviewContext)].filter(Boolean).join('\n\n'),
           specDir: this.config.specDir,
           projectDir: this.config.projectDir,
           sessionNumber: this.sessionNumber,
@@ -796,6 +797,13 @@ export class QALoop extends EventEmitter {
   /** The reviewer's qa_report.md, or null when there is none. */
   private async readReport(): Promise<string | null> {
     return readFile(join(this.config.specDir, 'qa_report.md'), 'utf-8').catch(() => null);
+  }
+
+  /** The reviewer's first message: acceptance criteria and subtask table instead of the whole spec and plan. */
+  private async reviewerKickoff(): Promise<string> {
+    const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
+    const [spec, plan] = await Promise.all([read('spec.md'), read('implementation_plan.json')]);
+    return qaKickoffContext({ spec, plan, specDir: this.config.specDir });
   }
 
   /** Remove qa_signoff from implementation_plan.json (no-op when absent). */

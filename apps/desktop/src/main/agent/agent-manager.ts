@@ -24,6 +24,7 @@ import { getSecurityProfile } from '../ai/security/security-profile';
 import { createOrGetWorktree } from '../ai/worktree';
 import { findTaskWorktree } from '../worktree-paths';
 import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
+import { qaKickoffContext } from '../ai/orchestration/qa-kickoff';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -624,52 +625,30 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Build initial messages for QA process.
-   * Includes spec.md and implementation plan to give QA agent full context.
+   * Build initial messages for QA process: the acceptance criteria and the
+   * subtask table, not the whole spec.md and implementation_plan.json (every
+   * turn re-sends the first message).
    */
   private buildQAInitialMessages(
     specDir: string,
     specId: string,
     projectPath: string,
   ): Array<{ role: 'user' | 'assistant'; content: string }> {
-    const parts: string[] = [];
-
-    parts.push(`You are reviewing the implementation of spec ${specId} in project: ${projectPath}`);
-    parts.push(`Spec directory: ${specDir}`);
-    parts.push('');
-
-    // Read spec.md
-    const specPath = path.join(specDir, 'spec.md');
-    try {
-      if (existsSync(specPath)) {
-        const specContent = readFileSync(specPath, 'utf-8');
-        parts.push('## Specification (spec.md)');
-        parts.push('');
-        parts.push(specContent);
-        parts.push('');
+    const read = (name: string): string | null => {
+      try {
+        return readFileSync(path.join(specDir, name), 'utf-8');
+      } catch {
+        return null;
       }
-    } catch {
-      // Not critical
-    }
-
-    // Read implementation_plan.json to show what was planned/completed
-    const planPath = path.join(specDir, 'implementation_plan.json');
-    try {
-      if (existsSync(planPath)) {
-        const planContent = readFileSync(planPath, 'utf-8');
-        parts.push('## Implementation Plan (implementation_plan.json)');
-        parts.push('');
-        parts.push('```json');
-        parts.push(planContent);
-        parts.push('```');
-        parts.push('');
-      }
-    } catch {
-      // Fall through
-    }
-
-    parts.push('Review the implementation against the specification. Check that all requirements are met, the code is correct, and tests pass. Write your findings to qa_report.md with "Status: PASSED" or "Status: FAILED" and a list of any issues found.');
-
+    };
+    const parts = [
+      `You are reviewing the implementation of spec ${specId} in project: ${projectPath}`,
+      `Spec directory: ${specDir}`,
+      '',
+      qaKickoffContext({ spec: read('spec.md'), plan: read('implementation_plan.json'), specDir }),
+      '',
+      'Review the implementation against the specification. Check that all requirements are met, the code is correct, and tests pass. Write your findings to qa_report.md with "Status: PASSED" or "Status: FAILED" and a list of any issues found.',
+    ];
     return [{ role: 'user', content: parts.join('\n') }];
   }
 }

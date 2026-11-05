@@ -275,6 +275,31 @@ describe('QALoop', () => {
     expect(calls.every((c) => c[0].agentType === 'qa_reviewer')).toBe(true);
   });
 
+  it('starts the reviewer with the acceptance criteria and the subtask table, not the whole spec and plan', async () => {
+    let sessionCallCount = 0;
+    const spec = '# Spec\n\n## Overview\n\nA long overview paragraph.\n\n## Requirements\n\n- **AC-1** Given x, when y, then z. — Test: unit\n- **AC-2** Given a, when b, then c. — Test: e2e\n';
+    const runSession = vi.fn().mockImplementation(async () => {
+      sessionCallCount++;
+      return makeSessionResult('completed');
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      if (path.endsWith('implementation_plan.json')) {
+        return Promise.resolve(sessionCallCount === 0 ? completedPlan() : completedPlan('approved'));
+      }
+      if (path.endsWith('spec.md')) return Promise.resolve(spec);
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    await new QALoop(makeConfig({ runSession, maxIterations: 5 })).run();
+    const review = (runSession.mock.calls as Array<[QASessionRunConfig]>)[0][0];
+    expect(review.agentType).toBe('qa_reviewer');
+    expect(review.kickoffData).toContain('AC-1 Given x, when y, then z.');
+    expect(review.kickoffData).toContain('AC-2 Given a, when b, then c.');
+    expect(review.kickoffData).not.toContain('A long overview paragraph');
+    expect(review.kickoffData).toContain('2 subtasks, 2 completed');
+    expect(review.kickoffData).toContain(`${SPEC_DIR}/spec.md`);
+  });
+
   it("keeps the reviewer's qa_report.md (AC coverage table) when writing the final report", async () => {
     let sessionCallCount = 0;
     const agentReport = '# QA Validation Report\n\n| AC | Result |\n|----|--------|\n| AC-1 | PASS |\n';
