@@ -38,6 +38,7 @@ import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import type { GateFinding, GateReport } from '../security/gates';
+import { describeVerification, type VerificationReport, verificationIssues } from '../verification/verify-task';
 import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
 import { approvalHolds, clearApproval, recordApproval } from './qa-approval';
 import { writeFileReplacing, writeFileReplacingSync } from '../safe-write';
@@ -183,6 +184,11 @@ export interface QALoopConfig {
    * are hard gates: QA cannot approve while any remain.
    */
   runGates?: () => Promise<GateReport>;
+  /**
+   * The app runs the project's checks itself on a clean copy. What the task broke
+   * blocks like a gate finding, and the reviewer gets the rest as facts.
+   */
+  runVerification?: () => Promise<VerificationReport>;
   /**
    * Static design check on the lines the task added to UI files. In 'block'
    * mode its findings are QA issues like gate findings; in 'warn' mode they are
@@ -388,6 +394,7 @@ export class QALoop extends EventEmitter {
   private iterationHistory: QAIterationRecord[] = [];
   private lastReviewerApproved = false;
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
+  private lastVerification: string | undefined;
   /** Project files the reviewer changed during this run (see runReviewerSession) */
   private reviewerChangedFiles: string[] = [];
   /** A snapshot failed, so whether the reviewer changed files is not known */
@@ -482,8 +489,9 @@ export class QALoop extends EventEmitter {
         // Security gates first, so the reviewer and fixer see their findings
         this.lastGateKeys = [];
         const securityIssues = await this.runGates();
+        const checkIssues = await this.runVerification();
         const designBlocking = await this.runDesignCheck();
-        const blockers = [...securityIssues, ...designBlocking];
+        const blockers = [...securityIssues, ...checkIssues, ...designBlocking];
 
         // The previous verdict is cleared first: a reviewer that fails to write one, or
         // a restart after the checks blocked, can never be read as approving.
@@ -494,6 +502,7 @@ export class QALoop extends EventEmitter {
           this.lastReviewerApproved = false;
           this.lastBlocking = [
             ...securityIssues.map((i) => ({ source: 'security' as const, title: i.title ?? '', location: i.location })),
+            ...checkIssues.map((i) => ({ source: 'checks' as const, title: i.title ?? '', location: i.location })),
             ...this.lastDesignFindings.map((f) => ({ source: 'design' as const, title: f.message, location: `${f.file}:${f.line}`, match: f.match })),
           ];
           if (securityIssues.length) this.emitTyped('log', `Security gates: ${securityIssues.length} issue(s) to fix before the review`);
@@ -745,6 +754,24 @@ export class QALoop extends EventEmitter {
     }
   }
 
+  /** The app's own run of the project's checks. Never throws: a run that can't happen says so and blocks nothing. */
+  private async runVerification(): Promise<QAIssue[]> {
+    this.lastVerification = undefined;
+    if (!this.config.runVerification) return [];
+    try {
+      const report = await this.config.runVerification();
+      this.lastVerification = describeVerification(report);
+      this.emitTyped('log', this.lastVerification);
+      const issues = verificationIssues(report);
+      this.lastGateKeys.push(...issues.map((issue) => issue.key));
+      return issues.map(({ key: _key, ...issue }) => issue);
+    } catch (error) {
+      this.lastVerification = `The app could not run its own checks: ${error instanceof Error ? error.message : String(error)}`;
+      this.emitTyped('log', this.lastVerification);
+      return [];
+    }
+  }
+
   /** Run the gates; returns their findings as blocking QA issues. Never throws. */
   private async runGates(): Promise<QAIssue[]> {
     if (!this.config.runGates) return [];
@@ -849,7 +876,9 @@ export class QALoop extends EventEmitter {
   private async reviewerKickoff(): Promise<string> {
     const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
     const [spec, plan] = await Promise.all([read('spec.md'), read('implementation_plan.json')]);
-    return qaKickoffContext({ spec, plan, specDir: this.config.specDir });
+    const context = qaKickoffContext({ spec, plan, specDir: this.config.specDir });
+    // From the app, not the repository: facts to build on, so the reviewer needn't run these again
+    return [context, this.lastVerification].filter(Boolean).join('\n\n');
   }
 
   /** Remove qa_signoff from implementation_plan.json (no-op when absent). */

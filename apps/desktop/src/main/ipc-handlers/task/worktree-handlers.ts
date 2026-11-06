@@ -11,6 +11,7 @@ import { projectStore } from '../../project-store';
 
 import { MergeOrchestrator } from '../../ai/merge/orchestrator';
 import { runMergeIntegrator } from '../../ai/runners/merge-integrator';
+import { describeVerification, projectVerification, verifyTask } from '../../ai/verification/verify-task';
 import { createPR } from '../../ai/runners/github/pr-creator';
 import type { ModelShorthand, ThinkingLevel } from '../../ai/config/types';
 import { findTaskAndProject } from './shared';
@@ -2068,6 +2069,7 @@ export function registerWorktreeHandlers(
           return { success: true, data: { success: cancelled, message: cancelled ? 'The merge was cancelled.' : 'No merge is waiting for review, or the task could not be put back.' } };
         }
 
+        const verification = projectVerification(project.path, project.settings);
         emitProgress('analyzing', 0, 'Starting the merge');
 
         const mergeResult = await inMergeQueue(project.path, taskId, () => integrateAndMerge({
@@ -2081,6 +2083,15 @@ export function registerWorktreeHandlers(
           onProgress: (stage) => (stage === 'integrating'
             ? emitProgress('analyzing', 10, 'Bringing the latest changes into the task')
             : emitProgress('validating', 80, 'Merging into the project')),
+          verify: verification
+            ? async () => {
+                if (!worktreePath) return { ok: true, summary: '' };
+                emitProgress('validating', 70, 'The app is running the checks itself');
+                const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, git: git.git, hostEnv: git.env });
+                const summary = describeVerification(report);
+                return { ok: report.status !== 'regression', summary };
+              }
+            : undefined,
           runAgent: (request) => {
             emitProgress('resolving', 25, request.conflictFiles.length ? `An agent is resolving ${request.conflictFiles.length} conflict(s) and checking the result` : 'An agent is checking the result');
             return runMergeIntegrator({

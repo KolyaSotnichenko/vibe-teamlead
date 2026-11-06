@@ -11,7 +11,7 @@ import { Button } from '../../ui/button';
 import { submitReview } from '../../../stores/task-store';
 import type { QaOutcomeInfo, Task } from '../../../../shared/types';
 
-const SOURCES = ['security', 'design', 'qa'] as const;
+const SOURCES = ['security', 'checks', 'design', 'qa'] as const;
 
 /** A regular expression matching exactly this text. Pure — tested directly. */
 export function exactPattern(text: string): string {

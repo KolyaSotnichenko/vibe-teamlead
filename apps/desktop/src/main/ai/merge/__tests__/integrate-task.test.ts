@@ -258,6 +258,58 @@ describe('integrateTask', () => {
     });
   });
 
+  describe("the app's own check of the result", () => {
+    const withCheck = (verify: IntegrateTaskOptions['verify'], runAgent: IntegrateTaskOptions['runAgent'] = resolving) =>
+      integrateTask({ worktreePath: wt, baseBranch: 'main', runAgent, verify });
+
+    it('runs on the integrated commit, after the agent has finished', async () => {
+      conflict();
+      let tipThen = '';
+      const result = await withCheck(async () => {
+        tipThen = tip();
+        return { ok: true, summary: 'The app ran the tests: passed.' };
+      });
+      expect(tipThen).toBe(tip());
+      expect(has(main(), tipThen)).toBe(true);
+      expect(result).toMatchObject({ status: 'needs_review' });
+    });
+
+    it("overrules the agent's word: what fails puts the task back", async () => {
+      conflict();
+      const before = tip();
+      const result = await withCheck(async () => ({ ok: false, summary: 'npm test fails on this task and passes on main' }));
+      expect(result).toEqual({ status: 'failed', message: 'npm test fails on this task and passes on main' });
+      expect(tip()).toBe(before);
+      expect(git(wt, 'status', '--porcelain', '--untracked-files=no')).toBe('');
+    });
+
+    it('applies to a merge git did alone too', async () => {
+      mainMovedElsewhere();
+      const before = tip();
+      const result = await withCheck(async () => ({ ok: false, summary: 'broken' }), async () => OK);
+      expect(result.status).toBe('failed');
+      expect(tip()).toBe(before);
+    });
+
+    it("puts its result next to the agent's report", async () => {
+      mainMovedElsewhere();
+      const result = await withCheck(async () => ({ ok: true, summary: 'App: tests passed.' }), async () => OK);
+      expect(result).toEqual({ status: 'verified', summary: `${OK.summary}\nApp: tests passed.` });
+    });
+
+    it('is not asked when there is nothing new to check', async () => {
+      const verify = vi.fn(async () => ({ ok: true, summary: '' }));
+      await expect(withCheck(verify)).resolves.toEqual({ status: 'up_to_date' });
+      expect(verify).not.toHaveBeenCalled();
+    });
+
+    it('a check that could not run stops nothing, and says so', async () => {
+      mainMovedElsewhere();
+      const result = await withCheck(async () => { throw new Error('no disk'); }, async () => OK);
+      expect(result).toEqual({ status: 'verified', summary: `${OK.summary}\nThe app could not run its own checks: no disk` });
+    });
+  });
+
   describe('integrateAndMerge', () => {
     const flow = (over: Partial<Parameters<typeof integrateAndMerge>[0]> = {}) => integrateAndMerge({
       projectDir: repo,

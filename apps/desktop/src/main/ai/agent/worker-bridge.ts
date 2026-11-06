@@ -36,11 +36,18 @@ import { readSubagentSettings } from '../claude-code/subagent-setting';
 import { readArchitectMode } from '../orchestration/architect-setting';
 import { loadDesignSystem } from '../design/design-system';
 import { projectStore } from '../../project-store';
+import { projectVerification } from '../verification/verify-task';
 import { resolvePromptsDir } from '../prompts/prompt-loader';
 import type { AgentAnswers } from '../claude-code/user-questions';
 import type { StreamEvent } from '../session/types';
 
 // ESM-compatible __dirname
+/** The project's check settings. In the main process: agents can't reach them. */
+function readVerification(projectId: string | undefined) {
+  const project = projectId ? projectStore.getProject(projectId) : undefined;
+  return project ? projectVerification(project.path, project.settings) : undefined;
+}
+
 /** The project's design system for the agents; never blocks a session. */
 function readDesignSystem(projectId: string | undefined) {
   try {
@@ -142,6 +149,7 @@ export class WorkerBridge extends EventEmitter {
         formatOnEdit: config.session.formatOnEdit ?? isFormatOnEditEnabled(),
         lspEnabled: config.session.lspEnabled ?? isLspEnabled(),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
+        verification: config.session.verification ?? readVerification(config.projectId),
       },
       promptsDir: resolvePromptsDir(),
     };

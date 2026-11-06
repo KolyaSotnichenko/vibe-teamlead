@@ -31,6 +31,8 @@ export interface IntegrateTaskOptions {
   worktreePath: string;
   baseBranch: string;
   runAgent: (request: IntegrationAgentRequest) => Promise<IntegrationAgentAnswer>;
+  /** The app's own check of the result: not ok overrules whatever the agent said */
+  verify?: () => Promise<{ ok: boolean; summary: string }>;
   git?: string;
   env?: NodeJS.ProcessEnv;
 }
@@ -154,6 +156,18 @@ export async function integrateTask(options: IntegrateTaskOptions): Promise<Inte
     return fail(`The agent left the task without "${baseBranch}" or without its own history.`);
   }
 
+  let summary = answer.summary;
+  if (options.verify) {
+    try {
+      const checked = await options.verify();
+      if (!checked.ok) return fail(checked.summary);
+      summary = [summary, checked.summary].filter(Boolean).join('\n');
+    } catch (error) {
+      // No verdict either way: the user hears it, and QA has already checked the task itself
+      summary = `${summary}\nThe app could not run its own checks: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
   const mergeCommit = (await run(['rev-list', '--first-parent', '--merges', '--reverse', `${before}..${tip}`])).stdout.split('\n')[0];
   const fixed = mergeCommit ? (await run(['diff', '--name-only', '-z', mergeCommit, tip])).raw.split('\0').filter(Boolean) : [];
   // Files that differ from both sides of the merge: what the agent changed while the merge was open
@@ -163,11 +177,11 @@ export async function integrateTask(options: IntegrateTaskOptions): Promise<Inte
   const files = [...new Set([...conflictFiles, ...inMerge, ...fixed])];
   if (!files.length) {
     rmSync(markFile, { force: true });
-    return { status: 'verified', summary: answer.summary };
+    return { status: 'verified', summary };
   }
 
-  writeFileSync(markFile, JSON.stringify({ state: 'review', before, tip, baseBranch, files, summary: answer.summary } satisfies IntegrationMark), 'utf-8');
-  return { status: 'needs_review', files, summary: answer.summary };
+  writeFileSync(markFile, JSON.stringify({ state: 'review', before, tip, baseBranch, files, summary } satisfies IntegrationMark), 'utf-8');
+  return { status: 'needs_review', files, summary };
 }
 
 function stillOpen(worktreePath: string, before: string): string {
@@ -229,6 +243,7 @@ export interface IntegrateAndMergeOptions extends MergeTaskBranchOptions {
   /** The user read the agent's work and said yes */
   confirmed: boolean;
   runAgent: IntegrateTaskOptions['runAgent'];
+  verify?: IntegrateTaskOptions['verify'];
   onProgress?: (stage: 'integrating' | 'merging') => void;
 }
 
@@ -301,7 +316,7 @@ async function mergeSteps(options: IntegrateAndMergeOptions): Promise<MergeOutco
 
   if (worktreePath) {
     onProgress?.('integrating');
-    const integration = await integrateTask({ worktreePath, baseBranch: options.baseBranch, runAgent, git: options.git, env: options.env });
+    const integration = await integrateTask({ worktreePath, baseBranch: options.baseBranch, runAgent, verify: options.verify, git: options.git, env: options.env });
     if (integration.status === 'failed') return { status: 'refused', message: `Could not merge: ${integration.message} Nothing reached the project.` };
     if (integration.status === 'needs_review') return integration;
   }

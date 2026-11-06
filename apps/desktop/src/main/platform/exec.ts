@@ -17,6 +17,8 @@ export interface RunOptions {
   signal?: AbortSignal;
   /** Keep at most this many characters of stdout / stderr (default 16 MB). */
   maxOutput?: number;
+  /** Run it in its own process group and kill the whole group: test runners leave workers behind. */
+  killGroup?: boolean;
   /** Called with each complete output line (stdout and stderr). */
   onLine?: (line: string) => void;
 }
@@ -100,7 +102,7 @@ export function runProcess(cmd: string, args: string[], options: RunOptions = {}
       resolve({ code: -1, stdout: '', stderr: '', timedOut: false, aborted: true });
       return;
     }
-    const child = spawn(cmd, args, { cwd: options.cwd, env: options.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cmd, args, { cwd: options.cwd, env: options.env, detached: options.killGroup === true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let pending = '';
@@ -126,10 +128,21 @@ export function runProcess(cmd: string, args: string[], options: RunOptions = {}
       lines(text);
     });
 
+    const send = (signalName: NodeJS.Signals) => {
+      if (options.killGroup && child.pid) {
+        try {
+          process.kill(-child.pid, signalName);
+          return;
+        } catch {
+          // The group is gone
+        }
+      }
+      child.kill(signalName);
+    };
     const kill = () => {
-      child.kill('SIGTERM');
+      send('SIGTERM');
       // Escalate if the process ignores SIGTERM.
-      setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+      setTimeout(() => send('SIGKILL'), 5000).unref();
     };
     const timer = setTimeout(() => {
       timedOut = true;

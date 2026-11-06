@@ -20,6 +20,12 @@ export interface ProjectSettings {
   notifications: NotificationSettings;
   /** Main branch name for worktree creation (default: auto-detected or 'main') */
   mainBranch?: string;
+  /** The app runs the project's checks itself before QA and after a merge (default: true) */
+  verifyEnabled?: boolean;
+  /** Replace the detected checks: one shell command each. Needed for nested projects and stacks with no standard command. */
+  verifyCommands?: string[];
+  /** Variables those checks need, such as a test database. Kept here, not in the repository, where agents can't change them. */
+  verifyEnv?: Record<string, string>;
   /** Whether newly created branches should be pushed to origin and track their remote branch (default: true) */
   pushNewBranches?: boolean;
   /** Include CLAUDE.md instructions in agent system prompt (default: true) */

@@ -42,6 +42,7 @@ import { subtaskCodeContext } from '../orchestration/coder-code-context';
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
+import { type CheckOutcome, verifyTask } from '../verification/verify-task';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
 import { listCommittedFiles, takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
@@ -944,6 +945,8 @@ async function runQualityAssurance(
 ): Promise<QAOutcome> {
   // QA tests what the coders built: look at the project again (browser tools for a new web app)
   cachedCapabilities = undefined;
+  const verification = session.verification;
+  const verificationBaseResults = new Map<string, CheckOutcome>();
   const qaLoop = new QALoop({
     specDir: session.specDir,
     projectDir: session.projectDir,
@@ -959,6 +962,22 @@ async function runQualityAssurance(
         semgrepBin: session.bundled?.semgrepBin,
         signal: abortController.signal,
       }),
+
+    runVerification: verification
+      ? async () => {
+          const report = await verifyTask({
+            worktreePath: session.projectDir,
+            baseRef: (await resolveBaseRef(session.projectDir)) ?? 'HEAD',
+            commands: verification.commands,
+            env: verification.env,
+            lockDir: verification.lockDir,
+            baseResults: verificationBaseResults,
+            signal: abortController.signal,
+            onLog: postLog,
+          });
+          return report;
+        }
+      : undefined,
 
     // Static design check on the lines this task added to UI files (needs tokens)
     runDesignCheck: session.designSystem?.tokens && session.designSystem.qaMode !== 'off'

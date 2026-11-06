@@ -1282,6 +1282,53 @@ describe('QALoop', () => {
       expect(outcome.approved).toBe(true);
     });
 
+    describe("the app's own run of the project's checks", () => {
+      const report = (over: Record<string, unknown> = {}) => ({
+        status: 'passed', commit: 'c'.repeat(40), baseCommit: 'b'.repeat(40), tamper: [],
+        checks: [{ name: 'test', command: 'npm test', outcome: 'passed', exitCode: 0 }], ...over,
+      });
+      const broken = () => report({ status: 'regression', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, tail: 'boom', onBase: 'passed' }] });
+
+      it('sends what the task broke to the fixer before any review, whatever the reviewer would say', async () => {
+        const { runSession } = approvingReviewer();
+        let round = 0;
+        const runVerification = async () => (round++ === 0 ? broken() : report());
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: runVerification as QALoopConfig['runVerification'] })).run();
+        expect(agents(runSession)).toEqual(['qa_fixer', 'qa_reviewer']);
+        expect(outcome.approved).toBe(true);
+      });
+
+      it('hands over to the user when the fixer cannot clear it', async () => {
+        const { runSession } = approvingReviewer();
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: (async () => broken()) as QALoopConfig['runVerification'] })).run();
+        expect(agents(runSession)).toEqual(['qa_fixer']);
+        expect(outcome.approved).toBe(false);
+      });
+
+      it('tells the reviewer what ran, so it need not run it again', async () => {
+        const { runSession } = approvingReviewer();
+        await new QALoop(makeConfig({ runSession, runVerification: (async () => report()) as QALoopConfig['runVerification'] })).run();
+        const review = runSession.mock.calls.map((call: unknown[]) => call[0] as { agentType: string; kickoffData?: string }).find((call) => call.agentType === 'qa_reviewer');
+        expect(review?.kickoffData).toContain('npm test: passed (exit 0)');
+      });
+
+      it('blocks nothing when the failure is on the base too', async () => {
+        const { runSession } = approvingReviewer();
+        const failing = report({ status: 'not_verified', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, onBase: 'failed' }] });
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: (async () => failing) as QALoopConfig['runVerification'] })).run();
+        expect(agents(runSession)).toEqual(['qa_reviewer']);
+        expect(outcome.approved).toBe(true);
+      });
+
+      it('a run that cannot happen blocks nothing, and the reviewer hears about it', async () => {
+        const { runSession } = approvingReviewer();
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: async () => { throw new Error('no disk'); } })).run();
+        expect(outcome.approved).toBe(true);
+        const review = runSession.mock.calls.map((call: unknown[]) => call[0] as { agentType: string; kickoffData?: string }).find((call) => call.agentType === 'qa_reviewer');
+        expect(review?.kickoffData).toContain('could not run its own checks: no disk');
+      });
+    });
+
     it('treats a repeated secret on a moved line as the same finding', async () => {
       const { runSession } = approvingReviewer();
       let line = 1;

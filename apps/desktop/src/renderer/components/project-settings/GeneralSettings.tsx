@@ -17,6 +17,7 @@ import {
   SelectValue
 } from '../ui/select';
 import { Separator } from '../ui/separator';
+import { VerificationSection } from './VerificationSection';
 import { ClaudeModelSelect } from '../settings/ClaudeModelSelect';
 import type {
   Project,
@@ -107,6 +108,8 @@ export function GeneralSettings({
 
       {project.autoBuildPath && (
         <>
+          <Separator />
+          <VerificationSection settings={settings} setSettings={setSettings} />
           <Separator />
 
           {/* Agent Settings */}

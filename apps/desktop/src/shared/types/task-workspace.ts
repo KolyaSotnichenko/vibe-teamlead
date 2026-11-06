@@ -186,7 +186,7 @@ export interface QaOutcomeInfo {
   /** The checks keep finding the same thing after the fixer's round; the review is waiting for them */
   checksRepeat?: boolean;
   blocking: Array<{
-    source: 'security' | 'design' | 'qa';
+    source: 'security' | 'checks' | 'design' | 'qa';
     title: string;
     location?: string;
     /** For design findings: the exact text the check matched */

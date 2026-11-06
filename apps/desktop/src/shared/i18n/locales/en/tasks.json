@@ -981,6 +981,8 @@
     "sources": {
       "security_one": "Security gates · {{count}}",
       "security_other": "Security gates · {{count}}",
+      "checks_one": "App checks · {{count}}",
+      "checks_other": "App checks · {{count}}",
       "design_one": "Design check · {{count}}",
       "design_other": "Design check · {{count}}",
       "qa_one": "QA reviewer · {{count}}",
