@@ -126,6 +126,14 @@ describe('verifyTask', () => {
     expect(report.checks[0].tail).toContain('url is');
   });
 
+  it("doesn't leave part of a secret at the cut where the output is trimmed", async () => {
+    const secret = 'hunter2-long-secret-value';
+    const filler = 'x'.repeat(3990 - 'tail'.length);
+    const report = await verify({ commands: [`echo "\${SECRET}${filler}"; exit 1`], env: { SECRET: secret } });
+    expect(report.checks[0].tail).not.toContain('value');
+    expect(report.checks[0].tail).not.toContain('secret');
+  });
+
   it('survives a process that holds its output open after being killed', async () => {
     const started = Date.now();
     const report = await verify({ commands: ['(setsid sleep 60 2>/dev/null || sleep 60) & wait'], checkTimeoutMs: 50, killGraceMs: 50 });

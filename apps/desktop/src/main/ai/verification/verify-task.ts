@@ -208,15 +208,17 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   if (!checks.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
 
   const env = verificationEnv(hostEnv, options.env);
+  /** The tail reaches agents and saved reports: the project's own values stay out of it */
+  const redact = (line: string) => Object.values(options.env).reduce((text, value) => (value.length >= 4 ? text.split(value).join('***') : text), line);
   const shell = async (command: string, cwd: string, timeoutMs: number): Promise<Omit<CheckResult, keyof Check>> => {
     let tail = '';
     const result = await runProcess('/bin/sh', ['-c', command], {
       cwd, env, timeoutMs, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024,
-      onLine: (line) => { tail = `${tail}${line}\n`.slice(-TAIL_CHARS); },
+      // Line by line, before the cut: a cut through a value would leave a part no match can find.
+      // Best effort, not a boundary: code that means to leak a value can encode it.
+      onLine: (line) => { tail = `${tail}${redact(line)}\n`.slice(-TAIL_CHARS); },
     });
     const outcome: CheckOutcome = result.timedOut ? 'timed_out' : result.code === 0 ? 'passed' : result.code === 127 || result.code === 126 ? 'unavailable' : 'failed';
-    // The tail reaches agents and saved reports: the project's own values stay out of it
-    for (const value of Object.values(options.env)) if (value.length >= 4) tail = tail.split(value).join('***');
     return { outcome, exitCode: result.code, tail };
   };
   /** A clean copy of a commit, gone afterwards */
