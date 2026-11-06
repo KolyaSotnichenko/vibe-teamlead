@@ -5,6 +5,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 ## 2.0.0-beta.2 - 2026-11-06
 
 - The app is smaller: Claude Code and CodeGraph ship once instead of twice.
+- Every DMG is checked against the app when it is built. The first `2.0.0-beta.1` image was missing a file and crashed on launch; it has been replaced.
 
 ## 2.0.0-beta.1 - 2026-11-06
 

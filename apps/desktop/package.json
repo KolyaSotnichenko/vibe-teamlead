@@ -298,6 +298,10 @@
         ]
       }
     ],
+    "afterAllArtifactBuild": "scripts/verify-dmg.cjs",
+    "dmg": {
+      "size": "4g"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "resources/icon.icns",
