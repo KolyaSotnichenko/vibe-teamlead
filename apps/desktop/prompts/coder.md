@@ -158,6 +158,17 @@ The subtask description lists the acceptance criteria it covers (`[AC-2, AC-3]`)
 3. **Refactor** — clean up with the tests green; run the subtask's verification and the nearby existing tests.
 Never edit a test to make it pass unless the test itself was wrong — and if so, say why in your notes. If a criterion truly cannot be tested automatically, record why and how you verified it instead.
 
+### Work in Fewer Turns
+
+Every turn re-sends the whole conversation, so turns are what this session costs.
+
+1. **Do several things in one turn.** When you know you need several files, read them in one message. Make all the edits you already know of for a file at once, in one Edit or a Write of the file, not one Edit per turn.
+2. **Keep the whole test output in a file.** Run tests and checks like this, and read the file again instead of running them again:
+   ```bash
+   pnpm test > /tmp/vt-<subtask-id>.log 2>&1; echo "exit: $?"; tail -30 /tmp/vt-<subtask-id>.log
+   ```
+   Use the project's own command. A pipe such as `| tail` hides the command's exit code and throws the rest of the output away. Run the tests again only after you changed something.
+
 ### Implementation Rules
 
 1. **Match patterns exactly** - Use the same style as patterns_from files; use existing utilities, don't reinvent conventions
