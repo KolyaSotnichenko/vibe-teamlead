@@ -272,6 +272,31 @@ describe('verifyTask', () => {
       expect(existsSync(ran())).toBe(false);
     });
 
+    it('run nowhere with only Mongo started: SQL migrations would look for another database', async () => {
+      composeWith('mongo:7');
+      await check({ docker });
+      expect(existsSync(ran())).toBe(false);
+    });
+
+    it('run nowhere when a committed env file says where a database is: tools may read it first', async () => {
+      composeWith('postgres:18');
+      writeFileSync(join(repo, '.env'), 'PROD_CONN=postgres://prod/x\n');
+      commit(repo, 'env');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      const report = await check({ docker });
+      expect(existsSync(ran())).toBe(false);
+      expect(report.migrationsSkipped).toBe(true);
+    });
+
+    it('an example file is no reason to stop: its values are replaced', async () => {
+      composeWith('postgres:18');
+      writeFileSync(join(repo, '.env.example'), 'DATABASE_URL=postgres://localhost/x\n');
+      commit(repo, 'example');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      await check({ docker });
+      expect(existsSync(ran())).toBe(true);
+    });
+
     it('run when the temporary database is up', async () => {
       composeWith('postgres:18');
       await check({ docker });

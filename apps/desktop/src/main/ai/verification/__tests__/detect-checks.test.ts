@@ -191,6 +191,20 @@ describe('serviceEnv', () => {
     expect(serviceEnv('CONN=postgres+asyncpg://prod/x\n', started).CONN).toBe(started[0].url);
   });
 
+  it.each([
+    ['PGHOSTADDR=10.0.0.1'],
+    ['PGSERVICE=prod'],
+    ['MY_DSN=whatever'],
+    ['DATABASE_DSN=x'],
+    ['GO_CONN=user:pw@tcp(10.0.0.1:3306)/app'],
+    ['LIBPQ=host=prod dbname=app'],
+    ['SQLSERVER=Server=prod;Database=app'],
+    ['PDO=pgsql:host=prod;dbname=app'],
+    ['READ_REPLICA_DB_HOST=prod'],
+  ])('keeps out another way of saying where a database is: %s', (line) => {
+    expect(serviceEnv(`${line}\nAPP_NAME=keep\n`, [])).toEqual({ APP_NAME: 'keep' });
+  });
+
   it('keeps web addresses: they are settings, not databases', () => {
     expect(serviceEnv('API=http://localhost:3001\nSITE=https://example.com\n', [])).toEqual({ API: 'http://localhost:3001', SITE: 'https://example.com' });
   });

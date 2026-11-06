@@ -16,7 +16,7 @@ import { basename, delimiter, dirname, join } from 'node:path';
 
 import { runProcess, searchPath } from '../../platform/exec';
 import { gitRunner, type GitRun } from '../merge/git-merge';
-import { type Check, type DetectedChecks, detectChecks, type ServiceImage, serviceEnv, serviceImages } from './detect-checks';
+import { type Check, type DetectedChecks, detectChecks, namesDatabase, type ServiceImage, serviceEnv, serviceImages } from './detect-checks';
 import { type DockerRun, hostDocker, startTestServices } from './test-services';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
@@ -188,9 +188,11 @@ async function findTamper(run: GitRun, base: string, head: string): Promise<Tamp
 const COMPOSE_FILE = /^(docker-)?compose(\.[\w-]+)?\.ya?ml$/;
 /** At the root or one level of packages in: the example settings of a monorepo's apps */
 const ENV_EXAMPLE = /^([^/]+\/){0,2}\.env\.(example|sample)$/;
+/** A real env file in the repository: tools may read it before anything the app sets */
+const COMMITTED_ENV = /(^|\/)\.env(\.[\w-]+)?$/;
 
 /** All this reads from the base, so that a task can't choose what checks it or what it runs against. */
-async function detectAt(run: GitRun, commit: string): Promise<{ detected: DetectedChecks; images: ServiceImage[]; example: string }> {
+async function detectAt(run: GitRun, commit: string): Promise<{ detected: DetectedChecks; images: ServiceImage[]; example: string; committedDatabase: boolean }> {
   const files = (await run(['ls-tree', '-r', '-z', '--name-only', commit])).raw.split('\0').filter(Boolean);
   const show = async (file: string) => {
     const shown = await run(['show', `${commit}:${file}`]);
@@ -201,10 +203,12 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
   for (const file of files.filter((name) => !name.includes('/') && name.endsWith('.json'))) contents.set(file, await show(file));
   const composeFile = files.find((name) => COMPOSE_FILE.test(name));
   const examples = await Promise.all(files.filter((name) => ENV_EXAMPLE.test(name)).sort().map(show));
+  const committed = await Promise.all(files.filter((name) => COMMITTED_ENV.test(name) && !/\.(example|sample)$/.test(name)).map(show));
   return {
     detected: detectChecks({ files, read: (path) => contents.get(path) ?? null }),
     images: composeFile ? serviceImages(await show(composeFile)) : [],
     example: examples.join('\n'),
+    committedDatabase: committed.some(namesDatabase),
   };
 }
 
@@ -269,7 +273,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         env = verificationEnv(hostEnv, variables);
         // Set by the project's settings, an address may be anything, so migrations stay away from it
         const ownDatabase = Object.keys(options.env).some((name) => /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i.test(name));
-        migratable = !ownDatabase && started.started.some((service) => service.kind !== 'redis');
+        // The migration tools here are for SQL databases
+        migratable = !ownDatabase && !base.committedDatabase && started.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
         // Example values aren't secrets, the project's own values and the database addresses are
         secrets = [...Object.values(options.env), ...started.started.flatMap((service) => [service.url, new URL(service.url).password])];
         return await work(cwd);

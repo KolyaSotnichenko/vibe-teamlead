@@ -155,8 +155,20 @@ const SCHEME_KINDS: Record<string, ServiceImage['kind']> = {
   redis: 'redis', rediss: 'redis',
   mongodb: 'mongo',
 };
-/** Settings that say where a database is, without being an address */
-const CONNECTION_SETTING = /^(DB|DATABASE|PG|POSTGRES|POSTGRESQL|MYSQL|MARIADB|MONGO|MONGODB|REDIS)_?(HOST|HOSTNAME|PORT|USER|USERNAME|PASS|PASSWORD|NAME|DATABASE|DB|URL|URI|SOCKET)$/i;
+/** Settings that by name say where a database is. Wide on purpose: a test missing a setting costs a "not verified", a real database costs far more. */
+const CONNECTION_NAME = /(^|_)(DB|DSN|DATABASE|SQL|MYSQL|MARIADB|POSTGRES|POSTGRESQL|MONGO|MONGODB|REDIS|PG[A-Z]*)(_|$)/i;
+/** Values that say so without a scheme: Go's DSN, libpq, ADO.NET, PDO */
+const CONNECTION_VALUE = /@tcp\(|(^|[\s;:])(host|hostaddr|dbname)=|(^|;)\s*(server|data source|database)=/i;
+
+/** Whether an env file's text says where a database is. Pure. */
+export function namesDatabase(envText: string): boolean {
+  return envText.split('\n').some((line) => {
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (!match || !match[2].trim()) return false;
+    const scheme = /^["']?(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(match[2].trim())?.[1]?.toLowerCase();
+    return (!!scheme && scheme !== 'http' && scheme !== 'https') || CONNECTION_NAME.test(match[1]) || CONNECTION_VALUE.test(match[2]);
+  });
+}
 
 /** host, port, user, password and name, for tools that read them apart */
 function splitConnection(url: string): [string, string][] {
@@ -185,7 +197,7 @@ export function serviceEnv(example: string, started: StartedService[]): Record<s
     if (scheme && scheme !== 'http' && scheme !== 'https') {
       const url = SCHEME_KINDS[scheme] ? urlOf(SCHEME_KINDS[scheme]) : undefined;
       if (url) entries.push([match[1], url]);
-    } else if (!CONNECTION_SETTING.test(match[1])) {
+    } else if (!CONNECTION_NAME.test(match[1]) && !CONNECTION_VALUE.test(value)) {
       entries.push([match[1], value]);
     }
   }
