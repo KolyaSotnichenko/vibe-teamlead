@@ -40,6 +40,7 @@ import { StageTicks, SubtaskBar } from './board/StageMarks';
 import { countSubtasks, formatSince, getTaskStage, type TaskStageInfo } from './board/task-stage';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { useMergeState } from './task-detail/useMergeState';
+import { useVerification } from './task-detail/useVerification';
 import { useSecurityQaError } from './task-detail/useSecurityQaError';
 
 // Catastrophic stuck detection interval (ms).
@@ -314,6 +315,7 @@ export const TaskCard = memo(function TaskCard({
 
   const securityQaError = useSecurityQaError(task);
   const mergeState = useMergeState(task);
+  const verification = useVerification(task);
 
   // Chip: why the task stands where it stands (word always shown, never colour alone)
   const chip: { tone: ChipTone; label: string } | null = (() => {
@@ -332,6 +334,7 @@ export const TaskCard = memo(function TaskCard({
       if (reason === 'plan_review') return { tone: 'outline', label: t('reviewReason.approvePlan') };
       if (reason === 'stopped') return { tone: 'outline', label: t('reviewReason.stopped') };
       if (reason === 'completed' && securityQaError) return { tone: 'attention', label: t('board.chip.securityQaFailed') };
+      if (reason === 'completed' && (verification?.status === 'not_verified' || verification?.status === 'not_configured')) return { tone: 'outline', label: t('board.chip.checksIncomplete') };
       if (reason === 'completed') return { tone: 'outline', label: t('board.chip.qaPassed') };
     }
     if (isArchived) return { tone: 'low', label: t('status.archived') };

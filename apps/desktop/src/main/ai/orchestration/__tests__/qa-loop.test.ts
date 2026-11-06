@@ -1322,6 +1322,24 @@ describe('QALoop', () => {
         await expect(kickoff(report({ status: 'not_verified', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, onBase: 'failed' }] }))).resolves.not.toContain("Don't run them again");
       });
 
+      it.each([
+        ['the task changed how checks run', { runnerConfigChanged: ['vitest.config.ts'] }],
+        ['migrations were left out', { migrationsSkipped: true }],
+        ['the database could not start', { services: { status: 'unavailable', images: ['postgres:18'] } }],
+      ])("doesn't tell the reviewer to rely on a pass when %s", async (_name, over) => {
+        const { runSession } = approvingReviewer();
+        await new QALoop(makeConfig({ runSession, runVerification: (async () => report(over)) as QALoopConfig['runVerification'] })).run();
+        const review = runSession.mock.calls.map((call: unknown[]) => call[0] as { agentType: string; kickoffData?: string }).find((call) => call.agentType === 'qa_reviewer');
+        expect(review?.kickoffData).not.toContain("Don't run them again");
+      });
+
+      it('leaves a summary for the task to show: the reason must not live only in the log', async () => {
+        const { runSession } = approvingReviewer();
+        await new QALoop(makeConfig({ runSession, runVerification: (async () => report({ services: { status: 'started', images: ['postgres:18'] } })) as QALoopConfig['runVerification'] })).run();
+        const written = mockWriteFile.mock.calls.find((call: unknown[]) => String(call[0]).endsWith('verification.json'));
+        expect(JSON.parse(String(written?.[1]))).toMatchObject({ status: 'passed', checks: [{ command: 'npm test', outcome: 'passed' }], services: { status: 'started' } });
+      });
+
       it('blocks nothing when the failure is on the base too', async () => {
         const { runSession } = approvingReviewer();
         const failing = report({ status: 'not_verified', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, onBase: 'failed' }] });

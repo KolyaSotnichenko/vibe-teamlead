@@ -2,8 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 2.0.0-beta.6 - 2026-11-06
 
+- The task shows what the app's own checks found, and its card says when they couldn't say everything, for example when Docker isn't running.
+- Databases agents started from a task's folder are removed with that folder.
 - The QA reviewer builds on the checks the app already ran instead of repeating them, and reads changes rather than whole files.
 
 ## 2.0.0-beta.5 - 2026-11-06

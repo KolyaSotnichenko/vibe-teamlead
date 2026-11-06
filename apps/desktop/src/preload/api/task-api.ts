@@ -95,6 +95,7 @@ export interface TaskAPI {
   getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<IPCResult<{ reason?: string } | null>>;
   getTaskMergeState: (taskId: string, projectId?: string) => Promise<IPCResult<MergeState | null>>;
+  getTaskVerification: (taskId: string, projectId?: string) => Promise<IPCResult<import('../../shared/utils/verification-summary').VerificationSummary | null>>;
   getMergeReviewDiff: (taskId: string, file: string, against: 'project' | 'task', projectId?: string) => Promise<IPCResult<{ diff: string; truncated: boolean }>>;
   getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult<string>>;
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;
@@ -311,6 +312,9 @@ export const createTaskAPI = (): TaskAPI => ({
 
   getTaskWorkspace: (taskId: string, projectId?: string): Promise<IPCResult<TaskWorkspace | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_GET, taskId, projectId),
+
+  getTaskVerification: (taskId: string, projectId?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_VERIFICATION, taskId, projectId),
 
   getTaskMergeState: (taskId: string, projectId?: string): Promise<IPCResult<MergeState | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_MERGE_STATE, taskId, projectId),

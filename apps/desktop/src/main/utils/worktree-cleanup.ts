@@ -24,6 +24,7 @@ import { getSpecsDir, isTaskBranch } from '../../shared/constants/config';
 import { taskLogService } from '../task-log-service';
 import { getToolPath } from '../cli-tool-manager';
 import { stopStorybooksUnder } from '../design/storybook-service';
+import { removeTaskContainers } from './task-containers';
 import { getIsolatedGitEnv } from './git-isolation';
 import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
@@ -290,6 +291,9 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
       warnings: ['Invalid worktree path']
     };
   }
+
+  // What agents started from this folder goes with it. Only after the check above: it removes things.
+  await removeTaskContainers(worktreePath);
 
   // 1. Get the branch name before we delete the directory
   const branch = getWorktreeBranch(worktreePath, specId, timeout, branchName);

@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
 
 import { runProcess, searchPath } from '../../platform/exec';
+import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
 import { type Check, type DetectedChecks, detectChecks, namesDatabase, type ServiceImage, serviceEnv, serviceImages } from './detect-checks';
 import { type DockerRun, hostDocker, startTestServices } from './test-services';
@@ -373,6 +374,25 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const broke = failed.some((result) => result.onBase === 'passed');
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
   return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}) };
+}
+
+/**
+ * A pass the reviewer may rely on without looking further. Not when the task changed
+ * what decides how checks run, or part of it didn't run. Pure.
+ */
+export function verificationIsConclusive(report: VerificationReport): boolean {
+  return report.status === 'passed' && !report.runnerConfigChanged.length && !report.migrationsSkipped && report.services?.status !== 'unavailable';
+}
+
+/** What the task window shows. Pure. */
+export function verificationSummary(report: VerificationReport): VerificationSummary {
+  return {
+    status: report.status,
+    commit: report.commit,
+    checks: report.checks.map(({ command, outcome, onBase }) => ({ command, outcome, ...(onBase ? { onBase } : {}) })),
+    ...(report.services ? { services: { status: report.services.status, images: report.services.images } } : {}),
+    ...(report.migrationsSkipped ? { migrationsSkipped: true } : {}),
+  };
 }
 
 const OUTCOME_WORDS: Record<CheckOutcome, string> = { passed: 'passed', failed: 'FAILED', timed_out: 'ran out of time', unavailable: 'its tool is not installed' };

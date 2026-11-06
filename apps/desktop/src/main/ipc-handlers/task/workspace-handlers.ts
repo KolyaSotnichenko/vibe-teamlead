@@ -23,6 +23,7 @@ import { findTaskAndProject } from './shared';
 import { getIntegrationReview, getIntegrationReviewDiff, getMergeState } from '../../ai/merge/integrate-task';
 import { isMergeQueued } from '../../ai/merge/merge-queue';
 import type { MergeState } from '../../../shared/types/task';
+import { parseVerificationSummary, type VerificationSummary } from '../../../shared/utils/verification-summary';
 import { parseTurnLimits, TURN_LIMITS_FILE } from '../../ai/claude-code/turn-limits';
 import { getToolPath } from '../../cli-tool-manager';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
@@ -260,6 +261,19 @@ export function registerTaskWorkspaceHandlers(): void {
         return { success: false, error: error instanceof Error ? error.message : 'Failed to load task workspace' };
       }
     }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_VERIFICATION,
+    async (_, taskId: string, projectId?: string): Promise<IPCResult<VerificationSummary | null>> => {
+      try {
+        const specDir = resolveSpecDir(taskId, projectId);
+        const text = specDir ? await readText(path.join(specDir, 'verification.json')) : undefined;
+        return { success: true, data: text ? parseVerificationSummary(text) : null };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    },
   );
 
   ipcMain.handle(

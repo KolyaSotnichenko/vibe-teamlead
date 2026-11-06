@@ -591,6 +591,7 @@
       "failed": "Failed",
       "qaPassed": "QA passed",
       "securityQaFailed": "Security QA didn't finish",
+      "checksIncomplete": "QA passed, checks incomplete",
       "merging": "Merging",
       "mergeFailed": "Merge failed",
       "mergeReview": "Check the merge"
@@ -1019,6 +1020,22 @@
     "truncated": "The diff is too long to show in full. See the rest in your editor.",
     "diffFailed": "Could not load the diff.",
     "cannotShow": "This file differs, but the changes can't be shown here. Check it in your editor."
+  },
+  "verification": {
+    "passedTitle": "App checks passed",
+    "notVerifiedTitle": "App checks couldn't say everything",
+    "notConfiguredTitle": "No app checks ran",
+    "notConfiguredBody": "The app found no typecheck or tests to run for this project. You can set commands in the project's settings.",
+    "dockerNeeded": "This project's tests need a database, and Docker isn't running. Start Docker Desktop for a full check.",
+    "temporaryDatabase": "Run on a clean copy of the code, with an empty temporary database.",
+    "migrationsSkipped": "Migrations weren't run: there was no temporary database to run them on.",
+    "outcome": {
+      "passed": "passed",
+      "failed": "failed",
+      "noTool": "its tool isn't installed",
+      "timedOut": "ran out of time",
+      "sameOnBase": "fails without this task too, so it says nothing about it"
+    }
   },
   "mergeState": {
     "mergingTitle": "Merging",

@@ -38,7 +38,7 @@ import { QASignoffSchema, validateStructuredOutput } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import type { GateFinding, GateReport } from '../security/gates';
-import { describeVerification, type VerificationReport, verificationIssues } from '../verification/verify-task';
+import { describeVerification, type VerificationReport, verificationIsConclusive, verificationIssues, verificationSummary } from '../verification/verify-task';
 import type { DesignFinding, DesignQaMode, QaOutcomeInfo } from '../../../shared/types';
 import { approvalHolds, clearApproval, recordApproval } from './qa-approval';
 import { writeFileReplacing, writeFileReplacingSync } from '../safe-write';
@@ -762,8 +762,9 @@ export class QALoop extends EventEmitter {
       const report = await this.config.runVerification();
       this.lastVerification = describeVerification(report);
       this.emitTyped('log', this.lastVerification);
-      // Reviewers kept starting databases to repeat these. A run that says nothing about the task is theirs to do.
-      if (report.status === 'passed') this.lastVerification += "\nAll of these passed. Don't run them again.";
+      await writeFileReplacing(join(this.config.specDir, 'verification.json'), JSON.stringify(verificationSummary(report), null, 2), 'utf-8');
+      // Reviewers kept starting databases to repeat these. A run that doesn't settle it is theirs to finish.
+      if (verificationIsConclusive(report)) this.lastVerification += "\nAll of these passed. Don't run them again.";
       const issues = verificationIssues(report);
       this.lastGateKeys.push(...issues.map((issue) => issue.key));
       return issues.map(({ key: _key, ...issue }) => issue);

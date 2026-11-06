@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
+vi.mock('../task-containers', () => ({ removeTaskContainers: vi.fn(async () => {}) }));
 
 import { cleanupWorktree, makeTreeWritable } from '../worktree-cleanup';
 import { isOwnWorktree } from '../../ipc-handlers/task/worktree-handlers';
