@@ -798,7 +798,7 @@ You MUST use the Write tool to save build-progress.txt.
 Do NOT just describe what the file should contain - you must actually call the Write tool with the complete content shown below.
 
 ```
-=== AUTO-BUILD PROGRESS ===
+=== BUILD PROGRESS ===
 
 Project: [Name from spec]
 Workspace: [managed by orchestrator]

@@ -1651,7 +1651,7 @@
   },
   "linearImport": {
     "title": "Імпорт задач із Linear",
-    "description": "Виберіть задачі з Linear для імпорту в AutoBuild",
+    "description": "Виберіть задачі з Linear для імпорту в Vibe Teamlead",
     "importing": "Імпорт...",
     "importTasks_one": "Імпортувати {{count}} задачу",
     "importTasks_few": "Імпортувати {{count}} задачі",

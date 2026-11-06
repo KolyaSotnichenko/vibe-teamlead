@@ -1584,7 +1584,7 @@
   },
   "linearImport": {
     "title": "Import Linear Tasks",
-    "description": "Select tasks from Linear to import into AutoBuild",
+    "description": "Select tasks from Linear to import into Vibe Teamlead",
     "importing": "Importing...",
     "importTasks_one": "Import {{count}} Task",
     "importTasks_other": "Import {{count}} Tasks",
