@@ -65,7 +65,7 @@ import type {
   OtherWorktreeInfo,
 } from './terminal';
 import type { AppSettings } from './settings';
-import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent, AppUpdateErrorEvent } from './app-update';
+import type { AppUpdateAutoInstallState, AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent, AppUpdateErrorEvent } from './app-update';
 import type {
   ChangelogTask,
   TaskSpecContent,
@@ -604,11 +604,15 @@ export interface ElectronAPI {
   downloadAppUpdate: () => Promise<IPCResult>;
   downloadStableUpdate: () => Promise<IPCResult>;
   installAppUpdate: () => void;
+  postponeAppUpdate: () => void;
   getDownloadedAppUpdate: () => Promise<IPCResult<AppUpdateInfo | null>>;
 
   // Electron app update event listeners
   onAppUpdateAvailable: (
     callback: (info: AppUpdateAvailableEvent) => void
+  ) => () => void;
+  onAppUpdateAutoInstall: (
+    callback: (state: AppUpdateAutoInstallState) => void
   ) => () => void;
   onAppUpdateDownloaded: (
     callback: (info: AppUpdateDownloadedEvent) => void

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, RefreshCw, CheckCircle2, AlertCircle, AlertTriangle, ExternalLink } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import type { AppUpdateAvailableEvent, AppUpdateProgress } from "../../shared/types";
+import type { AppUpdateAutoInstallState, AppUpdateAvailableEvent, AppUpdateProgress } from "../../shared/types";
 
 const CLAUDE_CODE_CHANGELOG_URL =
   "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md";
@@ -62,7 +62,8 @@ const createSafeLink = (opensInNewWindowText: string) => {
 
 /**
  * App Update Notification Dialog
- * Shows when a new app version is available and handles download/install workflow
+ * The app downloads and installs an update by itself. This shows how far along
+ * it is and lets the user put the restart off.
  */
 export function AppUpdateNotification() {
   const { t } = useTranslation(["dialogs", "common"]);
@@ -73,6 +74,8 @@ export function AppUpdateNotification() {
   const [isDownloaded, setIsDownloaded] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showReadOnlyWarning, setShowReadOnlyWarning] = useState(false);
+  const [autoInstall, setAutoInstall] = useState<AppUpdateAutoInstallState>({ kind: "idle" });
+  const versionRef = useRef<string | null>(null);
 
   // Create markdown components with translated accessibility text
   const markdownComponents: Components = useMemo(
@@ -85,10 +88,19 @@ export function AppUpdateNotification() {
   // Listen for update available event
   useEffect(() => {
     const cleanup = window.electronAPI.onAppUpdateAvailable((info) => {
+      // Checks repeat: the same version means the download went on or started again
+      if (versionRef.current === info.version) {
+        setIsDownloading(true);
+        setDownloadError(null);
+        return;
+      }
+      versionRef.current = info.version;
       setUpdateInfo(info);
       setIsOpen(true);
-      setIsDownloading(false);
+      // The app starts the download by itself
+      setIsDownloading(true);
       setIsDownloaded(false);
+      setAutoInstall({ kind: "idle" });
       setDownloadProgress(null);
       setDownloadError(null);
       setShowReadOnlyWarning(false);
@@ -99,12 +111,24 @@ export function AppUpdateNotification() {
 
   // Listen for update downloaded event
   useEffect(() => {
-    const cleanup = window.electronAPI.onAppUpdateDownloaded((_info) => {
+    const cleanup = window.electronAPI.onAppUpdateDownloaded((info) => {
+      versionRef.current = info.version;
+      setUpdateInfo(info);
       setIsDownloading(false);
       setIsDownloaded(true);
       setDownloadProgress(null);
       setDownloadError(null);
       setShowReadOnlyWarning(false);
+    });
+
+    return cleanup;
+  }, []);
+
+  // Listen for the restart that follows a download
+  useEffect(() => {
+    const cleanup = window.electronAPI.onAppUpdateAutoInstall((state) => {
+      setAutoInstall(state);
+      if (state.kind === "countdown") setIsOpen(true);
     });
 
     return cleanup;
@@ -134,6 +158,7 @@ export function AppUpdateNotification() {
   useEffect(() => {
     const cleanup = window.electronAPI.onAppUpdateReadOnlyVolume(() => {
       setShowReadOnlyWarning(true);
+      setIsOpen(true);
     });
 
     return cleanup;
@@ -161,8 +186,16 @@ export function AppUpdateNotification() {
     window.electronAPI.installAppUpdate();
   };
 
-  const handleDismiss = () => {
+  const handleLater = () => {
+    window.electronAPI.postponeAppUpdate();
+    setAutoInstall({ kind: "idle" });
     setIsOpen(false);
+  };
+
+  // Closing the dialog during the countdown must not end in a restart
+  const handleOpenChange = (open: boolean) => {
+    if (!open && autoInstall.kind === "countdown") handleLater();
+    else setIsOpen(open);
   };
 
   if (!updateInfo) {
@@ -170,7 +203,7 @@ export function AppUpdateNotification() {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -180,7 +213,7 @@ export function AppUpdateNotification() {
           <DialogDescription>
             {t(
               "dialogs:appUpdate.description",
-              "A new version of Vibe Teamlead is ready to download"
+              "A new version of Vibe Teamlead is on its way and installs by itself"
             )}
           </DialogDescription>
         </DialogHeader>
@@ -290,21 +323,26 @@ export function AppUpdateNotification() {
             <div className="flex items-center gap-3 text-sm text-success bg-success/10 border border-success/30 rounded-lg p-3">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
               <span>
-                {t(
-                  "dialogs:appUpdate.updateDownloaded",
-                  "Update downloaded successfully! Click Install to restart and apply the update."
-                )}
+                {autoInstall.kind === "countdown"
+                  ? t("dialogs:appUpdate.restartingIn", { count: autoInstall.seconds })
+                  : autoInstall.kind === "waiting"
+                    ? t("dialogs:appUpdate.waitingForTasks", { count: autoInstall.tasks })
+                    : t("dialogs:appUpdate.updateDownloaded")}
               </span>
             </div>
           )}
         </div>
 
         <DialogFooter className="flex flex-col sm:flex-row gap-3">
-          <Button variant="outline" onClick={handleDismiss} disabled={isDownloading}>
-            {isDownloaded
-              ? t("dialogs:appUpdate.installLater", "Install Later")
-              : t("dialogs:appUpdate.remindMeLater", "Remind Me Later")}
-          </Button>
+          {isDownloaded && autoInstall.kind !== "waiting" ? (
+            <Button variant="outline" onClick={handleLater}>
+              {t("dialogs:appUpdate.installLater", "Install Later")}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setIsOpen(false)}>
+              {t("dialogs:appUpdate.hide")}
+            </Button>
+          )}
 
           {isDownloaded ? (
             <Button onClick={handleInstall} disabled={showReadOnlyWarning}>

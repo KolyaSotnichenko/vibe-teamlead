@@ -14,7 +14,8 @@ import {
   downloadStableVersion,
   quitAndInstall,
   getCurrentVersion,
-  getDownloadedUpdateInfo
+  getDownloadedUpdateInfo,
+  postponeAutoInstall
 } from '../app-updater';
 
 /**
@@ -84,6 +85,17 @@ export function registerAppUpdateHandlers(): void {
           error: error instanceof Error ? error.message : 'Failed to download stable version'
         };
       }
+    }
+  );
+
+  /**
+   * APP_UPDATE_POSTPONE: Put off the restart; the update installs on quit
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.APP_UPDATE_POSTPONE,
+    async (): Promise<IPCResult> => {
+      postponeAutoInstall();
+      return { success: true };
     }
   );
 

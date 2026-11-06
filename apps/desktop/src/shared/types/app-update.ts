@@ -26,6 +26,12 @@ export interface AppUpdateDownloadedEvent {
   releaseDate?: string;
 }
 
+/** What happens to a downloaded update, without the user having to act */
+export type AppUpdateAutoInstallState =
+  | { kind: 'countdown'; seconds: number }
+  | { kind: 'waiting'; tasks: number }
+  | { kind: 'idle' };
+
 export interface AppUpdateErrorEvent {
   message: string;
 }

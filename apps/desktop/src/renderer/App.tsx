@@ -300,20 +300,6 @@ export function App() {
     };
   }, []);
 
-  // Listen for app updates - auto-open settings to 'updates' section when update is ready
-  useEffect(() => {
-    // When an update is downloaded and ready to install, open settings to updates section
-    const cleanupDownloaded = window.electronAPI.onAppUpdateDownloaded(() => {
-      console.warn('[App] Update downloaded, opening settings to updates section');
-      setSettingsInitialSection('updates');
-      setIsSettingsDialogOpen(true);
-    });
-
-    return () => {
-      cleanupDownloaded();
-    };
-  }, []);
-
   // Reset init success flag when selected project changes
   // This allows the init dialog to show for new/different projects
   useEffect(() => {

@@ -86,6 +86,8 @@ export const settingsMock = {
   // App Update Event Listeners (no-op in browser mode)
   onAppUpdateAvailable: () => () => {},
   onAppUpdateDownloaded: () => () => {},
+  onAppUpdateAutoInstall: () => () => {},
+  postponeAppUpdate: () => {},
   onAppUpdateProgress: () => () => {},
   onAppUpdateStableDowngrade: () => () => {},
   onAppUpdateReadOnlyVolume: () => () => {},

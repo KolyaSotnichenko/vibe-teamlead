@@ -8,11 +8,12 @@
  * 1. Check for updates 3 seconds after app launch
  * 2. Download updates automatically when available
  * 3. Notify user when update is downloaded
- * 4. Install and restart when user confirms
+ * 4. Restart and install after a countdown, once no agents run (see updater/auto-install.ts)
  *
  * Events sent to renderer:
  * - APP_UPDATE_AVAILABLE: New update available (with version info)
  * - APP_UPDATE_DOWNLOADED: Update downloaded and ready to install
+ * - APP_UPDATE_AUTO_INSTALL: Countdown or wait before the restart
  * - APP_UPDATE_PROGRESS: Download progress updates
  * - APP_UPDATE_ERROR: Error during update process
  */
@@ -27,6 +28,7 @@ import type { BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../shared/constants';
 import type { AppUpdateInfo } from '../shared/types';
 import { compareVersions } from './updater/version-manager';
+import { createAutoInstall } from './updater/auto-install';
 import { isMacOS } from './platform';
 
 // GitHub repo info for API calls
@@ -171,6 +173,7 @@ export function setUpdateChannel(channel: UpdateChannel): void {
   // Clear any downloaded update info when channel changes to prevent showing
   // an Install button for an update from a different channel
   downloadedUpdateInfo = null;
+  autoInstall?.cancel();
   console.warn(`[app-updater] Update channel set to: ${channel}, allowPrerelease: ${autoUpdater.allowPrerelease}`);
 }
 
@@ -189,6 +192,8 @@ let mainWindow: BrowserWindow | null = null;
 // Track downloaded update state so it persists across Settings page navigations
 let downloadedUpdateInfo: AppUpdateInfo | null = null;
 
+let autoInstall: ReturnType<typeof createAutoInstall> | null = null;
+
 // Flag to allow intentional downgrades (e.g., switching from beta to stable)
 let intentionalDowngrade = false;
 
@@ -200,9 +205,15 @@ let intentionalDowngrade = false;
  *
  * @param window - The main BrowserWindow for sending update events
  * @param betaUpdates - Whether to receive beta/pre-release updates
+ * @param runningTasks - The tasks a restart would stop
  */
-export function initializeAppUpdater(window: BrowserWindow, betaUpdates = false): void {
+export function initializeAppUpdater(window: BrowserWindow, betaUpdates: boolean, runningTasks: () => string[]): void {
   mainWindow = window;
+  autoInstall = createAutoInstall({
+    running: runningTasks,
+    install: quitAndInstall,
+    onState: (state) => mainWindow?.webContents.send(IPC_CHANNELS.APP_UPDATE_AUTO_INSTALL, state),
+  });
 
   // Set update channel based on user preference
   const channel = updateChannelFor(autoUpdater.currentVersion.version, betaUpdates);
@@ -231,6 +242,11 @@ export function initializeAppUpdater(window: BrowserWindow, betaUpdates = false)
     // Skip if the "update" is actually a downgrade, unless it's an intentional downgrade
     if (!isNewer && !intentionalDowngrade) {
       console.warn('[app-updater] Ignoring update - not newer than current version');
+      return;
+    }
+
+    // Checks repeat, and this one is already here: don't announce it or fetch it again
+    if (downloadedUpdateInfo?.version === info.version) {
       return;
     }
 
@@ -270,6 +286,7 @@ export function initializeAppUpdater(window: BrowserWindow, betaUpdates = false)
       // Reuse downloadedUpdateInfo instead of calling formatReleaseNotes again
       mainWindow.webContents.send(IPC_CHANNELS.APP_UPDATE_DOWNLOADED, downloadedUpdateInfo);
     }
+    autoInstall?.downloaded(info.version);
   });
 
   // Download progress
@@ -446,6 +463,13 @@ export function quitAndInstall(): boolean {
   console.warn('[app-updater] Quitting and installing update');
   autoUpdater.quitAndInstall(false, true);
   return true;
+}
+
+/**
+ * The user chose later: no restart now, the update installs when the app quits.
+ */
+export function postponeAutoInstall(): void {
+  autoInstall?.postpone();
 }
 
 /**
@@ -681,6 +705,7 @@ export async function downloadStableVersion(): Promise<void> {
  * Stop periodic update checks - called during app shutdown
  */
 export function stopPeriodicUpdates(): void {
+  autoInstall?.cancel();
   if (periodicCheckIntervalId) {
     clearInterval(periodicCheckIntervalId);
     periodicCheckIntervalId = null;

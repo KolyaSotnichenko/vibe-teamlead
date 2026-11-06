@@ -13,3 +13,7 @@
 | **Project → General** | The project's agent model, CLAUDE.md, notifications. |
 | **Project → GitHub / GitLab / Linear** | Repository, token, base branch, branch pushing, issue sync. |
 | **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory. You can run it again. |
+
+## Updates
+
+The app downloads an update by itself. It then restarts after a 10-second countdown, which **Later** stops; what you put off installs when you quit the app. While agents are running it waits for them to finish, because a restart would stop them.

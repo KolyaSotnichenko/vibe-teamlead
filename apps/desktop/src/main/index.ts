@@ -581,7 +581,7 @@ app.whenReady().then(() => {
       const settings = loadSettingsSync();
       const betaUpdates = settings.betaUpdates ?? false;
 
-      initializeAppUpdater(mainWindow, betaUpdates);
+      initializeAppUpdater(mainWindow, betaUpdates, () => agentManager?.getRunningTasks() ?? []);
       console.warn('[main] App auto-updater initialized');
       console.warn(`[main] Beta updates: ${betaUpdates ? 'enabled' : 'disabled'}`);
       if (forceUpdater && !app.isPackaged) {

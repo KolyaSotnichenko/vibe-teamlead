@@ -2,6 +2,7 @@ import { IPC_CHANNELS } from '../../shared/constants';
 import type {
   AppUpdateInfo,
   AppUpdateProgress,
+  AppUpdateAutoInstallState,
   AppUpdateAvailableEvent,
   AppUpdateDownloadedEvent,
   AppUpdateErrorEvent,
@@ -19,6 +20,7 @@ export interface AppUpdateAPI {
   downloadAppUpdate: () => Promise<IPCResult>;
   downloadStableUpdate: () => Promise<IPCResult>;
   installAppUpdate: () => void;
+  postponeAppUpdate: () => void;
   getAppVersion: () => Promise<string>;
   getDownloadedAppUpdate: () => Promise<IPCResult<AppUpdateInfo | null>>;
 
@@ -28,6 +30,9 @@ export interface AppUpdateAPI {
   ) => IpcListenerCleanup;
   onAppUpdateDownloaded: (
     callback: (info: AppUpdateDownloadedEvent) => void
+  ) => IpcListenerCleanup;
+  onAppUpdateAutoInstall: (
+    callback: (state: AppUpdateAutoInstallState) => void
   ) => IpcListenerCleanup;
   onAppUpdateProgress: (
     callback: (progress: AppUpdateProgress) => void
@@ -63,6 +68,12 @@ export const createAppUpdateAPI = (): AppUpdateAPI => ({
     );
   },
 
+  postponeAppUpdate: (): void => {
+    invokeIpc(IPC_CHANNELS.APP_UPDATE_POSTPONE).catch((err) =>
+      console.error('[app-update] Postpone failed:', err)
+    );
+  },
+
   getAppVersion: (): Promise<string> =>
     invokeIpc(IPC_CHANNELS.APP_UPDATE_GET_VERSION),
 
@@ -79,6 +90,11 @@ export const createAppUpdateAPI = (): AppUpdateAPI => ({
     callback: (info: AppUpdateDownloadedEvent) => void
   ): IpcListenerCleanup =>
     createIpcListener(IPC_CHANNELS.APP_UPDATE_DOWNLOADED, callback),
+
+  onAppUpdateAutoInstall: (
+    callback: (state: AppUpdateAutoInstallState) => void
+  ): IpcListenerCleanup =>
+    createIpcListener(IPC_CHANNELS.APP_UPDATE_AUTO_INSTALL, callback),
 
   onAppUpdateProgress: (
     callback: (progress: AppUpdateProgress) => void
