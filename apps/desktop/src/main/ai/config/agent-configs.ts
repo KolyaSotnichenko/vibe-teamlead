@@ -376,7 +376,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     thinkingDefault: 'medium',
   },
   merge_resolver: {
-    tools: [],
+    tools: [...BASE_READ_TOOLS, ...BASE_WRITE_TOOLS],
     mcpServers: [],
     appTools: [],
     thinkingDefault: 'low',

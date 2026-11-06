@@ -112,9 +112,9 @@ describe('AGENT_CONFIGS', () => {
     expect(config.mcpServers).toContain('context7');
   });
 
-  it('should configure merge_resolver with no tools', () => {
+  it('gives merge_resolver what it takes to read the project and run its checks', () => {
     const config = AGENT_CONFIGS.merge_resolver;
-    expect(config.tools).toHaveLength(0);
+    expect(config.tools).toEqual(expect.arrayContaining(['Read', 'Edit', 'Bash']));
     expect(config.mcpServers).toHaveLength(0);
   });
 

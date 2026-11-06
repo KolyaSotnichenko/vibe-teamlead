@@ -1000,12 +1000,13 @@
     "unrecorded": "This QA run ended before the app recorded why. Look at Workspace → Security and at design_check.md in Files: the reviewer may have approved while the security gates or the design check blocked it. Run QA again to get the reasons here."
   },
   "mergeReview": {
-    "title": "The model resolved conflicts. Check its work",
-    "description": "Git could not merge these files on its own, so the model did. Nothing is committed yet, and the task branch is still there.",
-    "hint": "Open a file to see the changes. If you correct it in your editor, your edits go into the commit.",
-    "commit": "Commit the merge",
+    "title": "An agent changed code to merge this. Check its work",
+    "description": "The main branch moved while this task was built. An agent brought it in, in the task's folder. Nothing reached the project yet.",
+    "checks": "The agent's report: {{summary}}",
+    "hint": "Open a file to see the changes. If you correct it in the task's folder, your edits go into the merge.",
+    "commit": "Merge into the project",
     "cancel": "Cancel the merge",
-    "failed": "Could not finish this. Check the project in a terminal.",
+    "failed": "Could not finish this. Check the task's folder in a terminal.",
     "againstProject": "What changes in the project",
     "againstTask": "Difference from the task",
     "loading": "Loading…",

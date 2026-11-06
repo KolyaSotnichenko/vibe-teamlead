@@ -100,6 +100,7 @@ function FileDiff({ task, file }: { task: Task; file: string }) {
 export function MergeReviewPanel({ task, onMerged }: { task: Task; onMerged?: () => void }) {
   const { t } = useTranslation('tasks');
   const [files, setFiles] = useState<string[] | null>(null);
+  const [summary, setSummary] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<string | null>(null);
@@ -109,7 +110,9 @@ export function MergeReviewPanel({ task, onMerged }: { task: Task; onMerged?: ()
     window.electronAPI
       ?.getTaskWorkspace?.(task.id, task.projectId)
       .then((r) => {
-        if (!cancelled && r?.success) setFiles(r.data?.mergeReview?.files ?? null);
+        if (cancelled || !r?.success) return;
+        setFiles(r.data?.mergeReview?.files ?? null);
+        setSummary(r.data?.mergeReview?.summary ?? '');
       })
       .catch(() => {});
     return () => {
@@ -142,6 +145,7 @@ export function MergeReviewPanel({ task, onMerged }: { task: Task; onMerged?: ()
       <header className="border-b border-l-2 border-b-border border-l-[var(--vt-signal)] px-4 py-3">
         <h3 id="merge-review" className="text-sm font-semibold text-foreground">{t('mergeReview.title')}</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">{t('mergeReview.description')}</p>
+        {summary && <p className="mt-2 text-sm text-foreground">{t('mergeReview.checks', { summary })}</p>}
       </header>
 
       <ul className="px-4 py-2">

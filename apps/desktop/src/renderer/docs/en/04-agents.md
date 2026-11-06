@@ -14,7 +14,7 @@ Each agent is a Claude Code session with its own prompt (`apps/desktop/prompts/`
 | **Coder** | Writes code subtask by subtask (TDD), commits, updates the subtask status. |
 | **QA reviewer** | Checks ACs, tests, UI (browser), security; writes the report; checks off the spec checkboxes. |
 | **QA fixer** | Fixes QA issues. |
-| **Merge resolver** | Resolves conflicts during a merge. |
+| **Merge integrator** | Brings the latest main branch into a task before it merges: resolves conflicts, runs the project's checks, fixes what the merge broke. |
 | **Commit message / PR description generators** | Write the commit message and the PR text. |
 | **PR reviewer and specialists** | Review other people's PRs: security, quality, logic, fit with the codebase. |
 | **Roadmap, competitor analysis, Ideation, Insights chat, Changelog** | Planning and knowledge utilities. |

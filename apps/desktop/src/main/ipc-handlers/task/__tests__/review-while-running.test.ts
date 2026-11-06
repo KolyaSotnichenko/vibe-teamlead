@@ -27,6 +27,8 @@ vi.mock('../../../ai/claude-code/credential', () => ({ resolveClaudeCredential: 
 vi.mock('../../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 
 import { IPC_CHANNELS } from '../../../../shared/constants';
+import { INTEGRATION_FILE } from '../../../ai/merge/integrate-task';
+import { inMergeQueue } from '../../../ai/merge/merge-queue';
 import { requestQaRerun } from '../../../ai/orchestration/qa-rerun';
 import { registerTaskExecutionHandlers } from '../execution-handlers';
 
@@ -92,20 +94,37 @@ describe('review of a task with a worktree', () => {
     expect(agent.startQAProcess).toHaveBeenCalled();
   });
 
-  it('refuses while a merge of this task waits for confirmation, and keeps the merge', async () => {
-    git('checkout', '-qb', 'vibe-teamlead/s');
-    writeFileSync(join(repo, 'b.txt'), 'task\n');
-    git('add', 'b.txt');
-    git('commit', '-qm', 'task');
-    git('checkout', '-q', 'main');
-    git('merge', '--no-commit', '--no-ff', 'vibe-teamlead/s');
-    writeFileSync(join(repo, '.git/vibe-teamlead-merge-review.json'), JSON.stringify({ files: ['b.txt'] }));
+  describe('and a merge', () => {
+    const inFolder = (...args: string[]) => execFileSync('git', args, { cwd: worktree.path ?? '', encoding: 'utf-8', stdio: 'pipe' }).trim();
 
-    const result = await review();
+    beforeEach(() => {
+      rmSync(worktree.path ?? '', { recursive: true });
+      git('worktree', 'add', '-qb', 'vibe-teamlead/s', worktree.path ?? '');
+    });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/merge/i);
-    expect(agent.startQAProcess).not.toHaveBeenCalled();
-    expect(git('rev-parse', 'MERGE_HEAD').trim()).toBe(git('rev-parse', 'vibe-teamlead/s').trim());
+    it('refuses while the agent\'s merge waits for confirmation, and keeps it', async () => {
+      const tip = inFolder('rev-parse', 'HEAD');
+      const mark = inFolder('rev-parse', '--path-format=absolute', '--git-path', INTEGRATION_FILE);
+      writeFileSync(mark, JSON.stringify({ state: 'review', before: tip, tip, files: ['a.txt'], summary: 'ok' }));
+
+      const result = await review();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/merge/i);
+      expect(agent.startQAProcess).not.toHaveBeenCalled();
+      expect(existsSync(mark)).toBe(true);
+    });
+
+    it('refuses while the task is merging or waiting to: QA would run on a moving folder', async () => {
+      let finish = () => {};
+      const merging = inMergeQueue(repo, 't', () => new Promise<void>((resolve) => { finish = resolve; }));
+
+      const result = await review();
+
+      expect(result.success).toBe(false);
+      expect(agent.startQAProcess).not.toHaveBeenCalled();
+      finish();
+      await merging;
+    });
   });
 });

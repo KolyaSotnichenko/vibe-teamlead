@@ -172,7 +172,7 @@ export interface TaskWorkspace {
   /** Sessions of this run that stopped at their turn limit */
   turnLimits?: TurnLimitHit[];
   /** A merge the model resolved, waiting for the user's decision */
-  mergeReview?: { files: string[] };
+  mergeReview?: { files: string[]; summary: string };
 }
 
 /** What blocked QA, in the words the task window shows */

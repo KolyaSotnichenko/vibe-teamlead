@@ -20,7 +20,7 @@ import type { TaskWorkspace, WorkspaceAdr, WorkspaceArchitecture, WorkspaceDiagr
 import { ensureAbsolutePath } from '../../utils/path-helpers';
 import { findTaskWorktree } from '../../worktree-paths';
 import { findTaskAndProject } from './shared';
-import { getMergeReview, getMergeReviewDiff } from '../../ai/merge/git-merge';
+import { getIntegrationReview, getIntegrationReviewDiff } from '../../ai/merge/integrate-task';
 import { parseTurnLimits, TURN_LIMITS_FILE } from '../../ai/claude-code/turn-limits';
 import { getToolPath } from '../../cli-tool-manager';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
@@ -219,14 +219,16 @@ export function registerTaskWorkspaceHandlers(): void {
       try {
         const { task, project } = findTaskAndProject(taskId, projectId);
         if (!task || !project) return { success: false, error: 'Task not found' };
-        const data = await getMergeReviewDiff({
-          projectDir: ensureAbsolutePath(project.path),
-          branch: `vibe-teamlead/${task.specId}`,
-          file,
-          against: against === 'task' ? 'task' : 'project',
-          git: getToolPath('git'),
-          env: getIsolatedGitEnv(),
-        });
+        const worktreePath = findTaskWorktree(ensureAbsolutePath(project.path), task.specId);
+        const data = worktreePath
+          ? await getIntegrationReviewDiff({
+              worktreePath,
+              file,
+              against: against === 'task' ? 'task' : 'project',
+              git: getToolPath('git'),
+              env: getIsolatedGitEnv(),
+            })
+          : null;
         return data ? { success: true, data } : { success: false, error: 'This file is not part of a merge waiting for review' };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -247,8 +249,9 @@ export function registerTaskWorkspaceHandlers(): void {
         }
         const workspace = await loadTaskWorkspace(specDir);
         const { task, project } = findTaskAndProject(taskId, projectId);
-        const mergeReview = task && project
-          ? await getMergeReview({ projectDir: ensureAbsolutePath(project.path), branch: `vibe-teamlead/${task.specId}`, git: getToolPath('git'), env: getIsolatedGitEnv() })
+        const worktreePath = task && project ? findTaskWorktree(ensureAbsolutePath(project.path), task.specId) : null;
+        const mergeReview = worktreePath
+          ? await getIntegrationReview({ worktreePath, git: getToolPath('git'), env: getIsolatedGitEnv() })
           : null;
         return { success: true, data: mergeReview ? { ...workspace, mergeReview } : workspace };
       } catch (error) {

@@ -172,7 +172,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
   },
   merge_resolver: {
     category: 'utility',
-    tools: [],
+    tools: ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash'],
     mcp_servers: [],
     settingsSource: { type: 'feature', feature: 'utility' },
   },

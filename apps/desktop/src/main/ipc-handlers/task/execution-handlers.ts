@@ -6,7 +6,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { getToolPath } from '../../cli-tool-manager';
 import { requestQaRerun } from '../../ai/orchestration/qa-rerun';
-import { getMergeReview } from '../../ai/merge/git-merge';
+import { getIntegrationReview } from '../../ai/merge/integrate-task';
+import { isMergeQueued } from '../../ai/merge/merge-queue';
 import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
@@ -403,8 +404,13 @@ export function registerTaskExecutionHandlers(
           return { success: false, error: 'An agent is still working on this task' };
         }
 
-        // A merge waiting for confirmation is the user's to finish or cancel: fixes would land after it
-        const mergeReview = await getMergeReview({ projectDir: project.path, branch: `vibe-teamlead/${task.specId}`, git: getToolPath('git'), env: getIsolatedGitEnv() });
+        if (isMergeQueued(taskId)) {
+          return { success: false, error: 'This task is merging. Wait for that to finish.' };
+        }
+
+        // The agent's merge waiting for confirmation is the user's to finish or cancel: fixes would land after it
+        const taskWorktree = findTaskWorktree(project.path, task.specId);
+        const mergeReview = taskWorktree ? await getIntegrationReview({ worktreePath: taskWorktree, git: getToolPath('git'), env: getIsolatedGitEnv() }) : null;
         if (mergeReview) {
           return { success: false, error: 'A merge of this task is waiting for your confirmation. Commit or cancel it first.' };
         }
