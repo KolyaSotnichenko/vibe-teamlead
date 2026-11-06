@@ -33,8 +33,13 @@ const samePrice = (a: ModelPrice, b: ModelPrice) => a.input === b.input && a.out
 export function withNewPrice(list: DatedModelPrice[] | ModelPrice | undefined, price: ModelPrice, now: string): DatedModelPrice[] {
   const current = listOf(list ? { m: list } : undefined, 'm');
   const last = current[current.length - 1];
-  if (!last) return [{ ...price, from: '' }];
+  if (!last) return [{ ...price, from: '', enteredAt: now }];
   if (samePrice(last, price)) return current;
-  if (last.from.slice(0, 10) === now.slice(0, 10)) return [...current.slice(0, -1), { ...price, from: last.from }];
-  return [...current, { ...price, from: now }];
+  if ((last.enteredAt ?? last.from).slice(0, 10) === now.slice(0, 10)) return [...current.slice(0, -1), { ...price, from: last.from, enteredAt: now }];
+  return [...current, { ...price, from: now, enteredAt: now }];
+}
+
+/** Cached reads dearer than input: providers charge less for them, so two fields were probably swapped. */
+export function priceLooksSwapped(price: ModelPrice): boolean {
+  return price.cacheRead > price.input;
 }

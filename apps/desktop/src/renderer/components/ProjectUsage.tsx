@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GatewayModelUsage, ModelPrice, ProjectUsageSummary } from '../../shared/types';
-import { currentPrice, withNewPrice } from '../../shared/utils/gateway-prices';
+import { currentPrice, priceLooksSwapped, withNewPrice } from '../../shared/utils/gateway-prices';
 import { cn } from '../lib/utils';
 import { saveSettings, useSettingsStore } from '../stores/settings-store';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -66,7 +66,8 @@ function useProjectUsage(projectId: string | null): { usage: ProjectUsageSummary
   return { usage, reload: load };
 }
 
-const PRICE_KINDS = ['input', 'output', 'cacheRead'] as const;
+// In the order gateways usually list them
+const PRICE_KINDS = ['input', 'cacheRead', 'output'] as const;
 
 /** One model's cost and the prices behind it. A price the user leaves blank is no price: no invented dollars. */
 function GatewayModelRow({ row, onSaved }: { row: GatewayModelUsage; onSaved: () => void }) {
@@ -80,7 +81,7 @@ function GatewayModelRow({ row, onSaved }: { row: GatewayModelUsage; onSaved: ()
     const values = PRICE_KINDS.map((kind) => Number(shown(kind)));
     const complete = PRICE_KINDS.every((kind) => shown(kind).trim() !== '') && values.every((value) => Number.isFinite(value) && value >= 0);
     if (!complete) return;
-    const [input, output, cacheRead] = values;
+    const [input, cacheRead, output] = values;
     const price: ModelPrice = { input, output, cacheRead, ...(saved?.cacheWrite === undefined ? {} : { cacheWrite: saved.cacheWrite }) };
     const list = prices && Object.hasOwn(prices, row.model) ? prices[row.model] : undefined;
     await saveSettings({ gatewayModelPrices: { ...prices, [row.model]: withNewPrice(list, price, new Date().toISOString()) } });
@@ -99,6 +100,9 @@ function GatewayModelRow({ row, onSaved }: { row: GatewayModelUsage; onSaved: ()
         <p className="text-[11px] text-muted-foreground">
           {t('usage.priceSince', { date: new Date(saved.from).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' }) })}
         </p>
+      )}
+      {saved && priceLooksSwapped(saved) && (
+        <p role="alert" className="text-[11px] text-foreground">{t('usage.priceSwapped')}</p>
       )}
       <div className="grid grid-cols-3 gap-1">
         {PRICE_KINDS.map((kind) => (

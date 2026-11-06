@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- Correcting a model's first price the same day replaces it, instead of leaving the mistake on all earlier sessions.
+- Prices are entered as input, cache read, output, and a price that looks swapped gets a warning.
+
 ## 2.0.0-beta.4 - 2026-11-06
 
 - The check for tampered tests no longer stops tasks by mistake. A test that runs only when a database is there, a word in a comment and a new test file's own pending test don't count as switching a test off.

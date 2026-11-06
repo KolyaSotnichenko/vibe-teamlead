@@ -48,6 +48,20 @@ describe('ProjectUsage through a gateway', () => {
     expect(screen.getAllByText('$5.10').length).toBeGreaterThan(0);
   });
 
+  it('warns when a saved price looks swapped', async () => {
+    useSettingsStore.setState((state) => ({ settings: { ...state.settings, gatewayModelPrices: { 'glm-5.3': { input: 1.4, output: 0.26, cacheRead: 4.4 } } } }));
+    usage.mockResolvedValue({ success: true, data: summarizeUsage(line) });
+    await open();
+    expect(await screen.findByRole('alert')).toHaveTextContent('usage.priceSwapped');
+  });
+
+  it('lists the fields in the order gateways do', async () => {
+    usage.mockResolvedValue({ success: true, data: summarizeUsage(line) });
+    await open();
+    const fields = await screen.findAllByRole('spinbutton');
+    expect(fields.map((field) => field.getAttribute('aria-label'))).toEqual(['glm-5.3: usage.kinds.input', 'glm-5.3: usage.kinds.cacheRead', 'glm-5.3: usage.kinds.output']);
+  });
+
   it('saves the prices once all three are in, and asks for the totals again', async () => {
     usage.mockResolvedValue({ success: true, data: summarizeUsage(line) });
     await open();
@@ -58,7 +72,7 @@ describe('ProjectUsage through a gateway', () => {
     fireEvent.change(field('output'), { target: { value: '4' } });
     fireEvent.change(field('cacheRead'), { target: { value: '0.1' } });
     fireEvent.blur(field('cacheRead'));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ gatewayModelPrices: { 'glm-5.3': [{ from: '', input: 1, output: 4, cacheRead: 0.1 }] } }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ gatewayModelPrices: { 'glm-5.3': [expect.objectContaining({ from: '', input: 1, output: 4, cacheRead: 0.1 })] } }));
     await waitFor(() => expect(usage.mock.calls.length).toBeGreaterThan(1));
   });
 });

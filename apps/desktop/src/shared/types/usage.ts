@@ -13,6 +13,8 @@ export interface ModelPrice {
 /** A price and the time it counts from; '' for the first, which also covers the history before it */
 export interface DatedModelPrice extends ModelPrice {
   from: string;
+  /** When it was entered: the first price's `from` is '', and a correction that day must still replace it */
+  enteredAt?: string;
 }
 
 /** Per model; a single price is what was saved before dates existed */

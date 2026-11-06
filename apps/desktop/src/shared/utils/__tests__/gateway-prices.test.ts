@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { currentPrice, priceAt, withNewPrice } from '../gateway-prices';
+import { currentPrice, priceAt, priceLooksSwapped, withNewPrice } from '../gateway-prices';
 
 const cheap = { input: 1, output: 2, cacheRead: 0.1 };
 const dear = { input: 3, output: 6, cacheRead: 0.3 };
@@ -45,5 +45,39 @@ describe('gateway prices by date', () => {
     expect(priceAt({}, 'm', undefined)).toBeUndefined();
     expect(priceAt({}, '__proto__', undefined)).toBeUndefined();
     expect(currentPrice({}, 'constructor')).toBeUndefined();
+  });
+});
+
+describe('correcting the first price', () => {
+  const cheap = { input: 1, output: 2, cacheRead: 0.1 };
+  const fixed = { input: 1, output: 4, cacheRead: 0.1 };
+
+  it('the same day replaces it: a typo must not stay on the whole history', () => {
+    const list = withNewPrice(undefined, cheap, '2026-11-06T10:00:00.000Z');
+    const corrected = withNewPrice(list, fixed, '2026-11-06T18:00:00.000Z');
+    expect(corrected).toHaveLength(1);
+    expect(corrected[0]).toMatchObject(fixed);
+    expect(corrected[0].from).toBe('');
+  });
+
+  it('a later day is a price change, and the first still covers what came before', () => {
+    const list = withNewPrice(undefined, cheap, '2026-11-06T10:00:00.000Z');
+    const changed = withNewPrice(list, fixed, '2026-11-07T10:00:00.000Z');
+    expect(changed).toHaveLength(2);
+    expect(priceAt({ m: changed }, 'm', '2026-11-01T00:00:00.000Z')).toMatchObject(cheap);
+  });
+});
+
+describe('priceLooksSwapped', () => {
+  it('flags cached reads dearer than input: providers charge less for them', () => {
+    expect(priceLooksSwapped({ input: 1.4, output: 0.26, cacheRead: 4.4 })).toBe(true);
+  });
+
+  it('leaves a normal price alone', () => {
+    expect(priceLooksSwapped({ input: 1.4, output: 4.4, cacheRead: 0.26 })).toBe(false);
+  });
+
+  it('a cache at the input price is unusual but real', () => {
+    expect(priceLooksSwapped({ input: 1, output: 4, cacheRead: 1 })).toBe(false);
   });
 });
