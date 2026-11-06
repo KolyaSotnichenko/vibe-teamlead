@@ -48,6 +48,20 @@ git diff {{BASE_BRANCH}}...HEAD --name-status
 
 ---
 
+**Read the diff, not the file.** Whole files are most of what each turn re-sends. For a changed file, start with `git diff {{BASE_BRANCH}}...HEAD -- <file>`, and open the file itself only where the diff doesn't let you judge it, with `offset` and `limit` when you can. When you know you need several, ask for them in one message.
+
+---
+
+## WHAT THE APP ALREADY RAN
+
+Before this session the app itself ran the project's checks on a clean copy of what is committed, against a temporary database when the project has one, and read the real exit codes. Your first message lists them.
+
+- **What passed there:** Don't run them again, and don't start a database or a server for them. They are evidence: use them in your report and in the Result column of the coverage table in phase 3.
+- **What it says it could not check** (failing on the base too, a missing tool, no checks found): that part is yours. Run it, or say in the report that nobody verified it.
+- **What is still yours:** whether the tests really assert the acceptance criteria, which passing can't tell you, whether the code is right, and whatever needs a browser. Run a command only for something the list doesn't cover.
+
+---
+
 ## SECURITY GATES (HARD)
 
 Before this session the app ran gitleaks (secrets) and OSV-Scanner (newly introduced vulnerable dependencies) on what this build changed. Read `security_gates.md` in the spec directory.
@@ -72,7 +86,7 @@ echo "In Progress: $(grep -c '"status": "in_progress"' implementation_plan.json)
 
 ## PHASE 2: START DEVELOPMENT ENVIRONMENT
 
-Only what the checks below need: tests that bring their own server need none.
+Only what the checks below need, which after the app's own run is usually just a browser check, or nothing: tests that bring their own server need none.
 
 Start servers with the tool `mcp__vibe-teamlead__start_dev_server`: give it a `name`, the `command` (from `project_index.json` or the package scripts) and any `env`, such as the URL of another server. The app picks a free port and passes it in `PORT` (or name the variable in `port_env`, or put `{port}` in the command), waits until the server answers and returns its URL and log file. No `sleep` or `curl` loop is needed.
 
@@ -92,6 +106,10 @@ Build a table of every acceptance criterion in spec.md (`AC-1` … `AC-n`): the 
 |----|-------------------|------------------------|--------|
 | AC-1 | `tests/test_x.py::test_y` | yes | PASS |
 
+
+### 3.1 to 3.3: Only What the App's Run Didn't Cover
+
+Skip these when the app's list in your first message already shows them passing.
 
 ### 3.1: Unit Tests
 
@@ -234,6 +252,8 @@ VISUAL VERIFICATION:
 <!-- - API validation (for projects with API endpoints) -->
 
 ## PHASE 5: DATABASE VERIFICATION (If Applicable)
+
+When the app's list says it ran against a temporary database, the migrations applied cleanly: don't set up a database to repeat that. Read the migrations this task added instead. A destructive statement (dropping a table or column, changing a type) needs a reason in the spec, and a migration tool can generate one from drift nobody meant to change.
 
 ### 5.1: Check Migrations
 

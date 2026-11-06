@@ -762,6 +762,8 @@ export class QALoop extends EventEmitter {
       const report = await this.config.runVerification();
       this.lastVerification = describeVerification(report);
       this.emitTyped('log', this.lastVerification);
+      // Reviewers kept starting databases to repeat these. A run that says nothing about the task is theirs to do.
+      if (report.status === 'passed') this.lastVerification += "\nAll of these passed. Don't run them again.";
       const issues = verificationIssues(report);
       this.lastGateKeys.push(...issues.map((issue) => issue.key));
       return issues.map(({ key: _key, ...issue }) => issue);

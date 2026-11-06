@@ -1312,6 +1312,16 @@ describe('QALoop', () => {
         expect(review?.kickoffData).toContain('npm test: passed (exit 0)');
       });
 
+      it('says a passing run needs no repeat, and only then', async () => {
+        const kickoff = async (result: ReturnType<typeof report>) => {
+          const { runSession } = approvingReviewer();
+          await new QALoop(makeConfig({ runSession, runVerification: (async () => result) as QALoopConfig['runVerification'] })).run();
+          return runSession.mock.calls.map((call: unknown[]) => call[0] as { agentType: string; kickoffData?: string }).find((call) => call.agentType === 'qa_reviewer')?.kickoffData ?? '';
+        };
+        await expect(kickoff(report())).resolves.toContain("Don't run them again");
+        await expect(kickoff(report({ status: 'not_verified', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, onBase: 'failed' }] }))).resolves.not.toContain("Don't run them again");
+      });
+
       it('blocks nothing when the failure is on the base too', async () => {
         const { runSession } = approvingReviewer();
         const failing = report({ status: 'not_verified', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, onBase: 'failed' }] });

@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- The QA reviewer builds on the checks the app already ran instead of repeating them, and reads changes rather than whole files.
+
 ## 2.0.0-beta.5 - 2026-11-06
 
 - While an agent's merge waits for review, the task shows one way to merge: the second Merge button and Ready to merge are hidden.
