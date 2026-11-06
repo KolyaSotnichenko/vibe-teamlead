@@ -156,6 +156,24 @@ describe('createSecurityFollowup', () => {
     });
   });
 
+  it('loses no finding when they do not fit in one task: more tasks, each whole', () => {
+    const many = Array.from({ length: 40 }, (_, index) => finding({ title: `Finding number ${index}.`, location: `f${index}.ts:1`, description: 'x'.repeat(700) }));
+    const created = create(many);
+    expect(created?.count).toBe(40);
+    const tasks = readdirSync(specs).filter((name) => name.includes('security-fixes'));
+    expect(tasks.length).toBeGreaterThan(1);
+    const text = tasks.map((name) => read(name, 'requirements.json').task_description as string).join('\n');
+    for (let index = 0; index < 40; index++) expect(text).toContain(`Finding number ${index}.`);
+    expect(text).not.toContain('(truncated)');
+    expect(create(many)).toBeNull();
+  });
+
+  it('puts the worst first', () => {
+    create([finding({ severity: 'low', title: 'Lesser', location: 'a.ts:1' }), finding({ severity: 'medium', title: 'Worse', location: 'b.ts:1' })]);
+    const text: string = read(newest(), 'requirements.json').task_description;
+    expect(text.indexOf('Worse')).toBeLessThan(text.indexOf('Lesser'));
+  });
+
   it('caps very long reports', () => {
     create([finding({ description: 'x'.repeat(100_000) })]);
     expect(read(newest(), 'requirements.json').task_description.length).toBeLessThan(10_000);
