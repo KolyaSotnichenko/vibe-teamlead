@@ -173,61 +173,22 @@ describe('ProgressTracker', () => {
   // Text Pattern Detection
   // ===========================================================================
 
-  describe('text pattern detection', () => {
-    it('should detect planning from text', () => {
-      const result = tracker.processEvent({
-        type: 'text-delta',
-        text: 'Creating implementation plan for the project...',
-      });
-
-      expect(result).not.toBeNull();
-      expect(result!.phase).toBe('planning');
-      expect(result!.source).toBe('text-pattern');
-    });
-
-    it('should detect coding from text', () => {
-      tracker.forcePhase('planning', 'Planning...');
-
-      const result = tracker.processEvent({
-        type: 'text-delta',
-        text: 'Implementing subtask changes now.',
-      });
-
-      expect(result).not.toBeNull();
-      expect(result!.phase).toBe('coding');
-    });
-
-    it('should detect qa_review from text', () => {
-      tracker.forcePhase('coding', 'Coding...');
-
-      const result = tracker.processEvent({
-        type: 'text-delta',
-        text: 'Starting QA review process.',
-      });
-
-      expect(result).not.toBeNull();
-      expect(result!.phase).toBe('qa_review');
-    });
-
-    it('should detect qa_fixing from text', () => {
-      tracker.forcePhase('qa_review', 'Reviewing...');
-
-      const result = tracker.processEvent({
-        type: 'text-delta',
-        text: 'Now QA fixing the issues found.',
-      });
-
-      expect(result).not.toBeNull();
-      expect(result!.phase).toBe('qa_fixing');
-    });
-
-    it('should ignore very short text fragments', () => {
-      const result = tracker.processEvent({
-        type: 'text-delta',
-        text: 'QA',
-      });
-
-      expect(result).toBeNull();
+  describe("an agent's words", () => {
+    // The spec validator wrote "QA Acceptance Criteria" in its report, and a task with
+    // no code yet jumped to AI Review. The orchestrator says when phases change.
+    it.each([
+      ['planning', 'All 20 ACs are covered, see QA Acceptance Criteria.'],
+      ['planning', 'The QA reviewer will check this later.'],
+      ['coding', 'This meets the acceptance criteria.'],
+      ['coding', 'Starting QA is the next step.'],
+      ['coding', 'Fixing issues in the test.'],
+      ['coding', 'Now QA fixing would be needed if this failed.'],
+      ['qa_review', 'Implementing subtask changes was done earlier.'],
+      ['idle', 'Creating implementation plan for the project...'],
+    ] as const)('never move a task out of %s: %s', (phase, text) => {
+      tracker.forcePhase(phase, 'Now');
+      expect(tracker.processEvent({ type: 'text-delta', text })).toBeNull();
+      expect(tracker.currentPhase).toBe(phase);
     });
 
     it('should detect subtask references in text during coding', () => {

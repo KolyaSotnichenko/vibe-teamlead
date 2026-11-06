@@ -1,13 +1,12 @@
 /**
  * Progress Tracker
  * ================
- * Detects execution phase transitions from tool calls and text patterns.
+ * Detects execution phase transitions from tool calls.
  * Replaces stdout parsing with structured event detection for the
  * Vercel AI SDK integration.
  *
  * Phase detection sources:
  * 1. Tool calls (e.g., Write to implementation_plan.json → planning phase)
- * 2. Text patterns in model output (fallback)
  *
  * Preserves regression prevention from phase-protocol.ts:
  * - Uses PHASE_ORDER_INDEX for ordering
@@ -103,40 +102,6 @@ const TOOL_NAME_PHASE_PATTERNS: ReadonlyArray<{
 ];
 
 // =============================================================================
-// Text Pattern Phase Detection
-// =============================================================================
-
-/**
- * Text patterns for fallback phase detection.
- * Only used when tool call detection doesn't match.
- * Order matters: more specific patterns first.
- */
-const TEXT_PHASE_PATTERNS: ReadonlyArray<{
-  pattern: RegExp;
-  phase: ExecutionPhase;
-  message: string;
-}> = [
-  // QA fixing (check before QA review — more specific)
-  { pattern: /qa\s*fix/i, phase: 'qa_fixing', message: 'Fixing QA issues...' },
-  { pattern: /fixing\s+issues/i, phase: 'qa_fixing', message: 'Fixing QA issues...' },
-
-  // QA review
-  { pattern: /qa\s*review/i, phase: 'qa_review', message: 'Running QA review...' },
-  { pattern: /starting\s+qa/i, phase: 'qa_review', message: 'Running QA review...' },
-  { pattern: /acceptance\s+criteria/i, phase: 'qa_review', message: 'Checking acceptance criteria...' },
-
-  // Coding
-  { pattern: /implementing\s+subtask/i, phase: 'coding', message: 'Implementing code changes...' },
-  { pattern: /starting\s+coder/i, phase: 'coding', message: 'Implementing code changes...' },
-  { pattern: /coder\s+agent/i, phase: 'coding', message: 'Implementing code changes...' },
-
-  // Planning
-  { pattern: /creating\s+implementation\s+plan/i, phase: 'planning', message: 'Creating implementation plan...' },
-  { pattern: /planner\s+agent/i, phase: 'planning', message: 'Creating implementation plan...' },
-  { pattern: /breaking.*into\s+subtasks/i, phase: 'planning', message: 'Breaking down into subtasks...' },
-];
-
-// =============================================================================
 // ProgressTracker Class
 // =============================================================================
 
@@ -145,7 +110,6 @@ const TEXT_PHASE_PATTERNS: ReadonlyArray<{
  *
  * Consumes StreamEvent objects and detects phase changes from:
  * - Tool calls (highest priority — deterministic signals)
- * - Text patterns (fallback — heuristic matching)
  *
  * Enforces phase ordering to prevent regression.
  */
@@ -277,7 +241,7 @@ export class ProgressTracker {
   }
 
   /**
-   * Detect phase from text output (fallback).
+   * Follow the subtask an agent names while coding. Text never changes the phase.
    * Only applies when not in a terminal phase.
    */
   private processTextDelta(text: string): PhaseDetection | null {
@@ -291,11 +255,8 @@ export class ProgressTracker {
       return null;
     }
 
-    for (const { pattern, phase, message } of TEXT_PHASE_PATTERNS) {
-      if (pattern.test(text)) {
-        return this.tryTransition(phase, message, 'text-pattern');
-      }
-    }
+    // An agent's words never change the phase: a report that mentions "acceptance criteria"
+    // once sent a task with no code to AI Review. The orchestrator says when phases change.
 
     // Detect subtask references in text when coding
     if (this._currentPhase === 'coding') {
