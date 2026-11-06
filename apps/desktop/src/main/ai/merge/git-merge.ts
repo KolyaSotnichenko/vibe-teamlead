@@ -72,17 +72,19 @@ const REGULAR_FILE = new Set(['100644', '100755']);
 /** Not text the resolver can read: a null byte, or bytes that aren't valid UTF-8. Pure. */
 const isBinary = (content: string) => content.includes('\0') || content.includes('\uFFFD');
 
-const hasOuterFence = (versions: MergeConflictVersions) => versions.ours.startsWith('```') || versions.theirs.startsWith('```');
+const startsWithBacktick = (versions: MergeConflictVersions) => versions.ours.startsWith('`') || versions.theirs.startsWith('`');
 
 /**
- * The file out of a code fence around the whole answer, which models add despite
- * being told not to. A fence inside it leaves the answer as it is: what is the file
- * and what is a talk about it can't be told apart. Pure.
+ * The file out of a code fence or single backticks around the whole answer, which
+ * models add despite being told not to. A fence inside it leaves the answer as it is:
+ * what is the file and what is a talk about it can't be told apart. Backticks inside
+ * single ones are the file's own (template strings). Pure.
  */
 function withoutOuterFence(content: string, versions: MergeConflictVersions): string {
-  if (hasOuterFence(versions)) return content;
+  if (startsWithBacktick(versions)) return content;
   const inner = /^```[^\n]*\n([\s\S]*\n)?```\s*$/.exec(content);
-  return inner && !/^```/m.test(inner[1] ?? '') ? (inner[1] ?? '') : content;
+  if (inner) return /^```/m.test(inner[1] ?? '') ? content : (inner[1] ?? '');
+  return /^`(?!``)([\s\S]*)`\s*$/.exec(content)?.[1] ?? content;
 }
 
 /** Why a resolver's answer can't be the merged file, if so. Pure. */
@@ -90,7 +92,7 @@ function whyUnusable(content: string | undefined, versions: MergeConflictVersion
   if (!content) return 'the model returned nothing';
   if (isBinary(content)) return 'the answer is not plain text';
   if (/^(<{7}|>{7}) /m.test(content)) return 'the answer still has conflict markers';
-  if (content.startsWith('```') && !hasOuterFence(versions)) return 'the answer has code fences besides the file';
+  if (content.startsWith('```') && !startsWithBacktick(versions)) return 'the answer has code fences besides the file';
   return undefined;
 }
 

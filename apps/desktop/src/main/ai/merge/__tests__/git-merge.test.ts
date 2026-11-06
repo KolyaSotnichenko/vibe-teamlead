@@ -386,9 +386,16 @@ describe('mergeTaskBranch', () => {
       ['fence with a language', '```ts\nboth\nsides\n```'],
       ['bare fence', '```\nboth\nsides\n```'],
       ['fence and a trailing line break', '```\nboth\nsides\n```\n'],
+      ['single backticks, as in a real merge', '`both\nsides\n`'],
+      ['single backticks and a trailing line break', '`both\nsides\n`\n'],
     ])('takes the file out of a code fence around the whole answer: %s', async (_name, resolved) => {
       await expect(merge({ resolveConflict: async () => resolved })).resolves.toMatchObject({ status: 'needs_review' });
       expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('both\nsides\n');
+    });
+
+    it('keeps backticks inside the file when it takes it out of single ones', async () => {
+      await merge({ resolveConflict: async () => '`const a = `x`;\n`' });
+      expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('const a = `x`;\n');
     });
 
     it.each<[string, () => Promise<string | undefined>, RegExp]>([
