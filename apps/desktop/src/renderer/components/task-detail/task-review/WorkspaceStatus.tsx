@@ -42,6 +42,8 @@ interface WorkspaceStatusProps {
   isMerging: boolean;
   isDiscarding: boolean;
   isCreatingPR?: boolean;
+  /** An agent's merge waits for the user above: the only way to merge is there */
+  mergeReviewOpen?: boolean;
   onShowDiffDialog: (show: boolean) => void;
   onShowDiscardDialog: (show: boolean) => void;
   onShowConflictDialog: (show: boolean) => void;
@@ -101,6 +103,7 @@ export function WorkspaceStatus({
   isMerging,
   isDiscarding,
   isCreatingPR,
+  mergeReviewOpen = false,
   onShowDiffDialog,
   onShowDiscardDialog,
   onShowConflictDialog,
@@ -439,7 +442,7 @@ export function WorkspaceStatus({
         )}
 
         {/* Merge Status */}
-        {mergePreview && !isAlreadyMerged && !isSuperseded && (
+        {!mergeReviewOpen && mergePreview && !isAlreadyMerged && !isSuperseded && (
           <div className={cn(
             "flex items-center justify-between p-2.5 rounded-lg border",
             hasGitConflicts || isBranchBehind || hasPathMappedMerges
@@ -550,7 +553,7 @@ export function WorkspaceStatus({
       )}
 
       {/* Actions Footer */}
-      <div className="px-4 py-3 bg-muted/20 border-t border-border space-y-3">
+      {!mergeReviewOpen && <div className="px-4 py-3 bg-muted/20 border-t border-border space-y-3">
         {/* Stage Only Option - only show after conflicts have been checked (not for already_merged/superseded) */}
         {mergePreview && !isAlreadyMerged && !isSuperseded && (
           <label className="inline-flex items-center gap-2.5 text-sm cursor-pointer select-none px-3 py-2 rounded-lg border border-border bg-background/50 hover:bg-background/80 transition-colors">
@@ -743,7 +746,7 @@ export function WorkspaceStatus({
             </Button>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

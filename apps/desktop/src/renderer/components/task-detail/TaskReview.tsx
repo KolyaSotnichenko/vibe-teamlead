@@ -13,6 +13,7 @@ import {
 } from './task-review';
 import { QaOutcomePanel } from './task-review/QaOutcomePanel';
 import { MergeReviewPanel } from './task-review/MergeReviewPanel';
+import { useMergeState } from './useMergeState';
 import { isIncompleteHumanReview } from '../../stores/task-store';
 
 interface TaskReviewProps {
@@ -111,6 +112,7 @@ export function TaskReview({
 }: TaskReviewProps) {
   // Nothing built yet: the only way forward is the Resume the task window offers
   const nothingBuilt = isIncompleteHumanReview(task);
+  const mergeReviewOpen = useMergeState(task)?.state === 'review';
   return (
     <div className="space-y-4">
       {/* Section divider */}
@@ -145,6 +147,7 @@ export function TaskReview({
         /* Worktree exists but not yet staged - show staging UI */
         <WorkspaceStatus
           taskId={task.id}
+          mergeReviewOpen={mergeReviewOpen}
           worktreeStatus={worktreeStatus}
           workspaceError={workspaceError}
           stageOnly={stageOnly}

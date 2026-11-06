@@ -4,6 +4,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## Unreleased
 
+- While an agent's merge waits for review, the task shows one way to merge: the second Merge button and Ready to merge are hidden.
 - Correcting a model's first price the same day replaces it, instead of leaving the mistake on all earlier sessions.
 - Prices are entered as input, cache read, output, and a price that looks swapped gets a warning.
 
