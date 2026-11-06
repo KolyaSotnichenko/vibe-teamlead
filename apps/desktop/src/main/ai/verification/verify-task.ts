@@ -137,8 +137,19 @@ export async function withVerifyLock<T>(dir: string, work: () => Promise<T>, opt
 }
 
 const TEST_FILE = /(^|\/)(__tests__|tests?|Tests|specs?)\/|\.(test|spec)\.[^/]+$|(^|\/)test_[^/]+\.py$|_(test|spec)\.(go|py|rb)$|[^/]*(Test|Tests|Spec)\.(java|kt|kts|cs|fs|php|swift|groovy|scala)$/;
-const DISABLED = /(?<![.\w])(?:it|test|describe|context|suite)\.(?:skip|only|todo|skipIf)\b|(?<![.\w])(?:xit|xdescribe|xtest|xcontext|fit|fdescribe)[\s(]|@pytest\.mark\.(?:skip|xfail)|pytest\.skip\(|@unittest\.skip|\bt\.Skip(?:Now|f)?\(|#\[ignore|@Disabled\b|@Ignore\b|\[Ignore\b|\[(?:Fact|Theory)\(Skip|markTestSkipped|markTestIncomplete|XCTSkip|@pending\b/;
+/** Narrows the whole run, wherever it is */
+const NARROWED = /(?<![.\w])(?:it|test|describe|context|suite)\.only\b|(?<![.\w])(?:fit|fdescribe)[\s(]/;
+/** Switches off a test that was running. A condition on a resource isn't that: `describe.skipIf(!DB)` runs when the resource is there. */
+const DISABLED = /(?<![.\w])(?:it|test|describe|context|suite)\.(?:skip|only|todo)\b|\.skipIf\(\s*true\s*\)|(?<![.\w])(?:xit|xdescribe|xtest|xcontext|fit|fdescribe)[\s(]|@pytest\.mark\.(?:skip|xfail)|pytest\.skip\(|@unittest\.skip|\bt\.Skip(?:Now|f)?\(|#\[ignore|@Disabled\b|@Ignore\b|\[Ignore\b|\[(?:Fact|Theory)\(Skip|markTestSkipped|markTestIncomplete|XCTSkip|@pending\b/;
+/** `DB ? describe : describe.skip`: chosen at run time, as with skipIf */
+const CONDITIONAL_SKIP = /\?\s*[\w.]+\s*:\s*(?:it|test|describe|context|suite)\.skip\b/;
 const GUARDED_SCRIPTS = ['test', 'typecheck'];
+
+/** A line without its comment: words in a comment switch nothing off. `#[` is Rust code, not a comment. Pure. */
+function codeOf(line: string): string {
+  if (/^\s*(\/\/|\/\*|\*|--|#(?!\[))/.test(line)) return '';
+  return line.replace(/\s\/\/.*$/, '');
+}
 const RUNNER_CONFIG = /(^|\/)(\.npmrc|\.yarnrc(\.yml)?|\.pnpmfile\.cjs|\.mocharc[^/]*|\.rspec|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Makefile|Rakefile|phpunit\.xml(\.dist)?|pom\.xml|mvnw|gradlew|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|Directory\.Build\.props|Cargo\.toml|go\.mod|Package\.swift|(vitest|vite|jest|playwright|karma)\.config\.[^/]+)$/;
 
 function scriptsOf(text: string): Record<string, unknown> {
@@ -167,13 +178,17 @@ async function findTamper(run: GitRun, base: string, head: string): Promise<Tamp
     }
   }
 
+  // A new file takes nothing away: holding back its own new test is for the reviewer, against the
+  // criteria. Only narrowing the run counts there.
+  const added = new Set(await list(['--diff-filter=A', '-M', '--name-only', '-z']));
   // File by file: in one patch, an added line can read as the header of another file
   for (const file of (await list(['--diff-filter=AMR', '-M', '--name-only', '-z'])).filter((name) => TEST_FILE.test(name))) {
     const patch = (await run(['-c', 'core.quotepath=off', 'diff', '-U0', '--no-color', '--no-ext-diff', '--no-textconv', '--text', base, head, '--', file])).raw;
     const lines = patch.split('\n');
-    const added = lines.slice(lines.findIndex((line) => line.startsWith('@@'))).filter((line) => line.startsWith('+'));
-    const switchedOff = added.find((line) => DISABLED.test(line));
-    if (switchedOff) findings.push({ kind: 'disabled_test', file, detail: `The task switched a test off or narrowed the run: ${switchedOff.slice(1).trim().slice(0, 120)}` });
+    const addedLines = lines.slice(lines.findIndex((line) => line.startsWith('@@'))).filter((line) => line.startsWith('+')).map((line) => codeOf(line.slice(1)));
+    const pattern = added.has(file) ? NARROWED : DISABLED;
+    const switchedOff = addedLines.find((line) => pattern.test(line) && !CONDITIONAL_SKIP.test(line));
+    if (switchedOff) findings.push({ kind: 'disabled_test', file, detail: `The task switched a test off or narrowed the run: ${switchedOff.trim().slice(0, 120)}` });
   }
 
   for (const file of await list(['--diff-filter=M', '--name-only', '-z'], ['package.json', '*/package.json', 'composer.json'])) {

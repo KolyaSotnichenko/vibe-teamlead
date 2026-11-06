@@ -2,8 +2,9 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 2.0.0-beta.4 - 2026-11-06
 
+- The check for tampered tests no longer stops tasks by mistake. A test that runs only when a database is there, a word in a comment and a new test file's own pending test don't count as switching a test off.
 - A task no longer jumps to AI Review because an agent mentioned acceptance criteria or QA in its text.
 
 ## 2.0.0-beta.3 - 2026-11-06

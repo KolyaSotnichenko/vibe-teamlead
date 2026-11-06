@@ -403,11 +403,45 @@ describe('verifyTask', () => {
       ['PHP', 'tests/ATest.php', '$this->markTestSkipped();\n'],
       ['Swift', 'Tests/ATests.swift', 'throw XCTSkip("no")\n'],
     ])('switched off in %s too', async (_stack, file, content) => {
-      const found = await findings(() => {
-        mkdirSync(join(wt, file, '..'), { recursive: true });
-        writeFileSync(join(wt, file), content);
-      });
+      mkdirSync(join(wt, file, '..'), { recursive: true });
+      writeFileSync(join(wt, file), 'first version\n');
+      commit(wt, 'the test exists');
+      git(repo, 'merge', '-q', '--ff-only', 'vibe-teamlead/t');
+      const found = await findings(() => writeFileSync(join(wt, file), content));
       expect(found).toMatchObject([{ kind: 'disabled_test', file }]);
+    });
+
+    describe('what is not tampering', () => {
+      // Real lines from two tasks this check stopped by mistake
+      it.each([
+        ['a condition on a resource', "describe.skipIf(!DB)('guard chain', () => {});"],
+        ['a skip chosen by a condition', 'const describeIfDb = DB ? describe : describe.skip;'],
+        ['a comment', '// DB-gated with describe.skipIf(!DB); TRUNCATE CASCADE reset in afterAll'],
+        ['a comment after code', "it('x', () => {}); // not it.skip('x')"],
+        ['a block comment line', ' * Do not use it.skip here.'],
+      ])('%s, in an existing test file', async (_name, line) => {
+        await expect(findings(() => writeFileSync(join(wt, 'src', 'a.test.ts'), `${line}\n`))).resolves.toEqual([]);
+      });
+
+      it.each([
+        ["it.skip('later', () => {});"],
+        ["describe.skipIf(!DB)('x', () => {});"],
+        ["test.todo('later');"],
+      ])('a new test file holding back its own new test: %s', async (line) => {
+        await expect(findings(() => writeFileSync(join(wt, 'src', 'new.test.ts'), `${line}\n`))).resolves.toEqual([]);
+      });
+    });
+
+    describe('what still is', () => {
+      it('a condition that is always true', async () => {
+        const found = await findings(() => writeFileSync(join(wt, 'src', 'a.test.ts'), "describe.skipIf(true)('x', () => {});\n"));
+        expect(found).toMatchObject([{ kind: 'disabled_test' }]);
+      });
+
+      it('.only in a new file: it narrows the whole run', async () => {
+        const found = await findings(() => writeFileSync(join(wt, 'src', 'new.test.ts'), "it.only('x', () => {});\n"));
+        expect(found).toMatchObject([{ kind: 'disabled_test', file: 'src/new.test.ts' }]);
+      });
     });
 
     it('the word in a file that is not a test is not tampering', async () => {
