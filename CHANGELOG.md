@@ -5,6 +5,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 ## 2.0.0-beta.3 - 2026-11-06
 
 - The app's checks work with nothing to set up. A database named in the project's compose file is started empty for each run, migrations are applied, settings come from `.env.example`, and it is removed afterwards.
+- Migrations only ever run on that temporary database, never on one an example file points at.
 - A check that fails on the base too gets a second try there, so a flaky test can't hide what a task broke.
 - On a pre-release, the Beta Updates switch shows on and locked, and saving settings no longer moves the app off its update channel.
 - The Auto-Update Projects switch is gone: nothing read it.

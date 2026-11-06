@@ -12,7 +12,7 @@ export interface Check {
 export interface DetectedChecks {
   /** Run in order before any check */
   install: string[];
-  /** Run after the install, against the temporary database: migrations */
+  /** Migrations: run after the install, and only against a temporary database the app started */
   prepare?: string[];
   checks: Check[];
 }
@@ -149,17 +149,30 @@ const STANDARD_NAMES: Record<ServiceImage['kind'], string[]> = {
   redis: ['REDIS_URL'],
   mongo: ['MONGODB_URI', 'MONGO_URL'],
 };
-const ADDRESS_KINDS: [RegExp, ServiceImage['kind']][] = [
-  [/^postgres(ql)?:\/\//i, 'postgres'],
-  [/^(mysql|mariadb):\/\//i, 'mysql'],
-  [/^rediss?:\/\//i, 'redis'],
-  [/^mongodb(\+srv)?:\/\//i, 'mongo'],
-];
+const SCHEME_KINDS: Record<string, ServiceImage['kind']> = {
+  postgres: 'postgres', postgresql: 'postgres',
+  mysql: 'mysql', mariadb: 'mysql',
+  redis: 'redis', rediss: 'redis',
+  mongodb: 'mongo',
+};
+/** Settings that say where a database is, without being an address */
+const CONNECTION_SETTING = /^(DB|DATABASE|PG|POSTGRES|POSTGRESQL|MYSQL|MARIADB|MONGO|MONGODB|REDIS)_?(HOST|HOSTNAME|PORT|USER|USERNAME|PASS|PASSWORD|NAME|DATABASE|DB|URL|URI|SOCKET)$/i;
+
+/** host, port, user, password and name, for tools that read them apart */
+function splitConnection(url: string): [string, string][] {
+  const { hostname, port, username, password, pathname } = new URL(url);
+  const name = pathname.slice(1);
+  return [
+    ['DB_HOST', hostname], ['DB_PORT', port],
+    ['DB_USER', username], ['DB_USERNAME', username], ['DB_PASSWORD', password],
+    ['DB_NAME', name], ['DB_DATABASE', name],
+  ];
+}
 
 /**
  * The variables the checks get: the project's example file, with database addresses
- * pointing at what was started. One for a service that wasn't started stays out: it
- * would point at nothing, or at something real. Pure.
+ * pointing at what was started. Anything else that says where a database or a broker
+ * is stays out: it would point at nothing, or at something real. Pure.
  */
 export function serviceEnv(example: string, started: StartedService[]): Record<string, string> {
   const urlOf = (kind: ServiceImage['kind']) => started.find((service) => service.kind === kind)?.url;
@@ -167,11 +180,17 @@ export function serviceEnv(example: string, started: StartedService[]): Record<s
   for (const line of example.split('\n')) {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
     if (!match) continue;
-    const value = match[2].trim().replace(/^(["'])(.*)\1$/, '$2');
-    const kind = ADDRESS_KINDS.find(([pattern]) => pattern.test(value))?.[1];
-    if (!kind) entries.push([match[1], value]);
-    else if (urlOf(kind)) entries.push([match[1], urlOf(kind) as string]);
+    const value = match[2].replace(/\s+#.*$/, '').trim().replace(/^(["'])(.*)\1$/, '$2');
+    const scheme = /^(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(value)?.[1]?.toLowerCase();
+    if (scheme && scheme !== 'http' && scheme !== 'https') {
+      const url = SCHEME_KINDS[scheme] ? urlOf(SCHEME_KINDS[scheme]) : undefined;
+      if (url) entries.push([match[1], url]);
+    } else if (!CONNECTION_SETTING.test(match[1])) {
+      entries.push([match[1], value]);
+    }
   }
   for (const service of started) for (const name of STANDARD_NAMES[service.kind]) entries.push([name, service.url]);
+  const database = started.find((service) => service.kind === 'postgres' || service.kind === 'mysql' || service.kind === 'mongo');
+  if (database) entries.push(...splitConnection(database.url));
   return Object.fromEntries(entries);
 }

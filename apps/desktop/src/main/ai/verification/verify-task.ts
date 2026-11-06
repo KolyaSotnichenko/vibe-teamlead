@@ -55,6 +55,8 @@ export interface VerificationReport {
   runnerConfigChanged: string[];
   /** The temporary databases the checks ran against, or why there were none */
   services?: { status: 'started' | 'unavailable'; images: string[]; reason?: string };
+  /** The project has migrations and they weren't run: no temporary database to run them on */
+  migrationsSkipped?: boolean;
 }
 
 export interface VerifyTaskOptions {
@@ -233,6 +235,9 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   /** Set for each copy: every copy gets its own database */
   let env: NodeJS.ProcessEnv = {};
   let secrets: string[] = [];
+  /** Only ever true while this copy's own temporary database is up: migrations can destroy data */
+  let migratable = false;
+  let migrationsSkipped = false;
   /** The tail reaches agents and saved reports: the project's own values stay out of it */
   const redact = (line: string) => secrets.reduce((text, value) => (value.length >= 4 ? text.split(value).join('***') : text), line);
   const shell = async (command: string, cwd: string, timeoutMs: number): Promise<Omit<CheckResult, keyof Check>> => {
@@ -262,8 +267,11 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         }
         const variables = { ...serviceEnv(base.example, started.started), ...options.env };
         env = verificationEnv(hostEnv, variables);
+        // Set by the project's settings, an address may be anything, so migrations stay away from it
+        const ownDatabase = Object.keys(options.env).some((name) => /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i.test(name));
+        migratable = !ownDatabase && started.started.some((service) => service.kind !== 'redis');
         // Example values aren't secrets, the project's own values and the database addresses are
-        secrets = [...Object.values(options.env), ...started.started.map((service) => service.url)];
+        secrets = [...Object.values(options.env), ...started.started.flatMap((service) => [service.url, new URL(service.url).password])];
         return await work(cwd);
       } finally {
         await started.stop();
@@ -281,8 +289,10 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       const result = await shell(command, cwd, installTimeout);
       if (result.outcome !== 'passed') return { name: 'install', command, ...result };
     }
-    // A database that isn't there can't be migrated: that says nothing about the task
-    if (services?.status === 'unavailable') return undefined;
+    if (!migratable) {
+      if (detected.prepare?.length) migrationsSkipped = true;
+      return undefined;
+    }
     for (const command of detected.prepare ?? []) {
       onLog?.(`Checks: ${command}`);
       const result = await shell(command, cwd, installTimeout);
@@ -342,7 +352,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
 
   const broke = failed.some((result) => result.onBase === 'passed');
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
-  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}) };
+  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}) };
 }
 
 const OUTCOME_WORDS: Record<CheckOutcome, string> = { passed: 'passed', failed: 'FAILED', timed_out: 'ran out of time', unavailable: 'its tool is not installed' };
@@ -355,6 +365,7 @@ export function describeVerification(report: VerificationReport): string {
     const base = check.onBase === undefined ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (the same on the base: says nothing about this task)';
     return `- ${check.command}: ${OUTCOME_WORDS[check.outcome]}${check.exitCode === undefined ? '' : ` (exit ${check.exitCode})`}${check.flaky ? ' (failed once, then passed: flaky)' : ''}${base}`;
   });
+  if (report.migrationsSkipped) runner.push('The migrations were not run: there was no temporary database to run them on, and they could change a real one.');
   const databases = report.services?.status === 'started'
     ? [`Against a temporary, empty database: ${report.services.images.join(', ')}`]
     : report.services?.reason ? [report.services.reason] : [];

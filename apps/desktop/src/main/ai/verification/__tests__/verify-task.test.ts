@@ -235,6 +235,56 @@ describe('verifyTask', () => {
     });
   });
 
+  describe('migrations can only ever touch the temporary database', () => {
+    const composeWith = (image: string) => {
+      writeFileSync(join(repo, 'docker-compose.yml'), `services:\n  db:\n    image: ${image}\n`);
+      commit(repo, 'compose');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+    };
+    const docker: DockerRun = async (args) => {
+      if (args[0] === 'run') return { ok: true, stdout: 'c1\n' };
+      if (args[0] === 'port') return { ok: true, stdout: '127.0.0.1:50000\n' };
+      return { ok: true, stdout: '' };
+    };
+    const ran = () => join(repo, 'migration-ran');
+    const check = (over: Partial<VerifyTaskOptions> = {}) => verify({ commands: ['true'], detected: { install: [], prepare: [`touch "${ran()}"`], checks: [] }, ...over });
+
+    it('run nowhere without a database it started: an example file can point at a real one', async () => {
+      await check();
+      expect(existsSync(ran())).toBe(false);
+    });
+
+    it('run nowhere with only a cache started', async () => {
+      composeWith('redis:7');
+      await check({ docker });
+      expect(existsSync(ran())).toBe(false);
+    });
+
+    it('run nowhere when Docker is missing', async () => {
+      composeWith('postgres:18');
+      await check({ docker: async () => ({ ok: false, stdout: '' }) });
+      expect(existsSync(ran())).toBe(false);
+    });
+
+    it("run nowhere when the project's settings name its own database", async () => {
+      composeWith('postgres:18');
+      await check({ docker, env: { DATABASE_URL: 'postgres://mine' } });
+      expect(existsSync(ran())).toBe(false);
+    });
+
+    it('run when the temporary database is up', async () => {
+      composeWith('postgres:18');
+      await check({ docker });
+      expect(existsSync(ran())).toBe(true);
+    });
+
+    it('say that they were skipped', async () => {
+      const report = await check();
+      expect(report.migrationsSkipped).toBe(true);
+      expect(describeVerification(report)).toMatch(/migrations/i);
+    });
+  });
+
   it('says plainly when there is nothing to run', async () => {
     const report = await verify({ commands: undefined });
     expect(report.status).toBe('not_configured');

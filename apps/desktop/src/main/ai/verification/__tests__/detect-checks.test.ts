@@ -167,6 +167,34 @@ describe('serviceEnv', () => {
     });
   });
 
+  it('splits the address for tools that read host, port and name separately, over what the example says', () => {
+    expect(serviceEnv('DB_HOST=prod.example.com\nDB_PASSWORD=real\n', started)).toMatchObject({
+      DB_HOST: '127.0.0.1', DB_PORT: '50000', DB_USERNAME: 'verify', DB_USER: 'verify', DB_PASSWORD: 'pw', DB_DATABASE: 'verify', DB_NAME: 'verify',
+    });
+  });
+
+  it('leaves out connection settings with no database started: they could reach a real one', () => {
+    expect(serviceEnv('DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_PASSWORD=x\nPGHOST=localhost\nMYSQL_HOST=db\nAPP_NAME=keep\n', [])).toEqual({ APP_NAME: 'keep' });
+  });
+
+  it.each([
+    ['jdbc:postgresql://prod/x'],
+    ['postgres+asyncpg://prod/x'],
+    ['amqp://prod'],
+    ['clickhouse://prod'],
+    ['postgres://prod/x # the main one'],
+  ])('keeps out an address in another form: %s', (value) => {
+    expect(serviceEnv(`CONN=${value}\n`, [])).toEqual({});
+  });
+
+  it('a database address in another form gets the temporary one', () => {
+    expect(serviceEnv('CONN=postgres+asyncpg://prod/x\n', started).CONN).toBe(started[0].url);
+  });
+
+  it('keeps web addresses: they are settings, not databases', () => {
+    expect(serviceEnv('API=http://localhost:3001\nSITE=https://example.com\n', [])).toEqual({ API: 'http://localhost:3001', SITE: 'https://example.com' });
+  });
+
   it('an example address for a service it did not start stays out: it would point at nothing, or at something real', () => {
     expect(serviceEnv('DATABASE_URL=postgres://localhost/x\n', [])).toEqual({});
   });
