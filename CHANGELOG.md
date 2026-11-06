@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.2 - 2026-11-06
+
+- The app is smaller: Claude Code and CodeGraph ship once instead of twice.
+
 ## 2.0.0-beta.1 - 2026-11-06
 
 ### Good to know
