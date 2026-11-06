@@ -2,7 +2,7 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 2.0.0-beta.8 - 2026-11-06
 
 - An update installs by itself: after the download the app restarts following a 10-second countdown you can stop, and waits while agents are running. It no longer opens Settings.
 - Agents can no longer run code inside the browser server, where it would skip the checks on commands and file writes. Clicks, forms and screenshots work as before.
