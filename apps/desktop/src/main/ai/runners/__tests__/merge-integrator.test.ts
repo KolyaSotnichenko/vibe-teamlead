@@ -5,6 +5,7 @@ vi.mock('../../claude-code/task', () => ({ EDIT_TOOLS: ['Read', 'Edit', 'Bash'],
 vi.mock('../../prompts/prompt-loader', () => ({ loadPrompt: (name: string) => `prompt:${name}` }));
 
 import { bashSecurityHook } from '../../security/bash-validator';
+import { AgentStillRunningError } from '../../merge/integrate-task';
 import { parseVerdict, runMergeIntegrator } from '../merge-integrator';
 
 describe('parseVerdict', () => {
@@ -65,8 +66,20 @@ describe('runMergeIntegrator', () => {
       signal = task.abortSignal;
       return new Promise(() => {});
     });
-    await expect(runMergeIntegrator({ ...options, timeoutMs: 5 })).rejects.toThrow(/stopped after/);
+    await expect(runMergeIntegrator({ ...options, timeoutMs: 5, stopGraceMs: 5 })).rejects.toBeInstanceOf(AgentStillRunningError);
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('waits for the session to really end before saying it stopped: a live agent could still commit', async () => {
+    let ended = false;
+    runClaudeTask.mockImplementation((task: { abortSignal: AbortSignal }) => new Promise((_, reject) => {
+      task.abortSignal.addEventListener('abort', () => setTimeout(() => {
+        ended = true;
+        reject(new Error('Claude task failed (cancelled)'));
+      }, 20));
+    }));
+    await expect(runMergeIntegrator({ ...options, timeoutMs: 5, stopGraceMs: 1000 })).rejects.toThrow(/stopped after/);
+    expect(ended).toBe(true);
   });
 
   it("passes on the call's error: the user has to see why", async () => {

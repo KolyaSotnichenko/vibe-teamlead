@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mergeTaskBranch } from '../git-merge';
 import { inMergeQueue } from '../merge-queue';
 import {
+  AgentStillRunningError,
   cancelIntegrationReview,
   getIntegrationReview,
   getIntegrationReviewDiff,
@@ -194,6 +195,21 @@ describe('integrateTask', () => {
         await expect(integrate(async () => { throw new Error('API Error: 429 busy'); }))
           .resolves.toEqual({ status: 'failed', message: 'API Error: 429 busy' });
         putBack(before);
+      });
+
+      it('leaves the folder alone while the agent may still be running, then undoes all it did at the next try', async () => {
+        const before = tip();
+        const result = await integrate(async () => { throw new AgentStillRunningError('The agent did not stop.'); });
+        expect(result).toEqual({ status: 'failed', message: 'The agent did not stop.' });
+        expect(existsSync(join(repo, '.git', 'worktrees', '001-task', 'MERGE_HEAD'))).toBe(true);
+
+        // It finishes late: its commit must not reach the project unread
+        writeFileSync(join(wt, 'shared.txt'), 'written late\n');
+        commitAll(wt, 'late commit');
+
+        await expect(integrate(resolving)).resolves.toMatchObject({ status: 'needs_review' });
+        expect(has(before, tip())).toBe(true);
+        expect(git(wt, 'log', '--format=%s')).not.toContain('late commit');
       });
 
       it("doesn't take the agent's word when conflict markers are still in the file", async () => {

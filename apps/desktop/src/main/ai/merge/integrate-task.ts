@@ -24,6 +24,9 @@ export interface IntegrationAgentAnswer {
   summary: string;
 }
 
+/** The agent was told to stop and hasn't: what it does in the folder from now on can't be trusted or undone yet. */
+export class AgentStillRunningError extends Error {}
+
 export interface IntegrateTaskOptions {
   worktreePath: string;
   baseBranch: string;
@@ -128,6 +131,8 @@ export async function integrateTask(options: IntegrateTaskOptions): Promise<Inte
   try {
     answer = await runAgent({ baseBranch, conflictFiles });
   } catch (error) {
+    // The mark stays 'running', so the next try goes back to before the merge, whatever the agent added by then
+    if (error instanceof AgentStillRunningError) return { status: 'failed', message: error.message };
     return fail(error instanceof Error ? error.message : String(error));
   }
   if (!answer.ok) return fail(answer.summary);

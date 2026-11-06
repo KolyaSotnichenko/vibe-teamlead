@@ -6,13 +6,14 @@
 
 import { EDIT_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ThinkingLevel } from '../config/types';
-import type { IntegrationAgentAnswer, IntegrationAgentRequest } from '../merge/integrate-task';
+import { AgentStillRunningError, type IntegrationAgentAnswer, type IntegrationAgentRequest } from '../merge/integrate-task';
 import { loadPrompt } from '../prompts/prompt-loader';
 import type { StreamEvent } from '../session/types';
 
 const MAX_TURNS = 80;
 /** A stuck agent would hold up every task behind it in the queue */
 const TIMEOUT_MS = 30 * 60_000;
+const STOP_GRACE_MS = 30_000;
 const VERDICT = /^\s*\**VERDICT:\s*(OK|FAILED)\b\s*[-–—:]?\s*(.*?)\**\s*$/gm;
 
 /** The agent's last verdict line. Without one it didn't finish, whatever else it said. Pure. */
@@ -30,17 +31,17 @@ export interface MergeIntegratorOptions extends IntegrationAgentRequest {
   thinkingLevel: ThinkingLevel;
   onEvent?: (event: StreamEvent) => void;
   timeoutMs?: number;
+  stopGraceMs?: number;
 }
 
 export async function runMergeIntegrator(options: MergeIntegratorOptions): Promise<IntegrationAgentAnswer> {
-  const { worktreePath, baseBranch, conflictFiles, taskTitle, model, thinkingLevel, onEvent, timeoutMs = TIMEOUT_MS } = options;
+  const { worktreePath, baseBranch, conflictFiles, taskTitle, model, thinkingLevel, onEvent, timeoutMs = TIMEOUT_MS, stopGraceMs = STOP_GRACE_MS } = options;
   const conflicts = conflictFiles.length
     ? `Git could not merge these files, and they are in conflict now:\n${conflictFiles.map((file) => `- ${JSON.stringify(file)}`).join('\n')}`
     : 'Git merged everything without a conflict. Only check the result, and fix what it broke.';
   const abortSignal = AbortSignal.timeout(timeoutMs);
-  // The stop is a request: the wait ends here whether or not the session listens
-  const stopped = new Promise<never>((_, reject) => {
-    abortSignal.addEventListener('abort', () => reject(new Error(`The agent was stopped after ${Math.round(timeoutMs / 60_000)} minutes without finishing.`)), { once: true });
+  const timedOut = new Promise<'timed_out'>((resolve) => {
+    abortSignal.addEventListener('abort', () => resolve('timed_out'), { once: true });
   });
   const session = runClaudeTask({
     agentType: 'merge_resolver',
@@ -55,6 +56,15 @@ export async function runMergeIntegrator(options: MergeIntegratorOptions): Promi
     abortSignal,
     onEvent,
   });
-  const { text } = await Promise.race([session, stopped]);
-  return parseVerdict(text);
+  const first = await Promise.race([session, timedOut]);
+  if (first !== 'timed_out') return parseVerdict(first.text);
+
+  // The stop is only a request: until the session has ended, it can still commit in the folder
+  const ended = await Promise.race([
+    session.then(() => true, () => true),
+    new Promise<false>((resolve) => { setTimeout(() => resolve(false), stopGraceMs).unref?.(); }),
+  ]);
+  const minutes = Math.round(timeoutMs / 60_000);
+  if (!ended) throw new AgentStillRunningError(`The agent ran for ${minutes} minutes and did not stop when told to. The next merge starts over and undoes what it did.`);
+  throw new Error(`The agent was stopped after ${minutes} minutes without finishing.`);
 }
