@@ -2,7 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 2.0.0-beta.1 - 2026-11-06
+
+### Good to know
+- Pre-release for macOS on Apple Silicon. It is not notarized: on first launch, macOS may ask you to allow it under System Settings > Privacy & Security.
 
 ### Merging
 - Tasks of a project merge one at a time, however many are asked to merge at once.
@@ -20,7 +23,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 - Merging commits uncommitted work only if QA approved it.
 
 ### Cost
-- The usage popover shows dollars through a gateway, per model, task and kind of token, at the prices you enter.
+- The usage popover shows dollars through a gateway, per model, task and kind of token, at the prices you enter. A new price counts from the day you enter it.
 - Coder sessions do one subtask and start from that subtask, its criteria and its code, not the whole plan.
 - QA starts from the acceptance criteria, stops after two review rounds and reviews what changed since the last one.
 - The planner checks for existing code before adding a subtask. The coder works in fewer turns and keeps full test output in a file.
