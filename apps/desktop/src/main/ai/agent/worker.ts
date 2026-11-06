@@ -308,6 +308,13 @@ function buildSecurityProfile(session: SerializableSessionConfig): SecurityProfi
 /**
  * Build a ToolContext for the given session config.
  */
+/** No base means nothing to compare with: better no verdict than one against the task itself. */
+async function requireBaseRef(projectDir: string): Promise<string> {
+  const ref = await resolveBaseRef(projectDir);
+  if (!ref) throw new Error('the branch this task started from was not found');
+  return ref;
+}
+
 function buildToolContext(session: SerializableSessionConfig, securityProfile: SecurityProfile): ToolContext {
   return {
     cwd: session.toolContext.cwd,
@@ -967,7 +974,7 @@ async function runQualityAssurance(
       ? async () => {
           const report = await verifyTask({
             worktreePath: session.projectDir,
-            baseRef: (await resolveBaseRef(session.projectDir)) ?? 'HEAD',
+            baseRef: await requireBaseRef(session.projectDir),
             commands: verification.commands,
             env: verification.env,
             lockDir: verification.lockDir,

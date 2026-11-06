@@ -10,7 +10,8 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import type { GatewayModelUsage, ModelPrice, ProjectUsageSummary, UsageBilling } from '../../../shared/types/usage';
+import type { GatewayModelUsage, GatewayPrices, ProjectUsageSummary, UsageBilling } from '../../../shared/types/usage';
+import { priceAt } from '../../../shared/utils/gateway-prices';
 
 export const USAGE_FILE = 'usage.jsonl';
 const APP_DIR = '.vibe-teamlead';
@@ -85,9 +86,14 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 
 
 const MILLION = 1_000_000;
 
-/** The prices of a model, if the user entered them. Own keys only: the name comes from the ledger, a file agents can reach. */
-function priceOf(prices: Record<string, ModelPrice>, model: string): ModelPrice | undefined {
-  return Object.hasOwn(prices, model) ? prices[model] : undefined;
+const CLAUDE_ALIASES = new Set(['opus', 'sonnet', 'haiku']);
+
+/** The models Settings send through a gateway, to price before they have run. None without a gateway. Pure. */
+export function configuredGatewayModels(settings: { anthropicBaseUrl?: unknown; customPhaseModels?: unknown; featureModels?: unknown; subagentModel?: unknown } | undefined): string[] {
+  if (typeof settings?.anthropicBaseUrl !== 'string' || !settings.anthropicBaseUrl.trim()) return [];
+  const values = [settings.subagentModel, ...Object.values(settings.customPhaseModels ?? {}), ...Object.values(settings.featureModels ?? {})];
+  const named = values.filter((value): value is string => typeof value === 'string' && !!value && !CLAUDE_ALIASES.has(value) && !value.startsWith('claude-'));
+  return [...new Set(named)];
 }
 
 /**
@@ -95,7 +101,7 @@ function priceOf(prices: Record<string, ModelPrice>, model: string): ModelPrice 
  * Through a gateway, the figure Claude Code reports is its own guess for a model
  * it doesn't know, so dollars there come only from the prices the user entered.
  */
-export function summarizeUsage(text: string, prices: Record<string, ModelPrice> = {}): ProjectUsageSummary {
+export function summarizeUsage(text: string, prices: GatewayPrices = {}, configuredModels: string[] = []): ProjectUsageSummary {
   const models = new Map<string, GatewayModelUsage>();
   const tasks = new Map<string, number>();
   const summary: ProjectUsageSummary = {
@@ -148,7 +154,7 @@ export function summarizeUsage(text: string, prices: Record<string, ModelPrice> 
       row.output += output;
       row.cacheRead += cacheRead;
       row.cacheWrite += cacheWrite;
-      const price = priceOf(prices, model);
+      const price = priceAt(prices, model, typeof e.at === 'string' ? e.at : undefined);
       if (price) {
         const kinds = {
           input: (input * num(price.input)) / MILLION,
@@ -173,17 +179,22 @@ export function summarizeUsage(text: string, prices: Record<string, ModelPrice> 
     summary.byAgent[agent] = (summary.byAgent[agent] ?? 0) + tokens;
     if (typeof e.at === 'string' && (!summary.since || e.at < summary.since)) summary.since = e.at;
   }
-  summary.gatewayModels = [...models.values()].sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1));
-  summary.gatewayModelsUnpriced = summary.gatewayModels.filter((row) => row.costUsd === undefined).map((row) => row.model);
+  const tokensOf = (row: GatewayModelUsage) => row.input + row.output + row.cacheRead + row.cacheWrite;
+  const ran = [...models.values()];
+  summary.gatewayModelsUnpriced = ran.filter((row) => row.costUsd === undefined).map((row) => row.model);
+  for (const model of configuredModels) {
+    if (!models.has(model)) models.set(model, { model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, ...(priceAt(prices, model, undefined) ? { costUsd: 0 } : {}) });
+  }
+  summary.gatewayModels = [...models.values()].sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1) || tokensOf(b) - tokensOf(a));
   summary.gatewayTasks = [...tasks].map(([specId, costUsd]) => ({ specId, costUsd })).sort((a, b) => b.costUsd - a.costUsd);
   return summary;
 }
 
 /** The project's usage so far. */
-export async function readProjectUsage(projectPath: string, prices: Record<string, ModelPrice> = {}): Promise<ProjectUsageSummary> {
+export async function readProjectUsage(projectPath: string, prices: GatewayPrices = {}, configuredModels: string[] = []): Promise<ProjectUsageSummary> {
   try {
-    return summarizeUsage(await readFile(path.join(projectPath, APP_DIR, USAGE_FILE), 'utf-8'), prices);
+    return summarizeUsage(await readFile(path.join(projectPath, APP_DIR, USAGE_FILE), 'utf-8'), prices, configuredModels);
   } catch {
-    return summarizeUsage('', prices);
+    return summarizeUsage('', prices, configuredModels);
   }
 }

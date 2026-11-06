@@ -1284,7 +1284,7 @@ describe('QALoop', () => {
 
     describe("the app's own run of the project's checks", () => {
       const report = (over: Record<string, unknown> = {}) => ({
-        status: 'passed', commit: 'c'.repeat(40), baseCommit: 'b'.repeat(40), tamper: [],
+        status: 'passed', commit: 'c'.repeat(40), baseCommit: 'b'.repeat(40), tamper: [], runnerConfigChanged: [],
         checks: [{ name: 'test', command: 'npm test', outcome: 'passed', exitCode: 0 }], ...over,
       });
       const broken = () => report({ status: 'regression', checks: [{ name: 'test', command: 'npm test', outcome: 'failed', exitCode: 1, tail: 'boom', onBase: 'passed' }] });

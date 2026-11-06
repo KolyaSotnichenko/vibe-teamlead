@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
+import { describeVerification, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
 
 describe('verifyTask', () => {
   let repo: string;
@@ -101,6 +101,37 @@ describe('verifyTask', () => {
     expect(report.status).toBe('not_verified');
     expect(report.checks[0].outcome).toBe('timed_out');
   });
+
+  describe("a task can't make a failure look like something else", () => {
+    it('exit 127 that the base does not give is the task breaking the check', async () => {
+      unlinkSync(join(wt, 'good.txt'));
+      commit(wt, 'broke');
+      const report = await verify({ commands: ['test -f good.txt || exit 127'] });
+      expect(report.status).toBe('regression');
+      expect(report.checks[0]).toMatchObject({ outcome: 'unavailable', onBase: 'passed' });
+    });
+
+    it('running out of time where the base does not is the task breaking the check', async () => {
+      unlinkSync(join(wt, 'good.txt'));
+      commit(wt, 'broke');
+      const report = await verify({ commands: ['test -f good.txt || sleep 30'], checkTimeoutMs: 400 });
+      expect(report.status).toBe('regression');
+      expect(report.checks[0]).toMatchObject({ outcome: 'timed_out', onBase: 'passed' });
+    });
+  });
+
+  it('keeps the project\'s secrets out of the output it passes on', async () => {
+    const report = await verify({ commands: ['echo "url is $DATABASE_URL"; exit 1'], env: { DATABASE_URL: 'postgres://u:hunter2@h/db' } });
+    expect(report.checks[0].tail).not.toContain('hunter2');
+    expect(report.checks[0].tail).toContain('url is');
+  });
+
+  it('survives a process that holds its output open after being killed', async () => {
+    const started = Date.now();
+    const report = await verify({ commands: ['(setsid sleep 60 2>/dev/null || sleep 60) & wait'], checkTimeoutMs: 50, killGraceMs: 50 });
+    expect(report.checks[0].outcome).toBe('timed_out');
+    expect(Date.now() - started).toBeLessThan(20_000);
+  }, 30_000);
 
   it('says plainly when there is nothing to run', async () => {
     const report = await verify({ commands: undefined });
@@ -215,6 +246,25 @@ describe('verifyTask', () => {
       await expect(findings(() => writeFileSync(join(wt, 'package.json'), JSON.stringify({ scripts: { test: 'vitest run', typecheck: 'tsc', dev: 'x' } })))).resolves.toEqual([]);
     });
 
+    it('a test moved out of where tests live counts as deleted', async () => {
+      const found = await findings(() => git(wt, 'mv', 'src/a.test.ts', 'src/a.ts'));
+      expect(found).toMatchObject([{ kind: 'deleted_test', file: 'src/a.test.ts' }]);
+    });
+
+    it("a line in a patch can't pose as a file header and hide what follows", async () => {
+      const found = await findings(() => writeFileSync(join(wt, 'src', 'a.test.ts'), `++ b/notes.md\nit.skip('works', () => {});\n`));
+      expect(found).toMatchObject([{ kind: 'disabled_test', file: 'src/a.test.ts' }]);
+    });
+
+    it('names a changed runner config, which can make checks pass without touching a test', async () => {
+      writeFileSync(join(wt, 'vitest.config.ts'), 'export default { test: { include: [] } };\n');
+      writeFileSync(join(wt, '.npmrc'), 'script-shell=/bin/true\n');
+      commit(wt, 'runner');
+      const report = await verify({ detected: { install: [], checks: [] } });
+      expect(report.runnerConfigChanged).toEqual(['.npmrc', 'vitest.config.ts']);
+      expect(describeVerification(report)).toContain('vitest.config.ts');
+    });
+
     it('blocks even when the checks pass: passing is what tampering is for', async () => {
       unlinkSync(join(wt, 'src', 'a.test.ts'));
       commit(wt, 'removed');
@@ -224,7 +274,7 @@ describe('verifyTask', () => {
 });
 
 describe('verificationIssues', () => {
-  const base = { commit: 'c'.repeat(40), baseCommit: 'b'.repeat(40), tamper: [] as TamperFinding[] };
+  const base = { commit: 'c'.repeat(40), baseCommit: 'b'.repeat(40), tamper: [] as TamperFinding[], runnerConfigChanged: [] };
   const failed = { name: 'test', command: 'npm test', outcome: 'failed' as const, exitCode: 1, tail: 'the reason' };
 
   it('blocks only what the task broke', () => {

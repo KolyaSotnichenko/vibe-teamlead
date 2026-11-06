@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { billingOf, projectRootFor, readProjectUsage, recordUsage, summarizeUsage, type UsageEntry } from '../usage-ledger';
+import { billingOf, configuredGatewayModels, projectRootFor, readProjectUsage, recordUsage, summarizeUsage, type UsageEntry } from '../usage-ledger';
 
 const project = () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'vtl-usage-'));
@@ -116,6 +116,42 @@ describe('summarizeUsage on a gateway, with the prices the user entered', () => 
     expect(summary.gatewayModels[0]).toMatchObject({ model: '__proto__' });
     expect(summary.gatewayModels[0].costUsd).toBeUndefined();
     expect(({} as Record<string, unknown>).input).toBeUndefined();
+  });
+
+  it('prices each session at what the model cost on its date', () => {
+    const summary = summarizeUsage(
+      [line({ at: '2026-11-10T00:00:00.000Z', specId: 'old', cacheRead: 0, output: 0 }), line({ at: '2026-12-10T00:00:00.000Z', specId: 'new', cacheRead: 0, output: 0 })].join('\n'),
+      { 'glm-5.3-flash': [{ from: '', input: 1, output: 1, cacheRead: 1 }, { from: '2026-12-01T00:00:00.000Z', input: 5, output: 5, cacheRead: 5 }] },
+    );
+    expect(summary.gatewayCostUsd).toBeCloseTo(6);
+    expect(summary.gatewayTasks).toEqual([{ specId: 'new', costUsd: 5 }, { specId: 'old', costUsd: 1 }]);
+  });
+
+  describe('the models set in Settings', () => {
+    it('are listed before they have run, so they can get a price', () => {
+      const summary = summarizeUsage(line({}), prices, ['new-model']);
+      expect(summary.gatewayModels.map((row) => row.model)).toEqual(['glm-5.3-flash', 'new-model']);
+      expect(summary.gatewayModels[1]).toMatchObject({ input: 0, output: 0, cacheRead: 0 });
+    });
+
+    it("don't count as missing from the total until they have tokens", () => {
+      expect(summarizeUsage(line({}), prices, ['new-model']).gatewayModelsUnpriced).toEqual([]);
+    });
+
+    it('a model no longer set stays while it has history', () => {
+      expect(summarizeUsage(line({}), prices, []).gatewayModels[0].model).toBe('glm-5.3-flash');
+    });
+
+    it('are listed once', () => {
+      expect(summarizeUsage(line({}), prices, ['glm-5.3-flash', 'glm-5.3-flash']).gatewayModels).toHaveLength(1);
+    });
+  });
+
+  it('picks the models from the settings: only with a gateway, and no aliases', () => {
+    const settings = { anthropicBaseUrl: 'https://gw.example.com', customPhaseModels: { spec: 'glm-5.3', coding: 'glm-5.3-flash' }, featureModels: { naming: 'minimax', utility: 'opus' }, subagentModel: '' };
+    expect(configuredGatewayModels(settings).sort()).toEqual(['glm-5.3', 'glm-5.3-flash', 'minimax']);
+    expect(configuredGatewayModels({ ...settings, anthropicBaseUrl: '' })).toEqual([]);
+    expect(configuredGatewayModels(undefined)).toEqual([]);
   });
 
   it('leaves the Anthropic figure alone: only there is it the real price', () => {

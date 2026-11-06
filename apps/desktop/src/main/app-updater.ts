@@ -17,6 +17,7 @@
  * - APP_UPDATE_ERROR: Error during update process
  */
 
+import { updateChannelFor } from './update-channel';
 import { accessSync, constants as fsConstants } from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
@@ -204,7 +205,7 @@ export function initializeAppUpdater(window: BrowserWindow, betaUpdates = false)
   mainWindow = window;
 
   // Set update channel based on user preference
-  const channel = betaUpdates ? 'beta' : 'latest';
+  const channel = updateChannelFor(autoUpdater.currentVersion.version, betaUpdates);
   setUpdateChannel(channel);
 
   // Log updater configuration

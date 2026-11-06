@@ -10,6 +10,14 @@ export interface ModelPrice {
   cacheWrite?: number;
 }
 
+/** A price and the time it counts from; '' for the first, which also covers the history before it */
+export interface DatedModelPrice extends ModelPrice {
+  from: string;
+}
+
+/** Per model; a single price is what was saved before dates existed */
+export type GatewayPrices = Record<string, ModelPrice | DatedModelPrice[]>;
+
 /** A model's tokens through a gateway. costUsd is unset until the user enters its price. */
 export interface GatewayModelUsage {
   model: string;

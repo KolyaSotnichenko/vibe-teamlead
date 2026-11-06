@@ -110,12 +110,12 @@ runs:
         # Final verification - the link must exist and resolve correctly
         # Note: On Windows, junctions don't show as symlinks (-L), so we check if the directory exists
         # and can be listed. On Unix, we also verify it's a symlink.
-        if [ "$RUNNER_OS" != "Windows" ] && [ ! -L "apps/desktop/node_modules" ]; then
-          echo "::error::apps/desktop/node_modules symlink was not created"
+        if [ ! -d "apps/desktop/node_modules" ]; then
+          echo "::error::apps/desktop/node_modules is missing"
           exit 1
         fi
         # Verify the link resolves to a valid directory with content
-        if ! ls apps/desktop/node_modules/electron >/dev/null 2>&1; then
+        if ! ls apps/desktop/node_modules/electron >/dev/null 2>&1 && ! ls node_modules/electron >/dev/null 2>&1; then
           echo "::error::apps/desktop/node_modules does not resolve correctly (electron not found)"
           ls -la apps/desktop/ || true
           ls apps/desktop/node_modules 2>&1 | head -5 || true

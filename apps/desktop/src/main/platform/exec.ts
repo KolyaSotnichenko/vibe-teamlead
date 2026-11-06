@@ -19,6 +19,8 @@ export interface RunOptions {
   maxOutput?: number;
   /** Run it in its own process group and kill the whole group: test runners leave workers behind. */
   killGroup?: boolean;
+  /** How long a killed process gets before SIGKILL; a group that still holds its output a moment later is left behind */
+  killGraceMs?: number;
   /** Called with each complete output line (stdout and stderr). */
   onLine?: (line: string) => void;
 }
@@ -95,8 +97,11 @@ export function findOnPath(name: string, path = searchPath()): string | undefine
 }
 
 /** Run a command to completion. Never throws; inspect `code`, `timedOut`, `aborted`, `error`. */
+const MAX_PENDING_LINE = 1024 * 1024;
+const SETTLE_AFTER_KILL_MS = 1000;
+
 export function runProcess(cmd: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
-  const { timeoutMs = 120_000, maxOutput = 16 * 1024 * 1024, signal, onLine } = options;
+  const { timeoutMs = 120_000, maxOutput = 16 * 1024 * 1024, signal, onLine, killGraceMs: grace = 5000 } = options;
   return new Promise((resolve) => {
     if (signal?.aborted) {
       resolve({ code: -1, stdout: '', stderr: '', timedOut: false, aborted: true });
@@ -114,7 +119,8 @@ export function runProcess(cmd: string, args: string[], options: RunOptions = {}
       if (!onLine) return;
       pending += chunk;
       const parts = pending.split('\n');
-      pending = parts.pop() ?? '';
+      // One endless line must not grow without limit
+      pending = (parts.pop() ?? '').slice(-MAX_PENDING_LINE);
       for (const line of parts) if (line.trim()) onLine(line);
     };
     child.stdout.on('data', (chunk: Buffer) => {
@@ -142,7 +148,15 @@ export function runProcess(cmd: string, args: string[], options: RunOptions = {}
     const kill = () => {
       send('SIGTERM');
       // Escalate if the process ignores SIGTERM.
-      setTimeout(() => send('SIGKILL'), 5000).unref();
+      setTimeout(() => send('SIGKILL'), grace).unref();
+      // A descendant that left the group can hold the pipes open for ever: the wait ends anyway
+      if (options.killGroup) {
+        setTimeout(() => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+          finish(-1);
+        }, grace + SETTLE_AFTER_KILL_MS).unref();
+      }
     };
     const timer = setTimeout(() => {
       timedOut = true;

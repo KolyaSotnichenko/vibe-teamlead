@@ -48,6 +48,8 @@ export interface VerificationReport {
   baseCommit: string;
   checks: CheckResult[];
   tamper: TamperFinding[];
+  /** Changed files that decide how checks run. Often fine, so not blocking; the reviewer gets to look. */
+  runnerConfigChanged: string[];
 }
 
 export interface VerifyTaskOptions {
@@ -64,6 +66,7 @@ export interface VerifyTaskOptions {
   /** Instead of detecting from the base. For tests. */
   detected?: DetectedChecks;
   checkTimeoutMs?: number;
+  killGraceMs?: number;
   installTimeoutMs?: number;
   git?: string;
   hostEnv?: NodeJS.ProcessEnv;
@@ -127,6 +130,7 @@ export async function withVerifyLock<T>(dir: string, work: () => Promise<T>, opt
 const TEST_FILE = /(^|\/)(__tests__|tests?|Tests|specs?)\/|\.(test|spec)\.[^/]+$|(^|\/)test_[^/]+\.py$|_(test|spec)\.(go|py|rb)$|[^/]*(Test|Tests|Spec)\.(java|kt|kts|cs|fs|php|swift|groovy|scala)$/;
 const DISABLED = /(?<![.\w])(?:it|test|describe|context|suite)\.(?:skip|only|todo|skipIf)\b|(?<![.\w])(?:xit|xdescribe|xtest|xcontext|fit|fdescribe)[\s(]|@pytest\.mark\.(?:skip|xfail)|pytest\.skip\(|@unittest\.skip|\bt\.Skip(?:Now|f)?\(|#\[ignore|@Disabled\b|@Ignore\b|\[Ignore\b|\[(?:Fact|Theory)\(Skip|markTestSkipped|markTestIncomplete|XCTSkip|@pending\b/;
 const GUARDED_SCRIPTS = ['test', 'typecheck'];
+const RUNNER_CONFIG = /(^|\/)(\.npmrc|\.yarnrc(\.yml)?|\.pnpmfile\.cjs|\.mocharc[^/]*|\.rspec|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Makefile|Rakefile|phpunit\.xml(\.dist)?|pom\.xml|mvnw|gradlew|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|Directory\.Build\.props|Cargo\.toml|go\.mod|Package\.swift|(vitest|vite|jest|playwright|karma)\.config\.[^/]+)$/;
 
 function scriptsOf(text: string): Record<string, unknown> {
   try {
@@ -146,15 +150,21 @@ async function findTamper(run: GitRun, base: string, head: string): Promise<Tamp
     if (TEST_FILE.test(file)) findings.push({ kind: 'deleted_test', file, detail: 'The task deleted this test file.' });
   }
 
-  const patch = (await run(['-c', 'core.quotepath=off', 'diff', '-U0', '-M', '--no-color', '--no-ext-diff', '--no-textconv', '--text', base, head])).raw;
-  let current = '';
-  const disabled = new Set<string>();
-  for (const line of patch.split('\n')) {
-    if (line.startsWith('+++ ')) current = line.startsWith('+++ b/') ? line.slice(6) : '';
-    else if (line.startsWith('+') && TEST_FILE.test(current) && DISABLED.test(line) && !disabled.has(current)) {
-      disabled.add(current);
-      findings.push({ kind: 'disabled_test', file: current, detail: `The task switched a test off or narrowed the run: ${line.slice(1).trim().slice(0, 120)}` });
+  // A rename out of where tests live takes the test out of the run just as deleting it would
+  const renames = await list(['--diff-filter=R', '-M', '--name-status', '-z']);
+  for (let index = 0; index + 2 < renames.length; index += 3) {
+    if (TEST_FILE.test(renames[index + 1]) && !TEST_FILE.test(renames[index + 2])) {
+      findings.push({ kind: 'deleted_test', file: renames[index + 1], detail: `The task moved this test to ${renames[index + 2]}, where it won't run as a test.` });
     }
+  }
+
+  // File by file: in one patch, an added line can read as the header of another file
+  for (const file of (await list(['--diff-filter=AMR', '-M', '--name-only', '-z'])).filter((name) => TEST_FILE.test(name))) {
+    const patch = (await run(['-c', 'core.quotepath=off', 'diff', '-U0', '--no-color', '--no-ext-diff', '--no-textconv', '--text', base, head, '--', file])).raw;
+    const lines = patch.split('\n');
+    const added = lines.slice(lines.findIndex((line) => line.startsWith('@@'))).filter((line) => line.startsWith('+'));
+    const switchedOff = added.find((line) => DISABLED.test(line));
+    if (switchedOff) findings.push({ kind: 'disabled_test', file, detail: `The task switched a test off or narrowed the run: ${switchedOff.slice(1).trim().slice(0, 120)}` });
   }
 
   for (const file of await list(['--diff-filter=M', '--name-only', '-z'], ['package.json', '*/package.json', 'composer.json'])) {
@@ -194,16 +204,19 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     ? options.commands.map((command) => ({ name: command, command }))
     : detected.checks;
   const tamper = await findTamper(run, baseCommit, commit);
-  if (!checks.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper };
+  const runnerConfigChanged = (await run(['-c', 'core.quotepath=off', 'diff', '--name-only', '-z', baseCommit, commit])).raw.split('\0').filter((file) => RUNNER_CONFIG.test(file)).sort();
+  if (!checks.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
 
   const env = verificationEnv(hostEnv, options.env);
   const shell = async (command: string, cwd: string, timeoutMs: number): Promise<Omit<CheckResult, keyof Check>> => {
     let tail = '';
     const result = await runProcess('/bin/sh', ['-c', command], {
-      cwd, env, timeoutMs, signal, killGroup: true, maxOutput: 1024,
+      cwd, env, timeoutMs, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024,
       onLine: (line) => { tail = `${tail}${line}\n`.slice(-TAIL_CHARS); },
     });
     const outcome: CheckOutcome = result.timedOut ? 'timed_out' : result.code === 0 ? 'passed' : result.code === 127 || result.code === 126 ? 'unavailable' : 'failed';
+    // The tail reaches agents and saved reports: the project's own values stay out of it
+    for (const value of Object.values(options.env)) if (value.length >= 4) tail = tail.split(value).join('***');
     return { outcome, exitCode: result.code, tail };
   };
   /** A clean copy of a commit, gone afterwards */
@@ -252,7 +265,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     return done;
   });
 
-  const failed = results.filter((result) => result.outcome === 'failed');
+  // Exit codes come from the task's code, so "tool missing" or a timeout proves nothing by itself: only the base can tell
+  const failed = results.filter((result) => result.outcome !== 'passed');
   const unknown = failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
   if (unknown.length) {
     await inCopy(baseCommit, async (cwd) => {
@@ -268,28 +282,29 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
 
   const broke = failed.some((result) => result.onBase === 'passed');
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
-  return { status, commit, baseCommit, checks: results, tamper };
+  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged };
 }
 
 const OUTCOME_WORDS: Record<CheckOutcome, string> = { passed: 'passed', failed: 'FAILED', timed_out: 'ran out of time', unavailable: 'its tool is not installed' };
 
 /** One line per check, for the task's log and for the QA reviewer: facts it need not check again. Pure. */
 export function describeVerification(report: VerificationReport): string {
-  if (report.status === 'not_configured' && !report.tamper.length) return 'The app found no checks to run for this project, so it verified nothing.';
+  const runner = report.runnerConfigChanged.length ? [`The task also changed files that decide how checks run, so look at these before trusting a pass: ${report.runnerConfigChanged.join(', ')}`] : [];
+  if (report.status === 'not_configured' && !report.tamper.length) return ['The app found no checks to run for this project, so it verified nothing.', ...runner].join('\n');
   const lines = report.checks.map((check) => {
-    const base = check.onBase === undefined ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (fails on the base too: says nothing about this task)';
+    const base = check.onBase === undefined ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (the same on the base: says nothing about this task)';
     return `- ${check.command}: ${OUTCOME_WORDS[check.outcome]}${check.exitCode === undefined ? '' : ` (exit ${check.exitCode})`}${check.flaky ? ' (failed once, then passed: flaky)' : ''}${base}`;
   });
-  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`)].join('\n');
+  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
 }
 
 /** What must be fixed before a review can pass. Keys ignore the wording, to compare rounds. Pure. */
 export function verificationIssues(report: VerificationReport): { key: string; type: 'critical'; title: string; description: string; location?: string; fix_required: string }[] {
   return [
-    ...report.checks.filter((check) => check.outcome === 'failed' && check.onBase === 'passed').map((check) => ({
+    ...report.checks.filter((check) => check.outcome !== 'passed' && check.onBase === 'passed').map((check) => ({
       key: `check:${check.command}`,
       type: 'critical' as const,
-      title: `\`${check.command}\` fails on this task and passes on the commit it started from`,
+      title: `\`${check.command}\` ${check.outcome === 'timed_out' ? 'runs out of time' : 'fails'} on this task and passes on the commit it started from`,
       description: `Exit code ${check.exitCode}. The end of its output:\n${check.tail ?? ''}`,
       fix_required: 'Fix the code so that this passes. Commit it: the app checks what is committed, on a clean copy.',
     })),

@@ -8,9 +8,10 @@ name: Release (macOS)
 #   CSC_LINK, CSC_KEY_PASSWORD           - Developer ID certificate (.p12, base64)
 #   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID - notarization
 
+# By hand only for now: releases are built and signed on the maintainer's Mac. There
+# are no signing secrets here, and an unsigned build published over a release's files
+# would break updates for the apps installed from it.
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:

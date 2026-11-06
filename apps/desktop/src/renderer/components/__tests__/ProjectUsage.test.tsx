@@ -58,7 +58,7 @@ describe('ProjectUsage through a gateway', () => {
     fireEvent.change(field('output'), { target: { value: '4' } });
     fireEvent.change(field('cacheRead'), { target: { value: '0.1' } });
     fireEvent.blur(field('cacheRead'));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ gatewayModelPrices: { 'glm-5.3': { input: 1, output: 4, cacheRead: 0.1 } } }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith({ gatewayModelPrices: { 'glm-5.3': [{ from: '', input: 1, output: 4, cacheRead: 0.1 }] } }));
     await waitFor(() => expect(usage.mock.calls.length).toBeGreaterThan(1));
   });
 });
