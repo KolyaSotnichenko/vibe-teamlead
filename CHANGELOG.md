@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- Agents can no longer run code inside the browser server, where it would skip the checks on commands and file writes. Clicks, forms and screenshots work as before.
+
 ## 2.0.0-beta.7 - 2026-11-06
 
 - Security QA findings below the level that blocks a task become one new task on the board, without repeats, instead of staying in a report.

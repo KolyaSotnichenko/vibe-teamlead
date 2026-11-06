@@ -104,6 +104,12 @@ function deny(reason: string): HookJSONOutput {
 /** Each starts agents on the next QA run, so an agent must not be able to leave one for itself. */
 const APP_REQUEST_FILES = new Set(['qa_fix_request.md', 'qa_rerun']);
 
+/**
+ * Playwright MCP's run-code tool executes Node code in the server's own process.
+ * Its vm context is no boundary, so that code could skip the Bash and write checks here.
+ */
+const BROWSER_SERVER_CODE = /^mcp__.+__browser_run_code(_unsafe)?$/;
+
 /** Directories a session may write to. */
 export function writeRoots(context: ToolContext): string[] {
   if (context.allowedWritePaths?.length) return context.allowedWritePaths;
@@ -116,6 +122,10 @@ export function evaluatePreToolUse(
   toolInput: Record<string, unknown> | null,
   context: ToolContext,
 ): HookJSONOutput {
+  if (BROWSER_SERVER_CODE.test(toolName)) {
+    return deny('Running code in the browser server is not allowed. Use browser_click, browser_type, browser_fill_form and browser_snapshot instead.');
+  }
+
   if (toolName === 'Bash') {
     const result = bashSecurityHook(
       { toolName, toolInput, cwd: context.cwd },
