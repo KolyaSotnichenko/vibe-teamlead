@@ -2,7 +2,7 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 2.0.0-beta.5 - 2026-11-06
 
 - While an agent's merge waits for review, the task shows one way to merge: the second Merge button and Ready to merge are hidden.
 - Correcting a model's first price the same day replaces it, instead of leaving the mistake on all earlier sessions.
