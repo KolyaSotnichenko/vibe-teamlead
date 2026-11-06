@@ -1647,6 +1647,12 @@
       "other": "Other"
     },
     "costApi": "for {{tokens}} tokens through the Anthropic API, as Claude Code reported it.",
+    "gatewayTitle": "Through the gateway",
+    "gatewayHint": "Enter what your gateway charges per million tokens. Only your gateway's bill can confirm the total.",
+    "gatewayUnpriced": "No price yet: {{models}}. They are left out of the total.",
+    "billByKind": "Bill by kind of token",
+    "byTask": "By task",
+    "noPrice": "no price",
     "costGateway": "{{tokens}} tokens went through {{gateway}}. Your gateway prices them; see its billing.",
     "costSubscription": "{{tokens}} tokens under your Claude subscription, with no per-token price.",
     "empty": "Nothing counted yet. Every agent session in this project adds its tokens when it ends, starting with sessions that began after this feature arrived (tasks already running keep the old code until they restart)."

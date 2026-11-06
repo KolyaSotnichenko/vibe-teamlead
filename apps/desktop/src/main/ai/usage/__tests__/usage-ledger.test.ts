@@ -72,3 +72,56 @@ describe('usage ledger', () => {
     expect(billingOf({ oauthToken: 't' })).toEqual({ billing: 'subscription' });
   });
 });
+
+describe('summarizeUsage on a gateway, with the prices the user entered', () => {
+  const line = (over: Record<string, unknown>) => JSON.stringify({
+    at: '2026-11-05T10:00:00.000Z', agentType: 'coder', model: 'glm-5.3-flash', billing: 'gateway', gateway: 'gw.example.com',
+    input: 1_000_000, output: 100_000, cacheRead: 10_000_000, cacheWrite: 0, costUsd: 999, specId: '008-task', ...over,
+  });
+  const prices = { 'glm-5.3-flash': { input: 1, output: 4, cacheRead: 0.1 } };
+
+  it('prices each kind of token per million, and ignores the figure Claude Code guessed', () => {
+    const summary = summarizeUsage(line({}), prices);
+    expect(summary.gatewayCostUsd).toBeCloseTo(1 + 0.4 + 1);
+    expect(summary.gatewayCostKinds).toEqual({ input: 1, output: expect.closeTo(0.4), cacheRead: 1, cacheWrite: 0 });
+  });
+
+  it('gives each model its tokens and cost, most expensive first', () => {
+    const summary = summarizeUsage([line({}), line({ model: 'kimi', input: 10, output: 10, cacheRead: 10 })].join('\n'), { ...prices, kimi: { input: 1, output: 1, cacheRead: 1 } });
+    expect(summary.gatewayModels.map((row) => row.model)).toEqual(['glm-5.3-flash', 'kimi']);
+    expect(summary.gatewayModels[0]).toMatchObject({ input: 1_000_000, output: 100_000, cacheRead: 10_000_000 });
+    expect(summary.gatewayModels[0].costUsd).toBeCloseTo(2.4);
+  });
+
+  it('says a model has no price instead of counting it as free', () => {
+    const summary = summarizeUsage([line({}), line({ model: 'unpriced' })].join('\n'), prices);
+    expect(summary.gatewayModels.find((row) => row.model === 'unpriced')?.costUsd).toBeUndefined();
+    expect(summary.gatewayCostUsd).toBeCloseTo(2.4);
+    expect(summary.gatewayModelsUnpriced).toEqual(['unpriced']);
+  });
+
+  it('charges a cache write at the input price unless it has its own', () => {
+    expect(summarizeUsage(line({ input: 0, output: 0, cacheRead: 0, cacheWrite: 1_000_000 }), prices).gatewayCostUsd).toBeCloseTo(1);
+    expect(summarizeUsage(line({ input: 0, output: 0, cacheRead: 0, cacheWrite: 1_000_000 }), { 'glm-5.3-flash': { input: 1, output: 4, cacheRead: 0.1, cacheWrite: 2 } }).gatewayCostUsd).toBeCloseTo(2);
+  });
+
+  it('adds up what each task cost, most expensive first', () => {
+    const summary = summarizeUsage([line({ specId: 'a' }), line({ specId: 'b' }), line({ specId: 'b' })].join('\n'), prices);
+    expect(summary.gatewayTasks.map((task) => task.specId)).toEqual(['b', 'a']);
+    expect(summary.gatewayTasks[0].costUsd).toBeCloseTo(4.8);
+  });
+
+  it("a model name from the ledger can't reach Object's prototype", () => {
+    const summary = summarizeUsage(line({ model: '__proto__' }), prices);
+    expect(summary.gatewayModels[0]).toMatchObject({ model: '__proto__' });
+    expect(summary.gatewayModels[0].costUsd).toBeUndefined();
+    expect(({} as Record<string, unknown>).input).toBeUndefined();
+  });
+
+  it('leaves the Anthropic figure alone: only there is it the real price', () => {
+    const summary = summarizeUsage(line({ billing: 'api', costUsd: 5 }), prices);
+    expect(summary.costUsd).toBe(5);
+    expect(summary.gatewayCostUsd).toBe(0);
+    expect(summary.gatewayModels).toEqual([]);
+  });
+});

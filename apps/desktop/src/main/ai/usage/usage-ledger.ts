@@ -10,7 +10,7 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import type { ProjectUsageSummary, UsageBilling } from '../../../shared/types/usage';
+import type { GatewayModelUsage, ModelPrice, ProjectUsageSummary, UsageBilling } from '../../../shared/types/usage';
 
 export const USAGE_FILE = 'usage.jsonl';
 const APP_DIR = '.vibe-teamlead';
@@ -83,8 +83,21 @@ export async function recordUsage(dir: string | undefined, entry: UsageEntry): P
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
 
-/** Totals of a ledger's lines (malformed lines are skipped). Pure. */
-export function summarizeUsage(text: string): ProjectUsageSummary {
+const MILLION = 1_000_000;
+
+/** The prices of a model, if the user entered them. Own keys only: the name comes from the ledger, a file agents can reach. */
+function priceOf(prices: Record<string, ModelPrice>, model: string): ModelPrice | undefined {
+  return Object.hasOwn(prices, model) ? prices[model] : undefined;
+}
+
+/**
+ * Totals of a ledger's lines (malformed lines are skipped). Pure.
+ * Through a gateway, the figure Claude Code reports is its own guess for a model
+ * it doesn't know, so dollars there come only from the prices the user entered.
+ */
+export function summarizeUsage(text: string, prices: Record<string, ModelPrice> = {}): ProjectUsageSummary {
+  const models = new Map<string, GatewayModelUsage>();
+  const tasks = new Map<string, number>();
   const summary: ProjectUsageSummary = {
     sessions: 0,
     totalTokens: 0,
@@ -97,6 +110,11 @@ export function summarizeUsage(text: string): ProjectUsageSummary {
     subscriptionTokens: 0,
     gatewayTokens: 0,
     gateways: [],
+    gatewayCostUsd: 0,
+    gatewayCostKinds: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    gatewayModels: [],
+    gatewayModelsUnpriced: [],
+    gatewayTasks: [],
     byAgent: {},
   };
   for (const line of text.split('\n')) {
@@ -123,6 +141,30 @@ export function summarizeUsage(text: string): ProjectUsageSummary {
     else if (e.billing === 'gateway') {
       summary.gatewayTokens += tokens;
       if (e.gateway && !summary.gateways.includes(e.gateway)) summary.gateways.push(e.gateway);
+      const model = typeof e.model === 'string' && e.model ? e.model : 'unknown';
+      const row = models.get(model) ?? { model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+      models.set(model, row);
+      row.input += input;
+      row.output += output;
+      row.cacheRead += cacheRead;
+      row.cacheWrite += cacheWrite;
+      const price = priceOf(prices, model);
+      if (price) {
+        const kinds = {
+          input: (input * num(price.input)) / MILLION,
+          output: (output * num(price.output)) / MILLION,
+          cacheRead: (cacheRead * num(price.cacheRead)) / MILLION,
+          cacheWrite: (cacheWrite * (price.cacheWrite === undefined ? num(price.input) : num(price.cacheWrite))) / MILLION,
+        };
+        const cost = kinds.input + kinds.output + kinds.cacheRead + kinds.cacheWrite;
+        row.costUsd = (row.costUsd ?? 0) + cost;
+        summary.gatewayCostUsd += cost;
+        summary.gatewayCostKinds.input += kinds.input;
+        summary.gatewayCostKinds.output += kinds.output;
+        summary.gatewayCostKinds.cacheRead += kinds.cacheRead;
+        summary.gatewayCostKinds.cacheWrite += kinds.cacheWrite;
+        if (typeof e.specId === 'string' && e.specId) tasks.set(e.specId, (tasks.get(e.specId) ?? 0) + cost);
+      }
     } else {
       summary.pricedTokens += tokens;
       summary.costUsd += num(e.costUsd);
@@ -131,14 +173,17 @@ export function summarizeUsage(text: string): ProjectUsageSummary {
     summary.byAgent[agent] = (summary.byAgent[agent] ?? 0) + tokens;
     if (typeof e.at === 'string' && (!summary.since || e.at < summary.since)) summary.since = e.at;
   }
+  summary.gatewayModels = [...models.values()].sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1));
+  summary.gatewayModelsUnpriced = summary.gatewayModels.filter((row) => row.costUsd === undefined).map((row) => row.model);
+  summary.gatewayTasks = [...tasks].map(([specId, costUsd]) => ({ specId, costUsd })).sort((a, b) => b.costUsd - a.costUsd);
   return summary;
 }
 
 /** The project's usage so far. */
-export async function readProjectUsage(projectPath: string): Promise<ProjectUsageSummary> {
+export async function readProjectUsage(projectPath: string, prices: Record<string, ModelPrice> = {}): Promise<ProjectUsageSummary> {
   try {
-    return summarizeUsage(await readFile(path.join(projectPath, APP_DIR, USAGE_FILE), 'utf-8'));
+    return summarizeUsage(await readFile(path.join(projectPath, APP_DIR, USAGE_FILE), 'utf-8'), prices);
   } catch {
-    return summarizeUsage('');
+    return summarizeUsage('', prices);
   }
 }

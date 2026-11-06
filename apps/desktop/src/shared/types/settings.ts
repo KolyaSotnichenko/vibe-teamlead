@@ -1,3 +1,4 @@
+import type { ModelPrice } from './usage';
 /**
  * Application settings types
  */
@@ -280,6 +281,8 @@ export interface AppSettings {
   subagentsEnabled?: boolean;
   /** Model of the helper subagents; empty = the same model as the agent */
   subagentModel?: string;
+  /** What the gateway charges per model (USD per million tokens), entered by the user */
+  gatewayModelPrices?: Record<string, ModelPrice>;
   securityQaEnabled?: boolean;
   securityQaScanMode?: 'quick' | 'standard' | 'deep';
   securityQaFailOn?: 'critical' | 'high' | 'medium' | 'low';

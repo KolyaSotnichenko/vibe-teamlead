@@ -6,8 +6,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProjectUsageSummary } from '../../shared/types';
+import type { GatewayModelUsage, ModelPrice, ProjectUsageSummary } from '../../shared/types';
 import { cn } from '../lib/utils';
+import { saveSettings, useSettingsStore } from '../stores/settings-store';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 const REFRESH_MS = 15_000;
@@ -39,7 +40,7 @@ export function roleOf(agentType: string): 'spec' | 'architect' | 'planner' | 'c
 
 const ROLE_ORDER = ['spec', 'architect', 'planner', 'coder', 'qa', 'qaFixer', 'other'] as const;
 
-function useProjectUsage(projectId: string | null): ProjectUsageSummary | null {
+function useProjectUsage(projectId: string | null): { usage: ProjectUsageSummary | null; reload: () => void } {
   const [usage, setUsage] = useState<ProjectUsageSummary | null>(null);
   const load = useCallback(() => {
     if (!projectId) return;
@@ -61,12 +62,61 @@ function useProjectUsage(projectId: string | null): ProjectUsageSummary | null {
     };
   }, [load]);
 
-  return usage;
+  return { usage, reload: load };
+}
+
+const PRICE_KINDS = ['input', 'output', 'cacheRead'] as const;
+
+/** One model's cost and the prices behind it. A price the user leaves blank is no price: no invented dollars. */
+function GatewayModelRow({ row, onSaved }: { row: GatewayModelUsage; onSaved: () => void }) {
+  const { t } = useTranslation('common');
+  const prices = useSettingsStore((state) => state.settings.gatewayModelPrices);
+  const saved = prices && Object.hasOwn(prices, row.model) ? prices[row.model] : undefined;
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const shown = (kind: (typeof PRICE_KINDS)[number]) => draft[kind] ?? (saved ? String(saved[kind]) : '');
+
+  const save = async () => {
+    const values = PRICE_KINDS.map((kind) => Number(shown(kind)));
+    const complete = PRICE_KINDS.every((kind) => shown(kind).trim() !== '') && values.every((value) => Number.isFinite(value) && value >= 0);
+    if (!complete) return;
+    const [input, output, cacheRead] = values;
+    const price: ModelPrice = { ...saved, input, output, cacheRead };
+    await saveSettings({ gatewayModelPrices: { ...prices, [row.model]: price } });
+    onSaved();
+  };
+
+  return (
+    <li className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="truncate font-mono text-foreground">{row.model}</span>
+        <span className="font-mono tabular-nums text-foreground">
+          {row.costUsd === undefined ? t('usage.noPrice') : formatUsd(row.costUsd)}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        {PRICE_KINDS.map((kind) => (
+          <label key={kind} className="text-[11px] text-muted-foreground">
+            {t(`usage.kinds.${kind}`)}
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={shown(kind)}
+              onChange={(event) => setDraft({ ...draft, [kind]: event.target.value })}
+              onBlur={() => void save()}
+              aria-label={`${row.model}: ${t(`usage.kinds.${kind}`)}`}
+              className="mt-0.5 w-full border border-border bg-transparent px-1 py-0.5 font-mono text-xs text-foreground"
+            />
+          </label>
+        ))}
+      </div>
+    </li>
+  );
 }
 
 export function ProjectUsage({ projectId }: { projectId: string | null }) {
   const { t, i18n } = useTranslation('common');
-  const usage = useProjectUsage(projectId);
+  const { usage, reload } = useProjectUsage(projectId);
   if (!usage) return null;
 
   // Nothing counted yet: still shown, so it's clear where the numbers will appear
@@ -91,6 +141,13 @@ export function ProjectUsage({ projectId }: { projectId: string | null }) {
   }
 
   const hasCost = usage.pricedTokens > 0;
+  const shownCost = usage.costUsd + usage.gatewayCostUsd;
+  const billed = [
+    { key: 'input', value: usage.gatewayCostKinds.input },
+    { key: 'output', value: usage.gatewayCostKinds.output },
+    { key: 'cacheRead', value: usage.gatewayCostKinds.cacheRead },
+    { key: 'cacheWrite', value: usage.gatewayCostKinds.cacheWrite },
+  ] as const;
   const kinds = [
     { key: 'input', value: usage.input, tone: 'bg-foreground' },
     { key: 'output', value: usage.output, tone: 'bg-foreground/60' },
@@ -119,15 +176,15 @@ export function ProjectUsage({ projectId }: { projectId: string | null }) {
             {compactTokens(usage.totalTokens)}
             <span className="ml-1 text-[10px] uppercase tracking-wide opacity-70">{t('usage.tokensShort')}</span>
           </span>
-          {hasCost && (
+          {shownCost > 0 && (
             <>
               <span aria-hidden className="h-3 w-px bg-border" />
-              <span>{formatUsd(usage.costUsd)}</span>
+              <span>{formatUsd(shownCost)}</span>
             </>
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={6} className="w-80 p-0">
+      <PopoverContent align="end" sideOffset={6} className="max-h-[80vh] w-80 overflow-y-auto p-0">
         {/* Total */}
         <div className="border-b border-border px-4 pt-3 pb-3">
           <div className="flex items-baseline justify-between gap-3">
@@ -177,6 +234,49 @@ export function ProjectUsage({ projectId }: { projectId: string | null }) {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* A gateway's dollars, at the prices the user entered */}
+        {usage.gatewayModels.length > 0 && (
+          <div className="border-b border-border px-4 py-3">
+            <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+              <span>{t('usage.gatewayTitle')}</span>
+              <span className="font-mono text-foreground">{formatUsd(usage.gatewayCostUsd)}</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{t('usage.gatewayHint')}</p>
+            {usage.gatewayModelsUnpriced.length > 0 && (
+              <p role="status" className="mt-1 text-[11px] text-foreground">{t('usage.gatewayUnpriced', { models: usage.gatewayModelsUnpriced.join(', ') })}</p>
+            )}
+            <ul className="mt-2 space-y-2.5">
+              {usage.gatewayModels.map((row) => <GatewayModelRow key={row.model} row={row} onSaved={reload} />)}
+            </ul>
+            {usage.gatewayCostUsd > 0 && (
+              <>
+                <div className="mt-3 mb-1 text-xs text-muted-foreground">{t('usage.billByKind')}</div>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {billed.map((kind) => (
+                    <div key={kind.key} className="flex justify-between gap-2 text-xs">
+                      <dt className="text-muted-foreground">{t(`usage.kinds.${kind.key}`)}</dt>
+                      <dd className="font-mono tabular-nums text-foreground">{formatUsd(kind.value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </>
+            )}
+            {usage.gatewayTasks.length > 0 && (
+              <>
+                <div className="mt-3 mb-1 text-xs text-muted-foreground">{t('usage.byTask')}</div>
+                <ul className="space-y-1">
+                  {usage.gatewayTasks.slice(0, 5).map((task) => (
+                    <li key={task.specId} className="flex justify-between gap-2 text-xs">
+                      <span className="truncate font-mono text-muted-foreground">{task.specId}</span>
+                      <span className="font-mono tabular-nums text-foreground">{formatUsd(task.costUsd)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         )}
 
