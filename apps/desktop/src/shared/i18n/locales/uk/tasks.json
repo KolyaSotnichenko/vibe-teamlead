@@ -712,6 +712,7 @@
         "critical": "Критичний"
       },
       "source": {
+        "security": "Security QA",
         "ideation": "Ідеї",
         "manual": "Написано вами",
         "imported": "Імпортовано",
@@ -1091,6 +1092,13 @@
     "mergingTitle": "Зливається",
     "mergingBody": "Задача чекає своєї черги, або агент вливає свіжі зміни. Це вікно можна закрити.",
     "failedTitle": "Злиття не завершилось"
+  },
+  "securityFollowup": {
+    "title_one": "Security QA лишив {{count}} дрібнішу знахідку",
+    "title_few": "Security QA лишив {{count}} дрібніші знахідки",
+    "title_many": "Security QA лишив {{count}} дрібніших знахідок",
+    "title_other": "Security QA лишив {{count}} дрібнішої знахідки",
+    "body": "Вони нижче рівня, що блокує задачу, тож схвалення QA лишається. Вони в новій задачі на дошці, запустіть її, коли захочете виправити:"
   },
   "securityQa": {
     "title": "Security QA не завершився",

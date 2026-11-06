@@ -9,7 +9,7 @@
 | **Semgrep** | Static analysis of the changed files (injection, unsafe APIs; its registry rules at ERROR severity) blocks approval. Runs only when Semgrep is installed (`brew install semgrep` or `pip install semgrep`); otherwise, or when its rules can't be fetched, the gate is skipped and the report says so. When Semgrep could not parse some of the files, or reported an error about the run itself, the report says "CLEAR (PARTIAL: …)" and the Security tab names what was not covered, so you can look at those files yourself; if it could not scan any of the files, the gate counts as failed. |
 | **Design check** | A static check of added UI lines against the design system tokens + a screenshot review (see "Design system and Storybook"). |
 | **Browser check** | QA opens the app in Chrome (Playwright / DevTools MCP), takes screenshots and reads the console. |
-| **Strix** | Pentest in Docker (optional). |
+| **Strix** | Pentest in Docker (optional). Findings at the level you set block the task and go to the QA fixer. Smaller ones don't stop it: the app files them as one new task on the board, without repeats, for you to start when you choose. |
 | **Security hooks** | Path boundaries, a list of forbidden commands (everything else is allowed), a ban on killing the app's own processes. |
 | **Environment isolation** | Agents run with their own Claude Code configuration (`~/.vibe-teamlead/claude-code`), not your `~/.claude`. Environment variables are filtered. |
 

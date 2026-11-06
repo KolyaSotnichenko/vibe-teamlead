@@ -264,6 +264,21 @@ export function registerTaskWorkspaceHandlers(): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.TASK_SECURITY_FOLLOWUP,
+    async (_, taskId: string, projectId?: string): Promise<IPCResult<{ specId: string; count: number } | null>> => {
+      try {
+        const specDir = resolveSpecDir(taskId, projectId);
+        const data = specDir ? await readJson(path.join(specDir, 'security_followup.json')) : undefined;
+        const followup = data as { specId?: unknown; count?: unknown } | undefined;
+        const valid = typeof followup?.specId === 'string' && typeof followup.count === 'number';
+        return { success: true, data: valid ? { specId: followup.specId as string, count: followup.count as number } : null };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.TASK_VERIFICATION,
     async (_, taskId: string, projectId?: string): Promise<IPCResult<VerificationSummary | null>> => {
       try {

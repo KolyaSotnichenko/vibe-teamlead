@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- Security QA findings below the level that blocks a task become one new task on the board, without repeats, instead of staying in a report.
+
 ## 2.0.0-beta.6 - 2026-11-06
 
 - The task shows what the app's own checks found, and its card says when they couldn't say everything, for example when Docker isn't running.

@@ -46,7 +46,9 @@ import { type CheckOutcome, verifyTask } from '../verification/verify-task';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
 import { listCommittedFiles, takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
+import { createSecurityFollowup } from '../security/followup-task';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
+import { projectRootFor } from '../usage/usage-ledger';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
@@ -1121,6 +1123,12 @@ async function runSecurityQa(
     });
 
     if (result.status === 'cancelled') return { ...outcome, approved: false, reason: 'cancelled' };
+    // Below the bar nothing stops the task and no fixer sees them: they'd stay in a report nobody opens
+    const projectRoot = projectRootFor(session.projectDir);
+    const followup = projectRoot
+      ? createSecurityFollowup({ projectRoot, sourceSpecDir: session.specDir, sourceSpecId: basename(session.specDir), findings: result.findings, failOn: settings.failOn })
+      : null;
+    if (followup) qaLog(`Security QA: ${followup.count} finding(s) below ${settings.failOn} filed as task ${followup.specId}`);
     if (result.status !== 'findings') {
       qaLog(
         result.status === 'clear'

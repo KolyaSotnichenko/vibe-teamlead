@@ -112,6 +112,7 @@ export const IPC_CHANNELS = {
 
   // Token usage per project
   USAGE_GET: 'usage:get',
+  TASK_SECURITY_FOLLOWUP: 'task:securityFollowup',  // Where lesser Strix findings went
   TASK_VERIFICATION: 'task:verification',  // What the app's own checks found
   TASK_MERGE_STATE: 'task:mergeState',  // Where the task's merge stands, for after its window closed
   TASK_SECURITY_QA_ERROR: 'task:securityQaError',  // Why the task's pentest did not finish, if it did not

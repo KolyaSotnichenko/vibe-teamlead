@@ -38,6 +38,7 @@ import { TaskWarnings } from './TaskWarnings';
 import { MergeStateNotice } from './MergeStateNotice';
 import { SecurityQaNotice } from './SecurityQaNotice';
 import { VerificationNotice } from './VerificationNotice';
+import { SecurityFollowupNotice } from './SecurityFollowupNotice';
 import { useMergeState } from './useMergeState';
 import { TurnLimitNotice } from './TurnLimitNotice';
 import { TaskSubtasks } from './TaskSubtasks';
@@ -482,6 +483,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
               <div className="mt-3 space-y-3 empty:hidden">
                 {!state.workspaceError && <MergeStateNotice task={task} />}
                 <VerificationNotice task={task} />
+                <SecurityFollowupNotice task={task} />
                 <SecurityQaNotice task={task} />
                 <TurnLimitNotice task={task} />
               </div>

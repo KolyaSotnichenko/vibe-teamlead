@@ -700,6 +700,7 @@
         "critical": "Critical"
       },
       "source": {
+        "security": "Security QA",
         "ideation": "Ideation",
         "manual": "Written by you",
         "imported": "Imported",
@@ -1041,6 +1042,11 @@
     "mergingTitle": "Merging",
     "mergingBody": "This task is waiting its turn, or an agent is bringing in the latest changes. You can close this window.",
     "failedTitle": "The merge didn't finish"
+  },
+  "securityFollowup": {
+    "title_one": "Security QA left {{count}} smaller finding",
+    "title_other": "Security QA left {{count}} smaller findings",
+    "body": "They're below the level that blocks a task, so QA's approval stands. They're in a new task on the board, ready when you want them fixed:"
   },
   "securityQa": {
     "title": "Security QA didn't finish",
