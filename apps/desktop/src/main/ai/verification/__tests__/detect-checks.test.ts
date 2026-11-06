@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { detectChecks } from '../detect-checks';
+import { detectChecks, serviceEnv, serviceImages } from '../detect-checks';
 
 const project = (files: Record<string, string>) => detectChecks({ files: Object.keys(files), read: (path) => files[path] ?? null });
 const pkg = (scripts: Record<string, string>, extra: Record<string, unknown> = {}) => JSON.stringify({ scripts, ...extra });
@@ -8,7 +8,7 @@ const names = (found: ReturnType<typeof detectChecks>) => found.checks.map((chec
 
 describe('detectChecks', () => {
   it('finds nothing to run in a project it does not know', () => {
-    expect(project({ 'README.md': 'hi' })).toEqual({ install: [], checks: [] });
+    expect(project({ 'README.md': 'hi' })).toEqual({ install: [], prepare: [], checks: [] });
   });
 
   describe('JavaScript and TypeScript', () => {
@@ -92,5 +92,82 @@ describe('detectChecks', () => {
   it('gives each check a name for the report', () => {
     expect(project({ 'go.mod': '' }).checks[0].name).toBe('go test');
     expect(project({ 'package.json': pkg({ typecheck: 'tsc' }) }).checks[0].name).toBe('typecheck');
+  });
+});
+
+describe('detectChecks: migrations', () => {
+  it('prepares the database with Prisma where its schema lives, after the install', () => {
+    const found = project({ 'package.json': pkg({ test: 'x' }), 'pnpm-lock.yaml': '', 'apps/api/prisma/schema.prisma': '' });
+    expect(found.prepare).toEqual(['cd apps/api && pnpm exec prisma generate && pnpm exec prisma migrate deploy']);
+  });
+
+  it.each([
+    ['Drizzle', { 'package.json': pkg({ test: 'x' }), 'pnpm-lock.yaml': '', 'drizzle.config.ts': '' }, 'pnpm exec drizzle-kit migrate'],
+    ['Django', { 'requirements.txt': '', 'manage.py': '' }, '.venv/bin/python manage.py migrate'],
+    ['Alembic', { 'pyproject.toml': '', 'uv.lock': '', 'alembic.ini': '' }, 'uv run alembic upgrade head'],
+    ['Rails', { Gemfile: '', 'config/database.yml': '' }, 'bundle exec rails db:prepare'],
+    ['Laravel', { 'composer.json': '{}', artisan: '' }, 'php artisan migrate --force'],
+  ])('%s', (_name, files, command) => {
+    expect(project(files as Record<string, string>).prepare).toEqual([command]);
+  });
+
+  it('no prepare step without a migration tool', () => {
+    expect(project({ 'go.mod': '' }).prepare).toEqual([]);
+  });
+});
+
+describe('serviceImages', () => {
+  it('takes the images of what a test database needs from the compose file', () => {
+    const compose = 'services:\n  postgres:\n    image: postgres:18-alpine\n  cache:\n    image: "redis:7"\n  api:\n    image: node:24-alpine\n';
+    expect(serviceImages(compose)).toEqual([{ kind: 'postgres', image: 'postgres:18-alpine' }, { kind: 'redis', image: 'redis:7' }]);
+  });
+
+  it.each([
+    ['pgvector/pgvector:pg16', 'postgres'],
+    ['postgis/postgis:16-3.4', 'postgres'],
+    ['mysql:8', 'mysql'],
+    ['mariadb:11', 'mysql'],
+    ['valkey/valkey:8', 'redis'],
+    ['mongo:7', 'mongo'],
+  ])('%s is %s', (image, kind) => {
+    expect(serviceImages(`services:\n  db:\n    image: ${image}\n`)).toEqual([{ kind, image }]);
+  });
+
+  it('runs one of each kind', () => {
+    expect(serviceImages('a:\n  image: postgres:16\nb:\n  image: postgres:15\n')).toEqual([{ kind: 'postgres', image: 'postgres:16' }]);
+  });
+
+  it("takes nothing that isn't a plain image name: this reaches a command line", () => {
+    expect(serviceImages('db:\n  image: postgres:16; rm -rf /\n')).toEqual([]);
+    expect(serviceImages('db:\n  image: --privileged\n')).toEqual([]);
+    expect(serviceImages('db:\n  image: ${DB_IMAGE}\n')).toEqual([]);
+  });
+
+  it('nothing from a file without services', () => {
+    expect(serviceImages('')).toEqual([]);
+  });
+});
+
+describe('serviceEnv', () => {
+  const started = [{ kind: 'postgres' as const, url: 'postgresql://verify:pw@127.0.0.1:50000/verify' }, { kind: 'redis' as const, url: 'redis://127.0.0.1:50001' }];
+
+  it('points the standard names at what it started', () => {
+    expect(serviceEnv('', started)).toMatchObject({ DATABASE_URL: started[0].url, POSTGRES_URL: started[0].url, REDIS_URL: started[1].url });
+  });
+
+  it("gives the project's own example values, so tests find the settings they need", () => {
+    expect(serviceEnv('# comment\nCSRF_SECRET=abc\nPORT="3001"\nEMPTY=\n', [])).toEqual({ CSRF_SECRET: 'abc', PORT: '3001', EMPTY: '' });
+  });
+
+  it('a variable with a database address gets the temporary one, whatever its name', () => {
+    expect(serviceEnv('PRIMARY_DB=postgres://u:p@localhost/x\nCACHE=redis://localhost\nOTHER=https://example.com\n', started)).toMatchObject({
+      PRIMARY_DB: started[0].url,
+      CACHE: started[1].url,
+      OTHER: 'https://example.com',
+    });
+  });
+
+  it('an example address for a service it did not start stays out: it would point at nothing, or at something real', () => {
+    expect(serviceEnv('DATABASE_URL=postgres://localhost/x\n', [])).toEqual({});
   });
 });

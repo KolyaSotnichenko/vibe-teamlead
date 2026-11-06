@@ -12,7 +12,19 @@ export interface Check {
 export interface DetectedChecks {
   /** Run in order before any check */
   install: string[];
+  /** Run after the install, against the temporary database: migrations */
+  prepare?: string[];
   checks: Check[];
+}
+
+export interface ServiceImage {
+  kind: 'postgres' | 'mysql' | 'redis' | 'mongo';
+  image: string;
+}
+
+export interface StartedService {
+  kind: ServiceImage['kind'];
+  url: string;
 }
 
 export interface ProjectFiles {
@@ -37,7 +49,21 @@ const record = (value: unknown): Record<string, unknown> => (value && typeof val
 export function detectChecks({ files, read }: ProjectFiles): DetectedChecks {
   const has = (path: string) => files.includes(path);
   const atRoot = (pattern: RegExp) => files.some((file) => !file.includes('/') && pattern.test(file));
-  const found: DetectedChecks = { install: [], checks: [] };
+  const found: DetectedChecks = { install: [], prepare: [], checks: [] };
+  const prepare = found.prepare as string[];
+  const nodeManager = has('pnpm-lock.yaml') ? 'pnpm exec' : has('yarn.lock') ? 'yarn' : has('bun.lock') || has('bun.lockb') ? 'bunx' : 'npx';
+  const pythonPrefix = has('uv.lock') ? 'uv run ' : has('poetry.lock') ? 'poetry run ' : '.venv/bin/';
+  const inFolder = (folder: string, command: string) => (folder ? `cd ${/^[\w./-]+$/.test(folder) ? folder : `'${folder.replace(/'/g, `'\\''`)}'`} && ${command}` : command);
+
+  const prismaSchema = files.find((file) => /(^|\/)prisma\/schema\.prisma$/.test(file));
+  if (prismaSchema) {
+    prepare.push(inFolder(prismaSchema.replace(/\/?prisma\/schema\.prisma$/, ''), `${nodeManager} prisma generate && ${nodeManager} prisma migrate deploy`));
+  }
+  if (atRoot(/^drizzle\.config\.[cm]?[jt]s$/)) prepare.push(`${nodeManager} drizzle-kit migrate`);
+  if (has('manage.py')) prepare.push(`${pythonPrefix === '.venv/bin/' ? '.venv/bin/python' : `${pythonPrefix}python`} manage.py migrate`);
+  if (has('alembic.ini')) prepare.push(`${pythonPrefix}alembic upgrade head`);
+  if (has('Gemfile') && has('config/database.yml')) prepare.push('bundle exec rails db:prepare');
+  if (has('artisan')) prepare.push('php artisan migrate --force');
 
   if (has('package.json')) {
     const scripts = record(json(read('package.json')).scripts);
@@ -95,4 +121,57 @@ export function detectChecks({ files, read }: ProjectFiles): DetectedChecks {
   }
 
   return found;
+}
+
+const SAFE_IMAGE = /^[A-Za-z0-9][\w./:@-]*$/;
+const KINDS: [RegExp, ServiceImage['kind']][] = [
+  [/postgres|pgvector|postgis|timescale/, 'postgres'],
+  [/mysql|mariadb/, 'mysql'],
+  [/redis|valkey/, 'redis'],
+  [/mongo/, 'mongo'],
+];
+
+/** The databases a compose file asks for, by image. Only plain names: this reaches a command line. Pure. */
+export function serviceImages(compose: string): ServiceImage[] {
+  const found = new Map<ServiceImage['kind'], string>();
+  for (const line of compose.split('\n')) {
+    const image = /^\s*image:\s*["']?([^"'\s#]+)["']?\s*(#.*)?$/.exec(line)?.[1];
+    if (!image || !SAFE_IMAGE.test(image)) continue;
+    const kind = KINDS.find(([pattern]) => pattern.test(image))?.[1];
+    if (kind && !found.has(kind)) found.set(kind, image);
+  }
+  return [...found].map(([kind, image]) => ({ kind, image }));
+}
+
+const STANDARD_NAMES: Record<ServiceImage['kind'], string[]> = {
+  postgres: ['DATABASE_URL', 'POSTGRES_URL'],
+  mysql: ['DATABASE_URL', 'MYSQL_URL'],
+  redis: ['REDIS_URL'],
+  mongo: ['MONGODB_URI', 'MONGO_URL'],
+};
+const ADDRESS_KINDS: [RegExp, ServiceImage['kind']][] = [
+  [/^postgres(ql)?:\/\//i, 'postgres'],
+  [/^(mysql|mariadb):\/\//i, 'mysql'],
+  [/^rediss?:\/\//i, 'redis'],
+  [/^mongodb(\+srv)?:\/\//i, 'mongo'],
+];
+
+/**
+ * The variables the checks get: the project's example file, with database addresses
+ * pointing at what was started. One for a service that wasn't started stays out: it
+ * would point at nothing, or at something real. Pure.
+ */
+export function serviceEnv(example: string, started: StartedService[]): Record<string, string> {
+  const urlOf = (kind: ServiceImage['kind']) => started.find((service) => service.kind === kind)?.url;
+  const entries: [string, string][] = [];
+  for (const line of example.split('\n')) {
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (!match) continue;
+    const value = match[2].trim().replace(/^(["'])(.*)\1$/, '$2');
+    const kind = ADDRESS_KINDS.find(([pattern]) => pattern.test(value))?.[1];
+    if (!kind) entries.push([match[1], value]);
+    else if (urlOf(kind)) entries.push([match[1], urlOf(kind) as string]);
+  }
+  for (const service of started) for (const name of STANDARD_NAMES[service.kind]) entries.push([name, service.url]);
+  return Object.fromEntries(entries);
 }

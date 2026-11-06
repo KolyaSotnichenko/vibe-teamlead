@@ -153,7 +153,7 @@
     "commands": "Commands",
     "commandsHint": "One per line. Leave empty to detect them for npm, pnpm, yarn, bun, Python, Go, Rust, Maven, Gradle, .NET, Ruby, PHP and Swift at the project's root. Each runs in a shell, with your permissions.",
     "env": "Variables for the checks",
-    "envHint": "KEY=value per line, such as a test database. Other variables, API keys included, don't reach the checks."
+    "envHint": "Rarely needed: the app starts a temporary database itself when the project's compose file names one. KEY=value per line. Other variables, API keys included, don't reach the checks."
   },
   "general": {
     "otherAgentSettings": "Other Agent Settings",

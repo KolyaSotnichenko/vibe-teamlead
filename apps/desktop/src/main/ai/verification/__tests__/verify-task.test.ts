@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { DockerRun } from '../test-services';
 import { describeVerification, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
 
 describe('verifyTask', () => {
@@ -84,6 +85,21 @@ describe('verifyTask', () => {
     expect(report.checks[0]).toMatchObject({ outcome: 'passed', flaky: true });
   });
 
+  it('gives the base a second try as well: a flaky test there would hide what the task broke', async () => {
+    unlinkSync(join(wt, 'good.txt'));
+    commit(wt, 'broke');
+    const marker = join(repo, 'base-first-try');
+    // Fails for good without good.txt; with it, only the first time
+    const report = await verify({ commands: [`test -f good.txt || exit 1; test -f "${marker}" || { touch "${marker}"; exit 1; }`] });
+    expect(report.status).toBe('regression');
+    expect(report.checks[0].onBase).toBe('passed');
+  });
+
+  it('keeps the output of the base too, when the base fails as well', async () => {
+    const report = await verify({ commands: ['echo from-the-run; exit 1'] });
+    expect(report.checks[0].tailOnBase).toContain('from-the-run');
+  });
+
   it('keeps the end of the output, from the failing check', async () => {
     const report = await verify({ commands: ['echo the-reason; exit 3'] });
     expect(report.checks[0].tail).toContain('the-reason');
@@ -140,6 +156,84 @@ describe('verifyTask', () => {
     expect(report.checks[0].outcome).toBe('timed_out');
     expect(Date.now() - started).toBeLessThan(20_000);
   }, 30_000);
+
+  describe("a database the project's tests need", () => {
+    const fakeDocker = () => {
+      const calls: string[][] = [];
+      let next = 0;
+      const docker: DockerRun = async (args) => {
+        calls.push(args);
+        if (args[0] === 'run') return { ok: true, stdout: `container-${++next}\n` };
+        if (args[0] === 'port') return { ok: true, stdout: '127.0.0.1:50000\n' };
+        if (args[0] === 'ps') return { ok: true, stdout: '' };
+        return { ok: true, stdout: '' };
+      };
+      return { docker, calls };
+    };
+
+    beforeEach(() => {
+      writeFileSync(join(repo, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres:18-alpine\n');
+      mkdirSync(join(repo, 'apps', 'api'), { recursive: true });
+      writeFileSync(join(repo, 'apps', 'api', '.env.example'), 'CSRF_SECRET=from-example\nDATABASE_URL=postgres://real.example.com/prod\n');
+      commit(repo, 'compose');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+    });
+
+    it('starts it by itself, gives the checks its address and the example settings, and removes it', async () => {
+      const { docker, calls } = fakeDocker();
+      const report = await verify({ docker, commands: ['case "$DATABASE_URL" in postgresql://verify:*@127.0.0.1:50000/verify) ;; *) exit 1;; esac; test "$CSRF_SECRET" = from-example'] });
+      expect(report.status).toBe('passed');
+      expect(report.services).toEqual({ status: 'started', images: ['postgres:18-alpine'] });
+      expect(calls).toContainEqual(['rm', '-f', '-v', 'container-1']);
+    });
+
+    it('runs migrations once the database is up, and a broken one is the task breaking things', async () => {
+      const { docker } = fakeDocker();
+      unlinkSync(join(wt, 'good.txt'));
+      commit(wt, 'broke');
+      const report = await verify({ docker, commands: ['true'], detected: { install: [], prepare: ['test -f good.txt'], checks: [] } });
+      expect(report.status).toBe('regression');
+      expect(report.checks[0]).toMatchObject({ name: 'prepare', onBase: 'passed' });
+    });
+
+    it('gives the task and the base each their own empty database', async () => {
+      const { docker, calls } = fakeDocker();
+      unlinkSync(join(wt, 'good.txt'));
+      commit(wt, 'broke');
+      await verify({ docker, commands: ['test -f good.txt'] });
+      expect(calls.filter((call) => call[0] === 'run')).toHaveLength(2);
+      expect(calls).toContainEqual(['rm', '-f', '-v', 'container-2']);
+    });
+
+    it("keeps the project's own value when it set one", async () => {
+      const { docker } = fakeDocker();
+      const report = await verify({ docker, env: { DATABASE_URL: 'postgres://mine' }, commands: ['test "$DATABASE_URL" = postgres://mine'] });
+      expect(report.status).toBe('passed');
+    });
+
+    it('hides the temporary password in what it passes on', async () => {
+      const { docker } = fakeDocker();
+      const report = await verify({ docker, commands: ['echo "url is $DATABASE_URL"; exit 1'] });
+      expect(report.checks[0].tail).toContain('url is');
+      expect(report.checks[0].tail).not.toMatch(/verify:[a-f0-9]{32}@/);
+    });
+
+    it('without Docker it still runs what it can, blocks nothing and says why', async () => {
+      const docker: DockerRun = async () => ({ ok: false, stdout: '' });
+      const report = await verify({ docker, commands: ['test -n "$DATABASE_URL"'] });
+      expect(report.status).toBe('not_verified');
+      expect(report.services?.status).toBe('unavailable');
+      expect(describeVerification(report)).toMatch(/Docker/);
+    });
+
+    it('a task cannot choose the image: it comes from the base', async () => {
+      const { docker, calls } = fakeDocker();
+      writeFileSync(join(wt, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres-evil:1\n');
+      commit(wt, 'task swaps the image');
+      await verify({ docker });
+      expect(calls.find((call) => call[0] === 'run')?.at(-1)).toBe('postgres:18-alpine');
+    });
+  });
 
   it('says plainly when there is nothing to run', async () => {
     const report = await verify({ commands: undefined });

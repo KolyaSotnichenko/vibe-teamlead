@@ -12,11 +12,12 @@
 
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { basename, delimiter, dirname, join } from 'node:path';
 
 import { runProcess, searchPath } from '../../platform/exec';
 import { gitRunner, type GitRun } from '../merge/git-merge';
-import { type Check, type DetectedChecks, detectChecks } from './detect-checks';
+import { type Check, type DetectedChecks, detectChecks, type ServiceImage, serviceEnv, serviceImages } from './detect-checks';
+import { type DockerRun, hostDocker, startTestServices } from './test-services';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
 
@@ -29,6 +30,8 @@ export interface CheckResult extends Check {
   flaky?: boolean;
   /** The same check on the commit the task started from, when it failed here */
   onBase?: CheckOutcome;
+  /** The end of its output there, when it failed there too */
+  tailOnBase?: string;
 }
 
 export interface TamperFinding {
@@ -50,6 +53,8 @@ export interface VerificationReport {
   tamper: TamperFinding[];
   /** Changed files that decide how checks run. Often fine, so not blocking; the reviewer gets to look. */
   runnerConfigChanged: string[];
+  /** The temporary databases the checks ran against, or why there were none */
+  services?: { status: 'started' | 'unavailable'; images: string[]; reason?: string };
 }
 
 export interface VerifyTaskOptions {
@@ -67,6 +72,8 @@ export interface VerifyTaskOptions {
   detected?: DetectedChecks;
   checkTimeoutMs?: number;
   killGraceMs?: number;
+  /** Instead of the machine's docker. For tests. */
+  docker?: DockerRun;
   installTimeoutMs?: number;
   git?: string;
   hostEnv?: NodeJS.ProcessEnv;
@@ -176,15 +183,27 @@ async function findTamper(run: GitRun, base: string, head: string): Promise<Tamp
   return findings;
 }
 
-async function detectAt(run: GitRun, commit: string): Promise<DetectedChecks> {
+const COMPOSE_FILE = /^(docker-)?compose(\.[\w-]+)?\.ya?ml$/;
+/** At the root or one level of packages in: the example settings of a monorepo's apps */
+const ENV_EXAMPLE = /^([^/]+\/){0,2}\.env\.(example|sample)$/;
+
+/** All this reads from the base, so that a task can't choose what checks it or what it runs against. */
+async function detectAt(run: GitRun, commit: string): Promise<{ detected: DetectedChecks; images: ServiceImage[]; example: string }> {
   const files = (await run(['ls-tree', '-r', '-z', '--name-only', commit])).raw.split('\0').filter(Boolean);
+  const show = async (file: string) => {
+    const shown = await run(['show', `${commit}:${file}`]);
+    return shown.ok ? shown.raw : '';
+  };
   const contents = new Map<string, string | null>();
   // The manifests detection reads are all at the root
-  for (const file of files.filter((name) => !name.includes('/') && name.endsWith('.json'))) {
-    const shown = await run(['show', `${commit}:${file}`]);
-    contents.set(file, shown.ok ? shown.raw : null);
-  }
-  return detectChecks({ files, read: (path) => contents.get(path) ?? null });
+  for (const file of files.filter((name) => !name.includes('/') && name.endsWith('.json'))) contents.set(file, await show(file));
+  const composeFile = files.find((name) => COMPOSE_FILE.test(name));
+  const examples = await Promise.all(files.filter((name) => ENV_EXAMPLE.test(name)).sort().map(show));
+  return {
+    detected: detectChecks({ files, read: (path) => contents.get(path) ?? null }),
+    images: composeFile ? serviceImages(await show(composeFile)) : [],
+    example: examples.join('\n'),
+  };
 }
 
 export async function verifyTask(options: VerifyTaskOptions): Promise<VerificationReport> {
@@ -199,7 +218,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const baseCommit = (await run(['merge-base', baseRef, commit])).stdout;
   if (!commit || !baseCommit) throw new Error(`The task's commit or its base "${baseRef}" was not found.`);
 
-  const detected = options.detected ?? (await detectAt(run, baseCommit));
+  const base = await detectAt(run, baseCommit);
+  const detected = options.detected ?? base.detected;
   const checks: Check[] = options.commands?.length
     ? options.commands.map((command) => ({ name: command, command }))
     : detected.checks;
@@ -207,9 +227,14 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const runnerConfigChanged = (await run(['-c', 'core.quotepath=off', 'diff', '--name-only', '-z', baseCommit, commit])).raw.split('\0').filter((file) => RUNNER_CONFIG.test(file)).sort();
   if (!checks.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
 
-  const env = verificationEnv(hostEnv, options.env);
+  const docker = options.docker ?? hostDocker(hostEnv, signal);
+  const serviceLabel = basename(dirname(dirname(options.lockDir))).replace(/[^\w.-]/g, '_') || 'project';
+  let services: VerificationReport['services'];
+  /** Set for each copy: every copy gets its own database */
+  let env: NodeJS.ProcessEnv = {};
+  let secrets: string[] = [];
   /** The tail reaches agents and saved reports: the project's own values stay out of it */
-  const redact = (line: string) => Object.values(options.env).reduce((text, value) => (value.length >= 4 ? text.split(value).join('***') : text), line);
+  const redact = (line: string) => secrets.reduce((text, value) => (value.length >= 4 ? text.split(value).join('***') : text), line);
   const shell = async (command: string, cwd: string, timeoutMs: number): Promise<Omit<CheckResult, keyof Check>> => {
     let tail = '';
     const result = await runProcess('/bin/sh', ['-c', command], {
@@ -230,7 +255,19 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       if (!cloned.ok) throw new Error(cloned.output || 'git clone failed');
       const checkedOut = await run(['checkout', '-q', '--detach', at], cwd);
       if (!checkedOut.ok) throw new Error(checkedOut.output || 'git checkout failed');
-      return await work(cwd);
+      const started = await startTestServices(base.images, { docker, label: serviceLabel });
+      try {
+        if (started.status !== 'none') {
+          services ??= { status: started.status, images: base.images.map((image) => image.image), ...(started.reason ? { reason: started.reason } : {}) };
+        }
+        const variables = { ...serviceEnv(base.example, started.started), ...options.env };
+        env = verificationEnv(hostEnv, variables);
+        // Example values aren't secrets, the project's own values and the database addresses are
+        secrets = [...Object.values(options.env), ...started.started.map((service) => service.url)];
+        return await work(cwd);
+      } finally {
+        await started.stop();
+      }
     } finally {
       rmSync(parent, { recursive: true, force: true });
     }
@@ -243,6 +280,13 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       onLog?.(`Checks: ${command}`);
       const result = await shell(command, cwd, installTimeout);
       if (result.outcome !== 'passed') return { name: 'install', command, ...result };
+    }
+    // A database that isn't there can't be migrated: that says nothing about the task
+    if (services?.status === 'unavailable') return undefined;
+    for (const command of detected.prepare ?? []) {
+      onLog?.(`Checks: ${command}`);
+      const result = await shell(command, cwd, installTimeout);
+      if (result.outcome !== 'passed') return { name: 'prepare', command, ...result };
     }
     return undefined;
   };
@@ -269,22 +313,36 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
 
   // Exit codes come from the task's code, so "tool missing" or a timeout proves nothing by itself: only the base can tell
   const failed = results.filter((result) => result.outcome !== 'passed');
+  const baseTails = new Map<string, string>();
   const unknown = failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
   if (unknown.length) {
     await inCopy(baseCommit, async (cwd) => {
       const failedInstall = await install(cwd);
       for (const result of unknown) {
         const key = `${baseCommit}\0${result.command}`;
-        if (result.name === 'install') baseResults.set(key, failedInstall?.command === result.command ? failedInstall.outcome : 'passed');
-        else baseResults.set(key, failedInstall ? failedInstall.outcome : (await shell(result.command, cwd, checkTimeout)).outcome);
+        if (result.name === 'install' || result.name === 'prepare') baseResults.set(key, failedInstall?.command === result.command ? failedInstall.outcome : 'passed');
+        else if (failedInstall) {
+          baseResults.set(key, failedInstall.outcome);
+          baseTails.set(key, failedInstall.tail ?? '');
+        } else {
+          let onBase = await shell(result.command, cwd, checkTimeout);
+          // As on the task: a flaky test here would hide what the task broke
+          if (onBase.outcome === 'failed') onBase = await shell(result.command, cwd, checkTimeout);
+          baseResults.set(key, onBase.outcome);
+          baseTails.set(key, onBase.tail ?? '');
+        }
       }
     });
   }
-  for (const result of failed) result.onBase = baseResults.get(`${baseCommit}\0${result.command}`);
+  for (const result of failed) {
+    const key = `${baseCommit}\0${result.command}`;
+    result.onBase = baseResults.get(key);
+    if (result.onBase !== 'passed' && baseTails.has(key)) result.tailOnBase = baseTails.get(key);
+  }
 
   const broke = failed.some((result) => result.onBase === 'passed');
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
-  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged };
+  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}) };
 }
 
 const OUTCOME_WORDS: Record<CheckOutcome, string> = { passed: 'passed', failed: 'FAILED', timed_out: 'ran out of time', unavailable: 'its tool is not installed' };
@@ -297,7 +355,10 @@ export function describeVerification(report: VerificationReport): string {
     const base = check.onBase === undefined ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (the same on the base: says nothing about this task)';
     return `- ${check.command}: ${OUTCOME_WORDS[check.outcome]}${check.exitCode === undefined ? '' : ` (exit ${check.exitCode})`}${check.flaky ? ' (failed once, then passed: flaky)' : ''}${base}`;
   });
-  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
+  const databases = report.services?.status === 'started'
+    ? [`Against a temporary, empty database: ${report.services.images.join(', ')}`]
+    : report.services?.reason ? [report.services.reason] : [];
+  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...databases, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
 }
 
 /** What must be fixed before a review can pass. Keys ignore the wording, to compare rounds. Pure. */
