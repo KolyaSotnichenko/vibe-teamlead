@@ -398,6 +398,8 @@ Use ONLY these values for the `type` field in phases:
 3. **Small scope** - Each subtask should take 1-3 files max
 4. **Clear verification** - Every subtask must have a way to verify it works
 5. **Explicit dependencies** - Phases block until dependencies complete
+6. **Reuse before you add** - Each subtask costs a whole coder session. Before adding one, check whether the code already has what it needs. If so, name it in `patterns_from` and make the subtask smaller, or cover its AC in the subtask next to it. This is never a reason to leave an AC unmapped.
+7. **Merge only what is tiny** - Fold a subtask of a few lines into the subtask next to it when both touch the same file. Don't merge anything bigger: rule 3 stays, because a long session costs more per turn than a short one.
 
 ### Verification Types
 
