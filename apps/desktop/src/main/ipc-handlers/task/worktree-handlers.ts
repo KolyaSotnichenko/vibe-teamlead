@@ -2049,8 +2049,6 @@ export function registerWorktreeHandlers(
           }
         };
 
-        emitProgress('analyzing', 0, 'Starting merge engine');
-
         // git does the merge. What it can't do, an agent does first, in the task's folder
         let mergeSucceeded = false;
         let mergeError: string | undefined;
@@ -2066,8 +2064,11 @@ export function registerWorktreeHandlers(
 
         if (options?.reviewAction === 'cancel') {
           const cancelled = worktreePath ? await cancelIntegrationReview({ worktreePath, ...git }) : false;
+          emitProgress('complete', 100, 'The merge was cancelled');
           return { success: true, data: { success: cancelled, message: cancelled ? 'The merge was cancelled.' : 'No merge is waiting for review, or the task could not be put back.' } };
         }
+
+        emitProgress('analyzing', 0, 'Starting the merge');
 
         const mergeResult = await inMergeQueue(project.path, taskId, () => integrateAndMerge({
           ...taskBranch,

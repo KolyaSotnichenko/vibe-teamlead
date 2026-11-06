@@ -34,7 +34,7 @@ apps/desktop/
     │   │   ├── agent/         # Worker thread + bridge (stream events, agent questions)
     │   │   ├── orchestration/ # Spec / build / QA pipeline
     │   │   ├── config/        # AGENT_CONFIGS: tools, MCP servers per agent type
-    │   │   ├── security/      # Bash allowlist, path containment (enforced as PreToolUse hooks)
+    │   │   ├── security/      # Bash denylist, path containment (enforced as PreToolUse hooks)
     │   │   └── runners/       # Utility features (insights, roadmap, PR review, ...)
     │   ├── github-auth/       # GitHub App device flow + Keychain token store
     │   └── ipc-handlers/      # Main ↔ renderer IPC

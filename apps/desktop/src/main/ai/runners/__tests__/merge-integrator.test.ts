@@ -4,6 +4,7 @@ const runClaudeTask = vi.hoisted(() => vi.fn());
 vi.mock('../../claude-code/task', () => ({ EDIT_TOOLS: ['Read', 'Edit', 'Bash'], runClaudeTask }));
 vi.mock('../../prompts/prompt-loader', () => ({ loadPrompt: (name: string) => `prompt:${name}` }));
 
+import { bashSecurityHook } from '../../security/bash-validator';
 import { parseVerdict, runMergeIntegrator } from '../merge-integrator';
 
 describe('parseVerdict', () => {
@@ -58,8 +59,38 @@ describe('runMergeIntegrator', () => {
     expect(runClaudeTask.mock.calls[0][0].prompt).toContain('without a conflict');
   });
 
+  it('gives up on an agent that hangs: it would hold up every task behind it in the queue', async () => {
+    let signal: AbortSignal | undefined;
+    runClaudeTask.mockImplementation(async (task: { abortSignal: AbortSignal }) => {
+      signal = task.abortSignal;
+      return new Promise(() => {});
+    });
+    await expect(runMergeIntegrator({ ...options, timeoutMs: 5 })).rejects.toThrow(/stopped after/);
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("passes on the call's error: the user has to see why", async () => {
     runClaudeTask.mockRejectedValue(new Error('API Error: 429 busy'));
     await expect(runMergeIntegrator(options)).rejects.toThrow('API Error: 429 busy');
+  });
+});
+
+describe('the commands the prompt asks for', () => {
+  const allowed = (command: string) => !('hookSpecificOutput' in bashSecurityHook({ toolName: 'Bash', toolInput: { command }, cwd: '/wt' }));
+
+  it.each([
+    'git status',
+    'git log -p main..HEAD -- apps/api/src/ideas/ideas.module.ts',
+    'git diff --name-only --diff-filter=U',
+    'git add apps/web/src/new-file.ts',
+    'pnpm install --frozen-lockfile',
+    'pnpm --filter @roadmaply/shared build && pnpm -r --if-present typecheck',
+    'pnpm --filter @roadmaply/web test',
+    'npm ci',
+    'npm test',
+    'npx tsc --noEmit',
+    'grep -rn "STAMP_DICTIONARY" apps/web/src',
+  ])('are not blocked: %s', (command) => {
+    expect(allowed(command)).toBe(true);
   });
 });

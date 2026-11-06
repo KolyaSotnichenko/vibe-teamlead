@@ -420,6 +420,9 @@ export interface MergeStats {
 // Merge progress tracking (for progress bar during merge operations)
 export type MergeStage = 'analyzing' | 'detecting_conflicts' | 'resolving' | 'validating' | 'complete' | 'error';
 
+/** Where a task's merge stands, for whoever looks at it later */
+export type MergeState = { state: 'merging' } | { state: 'review' } | { state: 'failed'; reason: string };
+
 export interface MergeProgress {
   stage: MergeStage;
   percent: number;

@@ -35,7 +35,9 @@ import { TASK_STATUS_LABELS } from '../../../shared/constants';
 import { TaskEditDialog } from '../TaskEditDialog';
 import { useTaskDetail } from './hooks/useTaskDetail';
 import { TaskWarnings } from './TaskWarnings';
+import { MergeStateNotice } from './MergeStateNotice';
 import { SecurityQaNotice } from './SecurityQaNotice';
+import { useMergeState } from './useMergeState';
 import { TurnLimitNotice } from './TurnLimitNotice';
 import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
@@ -83,6 +85,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
   const { toast } = useToast();
   const state = useTaskDetail({ task });
   const [mergeReviewKey, setMergeReviewKey] = useState(0);
+  const mergeState = useMergeState(task);
   const activeProject = useProjectStore(s => s.getActiveProject());
   const showFilesTab = isFilesTabEnabled();
   const completedSubtasks = task.subtasks.filter(s => s.status === 'completed').length;
@@ -476,6 +479,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
               {/* Warnings - compact inline */}
               <div className="mt-3 space-y-3 empty:hidden">
+                {!state.workspaceError && <MergeStateNotice task={task} />}
                 <SecurityQaNotice task={task} />
                 <TurnLimitNotice task={task} />
               </div>
@@ -551,7 +555,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                         worktreeStatus={state.worktreeStatus}
                         worktreeDiff={state.worktreeDiff}
                         isLoadingWorktree={state.isLoadingWorktree}
-                        isMerging={state.isMerging}
+                        isMerging={state.isMerging || mergeState?.state === 'merging'}
                         isDiscarding={state.isDiscarding}
                         showDiscardDialog={state.showDiscardDialog}
                         showDiffDialog={state.showDiffDialog}

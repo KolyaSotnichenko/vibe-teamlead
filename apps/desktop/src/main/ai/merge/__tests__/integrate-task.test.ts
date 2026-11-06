@@ -10,11 +10,13 @@ import {
   cancelIntegrationReview,
   getIntegrationReview,
   getIntegrationReviewDiff,
+  getMergeState,
   INTEGRATION_FILE,
   integrateAndMerge,
   integrateTask,
   type IntegrationAgentAnswer,
   type IntegrationAgentRequest,
+  type IntegrateTaskOptions,
 } from '../integrate-task';
 
 const BRANCH = 'vibe-teamlead/001-task';
@@ -333,6 +335,69 @@ describe('integrateTask', () => {
     it('stage only: staged, for the user to commit', async () => {
       mainMovedElsewhere();
       await expect(flow({ stageOnly: true, runAgent: async () => OK })).resolves.toMatchObject({ status: 'staged' });
+    });
+  });
+
+  describe('getMergeState: what the board shows after the window is closed', () => {
+    const flow = (runAgent: IntegrateTaskOptions['runAgent'], confirmed = false) => integrateAndMerge({
+      projectDir: repo, branch: BRANCH, baseBranch: 'main', worktreePath: wt, message: 'Merge', stageOnly: false, confirmed, runAgent,
+    });
+    const state = (merging = false) => getMergeState({ worktreePath: wt, merging });
+
+    it('nothing to say about a task nobody merged', async () => {
+      await expect(state()).resolves.toBeNull();
+    });
+
+    it('merging or waiting to comes first', async () => {
+      await expect(state(true)).resolves.toEqual({ state: 'merging' });
+    });
+
+    it('knows without a task folder that a merge is on, and nothing else', async () => {
+      await expect(getMergeState({ merging: true })).resolves.toEqual({ state: 'merging' });
+      await expect(getMergeState({ merging: false })).resolves.toBeNull();
+    });
+
+    it("remembers why a merge failed, and it survives the window: it's on disk", async () => {
+      conflict();
+      await flow(async () => ({ ok: false, summary: 'the tasks disagree.' }));
+      const result = await state();
+      expect(result?.state).toBe('failed');
+      expect(result?.state === 'failed' && result.reason).toMatch(/the tasks disagree/);
+    });
+
+    it('says a merge waits for the user', async () => {
+      conflict();
+      await flow(resolving);
+      await expect(state()).resolves.toEqual({ state: 'review' });
+    });
+
+    it('a new try wipes the old failure', async () => {
+      conflict();
+      await flow(async () => ({ ok: false, summary: 'no' }));
+      await flow(resolving);
+      await expect(state()).resolves.toEqual({ state: 'review' });
+    });
+
+    it('a failure says nothing once the task has moved on', async () => {
+      conflict();
+      await flow(async () => ({ ok: false, summary: 'no' }));
+      writeFileSync(join(wt, 'task.txt'), 'fixed by hand\n');
+      commitAll(wt, 'by hand');
+      await expect(state()).resolves.toBeNull();
+    });
+
+    it('a refusal before any agent ran is remembered too', async () => {
+      git(repo, 'checkout', '-q', '-b', 'elsewhere');
+      await flow(resolving);
+      const result = await state();
+      expect(result?.state === 'failed' && result.reason).toMatch(/"elsewhere"/);
+    });
+
+    it('a broken step comes back as a failure, not an exception that loses it', async () => {
+      const result = await integrateAndMerge({
+        projectDir: join(repo, 'no-such-folder'), branch: BRANCH, baseBranch: 'main', worktreePath: wt, message: 'Merge', stageOnly: false, confirmed: false, runAgent: resolving,
+      });
+      expect(result.status).toBe('refused');
     });
   });
 

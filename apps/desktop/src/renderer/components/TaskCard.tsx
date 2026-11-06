@@ -39,6 +39,7 @@ import type { Task, TaskStatus } from '../../shared/types';
 import { StageTicks, SubtaskBar } from './board/StageMarks';
 import { countSubtasks, formatSince, getTaskStage, type TaskStageInfo } from './board/task-stage';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { useMergeState } from './task-detail/useMergeState';
 import { useSecurityQaError } from './task-detail/useSecurityQaError';
 
 // Catastrophic stuck detection interval (ms).
@@ -312,6 +313,7 @@ export const TaskCard = memo(function TaskCard({
   };
 
   const securityQaError = useSecurityQaError(task);
+  const mergeState = useMergeState(task);
 
   // Chip: why the task stands where it stands (word always shown, never colour alone)
   const chip: { tone: ChipTone; label: string } | null = (() => {
@@ -321,6 +323,9 @@ export const TaskCard = memo(function TaskCard({
     if (task.executionProgress?.phase === 'failed' && task.status === 'in_progress') return { tone: 'attention', label: t('board.chip.failed') };
     if (task.status === 'error') return { tone: 'attention', label: t('board.chip.failed') };
     if (task.status === 'human_review') {
+      if (mergeState?.state === 'merging') return { tone: 'outline', label: t('board.chip.merging') };
+      if (mergeState?.state === 'failed') return { tone: 'attention', label: t('board.chip.mergeFailed') };
+      if (mergeState?.state === 'review') return { tone: 'attention', label: t('board.chip.mergeReview') };
       const reason = task.executionProgress?.phase === 'complete' ? 'completed' : task.reviewReason;
       if (reason === 'errors') return { tone: 'attention', label: t('reviewReason.hasErrors') };
       if (reason === 'qa_rejected') return { tone: 'attention', label: t('reviewReason.qaIssues') };

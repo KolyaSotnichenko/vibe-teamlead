@@ -12,6 +12,7 @@ import type {
   TaskLogStreamChunk,
   ReviewReason,
   MergeProgress,
+  MergeState,
   SupportedIDE,
   SupportedTerminal,
   WorktreeCreatePROptions,
@@ -93,6 +94,7 @@ export interface TaskAPI {
   // Task Workspace (parsed spec, ACs, plan, timeline, architecture)
   getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<IPCResult<{ reason?: string } | null>>;
+  getTaskMergeState: (taskId: string, projectId?: string) => Promise<IPCResult<MergeState | null>>;
   getMergeReviewDiff: (taskId: string, file: string, against: 'project' | 'task', projectId?: string) => Promise<IPCResult<{ diff: string; truncated: boolean }>>;
   getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult<string>>;
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;
@@ -309,6 +311,9 @@ export const createTaskAPI = (): TaskAPI => ({
 
   getTaskWorkspace: (taskId: string, projectId?: string): Promise<IPCResult<TaskWorkspace | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKSPACE_GET, taskId, projectId),
+
+  getTaskMergeState: (taskId: string, projectId?: string): Promise<IPCResult<MergeState | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_MERGE_STATE, taskId, projectId),
 
   getTaskSecurityQaError: (taskId: string, projectId?: string): Promise<IPCResult<{ reason?: string } | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_SECURITY_QA_ERROR, taskId, projectId),

@@ -9,6 +9,7 @@
 import { lstatSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { MergeState } from '../../../shared/types/task';
 import { gitPath, type GitRun, gitRunner, mergeBlocker, mergeTaskBranch, type MergeTaskBranchOptions, type MergeTaskBranchResult, saveApprovedChanges } from './git-merge';
 
 export interface IntegrationAgentRequest {
@@ -43,6 +44,7 @@ export type IntegrateTaskResult =
 
 /** In the task's git directory: agents can't reach it, and git never commits it */
 export const INTEGRATION_FILE = 'vibe-teamlead-integration.json';
+const MERGE_FAILURE_FILE = 'vibe-teamlead-merge-failure.json';
 
 interface IntegrationMark {
   state: 'running' | 'review';
@@ -225,8 +227,62 @@ export interface IntegrateAndMergeOptions extends MergeTaskBranchOptions {
   onProgress?: (stage: 'integrating' | 'merging') => void;
 }
 
-/** The whole merge of a task. Call it through the merge queue. */
-export async function integrateAndMerge(options: IntegrateAndMergeOptions): Promise<MergeTaskBranchResult | { status: 'needs_review'; files: string[]; summary: string }> {
+type MergeOutcome = MergeTaskBranchResult | { status: 'needs_review'; files: string[]; summary: string };
+
+/** The whole merge of a task. Call it through the merge queue. Never throws: nobody may be there to catch it. */
+export async function integrateAndMerge(options: IntegrateAndMergeOptions): Promise<MergeOutcome> {
+  let result: MergeOutcome;
+  try {
+    result = await mergeSteps(options);
+  } catch (error) {
+    result = { status: 'refused', message: error instanceof Error ? error.message : String(error) };
+  }
+  if (options.worktreePath) await noteOutcome(options, options.worktreePath, result);
+  return result;
+}
+
+/** The window that started the merge may be closed by the time it fails, so the reason goes on disk. */
+async function noteOutcome(options: IntegrateAndMergeOptions, worktreePath: string, result: MergeOutcome): Promise<void> {
+  try {
+    const run = gitRunner(worktreePath, options.git ?? 'git', options.env ?? process.env);
+    const tip = (await run(['rev-parse', 'HEAD'])).stdout;
+    if (!tip) return;
+    const file = await gitPath(run, worktreePath, MERGE_FAILURE_FILE);
+    if (result.status === 'refused' || result.status === 'conflicts') {
+      const reason = [result.conflictFiles?.join(', '), result.message].filter(Boolean).join(': ') || 'The merge failed.';
+      writeFileSync(file, JSON.stringify({ reason, tip }), 'utf-8');
+    } else {
+      rmSync(file, { force: true });
+    }
+  } catch {
+    // Non-fatal: the result still reaches whoever is waiting for it
+  }
+}
+
+export interface MergeStateOptions {
+  worktreePath?: string | null;
+  merging: boolean;
+  git?: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+/** Where a task's merge stands, for whoever looks at it later. A failure holds only while the task is where it failed. */
+export async function getMergeState(options: MergeStateOptions): Promise<MergeState | null> {
+  const { worktreePath, merging, git = 'git' } = options;
+  if (merging) return { state: 'merging' };
+  if (!worktreePath) return null;
+  const run = gitRunner(worktreePath, git, options.env ?? process.env);
+  if (await currentReview(run, worktreePath)) return { state: 'review' };
+  try {
+    const failure = JSON.parse(readFileSync(await gitPath(run, worktreePath, MERGE_FAILURE_FILE), 'utf-8')) as { reason?: unknown; tip?: unknown };
+    const stillThere = failure.tip === (await run(['rev-parse', 'HEAD'])).stdout;
+    return stillThere && typeof failure.reason === 'string' ? { state: 'failed', reason: failure.reason } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function mergeSteps(options: IntegrateAndMergeOptions): Promise<MergeOutcome> {
   const { worktreePath, confirmed, runAgent, onProgress } = options;
   // Before anything saves the folder's edits: that would move the task off the work under review
   if (worktreePath && !confirmed) {

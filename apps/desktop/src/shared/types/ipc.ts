@@ -48,7 +48,8 @@ import type {
   TaskLogStreamChunk,
   ImageAttachment,
   ReviewReason,
-  MergeProgress
+  MergeProgress,
+  MergeState
 } from './task';
 import type {
   TerminalCreateOptions,
@@ -714,6 +715,7 @@ export interface ElectronAPI {
   // Task workspace (parsed spec, ACs, plan, timeline, architecture)
   getTaskWorkspace: (taskId: string, projectId?: string) => Promise<IPCResult<TaskWorkspace | null>>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<IPCResult<{ reason?: string } | null>>;
+  getTaskMergeState: (taskId: string, projectId?: string) => Promise<IPCResult<MergeState | null>>;
   getMergeReviewDiff: (taskId: string, file: string, against: 'project' | 'task', projectId?: string) => Promise<IPCResult<{ diff: string; truncated: boolean }>>;
   getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult<string>>;
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;

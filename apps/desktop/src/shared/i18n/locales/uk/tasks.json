@@ -594,7 +594,10 @@
       },
       "failed": "Помилка",
       "qaPassed": "QA пройдено",
-      "securityQaFailed": "Security QA не завершився"
+      "securityQaFailed": "Security QA не завершився",
+      "merging": "Зливається",
+      "mergeFailed": "Злиття не вдалось",
+      "mergeReview": "Перевірте злиття"
     },
     "subtasksAria": "Виконано {{done}} з {{total}} підзадач",
     "worktree": "worktree",
@@ -1062,6 +1065,11 @@
     "truncated": "Зміни задовгі, щоб показати їх повністю. Решта доступна в редакторі.",
     "diffFailed": "Не вдалося завантажити зміни.",
     "cannotShow": "Цей файл відрізняється, але зміни тут показати не можна. Перевірте його в редакторі."
+  },
+  "mergeState": {
+    "mergingTitle": "Зливається",
+    "mergingBody": "Задача чекає своєї черги, або агент вливає свіжі зміни. Це вікно можна закрити.",
+    "failedTitle": "Злиття не завершилось"
   },
   "securityQa": {
     "title": "Security QA не завершився",

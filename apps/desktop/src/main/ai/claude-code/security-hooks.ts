@@ -1,7 +1,7 @@
 /**
  * PreToolUse hooks that enforce Vibe Teamlead's security model on Claude Code.
  *
- * - Bash commands go through the existing allowlist validator (`bashSecurityHook`),
+ * - Bash commands go through the existing denylist validator (`bashSecurityHook`),
  *   which already emits Claude Code's hook output format.
  * - File writes are always confined: to `allowedWritePaths` when the session
  *   sets them (spec agents and the architect write only inside the spec

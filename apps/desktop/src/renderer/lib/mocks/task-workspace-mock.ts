@@ -323,6 +323,7 @@ export const taskWorkspaceMock = {
     data: ['task-8', 'task-3', 'task-9'].includes(taskId) ? sampleTaskWorkspace : earlyTaskWorkspace,
   }),
   getTaskSecurityQaError: async (): Promise<IPCResult<{ reason?: string } | null>> => ({ success: true, data: null }),
+  getTaskMergeState: async () => ({ success: true as const, data: null }),
   getTaskWorkspaceImage: async (_taskId: string, _relativePath: string): Promise<IPCResult<string>> => ({
     success: true,
     data: `data:image/svg+xml;utf8,${encodeURIComponent(CONTAINERS_SVG)}`,
