@@ -13,6 +13,7 @@ import type {
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
 import { setUpdateChannel, setUpdateChannelWithDowngradeCheck } from '../app-updater';
+import { channelOnSave } from '../../shared/utils/update-channel';
 import { getSettingsPath, readSettingsFile } from '../settings-utils';
 import { resetMemoryService } from './context/memory-service-factory';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
@@ -206,17 +207,16 @@ export function registerSettingsHandlers(
           resetMemoryService();
         }
 
-        // Update auto-updater channel if betaUpdates setting changed
+        // Every save carries this setting, changed or not, and a pre-release stays on its channel
         if (settings.betaUpdates !== undefined) {
-          if (settings.betaUpdates) {
-            // Enabling beta updates - just switch channel
-            setUpdateChannel('beta');
-          } else {
-            // Disabling beta updates - switch to stable and check if downgrade is available
-            // This will notify the renderer if user is on a prerelease and stable version exists
-            setUpdateChannelWithDowngradeCheck('latest', true).catch((err) => {
+          const { channel, checkDowngrade } = channelOnSave(app.getVersion(), settings.betaUpdates);
+          if (checkDowngrade) {
+            // Back to stable: this tells the renderer if a stable version is there to go back to
+            setUpdateChannelWithDowngradeCheck(channel, true).catch((err) => {
               console.error('[settings-handlers] Failed to check for stable downgrade:', err);
             });
+          } else {
+            setUpdateChannel(channel);
           }
         }
 

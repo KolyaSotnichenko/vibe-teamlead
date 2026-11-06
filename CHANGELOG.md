@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- On a pre-release, the Beta Updates switch shows on and locked, and saving settings no longer moves the app off its update channel.
+- The Auto-Update Projects switch is gone: nothing read it.
+
 ## 2.0.0-beta.2 - 2026-11-06
 
 - The app is smaller: Claude Code and CodeGraph ship once instead of twice.

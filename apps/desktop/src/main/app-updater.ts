@@ -17,7 +17,7 @@
  * - APP_UPDATE_ERROR: Error during update process
  */
 
-import { updateChannelFor } from './update-channel';
+import { updateChannelFor } from '../shared/utils/update-channel';
 import { accessSync, constants as fsConstants } from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';

@@ -15,6 +15,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { Button } from '../ui/button';
+import { BetaUpdatesToggle } from './BetaUpdatesToggle';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { Progress } from '../ui/progress';
@@ -415,42 +416,20 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
             </div>
           )}
 
-          <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-            <div className="space-y-1">
-              <Label className="font-medium text-foreground">{t('updates.autoUpdateProjects')}</Label>
-              <p className="text-sm text-muted-foreground">
-                {t('updates.autoUpdateProjectsDescription')}
-              </p>
-            </div>
-            <Switch
-              checked={settings.autoUpdateAutoBuild}
-              onCheckedChange={(checked) =>
-                onSettingsChange({ ...settings, autoUpdateAutoBuild: checked })
+          <BetaUpdatesToggle
+            version={version}
+            enabled={settings.betaUpdates ?? false}
+            onChange={(checked) => {
+              onSettingsChange({ ...settings, betaUpdates: checked });
+              if (checked) {
+                // Clear downgrade info when enabling beta again
+                setStableDowngradeInfo(null);
+              } else {
+                // Clear beta update info when disabling beta, so stable downgrade UI can show
+                setAppUpdateInfo(null);
               }
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-            <div className="space-y-1">
-              <Label className="font-medium text-foreground">{t('updates.betaUpdates')}</Label>
-              <p className="text-sm text-muted-foreground">
-                {t('updates.betaUpdatesDescription')}
-              </p>
-            </div>
-            <Switch
-              checked={settings.betaUpdates ?? false}
-              onCheckedChange={(checked) => {
-                onSettingsChange({ ...settings, betaUpdates: checked });
-                if (checked) {
-                  // Clear downgrade info when enabling beta again
-                  setStableDowngradeInfo(null);
-                } else {
-                  // Clear beta update info when disabling beta, so stable downgrade UI can show
-                  setAppUpdateInfo(null);
-                }
-              }}
-            />
-          </div>
+            }}
+          />
 
           {/* Stable Downgrade Section - shown when user turns off beta while on prerelease */}
           {stableDowngradeInfo && !appUpdateInfo && (

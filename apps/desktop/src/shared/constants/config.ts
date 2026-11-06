@@ -38,7 +38,6 @@ export const DEFAULT_APP_SETTINGS = {
   githubCLIPath: undefined as string | undefined,
   gitlabCLIPath: undefined as string | undefined,
   autoBuildPath: undefined as string | undefined,
-  autoUpdateAutoBuild: true,
   autoNameTerminals: true,
   useClaudeSubscription: false,
   subagentsEnabled: true,

@@ -256,7 +256,6 @@ export interface AppSettings {
   gitlabCLIPath?: string;
   claudePath?: string;
   autoBuildPath?: string;
-  autoUpdateAutoBuild: boolean;
   autoNameTerminals: boolean;
   notifications: NotificationSettings;
   /** The sidebar teamlead chirps when the team's mood changes. On unless set to false. */
