@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TaskLogWriter, taskLogger } from '../task-log-writer';
+import { TaskLogWriter, logRunFailure, taskLogger } from '../task-log-writer';
 
 describe('taskLogger', () => {
   it('sends a line to the live log and keeps it in task_logs.json under its phase', () => {
@@ -28,5 +28,22 @@ describe('taskLogger', () => {
     taskLogger(() => {}, writer, 'qa')('session finished');
     const entries = JSON.parse(readFileSync(path.join(dir, 'task_logs.json'), 'utf-8')).phases.validation.entries;
     expect(entries.map((e: { content: string }) => e.content)).toEqual(['All done.', 'session finished']);
+  });
+});
+
+describe('logRunFailure', () => {
+  it('keeps the reason in task_logs.json, even when no session or phase ever started', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'vtl-tasklog-'));
+    const post = vi.fn();
+    logRunFailure(post, new TaskLogWriter(dir, 'spec'), 'Implementation plan is invalid');
+    expect(post).toHaveBeenCalledWith('Run failed: Implementation plan is invalid');
+    const logs = JSON.parse(readFileSync(path.join(dir, 'task_logs.json'), 'utf-8'));
+    expect(logs.phases.planning.entries.at(-1)).toMatchObject({ type: 'error', content: 'Run failed: Implementation plan is invalid' });
+  });
+
+  it('says nothing when there is no reason to give', () => {
+    const post = vi.fn();
+    logRunFailure(post, null, undefined);
+    expect(post).not.toHaveBeenCalled();
   });
 });

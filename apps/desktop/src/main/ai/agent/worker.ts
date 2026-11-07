@@ -55,7 +55,7 @@ import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking, modelPhaseFor, resolvePhaseModel } from '../config/phase-config';
-import { TaskLogWriter, taskLogger } from '../logging/task-log-writer';
+import { TaskLogWriter, logRunFailure, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import { runStandaloneQa } from './standalone-qa';
@@ -897,6 +897,8 @@ async function runBuildOrchestrator(
   });
 
   const outcome = await orchestrator.run();
+
+  if (!outcome.success) logRunFailure(postLog, logWriter, outcome.error);
 
   // End the final phase and flush any remaining accumulated log entries.
   // When the orchestrator reaches 'complete' or 'failed', finalPhase is a terminal

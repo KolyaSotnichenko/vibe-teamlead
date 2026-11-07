@@ -61,6 +61,21 @@ export function taskLogger(
   };
 }
 
+/**
+ * Why a run failed, kept in task_logs.json under the phase it stopped in. A build
+ * can fail before any session starts, and then nothing else records the reason.
+ */
+export function logRunFailure(
+  post: (line: string) => void,
+  writer: Pick<TaskLogWriter, 'logText'> | null | undefined,
+  error: string | undefined,
+): void {
+  if (!error) return;
+  const line = `Run failed: ${error}`;
+  post(line);
+  writer?.logText(line, undefined, 'error');
+}
+
 // =============================================================================
 // TaskLogWriter
 // =============================================================================

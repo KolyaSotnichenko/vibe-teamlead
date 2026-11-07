@@ -749,12 +749,17 @@ export class BuildOrchestrator extends EventEmitter {
    */
   private async isFirstRun(): Promise<boolean> {
     const planPath = join(this.config.specDir, 'implementation_plan.json');
+    let raw: string;
     try {
-      await readFile(planPath, 'utf-8');
-      return false;
+      raw = await readFile(planPath, 'utf-8');
     } catch {
       return true;
     }
+    // The app keeps a task's status in this file before a plan exists, with
+    // `phases: []`. That is no plan yet. A file it can't read stays not-first-run,
+    // so validation reports it instead of the planner writing over it.
+    const plan = safeParseJson<{ phases?: unknown }>(raw);
+    return Array.isArray(plan?.phases) && plan.phases.length === 0;
   }
 
   /**
