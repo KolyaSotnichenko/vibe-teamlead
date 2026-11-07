@@ -1061,5 +1061,53 @@
     "title": "A session stopped at its turn limit",
     "body": "The work continues in a new session. If this repeats, the subtask is too big for one session: split it.",
     "turns": "{{limit}} turns"
+  },
+  "preview": {
+    "title": "Preview",
+    "startingBody": "The app from main is starting. It stops when you leave this page.",
+    "failed": "The preview did not start.",
+    "stage": {
+      "worktree": "Updating to main",
+      "install": "Installing dependencies",
+      "libraries": "Building workspace packages",
+      "database": "Starting the database",
+      "migrations": "Applying migrations",
+      "seed": "Seeding the database",
+      "services": "Starting the services",
+      "ready": "Ready",
+      "failed": "Did not start",
+      "stopped": "Stopped"
+    },
+    "toolbar": {
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload",
+      "address": "Address",
+      "width": "Width",
+      "full": "Full",
+      "reset": "Reset preview data",
+      "resetConfirm": "Delete the preview's database and start empty?",
+      "resetYes": "Reset",
+      "resetNo": "Keep",
+      "services": "Services"
+    },
+    "services": {
+      "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's dev scripts. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
+      "looking": "Looking at the project's dev scripts…",
+      "name": "Name",
+      "dir": "Folder",
+      "command": "Command ({port} is the port)",
+      "urlEnv": "Variables with another service's URL",
+      "page": "Page",
+      "remove": "Remove",
+      "add": "Add a service",
+      "save": "Save and start",
+      "cancel": "Cancel",
+      "problem": {
+        "page": "Choose exactly one service as the page.",
+        "name": "Each service needs its own name: letters, digits, - and _.",
+        "command": "Each service needs a command."
+      }
+    }
   }
 }

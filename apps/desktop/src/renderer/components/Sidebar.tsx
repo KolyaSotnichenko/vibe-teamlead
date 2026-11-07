@@ -4,6 +4,7 @@ import {
   Plus,
   Settings,
   LayoutGrid,
+  MonitorPlay,
   Terminal,
   Map as MapIcon,
   BookOpen,
@@ -48,7 +49,7 @@ import { TeamStatus } from './sidebar/TeamStatus';
 import { BriefImportDialog } from './brief-import';
 import type { GitStatus } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs';
+export type SidebarView = 'kanban' | 'preview' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -70,6 +71,7 @@ const NAV_GROUPS = ['build', 'plan', 'knowledge'] as const;
 
 const baseNavItems: NavItem[] = [
   { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K', group: 'build' },
+  { id: 'preview', labelKey: 'navigation:items.preview', icon: MonitorPlay, shortcut: 'V', group: 'build' },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A', group: 'build' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W', group: 'build' },
   { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D', group: 'plan' },

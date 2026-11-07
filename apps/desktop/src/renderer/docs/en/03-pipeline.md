@@ -60,3 +60,4 @@ An optional pentest after QA approval. You enable it in Settings → Agent Setti
 - **Recovery:** on startup the app finds subtasks that got stuck and puts them back into work. There is a separate coder recovery prompt for failures.
 - **Queue:** a task holds its slot from the start until it is merged, archived or deleted, so the next one starts from a main that already has its work. One at a time by default; the queue's settings allow up to three, which can cause conflicts. Queued tasks start on their own when a slot is free.
 - **Auto-merge:** on in the queue's settings, off by default. A task merges by itself once QA approved it and the app's checks and Security QA are clean. Anything else stays with you, and a merge an agent changed code for waits for your review.
+- **Preview:** after a merge, see the app from main in the window, under Preview in the sidebar (see Preview).

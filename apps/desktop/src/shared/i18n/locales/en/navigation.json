@@ -20,7 +20,8 @@
     "gitlabMRs": "GitLab MRs",
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
-    "docs": "Documentation"
+    "docs": "Documentation",
+    "preview": "Preview"
   },
   "actions": {
     "settings": "Settings",

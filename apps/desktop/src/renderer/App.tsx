@@ -48,6 +48,7 @@ import { GitHubPRs } from './components/github-prs';
 import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
+import { PreviewPage } from './components/preview/PreviewPage';
 import { AgentTools } from './components/AgentTools';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -912,6 +913,7 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'preview' && selectedProject && <PreviewPage key={selectedProject.id} project={selectedProject} />}
               </>
             ) : (
               <WelcomeScreen
