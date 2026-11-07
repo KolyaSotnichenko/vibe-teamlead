@@ -11,6 +11,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 import { diffLines, MergeReviewPanel } from '../MergeReviewPanel';
+import { resetMergeStateSubscription } from '../../useMergeState';
 
 const task = { id: 't1', projectId: 'p1', title: 'Auth', status: 'human_review' } as unknown as Task;
 
@@ -29,7 +30,10 @@ function setup(files: string[] | undefined, merge: unknown = { success: true, da
   return { getMergeReviewDiff, mergeWorktree, onMerged, view };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetMergeStateSubscription();
+});
 
 describe('MergeReviewPanel', () => {
   it('shows nothing when no merge waits for review', async () => {
@@ -104,6 +108,46 @@ describe('MergeReviewPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('identity unknown');
     expect(screen.getByText('src/auth.ts')).toBeInTheDocument();
     expect(onMerged).not.toHaveBeenCalled();
+  });
+
+  describe('while the merge it confirmed is running, in a reopened window', () => {
+    function reopened() {
+      const progress: Array<(id: string, p: { stage: string }) => void> = [];
+      const workspace = vi.fn(async () => ({ success: true, data: { mergeReview: { files: ['src/auth.ts'] } } }));
+      const mergeWorktree = vi.fn();
+      (window as unknown as { electronAPI: unknown }).electronAPI = {
+        getTaskWorkspace: workspace,
+        getTaskMergeState: vi.fn(async () => ({ success: true, data: { state: 'merging' } })),
+        onMergeProgress: (listener: (id: string, p: { stage: string }) => void) => {
+          progress.push(listener);
+          return () => {};
+        },
+        mergeWorktree,
+      };
+      render(<MergeReviewPanel task={task} />);
+      return { progress, workspace, mergeWorktree };
+    }
+
+    it('offers neither button: a second click could only be refused', async () => {
+      const { mergeWorktree } = reopened();
+      await screen.findByText('src/auth.ts');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'mergeReview.commit' })).toBeDisabled());
+      expect(screen.getByRole('button', { name: 'mergeReview.cancel' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'mergeReview.commit' }));
+      expect(mergeWorktree).not.toHaveBeenCalled();
+    });
+
+    it('goes away when the merge is done', async () => {
+      const { progress, workspace } = reopened();
+      await screen.findByText('src/auth.ts');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'mergeReview.commit' })).toBeDisabled());
+      workspace.mockResolvedValue({ success: true, data: {} } as never);
+      (window.electronAPI.getTaskMergeState as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, data: null });
+
+      for (const listener of progress) listener('t1', { stage: 'complete' });
+
+      await waitFor(() => expect(screen.queryByText('src/auth.ts')).not.toBeInTheDocument());
+    });
   });
 
   it('reads a unified diff into lines, without its headers', () => {

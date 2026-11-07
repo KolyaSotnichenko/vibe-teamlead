@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../ui/button';
+import { useMergeState } from '../useMergeState';
 import type { Task } from '../../../../shared/types';
 
 type DiffLine = { kind: 'hunk' | 'added' | 'removed' | 'context'; text: string };
@@ -104,7 +105,10 @@ export function MergeReviewPanel({ task, onMerged }: { task: Task; onMerged?: ()
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<string | null>(null);
+  // Also after the window was closed and reopened, when `busy` no longer knows
+  const merging = useMergeState(task)?.state === 'merging';
 
+  // Read again when a merge ends: the review it was for may be over
   useEffect(() => {
     let cancelled = false;
     window.electronAPI
@@ -118,7 +122,7 @@ export function MergeReviewPanel({ task, onMerged }: { task: Task; onMerged?: ()
     return () => {
       cancelled = true;
     };
-  }, [task.id, task.projectId, task.status]);
+  }, [task.id, task.projectId, task.status, merging]);
 
   const decide = async (reviewAction: 'commit' | 'cancel') => {
     setBusy(true);
@@ -169,8 +173,8 @@ export function MergeReviewPanel({ task, onMerged }: { task: Task; onMerged?: ()
       <footer className="space-y-2 border-t border-border px-4 py-3">
         <p className="text-xs text-muted-foreground">{t('mergeReview.hint')}</p>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" disabled={busy} onClick={() => void decide('commit')}>{t('mergeReview.commit')}</Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void decide('cancel')}>{t('mergeReview.cancel')}</Button>
+          <Button size="sm" disabled={busy || merging} onClick={() => void decide('commit')}>{t('mergeReview.commit')}</Button>
+          <Button size="sm" variant="outline" disabled={busy || merging} onClick={() => void decide('cancel')}>{t('mergeReview.cancel')}</Button>
         </div>
       </footer>
     </section>
