@@ -8,6 +8,7 @@ import { updateRoadmapFeatureOutcome } from '../../utils/roadmap-utils';
 import { projectStore } from '../../project-store';
 import { titleGenerator } from '../../title-generator';
 import { AgentManager } from '../../agent';
+import { copyTaskModels } from '../../agent/task-models';
 import { findTaskAndProject } from './shared';
 import { findAllSpecPaths, isValidTaskId } from '../../utils/spec-path-helpers';
 import { isPathWithinBase, findTaskWorktree } from '../../worktree-paths';
@@ -616,6 +617,9 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           } catch (err) {
             console.error('Failed to update task_metadata.json:', err);
           }
+          // A task that has started reads its worktree's copy of the folder
+          const worktreePath = findTaskWorktree(project.path, task.specId);
+          if (worktreePath) copyTaskModels(specDir, path.join(worktreePath, getSpecsDir(project.autoBuildPath), task.specId));
 
           // Update requirements.json if it exists
           const requirementsPath = path.join(specDir, 'requirements.json');
