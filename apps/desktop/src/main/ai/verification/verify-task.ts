@@ -163,21 +163,30 @@ function scriptsOf(text: string): Record<string, unknown> {
   }
 }
 
-const TEST_FILE_ARGUMENT = /^[\w@./-]+\.(test|spec)\.[cm]?[jt]sx?$/;
+const TEST_FILE_ARGUMENT = /^(?!-)(?!.*\.\.)[\w@./-]+\.(test|spec)\.[cm]?[jt]sx?$/;
 
 /**
  * Whether a changed script only names more test files in a run that already names
- * its files: nothing else is kept out of it. In a run that names none, a file is a
- * filter, which narrows it. Pure.
+ * its files: every other byte stays, so nothing else can come along with them. In a
+ * run that names none, a file is a filter, which narrows it. After a flag's value it
+ * may widen what the flag leaves out, so only `--test`, which takes no value, may
+ * come before the list. Pure.
  */
 export function onlyAddsTestFiles(before: unknown, after: unknown): boolean {
   if (typeof before !== 'string' || typeof after !== 'string') return false;
-  const old = before.trim().split(/\s+/);
-  const next = after.trim().split(/\s+/);
+  const old = before.split(' ');
+  const next = after.split(' ');
+  const inAList = (index: number) => {
+    let first = index - 1;
+    if (first < 0 || !TEST_FILE_ARGUMENT.test(next[first])) return false;
+    while (first > 0 && TEST_FILE_ARGUMENT.test(next[first - 1])) first--;
+    const introducedBy = next[first - 1] ?? '';
+    return !introducedBy.startsWith('-') || introducedBy === '--test';
+  };
   let kept = 0;
   for (let index = 0; index < next.length; index++) {
     if (next[index] === old[kept]) kept++;
-    else if (!(TEST_FILE_ARGUMENT.test(next[index]) && TEST_FILE_ARGUMENT.test(next[index - 1] ?? ''))) return false;
+    else if (!TEST_FILE_ARGUMENT.test(next[index]) || !inAList(index)) return false;
   }
   return kept === old.length;
 }

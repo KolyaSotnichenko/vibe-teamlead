@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { DockerRun } from '../test-services';
-import { describeVerification, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
+import { describeVerification, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
 
 describe('verifyTask', () => {
   let repo: string;
@@ -588,5 +588,39 @@ describe('withVerifyLock', () => {
     mkdirSync(dir);
     await expect(withVerifyLock(dir, async () => 'ok', { pollMs: 5, staleMs: 1 })).resolves.toBe('ok');
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('a test script that only names more test files', () => {
+  const before = 'tsc && node --test a.test.js && vitest run';
+  it.each([
+    ['another file', 'tsc && node --test a.test.js b/c.test.mjs && vitest run'],
+    ['several', 'tsc && node --test a.test.js b.test.js c.spec.ts && vitest run'],
+  ])('%s is fine', (_name, after) => {
+    expect(onlyAddsTestFiles(before, after)).toBe(true);
+  });
+
+  it.each([
+    ['a flag shaped like a file', 'tsc && node --test a.test.js --x.test.js && vitest run'],
+    ['a short flag shaped like a file', 'tsc && node --test a.test.js -x.test.js && vitest run'],
+    ['a file outside the project', 'tsc && node --test a.test.js ../b.test.js && vitest run'],
+    ['a new line that starts another command', 'tsc && node --test a.test.js\nb.test.js && vitest run'],
+    ['a new line in place of a space', 'tsc &&\nnode --test a.test.js && vitest run'],
+    ['only other spacing', 'tsc  && node --test a.test.js && vitest run'],
+    ['a tab before the file', 'tsc && node --test a.test.js\tb.test.js && vitest run'],
+  ])('%s is not', (_name, after) => {
+    expect(onlyAddsTestFiles(before, after)).toBe(false);
+  });
+
+  it('a file after the value of a flag is not: it may widen what the flag leaves out', () => {
+    expect(onlyAddsTestFiles('vitest run --exclude a.test.js', 'vitest run --exclude a.test.js b.test.js')).toBe(false);
+  });
+
+  it('a file after a plain list still is', () => {
+    expect(onlyAddsTestFiles('mocha a.test.js', 'mocha a.test.js b.test.js')).toBe(true);
+  });
+
+  it.each([[undefined, 'x'], ['x', undefined], [1, 'x']])('a script that is not text is not: %s', (was, is) => {
+    expect(onlyAddsTestFiles(was, is)).toBe(false);
   });
 });
