@@ -40,6 +40,26 @@ export interface ProjectSettings {
   designQaMode?: import('./design-system').DesignQaMode;
   /** Agents may add Storybook and write stories for UI components (default: off) */
   storybookEnabled?: boolean;
+  /** What the Preview runs, confirmed by the owner (proposed on first open) */
+  previewServices?: PreviewService[];
+  /** Variables the preview's services get on top of `.env.example`. Never the project's `.env`. */
+  previewEnv?: Record<string, string>;
+}
+
+/** One process the Preview starts, through the app's dev-server manager. */
+export interface PreviewService {
+  /** /^[\w-]{1,40}$/ */
+  name: string;
+  /** Relative to the project root; '' for the root */
+  dir: string;
+  /** Shell command; `{port}` becomes the port */
+  command: string;
+  /** Variable the port is passed in (default PORT) */
+  portEnv?: string;
+  /** The service whose page the Preview shows: exactly one */
+  page?: boolean;
+  /** Variables that get another service's URL, e.g. { NEXT_PUBLIC_API_URL: 'api' } */
+  urlEnv?: Record<string, string>;
 }
 
 export interface NotificationSettings {
