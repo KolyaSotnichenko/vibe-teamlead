@@ -94,6 +94,27 @@ describe('labelDockerRuns', () => {
     }
   });
 
+  it('leaves text alone: a script being written, a commit message, a command in quotes', () => {
+    for (const command of [
+      "bash -c 'a; docker run pg'",
+      'bash -c "a; docker run pg"',
+      'git commit -m "first\ndocker run pg"',
+      "git commit -m 'it\ndocker run pg'",
+      'cat > start.sh <<EOF\ndocker run pg\nEOF',
+      'echo "say \\"hi; docker run pg"',
+    ]) {
+      expect(labelDockerRuns(command, WT)).toBe(command);
+    }
+  });
+
+  it('still marks a container after a quoted part has closed', () => {
+    expect(labelDockerRuns('echo "a b" && docker run pg', WT)).toBe(`echo "a b" && docker run ${label} pg`);
+  });
+
+  it('a backslash inside single quotes closes nothing and opens nothing', () => {
+    expect(labelDockerRuns("echo 'a\\' && docker run pg", WT)).toBe(`echo 'a\\' && docker run ${label} pg`);
+  });
+
   it('keeps a folder with a quote in it from breaking out of the command', () => {
     expect(labelDockerRuns('docker run pg', "/a'; rm -rf x '")).toBe(`docker run --label 'vibe-teamlead.task-folder=/a'\\''; rm -rf x '\\''' pg`);
   });

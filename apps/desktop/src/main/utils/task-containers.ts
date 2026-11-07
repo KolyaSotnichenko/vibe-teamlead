@@ -26,8 +26,29 @@ export function composeProjectName(folder: string): string {
 
 /** A Bash command that marks each container it starts as this task's. Pure. */
 export function labelDockerRuns(command: string, folder: string): string {
+  // Text being written stays as it is. A container started from one costs a leftover, no more
+  if (command.includes('<<')) return command;
   const value = `${TASK_LABEL}=${folder}`.replace(/'/g, `'\\''`);
-  return command.replace(DOCKER_RUN, (_, before: string, run: string) => `${before}${run} --label '${value}'`);
+  const quoted = quotedPositions(command);
+  return command.replace(DOCKER_RUN, (match: string, before: string, run: string, offset: number) =>
+    quoted.has(offset + before.length) ? match : `${before}${run} --label '${value}'`);
+}
+
+/** Positions inside single or double quotes. Pure. */
+function quotedPositions(command: string): Set<number> {
+  const quoted = new Set<number>();
+  let quote = '';
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (quote) quoted.add(i);
+    if (char === '\\' && quote !== "'") {
+      i++;
+      if (quote) quoted.add(i);
+    } else if (quote ? char === quote : char === "'" || char === '"') {
+      quote = quote ? '' : char;
+    }
+  }
+  return quoted;
 }
 
 export async function removeTaskContainers(worktreePath: string, docker: DockerRun = hostDocker(process.env)): Promise<void> {
