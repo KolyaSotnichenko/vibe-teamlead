@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.11 - 2026-11-07
+
+- A task stopped before its plan was written now gets a plan when it starts again, instead of failing in seconds.
+- When a run fails, the task's log says why, even if no agent had started.
+
 ## 2.0.0-beta.10 - 2026-11-07
 
 - The window no longer freezes for seconds at the end of a merge's checks.
