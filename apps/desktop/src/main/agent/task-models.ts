@@ -8,11 +8,12 @@
  * a run keeps them from start to finish. Without this, a task kept the models of
  * the day it was created, which a new provider may not serve at all.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolveDefaultTaskModels } from '../../shared/utils/task-models';
 import { isUsableModel } from '../ai/config/phase-config';
+import { writeFileReplacingSync } from '../ai/safe-write';
 import { readSettingsFile } from '../settings-utils';
 
 interface ModelMetadata {
@@ -63,20 +64,29 @@ export function taskModelsForRun(metadata: ModelMetadata): ModelMetadata {
   return withDefaultTaskModels(metadata, settings);
 }
 
+/**
+ * Agents can reach these folders and leave a link in place of the file. It is
+ * never read (the app would parse and rewrite what it points at), and the safe
+ * write replaces the link itself.
+ */
+function isRealFile(file: string): boolean {
+  return lstatSync(file, { throwIfNoEntry: false })?.isFile() === true;
+}
+
 /** Bring a task's metadata up to the models it should run on. */
 export function ensureTaskModels(specDir: string | undefined): void {
   if (!specDir) return;
   const metadataPath = path.join(specDir, METADATA_FILE);
   let metadata: ModelMetadata = {};
   try {
-    if (existsSync(metadataPath)) metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as ModelMetadata;
+    if (isRealFile(metadataPath)) metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as ModelMetadata;
   } catch {
     return; // Unreadable metadata: leave it alone
   }
   const next = taskModelsForRun(metadata);
   if (JSON.stringify(next) === JSON.stringify(metadata)) return;
   try {
-    writeFileSync(metadataPath, `${JSON.stringify(next, null, 2)}\n`, 'utf-8');
+    writeFileReplacingSync(metadataPath, `${JSON.stringify(next, null, 2)}\n`, 'utf-8');
   } catch {
     // Not writable: the run falls back to the built-in defaults
   }
@@ -89,14 +99,18 @@ export function ensureTaskModels(specDir: string | undefined): void {
 export function copyTaskModels(fromSpecDir: string, toSpecDir: string): void {
   if (path.resolve(fromSpecDir) === path.resolve(toSpecDir)) return;
   try {
-    const from = JSON.parse(readFileSync(path.join(fromSpecDir, METADATA_FILE), 'utf-8')) as ModelMetadata;
+    const fromPath = path.join(fromSpecDir, METADATA_FILE);
+    if (!isRealFile(fromPath)) return;
+    const from = JSON.parse(readFileSync(fromPath, 'utf-8')) as ModelMetadata;
     const toPath = path.join(toSpecDir, METADATA_FILE);
-    const to = JSON.parse(readFileSync(toPath, 'utf-8')) as ModelMetadata;
+    const stat = lstatSync(toPath, { throwIfNoEntry: false });
+    if (!stat) return;
+    const to = (stat.isFile() ? JSON.parse(readFileSync(toPath, 'utf-8')) : {}) as ModelMetadata;
     for (const field of MODEL_FIELDS) {
       if (from[field] === undefined) delete to[field];
       else to[field] = from[field] as never;
     }
-    writeFileSync(toPath, `${JSON.stringify(to, null, 2)}\n`, 'utf-8');
+    writeFileReplacingSync(toPath, `${JSON.stringify(to, null, 2)}\n`, 'utf-8');
   } catch {
     // No copy yet, or unreadable: the worktree gets the folder when it is created
   }

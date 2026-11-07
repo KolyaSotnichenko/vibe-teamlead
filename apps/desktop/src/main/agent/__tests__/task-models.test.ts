@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -161,5 +161,54 @@ describe('whether the user chose a task\'s models', () => {
     const changed = { phaseModels: { ...ollama, qa: 'sonnet' }, phaseThinking: thinking };
     expect(modelsChosenAfterEdit(before, changed, settings)).toBe(true);
     expect(modelsChosenAfterEdit({ ...changed, modelsChosen: true }, before, settings)).toBe(false);
+  });
+});
+
+describe('a link an agent left in place of the metadata', () => {
+  const OUTSIDE = '{"secret":"stays"}';
+  function linkedDir(): { dir: string; outside: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
+    const outside = join(mkdtempSync(join(tmpdir(), 'outside-')), 'settings.json');
+    writeFileSync(outside, OUTSIDE);
+    symlinkSync(outside, join(dir, 'task_metadata.json'));
+    return { dir, outside };
+  }
+
+  it('is replaced by a real file when the models are set, and what it points at stays', () => {
+    const { dir, outside } = linkedDir();
+    readSettingsFile.mockReturnValue({ customPhaseModels: ollama });
+
+    ensureTaskModels(dir);
+
+    expect(readFileSync(outside, 'utf-8')).toBe(OUTSIDE);
+    expect(lstatSync(join(dir, 'task_metadata.json')).isSymbolicLink()).toBe(false);
+    const written = JSON.parse(readFileSync(join(dir, 'task_metadata.json'), 'utf-8'));
+    expect(written.secret).toBeUndefined();
+    expect(written.phaseModels).toEqual(ollama);
+  });
+
+  it('is replaced when models are copied to a worktree, and what it points at stays', () => {
+    const { dir, outside } = linkedDir();
+    const from = mkdtempSync(join(tmpdir(), 'task-models-'));
+    writeFileSync(join(from, 'task_metadata.json'), JSON.stringify({ isAutoProfile: true, phaseModels: ollama }));
+
+    copyTaskModels(from, dir);
+
+    expect(readFileSync(outside, 'utf-8')).toBe(OUTSIDE);
+    expect(lstatSync(join(dir, 'task_metadata.json')).isSymbolicLink()).toBe(false);
+    const written = JSON.parse(readFileSync(join(dir, 'task_metadata.json'), 'utf-8'));
+    expect(written.secret).toBeUndefined();
+    expect(written.phaseModels).toEqual(ollama);
+  });
+
+  it('is not read as the source of a copy', () => {
+    const { dir: from } = linkedDir();
+    const to = mkdtempSync(join(tmpdir(), 'task-models-'));
+    const before = JSON.stringify({ phaseModels: ollama });
+    writeFileSync(join(to, 'task_metadata.json'), before);
+
+    copyTaskModels(from, to);
+
+    expect(readFileSync(join(to, 'task_metadata.json'), 'utf-8')).toBe(before);
   });
 });
