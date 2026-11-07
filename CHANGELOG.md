@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.10 - 2026-11-07
+
+- The window no longer freezes for seconds at the end of a merge's checks.
+- A task an error stopped partway through its plan offers Resume on its card and in its window.
+- While a merge you confirmed is running, its buttons are off, so a second click can't end in a red message. The panel goes away when the merge is done.
+- The app records when it stops answering and what was running, in a local file (`~/Library/Logs/Vibe Teamlead/stalls.jsonl`), to find what still slows it down.
+
 ## 2.0.0-beta.9 - 2026-11-07
 
 - After changing provider or models, you change them only in Settings: before each run a task takes what is set there. A task you picked different models for keeps them.
