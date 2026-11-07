@@ -241,6 +241,7 @@ export interface TaskMetadata {
   thinkingLevel?: ThinkingLevel;  // Thinking budget level (low, medium, high)
   // Auto profile - per-phase model configuration
   isAutoProfile?: boolean;  // True when using Auto (Optimized) profile
+  modelsChosen?: boolean;  // The user picked this task's models; otherwise each run takes them from the settings
   phaseModels?: PhaseModelConfig;  // Per-phase model configuration
   phaseThinking?: PhaseThinkingConfig;  // Per-phase thinking configuration
   fastMode?: boolean;  // Fast Mode — faster Opus 4.6 output, higher cost per token

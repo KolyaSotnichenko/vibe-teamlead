@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,8 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { readSettingsFile } = vi.hoisted(() => ({ readSettingsFile: vi.fn() }));
 vi.mock('../../settings-utils', () => ({ readSettingsFile }));
 
-import { resolveDefaultTaskModels } from '../../../shared/utils/task-models';
-import { ensureTaskModels, hasTaskModels, withDefaultTaskModels } from '../task-models';
+import { modelsChosenAfterEdit, modelsDifferFromDefaults, resolveDefaultTaskModels } from '../../../shared/utils/task-models';
+import { copyTaskModels, ensureTaskModels, hasChosenModels, withDefaultTaskModels } from '../task-models';
 
 const ollama = { spec: 'qwen3-coder:480b-cloud', planning: 'qwen3-coder:480b-cloud', coding: 'gpt-oss:120b', qa: 'qwen3-coder:480b-cloud' };
 
@@ -27,16 +27,61 @@ describe('resolveDefaultTaskModels', () => {
 describe('task metadata models', () => {
   beforeEach(() => readSettingsFile.mockReset());
 
-  it('treats metadata without usable models as missing', () => {
-    expect(hasTaskModels({})).toBe(false);
-    expect(hasTaskModels({ isAutoProfile: true, phaseModels: { spec: 'gpt-5.2' } })).toBe(false);
-    expect(hasTaskModels({ isAutoProfile: true, phaseModels: ollama })).toBe(true);
-    expect(hasTaskModels({ model: 'sonnet' })).toBe(true);
+  it('counts models as chosen only when the user picked them', () => {
+    expect(hasChosenModels({})).toBe(false);
+    expect(hasChosenModels({ isAutoProfile: true, phaseModels: ollama })).toBe(false);
+    expect(hasChosenModels({ isAutoProfile: true, modelsChosen: true, phaseModels: { spec: 'gpt-5.2' } })).toBe(false);
+    expect(hasChosenModels({ isAutoProfile: true, modelsChosen: true, phaseModels: ollama })).toBe(true);
+    expect(hasChosenModels({ model: 'sonnet' })).toBe(true);
   });
 
-  it('keeps models a task already chose', () => {
-    const metadata = { isAutoProfile: true, phaseModels: { spec: 'opus', planning: 'opus', coding: 'sonnet', qa: 'haiku' } };
+  it('keeps models the user picked for this task', () => {
+    const metadata = { isAutoProfile: true, modelsChosen: true, phaseModels: { spec: 'opus', planning: 'opus', coding: 'sonnet', qa: 'haiku' } };
     expect(withDefaultTaskModels(metadata, { customPhaseModels: ollama })).toBe(metadata);
+  });
+
+  it('moves a task that only took the defaults to the current settings', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
+    writeFileSync(join(dir, 'task_metadata.json'), JSON.stringify({
+      sourceType: 'manual', isAutoProfile: true, model: 'kimi', thinkingLevel: 'high',
+      phaseModels: { spec: 'kimi', planning: 'kimi', coding: 'kimi', qa: 'kimi' },
+      phaseThinking: { spec: 'high', planning: 'high', coding: 'high', qa: 'high' },
+    }));
+    readSettingsFile.mockReturnValue({ customPhaseModels: ollama, customPhaseThinking: { spec: 'low', planning: 'low', coding: 'low', qa: 'low' } });
+
+    ensureTaskModels(dir);
+
+    const written = JSON.parse(readFileSync(join(dir, 'task_metadata.json'), 'utf-8'));
+    expect(written.sourceType).toBe('manual');
+    expect(written.phaseModels).toEqual(ollama);
+    expect(written.model).toBe('gpt-oss:120b');
+    expect(written.phaseThinking.qa).toBe('low');
+    expect(written.thinkingLevel).toBe('low');
+  });
+
+  it('leaves the task as it is when the settings cannot be read', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
+    const before = JSON.stringify({ isAutoProfile: true, phaseModels: ollama });
+    writeFileSync(join(dir, 'task_metadata.json'), before);
+    readSettingsFile.mockReturnValue(undefined);
+
+    ensureTaskModels(dir);
+
+    expect(readFileSync(join(dir, 'task_metadata.json'), 'utf-8')).toBe(before);
+  });
+
+  it("doesn't rewrite a task already on the current settings", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
+    const file = join(dir, 'task_metadata.json');
+    readSettingsFile.mockReturnValue({ customPhaseModels: ollama });
+    writeFileSync(file, '{}');
+    ensureTaskModels(dir);
+    const old = new Date(1_000_000);
+    utimesSync(file, old, old);
+
+    ensureTaskModels(dir);
+
+    expect(statSync(file).mtimeMs).toBe(old.getTime());
   });
 
   it('writes the defaults into a task that has none (spec document import)', () => {
@@ -51,5 +96,70 @@ describe('task metadata models', () => {
     expect(written.isAutoProfile).toBe(true);
     expect(written.phaseModels.spec).toBe('qwen3-coder:480b-cloud');
     expect(written.phaseModels.coding).toBe('gpt-oss:120b');
+  });
+});
+
+describe('a task folder and its worktree copy', () => {
+  function dirWith(metadata: object): string {
+    const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'task_metadata.json'), JSON.stringify(metadata));
+    return dir;
+  }
+  const read = (dir: string) => JSON.parse(readFileSync(join(dir, 'task_metadata.json'), 'utf-8'));
+
+  it('gives the copy the models, the only ones a running task reads', () => {
+    const from = dirWith({ isAutoProfile: true, modelsChosen: true, model: 'sonnet', thinkingLevel: 'low', phaseModels: ollama, phaseThinking: { qa: 'low' } });
+    const to = dirWith({ sourceType: 'manual', isAutoProfile: true, model: 'kimi', phaseModels: { qa: 'kimi' } });
+
+    copyTaskModels(from, to);
+
+    expect(read(to)).toEqual({ sourceType: 'manual', isAutoProfile: true, modelsChosen: true, model: 'sonnet', thinkingLevel: 'low', phaseModels: ollama, phaseThinking: { qa: 'low' } });
+  });
+
+  it('clears a choice the user took back', () => {
+    const from = dirWith({ isAutoProfile: true, phaseModels: ollama });
+    const to = dirWith({ isAutoProfile: true, modelsChosen: true, phaseModels: ollama });
+
+    copyTaskModels(from, to);
+
+    expect(read(to).modelsChosen).toBeUndefined();
+  });
+
+  it('does nothing without a copy: the task has no worktree yet', () => {
+    const from = dirWith({ phaseModels: ollama });
+    const missing = join(from, 'nope');
+    expect(() => copyTaskModels(from, missing)).not.toThrow();
+  });
+});
+
+describe('whether the user chose a task\'s models', () => {
+  const thinking = { spec: 'high', planning: 'high', coding: 'low', qa: 'low' } as const;
+  const settings = { customPhaseModels: ollama, customPhaseThinking: thinking };
+
+  it('is no when the form still shows the settings', () => {
+    expect(modelsDifferFromDefaults({ phaseModels: ollama, phaseThinking: thinking }, settings)).toBe(false);
+  });
+
+  it('is yes when a model or a thinking level differs', () => {
+    expect(modelsDifferFromDefaults({ phaseModels: { ...ollama, qa: 'sonnet' }, phaseThinking: thinking }, settings)).toBe(true);
+    expect(modelsDifferFromDefaults({ phaseModels: ollama, phaseThinking: { ...thinking, qa: 'high' } }, settings)).toBe(true);
+  });
+
+  it('saving a title keeps a following task following, though its models look old', () => {
+    const old = { phaseModels: { ...ollama, qa: 'kimi' }, phaseThinking: thinking };
+    expect(modelsChosenAfterEdit(old, old, settings)).toBe(false);
+  });
+
+  it('saving a title keeps a choice', () => {
+    const chosen = { modelsChosen: true, phaseModels: { ...ollama, qa: 'kimi' }, phaseThinking: thinking };
+    expect(modelsChosenAfterEdit(chosen, chosen, settings)).toBe(true);
+  });
+
+  it('changing a model in the dialog is a choice, and setting it back to the settings ends it', () => {
+    const before = { phaseModels: ollama, phaseThinking: thinking };
+    const changed = { phaseModels: { ...ollama, qa: 'sonnet' }, phaseThinking: thinking };
+    expect(modelsChosenAfterEdit(before, changed, settings)).toBe(true);
+    expect(modelsChosenAfterEdit({ ...changed, modelsChosen: true }, before, settings)).toBe(false);
   });
 });

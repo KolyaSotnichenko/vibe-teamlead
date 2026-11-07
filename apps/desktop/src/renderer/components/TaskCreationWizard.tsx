@@ -35,6 +35,7 @@ import {
   PHASE_KEYS
 } from '../../shared/constants';
 import { useSettingsStore } from '../stores/settings-store';
+import { modelsDifferFromDefaults } from '../../shared/utils/task-models';
 
 interface TaskCreationWizardProps {
   projectId: string;
@@ -450,6 +451,7 @@ export function TaskCreationWizard({
         metadata.isAutoProfile = true;
         metadata.phaseModels = phaseModels;
         metadata.phaseThinking = phaseThinking;
+        if (modelsDifferFromDefaults({ phaseModels, phaseThinking }, settings)) metadata.modelsChosen = true;
       }
 
 

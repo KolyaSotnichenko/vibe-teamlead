@@ -45,6 +45,7 @@ import {
 } from '../../shared/constants';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import { useSettingsStore } from '../stores/settings-store';
+import { modelsChosenAfterEdit } from '../../shared/utils/task-models';
 
 /**
  * Props for the TaskEditDialog component
@@ -249,6 +250,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       metadataUpdates.isAutoProfile = profileId === 'auto';
       metadataUpdates.phaseModels = phaseModels;
       metadataUpdates.phaseThinking = phaseThinking;
+      metadataUpdates.modelsChosen = modelsChosenAfterEdit(task.metadata ?? {}, { phaseModels, phaseThinking }, settings);
     }
     // Always set attachedImages to persist removal when all images are deleted
     metadataUpdates.attachedImages = images.length > 0 ? images : [];

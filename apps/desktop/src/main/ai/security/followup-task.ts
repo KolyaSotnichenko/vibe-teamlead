@@ -21,7 +21,7 @@ const TASK_CHARS = 9000;
 const REPORT_CHARS = 8000;
 const MAX_NUMBER_TRIES = 20;
 /** What a new task takes from the one it came from: how the user runs agents, and nothing of the work itself */
-const INHERITED = ['model', 'thinkingLevel', 'isAutoProfile', 'phaseModels', 'phaseThinking', 'featureModels'] as const;
+const INHERITED = ['model', 'thinkingLevel', 'isAutoProfile', 'modelsChosen', 'phaseModels', 'phaseThinking', 'featureModels'] as const;
 
 /** Real findings below the bar. Strix also lists what it covered, with no severity. Pure. */
 export function lesserFindings(findings: StrixFinding[], failOn: StrixSeverity): StrixFinding[] {

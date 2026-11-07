@@ -1,7 +1,6 @@
 import { EventEmitter } from 'events';
 import path from 'path';
-import { ensureTaskModels, hasTaskModels, withDefaultTaskModels } from './task-models';
-import { readSettingsFile } from '../settings-utils';
+import { copyTaskModels, ensureTaskModels, taskModelsForRun } from './task-models';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { AgentState } from './agent-state';
 import { AgentEvents } from './agent-events';
@@ -166,12 +165,10 @@ export class AgentManager extends EventEmitter {
       }
     }
 
-    // Tasks without chosen models get the user's defaults (agent profile +
-    // custom phase models), written into their metadata for the later phases
+    // Tasks whose models the user didn't pick run on the current settings (agent
+    // profile + custom phase models), written into their metadata for the later phases
     ensureTaskModels(specDir);
-    const models = hasTaskModels(metadata as never)
-      ? metadata
-      : withDefaultTaskModels({ ...(metadata ?? {}) }, readSettingsFile() as never);
+    const models = taskModelsForRun({ ...(metadata ?? {}) } as never);
     const specModelShorthand = models?.phaseModels?.spec || models?.model || 'sonnet';
 
     const specModelId = resolveModelId(isUsableModel(specModelShorthand) ? specModelShorthand : 'sonnet');
@@ -267,6 +264,7 @@ export class AgentManager extends EventEmitter {
         worktreePath = result.worktreePath;
         // Spec dir in the worktree (spec files were copied by createOrGetWorktree)
         worktreeSpecDir = path.join(worktreePath, specsBaseDir, specId);
+        copyTaskModels(specDir, worktreeSpecDir);
         console.warn(`[AgentManager] Task ${taskId} will run in worktree: ${worktreePath}`);
       } catch (err) {
         console.error(`[AgentManager] Failed to create worktree for ${taskId}:`, err);
@@ -354,6 +352,7 @@ export class AgentManager extends EventEmitter {
       : specDir;
 
     if (worktreePath) {
+      copyTaskModels(specDir, effectiveSpecDir);
       console.warn(`[AgentManager] QA for ${taskId} will run in worktree: ${worktreePath}`);
     } else {
       console.warn(`[AgentManager] No worktree found for ${taskId}, QA running in project root`);
