@@ -614,6 +614,9 @@ export interface ElectronAPI {
   onAppUpdateAutoInstall: (
     callback: (state: AppUpdateAutoInstallState) => void
   ) => () => void;
+  onSleptWhileRunning: (
+    callback: (event: { tasks: number }) => void
+  ) => () => void;
   onAppUpdateDownloaded: (
     callback: (info: AppUpdateDownloadedEvent) => void
   ) => () => void;

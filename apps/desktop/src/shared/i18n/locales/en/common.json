@@ -1658,5 +1658,10 @@
     "costGateway": "{{tokens}} tokens went through {{gateway}}. Your gateway prices them; see its billing.",
     "costSubscription": "{{tokens}} tokens under your Claude subscription, with no per-token price.",
     "empty": "Nothing counted yet. Every agent session in this project adds its tokens when it ends, starting with sessions that began after this feature arrived (tasks already running keep the old code until they restart)."
+  },
+  "sleepWarning": {
+    "title": "Your Mac slept while agents were working",
+    "description_one": "Agents barely move while the Mac sleeps, and work after a pause costs more. Keep the lid open until {{count}} task finishes.",
+    "description_other": "Agents barely move while the Mac sleeps, and work after a pause costs more. Keep the lid open until {{count}} tasks finish."
   }
 }

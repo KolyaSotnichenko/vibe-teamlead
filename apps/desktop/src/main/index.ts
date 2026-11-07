@@ -51,7 +51,7 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, dialog, shell, nativeImage, session, screen, Menu, MenuItem } from 'electron';
+import { app, BrowserWindow, dialog, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor } from 'electron';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -60,7 +60,8 @@ import { AgentManager } from './agent';
 import { projectStore } from './project-store';
 import { TerminalManager } from './terminal-manager';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
-import { DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
+import { createSleepWatch } from './sleep-watch';
+import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { createQuitGuard, quitPrompt } from './quit-guard';
 import { readSettingsFile } from './settings-utils';
@@ -453,6 +454,13 @@ app.whenReady().then(() => {
   // Initialize agent manager
   agentManager = new AgentManager();
   projectStore.setRunningTaskCheck((taskId) => agentManager?.isRunning(taskId) ?? false);
+
+  const sleepWatch = createSleepWatch({
+    running: () => agentManager?.getRunningTasks() ?? [],
+    onSlept: (event) => mainWindow?.webContents.send(IPC_CHANNELS.APP_SLEPT_WHILE_RUNNING, event),
+  });
+  powerMonitor.on('suspend', sleepWatch.suspend);
+  powerMonitor.on('resume', sleepWatch.resume);
 
   // Load settings and configure agent manager with the prompts path
   // Uses EAFP pattern (try/catch) instead of LBYL (existsSync) to avoid TOCTOU race conditions

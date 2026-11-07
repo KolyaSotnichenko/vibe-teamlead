@@ -31,6 +31,9 @@ export interface AppUpdateAPI {
   onAppUpdateDownloaded: (
     callback: (info: AppUpdateDownloadedEvent) => void
   ) => IpcListenerCleanup;
+  onSleptWhileRunning: (
+    callback: (event: { tasks: number }) => void
+  ) => IpcListenerCleanup;
   onAppUpdateAutoInstall: (
     callback: (state: AppUpdateAutoInstallState) => void
   ) => IpcListenerCleanup;
@@ -90,6 +93,11 @@ export const createAppUpdateAPI = (): AppUpdateAPI => ({
     callback: (info: AppUpdateDownloadedEvent) => void
   ): IpcListenerCleanup =>
     createIpcListener(IPC_CHANNELS.APP_UPDATE_DOWNLOADED, callback),
+
+  onSleptWhileRunning: (
+    callback: (event: { tasks: number }) => void
+  ): IpcListenerCleanup =>
+    createIpcListener(IPC_CHANNELS.APP_SLEPT_WHILE_RUNNING, callback),
 
   onAppUpdateAutoInstall: (
     callback: (state: AppUpdateAutoInstallState) => void

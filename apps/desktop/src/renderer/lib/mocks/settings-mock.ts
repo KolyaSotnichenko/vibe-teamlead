@@ -87,6 +87,7 @@ export const settingsMock = {
   onAppUpdateAvailable: () => () => {},
   onAppUpdateDownloaded: () => () => {},
   onAppUpdateAutoInstall: () => () => {},
+  onSleptWhileRunning: () => () => {},
   postponeAppUpdate: () => {},
   onAppUpdateProgress: () => () => {},
   onAppUpdateStableDowngrade: () => () => {},
