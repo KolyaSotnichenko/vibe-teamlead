@@ -1234,14 +1234,13 @@ export function getTaskByGitHubIssue(issueNumber: number): Task | undefined {
 // ============================================
 
 /**
- * Check if a task is in human_review but has no completed subtasks.
- * This indicates the task crashed/exited before implementation completed
- * and should be resumed rather than reviewed.
+ * Whether a task in human_review has no finished work to review: it crashed or
+ * exited before any subtask was completed.
  */
-export function isIncompleteHumanReview(task: Task): boolean {
+export function hasNothingBuilt(task: Task): boolean {
   if (task.status !== 'human_review') return false;
 
-  // A run that ended in an error with a plan and nothing built has nothing to review: resume it
+  // A run that ended in an error with a plan and nothing built has nothing to review
   if (task.reviewReason === 'errors') {
     return (task.subtasks?.length ?? 0) > 0 && task.subtasks.every((s) => s.status !== 'completed');
   }
@@ -1253,11 +1252,18 @@ export function isIncompleteHumanReview(task: Task): boolean {
   // If no subtasks defined, task hasn't been planned yet (shouldn't be in human_review)
   if (!task.subtasks || task.subtasks.length === 0) return true;
 
-  // Check if any subtasks are completed
-  const completedSubtasks = task.subtasks.filter(s => s.status === 'completed').length;
-
   // If 0 completed subtasks, this task crashed before implementation
-  return completedSubtasks === 0;
+  return task.subtasks.every((s) => s.status !== 'completed');
+}
+
+/**
+ * Whether a task in human_review should be offered Resume: nothing built yet, or
+ * an error stopped the run partway through its plan. QA runs only on a finished
+ * plan, so errors with subtasks left can only come from the build.
+ */
+export function isIncompleteHumanReview(task: Task): boolean {
+  if (hasNothingBuilt(task)) return true;
+  return task.status === 'human_review' && task.reviewReason === 'errors' && (task.subtasks ?? []).some((s) => s.status !== 'completed');
 }
 
 /**

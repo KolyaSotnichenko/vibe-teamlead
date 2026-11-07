@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../../../shared/types';
-import { isIncompleteHumanReview } from '../task-store';
+import { hasNothingBuilt, isIncompleteHumanReview } from '../task-store';
 
 const task = (reviewReason: string | undefined, statuses: string[]) =>
   ({ status: 'human_review', reviewReason, subtasks: statuses.map((status, i) => ({ id: `s${i}`, status })) }) as unknown as Task;
@@ -10,9 +10,18 @@ describe('isIncompleteHumanReview', () => {
     expect(isIncompleteHumanReview(task('errors', ['pending', 'pending']))).toBe(true);
   });
 
-  it('keeps QA errors on built code in review', () => {
-    expect(isIncompleteHumanReview(task('errors', ['completed', 'pending']))).toBe(false);
+  it('offers to resume a run that stopped partway through the plan', () => {
+    expect(isIncompleteHumanReview(task('errors', ['completed', 'pending']))).toBe(true);
+  });
+
+  it('keeps errors after the whole plan was built in review: QA is what failed', () => {
     expect(isIncompleteHumanReview(task('errors', ['completed', 'completed']))).toBe(false);
+  });
+
+  it('tells a run with some code from one with none, which has nothing to review', () => {
+    expect(hasNothingBuilt(task('errors', ['pending', 'pending']))).toBe(true);
+    expect(hasNothingBuilt(task('errors', ['completed', 'pending']))).toBe(false);
+    expect(hasNothingBuilt(task('errors', ['completed', 'completed']))).toBe(false);
   });
 
   it('has no plan to resume from after an error without subtasks', () => {

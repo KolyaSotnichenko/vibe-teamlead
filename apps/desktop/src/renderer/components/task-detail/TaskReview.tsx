@@ -14,7 +14,7 @@ import {
 import { QaOutcomePanel } from './task-review/QaOutcomePanel';
 import { MergeReviewPanel } from './task-review/MergeReviewPanel';
 import { useMergeState } from './useMergeState';
-import { isIncompleteHumanReview } from '../../stores/task-store';
+import { hasNothingBuilt } from '../../stores/task-store';
 
 interface TaskReviewProps {
   task: Task;
@@ -111,7 +111,7 @@ export function TaskReview({
   onCreatePR
 }: TaskReviewProps) {
   // Nothing built yet: the only way forward is the Resume the task window offers
-  const nothingBuilt = isIncompleteHumanReview(task);
+  const nothingBuilt = hasNothingBuilt(task);
   const mergeReviewOpen = useMergeState(task)?.state === 'review';
   return (
     <div className="space-y-4">

@@ -44,7 +44,7 @@ QA couldn't approve the task and, after the fixer's attempts, handed it to you. 
 - "Run QA again" re-runs the fixer and QA.
 - To have something specific fixed, describe it in "Request Changes". You can also merge as is.
 
-A run cut off before any code was written has nothing to review, so the task window offers "Resume" instead: coding starts from the plan already written.
+A run cut off before any code was written has nothing to review, so the task window offers "Resume" instead: coding starts from the plan already written. A run an error stopped partway through the plan also gets "Resume", on its card too: coding carries on with the subtasks left, and what is already built stays there to look at.
 
 These actions don't touch your project's uncommitted files. While a merge of the task waits for your confirmation, commit or cancel it first.
 

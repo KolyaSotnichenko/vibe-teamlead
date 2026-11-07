@@ -28,7 +28,7 @@ vi.mock('../task-review/QaOutcomePanel', () => ({ QaOutcomePanel: () => <div>qa-
 vi.mock('../task-review/MergeReviewPanel', () => ({ MergeReviewPanel: () => null }));
 vi.mock('../../../stores/task-store', async () => {
   const actual = await vi.importActual<typeof import('../../../stores/task-store')>('../../../stores/task-store');
-  return { isIncompleteHumanReview: actual.isIncompleteHumanReview };
+  return { hasNothingBuilt: actual.hasNothingBuilt };
 });
 
 import { TaskReview } from '../TaskReview';
