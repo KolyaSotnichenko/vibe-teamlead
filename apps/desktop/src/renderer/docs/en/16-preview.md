@@ -21,7 +21,7 @@ Change the list later with **Services** in the toolbar. The list is kept in the 
 
 ## Where its code and data come from
 
-- **The code** is a copy of main of its own, in `.vibe-teamlead/worktrees/preview`. Your own folder, its branch and its uncommitted changes are never touched.
+- **The code** is a copy of main of its own, in `~/.vibe-teamlead/worktrees/preview`, outside your project. Your own folder, its branch and its uncommitted changes are never touched.
 - **The database** named in the project's compose file runs in Docker on a volume kept for this project, so an account you registered in the preview is still there next time. Migrations are applied to it, and on a new, empty database the project's seed script runs (`db:seed`, `seed`, or Prisma's seed). **Reset preview data** deletes it and starts empty.
 - **Settings** come from `.env.example` and the preview's own database, never from `.env`. Your real databases and keys are not used.
 
