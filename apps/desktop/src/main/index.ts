@@ -4,6 +4,9 @@
 // which is only available in CommonJS. Without this, node-pty native module
 // loading fails with "ReferenceError: require is not defined".
 import { stopAllStorybooks } from './design/storybook-service';
+import { removePreviewLeftovers } from './preview/preview-database';
+import { stopPreview } from './preview/preview-session';
+import { hostDocker } from './ai/verification/test-services';
 import Module, { createRequire } from 'module';
 import { initGitHubAuth } from './github-auth/token-store';
 import { migrateGlobalData } from './data-dir-migration';
@@ -409,6 +412,8 @@ if (isWindows()) {
 
 // Initialize the application
 app.whenReady().then(() => {
+  // A preview's database a crash left running; its volume stays
+  void removePreviewLeftovers(hostDocker(process.env)).catch(() => undefined);
   // Set app user model id for Windows
   electronApp.setAppUserModelId('com.vibeteamlead.app');
 
@@ -649,6 +654,9 @@ app.on('before-quit', (event) => {
   // Perform async cleanup, then allow quit to proceed
   (async () => {
     try {
+      // The preview's servers and database container; bounded so a hung docker can't hold the quit
+      await Promise.race([stopPreview().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 5000))]);
+
       // Kill all running agent processes
       if (agentManager) {
         await agentManager.killAll();

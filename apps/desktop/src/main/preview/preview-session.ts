@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import type { PreviewStatus } from '../../shared/types/preview';
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
@@ -19,19 +20,7 @@ import { runProcess } from '../platform/exec';
 import { type PreviewDatabase, startPreviewDatabase } from './preview-database';
 import { previewSpecDir, syncPreviewWorktree } from './preview-worktree';
 
-export type PreviewStage = 'worktree' | 'install' | 'database' | 'migrations' | 'seed' | 'services' | 'ready' | 'failed' | 'stopped';
-
-export interface PreviewStatus {
-  projectId: string;
-  stage: PreviewStage;
-  url?: string;
-  /** Where the view may navigate */
-  origins: string[];
-  message?: string;
-  logTail?: string;
-  database?: PreviewDatabase['status'];
-  databaseReason?: string;
-}
+export type { PreviewStage, PreviewStatus } from '../../shared/types/preview';
 
 export interface PreviewDeps {
   git: string;

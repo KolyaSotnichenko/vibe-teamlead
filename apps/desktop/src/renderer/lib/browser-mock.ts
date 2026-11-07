@@ -212,6 +212,15 @@ const browserMockAPI: ElectronAPI = {
   // Brief import
   brief: briefMock,
   design: designMock,
+  preview: {
+    start: async (projectId: string) => ({ success: true, data: { projectId, stage: 'stopped' as const, origins: [] } }),
+    stop: async () => ({ success: true }),
+    onStatus: () => () => {},
+    setBounds: async () => ({ success: true }),
+    navigate: async () => ({ success: true }),
+    proposeServices: async () => ({ success: true, data: [] }),
+    resetData: async (projectId: string) => ({ success: true, data: { projectId, stage: 'stopped' as const, origins: [] } }),
+  },
   usage: usageMock,
 
   // External tools check

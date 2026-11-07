@@ -837,6 +837,8 @@ export interface ElectronAPI {
   brief: import('./brief').BriefAPI;
   tools: import('./tools-check').ToolsCheckAPI;
   design: import('./design-system').DesignAPI;
+  /** The project's app from main, while the Preview is open */
+  preview: import('./preview').PreviewAPI;
   /** Token usage per project */
   usage: { get: (projectId: string) => Promise<IPCResult<import('./usage').ProjectUsageSummary>> };
 }

@@ -101,6 +101,13 @@ export const IPC_CHANNELS = {
   STORYBOOK_TASK_STATUS: 'design:taskStorybookStatus',
   STORYBOOK_TASK_START: 'design:taskStorybookStart',
   STORYBOOK_TASK_STOP: 'design:taskStorybookStop',
+  PREVIEW_START: 'preview:start',
+  PREVIEW_STOP: 'preview:stop',
+  PREVIEW_STATUS: 'preview:status',  // Event: preview status (main -> renderer)
+  PREVIEW_SET_BOUNDS: 'preview:setBounds',
+  PREVIEW_NAVIGATE: 'preview:navigate',
+  PREVIEW_PROPOSE_SERVICES: 'preview:proposeServices',
+  PREVIEW_RESET_DATA: 'preview:resetData',
   DESIGN_REFS_LIST: 'design:refsList',
   DESIGN_REFS_PICK: 'design:refsPick',
   DESIGN_REFS_ADD_FILES: 'design:refsAddFiles',
