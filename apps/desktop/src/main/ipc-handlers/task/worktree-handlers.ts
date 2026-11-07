@@ -29,10 +29,11 @@ import { taskDiffBase } from '../../utils/task-diff-base';
 import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
 import { inMergeQueue, isMergeQueued } from '../../ai/merge/merge-queue';
-import { approvedAsItIs } from '../../ai/orchestration/qa-approval';
+import { approvedAsItIs, autoMergeRefusal } from '../../ai/orchestration/qa-approval';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
+import type { MergeWorktreeOptions } from '../../../shared/types/task';
 
 // Regex pattern for validating git branch names
 export const GIT_BRANCH_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
@@ -1996,7 +1997,7 @@ export function registerWorktreeHandlers(
    */
   ipcMain.handle(
     IPC_CHANNELS.TASK_WORKTREE_MERGE,
-    async (_, taskId: string, options?: { noCommit?: boolean; reviewAction?: 'commit' | 'cancel' }): Promise<IPCResult<WorktreeMergeResult>> => {
+    async (_, taskId: string, options?: MergeWorktreeOptions): Promise<IPCResult<WorktreeMergeResult>> => {
       const isDebugMode = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
       const debug = (...args: unknown[]) => {
         if (isDebugMode) {
@@ -2007,7 +2008,8 @@ export function registerWorktreeHandlers(
       try {
         debug('Handler called with taskId:', taskId, 'options:', options);
 
-        const { task, project } = findTaskAndProject(taskId);
+        // With a project, only in it: another project can have a task with the same number
+        const { task, project } = findTaskAndProject(taskId, options?.projectId);
         if (!task || !project) {
           debug('Task or project not found');
           return { success: false, error: 'Task not found' };
@@ -2063,6 +2065,11 @@ export function registerWorktreeHandlers(
 
         if (isMergeQueued(taskId)) {
           return { success: true, data: { success: false, message: 'This task is already merging, or waiting to.' } };
+        }
+
+        const refusal = await autoMergeRefusal(options, worktreePath, task.specId);
+        if (refusal) {
+          return { success: true, data: { success: false, message: refusal } };
         }
 
         if (options?.reviewAction === 'cancel') {

@@ -2,9 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, truncateSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint } from '../qa-approval';
+import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal } from '../qa-approval';
 
 const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'vtl-approval-')));
 
@@ -152,5 +152,26 @@ describe('workTreeFingerprint', () => {
 
   it('is unknown outside a repository', async () => {
     await expect(workTreeFingerprint(tmp())).resolves.toBeUndefined();
+  });
+});
+
+describe('what an automatic merge needs', () => {
+  it('goes ahead on an approval of exactly this code', async () => {
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', async () => true)).resolves.toBeNull();
+  });
+
+  it('is refused without one, whatever the task folder says', async () => {
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', async () => false)).resolves.toEqual(expect.any(String));
+  });
+
+  it('is refused without a task folder to check', async () => {
+    await expect(autoMergeRefusal({ auto: true }, null, '001-a', async () => true)).resolves.toEqual(expect.any(String));
+  });
+
+  it('asks nothing of a merge the user started', async () => {
+    const approved = vi.fn(async () => false);
+    await expect(autoMergeRefusal({}, '/wt', '001-a', approved)).resolves.toBeNull();
+    await expect(autoMergeRefusal(undefined, null, '001-a', approved)).resolves.toBeNull();
+    expect(approved).not.toHaveBeenCalled();
   });
 });

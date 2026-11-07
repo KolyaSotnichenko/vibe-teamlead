@@ -39,6 +39,22 @@ export async function approvedAsItIs(projectDir: string, specDir: string, dir = 
   return approvalHolds(dir, projectDir, specDir, await workTreeFingerprint(projectDir));
 }
 
+/**
+ * Why an automatic merge can't go ahead, or null. The approval is the app's own
+ * record, outside anything an agent can write, and holds only for this exact code.
+ * A merge the user started needs none: they are the one deciding.
+ */
+export async function autoMergeRefusal(
+  options: { auto?: boolean } | undefined,
+  worktreePath: string | null,
+  specId: string,
+  approved: (projectDir: string, specDir: string) => Promise<boolean> = approvedAsItIs,
+): Promise<string | null> {
+  if (!options?.auto) return null;
+  if (worktreePath && (await approved(worktreePath, specId))) return null;
+  return 'QA did not approve this exact code, so the merge waits for you.';
+}
+
 /** Never throws: without a record, a later run simply reviews again. */
 export function recordApproval(dir: string, projectDir: string, specDir: string, fingerprint: string | undefined): void {
   if (!fingerprint) return;

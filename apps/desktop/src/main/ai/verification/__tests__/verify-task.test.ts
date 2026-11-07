@@ -616,8 +616,30 @@ describe('a test script that only names more test files', () => {
     expect(onlyAddsTestFiles('vitest run --exclude a.test.js', 'vitest run --exclude a.test.js b.test.js')).toBe(false);
   });
 
-  it('a file after a plain list still is', () => {
-    expect(onlyAddsTestFiles('mocha a.test.js', 'mocha a.test.js b.test.js')).toBe(true);
+  it.each([
+    ['mocha', 'mocha a.test.js', 'mocha a.test.js b.test.js'],
+    ['vitest', 'pnpm lint && vitest run a.test.ts', 'pnpm lint && vitest run a.test.ts b.test.ts'],
+    ['jest', 'jest a.test.js', 'jest a.test.js ./b.test.js'],
+  ])('the list of a known runner may grow: %s', (_name, was, is) => {
+    expect(onlyAddsTestFiles(was, is)).toBe(true);
+  });
+
+  it.each([
+    ['a path from the root', 'node --test a.test.js', 'node --test a.test.js /tmp/b.test.js'],
+    ['a response file', 'node --test a.test.js', 'node --test a.test.js @b.test.js'],
+    ['a flag further back that takes many values', 'mocha --ignore a.test.js', 'mocha --ignore a.test.js b.test.js'],
+    ['a flag between the runner and the list', 'node --test --test-skip-pattern x a.test.js', 'node --test --test-skip-pattern x a.test.js b.test.js'],
+    ['a command that runs no tests', 'cleanup a.test.js', 'cleanup a.test.js b.test.js'],
+    ['a list passed to something else', 'echo mocha a.test.js', 'echo mocha a.test.js b.test.js'],
+    ['a wrapper that decides what runs', 'sh run.sh node --test a.test.js', 'sh run.sh node --test a.test.js b.test.js'],
+  ])('is not: %s', (_name, was, is) => {
+    expect(onlyAddsTestFiles(was, is)).toBe(false);
+  });
+
+  it('the real script a task was stopped for', () => {
+    const was = 'pnpm --filter @roadmaply/shared build && node --test test/docker-compose.security.test.js && pnpm -r --if-present test && pnpm --filter @roadmaply/web build';
+    const is = 'pnpm --filter @roadmaply/shared build && node --test test/docker-compose.security.test.js test/env-examples.test.mjs && pnpm -r --if-present test && pnpm --filter @roadmaply/web build';
+    expect(onlyAddsTestFiles(was, is)).toBe(true);
   });
 
   it.each([[undefined, 'x'], ['x', undefined], [1, 'x']])('a script that is not text is not: %s', (was, is) => {

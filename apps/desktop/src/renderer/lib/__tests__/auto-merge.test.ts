@@ -19,10 +19,10 @@ function setup(over: Partial<AutoMergeApi> = {}, enabled = true, reviewReason = 
 }
 
 describe('merging a task by itself', () => {
-  it('merges a task QA approved, the way the button does', async () => {
+  it('merges a task QA approved, the way the button does, in the project it checked', async () => {
     const { auto, mergeWorktree } = setup();
     await auto.statusChanged('t', 'ai_review', 'human_review');
-    expect(mergeWorktree).toHaveBeenCalledWith('t');
+    expect(mergeWorktree).toHaveBeenCalledWith('t', { auto: true, projectId: 'p' });
   });
 
   it('does nothing while the switch is off, the default', async () => {

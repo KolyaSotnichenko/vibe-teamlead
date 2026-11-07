@@ -2,7 +2,8 @@
  * The project's auto-merge: a task QA approved merges by itself, the way the Merge
  * button does it. Anything less than a clean result stays with the user, and a merge
  * an agent changed code for still waits for their review. Runs only as a task
- * arrives in review, so turning the switch on merges nothing already waiting.
+ * arrives in review, so turning the switch on merges nothing already waiting. What
+ * is read here decides whether to ask; the main process checks QA's approval itself.
  */
 import type { Task, TaskStatus } from '../../shared/types';
 
@@ -10,7 +11,7 @@ export interface AutoMergeApi {
   getTaskMergeState: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskVerification: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: { status?: string } | null }>;
-  mergeWorktree: (taskId: string) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string } }>;
+  mergeWorktree: (taskId: string, options: { auto: true; projectId?: string }) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string } }>;
 }
 
 interface AutoMergeOptions {
@@ -44,7 +45,7 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem }: AutoMerg
       tried.add(taskId);
       try {
         if (!(await clean(task))) return;
-        const result = await api.mergeWorktree(taskId);
+        const result = await api.mergeWorktree(taskId, { auto: true, projectId: task.projectId });
         if (!result.success || !result.data?.success) onProblem(taskId, result.data?.message ?? result.error ?? '');
       } catch (error) {
         onProblem(taskId, error instanceof Error ? error.message : String(error));

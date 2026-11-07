@@ -163,30 +163,36 @@ function scriptsOf(text: string): Record<string, unknown> {
   }
 }
 
-const TEST_FILE_ARGUMENT = /^(?!-)(?!.*\.\.)[\w@./-]+\.(test|spec)\.[cm]?[jt]sx?$/;
+/** Relative, inside the project, and nothing a tool would read as a flag or a response file */
+const TEST_FILE_ARGUMENT = /^(?!.*\.\.)(\.\/)?\w[\w@./-]*\.(test|spec)\.[cm]?[jt]sx?$/;
+/** Runners whose words right before a list of files mean "run these", and that start a command */
+const LISTING_RUNNERS = [['node', '--test'], ['vitest', 'run'], ['mocha'], ['jest']];
+const COMMAND_START = new Set(['&&', ';']);
 
 /**
  * Whether a changed script only names more test files in a run that already names
- * its files: every other byte stays, so nothing else can come along with them. In a
- * run that names none, a file is a filter, which narrows it. After a flag's value it
- * may widen what the flag leaves out, so only `--test`, which takes no value, may
- * come before the list. Pure.
+ * its files: every other byte stays, so nothing else can come along with them. Only
+ * for the plain form of a known runner: in a run that names no files, a file is a
+ * filter that narrows it, and after a flag it may widen what the flag leaves out.
+ * Pure.
  */
 export function onlyAddsTestFiles(before: unknown, after: unknown): boolean {
   if (typeof before !== 'string' || typeof after !== 'string') return false;
   const old = before.split(' ');
   const next = after.split(' ');
-  const inAList = (index: number) => {
+  const inARunnersList = (index: number) => {
     let first = index - 1;
     if (first < 0 || !TEST_FILE_ARGUMENT.test(next[first])) return false;
     while (first > 0 && TEST_FILE_ARGUMENT.test(next[first - 1])) first--;
-    const introducedBy = next[first - 1] ?? '';
-    return !introducedBy.startsWith('-') || introducedBy === '--test';
+    return LISTING_RUNNERS.some((runner) => {
+      const start = first - runner.length;
+      return start >= 0 && runner.every((word, offset) => next[start + offset] === word) && (start === 0 || COMMAND_START.has(next[start - 1]));
+    });
   };
   let kept = 0;
   for (let index = 0; index < next.length; index++) {
     if (next[index] === old[kept]) kept++;
-    else if (!TEST_FILE_ARGUMENT.test(next[index]) || !inAList(index)) return false;
+    else if (!TEST_FILE_ARGUMENT.test(next[index]) || !inARunnersList(index)) return false;
   }
   return kept === old.length;
 }

@@ -560,3 +560,12 @@ export interface TaskStartOptions {
   model?: string;
   baseBranch?: string; // Override base branch for worktree creation
 }
+
+export interface MergeWorktreeOptions {
+  noCommit?: boolean;
+  reviewAction?: 'commit' | 'cancel';
+  /** Started by auto-merge, not by the user: the main process wants QA's approval of this exact code */
+  auto?: boolean;
+  /** Look for the task only in this project */
+  projectId?: string;
+}
