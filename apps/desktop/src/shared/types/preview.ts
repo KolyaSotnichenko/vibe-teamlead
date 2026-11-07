@@ -5,7 +5,7 @@
 import type { IPCResult } from './common';
 import type { PreviewService } from './project';
 
-export type PreviewStage = 'worktree' | 'install' | 'database' | 'migrations' | 'seed' | 'services' | 'ready' | 'failed' | 'stopped';
+export type PreviewStage = 'worktree' | 'install' | 'libraries' | 'database' | 'migrations' | 'seed' | 'services' | 'ready' | 'failed' | 'stopped';
 
 export interface PreviewStatus {
   projectId: string;

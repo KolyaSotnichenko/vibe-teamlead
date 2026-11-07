@@ -7,6 +7,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 
 import type { PreviewStatus } from '../../shared/types/preview';
@@ -18,6 +19,7 @@ import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { installDependencies, needsInstall } from '../design/storybook-service';
 import { runProcess } from '../platform/exec';
 import { type PreviewDatabase, startPreviewDatabase } from './preview-database';
+import { workspaceLibraries } from './detect-services';
 import { previewSpecDir, syncPreviewWorktree } from './preview-worktree';
 
 export type { PreviewStage, PreviewStatus } from '../../shared/types/preview';
@@ -38,6 +40,8 @@ export interface PreviewDeps {
   startServer: (options: Parameters<typeof startDevServer>[0]) => ReturnType<typeof startDevServer>;
   stopServer: (name: string) => Promise<boolean>;
   cleanUpLeftovers: (specDir: string) => void;
+  /** A free local port, picked before any service starts so each can name the others' URLs */
+  pickPort: () => Promise<number>;
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60_000;
@@ -90,6 +94,16 @@ function defaultDeps(): Omit<PreviewDeps, 'git' | 'secretsDir'> {
     startServer: startDevServer,
     stopServer: stopDevServer,
     cleanUpLeftovers,
+    pickPort: () =>
+      new Promise((resolvePort, reject) => {
+        const server = createServer();
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          const address = server.address();
+          const port = typeof address === 'object' && address ? address.port : 0;
+          server.close(() => resolvePort(port));
+        });
+      }),
   };
 }
 
@@ -137,7 +151,15 @@ function envFor(session: Session, dir: string, files: string[]): Record<string, 
 async function startServices(session: Session, files: string[]): Promise<string> {
   const services = session.project.settings.previewServices ?? [];
   const ordered = [...services.filter((s) => !s.page), ...services.filter((s) => s.page)];
+  // Every port first: a backend may need the page's URL (CORS), and the page starts last
+  const ports: Record<string, number> = {};
   const urls: Record<string, string> = {};
+  for (const service of ordered) {
+    let port = await session.deps.pickPort();
+    while (Object.values(ports).includes(port)) port = await session.deps.pickPort();
+    ports[service.name] = port;
+    urls[service.name] = `http://localhost:${port}`;
+  }
   let pageUrl = '';
   emit(session, { stage: 'services' });
   for (const service of ordered) {
@@ -153,6 +175,7 @@ async function startServices(session: Session, files: string[]): Promise<string>
         command: service.command,
         cwd: resolve(session.worktree!, service.dir),
         specDir: previewSpecDir(session.worktree!),
+        port: ports[service.name],
         portEnv: service.portEnv ?? 'PORT',
         env,
         timeoutMs: SERVER_START_TIMEOUT_MS,
@@ -167,6 +190,19 @@ async function startServices(session: Session, files: string[]): Promise<string>
     if (service.page) pageUrl = started.url;
   }
   return pageUrl;
+}
+
+/** The workspace packages the services use from built output: a fresh worktree has no dist/ for them. */
+async function buildLibraries(session: Session, files: string[]): Promise<void> {
+  const root = session.worktree!;
+  const read = (p: string) => session.deps.read(root, p);
+  const libraries = workspaceLibraries({ files, read }, session.project.settings.previewServices ?? []);
+  for (const library of libraries) {
+    emit(session, { stage: 'libraries', message: library.name });
+    const result = await session.deps.runCommand(library.command, resolve(root, library.dir), envFor(session, library.dir, files));
+    check(session);
+    if (result.code !== 0) throw Object.assign(new Error(`${library.name} did not build`), { logTail: tail(result.output) });
+  }
 }
 
 async function stopServers(session: Session): Promise<void> {
@@ -197,6 +233,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       await deps.install(path, (line) => emit(session, { stage: 'install', message: line }));
       check(session);
     }
+
+    await buildLibraries(session, files);
 
     emit(session, { stage: 'database', message: undefined });
     const compose = files.find((file) => /^(docker-)?compose\.ya?ml$/.test(file));
@@ -259,7 +297,9 @@ async function afterMerge(session: Session): Promise<void> {
     await stopServers(session);
     await session.deps.install(session.worktree!, (line) => emit(session, { stage: 'install', message: line }));
     check(session);
-    const url = await startServices(session, await session.deps.listFiles(session.worktree!));
+    const files = await session.deps.listFiles(session.worktree!);
+    await buildLibraries(session, files);
+    const url = await startServices(session, files);
     emit(session, { stage: 'ready', url, origins: [new URL(url).origin], message: undefined });
   } catch (error) {
     if (error instanceof Cancelled || session.cancelled) return;

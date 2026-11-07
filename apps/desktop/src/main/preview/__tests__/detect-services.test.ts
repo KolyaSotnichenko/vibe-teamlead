@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { proposePreviewServices } from '../detect-services';
+import { proposePreviewServices, workspaceLibraries } from '../detect-services';
 
 function project(files: Record<string, string>) {
   return { files: Object.keys(files), read: (path: string) => files[path] ?? null };
@@ -60,3 +60,33 @@ describe('proposePreviewServices', () => {
     }
   });
 });
+
+describe('workspaceLibraries', () => {
+  const files = (extra: Record<string, string> = {}) => project({
+    'pnpm-lock.yaml': '',
+    'packages/shared/package.json': JSON.stringify({ name: '@acme/shared', main: './dist/index.js', scripts: { build: 'tsc -p tsconfig.json' } }),
+    'packages/ui/package.json': JSON.stringify({ name: '@acme/ui', main: './src/index.ts', scripts: { build: 'tsup' } }),
+    'packages/config/package.json': JSON.stringify({ name: '@acme/config', main: './dist/index.js' }),
+    'apps/api/package.json': JSON.stringify({ name: 'api', dependencies: { '@acme/shared': 'workspace:*', '@acme/config': 'workspace:*', express: '^5' } }),
+    'apps/web/package.json': JSON.stringify({ name: 'web', dependencies: { '@acme/ui': 'workspace:^', '@acme/shared': 'workspace:*' } }),
+    ...extra,
+  });
+  const services = [{ name: 'api', dir: 'apps/api', command: 'x' }, { name: 'web', dir: 'apps/web', command: 'y', page: true }];
+
+  it('builds the workspace packages the services use whose entry is built output', () => {
+    expect(workspaceLibraries(files(), services)).toEqual([{ name: '@acme/shared', dir: 'packages/shared', command: 'pnpm run build' }]);
+  });
+
+  it('builds a package a library itself needs, before that library', () => {
+    const f = files({
+      'packages/shared/package.json': JSON.stringify({ name: '@acme/shared', main: './dist/index.js', scripts: { build: 'tsc' }, dependencies: { '@acme/core': 'workspace:*' } }),
+      'packages/core/package.json': JSON.stringify({ name: '@acme/core', exports: { '.': { types: './dist/index.d.ts' } }, scripts: { build: 'tsc' } }),
+    });
+    expect(workspaceLibraries(f, services).map((l) => l.name)).toEqual(['@acme/core', '@acme/shared']);
+  });
+
+  it('builds nothing for a single-package project', () => {
+    expect(workspaceLibraries(project({ 'package.json': JSON.stringify({ name: 'app', scripts: { dev: 'vite' } }) }), [{ name: 'web', dir: '', command: 'x', page: true }])).toEqual([]);
+  });
+});
+
