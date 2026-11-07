@@ -31,9 +31,25 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     send(status);
   };
 
+  // A reload of the app's own page leaves nobody to stop the preview: stop it then.
+  // Watched from the first start: the window may not exist yet when handlers register.
+  const watched = new WeakSet<object>();
+  const watchReloads = () => {
+    const window = getMainWindow();
+    if (!window || watched.has(window)) return;
+    watched.add(window);
+    window.webContents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) {
+        view.destroy();
+        void stopPreview();
+      }
+    });
+  };
+
   const start = async (projectId: string, resetData: boolean): Promise<IPCResult<PreviewStatus>> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
+    watchReloads();
     try {
       const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview') }, { resetData });
       return { success: true, data: status };
@@ -82,12 +98,4 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     }
   });
 
-  // A reload of the app's own page leaves nobody to stop the preview: stop it now
-  const window = getMainWindow();
-  window?.webContents.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument) {
-      view.destroy();
-      void stopPreview();
-    }
-  });
 }

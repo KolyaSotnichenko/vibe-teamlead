@@ -64,7 +64,11 @@ describe('preview IPC', () => {
     expect(view.setBounds).toHaveBeenCalled();
   });
 
-  it("stops the preview when the app's own page reloads", () => {
+  it("stops the preview when the app's own page reloads, watching from the first start", async () => {
+    expect(window.webContents.on).not.toHaveBeenCalled();
+    await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+    await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+    expect(window.webContents.on.mock.calls.filter(([event]) => event === 'did-start-navigation')).toHaveLength(1);
     const listener = window.webContents.on.mock.calls.find(([event]) => event === 'did-start-navigation')?.[1] as (d: unknown) => void;
     listener({ isMainFrame: true, isSameDocument: false });
     expect(view.destroy).toHaveBeenCalled();
