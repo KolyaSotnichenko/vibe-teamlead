@@ -26,6 +26,7 @@ import type { HookCallbackMatcher, HookJSONOutput, PreToolUseHookInput } from '@
 import { bashSecurityHook } from '../security/bash-validator';
 import { splitCommandSegments } from '../security/command-parser';
 import { isPathContained } from '../security/path-containment';
+import { labelDockerRuns } from '../../utils/task-containers';
 import type { ToolContext } from '../tools/types';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -136,7 +137,11 @@ export function evaluatePreToolUse(
     }
     const command = typeof toolInput?.command === 'string' ? toolInput.command : '';
     if (context.agentType === 'qa_reviewer' && reviewerBashDenied(command)) {
-      return deny(`Only read-only git commands (diff, log, show, status, blame, …) are allowed here. ${REVIEWER_RULE}`);
+      return deny(`Only read-only git commands (diff, log, show, status, blame, …) are allowed here, run in the task's folder without -C. ${REVIEWER_RULE}`);
+    }
+    const labelled = labelDockerRuns(command, context.cwd);
+    if (labelled !== command) {
+      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: { ...toolInput, command: labelled } } };
     }
     return {};
   }

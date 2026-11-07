@@ -37,3 +37,26 @@ describe('code run in the browser server', () => {
     },
   );
 });
+
+describe('git for the QA reviewer', () => {
+  it('says what to do about -C, not only that diff is allowed', () => {
+    const output = evaluatePreToolUse('Bash', { command: 'git -C /work/tree diff main...HEAD --name-status' }, { ...context, agentType: 'qa_reviewer' }) as {
+      hookSpecificOutput?: { permissionDecisionReason?: string };
+    };
+    expect(output.hookSpecificOutput?.permissionDecisionReason).toContain('without -C');
+  });
+});
+
+describe("a container an agent starts", () => {
+  it('is marked with the task, so it goes when the task does', () => {
+    const output = evaluatePreToolUse('Bash', { command: 'docker run -d pg', description: 'db' }, context) as {
+      hookSpecificOutput?: { permissionDecision?: string; updatedInput?: Record<string, unknown> };
+    };
+    expect(output.hookSpecificOutput?.permissionDecision).toBe('allow');
+    expect(output.hookSpecificOutput?.updatedInput).toEqual({ command: "docker run --label 'vibe-teamlead.task-folder=/work/tree' -d pg", description: 'db' });
+  });
+
+  it('changes nothing about other commands', () => {
+    expect(evaluatePreToolUse('Bash', { command: 'docker ps' }, context)).toEqual({});
+  });
+});

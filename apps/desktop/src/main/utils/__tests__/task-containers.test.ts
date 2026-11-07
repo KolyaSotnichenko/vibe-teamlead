@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { composeProjectName, removeTaskContainers } from '../task-containers';
+import { composeProjectName, labelDockerRuns, removeTaskContainers } from '../task-containers';
 
 const WT = '/p/.vibe-teamlead/worktrees/tasks/014-build-dashboard';
 
@@ -26,6 +26,18 @@ describe('removeTaskContainers', () => {
     expect(calls).toContainEqual(['rm', '-f', '-v', 'c1']);
     expect(calls).toContainEqual(['volume', 'rm', 'v1']);
     expect(calls).toContainEqual(['network', 'rm', 'n1']);
+  });
+
+  it('removes a container an agent started with docker run for this task', async () => {
+    const { docker, calls } = fakeDocker({ containers: [`c1\t\t${WT}`] });
+    await removeTaskContainers(WT, docker);
+    expect(calls).toContainEqual(['rm', '-f', '-v', 'c1']);
+  });
+
+  it("leaves a docker run container of another task alone", async () => {
+    const { docker, calls } = fakeDocker({ containers: [`c1\t\t${WT}-2`] });
+    await removeTaskContainers(WT, docker);
+    expect(calls.filter((call) => call[0] === 'rm')).toEqual([]);
   });
 
   it('asks for volumes and networks of this task only', async () => {
@@ -61,5 +73,28 @@ describe('removeTaskContainers', () => {
 describe('composeProjectName', () => {
   it('names the project as compose does from a folder', () => {
     expect(composeProjectName('/x/014-Build Dashboard!')).toBe('014-builddashboard');
+  });
+});
+
+describe('labelDockerRuns', () => {
+  const label = `--label 'vibe-teamlead.task-folder=${WT}'`;
+
+  it('marks a container the agent starts', () => {
+    expect(labelDockerRuns('docker run -d postgres:18', WT)).toBe(`docker run ${label} -d postgres:18`);
+    expect(labelDockerRuns('docker container run -d pg', WT)).toBe(`docker container run ${label} -d pg`);
+  });
+
+  it('marks it wherever it is in the command', () => {
+    expect(labelDockerRuns('docker rm -f a >/dev/null 2>&1; docker run -d pg && sleep 1', WT)).toBe(`docker rm -f a >/dev/null 2>&1; docker run ${label} -d pg && sleep 1`);
+  });
+
+  it("leaves everything else as it is: a search for the words, compose's own run, other docker commands", () => {
+    for (const command of ['grep "docker run" README.md', 'docker compose run api', 'docker ps', 'npm run test', 'echo docker run']) {
+      expect(labelDockerRuns(command, WT)).toBe(command);
+    }
+  });
+
+  it('keeps a folder with a quote in it from breaking out of the command', () => {
+    expect(labelDockerRuns('docker run pg', "/a'; rm -rf x '")).toBe(`docker run --label 'vibe-teamlead.task-folder=/a'\\''; rm -rf x '\\''' pg`);
   });
 });
