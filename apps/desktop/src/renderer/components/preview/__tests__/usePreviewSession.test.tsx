@@ -55,4 +55,22 @@ describe('usePreviewSession', () => {
     unmount();
     expect(listener).toBeNull();
   });
+
+  it("hides the view while one of the app's dialogs is open, since the view would cover it", async () => {
+    const { result } = renderHook(() => usePreviewSession('p1', true));
+    const box = document.createElement('div');
+    box.getBoundingClientRect = () => ({ left: 10, top: 50, width: 800, height: 600 }) as DOMRect;
+    document.body.appendChild(box);
+    (result.current.boxRef as { current: HTMLDivElement | null }).current = box;
+
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    document.body.appendChild(dialog);
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith(null));
+
+    dialog.remove();
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 50, width: 800, height: 600 }));
+    box.remove();
+  });
 });
+

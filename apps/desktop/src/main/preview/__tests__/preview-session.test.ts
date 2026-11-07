@@ -39,7 +39,8 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     git: 'git',
     docker: async () => ({ ok: true, stdout: '' }),
     secretsDir: '/tmp/secrets',
-    sync: vi.fn(async (projectPath: string) => { order.push('worktree'); return { path: `${projectPath}/.vibe-teamlead/worktrees/preview`, lockfileChanged: false }; }),
+    worktreesRoot: '/home/.vibe-teamlead/worktrees/preview',
+    sync: vi.fn(async (_projectPath: string, _main: string, _git: string, path: string) => { order.push('worktree'); return { path, lockfileChanged: false, moved: true }; }),
     listFiles: () => Object.keys(FILES),
     read: (_root: string, path: string) => FILES[path] ?? null,
     needsInstall: () => false,
@@ -78,7 +79,7 @@ describe('a preview session', () => {
     const calls = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string>; cwd: string });
     const api = calls.find((c) => c.name === 'preview-api')!;
     const web = calls.find((c) => c.name === 'preview-web')!;
-    expect(api.cwd).toBe('/projects/p1/.vibe-teamlead/worktrees/preview/apps/api');
+    expect(api.cwd).toBe('/home/.vibe-teamlead/worktrees/preview/p1/apps/api');
     expect(api.env).toMatchObject({ DATABASE_URL: 'postgresql://verify:pw@127.0.0.1:55001/verify', JWT_SECRET: 'dev-secret', FEATURE_X: 'on' });
     expect(web.env).toMatchObject({ NEXT_PUBLIC_SITE: 'preview', NEXT_PUBLIC_API_URL: 'http://localhost:4101', FEATURE_X: 'on' });
     expect(JSON.stringify(calls)).not.toContain('leak');
@@ -200,11 +201,13 @@ describe('a preview session', () => {
     vi.mocked(d.sync).mockClear();
     vi.mocked(d.startServer).mockClear();
 
+    vi.mocked(d.runCommand).mockClear();
     await inMergeQueue('/projects/p1', 't1', async () => {});
-    await vi.waitFor(() => expect(d.sync).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(d.runCommand).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(d.runCommand).mock.calls.map(([c]) => c)).toEqual(['pnpm run build', expect.stringContaining('prisma migrate deploy')]);
     expect(d.startServer).not.toHaveBeenCalled();
 
-    vi.mocked(d.sync).mockResolvedValueOnce({ path: '/projects/p1/.vibe-teamlead/worktrees/preview', lockfileChanged: true });
+    vi.mocked(d.sync).mockResolvedValueOnce({ path: '/home/.vibe-teamlead/worktrees/preview/p1', lockfileChanged: true, moved: true });
     await inMergeQueue('/projects/p1', 't2', async () => {});
     await vi.waitFor(() => expect(d.startServer).toHaveBeenCalledTimes(2));
     expect(d.install).toHaveBeenCalledTimes(1);
@@ -219,4 +222,107 @@ describe('a preview session', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(d.sync).not.toHaveBeenCalled();
   });
+
+  it('a merge that changed nothing in the worktree does nothing', async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d);
+    vi.mocked(d.runCommand).mockClear();
+    vi.mocked(d.sync).mockResolvedValueOnce({ path: '/home/.vibe-teamlead/worktrees/preview/p1', lockfileChanged: false, moved: false });
+    await inMergeQueue('/projects/p1', 't1', async () => {});
+    await vi.waitFor(() => expect(d.sync).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(d.runCommand).not.toHaveBeenCalled();
+  });
+
+  it('a merge that settles while the preview starts is applied once it is ready', async () => {
+    let release!: () => void;
+    const { d } = deps({ startDatabase: vi.fn(() => new Promise<PreviewDatabase>((resolve) => { release = () => resolve(database()); })) });
+    const starting = startPreview(project(), () => {}, d);
+    await vi.waitFor(() => expect(d.startDatabase).toHaveBeenCalled());
+    await inMergeQueue('/projects/p1', 't1', async () => {});
+    release();
+    await starting;
+    await vi.waitFor(() => expect(d.sync).toHaveBeenCalledTimes(2));
+  });
+
+  it('the next start waits for a stopped start to finish, and the stopped one says nothing more', async () => {
+    let release!: () => void;
+    const db1 = database();
+    const first = deps({ startDatabase: vi.fn((_images, options: { signal?: AbortSignal }) => new Promise<PreviewDatabase>((resolve) => { release = () => resolve(db1); options.signal?.addEventListener('abort', () => undefined); })) });
+    const firstStatuses: PreviewStatus[] = [];
+    const starting = startPreview(project(), (s) => firstStatuses.push(s), first.d);
+    await vi.waitFor(() => expect(first.d.startDatabase).toHaveBeenCalled());
+    const signal = vi.mocked(first.d.startDatabase).mock.calls[0][1].signal as AbortSignal;
+
+    const second = deps();
+    const secondStart = startPreview(project(), () => {}, second.d);
+    await vi.waitFor(() => expect(signal.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(second.d.sync).not.toHaveBeenCalled();
+
+    release();
+    await starting;
+    const status = await secondStart;
+    expect(status.stage).toBe('ready');
+    expect(db1.stop).toHaveBeenCalled();
+    expect(firstStatuses.filter((s) => s.stage === 'stopped')).toHaveLength(1);
+    expect(firstStatuses.at(-1)?.stage).toBe('stopped');
+    expect(currentPreview()?.stage).toBe('ready');
+  });
+
+  it('a server that finishes starting after a stop is stopped too', async () => {
+    let release!: () => void;
+    const { d } = deps({
+      startServer: vi.fn(() => new Promise<{ url: string; port: number; logPath: string; reused: boolean }>((resolve) => { release = () => resolve({ url: 'http://localhost:4101', port: 4101, logPath: '/log', reused: false }); })),
+    });
+    const starting = startPreview(project(), () => {}, d);
+    await vi.waitFor(() => expect(d.startServer).toHaveBeenCalled());
+    const stopping = stopPreview();
+    release();
+    await Promise.all([starting, stopping]);
+    expect(d.stopServer).toHaveBeenCalledWith('preview-api');
+    expect(vi.mocked(d.stopServer).mock.calls.filter(([n]) => n === 'preview-api').length).toBeGreaterThanOrEqual(1);
+    expect(vi.mocked(d.stopServer).mock.invocationCallOrder.at(-1)).toBeGreaterThan(vi.mocked(d.startServer).mock.invocationCallOrder[0]);
+  });
+
+  it('install, builds, migrations and seeds get a signal that a stop aborts', async () => {
+    let seen: AbortSignal | undefined;
+    const { d } = deps({
+      needsInstall: () => true,
+      install: vi.fn((_root: string, _onLine: unknown, signal?: AbortSignal) => { seen = signal; return new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve())); }),
+    });
+    const starting = startPreview(project(), () => {}, d);
+    await vi.waitFor(() => expect(seen).toBeDefined());
+    await stopPreview();
+    await starting;
+    expect(seen?.aborted).toBe(true);
+    expect(d.startDatabase).not.toHaveBeenCalled();
+  });
+
+  it('without a database, connection settings from the example are set empty, so nothing falls back to a real one', async () => {
+    const { d } = deps({ startDatabase: vi.fn(async () => database({ status: 'unavailable', started: [], fresh: false, reason: 'no docker' })) });
+    await startPreview(project(), () => {}, d);
+    const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
+    expect(api.env.DATABASE_URL).toBe('');
+    expect(api.env.JWT_SECRET).toBe('dev-secret');
+  });
+
+  it('runs from a worktree under the app folder, outside the project, so nothing walks up into its .env', async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d);
+    expect(vi.mocked(d.sync).mock.calls[0][3]).toBe('/home/.vibe-teamlead/worktrees/preview/p1');
+  });
 });
+
+describe('previewCommandEnv', () => {
+  it("passes what tools need and the preview's variables, not the app's own secrets", async () => {
+    const { previewCommandEnv } = await import('../preview-session');
+    process.env.PREVIEW_TEST_SECRET = 'leak';
+    const env = previewCommandEnv({ DATABASE_URL: 'postgresql://x' });
+    delete process.env.PREVIEW_TEST_SECRET;
+    expect(env.PREVIEW_TEST_SECRET).toBeUndefined();
+    expect(env.DATABASE_URL).toBe('postgresql://x');
+    expect(env.PATH).toBeTruthy();
+  });
+});
+

@@ -1,8 +1,11 @@
 /**
  * The Preview runs only while its page is on screen: mounting starts it, and
  * unmounting, or another project, stops it. The box the page reserves is where
- * the main process places the preview's view.
+ * the main process places the preview's view. The view is drawn above the
+ * app's own page, so it steps aside while any of the app's dialogs is open.
  */
+
+const DIALOG = '[role="dialog"], [role="alertdialog"]';
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -21,17 +24,30 @@ export function usePreviewSession(projectId: string | null, enabled: boolean) {
       if (live && next.projectId === projectId) setStatus(next);
     });
 
-    const report = () => {
+    // Sent only when it changed, at most once a frame: the dialog watch sees every DOM change
+    let last: string | undefined;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
       const box = boxRef.current;
       if (!box) return;
       const rect = box.getBoundingClientRect();
-      void api.setBounds(rect.width > 0 && rect.height > 0
+      const bounds = !document.querySelector(DIALOG) && rect.width > 0 && rect.height > 0
         ? { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
-        : null);
+        : null;
+      const key = JSON.stringify(bounds);
+      if (key === last) return;
+      last = key;
+      void api.setBounds(bounds);
+    };
+    const report = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report);
     if (boxRef.current) observer?.observe(boxRef.current);
     window.addEventListener('resize', report);
+    const dialogs = typeof MutationObserver === 'undefined' ? null : new MutationObserver(report);
+    dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
 
     void api.start(projectId).then(report);
 
@@ -39,6 +55,8 @@ export function usePreviewSession(projectId: string | null, enabled: boolean) {
       live = false;
       unsubscribe();
       observer?.disconnect();
+      dialogs?.disconnect();
+      if (frame) cancelAnimationFrame(frame);
       window.removeEventListener('resize', report);
       void api.setBounds(null);
       void api.stop();

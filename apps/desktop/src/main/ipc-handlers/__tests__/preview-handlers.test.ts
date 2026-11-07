@@ -24,7 +24,7 @@ type Invoke = (channel: string, event: unknown, ...args: unknown[]) => Promise<u
 const invoke = (channel: string, ...args: unknown[]) => (ipcMain as unknown as { invokeHandler: Invoke }).invokeHandler(channel, {}, ...args);
 
 function fakeView() {
-  return { show: vi.fn(), setBounds: vi.fn(), navigate: vi.fn(), destroy: vi.fn() };
+  return { show: vi.fn(), hide: vi.fn(), setBounds: vi.fn(), navigate: vi.fn(), destroy: vi.fn() };
 }
 
 describe('preview IPC', () => {
@@ -46,6 +46,22 @@ describe('preview IPC', () => {
     expect(await invoke(IPC_CHANNELS.PREVIEW_START, 'p1')).toMatchObject({ success: true, data: { stage: 'ready' } });
     expect(view.show).toHaveBeenCalledWith('p1', 'http://localhost:4100', ['http://localhost:4100']);
     expect(window.webContents.send).toHaveBeenCalledWith(IPC_CHANNELS.PREVIEW_STATUS, expect.objectContaining({ stage: 'ready' }));
+  });
+
+  it('takes the view off the screen while the preview is not ready, e.g. reinstalling after a merge', async () => {
+    vi.mocked(startPreview).mockImplementationOnce(async (project, onStatus) => {
+      const status = { projectId: project.id, stage: 'install' as const, origins: [] };
+      onStatus(status);
+      return status;
+    });
+    await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+    expect(view.hide).toHaveBeenCalled();
+    expect(view.destroy).not.toHaveBeenCalled();
+  });
+
+  it('starts previews in the app folder, outside the project', async () => {
+    await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+    expect(vi.mocked(startPreview).mock.calls[0][2].worktreesRoot).toMatch(/\/\.vibe-teamlead\/worktrees\/preview$/);
   });
 
   it('reset data starts with resetData', async () => {

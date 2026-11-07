@@ -5,6 +5,9 @@
 // loading fails with "ReferenceError: require is not defined".
 import { stopAllStorybooks } from './design/storybook-service';
 import { removePreviewLeftovers } from './preview/preview-database';
+import { cleanUpPreviewLeftovers } from './preview/preview-worktree';
+import { previewWorktreesRoot } from './ipc-handlers/preview-handlers';
+import { cleanUpLeftovers } from './ai/dev-servers/dev-servers';
 import { stopPreview } from './preview/preview-session';
 import { hostDocker } from './ai/verification/test-services';
 import Module, { createRequire } from 'module';
@@ -412,7 +415,8 @@ if (isWindows()) {
 
 // Initialize the application
 app.whenReady().then(() => {
-  // A preview's database a crash left running; its volume stays
+  // What a crashed preview left running: its servers, and its database (the volume stays)
+  cleanUpPreviewLeftovers(previewWorktreesRoot(), cleanUpLeftovers);
   void removePreviewLeftovers(hostDocker(process.env)).catch(() => undefined);
   // Set app user model id for Windows
   electronApp.setAppUserModelId('com.vibeteamlead.app');

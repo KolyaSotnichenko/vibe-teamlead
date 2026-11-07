@@ -94,4 +94,33 @@ describe('the preview database', () => {
     expect(calls[0]).toEqual(['ps', '-aq', '--filter', 'label=vibe-teamlead-preview']);
     expect(calls.slice(1)).toEqual([['rm', '-f', 'old1'], ['rm', '-f', 'old2']]);
   });
+
+  it('a reset that cannot remove the volume gives up and keeps the stored password', async () => {
+    const dir = secretsDir();
+    const first = fakeDocker();
+    await startPreviewDatabase(POSTGRES, { docker: first.docker, projectId: 'p1', secretsDir: dir });
+    const busy = fakeDocker({ volumeExists: true });
+    const docker: DockerRun = async (args) => (args[0] === 'volume' && args[1] === 'rm' ? { ok: false, stdout: 'volume is in use' } : busy.docker(args));
+    const db = await startPreviewDatabase(POSTGRES, { docker, projectId: 'p1', secretsDir: dir, reset: true });
+    expect(db.status).toBe('unavailable');
+    expect(db.reason).toContain('volume is in use');
+    const again = fakeDocker({ volumeExists: true });
+    await startPreviewDatabase(POSTGRES, { docker: again.docker, projectId: 'p1', secretsDir: dir });
+    expect(passwordOf(again.calls)).toBe(passwordOf(first.calls));
+  });
+
+  it('a stop while it waits for the database removes the container and returns at once', async () => {
+    const controller = new AbortController();
+    const calls: string[][] = [];
+    const docker: DockerRun = async (args) => {
+      calls.push(args);
+      if (args[0] === 'exec') { controller.abort(); return { ok: false, stdout: '' }; }
+      return fakeDocker().docker(args);
+    };
+    const db = await startPreviewDatabase(POSTGRES, { docker, projectId: 'p1', secretsDir: secretsDir(), signal: controller.signal, pollMs: 1 });
+    expect(db.status).toBe('unavailable');
+    expect(calls.filter((c) => c[0] === 'exec')).toHaveLength(1);
+    expect(calls.at(-1)).toEqual(['rm', '-f', 'abc123']);
+  });
 });
+

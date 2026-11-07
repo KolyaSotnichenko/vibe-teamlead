@@ -46,8 +46,14 @@ export class PreviewView {
       window.contentView.addChildView(view);
       this.view = view;
     }
+    this.view.setVisible(this.bounds !== null);
     if (this.bounds) this.view.setBounds(this.bounds);
     void this.view.webContents.loadURL(url);
+  }
+
+  /** Off the screen while the preview isn't ready, e.g. reinstalling after a merge */
+  hide(): void {
+    this.view?.setVisible(false);
   }
 
   /** null hides it (the box left the screen) */

@@ -6,6 +6,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { app, type BrowserWindow, ipcMain } from 'electron';
@@ -18,6 +19,9 @@ import { startPreview, stopPreview } from '../preview/preview-session';
 import { PreviewView } from '../preview/preview-view';
 import { projectStore } from '../project-store';
 
+/** The previews' worktrees: in the app's folder, outside every project */
+export const previewWorktreesRoot = () => path.join(homedir(), '.vibe-teamlead', 'worktrees', 'preview');
+
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | null, view = new PreviewView(getMainWindow)): void {
@@ -28,6 +32,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
   const onStatus = (status: PreviewStatus) => {
     if (status.stage === 'ready' && status.url) view.show(status.projectId, status.url, status.origins);
     else if (status.stage === 'stopped' || status.stage === 'failed') view.destroy();
+    else view.hide();
     send(status);
   };
 
@@ -51,7 +56,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     if (!project) return { success: false, error: 'Project not found' };
     watchReloads();
     try {
-      const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview') }, { resetData });
+      const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() }, { resetData });
       return { success: true, data: status };
     } catch (error) {
       view.destroy();

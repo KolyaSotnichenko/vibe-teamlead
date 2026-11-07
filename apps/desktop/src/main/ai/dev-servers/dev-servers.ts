@@ -202,7 +202,7 @@ function logTail(path: string): string {
 }
 
 /** The server's environment: what tools need, without the session's credentials. */
-function serverEnv(extra: Record<string, string>): Record<string, string> {
+export function serverEnv(extra: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = { PATH: searchPath(), HOME: process.env.HOME ?? homedir(), FORCE_COLOR: '0' };
   for (const key of ['USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'NVM_DIR', 'VOLTA_HOME', 'PNPM_HOME']) {
     const value = process.env[key];
