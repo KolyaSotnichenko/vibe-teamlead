@@ -10,8 +10,9 @@ import type { AgentProfile, PhaseModelConfig, FeatureModelConfig, FeatureThinkin
 // ============================================
 
 /**
- * Built-in choices (shorthands, resolved by MODEL_ID_MAP). The pickers add the
- * models the configured endpoint lists, and accept any typed model id.
+ * Names of the shorthands (resolved by MODEL_ID_MAP) settings and tasks may
+ * hold. Not choices: the pickers offer what the configured endpoint lists, and
+ * accept any typed model id.
  */
 export const AVAILABLE_MODELS = [
   { value: 'opus', label: 'Claude Opus 5.5' },

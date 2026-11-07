@@ -1,21 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { buildModelOptions } from '../ClaudeModelSelect';
 
-const labels = { builtIn: 'Built-in', endpoint: (name: string) => `From ${name}`, current: 'Current' };
+const labels = { endpoint: (name: string) => `From ${name}`, current: 'Current' };
 
 describe('buildModelOptions', () => {
-  it('lists built-in models first for the Anthropic API', () => {
-    const options = buildModelOptions('opus', {
-      models: [{ id: 'claude-fable-5-1', displayName: 'Claude Fable 5.1' }],
+  it('offers only what the endpoint lists, nothing built in', () => {
+    const options = buildModelOptions('claude-fable-5-1', {
+      models: [{ id: 'claude-fable-5-1', displayName: 'Claude Fable 5.1' }, { id: 'claude-sonnet-5-5' }],
       endpoint: 'https://api.anthropic.com',
       custom: false,
       fetchedAt: 0,
     }, labels);
-    expect(options[0]).toMatchObject({ value: 'opus', group: 'Built-in' });
-    expect(options.at(-1)).toEqual({ value: 'claude-fable-5-1', label: 'Claude Fable 5.1 · claude-fable-5-1', group: 'From api.anthropic.com' });
+    expect(options).toEqual([
+      { value: 'claude-fable-5-1', label: 'Claude Fable 5.1 · claude-fable-5-1', group: 'From api.anthropic.com' },
+      { value: 'claude-sonnet-5-5', label: 'claude-sonnet-5-5', group: 'From api.anthropic.com' },
+    ]);
   });
 
-  it('puts a custom endpoint first and keeps a typed value', () => {
+  it('offers nothing to choose when the list could not be loaded', () => {
+    expect(buildModelOptions('', { models: [], endpoint: 'https://api.anthropic.com', custom: false, error: 'nope', fetchedAt: 0 }, labels)).toEqual([]);
+  });
+
+  it('still names a saved shorthand the endpoint does not list', () => {
+    expect(buildModelOptions('opus', null, labels)).toEqual([{ value: 'opus', label: 'Claude Opus 5.5', group: 'Current' }]);
+  });
+
+  it('keeps a typed value above the listed models', () => {
     const options = buildModelOptions('my-finetune', {
       models: [{ id: 'qwen3-coder:30b' }],
       endpoint: 'http://localhost:11434',

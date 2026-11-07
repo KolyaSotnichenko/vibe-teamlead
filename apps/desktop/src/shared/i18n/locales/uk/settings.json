@@ -966,7 +966,6 @@
     }
   },
   "modelPicker": {
-    "builtIn": "Вбудовані",
     "fromEndpoint": "З {{endpoint}}",
     "current": "Поточна",
     "search": "Знайдіть або введіть ID моделі",

@@ -964,7 +964,6 @@
     }
   },
   "modelPicker": {
-    "builtIn": "Built-in",
     "fromEndpoint": "From {{endpoint}}",
     "current": "Current",
     "search": "Search or type a model id",

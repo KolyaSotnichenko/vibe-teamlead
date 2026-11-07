@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
-import { AVAILABLE_MODELS, LEGACY_MODEL_LABELS, REMOVED_PROVIDER_MODELS } from '../../../shared/constants';
+import { LEGACY_MODEL_LABELS, REMOVED_PROVIDER_MODELS } from '../../../shared/constants';
 import type { ClaudeModelList } from '../../../shared/types';
+import { getModelLabel } from '../../../shared/utils/model-display';
 import { useEndpointModels } from '../../hooks/useEndpointModels';
 import { cn } from '../../lib/utils';
 import { Combobox, type ComboboxOption } from '../ui/combobox';
@@ -27,34 +28,31 @@ function endpointName(endpoint: string): string {
 }
 
 /**
- * Picker options: the built-in shorthands, the models the endpoint lists,
- * and the current value if it is neither (a model id typed earlier).
- * With a custom endpoint (e.g. Ollama) its models come first.
+ * Picker options: the models the endpoint lists, and the current value if it
+ * isn't one of them (a model id typed earlier, or saved under another provider).
  */
 export function buildModelOptions(
   value: string,
   list: ClaudeModelList | null,
-  labels: { builtIn: string; endpoint: (name: string) => string; current: string },
+  labels: { endpoint: (name: string) => string; current: string },
 ): ComboboxOption[] {
-  const builtIn: ComboboxOption[] = AVAILABLE_MODELS.map((m) => ({ value: m.value, label: m.label, group: labels.builtIn }));
   const endpointGroup = list ? labels.endpoint(endpointName(list.endpoint)) : '';
-  const listed: ComboboxOption[] = (list?.models ?? []).map((m) => ({
+  const options: ComboboxOption[] = (list?.models ?? []).map((m) => ({
     value: m.id,
     label: m.displayName && m.displayName !== m.id ? `${m.displayName} · ${m.id}` : m.id,
     group: endpointGroup,
   }));
-  const options = list?.custom ? [...listed, ...builtIn] : [...builtIn, ...listed];
 
   const current = value?.trim();
   if (current && !REMOVED_PROVIDER_MODELS.has(current) && !options.some((o) => o.value === current)) {
-    options.unshift({ value: current, label: LEGACY_MODEL_LABELS[current] ?? current, group: labels.current });
+    options.unshift({ value: current, label: LEGACY_MODEL_LABELS[current] ?? getModelLabel(current), group: labels.current });
   }
   return options;
 }
 
 /**
- * Model picker: built-in Claude models, the live list from the configured
- * endpoint (Anthropic API or the base URL, e.g. Ollama), or any typed id.
+ * Model picker: the live list from the configured endpoint (Anthropic API or
+ * the base URL, e.g. Ollama), or any typed id.
  * A stored model of a removed provider shows the placeholder.
  */
 export function ClaudeModelSelect({ value, onChange, disabled, id, className, placeholder }: ClaudeModelSelectProps) {
@@ -64,7 +62,6 @@ export function ClaudeModelSelect({ value, onChange, disabled, id, className, pl
   const options = useMemo(
     () =>
       buildModelOptions(value, list, {
-        builtIn: t('modelPicker.builtIn'),
         endpoint: (name) => t('modelPicker.fromEndpoint', { endpoint: name }),
         current: t('modelPicker.current'),
       }),
