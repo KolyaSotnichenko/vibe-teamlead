@@ -11,6 +11,7 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
 
@@ -298,7 +299,9 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         await started.stop();
       }
     } finally {
-      rmSync(parent, { recursive: true, force: true });
+      // Not the sync call: after a merge this runs in the main process, where
+      // removing an installed copy froze the whole window for seconds
+      await rm(parent, { recursive: true, force: true });
     }
   };
   const installTimeout = options.installTimeoutMs ?? INSTALL_TIMEOUT_MS;
