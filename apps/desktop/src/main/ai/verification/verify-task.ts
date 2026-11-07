@@ -307,7 +307,9 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const install = async (cwd: string): Promise<CheckResult | undefined> => {
     for (const command of detected.install) {
       onLog?.(`Checks: ${command}`);
-      const result = await shell(command, cwd, installTimeout);
+      let result = await shell(command, cwd, installTimeout);
+      // A stall says more about the machine than the task: asleep, or busy with other tasks
+      if (result.outcome === 'timed_out') result = await shell(command, cwd, installTimeout);
       if (result.outcome !== 'passed') return { name: 'install', command, ...result };
     }
     if (!migratable) {
@@ -330,7 +332,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       onLog?.(`Checks: ${check.command}`);
       let result = await shell(check.command, cwd, checkTimeout);
       let flaky = false;
-      if (result.outcome === 'failed') {
+      if (result.outcome === 'failed' || result.outcome === 'timed_out') {
         const again = await shell(check.command, cwd, checkTimeout);
         if (again.outcome === 'passed') {
           flaky = true;

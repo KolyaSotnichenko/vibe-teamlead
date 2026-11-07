@@ -118,6 +118,21 @@ describe('verifyTask', () => {
     expect(report.checks[0].outcome).toBe('timed_out');
   });
 
+  describe('a slow machine is not a broken task', () => {
+    const stallsOnce = (marker: string) => `test -f "${marker}" || { touch "${marker}"; sleep 30; }`;
+
+    it('runs a check that ran out of time once more before believing it', async () => {
+      const report = await verify({ commands: [stallsOnce(join(repo, 'stalled'))], checkTimeoutMs: 400 });
+      expect(report.status).toBe('passed');
+      expect(report.checks[0]).toMatchObject({ outcome: 'passed', flaky: true });
+    });
+
+    it('runs an install that ran out of time once more before believing it', async () => {
+      const report = await verify({ commands: undefined, installTimeoutMs: 400, detected: { install: [stallsOnce(join(repo, 'stalled'))], checks: [{ name: 'ok', command: 'true' }] } });
+      expect(report.status).toBe('passed');
+    });
+  });
+
   describe("a task can't make a failure look like something else", () => {
     it('exit 127 that the base does not give is the task breaking the check', async () => {
       unlinkSync(join(wt, 'good.txt'));
