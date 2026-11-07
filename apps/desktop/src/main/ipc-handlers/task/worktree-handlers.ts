@@ -25,6 +25,7 @@ import {
 import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
+import { taskDiffBase } from '../../utils/task-diff-base';
 import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
 import { inMergeQueue, isMergeQueued } from '../../ai/merge/merge-queue';
@@ -1847,7 +1848,7 @@ export function registerWorktreeHandlers(
           // (both committed and uncommitted). This ensures the UI shows file stats
           // even when the agent hasn't committed its work yet.
           try {
-            const diffStat = execFileSync(getToolPath('git'), ['diff', '--stat', baseBranch], {
+            const diffStat = execFileSync(getToolPath('git'), ['diff', '--stat', taskDiffBase(getToolPath('git'), worktreePath, baseBranch)], {
               cwd: worktreePath,
               encoding: 'utf-8',
               stdio: ['pipe', 'pipe', 'pipe']
@@ -1929,14 +1930,15 @@ export function registerWorktreeHandlers(
           // Use working-tree diff against baseBranch to capture ALL changes
           // (both committed and uncommitted). This ensures the diff view shows
           // file changes even when the agent hasn't committed its work yet.
-          numstat = execFileSync(getToolPath('git'), ['diff', '--numstat', baseBranch], {
+          const diffBase = taskDiffBase(getToolPath('git'), worktreePath, baseBranch);
+          numstat = execFileSync(getToolPath('git'), ['diff', '--numstat', diffBase], {
             cwd: worktreePath,
             encoding: 'utf-8',
             stdio: ['pipe', 'pipe', 'pipe']
           }).trim();
 
           // Get name-status for file status (cross-platform)
-          nameStatus = execFileSync(getToolPath('git'), ['diff', '--name-status', baseBranch], {
+          nameStatus = execFileSync(getToolPath('git'), ['diff', '--name-status', diffBase], {
             cwd: worktreePath,
             encoding: 'utf-8',
             stdio: ['pipe', 'pipe', 'pipe']

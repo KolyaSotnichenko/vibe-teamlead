@@ -438,12 +438,37 @@ describe('verifyTask', () => {
         await expect(findings(() => writeFileSync(join(wt, 'src', 'a.test.ts'), `${line}\n`))).resolves.toEqual([]);
       });
 
+      it('one more test file for a run that already names its files', async () => {
+        writeFileSync(join(repo, 'package.json'), JSON.stringify({ scripts: { test: 'tsc && node --test a.test.js && vitest run' } }));
+        commit(repo, 'names files');
+        git(wt, 'merge', '-q', 'main');
+        await expect(findings(() => writeFileSync(join(wt, 'package.json'), JSON.stringify({ scripts: { test: 'tsc && node --test a.test.js test/b.test.mjs && vitest run' } })))).resolves.toEqual([]);
+      });
+
       it.each([
         ["it.skip('later', () => {});"],
         ["describe.skipIf(!DB)('x', () => {});"],
         ["test.todo('later');"],
       ])('a new test file holding back its own new test: %s', async (line) => {
         await expect(findings(() => writeFileSync(join(wt, 'src', 'new.test.ts'), `${line}\n`))).resolves.toEqual([]);
+      });
+    });
+
+    describe('a script that looks like it only adds', () => {
+      const before = 'tsc && node --test a.test.js && vitest run';
+      it.each([
+        ['a filter that narrows a run naming no files', 'tsc && node --test a.test.js && vitest run only.test.ts'],
+        ['a flag', 'tsc && node --test a.test.js --test-only && vitest run'],
+        ['a way to ignore failure', 'tsc && node --test a.test.js || true && vitest run'],
+        ['a file that is no test', 'tsc && node --test a.test.js evil.js && vitest run'],
+        ['a test file replaced by another', 'tsc && node --test b.test.js && vitest run'],
+        ['a command removed', 'node --test a.test.js test/b.test.mjs && vitest run'],
+      ])('%s', async (_name, after) => {
+        writeFileSync(join(repo, 'package.json'), JSON.stringify({ scripts: { test: before } }));
+        commit(repo, 'names files');
+        git(wt, 'merge', '-q', 'main');
+        const found = await findings(() => writeFileSync(join(wt, 'package.json'), JSON.stringify({ scripts: { test: after } })));
+        expect(found).toMatchObject([{ kind: 'changed_script' }]);
       });
     });
 

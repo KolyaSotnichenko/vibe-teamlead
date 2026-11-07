@@ -163,6 +163,25 @@ function scriptsOf(text: string): Record<string, unknown> {
   }
 }
 
+const TEST_FILE_ARGUMENT = /^[\w@./-]+\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/**
+ * Whether a changed script only names more test files in a run that already names
+ * its files: nothing else is kept out of it. In a run that names none, a file is a
+ * filter, which narrows it. Pure.
+ */
+export function onlyAddsTestFiles(before: unknown, after: unknown): boolean {
+  if (typeof before !== 'string' || typeof after !== 'string') return false;
+  const old = before.trim().split(/\s+/);
+  const next = after.trim().split(/\s+/);
+  let kept = 0;
+  for (let index = 0; index < next.length; index++) {
+    if (next[index] === old[kept]) kept++;
+    else if (!(TEST_FILE_ARGUMENT.test(next[index]) && TEST_FILE_ARGUMENT.test(next[index - 1] ?? ''))) return false;
+  }
+  return kept === old.length;
+}
+
 /** What the task did to its tests, from git: nothing an agent says comes into it. */
 async function findTamper(run: GitRun, base: string, head: string): Promise<TamperFinding[]> {
   const findings: TamperFinding[] = [];
@@ -196,7 +215,11 @@ async function findTamper(run: GitRun, base: string, head: string): Promise<Tamp
   for (const file of await list(['--diff-filter=M', '--name-only', '-z'], ['package.json', '*/package.json', 'composer.json'])) {
     const before = await run(['show', `${base}:${file}`]);
     const after = await run(['show', `${head}:${file}`]);
-    const changed = GUARDED_SCRIPTS.filter((script) => scriptsOf(before.raw)[script] !== undefined && scriptsOf(before.raw)[script] !== scriptsOf(after.raw)[script]);
+    const changed = GUARDED_SCRIPTS.filter((script) => {
+      const was = scriptsOf(before.raw)[script];
+      const is = scriptsOf(after.raw)[script];
+      return was !== undefined && was !== is && !onlyAddsTestFiles(was, is);
+    });
     if (changed.length) findings.push({ kind: 'changed_script', file, detail: `The task changed the "${changed.join('", "')}" script.` });
   }
   return findings;
