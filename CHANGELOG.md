@@ -8,6 +8,10 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 - A task an error stopped partway through its plan offers Resume on its card and in its window.
 - While a merge you confirmed is running, its buttons are off, so a second click can't end in a red message. The panel goes away when the merge is done.
 - The app records when it stops answering and what was running, in a local file (`~/Library/Logs/Vibe Teamlead/stalls.jsonl`), to find what still slows it down.
+- A task holds its slot until it is merged, so the next one starts from a main that has its work. One task at a time by default, and up to three with a warning about conflicts in the queue's settings. The Queue column says what it waits for.
+- Auto-merge, a switch in the queue's settings, off by default: a task merges by itself once QA approved it and the app's checks and Security QA are clean.
+- Adding a test file to a test script that already names its files no longer stops a task as tampering.
+- A task's stats and file list count from where it started, so work merged into main later doesn't read as deleted by the task.
 
 ## 2.0.0-beta.9 - 2026-11-07
 

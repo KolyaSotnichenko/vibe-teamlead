@@ -14,7 +14,7 @@ A phase or feature model is not served by your endpoint. For example, Ollama mod
 
 ## Tasks sit in Queue and don't get picked up
 
-The queue starts tasks when there is a free slot within the limit on parallel tasks. If all slots are taken by tasks In Progress, new ones wait. A task that depends on another one (for example, from a spec document) waits until that one finishes.
+The queue starts tasks when there is a free slot within the limit on parallel tasks. A task holds its slot until it is merged, archived or deleted, also while it waits for your review; the Queue column names them. If all slots are taken, new ones wait. A task that depends on another one (for example, from a spec document) waits until that one finishes.
 
 ## An agent is "stuck" on a question
 

@@ -11,6 +11,8 @@ import {
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
+import { Switch } from './ui/switch';
+import { DEFAULT_MAX_PARALLEL_TASKS, MAX_PARALLEL_TASKS } from '../../shared/utils/task-slots';
 
 /**
  * Props for QueueSettingsModal component
@@ -22,41 +24,46 @@ interface QueueSettingsModalProps {
   onOpenChange: (open: boolean) => void;
   /** The project ID to update settings for */
   projectId: string;
-  /** Current maximum parallel tasks setting (default: 3) */
+  /** Current maximum parallel tasks setting */
   currentMaxParallel?: number;
-  /** Callback when user saves the new max parallel value */
-  onSave: (maxParallel: number) => void;
+  /** Whether tasks QA approved merge by themselves */
+  currentAutoMerge?: boolean;
+  /** Callback when user saves the settings */
+  onSave: (maxParallel: number, autoMerge: boolean) => void;
 }
 
 /**
  * QueueSettingsModal - Modal for configuring queue parallel task limits
  *
  * Allows users to adjust the maximum number of tasks that can run in parallel
- * for a specific project. Validates input between 1-10 tasks.
+ * for a specific project, and whether approved tasks merge by themselves.
  */
 export function QueueSettingsModal({
   open,
   onOpenChange,
   projectId,
-  currentMaxParallel = 3,
+  currentMaxParallel = DEFAULT_MAX_PARALLEL_TASKS,
+  currentAutoMerge = false,
   onSave
 }: QueueSettingsModalProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const [maxParallel, setMaxParallel] = useState(currentMaxParallel);
+  const [autoMerge, setAutoMerge] = useState(currentAutoMerge);
   const [error, setError] = useState<string | null>(null);
 
   // Reset to current value when modal opens
   useEffect(() => {
     if (open) {
       setMaxParallel(currentMaxParallel);
+      setAutoMerge(currentAutoMerge);
       setError(null);
     }
-  }, [open, currentMaxParallel]);
+  }, [open, currentMaxParallel, currentAutoMerge]);
 
   /**
    * Validates and saves the max parallel tasks setting
    *
-   * Validates that the value is between 1-10, sets an error message
+   * Validates that the value is within the limits, sets an error message
    * if invalid, otherwise calls onSave and closes the modal.
    */
   const handleSave = () => {
@@ -65,12 +72,12 @@ export function QueueSettingsModal({
       setError(t('tasks:queue.settings.minValueError'));
       return;
     }
-    if (maxParallel > 10) {
+    if (maxParallel > MAX_PARALLEL_TASKS) {
       setError(t('tasks:queue.settings.maxValueError'));
       return;
     }
 
-    onSave(maxParallel);
+    onSave(maxParallel, autoMerge);
     onOpenChange(false);
   };
 
@@ -118,7 +125,7 @@ export function QueueSettingsModal({
               id="maxParallel"
               type="number"
               min={1}
-              max={10}
+              max={MAX_PARALLEL_TASKS}
               value={maxParallel}
               onChange={handleInputChange}
               className="w-full"
@@ -129,6 +136,19 @@ export function QueueSettingsModal({
             <p className="text-sm text-muted-foreground">
               {t('tasks:queue.settings.hint')}
             </p>
+            {maxParallel > 1 && (
+              <p role="alert" className="border-l-2 border-l-[var(--vt-signal)] pl-3 text-sm text-foreground">
+                {t('tasks:queue.settings.parallelWarning')}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="autoMerge">{t('tasks:queue.settings.autoMergeLabel')}</Label>
+              <p className="text-sm text-muted-foreground">{t('tasks:queue.settings.autoMergeHint')}</p>
+            </div>
+            <Switch id="autoMerge" checked={autoMerge} onCheckedChange={setAutoMerge} />
           </div>
         </div>
 

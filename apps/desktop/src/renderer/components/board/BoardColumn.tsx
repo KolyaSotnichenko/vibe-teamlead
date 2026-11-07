@@ -29,6 +29,10 @@ export interface BoardColumnProps {
   onQueueSettings?: () => void;
   onQueueAll?: () => void;
   maxParallelTasks?: number;
+  /** Tasks holding a slot, wherever they stand, until merged */
+  slotsInUse?: number;
+  /** Queue column: who holds the slots */
+  slotHolderNames?: string;
   archivedCount?: number;
   showArchived?: boolean;
   onToggleArchived?: () => void;
@@ -71,7 +75,7 @@ function tasksAreEquivalent(prevTasks: Task[], nextTasks: Task[]): boolean {
 
 const SHALLOW_KEYS: Array<keyof BoardColumnProps> = [
   'status', 'isOver', 'onTaskClick', 'onStatusChange', 'onAddClick', 'onImportBrief', 'onArchiveAll', 'onQueueSettings', 'onQueueAll',
-  'maxParallelTasks', 'archivedCount', 'showArchived', 'onToggleArchived', 'onSelectAll', 'onDeselectAll', 'onToggleSelect',
+  'maxParallelTasks', 'slotsInUse', 'slotHolderNames', 'archivedCount', 'showArchived', 'onToggleArchived', 'onSelectAll', 'onDeselectAll', 'onToggleSelect',
   'isCollapsed', 'onToggleCollapsed', 'columnWidth', 'isResizing', 'onResizeStart', 'onResizeEnd', 'isLocked', 'onToggleLocked',
 ];
 
@@ -112,6 +116,8 @@ export const BoardColumn = memo(function BoardColumn({
   onQueueSettings,
   onQueueAll,
   maxParallelTasks,
+  slotsInUse,
+  slotHolderNames,
   archivedCount,
   showArchived,
   onToggleArchived,
@@ -177,7 +183,8 @@ export const BoardColumn = memo(function BoardColumn({
     ));
   }, [tasks, onClickHandlers, onStatusChangeHandlers, onToggleSelectHandlers, selectedTaskIds, onTaskClick]);
 
-  const atCapacity = status === 'in_progress' && !!maxParallelTasks && tasks.length >= maxParallelTasks;
+  const slotsTaken = slotsInUse ?? tasks.length;
+  const atCapacity = !!maxParallelTasks && slotsTaken >= maxParallelTasks;
 
   // Collapsed: a narrow strip with the name running vertically and the count
   if (isCollapsed) {
@@ -221,9 +228,9 @@ export const BoardColumn = memo(function BoardColumn({
           {status === 'in_progress' && maxParallelTasks ? (
             <span className="font-mono text-xs tabular-nums text-muted-foreground">
               <span aria-hidden="true">
-                {tasks.length}/{maxParallelTasks}
+                {slotsTaken}/{maxParallelTasks}
               </span>
-              <span className="sr-only">{t('board.slots', { count: tasks.length, max: maxParallelTasks })}</span>
+              <span className="sr-only">{t('board.slots', { count: slotsTaken, max: maxParallelTasks })}</span>
               {atCapacity && <span className="ml-2 bg-accent px-1 py-0.5 font-sans text-[11px] text-foreground">{t('board.full')}</span>}
             </span>
           ) : (
@@ -261,6 +268,9 @@ export const BoardColumn = memo(function BoardColumn({
             onImportBrief={status === 'backlog' ? onImportBrief : undefined}
           />
         </header>
+        {status === 'queue' && tasks.length > 0 && atCapacity && slotHolderNames && (
+          <p className="border-b border-border py-2 text-xs text-muted-foreground">{t('board.queueWaitsFor', { tasks: slotHolderNames })}</p>
+        )}
 
         {/* Cards */}
         <div className="min-h-0 flex-1">

@@ -1,3 +1,4 @@
+import { occupiesSlot, parallelTaskLimit, slotHolders } from '../../shared/utils/task-slots';
 import { isReadyToStart } from '../lib/task-dependencies';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,7 @@ import { BulkActionBar } from './board/BulkActionBar';
 import { QueueSettingsModal } from './QueueSettingsModal';
 import { TASK_STATUS_COLUMNS } from '../../shared/constants';
 import { cn } from '../lib/utils';
-import { persistTaskStatus, forceCompleteTask, archiveTasks, deleteTasks, useTaskStore, isQueueAtCapacity, DEFAULT_MAX_PARALLEL_TASKS } from '../stores/task-store';
+import { persistTaskStatus, forceCompleteTask, archiveTasks, deleteTasks, useTaskStore, isQueueAtCapacity } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
 import { useKanbanSettingsStore, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, BASE_FONT_SIZE } from '../stores/kanban-settings-store';
 import { useToast } from '../hooks/use-toast';
@@ -97,7 +98,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Get projectId from first task
   const projectId = tasks[0]?.projectId;
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
-  const maxParallelTasks = project?.settings?.maxParallelTasks ?? DEFAULT_MAX_PARALLEL_TASKS;
+  const maxParallelTasks = parallelTaskLimit(project?.settings?.maxParallelTasks);
+  const autoMerge = project?.settings?.autoMerge === true;
 
   // Queue settings modal state
   const [showQueueSettings, setShowQueueSettings] = useState(false);
@@ -485,16 +487,16 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   };
 
   /**
-   * Save queue settings (maxParallelTasks)
+   * Save queue settings (maxParallelTasks, autoMerge)
    *
    * Uses the stored ref value to ensure the save works even if tasks
    * change while the modal is open.
    */
-  const handleSaveQueueSettings = async (maxParallel: number) => {
+  const handleSaveQueueSettings = async (maxParallel: number, autoMergeOn: boolean) => {
     const savedProjectId = queueSettingsProjectIdRef.current || projectId;
     if (!savedProjectId) return;
 
-    const success = await updateProjectSettings(savedProjectId, { maxParallelTasks: maxParallel });
+    const success = await updateProjectSettings(savedProjectId, { maxParallelTasks: maxParallel, autoMerge: autoMergeOn });
     if (success) {
       toast({
         title: t('queue.settings.saved'),
@@ -532,9 +534,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       while (true) {
         // Get CURRENT state from store to ensure accuracy
         const currentTasks = useTaskStore.getState().tasks;
-        const inProgressCount = currentTasks.filter((t) =>
-          t.status === 'in_progress' && !t.metadata?.archivedAt
-        ).length;
+        const inProgressCount = currentTasks.filter(occupiesSlot).length;
         // Tasks whose dependencies (brief import) are not done yet keep waiting.
         const queuedTasks = currentTasks.filter((t) =>
           t.status === 'queue' && !t.metadata?.archivedAt && !attemptedTaskIds.has(t.id) && isReadyToStart(t, currentTasks)
@@ -610,9 +610,13 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       .map((t) => t.id)
       .join(',')
   );
+  // A slot also comes free without a status change: a task deleted or archived
+  const slotsInUse = useTaskStore((state) => state.tasks.filter(occupiesSlot).length);
   useEffect(() => {
     if (readyQueuedKey) void processQueue();
-  }, [readyQueuedKey, processQueue]);
+  }, [readyQueuedKey, slotsInUse, processQueue]);
+
+  const holderNames = useTaskStore((state) => slotHolders(state.tasks).join(', '));
 
   // Get task order actions from store
   const reorderTasksInColumn = useTaskStore((state) => state.reorderTasksInColumn);
@@ -937,7 +941,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
                 setShowQueueSettings(true);
               } : undefined}
               onArchiveAll={status === 'done' ? handleArchiveAll : undefined}
-              maxParallelTasks={status === 'in_progress' ? maxParallelTasks : undefined}
+              maxParallelTasks={status === 'in_progress' || status === 'queue' ? maxParallelTasks : undefined}
+              slotsInUse={status === 'in_progress' || status === 'queue' ? slotsInUse : undefined}
+              slotHolderNames={status === 'queue' ? holderNames : undefined}
               archivedCount={status === 'done' ? archivedCount : undefined}
               showArchived={status === 'done' ? showArchived : undefined}
               onToggleArchived={status === 'done' ? toggleShowArchived : undefined}
@@ -1061,6 +1067,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           }}
           projectId={queueSettingsProjectIdRef.current || projectId || ''}
           currentMaxParallel={maxParallelTasks}
+          currentAutoMerge={autoMerge}
           onSave={handleSaveQueueSettings}
         />
       )}

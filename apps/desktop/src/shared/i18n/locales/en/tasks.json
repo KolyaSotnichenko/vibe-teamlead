@@ -127,15 +127,19 @@
     "queueAllSuccess": "Moved {{count}} tasks to queue.",
     "settings": {
       "title": "Queue Settings",
-      "description": "Configure the maximum number of tasks that can run in parallel in the \"In Progress\" board",
+      "description": "How many tasks of this project may be under way at once. A task holds its slot until it is merged.",
       "maxParallelLabel": "Max Parallel Tasks",
       "minValueError": "Must be at least 1",
-      "maxValueError": "Cannot exceed 10",
-      "hint": "When this limit is reached, new tasks will wait in the queue before moving to \"In Progress\"",
+      "maxValueError": "Cannot exceed 3",
+      "hint": "The next task starts once a slot is free: a task is merged, archived or deleted.",
       "saved": "Queue settings saved",
       "saveFailed": "Failed to save queue settings",
-      "retry": "Please try again"
-    }
+      "retry": "Please try again",
+      "parallelWarning": "More than one at a time can cause conflicts: tasks start from the same code and later meet in the merge. An agent then has to resolve them, which costs time and tokens.",
+      "autoMergeLabel": "Merge automatically",
+      "autoMergeHint": "A task merges by itself once QA approved it and the app's checks and Security QA are clean. Anything else, or a merge an agent changed code for, waits for you."
+    },
+    "autoMergeFailed": "Couldn't merge \"{{title}}\" automatically"
   },
   "execution": {
     "phases": {
@@ -616,7 +620,8 @@
         "reviewer": "reviewer",
         "general-purpose": "general"
       }
-    }
+    },
+    "queueWaitsFor": "Waiting for {{tasks}} to be merged, archived or deleted."
   },
   "overview": {
     "pipeline": {

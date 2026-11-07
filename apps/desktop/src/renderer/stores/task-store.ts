@@ -1,3 +1,4 @@
+import { isAtCapacity, parallelTaskLimit } from '../../shared/utils/task-slots';
 import { create } from 'zustand';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { Task, TaskStatus, SubtaskStatus, ImplementationPlan, Subtask, TaskMetadata, ExecutionProgress, ExecutionPhase, ReviewReason, TaskDraft, ImageAttachment, TaskOrderState } from '../../shared/types';
@@ -5,7 +6,7 @@ import { debugLog, debugWarn } from '../../shared/utils/debug-logger';
 import { useProjectStore } from './project-store';
 
 /** Default max parallel tasks when no project setting is configured */
-export const DEFAULT_MAX_PARALLEL_TASKS = 3;
+export { DEFAULT_MAX_PARALLEL_TASKS } from '../../shared/utils/task-slots';
 
 
 /** Maximum log entries stored per task to prevent renderer OOM */
@@ -890,16 +891,12 @@ export async function forceCompleteTask(taskId: string): Promise<PersistStatusRe
 }
 
 /**
- * Check if the in_progress queue is at capacity.
- * @param excludeTaskId - Task ID to exclude from the count (e.g., when restarting a stuck task already in in_progress)
+ * Check if a task starting now would have to wait for a slot.
+ * @param taskId - The task about to start: one that already holds a slot resumes in it
  */
-export function isQueueAtCapacity(excludeTaskId?: string): boolean {
-  const maxParallelTasks = useProjectStore.getState().getActiveProject()?.settings?.maxParallelTasks ?? DEFAULT_MAX_PARALLEL_TASKS;
-  const currentTasks = useTaskStore.getState().tasks;
-  const inProgressCount = currentTasks.filter((t) =>
-    t.status === 'in_progress' && !t.metadata?.archivedAt && (!excludeTaskId || t.id !== excludeTaskId)
-  ).length;
-  return inProgressCount >= maxParallelTasks;
+export function isQueueAtCapacity(taskId?: string): boolean {
+  const limit = parallelTaskLimit(useProjectStore.getState().getActiveProject()?.settings?.maxParallelTasks);
+  return isAtCapacity(useTaskStore.getState().tasks, limit, taskId);
 }
 
 export interface StartTaskOrQueueResult {
@@ -920,11 +917,7 @@ export interface StartTaskOrQueueResult {
  * not through this return value.
  */
 export async function startTaskOrQueue(taskId: string): Promise<StartTaskOrQueueResult> {
-  const task = useTaskStore.getState().tasks.find(t => t.id === taskId);
-  // Exclude this task from the capacity check when it's already in_progress (stuck restart)
-  const excludeId = task?.status === 'in_progress' ? taskId : undefined;
-
-  if (isQueueAtCapacity(excludeId)) {
+  if (isQueueAtCapacity(taskId)) {
     const result = await persistTaskStatus(taskId, 'queue');
     if (!result.success) {
       console.error('[Queue] Failed to queue task:', taskId, result.error);

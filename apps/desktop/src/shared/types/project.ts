@@ -30,8 +30,10 @@ export interface ProjectSettings {
   pushNewBranches?: boolean;
   /** Include CLAUDE.md instructions in agent system prompt (default: true) */
   useClaudeMd?: boolean;
-  /** Maximum parallel tasks allowed (default: 3) */
+  /** Tasks under way at once, each holding its slot until merged (default: 1, at most 3) */
   maxParallelTasks?: number;
+  /** A task QA approved merges by itself (default: off) */
+  autoMerge?: boolean;
   /** Design system markdown, relative to the project (default: found automatically) */
   designSystemPath?: string;
   /** How QA treats design-check findings (default: block when a design system exists) */
