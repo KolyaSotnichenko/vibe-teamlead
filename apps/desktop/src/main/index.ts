@@ -51,7 +51,7 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, dialog, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor } from 'electron';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -61,6 +61,7 @@ import { projectStore } from './project-store';
 import { TerminalManager } from './terminal-manager';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { createSleepWatch } from './sleep-watch';
+import { startStallWatch } from './stall-watch';
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { createQuitGuard, quitPrompt } from './quit-guard';
@@ -461,6 +462,11 @@ app.whenReady().then(() => {
   });
   powerMonitor.on('suspend', sleepWatch.suspend);
   powerMonitor.on('resume', sleepWatch.resume);
+
+  // Before the IPC handlers are registered, so all of them report
+  const stallWatch = startStallWatch(ipcMain, app.getPath('logs'));
+  powerMonitor.on('suspend', stallWatch.suspend);
+  powerMonitor.on('resume', stallWatch.resume);
 
   // Load settings and configure agent manager with the prompts path
   // Uses EAFP pattern (try/catch) instead of LBYL (existsSync) to avoid TOCTOU race conditions

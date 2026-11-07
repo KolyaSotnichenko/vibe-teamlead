@@ -101,3 +101,7 @@ Agents start dev servers and watchers as background tasks (QA does this to test 
 ## "No such tool available: mcp__playwright__…"
 
 QA gets browser tools only for a web frontend (Playwright) or an Electron app with Electron MCP turned on. For an API or a library there are none. QA's instructions now say which browser tools the session has (or that there are none, and why), so it doesn't try a tool that isn't there, and a browser server that can't start is left out of the session (the task log says so); without browser tools it checks behaviour with tests, `curl` and the code and says in the report that visual checks weren't possible. If your project has a web UI and QA still reports no browser tools, check Settings → Tools and that Chrome is installed.
+
+## The app hangs for a moment
+
+Each time the app's main process stops answering for 0.2 s or more, a line goes into `~/Library/Logs/Vibe Teamlead/stalls.jsonl`: how long, and what was running. The file stays on your machine and shows names and file paths, never command arguments. Attach it when you report a hang.
