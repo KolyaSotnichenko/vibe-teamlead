@@ -1,0 +1,97 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+import type { DockerRun } from '../../ai/verification/test-services';
+import { removePreviewLeftovers, startPreviewDatabase } from '../preview-database';
+
+const POSTGRES = [{ kind: 'postgres' as const, image: 'postgres:18-alpine' }];
+
+function fakeDocker(options: { info?: boolean; volumeExists?: boolean; leftovers?: string[] } = {}) {
+  const calls: string[][] = [];
+  let volumeExists = options.volumeExists ?? false;
+  const docker: DockerRun = async (args) => {
+    calls.push(args);
+    const [cmd, sub] = args;
+    if (cmd === 'info') return { ok: options.info ?? true, stdout: '' };
+    if (cmd === 'volume' && sub === 'inspect') return { ok: volumeExists, stdout: '' };
+    if (cmd === 'volume' && sub === 'rm') { volumeExists = false; return { ok: true, stdout: '' }; }
+    if (cmd === 'ps') return { ok: true, stdout: (options.leftovers ?? []).join('\n') };
+    if (cmd === 'run') { volumeExists = true; return { ok: true, stdout: 'abc123\n' }; }
+    if (cmd === 'port') return { ok: true, stdout: '127.0.0.1:55001\n' };
+    return { ok: true, stdout: '' };
+  };
+  return { docker, calls };
+}
+
+const secretsDir = () => mkdtempSync(join(tmpdir(), 'preview-secrets-'));
+const runArgs = (calls: string[][]) => calls.find((c) => c[0] === 'run') ?? [];
+const passwordOf = (calls: string[][]) => runArgs(calls).find((a) => a.startsWith('POSTGRES_PASSWORD='));
+
+describe('the preview database', () => {
+  it('mounts a named volume per project and kind', async () => {
+    const { docker, calls } = fakeDocker();
+    const db = await startPreviewDatabase(POSTGRES, { docker, projectId: 'p1', secretsDir: secretsDir() });
+    const args = runArgs(calls);
+    expect(args).toEqual(expect.arrayContaining(['-v', 'vibe-teamlead-preview-p1-postgres:/var/lib/postgresql', '--label', 'vibe-teamlead-preview=p1', '-p', '127.0.0.1::5432']));
+    expect(args).toContain('--rm');
+    expect(db.status).toBe('started');
+    expect(db.started[0]?.url).toMatch(/^postgresql:\/\/verify:[0-9a-f]+@127\.0\.0\.1:55001\/verify$/);
+  });
+
+  it('reuses the stored password', async () => {
+    const dir = secretsDir();
+    const first = fakeDocker();
+    await startPreviewDatabase(POSTGRES, { docker: first.docker, projectId: 'p1', secretsDir: dir });
+    const second = fakeDocker({ volumeExists: true });
+    await startPreviewDatabase(POSTGRES, { docker: second.docker, projectId: 'p1', secretsDir: dir });
+    expect(passwordOf(second.calls)).toBe(passwordOf(first.calls));
+  });
+
+  it('reports fresh only when the volume did not exist', async () => {
+    expect((await startPreviewDatabase(POSTGRES, { docker: fakeDocker().docker, projectId: 'p1', secretsDir: secretsDir() })).fresh).toBe(true);
+    expect((await startPreviewDatabase(POSTGRES, { docker: fakeDocker({ volumeExists: true }).docker, projectId: 'p1', secretsDir: secretsDir() })).fresh).toBe(false);
+  });
+
+  it('reset removes the volume and its password first', async () => {
+    const dir = secretsDir();
+    const first = fakeDocker();
+    await startPreviewDatabase(POSTGRES, { docker: first.docker, projectId: 'p1', secretsDir: dir });
+    const again = fakeDocker({ volumeExists: true });
+    const db = await startPreviewDatabase(POSTGRES, { docker: again.docker, projectId: 'p1', secretsDir: dir, reset: true });
+    const rm = again.calls.findIndex((c) => c[0] === 'volume' && c[1] === 'rm' && c.includes('vibe-teamlead-preview-p1-postgres'));
+    expect(rm).toBeGreaterThan(-1);
+    expect(rm).toBeLessThan(again.calls.findIndex((c) => c[0] === 'run'));
+    expect(passwordOf(again.calls)).not.toBe(passwordOf(first.calls));
+    expect(db.fresh).toBe(true);
+  });
+
+  it('is unavailable with the Docker reason when docker info fails', async () => {
+    const db = await startPreviewDatabase(POSTGRES, { docker: fakeDocker({ info: false }).docker, projectId: 'p1', secretsDir: secretsDir() });
+    expect(db.status).toBe('unavailable');
+    expect(db.reason).toMatch(/Docker isn't running/);
+  });
+
+  it('is none when the compose file names no database', async () => {
+    const { docker, calls } = fakeDocker();
+    expect((await startPreviewDatabase([], { docker, projectId: 'p1', secretsDir: secretsDir() })).status).toBe('none');
+    expect(calls).toEqual([]);
+  });
+
+  it('stop removes the container and keeps the volume', async () => {
+    const { docker, calls } = fakeDocker();
+    const db = await startPreviewDatabase(POSTGRES, { docker, projectId: 'p1', secretsDir: secretsDir() });
+    await db.stop();
+    const rm = calls.filter((c) => c[0] === 'rm');
+    expect(rm).toEqual([['rm', '-f', 'abc123']]);
+    expect(calls.some((c) => c[0] === 'volume' && c[1] === 'rm')).toBe(false);
+  });
+
+  it('removePreviewLeftovers removes containers with the preview label and keeps volumes', async () => {
+    const { docker, calls } = fakeDocker({ leftovers: ['old1', 'old2'] });
+    await removePreviewLeftovers(docker);
+    expect(calls[0]).toEqual(['ps', '-aq', '--filter', 'label=vibe-teamlead-preview']);
+    expect(calls.slice(1)).toEqual([['rm', '-f', 'old1'], ['rm', '-f', 'old2']]);
+  });
+});

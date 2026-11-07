@@ -26,15 +26,18 @@ const USER = 'verify';
 const PULL_TIMEOUT_MS = 10 * 60_000;
 const REASON_CHARS = 200;
 
-interface Recipe {
+export interface Recipe {
   port: number;
+  /** Where the image keeps its data: a volume mounted there survives the container */
+  dataDir: string;
   env: (password: string) => string[];
   url: (password: string, port: string) => string;
   ready: (password: string) => string[];
 }
 
-const RECIPES: Record<ServiceImage['kind'], Recipe> = {
+export const RECIPES: Record<ServiceImage['kind'], Recipe> = {
   postgres: {
+    dataDir: '/var/lib/postgresql', // 18+ keeps data under a versioned folder here; older ones in data/
     port: 5432,
     env: (password) => [`POSTGRES_USER=${USER}`, `POSTGRES_PASSWORD=${password}`, `POSTGRES_DB=${USER}`],
     url: (password, port) => `postgresql://${USER}:${password}@127.0.0.1:${port}/${USER}`,
@@ -42,24 +45,32 @@ const RECIPES: Record<ServiceImage['kind'], Recipe> = {
     ready: () => ['pg_isready', '-h', '127.0.0.1', '-U', USER, '-d', USER],
   },
   mysql: {
+    dataDir: '/var/lib/mysql',
     port: 3306,
     env: (password) => [`MYSQL_USER=${USER}`, `MYSQL_PASSWORD=${password}`, `MYSQL_DATABASE=${USER}`, 'MYSQL_RANDOM_ROOT_PASSWORD=1'],
     url: (password, port) => `mysql://${USER}:${password}@127.0.0.1:${port}/${USER}`,
     ready: (password) => ['sh', '-c', `mysqladmin ping -h 127.0.0.1 -u${USER} -p${password} || mariadb-admin ping -h 127.0.0.1 -u${USER} -p${password}`],
   },
   redis: {
+    dataDir: '/data',
     port: 6379,
     env: () => [],
     url: (_password, port) => `redis://127.0.0.1:${port}`,
     ready: () => ['sh', '-c', 'redis-cli ping || valkey-cli ping'],
   },
   mongo: {
+    dataDir: '/data/db',
     port: 27017,
     env: (password) => [`MONGO_INITDB_ROOT_USERNAME=${USER}`, `MONGO_INITDB_ROOT_PASSWORD=${password}`],
     url: (password, port) => `mongodb://${USER}:${password}@127.0.0.1:${port}/${USER}?authSource=admin`,
     ready: () => ['mongosh', '--quiet', '--eval', 'db.runCommand({ ping: 1 })'],
   },
 };
+
+/** Why the services can't start without Docker, in words a user can act on. */
+export function dockerMissingReason(images: ServiceImage[], who: string, forWhat: string): string {
+  return `This project's ${who} need ${images.map((image) => image.kind).join(', ')}, and Docker isn't running. Install or start Docker Desktop ${forWhat}.`;
+}
 
 /** docker as the machine has it. An app started from Finder has a bare PATH. */
 export function hostDocker(env: NodeJS.ProcessEnv, signal?: AbortSignal): DockerRun {
@@ -79,8 +90,7 @@ export async function startTestServices(
   if (!images.length) return { status: 'none', started: [], stop: nothing };
 
   if (!(await docker(['info'])).ok) {
-    const needs = images.map((image) => image.kind).join(', ');
-    return { status: 'unavailable', started: [], reason: `This project's tests need ${needs}, and Docker isn't running. Install or start Docker Desktop for a full check.`, stop: nothing };
+    return { status: 'unavailable', started: [], reason: dockerMissingReason(images, 'tests', 'for a full check'), stop: nothing };
   }
 
   // A run that died can't clean up after itself. Only this project's: a project runs one check at a time.
