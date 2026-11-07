@@ -51,9 +51,7 @@ export function proposePreviewServices({ files, read }: ProjectFiles): PreviewSe
     if (isFrontend(scripts.dev)) {
       services.push({ name, dir, command: withPort(manager, 'dev'), ...(pageChosen ? {} : { page: true }) });
       pageChosen = true;
-    } else if (!dir && packages.length > 1 && RUNS_WORKSPACE.test(scripts.dev ?? '')) {
-      continue;
-    } else if (scripts['start:dev'] || scripts.dev) {
+    } else if ((scripts['start:dev'] || scripts.dev) && !(!dir && packages.length > 1 && RUNS_WORKSPACE.test(scripts.dev ?? ''))) {
       services.push({ name, dir, command: `${manager} run ${scripts['start:dev'] ? 'start:dev' : 'dev'}` });
     }
   }

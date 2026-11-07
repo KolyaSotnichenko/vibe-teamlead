@@ -9,6 +9,14 @@ const waiting = new Map<string, number>();
 const queued = new Set<string>();
 
 /** Whether this task is merging or waiting to. */
+const settledListeners = new Set<(projectDir: string) => void>();
+
+/** Hear when a merge of a project finished, whether it succeeded or not. Returns the unsubscribe. */
+export function onMergeSettled(listener: (projectDir: string) => void): () => void {
+  settledListeners.add(listener);
+  return () => settledListeners.delete(listener);
+}
+
 export function isMergeQueued(taskId: string): boolean {
   return queued.has(taskId);
 }
@@ -27,6 +35,13 @@ export function inMergeQueue<T>(
 
   const run = (tails.get(projectDir) ?? Promise.resolve()).then(merge, merge).finally(() => {
     queued.delete(taskId);
+    for (const listener of settledListeners) {
+      try {
+        listener(projectDir);
+      } catch {
+        // A listener's failure is its own: the queue goes on
+      }
+    }
     const left = (waiting.get(projectDir) ?? 1) - 1;
     if (left) {
       waiting.set(projectDir, left);
