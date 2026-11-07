@@ -2,6 +2,15 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.9 - 2026-11-07
+
+- After changing provider or models, you change them only in Settings: before each run a task takes what is set there. A task you picked different models for keeps them.
+- Model changes in a task's edit window now reach a task that has already started.
+- The model pickers offer only what your provider lists, and you can still type any model id. The Built-in group is gone.
+- A check or install that ran out of time gets a second try, so a slow machine doesn't count as a broken task.
+- Databases agents start with `docker run` are removed along with their task.
+- The app tells you when the Mac slept while agents were working, for example with the lid closed.
+
 ## 2.0.0-beta.8 - 2026-11-06
 
 - An update installs by itself: after the download the app restarts following a 10-second countdown you can stop, and waits while agents are running. It no longer opens Settings.
