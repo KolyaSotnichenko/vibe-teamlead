@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { readSystemMeta } from './system-meta';
 import path from 'node:path';
 
 import { z } from 'zod';
@@ -170,7 +171,9 @@ export function loadDesignSystem(projectPath: string, settings: DesignSettings):
   const tokensRaw = readSmall(path.join(projectPath, paths.tokensPath));
   const { tokens, error } = tokensRaw !== undefined ? parseTokens(tokensRaw) : {};
   const exists = markdown !== undefined;
+  const meta = exists ? readSystemMeta(projectPath) : undefined;
   return {
+    ...(meta ? { meta } : {}),
     exists,
     source: exists ? paths.source : 'none',
     markdownPath: exists ? paths.markdownPath : undefined,

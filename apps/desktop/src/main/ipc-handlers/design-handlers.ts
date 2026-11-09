@@ -9,7 +9,7 @@ import path from 'node:path';
 import { type BrowserWindow, dialog, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DesignBrief, DesignDirection, DesignReferenceRole, DesignSystemInfo, DesignTokens, IPCResult, RedesignBrief, TaskStorybookStatus } from '../../shared/types';
+import type { DesignBrief, DesignDirection, DesignReferenceRole, DesignSystemInfo, DesignTokens, IPCResult, RedesignBrief, TaskStorybookStatus, DesignAudit } from '../../shared/types';
 import {
   addReferenceFiles,
   addReferenceUrls,
@@ -22,7 +22,9 @@ import {
 } from '../design/reference-service';
 import { extractDesignSystem, proposeDirections, writeDesignSystem } from '../ai/design/design-agent';
 import { loadDesignSystem, saveDesignSystem } from '../ai/design/design-system';
-import { auditProjectDesign, redesignBrief } from '../ai/design/redesign';
+import { auditProjectDesign, redesignBrief, summarizeAudit } from '../ai/design/redesign';
+import { recordSystemMeta } from '../ai/design/system-meta';
+import { readReferences } from '../ai/design/references';
 import { getToolPath } from '../cli-tool-manager';
 import {
   installDependencies,
@@ -45,6 +47,11 @@ function errorMessage(error: unknown): string {
 }
 
 /** The project's design system, with the Storybook server state. */
+/** The references the design system takes in: the ready ones */
+function readyReferenceIds(projectPath: string): string[] {
+  return readReferences(projectPath).filter((r) => r.status === 'ready').map((r) => r.id);
+}
+
 export function designInfo(projectId: string): DesignSystemInfo | null {
   const project = projectStore.getProject(projectId);
   if (!project) return null;
@@ -110,6 +117,19 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
     }
   };
 
+  ipcMain.handle(IPC_CHANNELS.DESIGN_AUDIT, async (_e, projectId: string): Promise<IPCResult<DesignAudit | null>> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    const info = loadDesignSystem(project.path, project.settings);
+    if (!info.exists || !info.tokens) return { success: true, data: null };
+    try {
+      const { findings, uiFiles } = await auditProjectDesign(project.path, info.tokens, getToolPath('git'));
+      return { success: true, data: summarizeAudit(findings, uiFiles.length) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DESIGN_REDESIGN_BRIEF, async (_e, projectId: string): Promise<IPCResult<RedesignBrief>> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
@@ -142,6 +162,7 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
           markdown: typeof content.markdown === 'string' ? content.markdown : undefined,
           tokens: content.tokens,
         });
+        recordSystemMeta(path, { how: 'edited' });
         return designInfo(projectId) as DesignSystemInfo;
       }),
   );
@@ -152,6 +173,7 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
       withProject(projectId, async (path, settings) => {
         const result = await agentJob(projectId, (signal, onProgress) => extractDesignSystem({ projectPath: path, signal, onProgress }));
         saveDesignSystem(path, settings, result);
+        recordSystemMeta(path, { how: 'extract', referenceIds: readyReferenceIds(path) });
         return designInfo(projectId) as DesignSystemInfo;
       }),
   );
@@ -172,6 +194,7 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
           writeDesignSystem({ projectPath: path, brief, direction, signal, onProgress }),
         );
         saveDesignSystem(path, settings, result);
+        recordSystemMeta(path, { how: 'direction', direction: direction.name, referenceIds: readyReferenceIds(path) });
         return designInfo(projectId) as DesignSystemInfo;
       }),
   );

@@ -10,7 +10,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import type { DesignFinding, DesignTokens } from '../../../shared/types';
+import type { DesignAudit, DesignFinding, DesignTokens } from '../../../shared/types';
 import { type AddedLines, isUiFile, lintAddedLines } from './design-lint';
 
 const run = promisify(execFile);
@@ -86,4 +86,15 @@ export function redesignBrief(input: RedesignInput): string {
     '- Behaviour stays as it is: the same routes, data, validation and copy, unless the design system changes the copy\'s tone.',
     '- Each task: the design check is clean on the files it touches, and its screens follow the design system at phone and desktop widths.',
   ].join('\n');
+}
+
+/** What the Design system tab shows for "apply to the project". Pure. */
+export function summarizeAudit(findings: DesignFinding[], uiFiles: number, topCount = 5): DesignAudit {
+  const byFile = new Map<string, DesignFinding[]>();
+  for (const finding of findings) byFile.set(finding.file, [...(byFile.get(finding.file) ?? []), finding]);
+  const top = [...byFile.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, topCount)
+    .map(([file, found]) => ({ file, count: found.length, rules: [...new Set(found.map((f) => f.rule))] }));
+  return { findings: findings.length, files: byFile.size, uiFiles, top };
 }

@@ -63,7 +63,27 @@ export interface StorybookInfo {
   running?: { url: string; pid?: number };
 }
 
+/** When and how the design system was last written, and the references it took in */
+export interface DesignSystemMeta {
+  writtenAt: string;
+  how: 'extract' | 'direction' | 'edited';
+  /** The direction it was written from */
+  direction?: string;
+  referenceIds: string[];
+}
+
+/** The project's UI files checked against the design system's tokens */
+export interface DesignAudit {
+  findings: number;
+  files: number;
+  uiFiles: number;
+  /** The files with the most places, with the kinds of place */
+  top: Array<{ file: string; count: number; rules: string[] }>;
+}
+
 export interface DesignSystemInfo {
+  /** Absent for a system written before the app kept this */
+  meta?: DesignSystemMeta;
   exists: boolean;
   /** "repo": a file in the project's repository; "app": kept by Vibe Teamlead in .vibe-teamlead/ */
   source: 'repo' | 'app' | 'none';
@@ -218,6 +238,8 @@ export interface RedesignBrief {
 export interface DesignAPI {
   get: (projectId: string) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
   redesignBrief: (projectId: string) => Promise<import('./common').IPCResult<RedesignBrief>>;
+  /** The UI files checked against the design system, without a model; null without tokens */
+  audit: (projectId: string) => Promise<import('./common').IPCResult<DesignAudit | null>>;
   save: (projectId: string, content: { markdown?: string; tokens?: DesignTokens }) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
   /** Read the project's styles and components and write the design system they form */
   extract: (projectId: string) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
