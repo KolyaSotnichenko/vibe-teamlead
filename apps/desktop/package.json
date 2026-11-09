@@ -1,7 +1,7 @@
 {
   "name": "vibe-teamlead-desktop",
   "productName": "Vibe Teamlead",
-  "version": "2.0.0-beta.14",
+  "version": "2.0.0-beta.15",
   "type": "module",
   "description": "Vibe Teamlead — a team of Claude Code agents that builds software from a spec",
   "homepage": "https://github.com/KolyaSotnichenko/vibe-teamlead",

@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.15 - 2026-11-09
+
+- Preview notes: a click in notes mode makes a note again. Keeping presses from the app's menus had stopped the clicks the overlay listens for.
+- App checks start the database from the main compose file. An override such as `docker-compose.e2e.yml` sorted first and named none, so migrations were skipped and tests failed "without this task too".
+- Preview Logs: each service's log, with a search; links in it open in the preview.
+- Preview Mail: when the project configures SMTP, a local Mailpit catches what the app sends; nothing leaves your Mac.
+
 ## 2.0.0-beta.14 - 2026-11-09
 
 - Preview needs no URL variables by hand: local addresses in `.env.example` (an API URL, a CORS origin) are pointed at the ports the preview picked, from each service's example port, `dev` script or framework default.
