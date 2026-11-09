@@ -22,6 +22,7 @@ import {
   waitForAuthResume,
   waitForRateLimitResume } from './pause-handler';
 import { writeFileReplacing } from '../safe-write';
+import { GAVE_UP_STATUSES } from './failed-subtasks';
 
 // =============================================================================
 // Types
@@ -72,6 +73,8 @@ export interface SubtaskIteratorResult {
   completedSubtasks: number;
   /** IDs of subtasks marked as stuck */
   stuckSubtasks: string[];
+  /** Of those, the ones the coder gave up on itself (status failed or blocked, its reason in notes) */
+  gaveUpSubtasks: string[];
   /** Whether iteration was cancelled */
   cancelled: boolean;
 }
@@ -132,6 +135,7 @@ export async function iterateSubtasks(
 
   const attemptCounts = new Map<string, number>();
   const stuckSubtasks: string[] = [];
+  const gaveUpSubtasks: string[] = [];
   const stoppedAtLimit = new Set<string>();
   let completedSubtasks = 0;
   let totalSubtasks = 0;
@@ -139,13 +143,13 @@ export async function iterateSubtasks(
   while (true) {
     // Check cancellation
     if (config.abortSignal?.aborted) {
-      return { totalSubtasks, completedSubtasks, stuckSubtasks, cancelled: true };
+      return { totalSubtasks, completedSubtasks, stuckSubtasks, gaveUpSubtasks, cancelled: true };
     }
 
     // Load the plan and find next pending subtask
     const plan = await loadImplementationPlan(config.specDir);
     if (!plan) {
-      return { totalSubtasks: 0, completedSubtasks: 0, stuckSubtasks, cancelled: false };
+      return { totalSubtasks: 0, completedSubtasks: 0, stuckSubtasks, gaveUpSubtasks, cancelled: false };
     }
 
     // Count totals
@@ -198,7 +202,7 @@ export async function iterateSubtasks(
 
     // Handle outcomes
     if (result.outcome === 'cancelled') {
-      return { totalSubtasks, completedSubtasks, stuckSubtasks, cancelled: true };
+      return { totalSubtasks, completedSubtasks, stuckSubtasks, gaveUpSubtasks, cancelled: true };
     }
 
     if (result.outcome === 'rate_limited') {
@@ -216,7 +220,7 @@ export async function iterateSubtasks(
 
       // Re-check abort after waiting
       if (config.abortSignal?.aborted) {
-        return { totalSubtasks, completedSubtasks, stuckSubtasks, cancelled: true };
+        return { totalSubtasks, completedSubtasks, stuckSubtasks, gaveUpSubtasks, cancelled: true };
       }
 
       // Continue the loop — subtask will be retried
@@ -233,7 +237,7 @@ export async function iterateSubtasks(
 
       // Re-check abort after waiting
       if (config.abortSignal?.aborted) {
-        return { totalSubtasks, completedSubtasks, stuckSubtasks, cancelled: true };
+        return { totalSubtasks, completedSubtasks, stuckSubtasks, gaveUpSubtasks, cancelled: true };
       }
 
       // Continue — subtask will be retried with fresh auth
@@ -248,6 +252,7 @@ export async function iterateSubtasks(
       // Trying again in this run wouldn't change why it gave up: the build stops and names it
       if (gaveUp) {
         stuckSubtasks.push(subtask.id);
+        gaveUpSubtasks.push(subtask.id);
         config.onSubtaskStuck?.(subtaskInfo, 'The coder could not finish it and said why in the plan');
       }
 
@@ -280,7 +285,7 @@ export async function iterateSubtasks(
     }
   }
 
-  return { totalSubtasks, completedSubtasks, stuckSubtasks, cancelled: false };
+  return { totalSubtasks, completedSubtasks, stuckSubtasks, gaveUpSubtasks, cancelled: false };
 }
 
 // =============================================================================
@@ -298,7 +303,7 @@ export async function iterateSubtasks(
  * Only ADD/UPDATE fields — never removes existing data.
  */
 /** Statuses a coder sets when it can't finish its subtask; a session ending doesn't overrule them. */
-const GAVE_UP: ReadonlySet<string> = new Set(['failed', 'blocked']);
+const GAVE_UP = GAVE_UP_STATUSES;
 
 async function ensureSubtaskMarkedCompleted(
   specDir: string,

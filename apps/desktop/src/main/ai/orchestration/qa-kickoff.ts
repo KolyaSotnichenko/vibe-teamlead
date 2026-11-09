@@ -41,6 +41,8 @@ interface PlanSubtask {
   title?: unknown;
   description?: unknown;
   status?: unknown;
+  skipped_by_owner?: unknown;
+  notes?: unknown;
 }
 
 const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -97,7 +99,12 @@ const subtaskId = (s: PlanSubtask): string => {
   return SUBTASK_ID.test(id) ? id : '?';
 };
 
-const subtaskStatus = (s: PlanSubtask): string => (KNOWN_STATUS.has(asText(s.status)) ? asText(s.status) : 'unknown');
+const skippedByOwner = (s: PlanSubtask): boolean => s.skipped_by_owner === true && s.status === 'completed';
+
+const subtaskStatus = (s: PlanSubtask): string =>
+  skippedByOwner(s) ? 'skipped by the owner' : KNOWN_STATUS.has(asText(s.status)) ? asText(s.status) : 'unknown';
+
+const SKIPPED_NOTES_MAX = 600;
 
 /** A compact table of the plan's subtasks: id, status, first line of the description. */
 export function subtaskTable(plan: string): string[] {
@@ -107,12 +114,20 @@ export function subtaskTable(plan: string): string[] {
   const subtasks = phases.flatMap((phase) => (Array.isArray(phase?.subtasks) ? phase.subtasks : [])).filter((s) => s && typeof s === 'object');
   if (!subtasks.length) return ['The plan lists no subtasks.'];
   const completed = subtasks.filter((s) => s.status === 'completed').length;
+  const skipped = subtasks.filter(skippedByOwner);
   return [
-    `${subtasks.length} subtask${subtasks.length === 1 ? '' : 's'}, ${completed} completed.`,
+    `${subtasks.length} subtask${subtasks.length === 1 ? '' : 's'}, ${completed} completed${skipped.length ? ` (${skipped.length} skipped by the owner)` : ''}.`,
     '',
     '| ID | Status | Description |',
     '|----|--------|-------------|',
     ...subtasks.map((s) => `| ${subtaskId(s)} | ${subtaskStatus(s)} | ${firstLine(s.description) || firstLine(s.title)} |`),
+    ...(skipped.length
+      ? [
+          '',
+          'The owner decided to go on without the subtasks marked "skipped by the owner" after reading why the coder stopped: their unfinished part is not a finding against this task. Everything else is reviewed as usual. Why the coder stopped:',
+          ...skipped.map((s) => `- ${subtaskId(s)}: ${cleanForMessage(asText(s.notes), SKIPPED_NOTES_MAX) || '(no reason written)'}`),
+        ]
+      : []),
   ];
 }
 

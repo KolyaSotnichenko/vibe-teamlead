@@ -248,9 +248,18 @@ interface PlanSubtask {
  * Manages transitions between planning, coding, QA review, and QA fixing phases.
  */
 /** Why the build can't go on to QA: QA needs every subtask done. Pure. */
-export function codingFailure(stuckSubtasks: string[]): string | undefined {
+export function codingFailure(stuckSubtasks: string[], gaveUpSubtasks: string[] = []): string | undefined {
   if (!stuckSubtasks.length) return undefined;
-  return `Not finished after ${MAX_SUBTASK_RETRIES} attempts: ${stuckSubtasks.join(', ')}. Resume the task to try again, or split these subtasks.`;
+  const gaveUp = stuckSubtasks.filter((id) => gaveUpSubtasks.includes(id));
+  const retried = stuckSubtasks.filter((id) => !gaveUpSubtasks.includes(id));
+  const parts: string[] = [];
+  if (gaveUp.length) {
+    parts.push(`The coder stopped at ${gaveUp.join(', ')} and wrote why in the plan. Resuming as is would stop again: continue without it, or resume with an instruction for the coder.`);
+  }
+  if (retried.length) {
+    parts.push(`Not finished after ${MAX_SUBTASK_RETRIES} attempts: ${retried.join(', ')}. Resume the task to try again, or split these subtasks.`);
+  }
+  return parts.join(' ');
 }
 
 /**
@@ -597,7 +606,7 @@ export class BuildOrchestrator extends EventEmitter {
       return { success: false, error: 'Build cancelled' };
     }
 
-    const failure = codingFailure(iteratorResult.stuckSubtasks);
+    const failure = codingFailure(iteratorResult.stuckSubtasks, iteratorResult.gaveUpSubtasks);
     if (failure) return { success: false, error: failure };
 
     // Sync after coding

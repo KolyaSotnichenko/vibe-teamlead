@@ -171,6 +171,29 @@ describe('coderKickoffContext', () => {
   });
 });
 
+describe('a subtask the owner sent back with an instruction', () => {
+  const reopened = planWith(
+    subtask('subtask-2-2', '[AC-1] Run the whole suite', 'pending', {
+      notes: 'Full suite red on pre-existing specs; needs a product fix.',
+      owner_instruction: 'You may change product code to fix the a11y failures.',
+    }),
+  );
+
+  it("gives the owner's instruction after the data, as the owner's, and the earlier session's notes as data", () => {
+    const text = context({ plan: reopened });
+    const instruction = text.indexOf('You may change product code');
+    expect(instruction).toBeGreaterThan(text.lastIndexOf('</coder_subtask_context_'));
+    expect(text).toMatch(/The owner read why an earlier session stopped/);
+    const notes = text.indexOf('Full suite red on pre-existing specs');
+    expect(notes).toBeGreaterThan(-1);
+    expect(notes).toBeLessThan(text.lastIndexOf('</coder_subtask_context_'));
+  });
+
+  it('says nothing about an owner without an instruction', () => {
+    expect(context()).not.toMatch(/owner/i);
+  });
+});
+
 describe('referencedCriteria', () => {
   it('reads the forms real plans use', () => {
     expect(referencedCriteria('[AC-1, AC-7, AC-8] and AC-10 portal part')).toEqual([1, 7, 8, 10]);

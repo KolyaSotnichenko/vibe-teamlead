@@ -69,12 +69,33 @@ describe('a coder session that reaches the turn limit', () => {
     expect(runSubtaskSession).toHaveBeenCalledTimes(1);
     expect(status()).toBe('completed');
   });
+
+  it('reports a subtask the coder gave up on as given up, not only as stuck', async () => {
+    const { config } = setup([
+      (planPath) => {
+        const plan = JSON.parse(readFileSync(planPath, 'utf-8'));
+        plan.phases[0].subtasks[0].status = 'failed';
+        writeFileSync(planPath, JSON.stringify(plan));
+        return 'completed';
+      },
+    ]);
+    const result = await iterateSubtasks(config);
+    expect(result.stuckSubtasks).toEqual(['s1']);
+    expect(result.gaveUpSubtasks).toEqual(['s1']);
+  });
 });
 
 describe('codingFailure', () => {
   it('stops the build with the names of unfinished subtasks, even if others were done', () => {
     expect(codingFailure(['s1', 's2'])).toContain('s1, s2');
     expect(codingFailure([])).toBeUndefined();
+  });
+
+  it('does not claim three attempts for a subtask the coder gave up on, and says what to do', () => {
+    const text = codingFailure(['s1'], ['s1']) ?? '';
+    expect(text).not.toMatch(/3 attempts/);
+    expect(text).toMatch(/coder stopped at s1 and wrote why/i);
+    expect(text).toMatch(/continue without it|instruction/i);
   });
 });
 

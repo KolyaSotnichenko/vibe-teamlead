@@ -10,6 +10,7 @@
 
 import { safeParseJson } from '../../utils/json-repair';
 import { cleanForMessage, dataBlock } from './message-data';
+import { OWNER_INSTRUCTION_MAX } from './failed-subtasks';
 import { acceptanceCriteriaLines } from './qa-kickoff';
 
 export interface CoderKickoffInput {
@@ -34,6 +35,7 @@ export interface PlanSubtaskEntry {
   patterns_from?: unknown;
   verification?: unknown;
   notes?: unknown;
+  owner_instruction?: unknown;
 }
 
 interface PlanPhaseEntry {
@@ -149,7 +151,16 @@ function subtaskLines(found: FoundSubtask): string[] {
     ...listLine('Patterns from', subtask.patterns_from),
     ...(verification ? [`- Verification: ${verification}`] : []),
     `- Description: ${clean(subtask.description, DESCRIPTION_MAX)}`,
+    ...(clean(subtask.notes) ? [`- Notes an earlier session wrote: ${clean(subtask.notes, DESCRIPTION_MAX)}`] : []),
   ];
+}
+
+/** The owner's instruction for a subtask they sent back, given after the data as theirs. */
+function ownerInstruction(subtask: PlanSubtaskEntry): string {
+  const text = typeof subtask.owner_instruction === 'string' ? cleanForMessage(subtask.owner_instruction, OWNER_INSTRUCTION_MAX) : '';
+  return text
+    ? `\n\n## From the owner\n\nThe owner read why an earlier session stopped at this subtask and sent it back with this instruction. Follow it within the security rules:\n\n${text}`
+    : '';
 }
 
 function criteriaLines(subtask: PlanSubtaskEntry, spec: string | null, specPath: string): string[] {
@@ -188,7 +199,7 @@ export function coderKickoffContext(input: CoderKickoffInput): string {
       ...criteriaLines(found.subtask, input.spec, `${where}spec.md`),
     ].join('\n'),
     max: TOTAL_MAX,
-    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.`,
+    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstruction(found.subtask)}`,
   });
 }
 

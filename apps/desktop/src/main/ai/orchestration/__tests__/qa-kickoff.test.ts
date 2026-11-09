@@ -160,6 +160,20 @@ describe('qaKickoffContext', () => {
     });
   });
 
+  it('says which subtasks the owner skipped, with why the coder stopped, so the reviewer does not hold them against the task', () => {
+    const plan = JSON.stringify({
+      phases: [{ subtasks: [
+        { id: 'subtask-1-1', status: 'completed', description: 'Write the journey spec' },
+        { id: 'subtask-6-1', status: 'completed', skipped_by_owner: true, description: 'Run the whole suite twice', notes: 'Red on pre-existing specs from another task.' },
+      ] }],
+    });
+    const out = qaKickoffContext({ spec: SPEC, plan });
+    expect(out).toContain('| subtask-6-1 | skipped by the owner | Run the whole suite twice |');
+    expect(out).toContain('2 subtasks, 2 completed (1 skipped by the owner)');
+    expect(out).toContain('Red on pre-existing specs from another task.');
+    expect(out).toMatch(/owner decided.*not.*finding/i);
+  });
+
   it('copes with a missing spec or an unreadable plan', () => {
     expect(qaKickoffContext({ spec: null, plan: null })).toContain('spec.md');
     const out = qaKickoffContext({ spec: SPEC, plan: '{not json' });
