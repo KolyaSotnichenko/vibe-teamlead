@@ -31,7 +31,7 @@ import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
 import { pickHostEnv, SESSION_HOST_ENV } from './host-env';
-import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS } from './skills';
+import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, skillsForAgent, SUPERPOWERS_INSTRUCTIONS, UX_REVIEW_INSTRUCTIONS, UX_REVIEW_SKILL } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 
 /** Claude Code built-in tools Vibe Teamlead agents may be given */
@@ -239,6 +239,10 @@ export function buildQueryOptions(
     plugins.push({ type: 'local', path: bundled.frontendDesignDir });
     availablePlugins.add('frontend-design');
   }
+  if (bundled.uxReviewDir && config.extraSkills?.includes(UX_REVIEW_SKILL)) {
+    plugins.push({ type: 'local', path: bundled.uxReviewDir });
+    availablePlugins.add('ux-review');
+  }
   // Language servers (lsp-registry.ts): diagnostics after edits and the LSP tool
   if (config.lspPluginDir) {
     plugins.push({ type: 'local', path: config.lspPluginDir });
@@ -253,6 +257,7 @@ export function buildQueryOptions(
     ASK_USER_INSTRUCTIONS,
     skills.some((s) => s.startsWith('superpowers:')) ? SUPERPOWERS_INSTRUCTIONS : '',
     skills.includes(FRONTEND_DESIGN_SKILL) ? FRONTEND_DESIGN_INSTRUCTIONS : '',
+    skills.includes(UX_REVIEW_SKILL) ? UX_REVIEW_INSTRUCTIONS : '',
     tools.includes('Bash') ? BACKGROUND_INSTRUCTIONS : '',
     tools.includes('Bash') ? CONTEXT_INSTRUCTIONS : '',
     browserToolsSection(config.agentType, Object.keys(mcpServers), config.mcpOptions?.projectCapabilities, config.mcpOptions?.taskTouchesUi),

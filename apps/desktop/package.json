@@ -219,6 +219,10 @@
         "to": "plugins/frontend-design"
       },
       {
+        "from": "vendor/ux-review",
+        "to": "plugins/ux-review"
+      },
+      {
         "from": "vendor/drawio-viewer",
         "to": "drawio-viewer"
       },

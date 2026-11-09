@@ -27,7 +27,7 @@ import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
 import { languagesFromIndex, lspLogLine, lspServersFor, scanProjectLanguages } from '../claude-code/lsp-registry';
 import { defaultClaudeConfigDir } from '../claude-code/runner';
 import { findOnPath } from '../../platform/exec';
-import { subtaskSkills } from '../claude-code/skills';
+import { qaSkills, subtaskSkills } from '../claude-code/skills';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
 import type {
@@ -1033,6 +1033,9 @@ async function runQualityAssurance(
           .filter(Boolean)
           .join('\n\n'),
         true, // skipPhaseLogging — the caller manages QA phase logging
+        undefined,
+        // The UX review, for a reviewer of a task that changed UI
+        qaSkills(runConfig.agentType, touchesUi),
       );
     },
   });

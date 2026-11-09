@@ -113,6 +113,10 @@ export const PLAYWRIGHT_TOOLS = [
   'mcp__playwright__browser_wait_for',
   'mcp__playwright__browser_verify_text_visible',
   'mcp__playwright__browser_close',
+  // UX review: phone and desktop widths, and the keyboard
+  'mcp__playwright__browser_resize',
+  'mcp__playwright__browser_press_key',
+  'mcp__playwright__browser_emulate_media',
 ] as const;
 
 /** Electron MCP tools for desktop app automation (when ELECTRON_MCP_ENABLED is set) */

@@ -61,3 +61,15 @@ This subtask builds UI: load the frontend-design skill (Skill tool) before writi
 export const SUPERPOWERS_INSTRUCTIONS = `
 ## Superpowers skills
 Superpowers skills are available through the Skill tool; use them when they apply. They are methods, not the workflow: where a skill prescribes file locations, worktrees, branches, commits or follow-up plans, follow THIS role's instructions instead (spec files belong in the spec directory; the app manages worktrees, branches and merges).`;
+
+/** The UX review skill (vendor/ux-review), for the QA reviewer of tasks that change UI. */
+export const UX_REVIEW_SKILL = 'ux-review:ux-review';
+
+/** Skills a QA session gets on top of its usual ones: the UX review for a reviewer of a task that changed UI. Pure. */
+export function qaSkills(agentType: AgentType, taskTouchesUi: boolean | undefined): string[] {
+  return agentType === 'qa_reviewer' && taskTouchesUi === true ? [UX_REVIEW_SKILL] : [];
+}
+
+export const UX_REVIEW_INSTRUCTIONS = `
+## UX review
+This task changed UI. After the acceptance criteria, load the ux-review skill (Skill tool) and follow it: open the pages the task changed in the browser, at 375 and 1280 pixels wide, go through them by keyboard, look at their empty, loading and error states and at how a person reaches them, and check them against its checklists. The project's design system and the spec come first. A problem that stops a person from using the page blocks approval like any other finding; matters of taste go under "UX notes" in qa_report.md.`;

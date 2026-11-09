@@ -8,7 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { codegraphMcpServer, excludeIndexFromGit } from '../codegraph';
 import { buildQueryOptions } from '../runner';
-import { FRONTEND_DESIGN_SKILL, skillsForAgent, subtaskSkills } from '../skills';
+import { FRONTEND_DESIGN_SKILL, qaSkills, skillsForAgent, subtaskSkills, UX_REVIEW_SKILL } from '../skills';
+import { PLAYWRIGHT_TOOLS } from '../../config/agent-configs';
 import { isUiFile } from '../../design/design-lint';
 import { type AgentQuestion, buildAskUserHook } from '../user-questions';
 import type { SessionConfig } from '../../session/types';
@@ -192,5 +193,64 @@ describe('CodeGraph helpers', () => {
     const exclude = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf-8');
     expect(exclude.match(/^\.codegraph\/$/gm)).toHaveLength(1);
     expect(exclude).toContain('# existing');
+  });
+});
+
+describe('the UX review for QA on tasks that change UI', () => {
+  const reviewer: SessionConfig = {
+    agentType: 'qa_reviewer',
+    model: 'claude-sonnet-4-6',
+    auth: { apiKey: 'sk-ant-test' },
+    systemPrompt: 'You are the reviewer.',
+    initialMessages: [{ role: 'user', content: 'go' }],
+    toolContext: { cwd: '/work', projectDir: '/work', specDir: '/work/spec', securityProfile: undefined as never },
+    maxSteps: 10,
+    specDir: '/work/spec',
+    projectDir: '/work',
+    bundled: { superpowersDir: '/r/superpowers', uxReviewDir: '/r/ux-review' },
+  };
+
+  it('goes to the reviewer only, and only when the task changed UI files', () => {
+    expect(qaSkills('qa_reviewer', true)).toEqual([UX_REVIEW_SKILL]);
+    expect(qaSkills('qa_reviewer', false)).toEqual([]);
+    expect(qaSkills('qa_reviewer', undefined)).toEqual([]);
+    expect(qaSkills('qa_fixer', true)).toEqual([]);
+  });
+
+  it('loads the plugin and tells the reviewer to look at the running page, at two widths and by keyboard', () => {
+    const options = buildQueryOptions({ ...reviewer, extraSkills: [UX_REVIEW_SKILL] }, new AbortController(), { codegraphReady: false });
+    expect(options.plugins).toContainEqual({ type: 'local', path: '/r/ux-review' });
+    expect(options.skills).toContain(UX_REVIEW_SKILL);
+    const append = (options.systemPrompt as { append: string }).append;
+    expect(append).toMatch(/## UX review/);
+    expect(append).toMatch(/375/);
+    expect(append).toMatch(/1280/);
+    expect(append).toMatch(/keyboard/i);
+    expect(append).toMatch(/design system/i);
+    const plain = buildQueryOptions(reviewer, new AbortController(), { codegraphReady: false });
+    expect(plain.plugins).not.toContainEqual({ type: 'local', path: '/r/ux-review' });
+    expect((plain.systemPrompt as { append: string }).append).not.toMatch(/## UX review/);
+  });
+
+  it('ships the plugin with its sources and their licenses', () => {
+    const root = join(__dirname, '..', '..', '..', '..', '..', 'vendor', 'ux-review');
+    expect(JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf-8')).name).toBe(UX_REVIEW_SKILL.split(':')[0]);
+    const skill = readFileSync(join(root, 'skills', 'ux-review', 'SKILL.md'), 'utf-8');
+    expect(skill).toMatch(/^name: ux-review$/m);
+    for (const ref of ['web-interface-guidelines.md', 'impeccable-audit.md', 'impeccable-harden.md']) {
+      expect(skill).toContain(`reference/${ref}`);
+      expect(readFileSync(join(root, 'skills', 'ux-review', 'reference', ref), 'utf-8').length).toBeGreaterThan(1000);
+    }
+    expect(readFileSync(join(root, 'licenses', 'web-interface-guidelines.LICENSE'), 'utf-8')).toMatch(/MIT License/);
+    expect(readFileSync(join(root, 'licenses', 'impeccable.LICENSE'), 'utf-8')).toMatch(/Apache License/);
+    expect(readFileSync(join(root, 'licenses', 'impeccable.NOTICE.md'), 'utf-8')).toMatch(/Third-Party Notices/);
+    const pkg = JSON.parse(readFileSync(join(root, '..', '..', 'package.json'), 'utf-8'));
+    expect(pkg.build.extraResources).toContainEqual({ from: 'vendor/ux-review', to: 'plugins/ux-review' });
+  });
+
+  it('gives QA the browser tools to resize the page and use the keyboard', () => {
+    expect(PLAYWRIGHT_TOOLS).toContain('mcp__playwright__browser_resize');
+    expect(PLAYWRIGHT_TOOLS).toContain('mcp__playwright__browser_press_key');
+    expect(PLAYWRIGHT_TOOLS).toContain('mcp__playwright__browser_emulate_media');
   });
 });

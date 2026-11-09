@@ -9,6 +9,7 @@ Shipped inside the Vibe Teamlead app so users don't have to install anything.
 | `drawio-viewer/` | https://github.com/jgraph/drawio @ `3e707fd` (`viewer-static.min.js`) | — | Apache-2.0 (see `drawio-viewer/LICENSE`) |
 | `vibe-teamlead-skills/` | this repo | — | AGPL-3.0 (same as the app) |
 | `frontend-design/` | https://github.com/anthropics/skills @ `ca45fc4` (`skills/frontend-design`) | — | Apache-2.0 (see `frontend-design/LICENSE.txt`) |
+| `ux-review/` | this repo (`SKILL.md`); checklists from https://github.com/vercel-labs/web-interface-guidelines @ `434b7f9` and https://github.com/pbakaus/impeccable @ `613fbf8` (`audit.md`, `harden.md`) | — | AGPL-3.0 for the skill; MIT and Apache-2.0 for the checklists (see `ux-review/licenses/`) |
 
 Only the Claude Code plugin parts are kept: `.claude-plugin/`, `hooks/`, `skills/`, `LICENSE`, `README.md`, `package.json`.
 
