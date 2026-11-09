@@ -108,6 +108,7 @@ export const IPC_CHANNELS = {
   PREVIEW_SET_BOUNDS: 'preview:setBounds',
   PREVIEW_NAVIGATE: 'preview:navigate',
   PREVIEW_PROPOSE_SERVICES: 'preview:proposeServices',
+  PROJECT_LOOSE_ENDS: 'project:looseEnds',  // Placeholders left in the project's UI files
   PREVIEW_RESET_DATA: 'preview:resetData',
   DESIGN_REFS_LIST: 'design:refsList',
   DESIGN_REFS_PICK: 'design:refsPick',

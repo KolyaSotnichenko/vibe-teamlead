@@ -8,6 +8,7 @@ import type { SupportedIDE, SupportedTerminal } from './settings';
 import type {
   Project,
   ProjectSettings,
+  LooseEnd,
   AutoBuildVersionInfo,
   InitializationResult,
   CreateProjectFolderResult,
@@ -175,6 +176,7 @@ export interface ElectronAPI {
   removeProject: (projectId: string) => Promise<IPCResult>;
   getProjects: () => Promise<IPCResult<Project[]>>;
   updateProjectSettings: (projectId: string, settings: Partial<ProjectSettings>) => Promise<IPCResult>;
+  getLooseEnds: (projectId: string) => Promise<IPCResult<LooseEnd[]>>;
   initializeProject: (projectId: string) => Promise<IPCResult<InitializationResult>>;
   checkProjectVersion: (projectId: string) => Promise<IPCResult<AutoBuildVersionInfo>>;
 

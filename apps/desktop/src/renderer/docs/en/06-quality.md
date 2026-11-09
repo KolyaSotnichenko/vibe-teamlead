@@ -14,3 +14,9 @@
 | **Environment isolation** | Agents run with their own Claude Code configuration (`~/.vibe-teamlead/claude-code`), not your `~/.claude`. Environment variables are filtered. |
 
 The scanners (gitleaks, OSV-Scanner), Claude Code, CodeGraph, Superpowers and Mermaid ship with the app, so you don't need to install anything separately. Semgrep is not bundled (it is a Python package): install it if you want that gate. Docker and Chrome are needed only for Strix and browser checks. The status of all tools is shown in Settings → Tools.
+
+## Placeholders left in the product
+
+A task can ship temporary text on purpose: a home page that says it is a placeholder, "coming soon", "lorem ipsum". When no later task replaces it, it stays. The board names such text in the project's pages (any stack: React, Vue, Svelte, Astro, server templates), read again after every merge, with the file and line. **Create a task** adds a task to replace it; **Leave it** keeps it off the list for this project. It is a text search, not a model, so it costs nothing. Inputs' `placeholder` attributes, tests, stories and server code are not counted.
+
+When a brief is split into tasks, the spec analyst also checks how a person reaches every page from the home page, and names the task that replaces any placeholder a task leaves.

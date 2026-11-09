@@ -26,6 +26,7 @@ import { TASK_STATUS_COLUMNS } from '../../shared/constants';
 import { cn } from '../lib/utils';
 import { persistTaskStatus, forceCompleteTask, archiveTasks, deleteTasks, useTaskStore, isQueueAtCapacity } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
+import { LooseEndsNotice } from './LooseEndsNotice';
 import { useKanbanSettingsStore, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, BASE_FONT_SIZE } from '../stores/kanban-settings-store';
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
@@ -106,6 +107,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Brief import from the Planning column menu; same project choice as New Task
   const [briefImportOpen, setBriefImportOpen] = useState(false);
   const briefProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
+  // A merge moves a task to done: the placeholders are read again then
+  const mergedCount = tasks.filter((task) => task.status === 'done').length;
   const openBriefImport = useCallback(() => setBriefImportOpen(true), []);
   // Store projectId when modal opens to prevent modal from disappearing if tasks change
   const queueSettingsProjectIdRef = useRef<string | null>(null);
@@ -914,6 +917,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           )}
         </div>
       )}
+      {briefProjectId && <LooseEndsNotice projectId={briefProjectId} refreshKey={mergedCount} />}
       {/* Kanban columns */}
       <DndContext
         sensors={sensors}

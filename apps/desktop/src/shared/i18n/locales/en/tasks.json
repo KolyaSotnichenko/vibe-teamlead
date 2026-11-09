@@ -1119,5 +1119,13 @@
         "command": "Each service needs a command."
       }
     }
+  },
+  "looseEnds": {
+    "title_one": "{{count}} placeholder left in the product",
+    "title_other": "{{count}} placeholders left in the product",
+    "body": "Text in the project's pages that says it is temporary: a placeholder page, \"coming soon\", \"lorem ipsum\". A task left it and no task replaces it. Create a task to replace it, or leave it if it is meant to stay.",
+    "createTask": "Create a task",
+    "taskCreated": "Task created",
+    "leave": "Leave it"
   }
 }

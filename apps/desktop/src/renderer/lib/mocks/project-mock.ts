@@ -27,6 +27,7 @@ export const projectMock = {
   }),
 
   updateProjectSettings: async () => ({ success: true }),
+  getLooseEnds: async () => ({ success: true, data: [] }),
 
   initializeProject: async () => ({
     success: true,

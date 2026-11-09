@@ -44,6 +44,8 @@ export interface ProjectSettings {
   previewServices?: PreviewService[];
   /** Variables the preview's services get on top of `.env.example`. Never the project's `.env`. */
   previewEnv?: Record<string, string>;
+  /** Placeholders the owner said to leave, as `file\ntext` (loose-ends.ts) */
+  ignoredLooseEnds?: string[];
 }
 
 /** One process the Preview starts, through the app's dev-server manager. */
@@ -512,4 +514,11 @@ export interface FileNode {
   path: string;
   name: string;
   isDirectory: boolean;
+}
+
+/** A placeholder left in a UI file: "coming soon", "lorem ipsum", a page that says it is one */
+export interface LooseEnd {
+  file: string;
+  line: number;
+  text: string;
 }

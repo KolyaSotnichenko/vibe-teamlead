@@ -9,7 +9,8 @@ import type {
   ProjectEnvConfig,
   GitStatus,
   KanbanPreferences,
-  GitBranchDetail
+  GitBranchDetail,
+  LooseEnd
 } from '../../shared/types';
 
 // Tab state interface (persisted in main process)
@@ -28,6 +29,8 @@ export interface ProjectAPI {
     projectId: string,
     settings: Partial<ProjectSettings>
   ) => Promise<IPCResult>;
+  /** Placeholders left in the project's UI files, without the ones the owner ignored */
+  getLooseEnds: (projectId: string) => Promise<IPCResult<LooseEnd[]>>;
   initializeProject: (projectId: string) => Promise<IPCResult<InitializationResult>>;
   checkProjectVersion: (projectId: string) => Promise<IPCResult<AutoBuildVersionInfo>>;
 
@@ -139,6 +142,9 @@ export const createProjectAPI = (): ProjectAPI => ({
     settings: Partial<ProjectSettings>
   ): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.PROJECT_UPDATE_SETTINGS, projectId, settings),
+
+  getLooseEnds: (projectId: string): Promise<IPCResult<LooseEnd[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROJECT_LOOSE_ENDS, projectId),
 
   initializeProject: (projectId: string): Promise<IPCResult<InitializationResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.PROJECT_INITIALIZE, projectId),

@@ -8,6 +8,7 @@
 import { registerBriefHandlers } from './brief-handlers';
 import { registerDesignHandlers } from './design-handlers';
 import { registerPreviewHandlers } from './preview-handlers';
+import { registerLooseEndsHandlers } from './loose-ends-handlers';
 import { registerUsageHandlers } from './usage-handlers';
 import { registerToolsCheckHandlers } from './tools-check-handlers';
 import type { BrowserWindow } from 'electron';
@@ -120,6 +121,7 @@ export function setupIpcHandlers(
   registerBriefHandlers(getMainWindow);
   registerDesignHandlers(getMainWindow);
   registerPreviewHandlers(getMainWindow);
+  registerLooseEndsHandlers();
   registerUsageHandlers();
 
   // Debug handlers (logs, debug info, etc.)
