@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.16 - 2026-11-09
+
+- A task from Preview notes with Quick fix no longer stops after its plan: a subtask's verification written as a command string is taken as a command check instead of failing the build.
+- Tasks with a Ukrainian or Russian title get a readable folder and branch name instead of "028-".
+
 ## 2.0.0-beta.15 - 2026-11-09
 
 - Preview notes: a click in notes mode makes a note again. Keeping presses from the app's menus had stopped the clicks the overlay listens for.
