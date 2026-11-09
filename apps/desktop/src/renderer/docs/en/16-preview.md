@@ -29,6 +29,7 @@ Change the list later with **Services** in the toolbar. The list is kept in the 
 
 - **The code** is a copy of main of its own, in `~/.vibe-teamlead/worktrees/preview`, outside your project. Your own folder, its branch and its uncommitted changes are never touched.
 - **The database** named in the project's compose file runs in Docker on a volume kept for this project, so an account you registered in the preview is still there next time. Migrations are applied to it (Prisma, Drizzle, Django, Alembic, Rails, Laravel), and on a new, empty database the project's seed script runs (`db:seed`, `seed`, or Prisma's seed). A Django, Rails or Laravel app with no database in compose gets its migrations on its own local file. **Reset preview data** deletes it and starts empty.
+- **Your sign-in in the page** doesn't outlive the preview: stopping it clears the page's cookies and storage, so the next start is signed out. **Reset session** (the exit icon next to Reload) does it on the spot and reloads the page.
 - **Dependencies** are installed with the project's own tool: pnpm, npm, yarn or bun; uv, Poetry or pip; Bundler; Composer; Go modules. A folder is installed again only when its lockfile changes. The tool itself (Python, Ruby, PHP, Go) has to be on your Mac; when it isn't, the preview says which install failed and shows its output.
 - **Settings** come from `.env.example` and the preview's own database, never from `.env`. Your real databases and keys are not used.
 

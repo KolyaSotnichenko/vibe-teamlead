@@ -1,6 +1,6 @@
-/** Above the preview: history, address, width presets, and resetting the preview's data. */
+/** Above the preview: history, resetting the session, address, width presets, and resetting the preview's data. */
 
-import { ArrowLeft, ArrowRight, RotateCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LogOut, RotateCw } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -42,6 +42,8 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
       <Button variant="ghost" size="icon" aria-label={t('preview.toolbar.back')} disabled={disabled} onClick={() => onNavigate({ action: 'back' })}><ArrowLeft className="h-4 w-4" /></Button>
       <Button variant="ghost" size="icon" aria-label={t('preview.toolbar.forward')} disabled={disabled} onClick={() => onNavigate({ action: 'forward' })}><ArrowRight className="h-4 w-4" /></Button>
       <Button variant="ghost" size="icon" aria-label={t('preview.toolbar.reload')} disabled={disabled} onClick={() => onNavigate({ action: 'reload' })}><RotateCw className="h-4 w-4" /></Button>
+      {/* A sign-in made while clicking through: cookies and storage cleared, the page reloaded */}
+      <Button variant="ghost" size="icon" aria-label={t('preview.toolbar.signOut')} title={t('preview.toolbar.signOutHint')} disabled={disabled} onClick={() => onNavigate({ action: 'signOut' })}><LogOut className="h-4 w-4" /></Button>
       <form onSubmit={go} className="min-w-48 flex-1">
         <Input aria-label={t('preview.toolbar.address')} className="font-mono text-xs" value={address} disabled={disabled} onChange={(e) => setAddress(e.target.value)} />
       </form>

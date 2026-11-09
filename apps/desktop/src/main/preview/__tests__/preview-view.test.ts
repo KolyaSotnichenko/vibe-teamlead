@@ -13,7 +13,7 @@ function fakeView() {
   const contents = {
     on: vi.fn((event: string, handler: Handler) => { handlers[event] = handler; }),
     setWindowOpenHandler: vi.fn((handler: Handler) => { openHandler = handler; }),
-    session: { setPermissionRequestHandler: vi.fn((handler: Handler) => { permissionHandler = handler; }), setPermissionCheckHandler: vi.fn() },
+    session: { setPermissionRequestHandler: vi.fn((handler: Handler) => { permissionHandler = handler; }), setPermissionCheckHandler: vi.fn(), clearStorageData: vi.fn(async () => {}) },
     loadURL: vi.fn(async () => {}),
     reload: vi.fn(),
     navigationHistory: { canGoBack: () => true, goBack: vi.fn(), canGoForward: () => false, goForward: vi.fn() },
@@ -45,6 +45,20 @@ const navigateEvent = () => ({ preventDefault: vi.fn() });
 beforeEach(() => vi.mocked(shell.openExternal).mockClear());
 
 describe('the preview view', () => {
+  it("signing out clears the page's cookies and storage, then reloads it", async () => {
+    const { preview, contents } = setup();
+    preview.navigate({ action: 'signOut' });
+    await vi.waitFor(() => expect(contents.reload).toHaveBeenCalled());
+    expect(contents.session.clearStorageData).toHaveBeenCalled();
+    expect(contents.session.clearStorageData.mock.invocationCallOrder[0]).toBeLessThan(contents.reload.mock.invocationCallOrder[0]);
+  });
+
+  it('a stopped preview leaves no session behind: the next one starts signed out', () => {
+    const { preview, contents } = setup();
+    preview.destroy();
+    expect(contents.session.clearStorageData).toHaveBeenCalled();
+  });
+
   it("uses the project's own partition and loads the page", () => {
     const { makeView, contents, window } = setup();
     expect(makeView).toHaveBeenCalledWith('persist:preview-p1');

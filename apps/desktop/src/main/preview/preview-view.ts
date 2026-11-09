@@ -3,6 +3,8 @@
  * box the renderer reserves. The page is code agents wrote, so it gets a
  * sandbox, no Node, a session of its own per project, no permissions, and no
  * way off its local origin: links elsewhere open in the default browser.
+ * A sign-in made while clicking through doesn't outlive the preview: stopping it, or
+ * "Reset session", clears the page's cookies and storage.
  */
 
 import { join } from 'node:path';
@@ -27,6 +29,9 @@ const routeOf = (url: string): string => {
 };
 
 const opensOutside = (url: string) => /^https?:\/\//i.test(url);
+
+/** Cookies, local and session storage, IndexedDB, service workers, cache storage: the user's session in the page */
+const clearSession = (session: Electron.Session): Promise<void> => session.clearStorageData().catch(() => {});
 
 export class PreviewView {
   private view: WebContentsView | null = null;
@@ -124,6 +129,10 @@ export class PreviewView {
       if (isAllowedPreviewUrl(target, this.origins)) void contents.loadURL(target);
     } else if (navigation.action === 'reload') {
       contents.reload();
+    } else if (navigation.action === 'signOut') {
+      void clearSession(contents.session).then(() => {
+        if (!contents.isDestroyed()) contents.reload();
+      });
     } else if (navigation.action === 'back') {
       if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
     } else if (contents.navigationHistory.canGoForward()) {
@@ -223,6 +232,9 @@ export class PreviewView {
     if (!view) return;
     const window = this.getWindow();
     if (window && !window.isDestroyed()) window.contentView.removeChildView(view);
-    if (!view.webContents.isDestroyed()) view.webContents.close();
+    if (!view.webContents.isDestroyed()) {
+      void clearSession(view.webContents.session);
+      view.webContents.close();
+    }
   }
 }

@@ -1097,6 +1097,8 @@
       "back": "Back",
       "forward": "Forward",
       "reload": "Reload",
+      "signOut": "Reset session",
+      "signOutHint": "Sign out of the app: clear its cookies and storage and reload. Stopping the preview does this too.",
       "address": "Address",
       "width": "Width",
       "full": "Full",

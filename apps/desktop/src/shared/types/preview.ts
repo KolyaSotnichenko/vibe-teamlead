@@ -31,7 +31,8 @@ export interface PreviewBounds {
   height: number;
 }
 
-export type PreviewNavigation = { action: 'back' | 'forward' | 'reload' } | { url: string };
+/** signOut: clears the page's cookies and storage, then reloads it */
+export type PreviewNavigation = { action: 'back' | 'forward' | 'reload' | 'signOut' } | { url: string };
 
 /** What the page's notes overlay reports, after the main process checked it */
 export type PreviewOverlayEvent =
