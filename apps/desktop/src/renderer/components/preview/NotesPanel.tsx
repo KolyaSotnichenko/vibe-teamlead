@@ -50,8 +50,12 @@ export function NotesPanel({ projectId, taskId, ready, onSend }: {
     () =>
       api.onOverlayEvent((event) => {
         if (event.type === 'picked') {
-          setPending(event);
-          setDraft('');
+          // A stray click while a note is being written must not throw its text away
+          setDraft((text) => {
+            if (text.trim()) return text;
+            setPending(event);
+            return '';
+          });
         } else if (event.type === 'escape') {
           setPicking(false);
         } else if (event.type === 'detached') {

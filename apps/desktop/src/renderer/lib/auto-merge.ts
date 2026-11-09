@@ -21,9 +21,11 @@ interface AutoMergeOptions {
   onProblem: (taskId: string, message: string) => void;
   /** Held for the owner's preview ("UI tasks wait for my preview"): it waits, nothing failed */
   onHeld?: (taskId: string) => void;
+  /** It left review: a hold no longer applies */
+  onLeft?: (taskId: string) => void;
 }
 
-export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld }: AutoMergeOptions) {
+export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, onLeft }: AutoMergeOptions) {
   const tried = new Set<string>();
 
   const clean = async (task: Task): Promise<boolean> => {
@@ -39,6 +41,7 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld }: 
     async statusChanged(taskId: string, oldStatus: TaskStatus | undefined, newStatus: TaskStatus): Promise<void> {
       if (newStatus !== 'human_review') {
         tried.delete(taskId);
+        if (oldStatus === 'human_review') onLeft?.(taskId);
         return;
       }
       if (oldStatus === 'human_review' || tried.has(taskId)) return;

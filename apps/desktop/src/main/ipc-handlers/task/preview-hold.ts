@@ -8,9 +8,13 @@ import { existsSync } from 'node:fs';
 
 import { updatePlanFile } from './plan-file-utils';
 
-export async function markWaitingForPreview(planPaths: string[]): Promise<void> {
+/** `on` false clears it: the task went back to the agents */
+export async function markWaitingForPreview(planPaths: string[], on = true): Promise<void> {
   for (const planPath of planPaths) {
     if (!existsSync(planPath)) continue;
-    await updatePlanFile<Record<string, unknown>>(planPath, (plan) => ({ ...plan, waitingForPreview: true }));
+    await updatePlanFile<Record<string, unknown>>(planPath, (plan) => {
+      const { waitingForPreview: _old, ...rest } = plan;
+      return on ? { ...rest, waitingForPreview: true } : rest;
+    });
   }
 }

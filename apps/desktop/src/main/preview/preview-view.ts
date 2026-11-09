@@ -34,6 +34,8 @@ export class PreviewView {
   private bounds: PreviewBounds | null = null;
   private worktree = '';
   private notesOn = false;
+  /** The last pins sent, for a page that loads anew */
+  private pins: Array<{ n: number; selector: string }> = [];
   private listeners = new Set<(event: PreviewOverlayEvent) => void>();
 
   constructor(
@@ -73,6 +75,7 @@ export class PreviewView {
       // A full load starts a new overlay: tell it the mode again (the pins follow the route)
       contents.on('dom-ready', () => {
         if (this.notesOn) this.command({ type: 'mode', on: true });
+        if (this.pins.length) this.command({ type: 'pins', pins: this.pins });
       });
       contents.on('will-redirect', (event, target) => guard(event, target, false));
       contents.setWindowOpenHandler(({ url: target }) => {
@@ -150,9 +153,13 @@ export class PreviewView {
   setNotesMode(on: boolean): void {
     this.notesOn = on;
     this.command({ type: 'mode', on });
+    // The panel may open on a page that loaded before it: say which page it is, for its pins
+    const contents = this.view?.webContents;
+    if (on && contents && !contents.isDestroyed()) this.emit({ type: 'route', route: routeOf(contents.getURL()) });
   }
 
   setPins(pins: Array<{ n: number; selector: string }>): void {
+    this.pins = pins;
     this.command({ type: 'pins', pins });
   }
 
@@ -209,6 +216,7 @@ export class PreviewView {
 
   destroy(): void {
     this.notesOn = false;
+    this.pins = [];
     const view = this.view;
     this.view = null;
     this.origins = [];

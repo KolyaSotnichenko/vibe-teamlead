@@ -26,6 +26,7 @@ export interface OverlayDeps {
 
 const SIGNAL = '#D6401A';
 const DRAG_MIN = 6;
+const PRESS_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchend'] as const;
 
 const collapse = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
 
@@ -267,8 +268,17 @@ export function startOverlay(win: Window, deps: OverlayDeps): () => void {
   win.addEventListener('click', block, capture);
   win.addEventListener('dblclick', block, capture);
   win.addEventListener('contextmenu', block, capture);
+  // Menus, selects and drags often act on pointer or touch presses, not on click
+  for (const type of PRESS_EVENTS) win.addEventListener(type, block, capture);
   win.addEventListener('keydown', onKey, capture);
   win.addEventListener('scroll', schedulePins, capture);
+  // Pages render after the pins arrive, and their layout moves: place the pins again when the page changes
+  const changes = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+    if (pins.length) schedulePins();
+  });
+  const observe = () => changes?.observe(doc.body ?? doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+  if (doc.body) observe();
+  else doc.addEventListener('DOMContentLoaded', observe, { once: true });
   win.addEventListener('resize', schedulePins);
   return () => {
     win.removeEventListener('message', onMessage);
@@ -278,8 +288,10 @@ export function startOverlay(win: Window, deps: OverlayDeps): () => void {
     win.removeEventListener('click', block, capture);
     win.removeEventListener('dblclick', block, capture);
     win.removeEventListener('contextmenu', block, capture);
+    for (const type of PRESS_EVENTS) win.removeEventListener(type, block, capture);
     win.removeEventListener('keydown', onKey, capture);
     win.removeEventListener('scroll', schedulePins, capture);
+    changes?.disconnect();
     win.removeEventListener('resize', schedulePins);
     host.remove();
   };

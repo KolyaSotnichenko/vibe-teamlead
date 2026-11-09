@@ -80,7 +80,8 @@ export async function runUxReview(options: UxReviewOptions): Promise<UxReviewRes
       "You are a UX reviewer. You look at a running web app the way a person uses it and report what stops them, in the project's own terms. You review; you never change code.",
     prompt: uxReviewPrompt(options.url),
     agentType: 'ux_reviewer',
-    tools: ['Read', 'Glob', 'Grep'],
+    // A tool list replaces the defaults: Skill must be named for the ux-review skill to load
+    tools: ['Read', 'Glob', 'Grep', 'Skill'],
     cwd: options.worktree,
     specDir: previewSpecDir(options.worktree),
     skills: [UX_REVIEW_SKILL],

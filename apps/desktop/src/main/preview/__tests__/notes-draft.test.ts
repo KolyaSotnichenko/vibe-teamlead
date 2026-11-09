@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { readNotesDraft, writeNotesDraft } from '../notes-draft';
+import { readNotesDraft, removeNotesDraft, writeNotesDraft } from '../notes-draft';
 
 const note = (n: number, extra: Record<string, unknown> = {}) => ({
   id: `id${n}`,
@@ -48,5 +48,14 @@ describe('the notes draft', () => {
     expect(readNotesDraft(project)).toEqual([]);
     expect(readNotesDraft(project, 't23')).toHaveLength(1);
     expect(readNotesDraft(project, '../../etc')).toEqual([]);
+  });
+
+  it("goes with the task: removing a task's draft leaves the project's", () => {
+    const project = mkdtempSync(join(tmpdir(), 'vtl-notes-'));
+    writeNotesDraft(project, [note(1)]);
+    writeNotesDraft(project, [note(2)], 't23');
+    removeNotesDraft(project, 't23');
+    expect(readNotesDraft(project, 't23')).toEqual([]);
+    expect(readNotesDraft(project)).toHaveLength(1);
   });
 });

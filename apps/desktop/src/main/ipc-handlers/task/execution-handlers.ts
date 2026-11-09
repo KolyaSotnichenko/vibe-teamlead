@@ -23,6 +23,7 @@ import {
 } from './plan-file-utils';
 import { writeFileAtomicSync } from '../../utils/atomic-file';
 import { findTaskWorktree } from '../../worktree-paths';
+import { markWaitingForPreview } from './preview-hold';
 import { applyFailedSubtaskDecision, parseFailedSubtaskDecision, taskOwnerDecisionsFile } from './failed-subtask-decision';
 import { projectStore } from '../../project-store';
 import { getIsolatedGitEnv, detectWorktreeBranch } from '../../utils/git-isolation';
@@ -378,6 +379,11 @@ export function registerTaskExecutionHandlers(
       const worktreePath = findTaskWorktree(project.path, task.specId);
       const worktreeSpecDir = worktreePath ? path.join(worktreePath, specsBaseDir, task.specId) : null;
       const hasWorktree = worktreePath !== null;
+
+      // Sent back to the agents: a hold for the owner's preview no longer applies
+      if (!approved) {
+        await markWaitingForPreview([specDir, ...(worktreeSpecDir ? [worktreeSpecDir] : [])].map((dir) => path.join(dir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN)), false);
+      }
 
       if (approved) {
         // Write approval to QA report

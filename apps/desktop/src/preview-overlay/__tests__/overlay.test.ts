@@ -81,6 +81,19 @@ describe('the notes overlay', () => {
     ]);
   });
 
+  it('keeps pointer and touch presses from the app too: menus and drags start on pointerdown', () => {
+    setup();
+    host({ type: 'mode', on: true });
+    const pressed = vi.fn();
+    const go = document.getElementById('go')!;
+    for (const type of ['pointerdown', 'pointerup', 'touchstart', 'touchend']) go.addEventListener(type, pressed);
+    for (const type of ['pointerdown', 'pointerup', 'touchstart', 'touchend']) go.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+    expect(pressed).not.toHaveBeenCalled();
+    host({ type: 'mode', on: false });
+    go.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(pressed).toHaveBeenCalledTimes(1);
+  });
+
   it('falls back to a computed selector and no frames when the framework says nothing', async () => {
     setup({ getElementContext: async () => { throw new Error('no React'); } });
     host({ type: 'mode', on: true });
@@ -105,5 +118,15 @@ describe('the notes overlay', () => {
     document.getElementById('go')!.addEventListener('click', onClick);
     click(document.getElementById('go')!);
     expect(onClick).toHaveBeenCalled();
+  });
+
+  it('places a pin once its element appears: pages render after the pins arrive', async () => {
+    setup();
+    host({ type: 'pins', pins: [{ n: 3, selector: '#late' }] });
+    expect(posted).toContainEqual({ source: FROM_OVERLAY, type: 'detached', ns: [3] });
+    const late = document.createElement('p');
+    late.id = 'late';
+    document.querySelector('main')!.appendChild(late);
+    await vi.waitFor(() => expect(posted).toContainEqual({ source: FROM_OVERLAY, type: 'detached', ns: [] }));
   });
 });

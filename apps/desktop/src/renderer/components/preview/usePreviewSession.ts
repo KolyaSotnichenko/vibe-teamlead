@@ -52,7 +52,11 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
     const dialogs = typeof MutationObserver === 'undefined' ? null : new MutationObserver(report);
     dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
 
-    void (taskId ? api.start(projectId, taskId) : api.start(projectId)).then(report);
+    void (taskId ? api.start(projectId, taskId) : api.start(projectId)).then((result) => {
+      // A start refused before any status (a task without a worktree) still says why
+      if (live && result && !result.success) setStatus({ projectId, ...(taskId ? { taskId } : {}), stage: 'failed', origins: [], message: result.error });
+      report();
+    });
 
     return () => {
       live = false;

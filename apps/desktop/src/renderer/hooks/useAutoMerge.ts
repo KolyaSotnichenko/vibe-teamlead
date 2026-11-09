@@ -15,6 +15,7 @@ export function useAutoMerge(): void {
       getTask: (taskId) => useTaskStore.getState().tasks.find((task) => task.id === taskId || task.specId === taskId),
       isEnabled: (task) => useProjectStore.getState().projects.find((project) => project.id === task.projectId)?.settings?.autoMerge === true,
       onHeld: (taskId) => useTaskStore.getState().updateTask(taskId, { waitingForPreview: true }),
+      onLeft: (taskId) => useTaskStore.getState().updateTask(taskId, { waitingForPreview: false }),
       onProblem: (taskId, message) => {
         const title = useTaskStore.getState().tasks.find((task) => task.id === taskId)?.title ?? taskId;
         toast({ title: t('queue.autoMergeFailed', { title }), description: message, variant: 'destructive' });

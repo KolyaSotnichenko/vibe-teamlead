@@ -334,6 +334,24 @@ describe('a preview session', () => {
       expect(currentPreview()?.stage).toBe('ready');
     });
 
+    it("doesn't wait for the project's preview to finish starting when another task's worktree goes", async () => {
+      let finish: () => void = () => {};
+      const { d } = deps({ install: vi.fn(() => new Promise<void>((r) => { finish = r; })), needsInstall: () => true });
+      void startPreview(project(), () => {}, d);
+      await vi.waitFor(() => expect(d.install).toHaveBeenCalled());
+      const removeVolumes = vi.fn(async () => {});
+      await releaseTaskPreview(TASK.worktree, removeVolumes);
+      expect(removeVolumes).toHaveBeenCalledWith(TASK.worktree);
+      finish();
+    });
+
+    it("reports a failure to start to the task's own view", async () => {
+      const { d } = deps();
+      const statuses: PreviewStatus[] = [];
+      await startPreview(project('p1', [{ name: 'web', dir: '', command: 'x' }]), (s) => statuses.push(s), d, { task: TASK });
+      expect(statuses.at(-1)).toMatchObject({ stage: 'failed', taskId: 't23' });
+    });
+
     it('is not moved by merges into main', async () => {
       const { d } = deps();
       await startPreview(project(), () => {}, d, { task: TASK });

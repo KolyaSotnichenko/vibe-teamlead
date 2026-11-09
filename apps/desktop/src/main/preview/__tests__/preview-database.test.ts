@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { DockerRun } from '../../ai/verification/test-services';
-import { previewTaskKey, removePreviewLeftovers, removeTaskPreviewVolumes, startPreviewDatabase } from '../preview-database';
+import { previewTaskKey, removePreviewLeftovers, removeTaskPreviewSecrets, removeTaskPreviewVolumes, startPreviewDatabase } from '../preview-database';
+import { existsSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
 
 const POSTGRES = [{ kind: 'postgres' as const, image: 'postgres:18-alpine' }];
@@ -178,5 +179,15 @@ describe("a task's preview database", () => {
   it('keys tasks apart, as plain names docker accepts', () => {
     expect(previewTaskKey('/p/wt/023-x')).toMatch(/^task-[0-9a-f]{12}$/);
     expect(previewTaskKey('/p/wt/023-x')).not.toBe(previewTaskKey('/p/wt/024-y'));
+  });
+
+  it("removes the task's copy of the password with it", () => {
+    const dir = secretsDir();
+    const key = previewTaskKey('/p/wt/023-x');
+    writeFileSync(join(dir, `${key}.json`), '{}');
+    writeFileSync(join(dir, 'p1.json'), '{}');
+    removeTaskPreviewSecrets(dir, '/p/wt/023-x');
+    expect(existsSync(join(dir, `${key}.json`))).toBe(false);
+    expect(existsSync(join(dir, 'p1.json'))).toBe(true);
   });
 });

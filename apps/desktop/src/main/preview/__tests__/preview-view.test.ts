@@ -167,7 +167,7 @@ describe('notes in the preview view', () => {
     preview.setNotesMode(true);
     await preview.handleOverlayMessage(77, { type: 'picked', pick });
     expect(contents.capturePage).toHaveBeenCalledWith({ x: 0, y: 4, width: 326, height: 72 });
-    expect(events).toEqual([
+    expect(events.filter((e) => (e as { type: string }).type !== 'route')).toEqual([
       {
         type: 'picked',
         route: '/login?next=/app',
@@ -184,7 +184,7 @@ describe('notes in the preview view', () => {
     preview.setNotesMode(true);
     await preview.handleOverlayMessage(12, { type: 'picked', pick });
     await preview.handleOverlayMessage(77, { type: 'picked', pick: { kind: 'evil' } });
-    expect(events).toEqual([]);
+    expect(events.filter((e) => (e as { type: string }).type === 'picked')).toEqual([]);
   });
 
   it('passes on detached pins and Escape, and reports the route as the page moves', async () => {
@@ -207,5 +207,20 @@ describe('notes in the preview view', () => {
     contents.send.mockClear();
     handlers['dom-ready']();
     expect(contents.send).toHaveBeenCalledWith('preview:overlay-command', { type: 'mode', on: true });
+  });
+
+  it("names the page's route when notes mode turns on, so pins show on a page already open", () => {
+    const { preview, events } = notes();
+    preview.setNotesMode(true);
+    expect(events).toContainEqual({ type: 'route', route: '/login?next=/app' });
+  });
+
+  it('gives a page that loaded anew its pins again', () => {
+    const { preview, contents, handlers } = notes();
+    preview.setNotesMode(true);
+    preview.setPins([{ n: 1, selector: '#a' }]);
+    contents.send.mockClear();
+    handlers['dom-ready']();
+    expect(contents.send).toHaveBeenCalledWith('preview:overlay-command', { type: 'pins', pins: [{ n: 1, selector: '#a' }] });
   });
 });

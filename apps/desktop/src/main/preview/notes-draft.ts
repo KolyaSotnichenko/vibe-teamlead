@@ -5,7 +5,7 @@
  * the folder is inside a project agents work in.
  */
 
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { cleanPick } from '../../preview-overlay/protocol';
@@ -56,4 +56,9 @@ export function writeNotesDraft(projectPath: string, notes: unknown, taskId?: st
   mkdirSync(join(projectPath, '.vibe-teamlead', 'preview'), { recursive: true });
   writeFileReplacingSync(draftFile(projectPath, taskId), JSON.stringify({ notes: kept }), 'utf-8');
   return kept;
+}
+
+/** A task's draft goes with the task's worktree */
+export function removeNotesDraft(projectPath: string, taskId: string): void {
+  rmSync(draftFile(projectPath, taskId), { force: true });
 }

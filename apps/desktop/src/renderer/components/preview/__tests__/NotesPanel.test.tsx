@@ -130,4 +130,14 @@ describe('NotesPanel', () => {
     await waitFor(() => expect(onSend).toHaveBeenCalledWith([saved(1)], '', false));
     await waitFor(() => expect(api.saveNotes).toHaveBeenLastCalledWith('p1', [], 't23'));
   });
+
+  it('keeps a note being typed when the page is clicked again', async () => {
+    setup();
+    act(() => emit({ type: 'picked', route: '/', width: 1280, pick }));
+    const box = await screen.findByLabelText('preview.notes.textLabel');
+    fireEvent.change(box, { target: { value: 'Half a thought' } });
+    act(() => emit({ type: 'picked', route: '/', width: 1280, pick: { ...pick, selector: '#other' } }));
+    expect(screen.getByLabelText('preview.notes.textLabel')).toHaveValue('Half a thought');
+    expect(screen.getByText(/#go/)).toBeInTheDocument();
+  });
 });

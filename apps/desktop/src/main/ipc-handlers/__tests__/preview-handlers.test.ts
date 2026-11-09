@@ -11,13 +11,14 @@ vi.mock('../../preview/preview-session', () => ({
     return status;
   }),
   stopPreview: vi.fn(async () => {}),
+  currentPreview: vi.fn(() => null),
 }));
 vi.mock('../../project-store', () => ({
   projectStore: { getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: '/p1', settings: {} } : undefined)) },
 }));
 vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 
-import { startPreview, stopPreview } from '../../preview/preview-session';
+import { currentPreview, startPreview, stopPreview } from '../../preview/preview-session';
 import { registerPreviewHandlers } from '../preview-handlers';
 
 type Invoke = (channel: string, event: unknown, ...args: unknown[]) => Promise<unknown>;
@@ -130,5 +131,12 @@ describe('preview IPC', () => {
       await invoke('preview:pins', [{ n: 1, selector: '#a' }, { n: 'x' }, null]);
       expect(view.setPins).toHaveBeenCalledWith([{ n: 1, selector: '#a' }]);
     });
+  });
+
+  it("refuses a UX review of a task's preview: it reviews main's", async () => {
+    vi.mocked(currentPreview).mockReturnValueOnce({ projectId: 'p1', taskId: 't23', stage: 'ready', url: 'http://localhost:1', origins: [] });
+    const result = (await invoke('preview:uxReview', 'p1')) as { success: boolean; error?: string };
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/task/i);
   });
 });

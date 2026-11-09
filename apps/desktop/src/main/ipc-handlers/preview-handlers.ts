@@ -90,6 +90,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     if (!status || status.projectId !== projectId || status.stage !== 'ready' || !status.url) {
       return { success: false, error: 'The preview is not running. Open it and wait until the page shows.' };
     }
+    if (status.taskId) return { success: false, error: "The UX review looks at the project's main branch; this is a task's preview." };
     if (uxReview) return { success: false, error: 'A UX review is already running.' };
     const controller = new AbortController();
     uxReview = controller;

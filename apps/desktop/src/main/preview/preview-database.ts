@@ -7,7 +7,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { writeFileReplacingSync } from '../ai/safe-write';
@@ -50,6 +50,11 @@ export const previewVolume = (projectId: string, kind: ServiceImage['kind']) => 
 
 /** The key of a task's preview data, from its worktree: plain enough for docker names */
 export const previewTaskKey = (worktree: string) => `task-${createHash('sha256').update(worktree).digest('hex').slice(0, 12)}`;
+
+/** A task's copy of the preview database password, removed with its worktree */
+export function removeTaskPreviewSecrets(secretsDir: string, worktree: string): void {
+  rmSync(join(secretsDir, `${previewTaskKey(worktree)}.json`), { force: true });
+}
 
 /** A task's preview volumes, removed with its worktree */
 export async function removeTaskPreviewVolumes(docker: DockerRun, worktree: string): Promise<void> {

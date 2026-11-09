@@ -101,4 +101,10 @@ describe('usePreviewSession', () => {
     act(() => listener?.({ projectId: 'p1', taskId: 't23', stage: 'ready', origins: [] }));
     expect(result.current.status?.taskId).toBe('t23');
   });
+
+  it("shows why it could not start, e.g. a task without a worktree", async () => {
+    preview.start.mockResolvedValueOnce({ success: false, error: 'This task has no worktree to preview.' } as never);
+    const { result } = renderHook(() => usePreviewSession('p1', true, 't23'));
+    await vi.waitFor(() => expect(result.current.status).toMatchObject({ stage: 'failed', message: 'This task has no worktree to preview.', taskId: 't23' }));
+  });
 });

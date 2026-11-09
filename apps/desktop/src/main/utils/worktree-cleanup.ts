@@ -20,12 +20,15 @@ import { rm } from 'fs/promises';
 import { existsSync, realpathSync } from 'fs';
 import { chmod, cp, lstat, mkdir, readdir, writeFile } from 'fs/promises';
 import path from 'path';
+import { app } from 'electron';
 import { getSpecsDir, isTaskBranch } from '../../shared/constants/config';
 import { taskLogService } from '../task-log-service';
 import { getToolPath } from '../cli-tool-manager';
 import { stopStorybooksUnder } from '../design/storybook-service';
 import { removeTaskContainers } from './task-containers';
 import { releaseTaskPreview } from '../preview/preview-session';
+import { removeTaskPreviewSecrets } from '../preview/preview-database';
+import { removeNotesDraft } from '../preview/notes-draft';
 import { getIsolatedGitEnv } from './git-isolation';
 import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
@@ -297,6 +300,12 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
   await removeTaskContainers(worktreePath);
   // Its preview, if open, stops; its copy of the preview data goes with it
   await releaseTaskPreview(worktreePath);
+  try {
+    removeTaskPreviewSecrets(path.join(app.getPath('userData'), 'preview'), worktreePath);
+    removeNotesDraft(projectPath, specId);
+  } catch {
+    // Left behind, they hold nothing a later task reads
+  }
 
   // 1. Get the branch name before we delete the directory
   const branch = getWorktreeBranch(worktreePath, specId, timeout, branchName);

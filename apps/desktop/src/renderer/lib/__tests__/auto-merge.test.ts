@@ -8,6 +8,7 @@ function setup(over: Partial<AutoMergeApi> = {}, enabled = true, reviewReason = 
   const mergeWorktree = vi.fn(async () => ({ success: true, data: { success: true, message: 'ok' } }));
   const onProblem = vi.fn();
   const onHeld = vi.fn();
+  const onLeft = vi.fn();
   const api: AutoMergeApi = {
     getTaskMergeState: vi.fn(async () => ({ success: true, data: null })),
     getTaskSecurityQaError: vi.fn(async () => ({ success: true, data: null })),
@@ -15,8 +16,8 @@ function setup(over: Partial<AutoMergeApi> = {}, enabled = true, reviewReason = 
     mergeWorktree,
     ...over,
   } as AutoMergeApi;
-  const auto = createAutoMerge({ api, getTask: () => task as never, isEnabled: () => enabled, onProblem, onHeld });
-  return { auto, mergeWorktree, onProblem, onHeld, task };
+  const auto = createAutoMerge({ api, getTask: () => task as never, isEnabled: () => enabled, onProblem, onHeld, onLeft });
+  return { auto, mergeWorktree, onProblem, onHeld, onLeft, task };
 }
 
 describe('merging a task by itself', () => {
@@ -98,5 +99,11 @@ describe('a UI task held for the preview', () => {
     await auto.statusChanged('t', 'ai_review', 'human_review');
     expect(onHeld).toHaveBeenCalledWith('t');
     expect(onProblem).not.toHaveBeenCalled();
+  });
+
+  it('loses the mark when it leaves review: it is held again only if it comes back and still changes UI', async () => {
+    const { auto, onLeft } = setup();
+    await auto.statusChanged('t', 'human_review', 'in_progress');
+    expect(onLeft).toHaveBeenCalledWith('t');
   });
 });

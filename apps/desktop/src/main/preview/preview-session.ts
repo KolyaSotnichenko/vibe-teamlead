@@ -457,7 +457,7 @@ export async function startPreview(
   await Promise.allSettled([...unfinished]);
   const services = project.settings.previewServices ?? [];
   if (services.filter((s) => s.page).length !== 1) {
-    const status: PreviewStatus = { projectId: project.id, stage: 'failed', origins: [], message: 'Choose exactly one service whose page the preview shows.' };
+    const status: PreviewStatus = { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'failed', origins: [], message: 'Choose exactly one service whose page the preview shows.' };
     onStatus(status);
     return status;
   }
@@ -506,8 +506,12 @@ export async function releaseTaskPreview(
   worktree: string,
   removeVolumes: (worktree: string) => Promise<void> = (path) => removeTaskPreviewVolumes(hostDocker(process.env), path),
 ): Promise<void> {
-  if (current?.task && resolve(current.task.worktree) === resolve(worktree)) await stopPreview();
-  await Promise.allSettled([...unfinished]);
+  const session = current;
+  if (session?.task && resolve(session.task.worktree) === resolve(worktree)) {
+    await stopPreview();
+    // Only that session's own work must be over before its volumes go; the project's preview may still be starting
+    await Promise.allSettled([session.work]);
+  }
   await removeVolumes(worktree).catch(() => {});
 }
 
