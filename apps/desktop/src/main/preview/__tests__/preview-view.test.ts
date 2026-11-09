@@ -99,6 +99,16 @@ describe('the preview view', () => {
     expect(contents.loadURL).toHaveBeenCalledWith('http://localhost:4100/settings');
   });
 
+  it("opens a bare path on the page's own address, and never a protocol-relative one elsewhere", () => {
+    const { preview, contents } = setup();
+    contents.loadURL.mockClear();
+    preview.navigate({ url: '/login?next=/app' });
+    expect(contents.loadURL).toHaveBeenCalledWith('http://localhost:4100/login?next=/app');
+    contents.loadURL.mockClear();
+    preview.navigate({ url: '//evil.example/x' });
+    expect(contents.loadURL).not.toHaveBeenCalled();
+  });
+
   it('hide keeps the page but takes it off the screen, and show brings it back', () => {
     const { preview, view } = setup();
     preview.setBounds({ x: 0, y: 40, width: 800, height: 600 });

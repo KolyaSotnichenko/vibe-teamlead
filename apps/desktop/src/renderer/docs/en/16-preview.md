@@ -15,7 +15,7 @@ The app reads the project's `dev` scripts and proposes what to run, for example 
 - **Folder:** where the command runs, relative to the project.
 - **Command:** the command itself. `{port}` becomes the port the app picked; the port is also in `PORT`.
 - **Page:** the service whose page the preview shows. Exactly one.
-- **Variables with another service's URL:** for example `NEXT_PUBLIC_API_URL=api` gives the page the address of the `api` service.
+- **Variables with another service's URL:** usually none. A local address in `.env.example`, such as `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`, is pointed at the preview's own port for the service that listens on 3001 in the project: the port from its `.env.example`, its `dev` script, or its framework's default. Name one here only when that can't be worked out, for example `NEXT_PUBLIC_API_URL=api`.
 
 Change the list later with **Services** in the toolbar. The list is kept in the project's settings in the app, not in the repository.
 
@@ -28,6 +28,8 @@ Change the list later with **Services** in the toolbar. The list is kept in the 
 Without Docker, the services still start, without a database, and the preview says so.
 
 ## The page
+
+It opens the project's home page, `/`. When that page is still a placeholder, type the path you want in the address field, for example `/login`.
 
 The page runs in a view of its own, separate from the app: no access to your files, and its cookies are kept apart. It stays on its own address; links to other sites open in your browser. The toolbar has back, forward, reload, the address, and widths of 375, 768 and 1280 pixels or the full window.
 

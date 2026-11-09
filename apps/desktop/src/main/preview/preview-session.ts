@@ -17,6 +17,7 @@ import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
 import { detectChecks, serviceEnv, serviceImages } from '../ai/verification/detect-checks';
+import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, searchPath } from '../platform/exec';
@@ -221,11 +222,13 @@ async function startServices(session: Session, files: string[]): Promise<string>
     ports[service.name] = port;
     urls[service.name] = `http://localhost:${port}`;
   }
+  // Local addresses in the examples point at each service's preview port; urlEnv still wins
+  const byExamplePort = previewAddressesByExamplePort(ordered, urls, (path) => session.deps.read(session.worktree, path));
   let pageUrl = '';
   emit(session, { stage: 'services' });
   for (const service of ordered) {
     check(session);
-    const env = envFor(session, service.dir, files);
+    const env = rewriteExampleUrls(envFor(session, service.dir, files), byExamplePort);
     for (const [variable, other] of Object.entries(service.urlEnv ?? {})) if (urls[other]) env[variable] = urls[other];
     const name = serverName(service);
     session.servers.push(name);

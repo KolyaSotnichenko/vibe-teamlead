@@ -72,7 +72,17 @@ export class PreviewView {
     const contents = this.view?.webContents;
     if (!contents) return;
     if ('url' in navigation) {
-      if (isAllowedPreviewUrl(navigation.url, this.origins)) void contents.loadURL(navigation.url);
+      // A bare path opens on the page's own address; the origin check below still decides
+      const typed = navigation.url.trim();
+      let target = typed;
+      if (typed.startsWith('/') && !typed.startsWith('//') && this.origins[0]) {
+        try {
+          target = new URL(typed, this.origins[0]).toString();
+        } catch {
+          return;
+        }
+      }
+      if (isAllowedPreviewUrl(target, this.origins)) void contents.loadURL(target);
     } else if (navigation.action === 'reload') {
       contents.reload();
     } else if (navigation.action === 'back') {

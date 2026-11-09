@@ -104,6 +104,33 @@ describe('a preview session', () => {
     expect(status.url).toBe(`http://localhost:${web.port}`);
   });
 
+  it("points the example's local addresses at the services' preview ports, with no variables set by hand", async () => {
+    const services: PreviewService[] = [
+      { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true },
+      { name: 'api', dir: 'apps/api', command: 'pnpm run start:dev' },
+    ];
+    FILES['apps/web/package.json'] = JSON.stringify({ scripts: { dev: 'next dev' } });
+    FILES['apps/api/.env.example'] = 'PORT=3001\nWEB_ORIGIN=http://localhost:3000\nDATABASE_URL=postgresql://u:p@localhost:5432/x\n';
+    FILES['apps/web/.env.example'] = 'NEXT_PUBLIC_API_BASE_URL=http://localhost:3001\n';
+    try {
+      const ports = [5001, 5002];
+      const { d } = deps({
+        pickPort: vi.fn(async () => ports.shift() ?? 0),
+        startServer: vi.fn(async (o: { port?: number }) => ({ url: `http://localhost:${o.port}`, port: o.port ?? 0, logPath: '/log', reused: false })),
+      });
+      await startPreview(project('p1', services), () => {}, d);
+      const calls = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string>; port?: number });
+      const web = calls.find((c) => c.name === 'preview-web')!;
+      const api = calls.find((c) => c.name === 'preview-api')!;
+      expect(api.env.WEB_ORIGIN).toBe(`http://localhost:${web.port}`);
+      expect(web.env.NEXT_PUBLIC_API_BASE_URL).toBe(`http://localhost:${api.port}`);
+    } finally {
+      delete FILES['apps/web/package.json'];
+      FILES['apps/api/.env.example'] = 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nJWT_SECRET=dev-secret\n';
+      FILES['apps/web/.env.example'] = 'NEXT_PUBLIC_SITE=preview\n';
+    }
+  });
+
   it('installs when the lockfile changed or node_modules is missing, and not otherwise', async () => {
     const first = deps();
     await startPreview(project(), () => {}, first.d);
