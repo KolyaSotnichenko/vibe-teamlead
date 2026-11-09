@@ -1106,7 +1106,9 @@
       "resetNo": "Keep",
       "services": "Services",
       "ux": "UX review",
-      "notes": "Notes"
+      "notes": "Notes",
+      "logs": "Logs",
+      "mail": "Mail"
     },
     "services": {
       "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's files. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
@@ -1167,6 +1169,16 @@
       "sendBack_one": "Send {{count}} note back to the agent",
       "sendBack_other": "Send {{count}} notes back to the agent",
       "sendBackHint": "The task goes back to the QA fixer with your notes and screenshots, and waits for you again once QA passes."
+    },
+    "logs": {
+      "services": "Services",
+      "search": "Find in the log",
+      "empty": "No service is running yet."
+    },
+    "mail": {
+      "none": "This app doesn't send mail through SMTP in its example settings, so nothing is caught here. A console mail provider prints its messages, with their links, in the API's log: open Logs and search for the address.",
+      "unavailable": "The mail catcher could not start, so the app's mail goes nowhere.",
+      "empty": "Nothing sent yet. Mail the app sends while you use it shows up here; nothing leaves your Mac."
     }
   },
   "looseEnds": {

@@ -25,6 +25,7 @@ import { findOnPath, runProcess, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
 import { type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
+import { mailEnv, needsMail, type PreviewMail, startPreviewMail } from './preview-mail';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
 export type { PreviewStage, PreviewStatus } from '../../shared/types/preview';
@@ -47,6 +48,8 @@ export interface PreviewDeps {
   startServer: (options: Parameters<typeof startDevServer>[0]) => ReturnType<typeof startDevServer>;
   stopServer: (name: string) => Promise<boolean>;
   cleanUpLeftovers: (specDir: string) => void;
+  /** A local mail catcher, when the project's example settings configure SMTP */
+  startMail: (docker: DockerRun, key: string) => Promise<PreviewMail>;
   /** Writes a small file in the worktree (what was installed, so it isn't installed again) */
   writeFile: (root: string, path: string, text: string) => void;
   /** A free local port, picked before any service starts so each can name the others' URLs */
@@ -72,7 +75,10 @@ interface Session {
   abort: AbortController;
   worktree: string;
   servers: string[];
+  /** Where each running service logs, by service name */
+  logs: Record<string, string>;
   database?: PreviewDatabase;
+  mail?: PreviewMail;
   status: PreviewStatus;
   unsubscribe: () => void;
   /** The start, then each re-sync after a merge, one after another */
@@ -123,6 +129,7 @@ function defaultDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | 'worktreesRoot'
       if (result.code !== 0) throw Object.assign(new Error(`${pm} install failed`), { logTail: tail(`${result.stdout}${result.stderr}`) });
     },
     startDatabase: startPreviewDatabase,
+    startMail: startPreviewMail,
     writeFile: (root, path, text) => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), text, 'utf-8');
@@ -195,7 +202,8 @@ function envFor(session: Session, dir: string, files: string[]): Record<string, 
     .join('\n');
   const env = serviceEnv(examples, started);
   for (const key of exampleKeys(examples)) if (!(key in env)) env[key] = '';
-  return { ...env, ...(session.project.settings.previewEnv ?? {}) };
+  const mail = session.mail?.status === 'started' && session.mail.smtpPort ? mailEnv(examples, session.mail.smtpPort) : {};
+  return { ...env, ...mail, ...(session.project.settings.previewEnv ?? {}) };
 }
 
 /** The workspace packages the services use from built output: a fresh worktree has no dist/ for them. */
@@ -322,6 +330,7 @@ async function startServices(session: Session, files: string[]): Promise<string>
       throw new Cancelled();
     }
     urls[service.name] = started.url;
+    session.logs[service.name] = started.logPath;
     if (service.page) pageUrl = started.url;
   }
   return pageUrl;
@@ -334,8 +343,10 @@ async function stopServers(session: Session): Promise<void> {
 async function teardown(session: Session): Promise<void> {
   session.unsubscribe();
   const database = session.database;
+  const mail = session.mail;
   session.database = undefined;
-  await Promise.all([stopServers(session), database?.stop()]);
+  session.mail = undefined;
+  await Promise.all([stopServers(session), database?.stop(), mail?.stop()]);
 }
 
 function failed(session: Session, error: unknown): PreviewStatus {
@@ -378,6 +389,18 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       session.database = database;
       check(session);
       emit(session, { database: database.status, databaseReason: database.reason });
+
+      // The app's mail goes to a local catcher, when its example settings configure SMTP
+      const examples = [...new Set(['', ...(project.settings.previewServices ?? []).map((s) => s.dir)])]
+        .map((dir) => (dir ? `${dir}/.env.example` : '.env.example'))
+        .filter((path) => files.includes(path))
+        .map((path) => deps.read(session.worktree, path) ?? '')
+        .join('\n');
+      if (needsMail(examples)) {
+        session.mail = await deps.startMail(deps.docker, session.task ? previewTaskKey(session.task.worktree) : project.id);
+        check(session);
+        emit(session, { mail: session.mail.status, mailReason: session.mail.reason });
+      }
 
       const sql = await runMigrations(session, files, true);
       if (sql && session.database?.fresh) {
@@ -469,6 +492,7 @@ export async function startPreview(
     task: options.task,
     worktree: options.task?.worktree ?? previewWorktreePath(deps.worktreesRoot, project.id),
     servers: [],
+    logs: {},
     status: { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'worktree', origins: [] },
     unsubscribe: () => {},
     work: Promise.resolve(),
@@ -513,6 +537,17 @@ export async function releaseTaskPreview(
     await Promise.allSettled([session.work]);
   }
   await removeVolumes(worktree).catch(() => {});
+}
+
+/** Where the running preview's services log, for the Logs panel */
+export function previewLogs(projectId: string): Array<{ service: string; path: string }> {
+  if (!current || current.project.id !== projectId) return [];
+  return Object.entries(current.logs).map(([service, path]) => ({ service, path }));
+}
+
+/** The running preview's mail catcher web port, when it has one */
+export function previewMailPort(projectId: string): number | undefined {
+  return current?.project.id === projectId && current.mail?.status === 'started' ? current.mail.httpPort : undefined;
 }
 
 export function currentPreview(): PreviewStatus | null {

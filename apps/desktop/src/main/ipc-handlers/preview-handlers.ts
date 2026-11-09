@@ -6,16 +6,18 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewNote, PreviewStatus, UxReviewResult } from '../../shared/types';
+import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
-import { currentPreview, startPreview, stopPreview } from '../preview/preview-session';
+import { currentPreview, previewLogs, previewMailPort, startPreview, stopPreview } from '../preview/preview-session';
+import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
 import { readNotesDraft, writeNotesDraft } from '../preview/notes-draft';
 import { previewWorktreePath } from '../preview/preview-worktree';
@@ -29,6 +31,28 @@ import { findTaskWorktree } from '../worktree-paths';
 export const previewWorktreesRoot = () => path.join(homedir(), '.vibe-teamlead', 'worktrees', 'preview');
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** How much of each service's log the Logs panel gets */
+const LOG_TAIL_BYTES = 64 * 1024;
+
+/** The end of a file, from a line start; empty when it can't be read */
+export async function readTail(file: string, bytes: number): Promise<string> {
+  try {
+    const handle = await open(file, 'r');
+    try {
+      const { size } = await handle.stat();
+      const start = Math.max(0, size - bytes);
+      const buffer = Buffer.alloc(size - start);
+      await handle.read(buffer, 0, buffer.length, start);
+      const text = buffer.toString('utf-8');
+      return start > 0 ? text.slice(text.indexOf('\n') + 1) : text;
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return '';
+  }
+}
 
 export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | null, view = new PreviewView(getMainWindow)): void {
   const send = (status: PreviewStatus) => {
@@ -136,6 +160,34 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     // The note's text is typed in the app's own panel
     if (overlayEvent.type === 'picked') window.webContents.focus();
   });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_LOGS, async (_e, projectId: string): Promise<IPCResult<Array<{ service: string; text: string }>>> => ({
+    success: true,
+    data: await Promise.all(previewLogs(projectId).map(async ({ service, path: file }) => ({ service, text: await readTail(file, LOG_TAIL_BYTES) }))),
+  }));
+  const fetchJson = async (url: string) => {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`The mail catcher answered ${response.status}`);
+    return response.json() as Promise<unknown>;
+  };
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_MAIL_LIST, async (_e, projectId: string): Promise<IPCResult<PreviewMailSummary[]>> => {
+    const port = previewMailPort(projectId);
+    if (!port) return { success: true, data: [] };
+    try {
+      return { success: true, data: await listMail(port, fetchJson) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_MAIL_GET, async (_e, projectId: string, id: unknown): Promise<IPCResult<PreviewMailMessage | null>> => {
+    const port = previewMailPort(projectId);
+    if (!port || typeof id !== 'string') return { success: true, data: null };
+    try {
+      return { success: true, data: await getMail(port, id, fetchJson) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_MODE, (_e, on: unknown): IPCResult => {
     view.setNotesMode(on === true);
     return { success: true };

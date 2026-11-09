@@ -14,6 +14,8 @@ import { PreviewServicesForm } from './PreviewServicesForm';
 import { PreviewToolbar, type PreviewSide, type PreviewWidth } from './PreviewToolbar';
 import { UxReviewPanel } from './UxReviewPanel';
 import { NotesPanel } from './NotesPanel';
+import { LogsPanel } from './LogsPanel';
+import { MailPanel } from './MailPanel';
 import { notesImages, notesTask } from './notes-task';
 import { createTask, startTaskOrQueue, submitReview } from '../../stores/task-store';
 import { usePreviewSession } from './usePreviewSession';
@@ -115,6 +117,16 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
             ready={ready}
             onSend={(notes, title, quick) => (task ? sendBack(task, notes) : sendNotes(project.id, notes, title, quick))}
           />
+        </aside>
+      )}
+      {side === 'logs' && (
+        <aside aria-label={t('preview.toolbar.logs')} className="w-96 shrink-0 border-l border-border bg-background">
+          <LogsPanel projectId={project.id} />
+        </aside>
+      )}
+      {side === 'mail' && (
+        <aside aria-label={t('preview.toolbar.mail')} className="w-96 shrink-0 border-l border-border bg-background">
+          <MailPanel projectId={project.id} mail={status?.mail} reason={status?.mailReason} />
         </aside>
       )}
       {side === 'ux' && !task && (

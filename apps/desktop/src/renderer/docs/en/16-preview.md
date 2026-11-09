@@ -44,6 +44,12 @@ The page runs in a view of its own, separate from the app: no access to your fil
 
 The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped. Fix the command under **Services** and open Preview again.
 
+## Logs and mail
+
+**Logs** shows the end of each running service's log, refreshed while open, with a search. A link in a line opens in the preview.
+
+**Mail:** the preview never sends real email. When the project's `.env.example` configures SMTP (`SMTP_HOST`, `MAIL_HOST`, `MAILER_DSN` and the like), the preview runs Mailpit, a local mail catcher, in Docker and points those settings at it; what the app sends shows up under **Mail**, and a link in a message opens in the preview. An app whose mail provider prints messages (a `console` provider) puts them, links included, in its API's log: open **Logs** and search for the address.
+
 ## Notes
 
 **Notes** in the toolbar opens the notes panel and turns picking on. Hover the page: the element under the pointer is outlined. Click it, or drag over an area, and write what should change; Enter saves, Escape cancels. Each note is a numbered pin on its page, found again when you come back to that page. While picking is on, your clicks don't reach the app; turn it off to use the app between notes.

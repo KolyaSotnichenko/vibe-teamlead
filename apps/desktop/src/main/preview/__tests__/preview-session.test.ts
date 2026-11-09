@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, PreviewService } from '../../../shared/types/project';
 import { inMergeQueue } from '../../ai/merge/merge-queue';
 import { previewTaskKey, type PreviewDatabase } from '../preview-database';
-import { type PreviewDeps, type PreviewStatus, currentPreview, releaseTaskPreview, startPreview, stopPreview } from '../preview-session';
+import { type PreviewDeps, type PreviewStatus, currentPreview, previewLogs, previewMailPort, releaseTaskPreview, startPreview, stopPreview } from '../preview-session';
 
 const SERVICES: PreviewService[] = [
   { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true, urlEnv: { NEXT_PUBLIC_API_URL: 'api' } },
@@ -52,6 +52,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     stopServer: vi.fn(async () => true),
     cleanUpLeftovers: vi.fn(),
     writeFile: vi.fn(),
+    startMail: vi.fn(async () => ({ status: 'started' as const, smtpPort: 41025, httpPort: 48025, stop: vi.fn(async () => {}) })),
     pickPort: vi.fn(async () => 6000 + Math.floor(Math.random() * 1000)),
     ...overrides,
   };
@@ -191,6 +192,35 @@ describe('a preview session', () => {
       expect(status.message).toContain('backend');
       expect(status.logTail).toContain('python3: command not found');
     });
+  });
+
+  it('keeps where each service logs, for the Logs panel', async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d);
+    expect(previewLogs('p1').map((l) => l.service).sort()).toEqual(['api', 'web']);
+    expect(previewLogs('other')).toEqual([]);
+  });
+
+  it("catches the app's mail locally when the example configures SMTP, and points it there", async () => {
+    FILES['apps/api/.env.example'] = 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nSMTP_HOST=smtp.sendgrid.net\nSMTP_PORT=587\nSMTP_PASS=secret\n';
+    try {
+      const { d } = deps();
+      const status = await startPreview(project(), () => {}, d);
+      expect(d.startMail).toHaveBeenCalledTimes(1);
+      const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
+      expect(api.env).toMatchObject({ SMTP_HOST: '127.0.0.1', SMTP_PORT: '41025', SMTP_PASS: '' });
+      expect(status.mail).toBe('started');
+      expect(previewMailPort('p1')).toBe(48025);
+    } finally {
+      FILES['apps/api/.env.example'] = 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nJWT_SECRET=dev-secret\n';
+    }
+  });
+
+  it("starts no mail catcher for a project that prints its mail", async () => {
+    const { d } = deps();
+    const status = await startPreview(project(), () => {}, d);
+    expect(d.startMail).not.toHaveBeenCalled();
+    expect(status.mail).toBeUndefined();
   });
 
   it('installs when the lockfile changed or node_modules is missing, and not otherwise', async () => {

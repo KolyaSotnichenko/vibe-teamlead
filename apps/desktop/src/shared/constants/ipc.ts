@@ -111,6 +111,9 @@ export const IPC_CHANNELS = {
   PREVIEW_PROPOSE_SERVICES: 'preview:proposeServices',
   PREVIEW_UX_REVIEW: 'preview:uxReview',
   PREVIEW_NOTES_MODE: 'preview:notesMode',
+  PREVIEW_LOGS: 'preview:logs',
+  PREVIEW_MAIL_LIST: 'preview:mailList',
+  PREVIEW_MAIL_GET: 'preview:mailGet',
   PREVIEW_PINS: 'preview:pins',
   PREVIEW_FOCUS_PIN: 'preview:focusPin',
   PREVIEW_OVERLAY_EVENT: 'preview:overlayEvent',  // Event: what the page's notes overlay reported (main -> renderer)

@@ -19,6 +19,9 @@ export interface PreviewStatus {
   logTail?: string;
   database?: 'none' | 'started' | 'unavailable';
   databaseReason?: string;
+  /** A local mail catcher, when the project's settings configure SMTP */
+  mail?: 'started' | 'unavailable';
+  mailReason?: string;
 }
 
 export interface PreviewBounds {
@@ -50,6 +53,27 @@ export interface PreviewNote {
   /** PNG data URL of the element or region */
   image?: string;
   createdAt: string;
+}
+
+/** A message the app sent, caught by the preview's local mail catcher */
+export interface PreviewMailSummary {
+  id: string;
+  from: string;
+  to: string[];
+  subject: string;
+  at: string;
+  snippet: string;
+}
+
+export interface PreviewMailMessage {
+  id: string;
+  from: string;
+  to: string[];
+  subject: string;
+  at: string;
+  text: string;
+  /** Links in the message, to open in the preview */
+  links: string[];
 }
 
 /** One problem the UX review found on the running app */
@@ -88,6 +112,11 @@ export interface PreviewAPI {
   cancelUxReview: () => Promise<IPCResult>;
   /** The last review of this project, if any */
   lastUxReview: (projectId: string) => Promise<IPCResult<UxReviewResult | null>>;
+  /** The end of each running service's log */
+  logs: (projectId: string) => Promise<IPCResult<Array<{ service: string; text: string }>>>;
+  /** What the app sent, caught by the preview's mail catcher */
+  mailList: (projectId: string) => Promise<IPCResult<PreviewMailSummary[]>>;
+  mailGet: (projectId: string, id: string) => Promise<IPCResult<PreviewMailMessage | null>>;
   /** Notes mode: the page outlines elements and takes clicks and drags as notes */
   setNotesMode: (on: boolean) => Promise<IPCResult>;
   /** The pins of the page's current route */

@@ -12,6 +12,8 @@ vi.mock('../../preview/preview-session', () => ({
   }),
   stopPreview: vi.fn(async () => {}),
   currentPreview: vi.fn(() => null),
+  previewLogs: vi.fn(() => []),
+  previewMailPort: vi.fn(() => undefined),
 }));
 vi.mock('../../project-store', () => ({
   projectStore: { getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: '/p1', settings: {} } : undefined)) },
@@ -19,7 +21,10 @@ vi.mock('../../project-store', () => ({
 vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 
 import { currentPreview, startPreview, stopPreview } from '../../preview/preview-session';
-import { registerPreviewHandlers } from '../preview-handlers';
+import { readTail, registerPreviewHandlers } from '../preview-handlers';
+import { mkdtempSync as mkTmp, writeFileSync as writeTmp } from 'node:fs';
+import { join as joinPath } from 'node:path';
+import { tmpdir as tmpDir } from 'node:os';
 
 type Invoke = (channel: string, event: unknown, ...args: unknown[]) => Promise<unknown>;
 const invoke = (channel: string, ...args: unknown[]) => (ipcMain as unknown as { invokeHandler: Invoke }).invokeHandler(channel, {}, ...args);
@@ -138,5 +143,16 @@ describe('preview IPC', () => {
     const result = (await invoke('preview:uxReview', 'p1')) as { success: boolean; error?: string };
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/task/i);
+  });
+});
+
+describe('readTail', () => {
+  it('gives the end of a log from a whole line, and nothing for a file that is not there', async () => {
+    const dir = mkTmp(joinPath(tmpDir(), 'vtl-tail-'));
+    const file = joinPath(dir, 'api.log');
+    writeTmp(file, 'first line\nsecond line\nthird line\n');
+    expect(await readTail(file, 1000)).toBe('first line\nsecond line\nthird line\n');
+    expect(await readTail(file, 15)).toBe('third line\n');
+    expect(await readTail(joinPath(dir, 'none.log'), 100)).toBe('');
   });
 });

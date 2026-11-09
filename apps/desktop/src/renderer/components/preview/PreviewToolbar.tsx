@@ -12,7 +12,7 @@ export const PREVIEW_WIDTHS = [375, 768, 1280, null] as const;
 export type PreviewWidth = (typeof PREVIEW_WIDTHS)[number];
 
 /** What the side panel shows, or null when it is closed */
-export type PreviewSide = 'notes' | 'ux' | null;
+export type PreviewSide = 'notes' | 'ux' | 'logs' | 'mail' | null;
 
 export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide, uxReview = true }: {
   url?: string;
@@ -63,6 +63,12 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
       )}
       <Button variant={side === 'notes' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'notes'} onClick={() => onSide(side === 'notes' ? null : 'notes')}>
         {t('preview.toolbar.notes')}
+      </Button>
+      <Button variant={side === 'logs' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'logs'} onClick={() => onSide(side === 'logs' ? null : 'logs')}>
+        {t('preview.toolbar.logs')}
+      </Button>
+      <Button variant={side === 'mail' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'mail'} onClick={() => onSide(side === 'mail' ? null : 'mail')}>
+        {t('preview.toolbar.mail')}
       </Button>
       {uxReview && (
         <Button variant={side === 'ux' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'ux'} onClick={() => onSide(side === 'ux' ? null : 'ux')}>
