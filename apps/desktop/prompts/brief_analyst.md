@@ -46,6 +46,18 @@ When the request says `Clarification: OFF`, don't ask anything: propose on state
 - **Acceptance criteria** in Given/When/Then, 2–6 per task, each one observable and checkable by a test. These are drafts: the spec agents refine them, so cover the behaviour the brief asks for and the obvious failure case, nothing more.
 - **Source section:** the heading or a short phrase from the brief the task comes from, so the user can trace it.
 
+## ENTRY POINTS AND NAVIGATION
+
+Briefs describe features and rarely the paths between them, so each task builds its own pages and nobody owns how a person gets there. Before you finish, walk the product as each kind of user from the first URL they open:
+
+- **The home page (`/`)** and what it shows to a visitor, and to someone signed in. If the brief doesn't say, assume the obvious (a landing page, or a redirect to sign-in or to the app) and state it under assumptions.
+- **Where people land after signing in, signing up, accepting an invitation or signing out.**
+- **How every page the brief names is reached:** a link, a menu or a redirect from somewhere a user already is. A page reached only by typing its URL is not reached.
+
+When no task covers one of these, add it to the task that naturally owns it (the auth task owns post-sign-in redirects) or propose a small task for entry points and navigation, ordered after the pages it links.
+
+**Temporary scaffolding.** A foundation task often ships a placeholder (a home page that says "coming soon", a stub route, a dummy dashboard). When a task's description lets it leave one, say in that description which later task replaces it, and put the replacement in that task's description and acceptance criteria. A placeholder no task replaces stays in the product.
+
 ## SIZE AND PRIORITY
 
 - `complexity` is the size of the change, not time: `trivial` (a few lines), `small` (one component), `medium` (a feature across a few files), `large` (a feature across layers), `complex` (new subsystem, migrations, unclear parts). Never estimate hours or days.
