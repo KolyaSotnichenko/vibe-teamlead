@@ -1,4 +1,5 @@
 import { ipcMain } from "electron";
+import { specSlug } from '../../shared/utils/spec-slug';
 import type { BrowserWindow } from "electron";
 import {
   IPC_CHANNELS,
@@ -532,11 +533,7 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
         }
 
         // Create spec ID with zero-padded number and slugified title
-        const slugifiedTitle = feature.title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-          .substring(0, 50);
+        const slugifiedTitle = specSlug(feature.title);
         const specId = `${String(specNumber).padStart(3, "0")}-${slugifiedTitle}`;
 
         // Create spec directory

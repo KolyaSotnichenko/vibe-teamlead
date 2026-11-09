@@ -1,4 +1,5 @@
 import { ipcMain, nativeImage } from 'electron';
+import { specSlug } from '../../../shared/utils/spec-slug';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir, VALID_THINKING_LEVELS, sanitizeThinkingLevel } from '../../../shared/constants';
 import type { IPCResult, Project, Task, TaskMetadata, TaskOutcome } from '../../../shared/types';
 import path from 'path';
@@ -165,11 +166,7 @@ export async function createTaskInProject(
   }
 
   // Create spec ID with zero-padded number and slugified title
-  const slugifiedTitle = finalTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .substring(0, 50);
+  const slugifiedTitle = specSlug(finalTitle);
   const specId = `${String(specNumber).padStart(3, '0')}-${slugifiedTitle}`;
 
   // Create spec directory

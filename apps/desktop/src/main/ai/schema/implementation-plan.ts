@@ -58,6 +58,16 @@ function normalizeStatus(value: unknown): string {
  * Handles: subtask_id→id, name→title (fallback), file_paths→files_to_modify.
  * Title is the primary field (short summary); description is optional detail.
  */
+/** A command a coder can run, at the start of a verification written as a string */
+const COMMAND_START = /^(pnpm|npm|npx|yarn|bun|bunx|node|deno|python3?|pytest|uv|poetry|go|cargo|make|bundle|rails|php|composer|mvn|gradle|\.\/|dotnet|swift)\b/;
+
+/** A verification written as a string: a command to run, or a check to make by hand. Pure. */
+function verificationFromString(text: string): { type: string; run?: string; scenario?: string } | undefined {
+  const value = text.trim();
+  if (!value) return undefined;
+  return COMMAND_START.test(value) ? { type: 'command', run: value } : { type: 'manual', scenario: value };
+}
+
 function coerceSubtask(input: unknown): unknown {
   if (!input || typeof input !== 'object') return input;
   const raw = input as Record<string, unknown>;
@@ -79,10 +89,12 @@ function coerceSubtask(input: unknown): unknown {
     files_to_modify: raw.files_to_modify ?? raw.file_paths ?? raw.files_modified ?? undefined,
     // Coerce files_to_create: accept new_files as alias
     files_to_create: raw.files_to_create ?? raw.new_files ?? undefined,
-    // Coerce verification object: accept method as alias for type.
-    // Non-object verification values (strings, etc.) are NOT coerced — let Zod
-    // reject them so the validation retry loop can tell the LLM what's wrong.
-    verification: raw.verification && typeof raw.verification === 'object'
+    // Coerce verification object: accept method as alias for type. A string is turned into
+    // one too: the last agent to edit the plan (the spec check) has no retry after it, and a
+    // rejected plan stopped the build (task 028).
+    verification: typeof raw.verification === 'string'
+      ? verificationFromString(raw.verification)
+      : raw.verification && typeof raw.verification === 'object'
       ? {
           ...(raw.verification as Record<string, unknown>),
           type: (raw.verification as Record<string, unknown>).type

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { specSlug } from '../../shared/utils/spec-slug';
 import type { BrowserWindow } from 'electron';
 import { IPC_CHANNELS, getSpecsDir, AUTO_BUILD_PATHS } from '../../shared/constants';
 import type { IPCResult, LinearIssue, LinearTeam, LinearProject, LinearImportResult, LinearSyncStatus, Project, TaskMetadata } from '../../shared/types';
@@ -486,11 +487,7 @@ ${safeDescription || 'No description provided.'}
             }
 
             // Create spec ID with zero-padded number and slugified title
-            const slugifiedTitle = safeTitle
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, '-')
-              .replace(/^-|-$/g, '')
-              .substring(0, 50);
+            const slugifiedTitle = specSlug(safeTitle);
             const specId = `${String(specNumber).padStart(3, '0')}-${slugifiedTitle}`;
 
             // Create spec directory

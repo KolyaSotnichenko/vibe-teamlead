@@ -538,7 +538,8 @@ function validateSubtask(
     );
   }
 
-  if ('verification' in subtask) {
+  // A string is fine: the plan schema turns it into a command or manual check
+  if ('verification' in subtask && subtask.verification && typeof subtask.verification === 'object') {
     const ver = subtask.verification as Record<string, unknown>;
     if (!('type' in ver)) {
       errors.push(

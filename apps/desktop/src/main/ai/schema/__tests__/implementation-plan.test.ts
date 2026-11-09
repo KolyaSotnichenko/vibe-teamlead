@@ -140,15 +140,25 @@ describe('PlanSubtaskSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects string verification (must be an object for retry feedback)', () => {
+  it('turns a string verification into a manual check: a last edit with no retry left must not stop the build', () => {
     const result = PlanSubtaskSchema.safeParse({
       id: '1.1',
       title: 'Add HiDPI support',
       status: 'pending',
       verification: 'Open in Chrome, canvas should render sharp on DPR=2',
     });
-    // String verification should fail so the retry loop can tell the LLM what's wrong
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.verification).toEqual({ type: 'manual', scenario: 'Open in Chrome, canvas should render sharp on DPR=2' });
+  });
+
+  it('turns a string that is a command into a command check (task 028: the spec check rewrote them as strings)', () => {
+    const result = PlanSubtaskSchema.safeParse({
+      id: '1-1',
+      title: 'Registration link',
+      status: 'pending',
+      verification: 'pnpm --filter @roadmaply/web test -- src/app/login/page.test.tsx',
+    });
+    expect(result.success && result.data.verification).toEqual({ type: 'command', run: 'pnpm --filter @roadmaply/web test -- src/app/login/page.test.tsx' });
   });
 
   it('coerces "files_modified" to "files_to_modify"', () => {

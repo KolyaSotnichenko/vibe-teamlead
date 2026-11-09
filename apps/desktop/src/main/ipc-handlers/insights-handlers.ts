@@ -1,4 +1,5 @@
 import { ipcMain, app } from "electron";
+import { specSlug } from '../../shared/utils/spec-slug';
 import type { BrowserWindow } from "electron";
 import path from "path";
 import { existsSync, readdirSync, mkdirSync, writeFileSync } from "fs";
@@ -162,11 +163,7 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
         }
 
         // Create spec ID with zero-padded number and slugified title
-        const slugifiedTitle = title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-          .substring(0, 50);
+        const slugifiedTitle = specSlug(title);
         const specId = `${String(specNumber).padStart(3, "0")}-${slugifiedTitle}`;
 
         // Create spec directory
