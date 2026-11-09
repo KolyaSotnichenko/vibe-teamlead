@@ -1203,8 +1203,6 @@
       "title": "Design system",
       "tab": "Design system",
       "extractAgain": "Extract again",
-      "generateTitle": "Design a new one",
-      "generateNew": "New design",
       "repoTitle": "Use a file in the repository",
       "useFile": "Use this file",
       "inRepo": "in the repository",
@@ -1336,77 +1334,15 @@
           "banned": "banned patterns"
         }
       },
-      "flow": {
-        "label": "Design system steps",
-        "kicker": {
-          "optional": "1 · optional",
-          "references": "1 · references",
-          "startHere": "2 · start here",
-          "next": "{{n}} · next step",
-          "system": "2 · design system",
-          "afterCode": "3 · when there is code",
-          "apply": "3 · apply"
-        },
-        "references": {
-          "title": "References",
-          "empty": "What you like: sites, screenshots, a brand book",
-          "added": "{{count}} added",
-          "held": "{{count}} · all in the system",
-          "fresh": "{{count}} · {{fresh}} new since the system",
-          "statusNone": "none added",
-          "statusChanged": "● changed",
-          "statusDone": "✓ done"
-        },
-        "system": {
-          "title": "Design system",
-          "none": "The rules and tokens the agents build the UI by",
-          "exists": "The rules the agents build the UI by",
-          "extract": "Extracted from the code, {{date}}",
-          "direction": "Direction “{{name}}”, {{date}}",
-          "edited": "Edited, {{date}}",
-          "staleNote": "New references aren't in it yet",
-          "statusNone": "not yet",
-          "statusStale": "needs an update",
-          "statusDone": "✓ done"
-        },
-        "apply": {
-          "title": "Apply to the project",
-          "waiting": "Tasks that bring existing code to the system",
-          "checking": "Checking the code…",
-          "unavailable": "The system has no tokens to check the code against",
-          "diff": "Code written before the system",
-          "clean": "The code follows the current system",
-          "statusWaiting": "after step 2",
-          "statusChecking": "checking…",
-          "statusUnavailable": "no tokens",
-          "places_one": "{{count}} place",
-          "places_other": "{{count}} places",
-          "inFiles_one": "in {{count}} file",
-          "inFiles_other": "in {{count}} files",
-          "uiFiles_one": "{{count}} file",
-          "uiFiles_other": "{{count}} files",
-          "noDiff": "0 differences"
-        }
-      },
       "start": {
         "title": "Where to start",
-        "body": "Pick your situation. Both paths end in a design system the agents build by and QA checks every UI change against.",
+        "body": "Pick your situation. Either way the agents build by the system and QA checks every UI change against it.",
         "pathA": "Path A",
         "pathB": "Path B",
         "keepTitle": "I like how it looks now",
-        "keepBody": "The agent reads the project's styles, theme and components and writes down the visual language that is already there. New tasks keep to it.",
-        "keep1": "Extract from the code",
-        "keep2": "Review the colours and fonts",
         "extract": "Extract from the code",
         "oneSession": "One agent session",
         "newTitle": "I want a new look",
-        "newBody": "Show what you like and describe the product: the agent proposes three directions. You pick one and it writes the full system.",
-        "new1": "Add references",
-        "new1Hint": "(sites, screenshots, a brand book — optional, but it helps)",
-        "new2": "Design: three directions → pick one",
-        "new3": "If there is code already, apply it to the project",
-        "addRefs": "Add references",
-        "design": "Design",
         "repoQuestion": "Already keep a design system document in the repository?",
         "repoLink": "Point at the file"
       },
@@ -1416,6 +1352,47 @@
         "body": "The agents see their notes, but the system's rules — colours, fonts, radii — are still the old ones. For the references to change how the product looks, update the system, then apply it to the code.",
         "newDirection": "New direction with the references",
         "refresh": "Only update from “As is” references"
+      },
+      "tabs": {
+        "setup": "Setup",
+        "view": "Overview"
+      },
+      "status": {
+        "none": "not set up yet",
+        "exists": "set up",
+        "extract": "extracted from the code, {{date}}",
+        "direction": "direction “{{name}}”, {{date}}",
+        "edited": "edited, {{date}}",
+        "places_one": "{{count}} difference",
+        "places_other": "{{count}} differences",
+        "inFiles_one": "in {{count}} file",
+        "inFiles_other": "in {{count}} files",
+        "clean": "the code follows it"
+      },
+      "setup": {
+        "current": "current",
+        "changeTitle": "Change the design system",
+        "keep": {
+          "card": "The agent writes down the visual language the code already has. New tasks keep to it.",
+          "rulesTitle": "Brand rules (optional)",
+          "rulesHint": "A brand book or a token file, if you have one. The agent takes it as exact rules: these colours and fonts, nothing else.",
+          "extractTitle": "Extract from the code",
+          "extractHint": "The agent reads the project's styles, theme and components, together with the rules above, and writes the system."
+        },
+        "new": {
+          "card": "Show what you like and describe the product: the agent proposes three directions, you pick one.",
+          "refsTitle": "References (optional, but it helps)",
+          "refsHint": "Sites, screenshots, a brand book you like. Each is looked at once when you add it. “Inspiration” sets a direction, not a copy; “As is” gives exact rules (colours, fonts). Switch the role on each one.",
+          "briefTitle": "Brief and three directions",
+          "briefHint": "Describe the product: the agent proposes three different directions from the brief and the references. Pick one and it writes the full system.",
+          "replaces": "Choosing a direction replaces the current design system."
+        }
+      },
+      "view": {
+        "tokens": "Colours, fonts and rules",
+        "emptyTitle": "No design system yet",
+        "emptyBody": "Set one up: extract it from the code or design a new one. It will show here.",
+        "setUp": "Set up"
       }
     }
   },

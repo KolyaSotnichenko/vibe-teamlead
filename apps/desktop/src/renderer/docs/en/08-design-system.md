@@ -9,21 +9,24 @@
 
 **Where it lives.** In the project's `.vibe-teamlead/`, or in a repository file (`DESIGN-SYSTEM.md` at the root, `design/` or `docs/`), or at a path you specify.
 
-**Three steps.** The tab opens with a strip of three steps; the dark one is what to do next:
-1. **References** (optional): sites, screenshots, a brand book you like.
-2. **Design system**: the rules and tokens themselves.
-3. **Apply to the project**: tasks that bring code written before the system up to it. The step shows how many places in how many files differ (checked without a model each time the tokens change).
+**The tab has two parts** (Context → Design system):
+- **Setup** — how the system is made, applying it to the code, the QA check and Storybook. It opens first while there is no system or when it needs an update.
+- **Overview** — the system itself: colours, fonts, rules and the document, editable. It opens first otherwise.
 
-**Where to start** (Context → Design system, while there is no system yet), two paths:
-- **Path A — "I like how it looks now": Extract from the code.** The agent reads the theme, CSS variables and components and writes down the visual language that already exists;
-- **Path B — "I want a new look": Add references, then Design.** You describe the product, audience and mood → the agent proposes three different directions (palette, fonts, principles) → you choose → it writes the full system. If there is code already, step 3 applies it;
-- **Point at the file** (under the two paths): use a design system document already in the repository.
+The line next to the parts says where things stand: how the system was made and when, and how many differences the code has from it.
 
-**When references come after the system.** The app remembers which references the system was written from. Ones added later are marked **new** (the others **in the system**), and a banner asks for an update: **New direction with the references** (three directions again) or **Only update from "As is" references** (extract again: the code plus the references). Until then the agents see the new references' notes, but the system's colours, fonts and radii stay as they were.
+**Setup: pick a path.** Click a card and its steps open under it; the path the current system came from is marked **current**.
+- **Path A — "I like how it looks now".** 1) Brand rules (optional): a brand book, a token file or a site added here is taken as **As is** — exact rules. 2) **Extract from the code**: the agent reads the theme, CSS variables and components together with those rules and writes the system.
+- **Path B — "I want a new look".** 1) References (optional, but it helps): sites, screenshots, a brand book you like, as **Inspiration** (a direction) unless you switch one to **As is**. 2) Brief and three directions: describe the product, audience and mood → the agent proposes three different directions → you choose → it writes the full system.
+- **Point at the file** (under the paths): use a design system document already in the repository.
+
+When a system is written, the tab switches to Overview.
+
+**When references come after the system.** The app remembers which references the system was written from. Ones added later are marked **new** (the others **in the system**), and Setup opens with a banner: **New direction with the references** (opens path B) or **Only update from "As is" references** (opens path A, extract again). Until then the agents see the new references' notes, but the system's colours, fonts and radii stay as they were.
 
 The document and tokens can be edited right in the tab. The model for this agent is "Design system" in the feature models.
 
-**References** (Context → Design system → References): images, PDFs (brand books), token files (W3C / Tokens Studio JSON, CSS variables, a Tailwind config) and sites, as many as you like.
+**References** (Setup → inside path A or B): images, PDFs (brand books), token files (W3C / Tokens Studio JSON, CSS variables, a Tailwind config) and sites, as many as you like.
 - Each is looked at once when you add it and gets short notes: what it is, its palette, fonts, light or dark, traits and what to take from it. Colours of images and page screenshots are measured from the pixels, not guessed. Token files are read exactly, without a model. A site is opened in a hidden, sandboxed window (no sign-ins, no downloads): screenshot plus what its CSS declares.
 - Every reference has a role: **As is** (rules: exact colours, fonts, brand rules) or **Inspiration** (a direction, not a copy). Token files and PDFs start as "As is", images and sites as "Inspiration".
 - "Extract", "Design a new one" and "Write" use them: as-is ones are followed, inspiration ones are read for what they share. The agent opens the as-is images and up to 6 inspiration ones itself and knows the rest from their notes, so many references don't overflow it. It ends the document with a "References" section: what it took from which, and the conflicts it resolved.
@@ -45,7 +48,7 @@ The document and tokens can be edited right in the tab. The model for this agent
 - **Check modes:** Block (default; QA won't approve with findings), Report only, Off.
 - **Visual review.** The QA reviewer takes screenshots of the changed screens and states, compares them with the document and adds a "Design Review" table to the report.
 
-**Applying a changed design system** (Context → Design system → Apply to the project): when the design system changes after the app is built, the block lists the files with the most differences and what happens next; **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
+**Applying a changed design system** (Context → Design system → Setup → Apply to the project): when the design system changes after the app is built, the block lists the files with the most differences and what happens next; **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
 
 **Storybook** (a project option, off by default):
 - when enabled, every new or changed UI component gets stories for its states (default, empty, loading, error, long text), and QA takes screenshots of them;

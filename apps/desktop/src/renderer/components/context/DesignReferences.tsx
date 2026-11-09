@@ -153,7 +153,21 @@ function ReferenceRow({ row, mark, onRole, onRemove, onRetry }: { row: Row; mark
  * ones are "in the system"); null when there is no system to compare with.
  * `onList`: the tab reads the same list for its steps.
  */
-export function DesignReferences({ projectId, fresh = null, onList }: { projectId: string; fresh?: string[] | null; onList?: (list: DesignReferenceList) => void }) {
+export function DesignReferences({
+  projectId,
+  fresh = null,
+  onList,
+  bare = false,
+  defaultRole,
+}: {
+  projectId: string;
+  fresh?: string[] | null;
+  onList?: (list: DesignReferenceList) => void;
+  /** Inside a setup step: the step gives the title and the explanation */
+  bare?: boolean;
+  /** The role new files and sites get (each can be switched after); also the only role listed */
+  defaultRole?: DesignReferenceRole;
+}) {
   const { t } = useTranslation('common');
   const design = window.electronAPI.design;
   const [list, setList] = useState<DesignReferenceList | null>(null);
@@ -181,7 +195,7 @@ export function DesignReferences({ projectId, fresh = null, onList }: { projectI
   if (!design?.listReferences) return null;
 
   const addFiles = async (paths: string[]) => {
-    if (paths.length) apply(await design.addReferenceFiles(projectId, paths));
+    if (paths.length) apply(await design.addReferenceFiles(projectId, paths, defaultRole));
   };
   const pick = async () => {
     const result = await design.pickReferenceFiles();
@@ -195,23 +209,28 @@ export function DesignReferences({ projectId, fresh = null, onList }: { projectI
   const addUrls = async () => {
     const lines = urls.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
     if (!lines.length) return;
-    apply(await design.addReferenceUrls(projectId, lines));
+    apply(await design.addReferenceUrls(projectId, lines, defaultRole));
     setUrls('');
   };
 
-  const rows = list?.references ?? [];
+  // Path A lists only its brand rules ("As is"); the inspiration ones belong to path B
+  const rows = (list?.references ?? []).filter((r) => !defaultRole || r.role === defaultRole);
   const summary = list?.summary;
   const asIs = rows.filter((r) => r.role === 'as-is');
   const inspiration = rows.filter((r) => r.role === 'inspiration');
 
   return (
-    <section className="space-y-4" aria-labelledby="ds-refs">
-      <SectionHeader
-        id="ds-refs"
-        title={t('context.design.refs.title')}
-        meta={summary && summary.total > 0 ? t('context.design.refs.meta', { total: summary.total, ready: summary.ready }) : undefined}
-      />
-      <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.refs.body')}</p>
+    <section className="space-y-4" aria-labelledby={bare ? undefined : 'ds-refs'} aria-label={bare ? t('context.design.refs.title') : undefined}>
+      {!bare && (
+        <>
+          <SectionHeader
+            id="ds-refs"
+            title={t('context.design.refs.title')}
+            meta={summary && summary.total > 0 ? t('context.design.refs.meta', { total: summary.total, ready: summary.ready }) : undefined}
+          />
+          <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.refs.body')}</p>
+        </>
+      )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div
@@ -255,7 +274,7 @@ export function DesignReferences({ projectId, fresh = null, onList }: { projectI
         </p>
       )}
 
-      {summary && summary.ready > 1 && (
+      {summary && summary.ready > 1 && !defaultRole && (
         <div className="space-y-2">
           {(summary.sharedColors.length > 0 || summary.sharedFonts.length > 0) && (
             <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
