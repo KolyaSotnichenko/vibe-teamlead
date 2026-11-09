@@ -8,6 +8,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 - A path typed in Preview's address field, such as `/login`, opens on the page's own address.
 - The board names placeholders left in the product (a page that says it is a placeholder, "coming soon", "lorem ipsum") after every merge, with a task to replace each, or Leave it. A text search, no model.
 - When a brief is split into tasks, the spec analyst checks how a person reaches every page from the home page and who replaces a placeholder a task leaves.
+- Preview runs Python (Django, FastAPI, Flask), Ruby (Rails), PHP (Laravel) and Go projects, not only JavaScript: it proposes the services, installs dependencies with the project's own tool when they change, and runs the framework's migrations.
 
 ## 2.0.0-beta.13 - 2026-11-09
 
