@@ -12,10 +12,14 @@ import path from 'node:path';
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewStatus } from '../../shared/types';
+import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
-import { startPreview, stopPreview } from '../preview/preview-session';
+import { currentPreview, startPreview, stopPreview } from '../preview/preview-session';
+import { readLastUxReview, runUxReview } from '../preview/ux-review';
+import { previewWorktreePath } from '../preview/preview-worktree';
+import { runClaudeTask } from '../ai/claude-code/task';
+import { getFeatureSettings } from './feature-settings-helper';
 import { PreviewView } from '../preview/preview-view';
 import { projectStore } from '../project-store';
 
@@ -29,7 +33,10 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     const window = getMainWindow();
     if (window && !window.isDestroyed()) window.webContents.send(IPC_CHANNELS.PREVIEW_STATUS, status);
   };
+  // One UX review at a time, on the running preview; it ends when the preview stops
+  let uxReview: AbortController | null = null;
   const onStatus = (status: PreviewStatus) => {
+    if (status.stage !== 'ready') uxReview?.abort();
     if (status.stage === 'ready' && status.url) view.show(status.projectId, status.url, status.origins);
     else if (status.stage === 'stopped' || status.stage === 'failed') view.destroy();
     else view.hide();
@@ -67,7 +74,44 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
   ipcMain.handle(IPC_CHANNELS.PREVIEW_START, (_e, projectId: string) => start(projectId, false));
   ipcMain.handle(IPC_CHANNELS.PREVIEW_RESET_DATA, (_e, projectId: string) => start(projectId, true));
 
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_UX_REVIEW, async (_e, projectId: string): Promise<IPCResult<UxReviewResult>> => {
+    const status = currentPreview();
+    if (!status || status.projectId !== projectId || status.stage !== 'ready' || !status.url) {
+      return { success: false, error: 'The preview is not running. Open it and wait until the page shows.' };
+    }
+    if (uxReview) return { success: false, error: 'A UX review is already running.' };
+    const controller = new AbortController();
+    uxReview = controller;
+    try {
+      const review = await runUxReview({
+        projectId,
+        url: status.url,
+        worktree: previewWorktreePath(previewWorktreesRoot(), projectId),
+        dataDir: app.getPath('userData'),
+        runTask: (options) => runClaudeTask(options as unknown as Parameters<typeof runClaudeTask>[0]),
+        model: getFeatureSettings('uxReview'),
+        signal: controller.signal,
+      });
+      return { success: true, data: review };
+    } catch (error) {
+      return { success: false, error: controller.signal.aborted ? 'The UX review was stopped.' : errorMessage(error) };
+    } finally {
+      if (uxReview === controller) uxReview = null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_UX_REVIEW_CANCEL, (): IPCResult => {
+    uxReview?.abort();
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_UX_REVIEW_LAST, (_e, projectId: string): IPCResult<UxReviewResult | null> => ({
+    success: true,
+    data: readLastUxReview(app.getPath('userData'), projectId),
+  }));
+
   ipcMain.handle(IPC_CHANNELS.PREVIEW_STOP, async (): Promise<IPCResult> => {
+    uxReview?.abort();
     view.destroy();
     await stopPreview();
     return { success: true };

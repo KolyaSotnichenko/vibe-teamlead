@@ -24,4 +24,13 @@ describe('getFeatureSettings', () => {
     readSettingsFile.mockReturnValue({ featureModels: { utility: 'gpt-5.2' } });
     expect(getFeatureSettings('utility').model).toBe('haiku');
   });
+
+  it("the UX review reads the design system's choice, and through it the roadmap's, until it has its own", () => {
+    readSettingsFile.mockReturnValue({ featureModels: { roadmap: 'gpt-oss:120b' }, featureThinking: { roadmap: 'low' } });
+    expect(getFeatureSettings('uxReview')).toEqual({ model: 'gpt-oss:120b', thinkingLevel: 'low' });
+    readSettingsFile.mockReturnValue({ featureModels: { roadmap: 'a', designSystem: 'b' }, featureThinking: { designSystem: 'high' } });
+    expect(getFeatureSettings('uxReview')).toEqual({ model: 'b', thinkingLevel: 'high' });
+    readSettingsFile.mockReturnValue({ featureModels: { designSystem: 'b', uxReview: 'c' } });
+    expect(getFeatureSettings('uxReview').model).toBe('c');
+  });
 });

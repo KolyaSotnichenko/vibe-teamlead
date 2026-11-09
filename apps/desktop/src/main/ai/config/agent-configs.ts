@@ -169,7 +169,8 @@ export type AgentType =
   | 'competitor_analysis'
   | 'ideation'
   | 'brief_analyst'
-  | 'design_system';
+  | 'design_system'
+  | 'ux_reviewer';
 
 /** Configuration for a single agent type */
 export interface AgentConfig {
@@ -352,6 +353,13 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   // ═══════════════════════════════════════════════════════════════════════
   // UTILITY PHASES (Minimal, no MCP)
   // ═══════════════════════════════════════════════════════════════════════
+  ux_reviewer: {
+    // The Preview's UX review: the running app in a headless browser, the code read only to name files.
+    tools: [...BASE_READ_TOOLS],
+    mcpServers: ['playwright'],
+    appTools: [],
+    thinkingDefault: 'medium',
+  },
   brief_analyst: {
     // Reads the brief and the project; writes nothing (the proposal is structured output).
     tools: [...BASE_READ_TOOLS],

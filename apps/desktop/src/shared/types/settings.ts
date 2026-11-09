@@ -211,6 +211,7 @@ export interface FeatureModelConfig {
   naming: string;       // AI naming (task titles, terminal names)
   briefImport: string;  // Spec document (ТЗ) → tasks
   designSystem: string; // Design system: extract from code, generate directions
+  uxReview: string;     // Preview's UX review of the running app
 }
 
 // Feature-specific thinking level configuration
@@ -224,6 +225,7 @@ export interface FeatureThinkingConfig {
   naming: ThinkingLevel;
   briefImport: ThinkingLevel;
   designSystem: ThinkingLevel;
+  uxReview: ThinkingLevel;
 }
 
 // Agent profile for preset model/thinking configurations

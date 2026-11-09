@@ -239,7 +239,7 @@ export function buildQueryOptions(
     plugins.push({ type: 'local', path: bundled.frontendDesignDir });
     availablePlugins.add('frontend-design');
   }
-  if (bundled.uxReviewDir && config.extraSkills?.includes(UX_REVIEW_SKILL)) {
+  if (bundled.uxReviewDir && (config.extraSkills?.includes(UX_REVIEW_SKILL) || config.skillsOverride?.includes(UX_REVIEW_SKILL))) {
     plugins.push({ type: 'local', path: bundled.uxReviewDir });
     availablePlugins.add('ux-review');
   }

@@ -33,12 +33,14 @@ export function FeatureModelSettings() {
     ...savedModels,
     briefImport: savedModels?.briefImport ?? savedModels?.roadmap ?? DEFAULT_FEATURE_MODELS.briefImport,
     designSystem: savedModels?.designSystem ?? savedModels?.roadmap ?? DEFAULT_FEATURE_MODELS.designSystem,
+    uxReview: savedModels?.uxReview ?? savedModels?.designSystem ?? savedModels?.roadmap ?? DEFAULT_FEATURE_MODELS.uxReview,
   };
   const featureThinking: FeatureThinkingConfig = {
     ...DEFAULT_FEATURE_THINKING,
     ...savedThinking,
     briefImport: savedThinking?.briefImport ?? savedThinking?.roadmap ?? DEFAULT_FEATURE_THINKING.briefImport,
     designSystem: savedThinking?.designSystem ?? savedThinking?.roadmap ?? DEFAULT_FEATURE_THINKING.designSystem,
+    uxReview: savedThinking?.uxReview ?? savedThinking?.designSystem ?? savedThinking?.roadmap ?? DEFAULT_FEATURE_THINKING.uxReview,
   };
 
   const handleModelChange = (feature: keyof FeatureModelConfig, value: string) => {

@@ -220,6 +220,9 @@ const browserMockAPI: ElectronAPI = {
     navigate: async () => ({ success: true }),
     proposeServices: async () => ({ success: true, data: [] }),
     resetData: async (projectId: string) => ({ success: true, data: { projectId, stage: 'stopped' as const, origins: [] } }),
+    uxReview: async () => ({ success: false, error: 'Not available in the browser' }),
+    cancelUxReview: async () => ({ success: true }),
+    lastUxReview: async () => ({ success: true, data: null }),
   },
   usage: usageMock,
 

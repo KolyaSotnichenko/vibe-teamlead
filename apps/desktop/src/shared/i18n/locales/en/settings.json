@@ -1033,6 +1033,10 @@
     "designSystem": {
       "label": "Design system",
       "description": "Extracts or designs the project design system"
+    },
+    "uxReview": {
+      "label": "UX review",
+      "description": "Reviews the running app in Preview as a person would use it"
     }
   },
   "agentCategories": {

@@ -254,3 +254,29 @@ describe('the UX review for QA on tasks that change UI', () => {
     expect(PLAYWRIGHT_TOOLS).toContain('mcp__playwright__browser_emulate_media');
   });
 });
+
+describe('the UX reviewer the Preview runs', () => {
+  it('gets the skill as its own, the Playwright browser and only read tools', () => {
+    const options = buildQueryOptions(
+      {
+        agentType: 'ux_reviewer',
+        model: 'claude-sonnet-4-6',
+        auth: { apiKey: 'sk-ant-test' },
+        systemPrompt: 'You are a UX reviewer.',
+        initialMessages: [{ role: 'user', content: 'go' }],
+        toolContext: { cwd: '/wt', projectDir: '/wt', specDir: '/wt/spec', securityProfile: undefined as never },
+        maxSteps: 10,
+        specDir: '/wt/spec',
+        projectDir: '/wt',
+        skillsOverride: [UX_REVIEW_SKILL],
+        bundled: { uxReviewDir: '/r/ux-review', playwrightMcpCli: join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'node_modules', '@playwright', 'mcp', 'cli.js'), nodeRuntime: process.execPath },
+      },
+      new AbortController(),
+      { codegraphReady: false },
+    );
+    expect(options.plugins).toContainEqual({ type: 'local', path: '/r/ux-review' });
+    expect(options.skills).toEqual([UX_REVIEW_SKILL]);
+    expect(Object.keys(options.mcpServers ?? {})).toContain('playwright');
+    expect(options.allowedTools ?? options.tools).not.toContain('Write');
+  });
+});

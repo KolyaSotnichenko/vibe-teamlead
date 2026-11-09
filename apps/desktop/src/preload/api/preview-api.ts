@@ -17,4 +17,7 @@ export const createPreviewAPI = (): PreviewAPI => ({
   navigate: (navigation) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NAVIGATE, navigation),
   proposeServices: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, projectId),
   resetData: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RESET_DATA, projectId),
+  uxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW, projectId),
+  cancelUxReview: () => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_CANCEL),
+  lastUxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_LAST, projectId),
 });
