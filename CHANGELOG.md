@@ -6,6 +6,8 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 - Preview needs no URL variables by hand: local addresses in `.env.example` (an API URL, a CORS origin) are pointed at the ports the preview picked, from each service's example port, `dev` script or framework default.
 - A path typed in Preview's address field, such as `/login`, opens on the page's own address.
+- The board names placeholders left in the product (a page that says it is a placeholder, "coming soon", "lorem ipsum") after every merge, with a task to replace each, or Leave it. A text search, no model.
+- When a brief is split into tasks, the spec analyst checks how a person reaches every page from the home page and who replaces a placeholder a task leaves.
 
 ## 2.0.0-beta.13 - 2026-11-09
 
