@@ -2,6 +2,12 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.18 - 2026-11-09
+
+- The Design system tab is one flow in three steps — references (optional), the design system, applying it to the code — with the next one marked. Without a system it starts with two paths: keep the current look (extract it from the code) or a new one (references, then three directions), and a link to a file already in the repository.
+- References added after the system was written are marked "new", and a banner offers a new direction with them or an update from the "As is" ones. Until then the system's rules stay as they were.
+- Apply to the project shows how many places in how many files differ from the system, the files with the most and what happens next, before anything is planned. The check runs without a model.
+
 ## 2.0.0-beta.17 - 2026-11-09
 
 - The app checks before QA say what they are doing in the task's log: the clean copy, the database, installs and migrations, each check with its time, and the run on main when a check fails. A task in AI Review no longer looks stuck while they run.
