@@ -14,7 +14,7 @@ export type PreviewWidth = (typeof PREVIEW_WIDTHS)[number];
 /** What the side panel shows, or null when it is closed */
 export type PreviewSide = 'notes' | 'ux' | null;
 
-export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide }: {
+export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide, uxReview = true }: {
   url?: string;
   width: PreviewWidth;
   onWidth: (width: PreviewWidth) => void;
@@ -24,6 +24,8 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
   disabled: boolean;
   side: PreviewSide;
   onSide: (side: PreviewSide) => void;
+  /** The UX review reviews main's preview, so a task's preview has none */
+  uxReview?: boolean;
 }) {
   const { t } = useTranslation(['tasks']);
   const [address, setAddress] = useState(url ?? '');
@@ -62,9 +64,11 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
       <Button variant={side === 'notes' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'notes'} onClick={() => onSide(side === 'notes' ? null : 'notes')}>
         {t('preview.toolbar.notes')}
       </Button>
-      <Button variant={side === 'ux' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'ux'} onClick={() => onSide(side === 'ux' ? null : 'ux')}>
-        {t('preview.toolbar.ux')}
-      </Button>
+      {uxReview && (
+        <Button variant={side === 'ux' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'ux'} onClick={() => onSide(side === 'ux' ? null : 'ux')}>
+          {t('preview.toolbar.ux')}
+        </Button>
+      )}
       <Button variant="ghost" size="sm" onClick={onEditServices}>{t('preview.toolbar.services')}</Button>
     </div>
   );

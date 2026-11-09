@@ -72,5 +72,33 @@ describe('usePreviewSession', () => {
     await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 50, width: 800, height: 600 }));
     box.remove();
   });
-});
 
+  it('stays on screen inside the dialog it belongs to, a task window, and steps aside for any other', async () => {
+    const { result } = renderHook(() => usePreviewSession('p1', true, 't23'));
+    expect(preview.start).toHaveBeenCalledWith('p1', 't23');
+    const taskWindow = document.createElement('div');
+    taskWindow.setAttribute('role', 'dialog');
+    const box = document.createElement('div');
+    box.getBoundingClientRect = () => ({ left: 10, top: 50, width: 800, height: 600 }) as DOMRect;
+    taskWindow.appendChild(box);
+    document.body.appendChild(taskWindow);
+    (result.current.boxRef as { current: HTMLDivElement | null }).current = box;
+    window.dispatchEvent(new Event('resize'));
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 50, width: 800, height: 600 }));
+
+    const confirm = document.createElement('div');
+    confirm.setAttribute('role', 'alertdialog');
+    document.body.appendChild(confirm);
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith(null));
+    confirm.remove();
+    taskWindow.remove();
+  });
+
+  it("keeps only its own task's status", () => {
+    const { result } = renderHook(() => usePreviewSession('p1', true, 't23'));
+    act(() => listener?.({ projectId: 'p1', stage: 'ready', origins: [] }));
+    expect(result.current.status).toBeNull();
+    act(() => listener?.({ projectId: 'p1', taskId: 't23', stage: 'ready', origins: [] }));
+    expect(result.current.status?.taskId).toBe('t23');
+  });
+});

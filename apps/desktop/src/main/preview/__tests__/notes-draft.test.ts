@@ -41,4 +41,12 @@ describe('the notes draft', () => {
     expect(kept).toHaveLength(100);
     expect(kept[0].text).toHaveLength(4000);
   });
+
+  it("keeps a task's notes apart from the project's", () => {
+    const project = mkdtempSync(join(tmpdir(), 'vtl-notes-'));
+    writeNotesDraft(project, [note(1)], 't23');
+    expect(readNotesDraft(project)).toEqual([]);
+    expect(readNotesDraft(project, 't23')).toHaveLength(1);
+    expect(readNotesDraft(project, '../../etc')).toEqual([]);
+  });
 });

@@ -24,7 +24,7 @@ import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
-import { type PreviewDatabase, startPreviewDatabase } from './preview-database';
+import { type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
 export type { PreviewStage, PreviewStatus } from '../../shared/types/preview';
@@ -58,8 +58,15 @@ const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const TAIL_CHARS = 2000;
 const SERVER_START_TIMEOUT_MS = 180_000;
 
+/** A task's preview: its worktree as it is, on a copy of the project's preview data */
+export interface PreviewTask {
+  taskId: string;
+  worktree: string;
+}
+
 interface Session {
   project: Project;
+  task?: PreviewTask;
   deps: PreviewDeps;
   onStatus: (status: PreviewStatus) => void;
   abort: AbortController;
@@ -342,7 +349,11 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
   const { project, deps } = session;
   try {
     emit(session, { stage: 'worktree' });
-    await deps.sync(project.path, project.settings.mainBranch ?? 'main', deps.git, session.worktree).then(async ({ lockfileChanged }) => {
+    // A task's worktree is the agents': it is shown as it is, never moved
+    const synced = session.task
+      ? Promise.resolve({ lockfileChanged: false })
+      : deps.sync(project.path, project.settings.mainBranch ?? 'main', deps.git, session.worktree);
+    await synced.then(async ({ lockfileChanged }) => {
       check(session);
       deps.cleanUpLeftovers(previewSpecDir(session.worktree));
       const files = await deps.listFiles(session.worktree);
@@ -356,7 +367,14 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       emit(session, { stage: 'database', message: undefined });
       const compose = files.find((file) => /^(docker-)?compose\.ya?ml$/.test(file));
       const images = compose ? serviceImages(deps.read(session.worktree, compose) ?? '') : [];
-      const database = await deps.startDatabase(images, { docker: deps.docker, projectId: project.id, secretsDir: deps.secretsDir, reset: resetData, signal: session.abort.signal });
+      const database = await deps.startDatabase(images, {
+        docker: deps.docker,
+        projectId: session.task ? previewTaskKey(session.task.worktree) : project.id,
+        ...(session.task ? { copyFrom: project.id } : {}),
+        secretsDir: deps.secretsDir,
+        reset: resetData,
+        signal: session.abort.signal,
+      });
       session.database = database;
       check(session);
       emit(session, { database: database.status, databaseReason: database.reason });
@@ -432,7 +450,7 @@ export async function startPreview(
   project: Project,
   onStatus: (status: PreviewStatus) => void,
   deps: Partial<PreviewDeps> & Pick<PreviewDeps, 'git' | 'secretsDir' | 'worktreesRoot'>,
-  options: { resetData?: boolean } = {},
+  options: { resetData?: boolean; task?: PreviewTask } = {},
 ): Promise<PreviewStatus> {
   await stopPreview();
   // A stopped session may still be winding down: it must be gone before this one touches the worktree or the volume
@@ -448,16 +466,17 @@ export async function startPreview(
     deps: { ...defaultDeps(), ...deps },
     onStatus,
     abort: new AbortController(),
-    worktree: previewWorktreePath(deps.worktreesRoot, project.id),
+    task: options.task,
+    worktree: options.task?.worktree ?? previewWorktreePath(deps.worktreesRoot, project.id),
     servers: [],
-    status: { projectId: project.id, stage: 'worktree', origins: [] },
+    status: { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'worktree', origins: [] },
     unsubscribe: () => {},
     work: Promise.resolve(),
     mergePending: false,
   };
   const projectDir = resolve(project.path);
   session.unsubscribe = onMergeSettled((dir) => {
-    if (resolve(dir) !== projectDir) return;
+    if (session.task || resolve(dir) !== projectDir) return;
     session.work = session.work.then(() => afterMerge(session));
   });
   current = session;
@@ -477,6 +496,19 @@ export async function stopPreview(projectId?: string): Promise<void> {
   session.abort.abort();
   session.onStatus(session.status);
   await teardown(session);
+}
+
+/**
+ * A task's worktree is being removed (merged, discarded, deleted): its preview stops and its
+ * copy of the preview data goes. The project's own preview is left running.
+ */
+export async function releaseTaskPreview(
+  worktree: string,
+  removeVolumes: (worktree: string) => Promise<void> = (path) => removeTaskPreviewVolumes(hostDocker(process.env), path),
+): Promise<void> {
+  if (current?.task && resolve(current.task.worktree) === resolve(worktree)) await stopPreview();
+  await Promise.allSettled([...unfinished]);
+  await removeVolumes(worktree).catch(() => {});
 }
 
 export function currentPreview(): PreviewStatus | null {

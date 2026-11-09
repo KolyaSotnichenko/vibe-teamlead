@@ -23,6 +23,7 @@ import { runClaudeTask } from '../ai/claude-code/task';
 import { getFeatureSettings } from './feature-settings-helper';
 import { PreviewView } from '../preview/preview-view';
 import { projectStore } from '../project-store';
+import { findTaskWorktree } from '../worktree-paths';
 
 /** The previews' worktrees: in the app's folder, outside every project */
 export const previewWorktreesRoot = () => path.join(homedir(), '.vibe-teamlead', 'worktrees', 'preview');
@@ -59,13 +60,21 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     });
   };
 
-  const start = async (projectId: string, resetData: boolean): Promise<IPCResult<PreviewStatus>> => {
+  const start = async (projectId: string, resetData: boolean, taskId?: unknown): Promise<IPCResult<PreviewStatus>> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
+    // A task's preview runs its worktree
+    let task: { taskId: string; worktree: string } | undefined;
+    if (typeof taskId === 'string' && taskId) {
+      const found = projectStore.getTasks(projectId).find((t) => t.id === taskId);
+      const worktree = found ? findTaskWorktree(project.path, found.specId) : null;
+      if (!found || !worktree) return { success: false, error: "This task has no worktree to preview." };
+      task = { taskId, worktree };
+    }
     watchReloads();
-    view.setWorktree(previewWorktreePath(previewWorktreesRoot(), projectId));
+    view.setWorktree(task?.worktree ?? previewWorktreePath(previewWorktreesRoot(), projectId));
     try {
-      const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() }, { resetData });
+      const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() }, { resetData, task });
       return { success: true, data: status };
     } catch (error) {
       view.destroy();
@@ -73,8 +82,8 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     }
   };
 
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_START, (_e, projectId: string) => start(projectId, false));
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_RESET_DATA, (_e, projectId: string) => start(projectId, true));
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_START, (_e, projectId: string, taskId?: unknown) => start(projectId, false, taskId));
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_RESET_DATA, (_e, projectId: string, taskId?: unknown) => start(projectId, true, taskId));
 
   ipcMain.handle(IPC_CHANNELS.PREVIEW_UX_REVIEW, async (_e, projectId: string): Promise<IPCResult<UxReviewResult>> => {
     const status = currentPreview();
@@ -142,15 +151,16 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     if (typeof n === 'number') view.focusPin(n);
     return { success: true };
   });
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_LOAD, (_e, projectId: string): IPCResult<PreviewNote[]> => {
+  const draftTask = (taskId: unknown) => (typeof taskId === 'string' && taskId ? taskId : undefined);
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_LOAD, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewNote[]> => {
     const project = projectStore.getProject(projectId);
-    return project ? { success: true, data: readNotesDraft(project.path) } : { success: false, error: 'Project not found' };
+    return project ? { success: true, data: readNotesDraft(project.path, draftTask(taskId)) } : { success: false, error: 'Project not found' };
   });
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_SAVE, (_e, projectId: string, notes: unknown): IPCResult<PreviewNote[]> => {
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_SAVE, (_e, projectId: string, notes: unknown, taskId?: unknown): IPCResult<PreviewNote[]> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
     try {
-      return { success: true, data: writeNotesDraft(project.path, notes) };
+      return { success: true, data: writeNotesDraft(project.path, notes, draftTask(taskId)) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }

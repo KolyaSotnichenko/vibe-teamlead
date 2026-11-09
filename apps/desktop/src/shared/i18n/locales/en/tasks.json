@@ -417,7 +417,8 @@
       "plan": "Plan",
       "architecture": "Architecture",
       "security": "Security",
-      "storybook": "Storybook"
+      "storybook": "Storybook",
+      "preview": "Preview"
     },
     "sections": {
       "label": "Workspace sections"
@@ -1162,7 +1163,10 @@
       "full": "Full pipeline",
       "fullHint": "spec, plan and architecture, as for any new task",
       "sendNow": "Create the task",
-      "sendFailed": "The task could not be created. The notes are kept."
+      "sendFailed": "The task could not be created. The notes are kept.",
+      "sendBack_one": "Send {{count}} note back to the agent",
+      "sendBack_other": "Send {{count}} notes back to the agent",
+      "sendBackHint": "The task goes back to the QA fixer with your notes and screenshots, and waits for you again once QA passes."
     }
   },
   "looseEnds": {

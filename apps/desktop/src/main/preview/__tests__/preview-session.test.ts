@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Project, PreviewService } from '../../../shared/types/project';
 import { inMergeQueue } from '../../ai/merge/merge-queue';
-import type { PreviewDatabase } from '../preview-database';
-import { type PreviewDeps, type PreviewStatus, currentPreview, startPreview, stopPreview } from '../preview-session';
+import { previewTaskKey, type PreviewDatabase } from '../preview-database';
+import { type PreviewDeps, type PreviewStatus, currentPreview, releaseTaskPreview, startPreview, stopPreview } from '../preview-session';
 
 const SERVICES: PreviewService[] = [
   { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true, urlEnv: { NEXT_PUBLIC_API_URL: 'api' } },
@@ -301,6 +301,48 @@ describe('a preview session', () => {
     await vi.waitFor(() => expect(d.startServer).toHaveBeenCalledTimes(2));
     expect(d.install).toHaveBeenCalledTimes(1);
     expect(d.stopServer).toHaveBeenCalledWith('preview-web');
+  });
+
+  describe("a task's preview", () => {
+    const TASK = { taskId: 't23', worktree: '/projects/p1/.vibe-teamlead/worktrees/tasks/023-x' };
+
+    it("runs the task's worktree as it is, on its own copy of the project's preview data", async () => {
+      const { d, order } = deps();
+      const status = await startPreview(project(), () => {}, d, { task: TASK });
+      expect(d.sync).not.toHaveBeenCalled();
+      expect(order).not.toContain('worktree');
+      const dbOptions = vi.mocked(d.startDatabase).mock.calls[0][1];
+      expect(dbOptions).toMatchObject({ projectId: previewTaskKey(TASK.worktree), copyFrom: 'p1' });
+      const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { cwd: string }).find((o) => o.cwd.endsWith('/apps/api'))!;
+      expect(api.cwd).toBe(`${TASK.worktree}/apps/api`);
+      expect(status).toMatchObject({ stage: 'ready', taskId: 't23' });
+    });
+
+    it('stops, and its data goes, when its worktree is removed; the project preview stays', async () => {
+      const { d } = deps();
+      const removeVolumes = vi.fn(async () => {});
+      await startPreview(project(), () => {}, d, { task: TASK });
+      await releaseTaskPreview('/projects/p1/.vibe-teamlead/worktrees/tasks/other', removeVolumes);
+      expect(currentPreview()?.stage).toBe('ready');
+      await releaseTaskPreview(TASK.worktree, removeVolumes);
+      expect(currentPreview()).toBeNull();
+      expect(removeVolumes).toHaveBeenLastCalledWith(TASK.worktree);
+
+      const main = deps();
+      await startPreview(project(), () => {}, main.d);
+      await releaseTaskPreview(TASK.worktree, removeVolumes);
+      expect(currentPreview()?.stage).toBe('ready');
+    });
+
+    it('is not moved by merges into main', async () => {
+      const { d } = deps();
+      await startPreview(project(), () => {}, d, { task: TASK });
+      vi.mocked(d.runCommand).mockClear();
+      await inMergeQueue('/projects/p1', 'other', async () => {});
+      await new Promise((r) => setTimeout(r, 20));
+      expect(d.sync).not.toHaveBeenCalled();
+      expect(d.runCommand).not.toHaveBeenCalled();
+    });
   });
 
   it("ignores merges of other projects", async () => {

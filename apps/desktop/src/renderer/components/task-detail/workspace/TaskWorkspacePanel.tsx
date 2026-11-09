@@ -14,11 +14,22 @@ import { ArchitectureTab } from './ArchitectureTab';
 import { SecurityTab } from './SecurityTab';
 import { SpecTab } from './SpecTab';
 import { StorybookTab } from './StorybookTab';
+import { PreviewPage } from '../../preview/PreviewPage';
+import { useProjectStore } from '../../../stores/project-store';
 import { EmptyState } from './workspace-ui';
 
 const PlanTab = lazy(() => import('./PlanTab'));
 
-type Section = 'spec' | 'plan' | 'architecture' | 'security' | 'storybook';
+type Section = 'spec' | 'plan' | 'architecture' | 'security' | 'storybook' | 'preview';
+
+/** The workspace's tabs: Storybook when the worktree has one, Preview while the task waits in review. Pure. */
+export function workspaceSections(opts: { storybook: boolean; status: string; hasProject: boolean }): Section[] {
+  return [
+    'spec', 'plan', 'architecture', 'security',
+    ...(opts.storybook ? (['storybook'] as const) : []),
+    ...(opts.status === 'human_review' && opts.hasProject ? (['preview'] as const) : []),
+  ];
+}
 
 function useTaskWorkspace(task: Task) {
   const [workspace, setWorkspace] = useState<TaskWorkspace | null>(null);
@@ -73,7 +84,10 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
       cancelled = true;
     };
   }, [task.id, task.projectId, task.status]);
-  const sections: Section[] = ['spec', 'plan', 'architecture', 'security', ...(storybook?.worktree && storybook.detected ? (['storybook'] as const) : [])];
+  // The task's own app, before it merges: while it waits in review
+  const project = useProjectStore((state) => state.projects.find((p) => p.id === task.projectId));
+  const sections = workspaceSections({ storybook: !!(storybook?.worktree && storybook.detected), status: task.status, hasProject: !!project });
+  const previewable = sections.includes('preview');
 
   // Each section starts at its top
   // biome-ignore lint/correctness/useExhaustiveDependencies: section is the intended trigger
@@ -99,6 +113,7 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
         architecture: workspace.architecture.diagrams.length + workspace.architecture.adrs.length || undefined,
         security: undefined,
         storybook: undefined,
+        preview: undefined,
       }
     : {};
   const failing = workspace?.spec?.criteria.filter((c) => c.status === 'fail').length ?? 0;
@@ -183,6 +198,11 @@ export function TaskWorkspacePanel({ task }: { task: Task }) {
               {storybook?.detected && (
                 <TabsPrimitive.Content value="storybook" className="focus-visible:outline-none">
                   <StorybookTab taskId={task.id} projectId={task.projectId} status={storybook} onStatus={setStorybook} />
+                </TabsPrimitive.Content>
+              )}
+              {previewable && section === 'preview' && project && (
+                <TabsPrimitive.Content value="preview" className="h-[70vh] focus-visible:outline-none">
+                  <PreviewPage project={project} task={task} />
                 </TabsPrimitive.Content>
               )}
             </>

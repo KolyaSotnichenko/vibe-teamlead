@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { DockerRun } from '../../ai/verification/test-services';
-import { removePreviewLeftovers, startPreviewDatabase } from '../preview-database';
+import { previewTaskKey, removePreviewLeftovers, removeTaskPreviewVolumes, startPreviewDatabase } from '../preview-database';
+import { writeFileSync } from 'node:fs';
 
 const POSTGRES = [{ kind: 'postgres' as const, image: 'postgres:18-alpine' }];
 
@@ -124,3 +125,58 @@ describe('the preview database', () => {
   });
 });
 
+describe("a task's preview database", () => {
+  function volumesDocker(volumes: Set<string>) {
+    const calls: string[][] = [];
+    const docker: DockerRun = async (args) => {
+      calls.push(args);
+      const [cmd, sub, name] = args;
+      if (cmd === 'info') return { ok: true, stdout: '' };
+      if (cmd === 'volume' && sub === 'inspect') return { ok: volumes.has(name), stdout: '' };
+      if (cmd === 'volume' && sub === 'create') { volumes.add(name); return { ok: true, stdout: name }; }
+      if (cmd === 'volume' && sub === 'rm') { for (const v of args.slice(2)) volumes.delete(v); return { ok: true, stdout: '' }; }
+      if (cmd === 'volume' && sub === 'ls') return { ok: true, stdout: [...volumes].join('\n') };
+      if (cmd === 'ps') return { ok: true, stdout: '' };
+      if (cmd === 'run') return { ok: true, stdout: 'abc123\n' };
+      if (cmd === 'port') return { ok: true, stdout: '127.0.0.1:55001\n' };
+      return { ok: true, stdout: '' };
+    };
+    return { docker, calls };
+  }
+
+  it("starts from a copy of the project's preview data, with its password, and never touches the project's volume", async () => {
+    const dir = secretsDir();
+    writeFileSync(join(dir, 'p1.json'), JSON.stringify({ passwords: { postgres: 'projectpw' } }));
+    const volumes = new Set(['vibe-teamlead-preview-p1-postgres']);
+    const { docker, calls } = volumesDocker(volumes);
+    const key = previewTaskKey('/p/.vibe-teamlead/worktrees/tasks/023-x');
+    const db = await startPreviewDatabase(POSTGRES, { docker, projectId: key, copyFrom: 'p1', secretsDir: dir });
+    const copy = calls.find((c) => c[0] === 'run' && c.includes('--entrypoint'))!;
+    expect(copy).toEqual(expect.arrayContaining(['-v', 'vibe-teamlead-preview-p1-postgres:/from:ro', '-v', `vibe-teamlead-preview-${key}-postgres:/to`]));
+    expect(db.fresh).toBe(false);
+    expect(db.started[0]?.url).toContain('verify:projectpw@');
+    expect(calls.some((c) => c[0] === 'volume' && c[1] === 'rm' && c.includes('vibe-teamlead-preview-p1-postgres'))).toBe(false);
+  });
+
+  it('starts empty when the project has no preview data yet, and copies only once', async () => {
+    const volumes = new Set<string>();
+    const { docker, calls } = volumesDocker(volumes);
+    const key = previewTaskKey('/p/wt/024-y');
+    const db = await startPreviewDatabase(POSTGRES, { docker, projectId: key, copyFrom: 'p1', secretsDir: secretsDir() });
+    expect(calls.some((c) => c.includes('--entrypoint'))).toBe(false);
+    expect(db.fresh).toBe(true);
+  });
+
+  it("is removed with the task's worktree", async () => {
+    const key = previewTaskKey('/p/wt/023-x');
+    const volumes = new Set([`vibe-teamlead-preview-${key}-postgres`, 'vibe-teamlead-preview-p1-postgres']);
+    const { docker } = volumesDocker(volumes);
+    await removeTaskPreviewVolumes(docker, '/p/wt/023-x');
+    expect([...volumes]).toEqual(['vibe-teamlead-preview-p1-postgres']);
+  });
+
+  it('keys tasks apart, as plain names docker accepts', () => {
+    expect(previewTaskKey('/p/wt/023-x')).toMatch(/^task-[0-9a-f]{12}$/);
+    expect(previewTaskKey('/p/wt/023-x')).not.toBe(previewTaskKey('/p/wt/024-y'));
+  });
+});

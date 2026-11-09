@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { PreviewNote, PreviewService, Project } from '../../../shared/types';
+import type { PreviewNote, PreviewService, Project, Task } from '../../../shared/types';
 import { updateProjectSettings } from '../../stores/project-store';
 import { EmptyState, Notice } from '../task-detail/workspace/workspace-ui';
 import { PreviewServicesForm } from './PreviewServicesForm';
@@ -15,7 +15,7 @@ import { PreviewToolbar, type PreviewSide, type PreviewWidth } from './PreviewTo
 import { UxReviewPanel } from './UxReviewPanel';
 import { NotesPanel } from './NotesPanel';
 import { notesImages, notesTask } from './notes-task';
-import { createTask, startTaskOrQueue } from '../../stores/task-store';
+import { createTask, startTaskOrQueue, submitReview } from '../../stores/task-store';
 import { usePreviewSession } from './usePreviewSession';
 
 /** Notes as one task, in the queue: it starts when a slot is free */
@@ -27,14 +27,21 @@ async function sendNotes(projectId: string, notes: PreviewNote[], title: string,
   return true;
 }
 
-export function PreviewPage({ project }: { project: Project }) {
+/** Notes on a task's own preview go back into that task as a fix round */
+async function sendBack(task: Task, notes: PreviewNote[]): Promise<boolean> {
+  const { description } = notesTask(notes, task.title);
+  return submitReview(task.id, false, description, notesImages(notes));
+}
+
+/** `task`: that task's worktree, inside its window, instead of the project's main */
+export function PreviewPage({ project, task }: { project: Project; task?: Task }) {
   const { t } = useTranslation(['tasks']);
   const saved = project.settings.previewServices ?? [];
   const [editing, setEditing] = useState(saved.length === 0);
   const [proposed, setProposed] = useState<PreviewService[] | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
   const [side, setSide] = useState<PreviewSide>(null);
-  const { status, boxRef } = usePreviewSession(project.id, !editing && saved.length > 0);
+  const { status, boxRef } = usePreviewSession(project.id, !editing && saved.length > 0, task?.id);
 
   useEffect(() => {
     if (!editing || saved.length) return;
@@ -74,10 +81,11 @@ export function PreviewPage({ project }: { project: Project }) {
         onWidth={setWidth}
         disabled={!ready}
         onNavigate={(navigation) => void window.electronAPI.preview.navigate(navigation)}
-        onReset={() => void window.electronAPI.preview.resetData(project.id)}
+        onReset={() => void (task ? window.electronAPI.preview.resetData(project.id, task.id) : window.electronAPI.preview.resetData(project.id))}
         onEditServices={() => setEditing(true)}
         side={side}
         onSide={setSide}
+        uxReview={!task}
       />
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
@@ -101,10 +109,15 @@ export function PreviewPage({ project }: { project: Project }) {
       </div>
       {side === 'notes' && (
         <aside aria-label={t('preview.toolbar.notes')} className="w-96 shrink-0 border-l border-border bg-background">
-          <NotesPanel projectId={project.id} ready={ready} onSend={(notes, title, quick) => sendNotes(project.id, notes, title, quick)} />
+          <NotesPanel
+            projectId={project.id}
+            taskId={task?.id}
+            ready={ready}
+            onSend={(notes, title, quick) => (task ? sendBack(task, notes) : sendNotes(project.id, notes, title, quick))}
+          />
         </aside>
       )}
-      {side === 'ux' && (
+      {side === 'ux' && !task && (
         <aside aria-label={t('preview.toolbar.ux')} className="w-96 shrink-0 border-l border-border bg-background">
           <UxReviewPanel projectId={project.id} ready={ready} />
         </aside>

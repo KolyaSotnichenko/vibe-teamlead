@@ -18,7 +18,7 @@ const saved = (n: number, route = '/login'): PreviewNote => ({ id: `id${n}`, n, 
 let emit: (event: PreviewOverlayEvent) => void = () => {};
 let api: Record<string, ReturnType<typeof vi.fn>>;
 
-function setup(draft: PreviewNote[] = [], onSend = vi.fn(async () => true)) {
+function setup(draft: PreviewNote[] = [], onSend = vi.fn(async () => true), taskId?: string) {
   api = {
     loadNotes: vi.fn(async () => ({ success: true, data: draft })),
     saveNotes: vi.fn(async (_p: string, notes: PreviewNote[]) => ({ success: true, data: notes })),
@@ -29,7 +29,7 @@ function setup(draft: PreviewNote[] = [], onSend = vi.fn(async () => true)) {
     onOverlayEvent: vi.fn((callback: (event: PreviewOverlayEvent) => void) => { emit = callback; return () => {}; }),
   };
   (window as unknown as { electronAPI: unknown }).electronAPI = { preview: api };
-  const view = render(<NotesPanel projectId="p1" ready onSend={onSend} />);
+  const view = render(<NotesPanel projectId="p1" taskId={taskId} ready onSend={onSend} />);
   return { onSend, ...view };
 }
 
@@ -117,5 +117,17 @@ describe('NotesPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'preview.notes.sendNow' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('preview.notes.sendFailed');
     expect(screen.getByText('Note 1')).toBeInTheDocument();
+  });
+
+  it("on a task's preview, keeps the task's own draft and sends the notes back into the task, no mode to choose", async () => {
+    const { onSend } = setup([saved(1)], vi.fn(async () => true), 't23');
+    await screen.findByText('Note 1');
+    expect(api.loadNotes).toHaveBeenCalledWith('p1', 't23');
+    fireEvent.click(screen.getByRole('button', { name: 'preview.notes.sendBack {"count":1}' }));
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('preview.notes.title')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'preview.notes.sendNow' }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith([saved(1)], '', false));
+    await waitFor(() => expect(api.saveNotes).toHaveBeenLastCalledWith('p1', [], 't23'));
   });
 });

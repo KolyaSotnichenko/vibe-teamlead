@@ -11,7 +11,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { PreviewStatus } from '../../../shared/types';
 
-export function usePreviewSession(projectId: string | null, enabled: boolean) {
+/** `taskId`: a task's preview (its worktree), shown inside the task's window */
+export function usePreviewSession(projectId: string | null, enabled: boolean, taskId?: string) {
   const [status, setStatus] = useState<PreviewStatus | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -21,7 +22,7 @@ export function usePreviewSession(projectId: string | null, enabled: boolean) {
     let live = true;
     setStatus(null);
     const unsubscribe = api.onStatus((next) => {
-      if (live && next.projectId === projectId) setStatus(next);
+      if (live && next.projectId === projectId && next.taskId === taskId) setStatus(next);
     });
 
     // Sent only when it changed, at most once a frame: the dialog watch sees every DOM change
@@ -32,7 +33,9 @@ export function usePreviewSession(projectId: string | null, enabled: boolean) {
       const box = boxRef.current;
       if (!box) return;
       const rect = box.getBoundingClientRect();
-      const bounds = !document.querySelector(DIALOG) && rect.width > 0 && rect.height > 0
+      // A dialog the page sits in (the task's window) doesn't count; any other would be covered
+      const covered = Array.from(document.querySelectorAll(DIALOG)).some((dialog) => !dialog.contains(box));
+      const bounds = !covered && rect.width > 0 && rect.height > 0
         ? { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
         : null;
       const key = JSON.stringify(bounds);
@@ -49,7 +52,7 @@ export function usePreviewSession(projectId: string | null, enabled: boolean) {
     const dialogs = typeof MutationObserver === 'undefined' ? null : new MutationObserver(report);
     dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
 
-    void api.start(projectId).then(report);
+    void (taskId ? api.start(projectId, taskId) : api.start(projectId)).then(report);
 
     return () => {
       live = false;
@@ -61,7 +64,7 @@ export function usePreviewSession(projectId: string | null, enabled: boolean) {
       void api.setBounds(null);
       void api.stop();
     };
-  }, [projectId, enabled]);
+  }, [projectId, enabled, taskId]);
 
   return { status, boxRef };
 }

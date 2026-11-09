@@ -6,7 +6,7 @@ import type { PreviewAPI, PreviewOverlayEvent, PreviewStatus } from '../../share
 export type { PreviewAPI };
 
 export const createPreviewAPI = (): PreviewAPI => ({
-  start: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_START, projectId),
+  start: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_START, projectId, taskId),
   stop: () => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_STOP),
   onStatus: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, status: PreviewStatus) => callback(status);
@@ -16,7 +16,7 @@ export const createPreviewAPI = (): PreviewAPI => ({
   setBounds: (bounds) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_SET_BOUNDS, bounds),
   navigate: (navigation) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NAVIGATE, navigation),
   proposeServices: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, projectId),
-  resetData: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RESET_DATA, projectId),
+  resetData: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RESET_DATA, projectId, taskId),
   uxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW, projectId),
   cancelUxReview: () => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_CANCEL),
   lastUxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_LAST, projectId),
@@ -28,6 +28,6 @@ export const createPreviewAPI = (): PreviewAPI => ({
     ipcRenderer.on(IPC_CHANNELS.PREVIEW_OVERLAY_EVENT, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.PREVIEW_OVERLAY_EVENT, handler);
   },
-  loadNotes: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_LOAD, projectId),
-  saveNotes: (projectId, notes) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_SAVE, projectId, notes),
+  loadNotes: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_LOAD, projectId, taskId),
+  saveNotes: (projectId, notes, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_SAVE, projectId, notes, taskId),
 });

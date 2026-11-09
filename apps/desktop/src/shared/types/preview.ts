@@ -9,6 +9,8 @@ export type PreviewStage = 'worktree' | 'install' | 'libraries' | 'database' | '
 
 export interface PreviewStatus {
   projectId: string;
+  /** Set for a task's preview (its worktree), absent for the project's (main) */
+  taskId?: string;
   stage: PreviewStage;
   url?: string;
   /** Where the view may navigate */
@@ -73,13 +75,14 @@ export interface UxReviewResult {
 }
 
 export interface PreviewAPI {
-  start: (projectId: string) => Promise<IPCResult<PreviewStatus>>;
+  /** `taskId`: that task's worktree instead of main */
+  start: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
   stop: () => Promise<IPCResult>;
   onStatus: (callback: (status: PreviewStatus) => void) => () => void;
   setBounds: (bounds: PreviewBounds | null) => Promise<IPCResult>;
   navigate: (navigation: PreviewNavigation) => Promise<IPCResult>;
   proposeServices: (projectId: string) => Promise<IPCResult<PreviewService[]>>;
-  resetData: (projectId: string) => Promise<IPCResult<PreviewStatus>>;
+  resetData: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
   /** Reviews the running preview's pages as a person would use them (one agent session) */
   uxReview: (projectId: string) => Promise<IPCResult<UxReviewResult>>;
   cancelUxReview: () => Promise<IPCResult>;
@@ -91,7 +94,7 @@ export interface PreviewAPI {
   setPins: (pins: Array<{ n: number; selector: string }>) => Promise<IPCResult>;
   focusPin: (n: number) => Promise<IPCResult>;
   onOverlayEvent: (callback: (event: PreviewOverlayEvent) => void) => () => void;
-  loadNotes: (projectId: string) => Promise<IPCResult<PreviewNote[]>>;
+  loadNotes: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewNote[]>>;
   /** Replaces the draft; returns what was kept */
-  saveNotes: (projectId: string, notes: PreviewNote[]) => Promise<IPCResult<PreviewNote[]>>;
+  saveNotes: (projectId: string, notes: PreviewNote[], taskId?: string) => Promise<IPCResult<PreviewNote[]>>;
 }

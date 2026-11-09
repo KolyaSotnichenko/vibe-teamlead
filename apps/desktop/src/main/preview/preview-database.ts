@@ -6,7 +6,7 @@
  * start. No Electron imports.
  */
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -35,6 +35,11 @@ export interface PreviewDatabaseOptions {
   secretsDir: string;
   /** Start from an empty volume and a new password */
   reset?: boolean;
+  /**
+   * A task's preview: the project whose preview data a new volume starts as a copy of, so
+   * the owner's account is there, while the task's migrations touch only the copy
+   */
+  copyFrom?: string;
   /** A stop: whatever started is removed and nothing more starts */
   signal?: AbortSignal;
   readyTimeoutMs?: number;
@@ -42,6 +47,17 @@ export interface PreviewDatabaseOptions {
 }
 
 export const previewVolume = (projectId: string, kind: ServiceImage['kind']) => `${PREVIEW_LABEL}-${projectId}-${kind}`;
+
+/** The key of a task's preview data, from its worktree: plain enough for docker names */
+export const previewTaskKey = (worktree: string) => `task-${createHash('sha256').update(worktree).digest('hex').slice(0, 12)}`;
+
+/** A task's preview volumes, removed with its worktree */
+export async function removeTaskPreviewVolumes(docker: DockerRun, worktree: string): Promise<void> {
+  const prefix = `${PREVIEW_LABEL}-${previewTaskKey(worktree)}-`;
+  const listed = await docker(['volume', 'ls', '-q', '--filter', `name=${prefix}`]);
+  const volumes = listed.stdout.split('\n').map((v) => v.trim()).filter((v) => v.startsWith(prefix));
+  if (volumes.length) await docker(['volume', 'rm', '-f', ...volumes]);
+}
 
 type Secrets = { passwords: Partial<Record<ServiceImage['kind'], string>> };
 
@@ -55,7 +71,7 @@ function readSecrets(file: string): Secrets {
 }
 
 export async function startPreviewDatabase(images: ServiceImage[], options: PreviewDatabaseOptions): Promise<PreviewDatabase> {
-  const { docker, projectId, secretsDir, reset = false, signal, readyTimeoutMs = READY_TIMEOUT_MS, pollMs = POLL_MS } = options;
+  const { docker, projectId, secretsDir, reset = false, copyFrom, signal, readyTimeoutMs = READY_TIMEOUT_MS, pollMs = POLL_MS } = options;
   const nothing = async () => {};
   if (!images.length) return { status: 'none', started: [], fresh: false, stop: nothing };
   if (!(await docker(['info'])).ok) {
@@ -92,7 +108,20 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
       if (!removed.ok) return gaveUp(`The preview's data could not be reset: ${removed.stdout.trim().slice(0, REASON_CHARS)}`);
       delete secrets.passwords[kind];
     }
-    const existed = (await docker(['volume', 'inspect', volume])).ok;
+    let existed = (await docker(['volume', 'inspect', volume])).ok;
+    // A task's first open: its own copy of the project's preview data, with the password that data has
+    if (!existed && copyFrom && (await docker(['volume', 'inspect', previewVolume(copyFrom, kind)])).ok) {
+      const copied =
+        (await docker(['volume', 'create', volume])).ok &&
+        (await docker(['run', '--rm', '--entrypoint', 'sh', '-v', `${previewVolume(copyFrom, kind)}:/from:ro`, '-v', `${volume}:/to`, image, '-c', 'cp -a /from/. /to/'])).ok;
+      const password = readSecrets(join(secretsDir, `${copyFrom}.json`)).passwords[kind];
+      if (copied && password) {
+        secrets.passwords[kind] = password;
+        existed = true;
+      } else {
+        await docker(['volume', 'rm', '-f', volume]);
+      }
+    }
     if (!existed) fresh = true;
     // A volume made with another password won't accept a new one: keep the stored one while the volume lives
     const password = (existed && secrets.passwords[kind]) || randomBytes(16).toString('hex');

@@ -18,7 +18,9 @@ const TEXT_MAX = 4000;
 const IMAGE_MAX = 2 * 1024 * 1024;
 const PNG = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
-const draftFile = (projectPath: string) => join(projectPath, '.vibe-teamlead', 'preview', 'notes.json');
+/** The project's draft, or a task's (notes on its own preview) */
+const draftFile = (projectPath: string, taskId?: string) =>
+  join(projectPath, '.vibe-teamlead', 'preview', taskId ? `notes-task-${taskId.replace(/[^\w-]/g, '_').slice(0, 80)}.json` : 'notes.json');
 
 function cleanNote(value: unknown): PreviewNote | null {
   if (!value || typeof value !== 'object') return null;
@@ -41,17 +43,17 @@ function cleanNote(value: unknown): PreviewNote | null {
 const cleanNotes = (values: unknown): PreviewNote[] =>
   (Array.isArray(values) ? values : []).map(cleanNote).filter((n): n is PreviewNote => !!n).slice(0, NOTES_MAX);
 
-export function readNotesDraft(projectPath: string): PreviewNote[] {
+export function readNotesDraft(projectPath: string, taskId?: string): PreviewNote[] {
   try {
-    return cleanNotes((JSON.parse(readFileSync(draftFile(projectPath), 'utf-8')) as { notes?: unknown }).notes);
+    return cleanNotes((JSON.parse(readFileSync(draftFile(projectPath, taskId), 'utf-8')) as { notes?: unknown }).notes);
   } catch {
     return [];
   }
 }
 
-export function writeNotesDraft(projectPath: string, notes: unknown): PreviewNote[] {
+export function writeNotesDraft(projectPath: string, notes: unknown, taskId?: string): PreviewNote[] {
   const kept = cleanNotes(notes);
   mkdirSync(join(projectPath, '.vibe-teamlead', 'preview'), { recursive: true });
-  writeFileReplacingSync(draftFile(projectPath), JSON.stringify({ notes: kept }), 'utf-8');
+  writeFileReplacingSync(draftFile(projectPath, taskId), JSON.stringify({ notes: kept }), 'utf-8');
   return kept;
 }

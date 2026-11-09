@@ -15,8 +15,10 @@ type Picked = Extract<PreviewOverlayEvent, { type: 'picked' }>;
 
 const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 64);
 
-export function NotesPanel({ projectId, ready, onSend }: {
+export function NotesPanel({ projectId, taskId, ready, onSend }: {
   projectId: string;
+  /** A task's preview: its own draft, and the notes go back into that task */
+  taskId?: string;
   ready: boolean;
   /** Makes the task; true when it was made */
   onSend: (notes: PreviewNote[], title: string, quickFix: boolean) => Promise<boolean>;
@@ -36,13 +38,13 @@ export function NotesPanel({ projectId, ready, onSend }: {
 
   useEffect(() => {
     let live = true;
-    void api.loadNotes(projectId).then((result) => {
+    void (taskId ? api.loadNotes(projectId, taskId) : api.loadNotes(projectId)).then((result) => {
       if (live && result.success && result.data) setNotes(result.data);
     });
     return () => {
       live = false;
     };
-  }, [api, projectId]);
+  }, [api, projectId, taskId]);
 
   useEffect(
     () =>
@@ -80,9 +82,9 @@ export function NotesPanel({ projectId, ready, onSend }: {
   const store = useCallback(
     (next: PreviewNote[]) => {
       setNotes(next);
-      void api.saveNotes(projectId, next);
+      void (taskId ? api.saveNotes(projectId, next, taskId) : api.saveNotes(projectId, next));
     },
-    [api, projectId],
+    [api, projectId, taskId],
   );
 
   const save = () => {
@@ -195,6 +197,7 @@ export function NotesPanel({ projectId, ready, onSend }: {
         <div className="space-y-2 border-t border-border p-3">
           {sending ? (
             <>
+              {!taskId && (<>
               <label htmlFor="preview-notes-title" className="block text-sm font-medium">{t('preview.notes.title')}</label>
               <input
                 id="preview-notes-title"
@@ -212,6 +215,8 @@ export function NotesPanel({ projectId, ready, onSend }: {
                   <span><span className="font-medium">{t('preview.notes.full')}</span> <span className="text-muted-foreground">{t('preview.notes.fullHint')}</span></span>
                 </label>
               </fieldset>
+              </>)}
+              {taskId && <p className="text-sm text-muted-foreground">{t('preview.notes.sendBackHint')}</p>}
               {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
               <div className="flex gap-2">
                 <Button size="sm" disabled={busy} onClick={() => void send()}>{t('preview.notes.sendNow')}</Button>
@@ -219,8 +224,8 @@ export function NotesPanel({ projectId, ready, onSend }: {
               </div>
             </>
           ) : (
-            <Button size="sm" onClick={() => setSending({ title: notes[0].text.replace(/\s+/g, ' ').trim().slice(0, 80), quick: true })}>
-              {t('preview.notes.send', { count: notes.length })}
+            <Button size="sm" onClick={() => setSending(taskId ? { title: '', quick: false } : { title: notes[0].text.replace(/\s+/g, ' ').trim().slice(0, 80), quick: true })}>
+              {t(taskId ? 'preview.notes.sendBack' : 'preview.notes.send', { count: notes.length })}
             </Button>
           )}
         </div>

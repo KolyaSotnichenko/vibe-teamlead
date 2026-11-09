@@ -25,6 +25,7 @@ import { taskLogService } from '../task-log-service';
 import { getToolPath } from '../cli-tool-manager';
 import { stopStorybooksUnder } from '../design/storybook-service';
 import { removeTaskContainers } from './task-containers';
+import { releaseTaskPreview } from '../preview/preview-session';
 import { getIsolatedGitEnv } from './git-isolation';
 import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
@@ -294,6 +295,8 @@ export async function cleanupWorktree(options: WorktreeCleanupOptions): Promise<
 
   // What agents started from this folder goes with it. Only after the check above: it removes things.
   await removeTaskContainers(worktreePath);
+  // Its preview, if open, stops; its copy of the preview data goes with it
+  await releaseTaskPreview(worktreePath);
 
   // 1. Get the branch name before we delete the directory
   const branch = getWorktreeBranch(worktreePath, specId, timeout, branchName);
