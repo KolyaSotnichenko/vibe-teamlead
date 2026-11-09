@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.14 - 2026-11-09
+
+- Preview needs no URL variables by hand: local addresses in `.env.example` (an API URL, a CORS origin) are pointed at the ports the preview picked, from each service's example port, `dev` script or framework default.
+- A path typed in Preview's address field, such as `/login`, opens on the page's own address.
+
 ## 2.0.0-beta.13 - 2026-11-09
 
 - When the coder stops at a subtask and writes why (it needs code outside the task, or a decision only you can make), the task window shows that reason instead of a Resume that would stop there again. Continue without it sends the task to QA, which is told you skipped the subtask and why; Send back with an instruction gives the subtask to the coder again with what you wrote. Your decision is kept in the app, so an agent can't make one up.
