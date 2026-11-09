@@ -29,7 +29,7 @@ describe('applyFailedSubtaskDecision', () => {
     const result = await applyFailedSubtaskDecision([worktree, main], { action: 'skip' }, decisions);
 
     expect(result).toEqual({ changed: ['s2'] });
-    expect(readOwnerDecisions(decisions).skipped).toEqual(['s2']);
+    expect(Object.keys(readOwnerDecisions(decisions).skipped)).toEqual(['s2']);
     for (const path of [worktree, main]) {
       expect(read(path).phases[0].subtasks[1]).toMatchObject({ status: 'completed', skipped_by_owner: true, notes: 'why' });
     }
@@ -41,19 +41,22 @@ describe('applyFailedSubtaskDecision', () => {
     const decisions = join(root, 'decisions.json');
     await applyFailedSubtaskDecision([main], { action: 'retry', instruction: 'go' }, decisions);
     expect(read(main).phases[0].subtasks[1]).toMatchObject({ status: 'pending' });
-    expect(readOwnerDecisions(decisions).instructions).toEqual({ s2: 'go' });
+    expect(readOwnerDecisions(decisions).instructions.s2.text).toBe('go');
 
     expect(await applyFailedSubtaskDecision([join(root, 'nope', 'implementation_plan.json'), main], { action: 'skip' }, decisions)).toEqual({ changed: [] });
-    expect(readOwnerDecisions(decisions).instructions).toEqual({ s2: 'go' });
+    expect(readOwnerDecisions(decisions).instructions.s2.text).toBe('go');
   });
 });
 
 describe('parseFailedSubtaskDecision', () => {
   it('accepts skip and retry, drops an instruction that is not text, and rejects anything else', () => {
-    expect(parseFailedSubtaskDecision({ action: 'skip', instruction: 'x' })).toEqual({ action: 'skip' });
-    expect(parseFailedSubtaskDecision({ action: 'retry', instruction: 'fix it' })).toEqual({ action: 'retry', instruction: 'fix it' });
-    expect(parseFailedSubtaskDecision({ action: 'retry', instruction: 5 })).toEqual({ action: 'retry', instruction: undefined });
-    expect(parseFailedSubtaskDecision({ action: 'delete' })).toBeNull();
+    expect(parseFailedSubtaskDecision({ action: 'skip', instruction: 'x', ids: ['s2'] })).toEqual({ action: 'skip', ids: ['s2'] });
+    expect(parseFailedSubtaskDecision({ action: 'retry', instruction: 'fix it', ids: ['s2'] })).toEqual({ action: 'retry', instruction: 'fix it', ids: ['s2'] });
+    expect(parseFailedSubtaskDecision({ action: 'retry', instruction: 5, ids: ['s2'] })).toEqual({ action: 'retry', instruction: undefined, ids: ['s2'] });
+    expect(parseFailedSubtaskDecision({ action: 'delete', ids: ['s2'] })).toBeNull();
+    expect(parseFailedSubtaskDecision({ action: 'skip' })).toBeNull();
+    expect(parseFailedSubtaskDecision({ action: 'skip', ids: [] })).toBeNull();
+    expect(parseFailedSubtaskDecision({ action: 'skip', ids: [5] })).toBeNull();
     expect(parseFailedSubtaskDecision('skip')).toBeNull();
   });
 });

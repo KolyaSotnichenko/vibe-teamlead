@@ -522,8 +522,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     onResume={handleStartStop}
                     gaveUp={gaveUp}
                     isDeciding={isDeciding}
-                    onSkipFailed={() => void handleFailedSubtasks({ action: 'skip' })}
-                    onRetryFailed={(instruction) => void handleFailedSubtasks({ action: 'retry', instruction })}
+                    onSkipFailed={() => void handleFailedSubtasks({ action: 'skip', ids: gaveUp.map((s) => s.id) })}
+                    onRetryFailed={(instruction) => void handleFailedSubtasks({ action: 'retry', instruction, ids: gaveUp.map((s) => s.id) })}
                   />
                 </div>
               )}

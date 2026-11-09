@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { qaKickoffContext } from '../qa-kickoff';
+import { subtaskFingerprint } from '../failed-subtasks';
 
 const SPEC = `# Specification: Rate limiting for the public API
 
@@ -167,7 +168,7 @@ describe('qaKickoffContext', () => {
         { id: 'subtask-6-1', status: 'completed', skipped_by_owner: true, description: 'Run the whole suite twice', notes: 'Red on pre-existing specs from another task.' },
       ] }],
     });
-    const out = qaKickoffContext({ spec: SPEC, plan, skippedByOwner: ['subtask-6-1'] });
+    const out = qaKickoffContext({ spec: SPEC, plan, skippedByOwner: { 'subtask-6-1': subtaskFingerprint({ description: 'Run the whole suite twice' }) } });
     expect(out).toContain('| subtask-6-1 | skipped by the owner | Run the whole suite twice |');
     expect(out).toContain('2 subtasks, 2 completed (1 skipped by the owner)');
     expect(out).toContain('Red on pre-existing specs from another task.');
@@ -179,6 +180,17 @@ describe('qaKickoffContext', () => {
     const out = qaKickoffContext({ spec: SPEC, plan });
     expect(out).toContain('| subtask-6-1 | completed | Run the suite |');
     expect(out).not.toMatch(/skipped by the owner/);
+  });
+
+  it('reviews in full a skipped subtask whose text an agent changed since, or whose id another subtask took', () => {
+    const skippedByOwner = { 'subtask-6-1': subtaskFingerprint({ description: 'Run the whole suite twice' }) };
+    const rewritten = JSON.stringify({ phases: [{ subtasks: [{ id: 'subtask-6-1', status: 'completed', description: 'Run the whole suite twice, and also the auth flow' }] }] });
+    expect(qaKickoffContext({ spec: SPEC, plan: rewritten, skippedByOwner })).not.toMatch(/skipped by the owner/);
+    const duplicated = JSON.stringify({ phases: [{ subtasks: [
+      { id: 'subtask-6-1', status: 'completed', description: 'Run the whole suite twice' },
+      { id: 'subtask-6-1', status: 'completed', description: 'Write the auth flow' },
+    ] }] });
+    expect(qaKickoffContext({ spec: SPEC, plan: duplicated, skippedByOwner })).not.toMatch(/skipped by the owner/);
   });
 
   it('copes with a missing spec or an unreadable plan', () => {

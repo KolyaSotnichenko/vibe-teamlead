@@ -56,7 +56,7 @@ export interface Subtask {
 }
 
 /** What the owner decided about subtasks the coder gave up on. */
-export type FailedSubtaskDecision = { action: 'skip' } | { action: 'retry'; instruction?: string };
+export type FailedSubtaskDecision = { action: 'skip'; ids: string[] } | { action: 'retry'; instruction?: string; ids: string[] };
 
 export interface QAReport {
   status: 'passed' | 'failed' | 'pending';

@@ -10,18 +10,19 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { writeFileReplacingSync } from '../safe-write';
-import { OWNER_INSTRUCTION_MAX, type FailedSubtaskAction } from './failed-subtasks';
+import { OWNER_INSTRUCTION_MAX, type DecidedSubtask, type FailedSubtaskAction } from './failed-subtasks';
 
 export interface OwnerDecisions {
-  /** Subtasks the owner went on without */
-  skipped: string[];
-  /** Subtasks the owner sent back, with what they said */
-  instructions: Record<string, string>;
+  /** Subtasks the owner went on without: id → fingerprint of the subtask they saw */
+  skipped: Record<string, string>;
+  /** Subtasks the owner sent back, with what they said and the fingerprint of the subtask they saw */
+  instructions: Record<string, { text: string; fingerprint: string }>;
 }
 
 interface StoredDecision {
   skipped?: boolean;
   instruction?: string;
+  fingerprint?: string;
   at?: string;
 }
 
@@ -41,24 +42,27 @@ function readStored(file: string): Record<string, StoredDecision> {
 }
 
 export function readOwnerDecisions(file: string | undefined): OwnerDecisions {
-  const decisions: OwnerDecisions = { skipped: [], instructions: {} };
+  const decisions: OwnerDecisions = { skipped: {}, instructions: {} };
   if (!file) return decisions;
   for (const [id, entry] of Object.entries(readStored(file))) {
-    if (!entry || typeof entry !== 'object') continue;
-    if (entry.skipped === true) decisions.skipped.push(id);
-    if (typeof entry.instruction === 'string' && entry.instruction) decisions.instructions[id] = entry.instruction.slice(0, OWNER_INSTRUCTION_MAX);
+    // Without the fingerprint a decision can't be matched to what the owner saw
+    if (!entry || typeof entry !== 'object' || typeof entry.fingerprint !== 'string' || !entry.fingerprint) continue;
+    if (entry.skipped === true) decisions.skipped[id] = entry.fingerprint;
+    if (typeof entry.instruction === 'string' && entry.instruction) {
+      decisions.instructions[id] = { text: entry.instruction.slice(0, OWNER_INSTRUCTION_MAX), fingerprint: entry.fingerprint };
+    }
   }
   return decisions;
 }
 
 /** Replaces what was decided earlier about these subtasks. */
-export function recordOwnerDecision(file: string, subtaskIds: string[], decision: FailedSubtaskAction): void {
+export function recordOwnerDecision(file: string, subtasks: DecidedSubtask[], decision: FailedSubtaskAction): void {
   const stored = readStored(file);
   const at = new Date().toISOString();
   const instruction = decision.action === 'retry' ? (decision.instruction ?? '').trim().slice(0, OWNER_INSTRUCTION_MAX) : '';
-  for (const id of subtaskIds) {
-    if (decision.action === 'skip') stored[id] = { skipped: true, at };
-    else if (instruction) stored[id] = { instruction, at };
+  for (const { id, fingerprint } of subtasks) {
+    if (decision.action === 'skip') stored[id] = { skipped: true, fingerprint, at };
+    else if (instruction) stored[id] = { instruction, fingerprint, at };
     else delete stored[id];
   }
   mkdirSync(dirname(file), { recursive: true });

@@ -10,7 +10,7 @@
 
 import { safeParseJson } from '../../utils/json-repair';
 import { cleanForMessage, dataBlock } from './message-data';
-import { OWNER_INSTRUCTION_MAX } from './failed-subtasks';
+import { OWNER_INSTRUCTION_MAX, subtaskFingerprint } from './failed-subtasks';
 import { acceptanceCriteriaLines } from './qa-kickoff';
 
 export interface CoderKickoffInput {
@@ -21,8 +21,8 @@ export interface CoderKickoffInput {
   subtaskId: string;
   /** Where the files are, for the pointer line */
   specDir?: string;
-  /** What the owner said when sending this subtask back, from the app's store (never from the plan) */
-  ownerInstruction?: string;
+  /** What the owner said when sending this subtask back, from the app's store (never from the plan), with the fingerprint of the subtask they saw */
+  ownerInstruction?: { text: string; fingerprint: string };
 }
 
 export interface PlanSubtaskEntry {
@@ -156,6 +156,14 @@ function subtaskLines(found: FoundSubtask): string[] {
   ];
 }
 
+/** The owner's instruction, only while the subtask is still the one they saw and its id is its own. */
+function instructionFor(input: CoderKickoffInput, found: FoundSubtask): string | undefined {
+  const given = input.ownerInstruction;
+  if (!given || given.fingerprint !== subtaskFingerprint(found.subtask)) return undefined;
+  const sameId = found.phases.flatMap(subtasksOf).filter((s) => entryId(s) === entryId(found.subtask)).length;
+  return sameId === 1 ? given.text : undefined;
+}
+
 /** The owner's instruction for a subtask they sent back, given after the data as theirs. */
 function ownerInstructionSection(instruction: string | undefined): string {
   const text = instruction ? cleanForMessage(instruction, OWNER_INSTRUCTION_MAX) : '';
@@ -199,7 +207,7 @@ export function coderKickoffContext(input: CoderKickoffInput): string {
       ...criteriaLines(found.subtask, input.spec, `${where}spec.md`),
     ].join('\n'),
     max: TOTAL_MAX,
-    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstructionSection(input.ownerInstruction)}`,
+    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstructionSection(instructionFor(input, found))}`,
   });
 }
 

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { BuildOrchestrator } from '../build-orchestrator';
 import { coderKickoffContext, coderKickoffMessage, findPlanSubtask, referencedCriteria } from '../coder-kickoff';
+import { subtaskFingerprint } from '../failed-subtasks';
 
 const SPEC = `# Specification: Rate limiting for the public API
 
@@ -180,13 +181,19 @@ describe('a subtask the owner sent back with an instruction', () => {
   );
 
   it("gives the owner's instruction after the data, as the owner's, and the earlier session's notes as data", () => {
-    const text = context({ plan: reopened, ownerInstruction: 'You may change product code to fix the a11y failures.' });
+    const fingerprint = subtaskFingerprint({ title: '[title] [AC-1] Run the whole suite', description: '[AC-1] Run the whole suite' });
+    const text = context({ plan: reopened, ownerInstruction: { text: 'You may change product code to fix the a11y failures.', fingerprint } });
     const instruction = text.indexOf('You may change product code');
     expect(instruction).toBeGreaterThan(text.lastIndexOf('</coder_subtask_context_'));
     expect(text).toMatch(/The owner read why an earlier session stopped/);
     const notes = text.indexOf('Full suite red on pre-existing specs');
     expect(notes).toBeGreaterThan(-1);
     expect(notes).toBeLessThan(text.lastIndexOf('</coder_subtask_context_'));
+  });
+
+  it('drops the instruction when an agent rewrote the subtask since the owner sent it back', () => {
+    const text = context({ plan: reopened, ownerInstruction: { text: 'You may change product code.', fingerprint: 'of-another-text' } });
+    expect(text).not.toContain('You may change product code.');
   });
 
   it('never takes an instruction from the plan, which agents can edit', () => {

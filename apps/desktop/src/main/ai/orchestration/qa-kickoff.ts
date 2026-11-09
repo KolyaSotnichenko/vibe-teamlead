@@ -14,6 +14,7 @@
 import { SUBTASK_STATUS_VALUES } from '../schema/implementation-plan';
 import { safeParseJson } from '../../utils/json-repair';
 import { cleanForMessage, dataBlock } from './message-data';
+import { subtaskFingerprint } from './failed-subtasks';
 
 export interface QAKickoffInput {
   /** spec.md, or null when it can't be read */
@@ -22,8 +23,11 @@ export interface QAKickoffInput {
   plan: string | null;
   /** Where the files are, for the pointer line */
   specDir?: string;
-  /** Subtasks the owner went on without, from the app's store (the plan's own flag is the agents' word) */
-  skippedByOwner?: string[];
+  /**
+   * Subtasks the owner went on without, from the app's store, with the fingerprint of what they saw
+   * (the plan's own flag is the agents' word, and its text may have changed since)
+   */
+  skippedByOwner?: Record<string, string>;
 }
 
 /** A criterion line: an optional list marker or heading, optional bold, then `AC-n`. */
@@ -106,15 +110,25 @@ const subtaskStatus = (s: PlanSubtask, skipped: ReadonlySet<string>): string =>
 const SKIPPED_NOTES_MAX = 600;
 
 /** A compact table of the plan's subtasks: id, status, first line of the description. */
-export function subtaskTable(plan: string, skippedByOwner: string[] = []): string[] {
-  const ownerSkipped = new Set(skippedByOwner);
+export function subtaskTable(plan: string, skippedByOwner: Record<string, string> = {}): string[] {
   const parsed = safeParseJson<{ phases?: Array<{ subtasks?: PlanSubtask[] }> }>(plan);
   if (!parsed || typeof parsed !== 'object') return ['implementation_plan.json could not be parsed; use `mcp__vibe-teamlead__get_build_progress` for the subtasks.'];
   const phases = Array.isArray(parsed.phases) ? parsed.phases : [];
   const subtasks = phases.flatMap((phase) => (Array.isArray(phase?.subtasks) ? phase.subtasks : [])).filter((s) => s && typeof s === 'object');
   if (!subtasks.length) return ['The plan lists no subtasks.'];
   const completed = subtasks.filter((s) => s.status === 'completed').length;
-  const skipped = subtasks.filter((s) => s.status === 'completed' && ownerSkipped.has(subtaskId(s)));
+  // Skipped only as the owner saw it: the same text, under an id no other subtask uses
+  const idCounts = new Map<string, number>();
+  for (const s of subtasks) idCounts.set(subtaskId(s), (idCounts.get(subtaskId(s)) ?? 0) + 1);
+  const ownerSkipped = new Set(
+    subtasks
+      .filter((s) => {
+        const id = subtaskId(s);
+        return s.status === 'completed' && idCounts.get(id) === 1 && Object.hasOwn(skippedByOwner, id) && skippedByOwner[id] === subtaskFingerprint(s);
+      })
+      .map(subtaskId),
+  );
+  const skipped = subtasks.filter((s) => ownerSkipped.has(subtaskId(s)));
   return [
     `${subtasks.length} subtask${subtasks.length === 1 ? '' : 's'}, ${completed} completed${skipped.length ? ` (${skipped.length} skipped by the owner)` : ''}.`,
     '',

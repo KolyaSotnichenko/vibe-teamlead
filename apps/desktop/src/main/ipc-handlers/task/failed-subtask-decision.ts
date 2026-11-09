@@ -6,7 +6,7 @@
 
 import { app } from 'electron';
 
-import { resolveFailedSubtasks, type FailedSubtaskAction } from '../../ai/orchestration/failed-subtasks';
+import { resolveFailedSubtasks, type DecidedSubtask, type FailedSubtaskAction } from '../../ai/orchestration/failed-subtasks';
 import { ownerDecisionsPath, recordOwnerDecision } from '../../ai/orchestration/owner-decisions';
 import { updatePlanFile } from './plan-file-utils';
 
@@ -33,23 +33,28 @@ export async function applyFailedSubtaskDecision(
   decisionsFile: string,
 ): Promise<{ changed: string[] }> {
   const now = new Date().toISOString();
-  const changed = new Set<string>();
+  // Fingerprints from the first copy, the worktree's when there is one: that is what the build reads
+  let decided: DecidedSubtask[] | null = null;
   for (const planPath of planPaths) {
     await updatePlanFile<Record<string, unknown>>(planPath, (plan) => {
       const result = resolveFailedSubtasks(plan as { phases?: Array<{ subtasks?: Array<Record<string, unknown>> }> }, decision, now);
-      for (const id of result.changed) changed.add(id);
+      decided ??= result.changed.length ? result.changed : null;
       return plan;
     });
   }
-  if (changed.size) recordOwnerDecision(decisionsFile, [...changed], decision);
-  return { changed: [...changed] };
+  const changed: DecidedSubtask[] = decided ?? [];
+  if (changed.length) recordOwnerDecision(decisionsFile, changed, decision);
+  return { changed: changed.map((c) => c.id) };
 }
 
 /** The decision as the renderer sent it, or null when it is not one. Pure. */
 export function parseFailedSubtaskDecision(value: unknown): FailedSubtaskAction | null {
   if (!value || typeof value !== 'object') return null;
-  const { action, instruction } = value as { action?: unknown; instruction?: unknown };
-  if (action === 'skip') return { action: 'skip' };
-  if (action === 'retry') return { action: 'retry', instruction: typeof instruction === 'string' ? instruction : undefined };
+  const { action, instruction, ids } = value as { action?: unknown; instruction?: unknown; ids?: unknown };
+  // The subtasks the owner was shown: the decision covers only those
+  if (!Array.isArray(ids) || !ids.length || ids.length > 50 || !ids.every((id) => typeof id === 'string' && id.length <= 200)) return null;
+  const shown = ids as string[];
+  if (action === 'skip') return { action: 'skip', ids: shown };
+  if (action === 'retry') return { action: 'retry', instruction: typeof instruction === 'string' ? instruction : undefined, ids: shown };
   return null;
 }
