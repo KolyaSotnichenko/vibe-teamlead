@@ -23,7 +23,7 @@ import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
-import { frameworkMigrations, stackInstalls } from './stacks';
+import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
 import { type PreviewDatabase, startPreviewDatabase } from './preview-database';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
@@ -219,8 +219,11 @@ async function runMigrations(session: Session, files: string[], report: boolean)
     if (!commands.some((c) => c.dir === dir && c.command === command)) commands.push({ dir, command });
   };
   if (sql) for (const command of detectChecks(project).prepare ?? []) add('', command);
-  if (sql || database.status === 'none') {
-    for (const dir of serviceDirs(session)) for (const command of frameworkMigrations(project, dir)) add(dir, command);
+  // With the preview's SQL database, on it; without a database in compose, only onto a local file
+  for (const dir of serviceDirs(session)) {
+    for (const command of frameworkMigrations(project, dir)) {
+      if (sql || (database.status === 'none' && migratesOnLocalFile(project, dir, command))) add(dir, command);
+    }
   }
   if (commands.length && report) emit(session, { stage: 'migrations' });
   for (const { dir, command } of commands) {

@@ -136,6 +136,7 @@ describe('a preview session', () => {
   describe('a project in Python', () => {
     const DJANGO: Record<string, string> = {
       'backend/manage.py': '',
+      'backend/mysite/settings.py': "DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3'}}",
       'backend/requirements.txt': 'django==5.1',
       'backend/.env.example': 'DEBUG=1\n',
     };
@@ -174,6 +175,13 @@ describe('a preview session', () => {
       await startPreview(project('p1', services), () => {}, d);
       const calls = vi.mocked(d.runCommand).mock.calls.map(([command, cwd]) => ({ command, cwd }));
       expect(calls).toContainEqual({ command: '.venv/bin/python manage.py migrate', cwd: '/home/.vibe-teamlead/worktrees/preview/p1/backend' });
+    });
+
+    it('does not migrate a server database the preview did not start', async () => {
+      const files = { ...DJANGO, 'backend/mysite/settings.py': "DATABASES = {'default': {'ENGINE': 'django.db.backends.postgresql', 'HOST': 'db.prod'}}" };
+      const { d } = python(files, new Map());
+      await startPreview(project('p1', services), () => {}, d);
+      expect(vi.mocked(d.runCommand).mock.calls.map(([c]) => c)).not.toContain('.venv/bin/python manage.py migrate');
     });
 
     it('says which install failed, with its output', async () => {

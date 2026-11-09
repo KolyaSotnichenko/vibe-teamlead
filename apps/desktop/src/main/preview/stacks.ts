@@ -8,6 +8,10 @@
 import type { PreviewService } from '../../shared/types/project';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
 
+/** What may go into a command from a file or folder name in the repository */
+const SAFE_NAME = /^[A-Za-z0-9_-]+$/;
+const SAFE_MODULE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
 const SKIPPED = /(^|\/)(node_modules|vendor|\.venv|venv|\.vibe-teamlead|\.git|dist|build|tests?|__tests__|e2e)\//;
 const MAX_DEPTH = 2;
 
@@ -49,7 +53,10 @@ function fastapiTarget(project: ProjectFiles, dir: string): { target: string; ap
       appDir = 'src';
       module = module.slice('src/'.length);
     }
-    return { target: `${module.replace(/\//g, '.')}:${variable}`, appDir };
+    const dotted = module.replace(/\//g, '.');
+    // Names from the repository go into a shell command: only plain identifiers
+    if (!SAFE_MODULE.test(dotted)) continue;
+    return { target: `${dotted}:${variable}`, appDir };
   }
   return undefined;
 }
@@ -86,11 +93,13 @@ function proposalsIn(project: ProjectFiles, dir: string): Proposal[] {
   if (has('go.mod')) {
     if (has('main.go')) return [{ service: { name, dir, command: 'go run .' }, html: false }];
     const prefix = join(dir, 'cmd/');
-    const main = project.files.filter((file) => file.startsWith(prefix) && /^[^/]+\/main\.go$/.test(file.slice(prefix.length))).sort()[0];
-    if (main) {
-      const command = main.slice(prefix.length).split('/')[0];
-      return [{ service: { name: command.replace(/[^\w-]/g, '-'), dir, command: `go run ./cmd/${command}` }, html: false }];
-    }
+    // The folder's name goes into a shell command: only plain names
+    const main = project.files
+      .filter((file) => file.startsWith(prefix) && /^[^/]+\/main\.go$/.test(file.slice(prefix.length)))
+      .map((file) => file.slice(prefix.length).split('/')[0])
+      .filter((name) => SAFE_NAME.test(name))
+      .sort()[0];
+    if (main) return [{ service: { name: main, dir, command: `go run ./cmd/${main}` }, html: false }];
   }
   return [];
 }
@@ -141,4 +150,35 @@ export function frameworkMigrations(project: ProjectFiles, dir: string): string[
   if (has('Gemfile') && has('config/database.yml')) commands.push('bundle exec rails db:prepare');
   if (has('artisan')) commands.push('php artisan migrate --force');
   return commands;
+}
+
+/** Every value a pattern captures in a text */
+const allOf = (text: string, pattern: RegExp): string[] => [...text.matchAll(pattern)].map((m) => m[1]);
+
+/**
+ * Whether a framework migration, with no database from compose, can only reach a local file
+ * (SQLite) and not a server the config names: the preview never migrates a database it didn't
+ * start. Unsure means no.
+ */
+export function migratesOnLocalFile(project: ProjectFiles, dir: string, command: string): boolean {
+  const prefix = dir ? `${dir}/` : '';
+  const read = (file: string) => project.read(join(dir, file)) ?? '';
+  if (/manage\.py migrate/.test(command)) {
+    const settings = project.files
+      .filter((f) => f.startsWith(prefix) && !SKIPPED.test(f) && /(^|\/)settings(\.py|\/[^/]+\.py)$/.test(f.slice(prefix.length)))
+      .map((f) => project.read(f) ?? '')
+      .join('\n');
+    const engines = allOf(settings, /['"]ENGINE['"]\s*:\s*['"]([^'"]+)['"]/g);
+    return engines.length > 0 && engines.every((engine) => engine.endsWith('sqlite3'));
+  }
+  if (/rails db:prepare/.test(command)) {
+    const adapters = allOf(read('config/database.yml'), /^\s*adapter:\s*["']?([\w-]+)/gm);
+    return adapters.length > 0 && adapters.every((adapter) => adapter === 'sqlite3');
+  }
+  if (/artisan migrate/.test(command)) return /^\s*DB_CONNECTION\s*=\s*["']?sqlite["']?\s*$/m.test(read('.env.example'));
+  if (/alembic upgrade/.test(command)) {
+    const urls = allOf(read('alembic.ini'), /^\s*sqlalchemy\.url\s*=\s*(\S+)/gm);
+    return urls.length > 0 && urls.every((url) => url.startsWith('sqlite'));
+  }
+  return false;
 }

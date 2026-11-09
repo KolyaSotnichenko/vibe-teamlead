@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { frameworkMigrations, proposeStackServices, stackInstalls } from '../stacks';
+import { frameworkMigrations, migratesOnLocalFile, proposeStackServices, stackInstalls } from '../stacks';
 
 const project = (files: Record<string, string>) => ({ files: Object.keys(files), read: (p: string) => files[p] ?? null });
 
@@ -61,5 +61,32 @@ describe('frameworkMigrations', () => {
     expect(frameworkMigrations(project({ Gemfile: '', 'config/database.yml': '' }), '')).toEqual(['bundle exec rails db:prepare']);
     expect(frameworkMigrations(project({ artisan: '' }), '')).toEqual(['php artisan migrate --force']);
     expect(frameworkMigrations(project({ 'package.json': '{}' }), '')).toEqual([]);
+  });
+});
+
+describe('names from the repository never reach a shell unchecked', () => {
+  it('skips a cmd/ folder or a FastAPI module whose name is not a plain identifier', () => {
+    expect(proposeStackServices(project({ 'go.mod': '', 'cmd/x;rm -rf ~/main.go': 'package main' }))).toEqual([]);
+    expect(proposeStackServices(project({ 'go.mod': '', 'cmd/$(id)/main.go': '', 'cmd/server/main.go': '' }))[0].command).toBe('go run ./cmd/server');
+    expect(
+      proposeStackServices(project({ 'requirements.txt': 'fastapi', 'a b;c/main.py': 'app = FastAPI()' })),
+    ).toEqual([]);
+  });
+});
+
+describe('migratesOnLocalFile: without a database in compose, migrations run only on a local file', () => {
+  it('Django with sqlite3, Rails with sqlite3, Laravel with sqlite, Alembic with a sqlite URL', () => {
+    expect(migratesOnLocalFile(project({ 'mysite/settings.py': "'ENGINE': 'django.db.backends.sqlite3'" }), '', '.venv/bin/python manage.py migrate')).toBe(true);
+    expect(migratesOnLocalFile(project({ 'config/database.yml': 'development:\n  adapter: sqlite3\n' }), '', 'bundle exec rails db:prepare')).toBe(true);
+    expect(migratesOnLocalFile(project({ '.env.example': 'DB_CONNECTION=sqlite\n' }), '', 'php artisan migrate --force')).toBe(true);
+    expect(migratesOnLocalFile(project({ 'alembic.ini': 'sqlalchemy.url = sqlite:///app.db' }), '', 'uv run alembic upgrade head')).toBe(true);
+  });
+
+  it('not when the config names a server database, or anything else', () => {
+    expect(migratesOnLocalFile(project({ 'mysite/settings.py': "'ENGINE': 'django.db.backends.postgresql'" }), '', '.venv/bin/python manage.py migrate')).toBe(false);
+    expect(migratesOnLocalFile(project({ 'mysite/settings.py': "'ENGINE': 'django.db.backends.sqlite3'\nOTHER = {'ENGINE': 'django.db.backends.postgresql'}" }), '', '.venv/bin/python manage.py migrate')).toBe(false);
+    expect(migratesOnLocalFile(project({ 'config/database.yml': 'development:\n  adapter: postgresql\n  host: db.prod.example.com' }), '', 'bundle exec rails db:prepare')).toBe(false);
+    expect(migratesOnLocalFile(project({ '.env.example': 'DB_CONNECTION=mysql\n' }), '', 'php artisan migrate --force')).toBe(false);
+    expect(migratesOnLocalFile(project({}), '', 'something else')).toBe(false);
   });
 });
