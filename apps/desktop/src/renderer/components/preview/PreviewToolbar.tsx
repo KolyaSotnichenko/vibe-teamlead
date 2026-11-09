@@ -11,7 +11,10 @@ import { Input } from '../ui/input';
 export const PREVIEW_WIDTHS = [375, 768, 1280, null] as const;
 export type PreviewWidth = (typeof PREVIEW_WIDTHS)[number];
 
-export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled }: {
+/** What the side panel shows, or null when it is closed */
+export type PreviewSide = 'notes' | 'ux' | null;
+
+export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide }: {
   url?: string;
   width: PreviewWidth;
   onWidth: (width: PreviewWidth) => void;
@@ -19,6 +22,8 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
   onReset: () => void;
   onEditServices: () => void;
   disabled: boolean;
+  side: PreviewSide;
+  onSide: (side: PreviewSide) => void;
 }) {
   const { t } = useTranslation(['tasks']);
   const [address, setAddress] = useState(url ?? '');
@@ -54,6 +59,9 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
       ) : (
         <Button variant="outline" size="sm" onClick={() => setConfirmReset(true)}>{t('preview.toolbar.reset')}</Button>
       )}
+      <Button variant={side === 'ux' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'ux'} onClick={() => onSide(side === 'ux' ? null : 'ux')}>
+        {t('preview.toolbar.ux')}
+      </Button>
       <Button variant="ghost" size="sm" onClick={onEditServices}>{t('preview.toolbar.services')}</Button>
     </div>
   );

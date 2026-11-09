@@ -1099,7 +1099,8 @@
       "resetConfirm": "Delete the preview's database and start empty?",
       "resetYes": "Reset",
       "resetNo": "Keep",
-      "services": "Services"
+      "services": "Services",
+      "ux": "UX review"
     },
     "services": {
       "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's files. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
@@ -1118,6 +1119,24 @@
         "name": "Each service needs its own name: letters, digits, - and _.",
         "command": "Each service needs a command."
       }
+    },
+    "ux": {
+      "intro": "An agent goes through the running app as a person would: from the home page, at 375 and 1280 pixels, by keyboard, through empty, loading and error states. It checks against Vercel's Web Interface Guidelines, Impeccable's checklists and your design system. One agent session; the model is set under Settings → Feature models → UX review.",
+      "run": "Run UX review",
+      "running": "Going through the app… this takes a few minutes.",
+      "stop": "Stop",
+      "failed": "The UX review did not finish.",
+      "pages_one": "{{count}} page · {{at}}",
+      "pages_other": "{{count}} pages · {{at}}",
+      "none": "Nothing found that stops people from using these pages.",
+      "severity": {
+        "blocks": "blocks",
+        "note": "note"
+      },
+      "createTask": "Create a task",
+      "createAll_one": "One task for the {{count}} blocking problem",
+      "createAll_other": "One task for the {{count}} blocking problems",
+      "taskCreated": "Task created"
     }
   },
   "looseEnds": {

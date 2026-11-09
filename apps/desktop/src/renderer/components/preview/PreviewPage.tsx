@@ -11,7 +11,8 @@ import type { PreviewService, Project } from '../../../shared/types';
 import { updateProjectSettings } from '../../stores/project-store';
 import { EmptyState, Notice } from '../task-detail/workspace/workspace-ui';
 import { PreviewServicesForm } from './PreviewServicesForm';
-import { PreviewToolbar, type PreviewWidth } from './PreviewToolbar';
+import { PreviewToolbar, type PreviewSide, type PreviewWidth } from './PreviewToolbar';
+import { UxReviewPanel } from './UxReviewPanel';
 import { usePreviewSession } from './usePreviewSession';
 
 export function PreviewPage({ project }: { project: Project }) {
@@ -20,6 +21,7 @@ export function PreviewPage({ project }: { project: Project }) {
   const [editing, setEditing] = useState(saved.length === 0);
   const [proposed, setProposed] = useState<PreviewService[] | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
+  const [side, setSide] = useState<PreviewSide>(null);
   const { status, boxRef } = usePreviewSession(project.id, !editing && saved.length > 0);
 
   useEffect(() => {
@@ -62,11 +64,14 @@ export function PreviewPage({ project }: { project: Project }) {
         onNavigate={(navigation) => void window.electronAPI.preview.navigate(navigation)}
         onReset={() => void window.electronAPI.preview.resetData(project.id)}
         onEditServices={() => setEditing(true)}
+        side={side}
+        onSide={setSide}
       />
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
       )}
-      <div className="flex min-h-0 flex-1 justify-center bg-muted">
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 justify-center bg-muted">
         <div ref={boxRef} className="relative h-full" style={{ width: width ? `${width}px` : '100%', maxWidth: '100%' }}>
           {!ready && (
             <div className="absolute inset-0 overflow-auto bg-background p-6">
@@ -81,6 +86,12 @@ export function PreviewPage({ project }: { project: Project }) {
             </div>
           )}
         </div>
+      </div>
+      {side === 'ux' && (
+        <aside aria-label={t('preview.toolbar.ux')} className="w-96 shrink-0 border-l border-border bg-background">
+          <UxReviewPanel projectId={project.id} ready={ready} />
+        </aside>
+      )}
       </div>
     </div>
   );
