@@ -8,9 +8,10 @@
  * No Electron imports.
  */
 
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import type { PreviewStatus } from '../../shared/types/preview';
 import type { Project, PreviewService } from '../../shared/types/project';
@@ -22,6 +23,7 @@ import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
+import { frameworkMigrations, stackInstalls } from './stacks';
 import { type PreviewDatabase, startPreviewDatabase } from './preview-database';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
@@ -45,6 +47,8 @@ export interface PreviewDeps {
   startServer: (options: Parameters<typeof startDevServer>[0]) => ReturnType<typeof startDevServer>;
   stopServer: (name: string) => Promise<boolean>;
   cleanUpLeftovers: (specDir: string) => void;
+  /** Writes a small file in the worktree (what was installed, so it isn't installed again) */
+  writeFile: (root: string, path: string, text: string) => void;
   /** A free local port, picked before any service starts so each can name the others' URLs */
   pickPort: () => Promise<number>;
 }
@@ -112,6 +116,10 @@ function defaultDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | 'worktreesRoot'
       if (result.code !== 0) throw Object.assign(new Error(`${pm} install failed`), { logTail: tail(`${result.stdout}${result.stderr}`) });
     },
     startDatabase: startPreviewDatabase,
+    writeFile: (root, path, text) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text, 'utf-8');
+    },
     runCommand: async (command, cwd, env, signal) => {
       const result = await runProcess('/bin/sh', ['-c', command], { cwd, env: previewCommandEnv(env), signal, timeoutMs: COMMAND_TIMEOUT_MS, killGroup: true });
       return { code: result.code, output: `${result.stdout}${result.stderr}` };
@@ -195,19 +203,68 @@ async function buildLibraries(session: Session, files: string[], report: boolean
   }
 }
 
-/** Migrations, only ever on the preview's own SQL database. */
+/**
+ * Migrations, only ever on the preview's own database: the project's (Prisma, Drizzle) on its
+ * SQL database, and each service folder's framework migrations (Django, Alembic, Rails,
+ * Laravel) also when compose names no database, as those default to a local file. Returns
+ * whether a SQL database is there, for the seed.
+ */
 async function runMigrations(session: Session, files: string[], report: boolean): Promise<boolean> {
   const database = session.database;
-  if (!(database?.status === 'started' && database.started.some((s) => s.kind === 'postgres' || s.kind === 'mysql'))) return false;
-  const read = (p: string) => session.deps.read(session.worktree, p);
-  const prepare = detectChecks({ files, read }).prepare ?? [];
-  if (prepare.length && report) emit(session, { stage: 'migrations' });
-  for (const command of prepare) {
-    const result = await session.deps.runCommand(command, session.worktree, envFor(session, '', files), session.abort.signal);
+  if (!database || database.status === 'unavailable') return false;
+  const sql = database.status === 'started' && database.started.some((s) => s.kind === 'postgres' || s.kind === 'mysql');
+  const project = { files, read: (p: string) => session.deps.read(session.worktree, p) };
+  const commands: Array<{ dir: string; command: string }> = [];
+  const add = (dir: string, command: string) => {
+    if (!commands.some((c) => c.dir === dir && c.command === command)) commands.push({ dir, command });
+  };
+  if (sql) for (const command of detectChecks(project).prepare ?? []) add('', command);
+  if (sql || database.status === 'none') {
+    for (const dir of serviceDirs(session)) for (const command of frameworkMigrations(project, dir)) add(dir, command);
+  }
+  if (commands.length && report) emit(session, { stage: 'migrations' });
+  for (const { dir, command } of commands) {
+    const result = await session.deps.runCommand(command, resolve(session.worktree, dir), envFor(session, dir, files), session.abort.signal);
     check(session);
     if (result.code !== 0) throw Object.assign(new Error('The migrations failed'), { logTail: tail(result.output) });
   }
-  return true;
+  return sql;
+}
+
+/** The root and every service's folder */
+function serviceDirs(session: Session): string[] {
+  return [...new Set(['', ...(session.project.settings.previewServices ?? []).map((s) => s.dir)])];
+}
+
+/** Where a folder's install is recorded, relative to the worktree */
+const installStampPath = (dir: string) => `.vibe-teamlead/specs/preview/installed-${createHash('sha256').update(dir).digest('hex').slice(0, 16)}`;
+
+/**
+ * Python, Ruby, PHP and Go dependencies of the root and the services' folders, each with its
+ * own tool. A folder is installed again only when its command or its lockfiles changed.
+ */
+async function installStacks(session: Session, files: string[]): Promise<void> {
+  const read = (p: string) => session.deps.read(session.worktree, p);
+  for (const install of stackInstalls({ files, read }, serviceDirs(session))) {
+    const stamp = createHash('sha256').update([install.command, ...install.lockfiles.map((f) => `${f}\0${read(f) ?? ''}`)].join('\0')).digest('hex');
+    const stampPath = installStampPath(`${install.dir}\0${install.command}`);
+    if (read(stampPath) === stamp) continue;
+    emit(session, { stage: 'install', message: `${install.dir || '.'}: ${install.command}` });
+    const result = await session.deps.runCommand(install.command, resolve(session.worktree, install.dir), envFor(session, install.dir, files), session.abort.signal);
+    check(session);
+    if (result.code !== 0) {
+      throw Object.assign(new Error(`The dependencies in ${install.dir || 'the project root'} did not install`), { logTail: tail(result.output) });
+    }
+    session.deps.writeFile(session.worktree, stampPath, stamp);
+  }
+}
+
+/** Node dependencies at the root, when the project has a package.json to install from */
+async function installNode(session: Session, files: string[], lockfileChanged: boolean): Promise<void> {
+  if (!files.includes('package.json') || !(lockfileChanged || session.deps.needsInstall(session.worktree))) return;
+  emit(session, { stage: 'install', message: undefined });
+  await session.deps.install(session.worktree, (line) => emit(session, { stage: 'install', message: line }), session.abort.signal);
+  check(session);
 }
 
 async function startServices(session: Session, files: string[]): Promise<string> {
@@ -288,11 +345,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       const files = await deps.listFiles(session.worktree);
       check(session);
 
-      if (lockfileChanged || deps.needsInstall(session.worktree)) {
-        emit(session, { stage: 'install' });
-        await deps.install(session.worktree, (line) => emit(session, { stage: 'install', message: line }), session.abort.signal);
-        check(session);
-      }
+      await installNode(session, files, lockfileChanged);
+      await installStacks(session, files);
 
       await buildLibraries(session, files, true);
 
@@ -354,8 +408,8 @@ async function afterMerge(session: Session): Promise<void> {
     if (lockfileChanged) {
       emit(session, { stage: 'install', message: undefined });
       await stopServers(session);
-      await session.deps.install(session.worktree, (line) => emit(session, { stage: 'install', message: line }), session.abort.signal);
-      check(session);
+      await installNode(session, files, true);
+      await installStacks(session, files);
       await buildLibraries(session, files, true);
       await runMigrations(session, files, true);
       const url = await startServices(session, files);

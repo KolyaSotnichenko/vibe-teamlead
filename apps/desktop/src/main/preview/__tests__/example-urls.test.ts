@@ -19,6 +19,15 @@ describe('examplePort: where a service listens when run as its example says', ()
     expect(examplePort({ name: 'web', dir: '', command: 'x' }, read({ 'package.json': JSON.stringify({ scripts: { dev: 'ng serve' } }) }))).toBe(4200);
   });
 
+  it("takes a backend framework's default from its command", () => {
+    const none = read({});
+    expect(examplePort({ name: 'b', dir: 'b', command: '.venv/bin/python manage.py runserver 127.0.0.1:{port}' }, none)).toBe(8000);
+    expect(examplePort({ name: 'b', dir: 'b', command: 'poetry run uvicorn app.main:app --reload --port {port}' }, none)).toBe(8000);
+    expect(examplePort({ name: 'b', dir: 'b', command: 'uv run flask run --port {port}' }, none)).toBe(5000);
+    expect(examplePort({ name: 'b', dir: 'b', command: 'bin/rails server -p {port}' }, none)).toBe(3000);
+    expect(examplePort({ name: 'b', dir: 'b', command: 'php artisan serve --port={port}' }, none)).toBe(8000);
+  });
+
   it('knows nothing when nothing says', () => {
     expect(examplePort({ name: 'api', dir: 'api', command: 'x' }, read({ 'api/package.json': JSON.stringify({ scripts: { dev: 'node server.js' } }) }))).toBeUndefined();
     expect(examplePort({ name: 'api', dir: 'api', command: 'x' }, read({ 'api/.env.example': 'PORT=abc' }))).toBeUndefined();

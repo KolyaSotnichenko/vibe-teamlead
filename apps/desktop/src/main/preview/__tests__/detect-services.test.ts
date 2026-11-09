@@ -90,3 +90,35 @@ describe('workspaceLibraries', () => {
   });
 });
 
+
+describe('proposePreviewServices beyond JavaScript', () => {
+  const project = (files: Record<string, string>) => ({ files: Object.keys(files), read: (p: string) => files[p] ?? null });
+
+  it('proposes a Django backend next to a Next frontend, keeping the frontend as the page', () => {
+    const services = proposePreviewServices(
+      project({
+        'pnpm-lock.yaml': '',
+        'web/package.json': JSON.stringify({ scripts: { dev: 'next dev' } }),
+        'backend/manage.py': '',
+        'backend/requirements.txt': 'django',
+      }),
+    );
+    expect(services).toEqual([
+      { name: 'web', dir: 'web', command: 'pnpm run dev --port {port}', page: true },
+      { name: 'backend', dir: 'backend', command: '.venv/bin/python manage.py runserver 127.0.0.1:{port}' },
+    ]);
+  });
+
+  it('makes a Rails app the page when there is no JavaScript frontend', () => {
+    expect(proposePreviewServices(project({ Gemfile: "gem 'rails'", 'bin/rails': '' }))).toEqual([
+      { name: 'web', dir: '', command: 'bin/rails server -b 127.0.0.1 -p {port}', page: true },
+    ]);
+  });
+
+  it('keeps names unique', () => {
+    const names = proposePreviewServices(
+      project({ 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }), 'manage.py': '', 'requirements.txt': 'django' }),
+    ).map((s) => s.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});

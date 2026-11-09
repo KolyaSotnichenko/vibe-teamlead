@@ -10,7 +10,13 @@ While it is open, a merge into main moves it to the new code. Pages reload as th
 
 ## The first time
 
-The app reads the project's `dev` scripts and proposes what to run, for example `api` and `web` in a monorepo. Check the list once:
+The app reads the project's files and proposes what to run, for example `api` and `web` in a monorepo:
+
+- **JavaScript and TypeScript:** each package's `dev` (or `start:dev`) script; Next, Vite, Nuxt, SvelteKit, Astro, Angular and Remix frontends become pages.
+- **Python:** Django (`manage.py runserver`), FastAPI (`uvicorn`, with the module that creates the app) and Flask (`flask run`), run through uv or Poetry when the project uses them, otherwise a `.venv` of the preview's own.
+- **Ruby:** Rails (`bin/rails server`). **PHP:** Laravel (`php artisan serve`). **Go:** `go run` of the main package, at the root or under `cmd/`.
+
+Anything else that serves HTTP works too: add it under **Services** with a command that takes `{port}` or reads `PORT`. Check the list once:
 
 - **Folder:** where the command runs, relative to the project.
 - **Command:** the command itself. `{port}` becomes the port the app picked; the port is also in `PORT`.
@@ -22,7 +28,8 @@ Change the list later with **Services** in the toolbar. The list is kept in the 
 ## Where its code and data come from
 
 - **The code** is a copy of main of its own, in `~/.vibe-teamlead/worktrees/preview`, outside your project. Your own folder, its branch and its uncommitted changes are never touched.
-- **The database** named in the project's compose file runs in Docker on a volume kept for this project, so an account you registered in the preview is still there next time. Migrations are applied to it, and on a new, empty database the project's seed script runs (`db:seed`, `seed`, or Prisma's seed). **Reset preview data** deletes it and starts empty.
+- **The database** named in the project's compose file runs in Docker on a volume kept for this project, so an account you registered in the preview is still there next time. Migrations are applied to it (Prisma, Drizzle, Django, Alembic, Rails, Laravel), and on a new, empty database the project's seed script runs (`db:seed`, `seed`, or Prisma's seed). A Django, Rails or Laravel app with no database in compose gets its migrations on its own local file. **Reset preview data** deletes it and starts empty.
+- **Dependencies** are installed with the project's own tool: pnpm, npm, yarn or bun; uv, Poetry or pip; Bundler; Composer; Go modules. A folder is installed again only when its lockfile changes. The tool itself (Python, Ruby, PHP, Go) has to be on your Mac; when it isn't, the preview says which install failed and shows its output.
 - **Settings** come from `.env.example` and the preview's own database, never from `.env`. Your real databases and keys are not used.
 
 Without Docker, the services still start, without a database, and the preview says so.

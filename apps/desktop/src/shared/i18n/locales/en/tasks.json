@@ -1102,8 +1102,8 @@
       "services": "Services"
     },
     "services": {
-      "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's dev scripts. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
-      "looking": "Looking at the project's dev scripts…",
+      "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's files. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
+      "looking": "Looking at the project's files…",
       "name": "Name",
       "dir": "Folder",
       "command": "Command ({port} is the port)",

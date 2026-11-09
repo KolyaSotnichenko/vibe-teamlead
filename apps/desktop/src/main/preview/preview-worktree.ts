@@ -16,7 +16,11 @@ import { getIsolatedGitEnv } from '../utils/git-isolation';
 
 const run = promisify(execFile);
 
-const LOCKFILES = new Set(['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb', 'bun.lock']);
+const LOCKFILES = new Set([
+  'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb', 'bun.lock',
+  'uv.lock', 'poetry.lock', 'requirements.txt', 'Pipfile.lock', 'pyproject.toml',
+  'Gemfile.lock', 'composer.lock', 'go.sum',
+]);
 
 /** `root` is …/.vibe-teamlead/worktrees/preview in the app's folder: dev-servers finds leftovers under it. */
 export function previewWorktreePath(root: string, projectId: string): string {

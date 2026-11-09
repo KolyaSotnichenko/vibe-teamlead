@@ -19,6 +19,7 @@ function project(id = 'p1', services = SERVICES): Project {
 
 const FILES: Record<string, string> = {
   'pnpm-lock.yaml': '',
+  'package.json': JSON.stringify({ name: 'acme', private: true }),
   'docker-compose.yml': 'services:\n  db:\n    image: postgres:18-alpine\n',
   'apps/api/package.json': JSON.stringify({ scripts: { seed: 'node scripts/seed.mjs' }, dependencies: { '@acme/shared': 'workspace:*' } }),
   'packages/shared/package.json': JSON.stringify({ name: '@acme/shared', main: './dist/index.js', scripts: { build: 'tsc' } }),
@@ -50,6 +51,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     startServer: vi.fn(async (o: { name: string }) => { order.push(`server:${o.name}`); port += 1; return { url: `http://localhost:${port}`, port, logPath: '/log', reused: false }; }),
     stopServer: vi.fn(async () => true),
     cleanUpLeftovers: vi.fn(),
+    writeFile: vi.fn(),
     pickPort: vi.fn(async () => 6000 + Math.floor(Math.random() * 1000)),
     ...overrides,
   };
@@ -129,6 +131,58 @@ describe('a preview session', () => {
       FILES['apps/api/.env.example'] = 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nJWT_SECRET=dev-secret\n';
       FILES['apps/web/.env.example'] = 'NEXT_PUBLIC_SITE=preview\n';
     }
+  });
+
+  describe('a project in Python', () => {
+    const DJANGO: Record<string, string> = {
+      'backend/manage.py': '',
+      'backend/requirements.txt': 'django==5.1',
+      'backend/.env.example': 'DEBUG=1\n',
+    };
+    const services: PreviewService[] = [{ name: 'backend', dir: 'backend', command: '.venv/bin/python manage.py runserver 127.0.0.1:{port}', page: true }];
+    const python = (files: Record<string, string>, stamps: Map<string, string>, overrides: Partial<PreviewDeps> = {}) =>
+      deps({
+        listFiles: () => Object.keys(files),
+        read: (_root: string, path: string) => stamps.get(path) ?? files[path] ?? null,
+        writeFile: vi.fn((_root: string, path: string, text: string) => void stamps.set(path, text)),
+        needsInstall: () => true,
+        startDatabase: vi.fn(async () => database({ status: 'none', started: [], fresh: false })),
+        ...overrides,
+      });
+
+    it("installs its dependencies with its own tool, not npm, and only again when they change", async () => {
+      const stamps = new Map<string, string>();
+      const first = python(DJANGO, stamps);
+      await startPreview(project('p1', services), () => {}, first.d);
+      expect(first.d.install).not.toHaveBeenCalled();
+      const ran = () => vi.mocked(first.d.runCommand).mock.calls.map(([command, cwd]) => `${cwd.split('/').pop()}: ${command}`);
+      expect(ran()).toContain('backend: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt');
+      await stopPreview();
+
+      const again = python(DJANGO, stamps);
+      await startPreview(project('p1', services), () => {}, again.d);
+      expect(vi.mocked(again.d.runCommand).mock.calls.map(([c]) => c)).not.toContain('python3 -m venv .venv && .venv/bin/pip install -r requirements.txt');
+      await stopPreview();
+
+      const changed = python({ ...DJANGO, 'backend/requirements.txt': 'django==5.2' }, stamps);
+      await startPreview(project('p1', services), () => {}, changed.d);
+      expect(vi.mocked(changed.d.runCommand).mock.calls.map(([c]) => c)).toContain('python3 -m venv .venv && .venv/bin/pip install -r requirements.txt');
+    });
+
+    it("runs the framework's migrations in the service's folder, also without a database from compose", async () => {
+      const { d } = python(DJANGO, new Map());
+      await startPreview(project('p1', services), () => {}, d);
+      const calls = vi.mocked(d.runCommand).mock.calls.map(([command, cwd]) => ({ command, cwd }));
+      expect(calls).toContainEqual({ command: '.venv/bin/python manage.py migrate', cwd: '/home/.vibe-teamlead/worktrees/preview/p1/backend' });
+    });
+
+    it('says which install failed, with its output', async () => {
+      const { d } = python(DJANGO, new Map(), { runCommand: vi.fn(async (command: string) => (command.includes('pip install') ? { code: 127, output: 'sh: python3: command not found' } : { code: 0, output: '' })) });
+      const status = await startPreview(project('p1', services), () => {}, d);
+      expect(status.stage).toBe('failed');
+      expect(status.message).toContain('backend');
+      expect(status.logTail).toContain('python3: command not found');
+    });
   });
 
   it('installs when the lockfile changed or node_modules is missing, and not otherwise', async () => {

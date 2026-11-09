@@ -7,6 +7,7 @@
 
 import type { PreviewService } from '../../shared/types/project';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
+import { proposeStackServices } from './stacks';
 
 /** First word of a `dev` script that marks a frontend dev server */
 const FRONTEND_TOOLS = new Set(['next', 'vite', 'nuxt', 'nuxi', 'svelte-kit', 'astro', 'ng', 'remix', 'react-scripts', 'react-router']);
@@ -54,6 +55,14 @@ export function proposePreviewServices({ files, read }: ProjectFiles): PreviewSe
     } else if ((scripts['start:dev'] || scripts.dev) && !(!dir && packages.length > 1 && RUNS_WORKSPACE.test(scripts.dev ?? ''))) {
       services.push({ name, dir, command: `${manager} run ${scripts['start:dev'] ? 'start:dev' : 'dev'}` });
     }
+  }
+  // Python, Ruby, PHP and Go services; a JavaScript frontend stays the page when there is one
+  const taken = new Set(services.map((s) => s.name));
+  for (const { page, ...service } of proposeStackServices({ files, read })) {
+    let name = service.name;
+    for (let n = 2; taken.has(name); n++) name = `${service.name}-${n}`;
+    taken.add(name);
+    services.push({ ...service, name, ...(page && !pageChosen ? { page: true } : {}) });
   }
   return services;
 }

@@ -22,6 +22,15 @@ const FRAMEWORK_PORTS: Record<string, number> = {
   ng: 4200,
 };
 
+/** Where a backend framework listens by default, told by the service's command */
+const BACKEND_PORTS: Array<[RegExp, number]> = [
+  [/\bmanage\.py\s+runserver\b/, 8000],
+  [/\buvicorn\b/, 8000],
+  [/\bflask\s+run\b/, 5000],
+  [/\brails\s+server\b|\brails\s+s\b/, 3000],
+  [/\bartisan\s+serve\b/, 8000],
+];
+
 const LOCAL_URL = /^(https?):\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{2,5})(\/.*)?$/;
 
 const asPort = (value: string | undefined): number | undefined => {
@@ -55,7 +64,9 @@ export function examplePort(service: PreviewService, read: (path: string) => str
   const script = devScript(read(inDir('package.json')));
   const named = /(?:--port[=\s]|-p\s+|\bPORT=)(\d{2,5})\b/.exec(script)?.[1];
   if (asPort(named)) return asPort(named);
-  return FRAMEWORK_PORTS[script.trim().split(/\s+/)[0] ?? ''];
+  const fromScript = FRAMEWORK_PORTS[script.trim().split(/\s+/)[0] ?? ''];
+  if (fromScript) return fromScript;
+  return BACKEND_PORTS.find(([pattern]) => pattern.test(service.command))?.[1];
 }
 
 /** The env with local addresses on a known example port pointed at that service's preview address. Pure. */
