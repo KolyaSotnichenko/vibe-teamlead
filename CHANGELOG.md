@@ -2,6 +2,12 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.12 - 2026-11-09
+
+- Preview, in the sidebar: the project's app from main inside the window. It starts when you open it and stops when you leave, runs the database from the compose file on its own volume, applies migrations and seeds a new database, and never uses your `.env`. The first time you confirm which services it runs.
+- When a task breaks the project's tests or build, the QA fixer gets two tries instead of one, and it is shown which package failed and the error lines first.
+- Run QA again gives the fixer new tries, instead of re-running the checks and handing the task back at once.
+
 ## 2.0.0-beta.11 - 2026-11-07
 
 - A task stopped before its plan was written now gets a plan when it starts again, instead of failing in seconds.
