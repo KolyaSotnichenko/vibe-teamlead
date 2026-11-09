@@ -41,7 +41,7 @@ While a task builds, the agents write their logs, QA report, security results an
 QA couldn't approve the task and, after the fixer's attempts, handed it to you. The Review tab opens with a "Why QA didn't approve" panel. It gives the reason in plain words and lists what blocked approval, grouped by source: security gates, the design check, or the reviewer's issues. The task pipeline marks QA as the failed stage, not Code.
 
 - A design finding the design system should allow (say, a `repeating-linear-gradient` it uses on purpose) has an "Allow" button. It adds the pattern to `tokens.allowedPatterns`, so the design check stops flagging it. Banned patterns can't be allowed this way.
-- "Run QA again" re-runs the fixer and QA.
+- "Run QA again" starts over: the checks run, and whatever they find gets fresh fixer rounds before the review.
 - To have something specific fixed, describe it in "Request Changes". You can also merge as is.
 
 A run cut off before any code was written has nothing to review, so the task window offers "Resume" instead: coding starts from the plan already written. A run an error stopped partway through the plan also gets "Resume", on its card too: coding carries on with the subtasks left, and what is already built stays there to look at.

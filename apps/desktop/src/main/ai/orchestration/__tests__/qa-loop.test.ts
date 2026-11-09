@@ -1298,11 +1298,42 @@ describe('QALoop', () => {
         expect(outcome.approved).toBe(true);
       });
 
-      it('hands over to the user when the fixer cannot clear it', async () => {
+      it('gives the fixer two rounds at a failing check, then hands over to the user', async () => {
         const { runSession } = approvingReviewer();
         const outcome = await new QALoop(makeConfig({ runSession, runVerification: (async () => broken()) as QALoopConfig['runVerification'] })).run();
-        expect(agents(runSession)).toEqual(['qa_fixer']);
+        expect(agents(runSession)).toEqual(['qa_fixer', 'qa_fixer']);
         expect(outcome.approved).toBe(false);
+        expect(outcome.reason).toBe('recurring_issues');
+      });
+
+      it('a check cleared in the second fixer round goes on to the review', async () => {
+        const { runSession } = approvingReviewer();
+        let round = 0;
+        const runVerification = async () => (round++ < 2 ? broken() : report());
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: runVerification as QALoopConfig['runVerification'] })).run();
+        expect(agents(runSession)).toEqual(['qa_fixer', 'qa_fixer', 'qa_reviewer']);
+        expect(outcome.approved).toBe(true);
+      });
+
+      it('Run QA again gives the fixer new rounds at a check earlier runs could not clear', async () => {
+        const round = (n: number) => ({ iteration: n, status: 'rejected', durationMs: 1, timestamp: 't', issues: [{ title: '`npm test` fails on this task and passes on the commit it started from' }], gate_keys: ['check:npm test'] });
+        const { state, runSession } = approvingReviewer({ qa_iteration_history: [round(1), round(2), round(3)] });
+        const read = mockReadFile.getMockImplementation()!;
+        mockReadFile.mockImplementation((p: string) => (p.endsWith('QA_RERUN') ? Promise.resolve('x') : read(p)));
+        let calls = 0;
+        const runVerification = async () => (calls++ === 0 ? broken() : report());
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: runVerification as QALoopConfig['runVerification'] })).run();
+        expect(agents(runSession)).toEqual(['qa_fixer', 'qa_reviewer']);
+        expect(outcome.approved).toBe(true);
+        expect((state.plan.qa_iteration_history as unknown[]).length).toBeGreaterThan(3);
+      });
+
+      it('without Run QA again, a check earlier runs could not clear is handed over at once', async () => {
+        const round = (n: number) => ({ iteration: n, status: 'rejected', durationMs: 1, timestamp: 't', issues: [], gate_keys: ['check:npm test'] });
+        const { runSession } = approvingReviewer({ qa_iteration_history: [round(1), round(2)] });
+        const outcome = await new QALoop(makeConfig({ runSession, runVerification: (async () => broken()) as QALoopConfig['runVerification'] })).run();
+        expect(agents(runSession)).toEqual([]);
+        expect(outcome.reason).toBe('recurring_issues');
       });
 
       it('tells the reviewer what ran, so it need not run it again', async () => {

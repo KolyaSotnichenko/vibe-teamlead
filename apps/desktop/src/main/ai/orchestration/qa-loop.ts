@@ -55,6 +55,12 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 
 /** Rounds an issue must appear in before escalation: the fixer gets two tries at it */
 const RECURRING_ISSUE_THRESHOLD = 3;
+/**
+ * Fixer rounds a finding gets before the user is asked. A project check that
+ * the task broke is a real failure the fixer can work on, so it gets two; the
+ * other gates' findings repeating usually means a false positive.
+ */
+const fixerRoundsFor = (gateKey: string) => (gateKey.startsWith('check:') ? 2 : 1);
 
 /** The reviewer finished its report but the verdict was lost: ask for the verdict alone. */
 export const SIGNOFF_PROMPT = `You are the QA reviewer. Your review is finished and its report is in qa_report.md in the spec directory, but your verdict was not recorded.
@@ -469,14 +475,19 @@ export class QALoop extends EventEmitter {
       // A new review: whatever was approved before no longer speaks for this run
       if (this.config.approvals) clearApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir);
 
-      // Rounds of earlier runs count too: a restart must not hide a recurring issue
-      this.iterationHistory = await this.loadIterationHistory();
+      // Rounds of earlier runs count too: a restart must not hide a recurring issue.
+      // "Run QA again" is the user asking for fresh tries, so it starts the count over.
+      this.iterationHistory = rerun ? [] : await this.loadIterationHistory();
+      let extraCheckRound = false;
 
       // Main QA loop
       let consecutiveErrors = 0;
       let lastErrorContext: QAErrorContext | undefined;
 
-      for (let iteration = 1; iteration <= maxIterations; iteration++) {
+      for (let iteration = 1; iteration <= maxIterations + 1; iteration++) {
+        // One round past the limit, only for a failing check's second fixer round
+        if (iteration > maxIterations && !extraCheckRound) break;
+        extraCheckRound = false;
         if (this.aborted) {
           return this.outcome(false, iteration - 1, Date.now() - startTime, 'cancelled');
         }
@@ -510,20 +521,25 @@ export class QALoop extends EventEmitter {
           this.emitTyped('qa-review-complete', iteration, 'rejected', blockers);
 
           const gateKeys = this.lastGateKeys;
-          const seenBefore = new Set(this.iterationHistory.flatMap((r) => r.gate_keys ?? []));
+          const earlier = [...this.iterationHistory];
+          const roundsBefore = (key: string) => earlier.filter((r) => r.gate_keys?.includes(key)).length;
           await this.recordIteration(iteration, 'rejected', blockers, Date.now() - iterationStart, { gate_keys: gateKeys });
 
           // Nothing new, and the fixer already had a round at these: another can't help
           // (a false positive, say). Only the user can settle it.
           const recurring = findRecurring(this.iterationHistory, blockers);
-          if (gateKeys.every((k) => seenBefore.has(k)) || recurring.length) {
+          if (gateKeys.every((k) => roundsBefore(k) >= fixerRoundsFor(k)) || recurring.length) {
             this.emitTyped('log', 'The checks keep finding the same thing — handing over to you');
             this.checksRepeat = true;
             await this.escalate(blockers);
             return this.outcome(false, iteration, Date.now() - startTime, 'recurring_issues');
           }
 
-          if (iteration >= maxIterations) break;
+          if (iteration >= maxIterations) {
+            // A check the fixer has had fewer rounds at than it gets still has a try
+            extraCheckRound = iteration === maxIterations && gateKeys.some((k) => k.startsWith('check:') && roundsBefore(k) < fixerRoundsFor(k));
+            if (!extraCheckRound) break;
+          }
           const stopped = await this.runFixer(iteration, maxIterations, blockers, startTime);
           if (stopped) return stopped;
           continue;
