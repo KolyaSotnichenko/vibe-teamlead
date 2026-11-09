@@ -206,3 +206,22 @@ export function serviceEnv(example: string, started: StartedService[]): Record<s
   if (database) entries.push(...splitConnection(database.url));
   return Object.fromEntries(entries);
 }
+
+const ROOT_COMPOSE = /^(docker-)?compose(\.[\w-]+)?\.ya?ml$/;
+const MAIN_COMPOSE = /^(docker-)?compose\.ya?ml$/;
+
+/**
+ * The project's compose files at its root, the main one first: an override (`compose.e2e.yml`)
+ * often only changes settings and names no images, and sorts before the main file. Pure.
+ */
+export function composeFilesInOrder(files: string[]): string[] {
+  const root = files.filter((file) => ROOT_COMPOSE.test(file)).sort();
+  return [...root.filter((file) => MAIN_COMPOSE.test(file)), ...root.filter((file) => !MAIN_COMPOSE.test(file))];
+}
+
+/** The service images across compose files, in order: the first image of each kind. Pure. */
+export function imagesFromComposeFiles(contents: string[]): ServiceImage[] {
+  const found = new Map<ServiceImage['kind'], ServiceImage>();
+  for (const content of contents) for (const image of serviceImages(content)) if (!found.has(image.kind)) found.set(image.kind, image);
+  return [...found.values()];
+}

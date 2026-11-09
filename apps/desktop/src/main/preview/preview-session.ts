@@ -17,7 +17,7 @@ import type { PreviewStatus } from '../../shared/types/preview';
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
-import { detectChecks, serviceEnv, serviceImages } from '../ai/verification/detect-checks';
+import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, serviceEnv } from '../ai/verification/detect-checks';
 import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
@@ -365,8 +365,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       await buildLibraries(session, files, true);
 
       emit(session, { stage: 'database', message: undefined });
-      const compose = files.find((file) => /^(docker-)?compose\.ya?ml$/.test(file));
-      const images = compose ? serviceImages(deps.read(session.worktree, compose) ?? '') : [];
+      // The main compose file first; an override can add a kind the main file doesn't name
+      const images = imagesFromComposeFiles(composeFilesInOrder(files).map((file) => deps.read(session.worktree, file) ?? ''));
       const database = await deps.startDatabase(images, {
         docker: deps.docker,
         projectId: session.task ? previewTaskKey(session.task.worktree) : project.id,

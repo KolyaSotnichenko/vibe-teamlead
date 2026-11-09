@@ -18,7 +18,7 @@ import { basename, delimiter, dirname, join } from 'node:path';
 import { runProcess, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
-import { type Check, type DetectedChecks, detectChecks, namesDatabase, type ServiceImage, serviceEnv, serviceImages } from './detect-checks';
+import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
 import { type DockerRun, hostDocker, startTestServices } from './test-services';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
@@ -240,7 +240,6 @@ async function findTamper(run: GitRun, base: string, head: string): Promise<Tamp
   return findings;
 }
 
-const COMPOSE_FILE = /^(docker-)?compose(\.[\w-]+)?\.ya?ml$/;
 /** At the root or one level of packages in: the example settings of a monorepo's apps */
 const ENV_EXAMPLE = /^([^/]+\/){0,2}\.env\.(example|sample)$/;
 /** A real env file in the repository: tools may read it before anything the app sets */
@@ -256,12 +255,13 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
   const contents = new Map<string, string | null>();
   // The manifests detection reads are all at the root
   for (const file of files.filter((name) => !name.includes('/') && name.endsWith('.json'))) contents.set(file, await show(file));
-  const composeFile = files.find((name) => COMPOSE_FILE.test(name));
+  // The main compose file first: an override that sorts before it may name no images
+  const composeContents = await Promise.all(composeFilesInOrder(files).map(show));
   const examples = await Promise.all(files.filter((name) => ENV_EXAMPLE.test(name)).sort().map(show));
   const committed = await Promise.all(files.filter((name) => COMMITTED_ENV.test(name) && !/\.(example|sample)$/.test(name)).map(show));
   return {
     detected: detectChecks({ files, read: (path) => contents.get(path) ?? null }),
-    images: composeFile ? serviceImages(await show(composeFile)) : [],
+    images: imagesFromComposeFiles(composeContents),
     example: examples.join('\n'),
     committedDatabase: committed.some(namesDatabase),
   };

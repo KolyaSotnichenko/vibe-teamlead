@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { detectChecks, serviceEnv, serviceImages } from '../detect-checks';
+import { composeFilesInOrder, imagesFromComposeFiles, detectChecks, serviceEnv, serviceImages } from '../detect-checks';
 
 const project = (files: Record<string, string>) => detectChecks({ files: Object.keys(files), read: (path) => files[path] ?? null });
 const pkg = (scripts: Record<string, string>, extra: Record<string, unknown> = {}) => JSON.stringify({ scripts, ...extra });
@@ -211,5 +211,30 @@ describe('serviceEnv', () => {
 
   it('an example address for a service it did not start stays out: it would point at nothing, or at something real', () => {
     expect(serviceEnv('DATABASE_URL=postgres://localhost/x\n', [])).toEqual({});
+  });
+});
+
+describe('which compose files name the databases', () => {
+  it('takes the main file first, then the overrides, at the root only', () => {
+    expect(composeFilesInOrder(['docker-compose.e2e.yml', 'apps/x/compose.yml', 'docker-compose.yml', 'README.md', 'compose.override.yaml'])).toEqual([
+      'docker-compose.yml',
+      'compose.override.yaml',
+      'docker-compose.e2e.yml',
+    ]);
+  });
+
+  it("finds the database in the main file when an override sorts first and has none (roadmaply's e2e file)", () => {
+    const override = 'services:\n  api:\n    environment:\n      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/x\n';
+    const main = 'services:\n  postgres:\n    image: postgres:18-alpine\n';
+    expect(imagesFromComposeFiles([main, override])).toEqual([{ kind: 'postgres', image: 'postgres:18-alpine' }]);
+  });
+
+  it('keeps the first image of a kind and adds kinds only the overrides name', () => {
+    const main = 'services:\n  db:\n    image: postgres:18-alpine\n';
+    const extra = 'services:\n  db:\n    image: postgres:17\n  cache:\n    image: redis:7\n';
+    expect(imagesFromComposeFiles([main, extra])).toEqual([
+      { kind: 'postgres', image: 'postgres:18-alpine' },
+      { kind: 'redis', image: 'redis:7' },
+    ]);
   });
 });
