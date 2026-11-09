@@ -11,10 +11,10 @@ import { QueueSettingsModal } from '../QueueSettingsModal';
 
 afterEach(cleanup);
 
-function show(currentMaxParallel = 1, currentAutoMerge = false) {
+function show(currentMaxParallel = 1, currentAutoMerge = false, currentPreviewHold = false) {
   const onSave = vi.fn();
   const onOpenChange = vi.fn();
-  render(<QueueSettingsModal open onOpenChange={onOpenChange} projectId="p" currentMaxParallel={currentMaxParallel} currentAutoMerge={currentAutoMerge} onSave={onSave} />);
+  render(<QueueSettingsModal open onOpenChange={onOpenChange} projectId="p" currentMaxParallel={currentMaxParallel} currentAutoMerge={currentAutoMerge} currentPreviewBeforeAutoMerge={currentPreviewHold} onSave={onSave} />);
   return { onSave, onOpenChange, input: screen.getByRole('spinbutton') };
 }
 const WARNING = 'tasks:queue.settings.parallelWarning';
@@ -45,13 +45,31 @@ describe('QueueSettingsModal', () => {
     const { input, onSave } = show(1);
     fireEvent.change(input, { target: { value: '2' } });
     save();
-    expect(onSave).toHaveBeenCalledWith(2, false);
+    expect(onSave).toHaveBeenCalledWith(2, false, false);
   });
 
   it('turns auto-merge on', () => {
     const { onSave } = show(1);
     fireEvent.click(screen.getByRole('switch'));
     save();
-    expect(onSave).toHaveBeenCalledWith(1, true);
+    expect(onSave).toHaveBeenCalledWith(1, true, false);
+  });
+
+  it('offers "UI tasks wait for my preview" only while auto-merge is on, off by default', () => {
+    const { onSave } = show(1, false);
+    expect(screen.queryByText('tasks:queue.settings.previewHoldLabel')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByText('tasks:queue.settings.previewHoldLabel')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('switch')[1]);
+    save();
+    expect(onSave).toHaveBeenCalledWith(1, true, true);
+  });
+
+  it('keeps the preview switch as saved, and drops it when auto-merge goes off', () => {
+    const { onSave } = show(1, true, true);
+    expect(screen.getAllByRole('switch')[1]).toBeChecked();
+    fireEvent.click(screen.getAllByRole('switch')[0]);
+    save();
+    expect(onSave).toHaveBeenCalledWith(1, false, false);
   });
 });

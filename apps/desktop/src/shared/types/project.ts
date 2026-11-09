@@ -34,6 +34,8 @@ export interface ProjectSettings {
   maxParallelTasks?: number;
   /** A task QA approved merges by itself (default: off) */
   autoMerge?: boolean;
+  /** With auto-merge on: a task that changed UI files waits in review for the owner's preview */
+  previewBeforeAutoMerge?: boolean;
   /** Design system markdown, relative to the project (default: found automatically) */
   designSystemPath?: string;
   /** How QA treats design-check findings (default: block when a design system exists) */

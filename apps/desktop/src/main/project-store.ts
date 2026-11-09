@@ -560,7 +560,7 @@ export class ProjectStore {
         );
 
         // Extract staged status from plan (set when changes are merged with --no-commit)
-        const planWithStaged = plan as unknown as { stagedInMainProject?: boolean; stagedAt?: string } | null;
+        const planWithStaged = plan as unknown as { stagedInMainProject?: boolean; stagedAt?: string; waitingForPreview?: boolean } | null;
         const stagedInMainProject = planWithStaged?.stagedInMainProject;
         const stagedAt = planWithStaged?.stagedAt;
 
@@ -607,6 +607,7 @@ export class ProjectStore {
           ...(correctedReviewReason !== undefined && { reviewReason: correctedReviewReason }),
           ...(executionProgress && { executionProgress }),
           stagedInMainProject,
+          ...(planWithStaged?.waitingForPreview === true ? { waitingForPreview: true } : {}),
           stagedAt,
           location, // Add location metadata (main vs worktree)
           specsPath: specPath, // Add full path to specs directory

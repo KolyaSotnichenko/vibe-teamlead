@@ -137,9 +137,12 @@
       "retry": "Please try again",
       "parallelWarning": "More than one at a time can cause conflicts: tasks start from the same code and later meet in the merge. An agent then has to resolve them, which costs time and tokens.",
       "autoMergeLabel": "Merge automatically",
-      "autoMergeHint": "A task merges by itself once QA approved it and the app's checks and Security QA are clean. Anything else, or a merge an agent changed code for, waits for you."
+      "autoMergeHint": "A task merges by itself once QA approved it and the app's checks and Security QA are clean. Anything else, or a merge an agent changed code for, waits for you.",
+      "previewHoldLabel": "UI tasks wait for my preview",
+      "previewHoldHint": "A task that changed UI files stops in Human Review instead of merging, so you can look at it in its Preview tab first. It keeps its slot until you merge it or send notes."
     },
-    "autoMergeFailed": "Couldn't merge \"{{title}}\" automatically"
+    "autoMergeFailed": "Couldn't merge \"{{title}}\" automatically",
+    "heldForPreview": "{{number}} (waits for your preview)"
   },
   "execution": {
     "phases": {
@@ -598,7 +601,8 @@
       "checksIncomplete": "QA passed, checks incomplete",
       "merging": "Merging",
       "mergeFailed": "Merge failed",
-      "mergeReview": "Check the merge"
+      "mergeReview": "Check the merge",
+      "waitingForPreview": "Waiting for your preview"
     },
     "subtasksAria": "{{done}} of {{total}} subtasks done",
     "worktree": "worktree",

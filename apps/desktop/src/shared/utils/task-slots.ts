@@ -34,3 +34,15 @@ export function isAtCapacity(tasks: Task[], limit: number, taskId?: string): boo
   if (taskId && others.some((task) => task.id === taskId)) return false;
   return others.length >= limit;
 }
+
+/** Whether auto-merge holds this task for the owner's preview right now */
+export const waitsForPreview = (task: Pick<Task, 'status' | 'reviewReason' | 'waitingForPreview'>): boolean =>
+  task.status === 'human_review' && task.reviewReason === 'completed' && task.waitingForPreview === true;
+
+/** The slot holders' numbers, a held task's through `held` (it waits for the owner, not an agent) */
+export function slotHolderLabels(tasks: Task[], held: (number: string) => string): string[] {
+  return tasks.filter(occupiesSlot).map((task) => {
+    const number = (task.specId ?? task.id).split('-')[0];
+    return waitsForPreview(task) ? held(number) : number;
+  });
+}

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal } from '../qa-approval';
+import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal, PREVIEW_HOLD } from '../qa-approval';
 
 const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'vtl-approval-')));
 
@@ -173,5 +173,29 @@ describe('what an automatic merge needs', () => {
     await expect(autoMergeRefusal({}, '/wt', '001-a', approved)).resolves.toBeNull();
     await expect(autoMergeRefusal(undefined, null, '001-a', approved)).resolves.toBeNull();
     expect(approved).not.toHaveBeenCalled();
+  });
+});
+
+describe('UI tasks wait for the preview', () => {
+  const approved = async () => true;
+
+  it('holds an approved task that changed UI files, when the switch is on', async () => {
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', approved, async () => true)).resolves.toBe(PREVIEW_HOLD);
+  });
+
+  it("holds it when the changed files can't be listed: the safe side", async () => {
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', approved, async () => undefined)).resolves.toBe(PREVIEW_HOLD);
+  });
+
+  it('lets a task without UI changes merge, and asks nothing with the switch off or for a merge by hand', async () => {
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', approved, async () => false)).resolves.toBeNull();
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', approved)).resolves.toBeNull();
+    const touches = vi.fn(async () => true);
+    await expect(autoMergeRefusal({}, '/wt', '001-a', approved, touches)).resolves.toBeNull();
+    expect(touches).not.toHaveBeenCalled();
+  });
+
+  it('says QA did not approve before anything about the preview', async () => {
+    await expect(autoMergeRefusal({ auto: true }, '/wt', '001-a', async () => false, async () => true)).resolves.not.toBe(PREVIEW_HOLD);
   });
 });

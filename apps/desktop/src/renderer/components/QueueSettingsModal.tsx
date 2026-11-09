@@ -28,8 +28,10 @@ interface QueueSettingsModalProps {
   currentMaxParallel?: number;
   /** Whether tasks QA approved merge by themselves */
   currentAutoMerge?: boolean;
+  /** With auto-merge: UI tasks wait for the owner's preview */
+  currentPreviewBeforeAutoMerge?: boolean;
   /** Callback when user saves the settings */
-  onSave: (maxParallel: number, autoMerge: boolean) => void;
+  onSave: (maxParallel: number, autoMerge: boolean, previewBeforeAutoMerge: boolean) => void;
 }
 
 /**
@@ -44,11 +46,13 @@ export function QueueSettingsModal({
   projectId,
   currentMaxParallel = DEFAULT_MAX_PARALLEL_TASKS,
   currentAutoMerge = false,
+  currentPreviewBeforeAutoMerge = false,
   onSave
 }: QueueSettingsModalProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const [maxParallel, setMaxParallel] = useState(currentMaxParallel);
   const [autoMerge, setAutoMerge] = useState(currentAutoMerge);
+  const [previewHold, setPreviewHold] = useState(currentPreviewBeforeAutoMerge);
   const [error, setError] = useState<string | null>(null);
 
   // Reset to current value when modal opens
@@ -56,6 +60,7 @@ export function QueueSettingsModal({
     if (open) {
       setMaxParallel(currentMaxParallel);
       setAutoMerge(currentAutoMerge);
+      setPreviewHold(currentPreviewBeforeAutoMerge);
       setError(null);
     }
   }, [open, currentMaxParallel, currentAutoMerge]);
@@ -77,7 +82,7 @@ export function QueueSettingsModal({
       return;
     }
 
-    onSave(maxParallel, autoMerge);
+    onSave(maxParallel, autoMerge, autoMerge && previewHold);
     onOpenChange(false);
   };
 
@@ -150,6 +155,16 @@ export function QueueSettingsModal({
             </div>
             <Switch id="autoMerge" checked={autoMerge} onCheckedChange={setAutoMerge} />
           </div>
+
+          {autoMerge && (
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="previewHold">{t('tasks:queue.settings.previewHoldLabel')}</Label>
+                <p className="text-sm text-muted-foreground">{t('tasks:queue.settings.previewHoldHint')}</p>
+              </div>
+              <Switch id="previewHold" checked={previewHold} onCheckedChange={setPreviewHold} />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

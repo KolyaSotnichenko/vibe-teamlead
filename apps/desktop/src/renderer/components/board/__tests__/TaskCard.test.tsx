@@ -83,6 +83,13 @@ describe('TaskCard', () => {
       expect(screen.queryByText('board.chip.qaPassed')).not.toBeInTheDocument();
     });
 
+    it('says a UI task auto-merge held is waiting for your preview', async () => {
+      answers(null);
+      render(<TaskCard task={inReview({ waitingForPreview: true })} onClick={vi.fn()} />);
+      expect(await screen.findByText('board.chip.waitingForPreview')).toBeInTheDocument();
+      expect(screen.queryByText('board.chip.qaPassed')).not.toBeInTheDocument();
+    });
+
     it('stays QA passed when the scan had no error', async () => {
       answers(null);
       render(<TaskCard task={inReview()} onClick={vi.fn()} />);

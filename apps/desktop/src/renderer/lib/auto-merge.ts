@@ -11,7 +11,7 @@ export interface AutoMergeApi {
   getTaskMergeState: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskVerification: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: { status?: string } | null }>;
-  mergeWorktree: (taskId: string, options: { auto: true; projectId?: string }) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string } }>;
+  mergeWorktree: (taskId: string, options: { auto: true; projectId?: string }) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string; heldForPreview?: boolean } }>;
 }
 
 interface AutoMergeOptions {
@@ -19,9 +19,11 @@ interface AutoMergeOptions {
   getTask: (taskId: string) => Task | undefined;
   isEnabled: (task: Task) => boolean;
   onProblem: (taskId: string, message: string) => void;
+  /** Held for the owner's preview ("UI tasks wait for my preview"): it waits, nothing failed */
+  onHeld?: (taskId: string) => void;
 }
 
-export function createAutoMerge({ api, getTask, isEnabled, onProblem }: AutoMergeOptions) {
+export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld }: AutoMergeOptions) {
   const tried = new Set<string>();
 
   const clean = async (task: Task): Promise<boolean> => {
@@ -46,7 +48,8 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem }: AutoMerg
       try {
         if (!(await clean(task))) return;
         const result = await api.mergeWorktree(taskId, { auto: true, projectId: task.projectId });
-        if (!result.success || !result.data?.success) onProblem(taskId, result.data?.message ?? result.error ?? '');
+        if (result.data?.heldForPreview) onHeld?.(taskId);
+        else if (!result.success || !result.data?.success) onProblem(taskId, result.data?.message ?? result.error ?? '');
       } catch (error) {
         onProblem(taskId, error instanceof Error ? error.message : String(error));
       }

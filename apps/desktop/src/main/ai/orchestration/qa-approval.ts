@@ -49,11 +49,20 @@ export async function autoMergeRefusal(
   worktreePath: string | null,
   specId: string,
   approved: (projectDir: string, specDir: string) => Promise<boolean> = approvedAsItIs,
+  /**
+   * Given when the project's "UI tasks wait for my preview" is on: whether the task changed
+   * UI files, undefined when they can't be listed (then it waits too: the safe side)
+   */
+  touchesUi?: () => Promise<boolean | undefined>,
 ): Promise<string | null> {
   if (!options?.auto) return null;
-  if (worktreePath && (await approved(worktreePath, specId))) return null;
-  return 'QA did not approve this exact code, so the merge waits for you.';
+  if (!worktreePath || !(await approved(worktreePath, specId))) return 'QA did not approve this exact code, so the merge waits for you.';
+  if (touchesUi && (await touchesUi()) !== false) return PREVIEW_HOLD;
+  return null;
 }
+
+/** Why an approved UI task did not merge by itself: the owner looks at it first */
+export const PREVIEW_HOLD = 'This task changed UI, so it waits for your preview before it merges.';
 
 /** Never throws: without a record, a later run simply reviews again. */
 export function recordApproval(dir: string, projectDir: string, specDir: string, fingerprint: string | undefined): void {

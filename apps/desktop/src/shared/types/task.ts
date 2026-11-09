@@ -282,6 +282,8 @@ export interface Task {
   executionProgress?: ExecutionProgress;  // Real-time execution progress
   releasedInVersion?: string;  // Version in which this task was released
   stagedInMainProject?: boolean;  // True if changes were staged to main project (worktree merged with --no-commit)
+  /** Auto-merge held it for the owner's preview ("UI tasks wait for my preview") */
+  waitingForPreview?: boolean;
   stagedAt?: string;  // ISO timestamp when changes were staged
   location?: 'main' | 'worktree';  // Where task was loaded from (main project or worktree)
   specsPath?: string;  // Full path to specs directory for this task
@@ -457,6 +459,8 @@ export interface MergeLogEntry {
 export interface WorktreeMergeResult {
   success: boolean;
   message: string;
+  /** Auto-merge held it for the owner's preview: not a failure */
+  heldForPreview?: boolean;
   merged?: boolean;
   conflictFiles?: string[];
   /** The model resolved conflicts: staged, and the commit waits for the user */

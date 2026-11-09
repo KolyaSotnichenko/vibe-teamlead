@@ -92,6 +92,7 @@ function taskCardPropsAreEqual(prevProps: TaskCardProps, nextProps: TaskCardProp
     prevTask.description === nextTask.description &&
     prevTask.updatedAt === nextTask.updatedAt &&
     prevTask.reviewReason === nextTask.reviewReason &&
+    prevTask.waitingForPreview === nextTask.waitingForPreview &&
     prevTask.location === nextTask.location &&
     prevTask.executionProgress?.phase === nextTask.executionProgress?.phase &&
     prevTask.executionProgress?.message === nextTask.executionProgress?.message &&
@@ -334,6 +335,7 @@ export const TaskCard = memo(function TaskCard({
       if (reason === 'plan_review') return { tone: 'outline', label: t('reviewReason.approvePlan') };
       if (reason === 'stopped') return { tone: 'outline', label: t('reviewReason.stopped') };
       if (reason === 'completed' && securityQaError) return { tone: 'attention', label: t('board.chip.securityQaFailed') };
+      if (reason === 'completed' && task.waitingForPreview) return { tone: 'attention', label: t('board.chip.waitingForPreview') };
       if (reason === 'completed' && (verification?.status === 'not_verified' || verification?.status === 'not_configured')) return { tone: 'outline', label: t('board.chip.checksIncomplete') };
       if (reason === 'completed') return { tone: 'outline', label: t('board.chip.qaPassed') };
     }

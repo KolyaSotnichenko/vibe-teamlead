@@ -29,7 +29,9 @@ import { taskDiffBase } from '../../utils/task-diff-base';
 import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
 import { inMergeQueue, isMergeQueued } from '../../ai/merge/merge-queue';
-import { approvedAsItIs, autoMergeRefusal } from '../../ai/orchestration/qa-approval';
+import { approvedAsItIs, autoMergeRefusal, PREVIEW_HOLD } from '../../ai/orchestration/qa-approval';
+import { changedFilesSinceBase, uiChangedSince } from '../../ai/orchestration/qa-browser-scope';
+import { markWaitingForPreview } from './preview-hold';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
@@ -2067,7 +2069,15 @@ export function registerWorktreeHandlers(
           return { success: true, data: { success: false, message: 'This task is already merging, or waiting to.' } };
         }
 
-        const refusal = await autoMergeRefusal(options, worktreePath, task.specId);
+        // "UI tasks wait for my preview": an approved task that changed UI stops here for the owner
+        const touchesUi = project.settings?.previewBeforeAutoMerge && worktreePath
+          ? () => uiChangedSince(() => changedFilesSinceBase(worktreePath))
+          : undefined;
+        const refusal = await autoMergeRefusal(options, worktreePath, task.specId, approvedAsItIs, touchesUi);
+        if (refusal === PREVIEW_HOLD) {
+          await markWaitingForPreview([path.join(specDir, 'implementation_plan.json'), ...(worktreePath ? [path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId, 'implementation_plan.json')] : [])]);
+          return { success: true, data: { success: false, message: refusal, heldForPreview: true } };
+        }
         if (refusal) {
           return { success: true, data: { success: false, message: refusal } };
         }

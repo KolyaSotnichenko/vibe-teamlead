@@ -1,4 +1,4 @@
-import { occupiesSlot, parallelTaskLimit, slotHolders } from '../../shared/utils/task-slots';
+import { occupiesSlot, parallelTaskLimit, slotHolderLabels } from '../../shared/utils/task-slots';
 import { isReadyToStart } from '../lib/task-dependencies';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -495,11 +495,11 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
    * Uses the stored ref value to ensure the save works even if tasks
    * change while the modal is open.
    */
-  const handleSaveQueueSettings = async (maxParallel: number, autoMergeOn: boolean) => {
+  const handleSaveQueueSettings = async (maxParallel: number, autoMergeOn: boolean, previewHoldOn: boolean) => {
     const savedProjectId = queueSettingsProjectIdRef.current || projectId;
     if (!savedProjectId) return;
 
-    const success = await updateProjectSettings(savedProjectId, { maxParallelTasks: maxParallel, autoMerge: autoMergeOn });
+    const success = await updateProjectSettings(savedProjectId, { maxParallelTasks: maxParallel, autoMerge: autoMergeOn, previewBeforeAutoMerge: previewHoldOn });
     if (success) {
       toast({
         title: t('queue.settings.saved'),
@@ -619,7 +619,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     if (readyQueuedKey) void processQueue();
   }, [readyQueuedKey, slotsInUse, processQueue]);
 
-  const holderNames = useTaskStore((state) => slotHolders(state.tasks).join(', '));
+  const holderNames = useTaskStore((state) => slotHolderLabels(state.tasks, (number) => t('queue.heldForPreview', { number })).join(', '));
 
   // Get task order actions from store
   const reorderTasksInColumn = useTaskStore((state) => state.reorderTasksInColumn);
@@ -1072,6 +1072,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           projectId={queueSettingsProjectIdRef.current || projectId || ''}
           currentMaxParallel={maxParallelTasks}
           currentAutoMerge={autoMerge}
+          currentPreviewBeforeAutoMerge={project?.settings?.previewBeforeAutoMerge === true}
           onSave={handleSaveQueueSettings}
         />
       )}

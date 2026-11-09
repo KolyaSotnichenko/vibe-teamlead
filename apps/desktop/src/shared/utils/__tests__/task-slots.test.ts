@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../../types';
-import { isAtCapacity, MAX_PARALLEL_TASKS, occupiesSlot, parallelTaskLimit, slotHolders } from '../task-slots';
+import { isAtCapacity, MAX_PARALLEL_TASKS, occupiesSlot, parallelTaskLimit, slotHolders, slotHolderLabels } from '../task-slots';
 
 const task = (id: string, status: string, metadata = {}) => ({ id, specId: `${id}-name`, status, metadata }) as unknown as Task;
 
@@ -62,5 +62,13 @@ describe('whether a slot is free', () => {
 
   it('counts the others for a task that does not hold one yet', () => {
     expect(isAtCapacity([unmerged, queued], 1, 'b')).toBe(true);
+  });
+});
+
+describe('what the queue waits for', () => {
+  it('names a task held for the preview as waiting for the owner', () => {
+    const held = { ...task('011', 'human_review'), reviewReason: 'completed', waitingForPreview: true } as unknown as Task;
+    const stale = { ...task('012', 'in_progress'), waitingForPreview: true } as unknown as Task;
+    expect(slotHolderLabels([held, stale, task('020', 'in_progress')], (n) => `${n} (your preview)`)).toEqual(['011 (your preview)', '012', '020']);
   });
 });

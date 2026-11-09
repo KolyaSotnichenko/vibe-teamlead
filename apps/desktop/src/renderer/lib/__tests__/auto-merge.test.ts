@@ -7,6 +7,7 @@ function setup(over: Partial<AutoMergeApi> = {}, enabled = true, reviewReason = 
   const task = { id: 't', projectId: 'p', status: 'human_review', reviewReason };
   const mergeWorktree = vi.fn(async () => ({ success: true, data: { success: true, message: 'ok' } }));
   const onProblem = vi.fn();
+  const onHeld = vi.fn();
   const api: AutoMergeApi = {
     getTaskMergeState: vi.fn(async () => ({ success: true, data: null })),
     getTaskSecurityQaError: vi.fn(async () => ({ success: true, data: null })),
@@ -14,8 +15,8 @@ function setup(over: Partial<AutoMergeApi> = {}, enabled = true, reviewReason = 
     mergeWorktree,
     ...over,
   } as AutoMergeApi;
-  const auto = createAutoMerge({ api, getTask: () => task as never, isEnabled: () => enabled, onProblem });
-  return { auto, mergeWorktree, onProblem, task };
+  const auto = createAutoMerge({ api, getTask: () => task as never, isEnabled: () => enabled, onProblem, onHeld });
+  return { auto, mergeWorktree, onProblem, onHeld, task };
 }
 
 describe('merging a task by itself', () => {
@@ -86,5 +87,16 @@ describe('merging a task by itself', () => {
     const { auto, onProblem } = setup({ mergeWorktree: vi.fn(async () => { throw new Error('boom'); }) as never });
     await expect(auto.statusChanged('t', 'ai_review', 'human_review')).resolves.toBeUndefined();
     expect(onProblem).toHaveBeenCalledWith('t', 'boom');
+  });
+});
+
+describe('a UI task held for the preview', () => {
+  it('is marked as waiting for the owner, not reported as a failed merge', async () => {
+    const { auto, onProblem, onHeld } = setup({
+      mergeWorktree: vi.fn(async () => ({ success: true, data: { success: false, message: 'waits for your preview', heldForPreview: true } })) as never,
+    });
+    await auto.statusChanged('t', 'ai_review', 'human_review');
+    expect(onHeld).toHaveBeenCalledWith('t');
+    expect(onProblem).not.toHaveBeenCalled();
   });
 });
