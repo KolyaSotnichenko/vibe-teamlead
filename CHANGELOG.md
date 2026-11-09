@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.17 - 2026-11-09
+
+- The app checks before QA say what they are doing in the task's log: the clean copy, the database, installs and migrations, each check with its time, and the run on main when a check fails. A task in AI Review no longer looks stuck while they run.
+
 ## 2.0.0-beta.16 - 2026-11-09
 
 - A task from Preview notes with Quick fix no longer stops after its plan: a subtask's verification written as a command string is taken as a command check instead of failing the build.
