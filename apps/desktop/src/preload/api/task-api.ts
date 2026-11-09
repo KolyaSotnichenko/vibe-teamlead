@@ -53,6 +53,7 @@ export interface TaskAPI {
     taskId: string,
     options?: import('../../shared/types').TaskRecoveryOptions
   ) => Promise<IPCResult<TaskRecoveryResult>>;
+  resolveFailedSubtasks: (taskId: string, decision: import('../../shared/types').FailedSubtaskDecision) => Promise<IPCResult<{ changed: string[] }>>;
   checkTaskRunning: (taskId: string) => Promise<IPCResult<boolean>>;
   resumePausedTask: (taskId: string) => Promise<IPCResult>;
 
@@ -158,6 +159,9 @@ export const createTaskAPI = (): TaskAPI => ({
     options?: import('../../shared/types').TaskRecoveryOptions
   ): Promise<IPCResult<TaskRecoveryResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_RECOVER_STUCK, taskId, options),
+
+  resolveFailedSubtasks: (taskId: string, decision: import('../../shared/types').FailedSubtaskDecision): Promise<IPCResult<{ changed: string[] }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_RESOLVE_FAILED_SUBTASKS, taskId, decision),
 
   checkTaskRunning: (taskId: string): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_CHECK_RUNNING, taskId),

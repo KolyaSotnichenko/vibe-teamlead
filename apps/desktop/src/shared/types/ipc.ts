@@ -43,6 +43,7 @@ import type {
   WorktreeCreatePRResult,
   TaskRecoveryResult,
   TaskRecoveryOptions,
+  FailedSubtaskDecision,
   TaskMetadata,
   TaskLogs,
   TaskLogStreamChunk,
@@ -195,6 +196,7 @@ export interface ElectronAPI {
   submitReview: (taskId: string, approved: boolean, feedback?: string, images?: ImageAttachment[], options?: { rerunOnly?: boolean }) => Promise<IPCResult>;
   updateTaskStatus: (taskId: string, status: TaskStatus, options?: { forceCleanup?: boolean }) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
   recoverStuckTask: (taskId: string, options?: TaskRecoveryOptions) => Promise<IPCResult<TaskRecoveryResult>>;
+  resolveFailedSubtasks: (taskId: string, decision: FailedSubtaskDecision) => Promise<IPCResult<{ changed: string[] }>>;
   checkTaskRunning: (taskId: string) => Promise<IPCResult<boolean>>;
   resumePausedTask: (taskId: string) => Promise<IPCResult>;
 

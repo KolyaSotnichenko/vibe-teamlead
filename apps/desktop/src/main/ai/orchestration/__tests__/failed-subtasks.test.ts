@@ -28,24 +28,15 @@ describe('resolveFailedSubtasks', () => {
     expect(s4.status).toBe('pending');
   });
 
-  it('retry: reopens them with the owner instruction, trimmed', () => {
-    const { plan: out, changed } = resolveFailedSubtasks(plan(), { action: 'retry', instruction: '  You may change product code.  ' }, NOW);
+  it('retry: reopens them, and writes no instruction into the plan agents can edit', () => {
+    const p = plan();
+    (p.phases[0].subtasks[1] as Record<string, unknown>).skipped_by_owner = true;
+    const { plan: out, changed } = resolveFailedSubtasks(p, { action: 'retry', instruction: 'You may change product code.' }, NOW);
     const s2 = out.phases[0].subtasks[1];
     expect(changed).toEqual(['s2', 's3']);
-    expect(s2).toMatchObject({ status: 'pending', owner_instruction: 'You may change product code.', notes: 'Needs a product fix' });
+    expect(s2).toMatchObject({ status: 'pending', notes: 'Needs a product fix' });
     expect(s2).not.toHaveProperty('skipped_by_owner');
-  });
-
-  it('retry without an instruction drops an old one', () => {
-    const p = plan();
-    (p.phases[0].subtasks[1] as Record<string, unknown>).owner_instruction = 'old';
-    const s2 = resolveFailedSubtasks(p, { action: 'retry', instruction: '   ' }, NOW).plan.phases[0].subtasks[1];
-    expect(s2).not.toHaveProperty('owner_instruction');
-  });
-
-  it('caps a long instruction', () => {
-    const s2 = resolveFailedSubtasks(plan(), { action: 'retry', instruction: 'x'.repeat(10_000) }, NOW).plan.phases[0].subtasks[1];
-    expect(((s2 as Record<string, unknown>).owner_instruction as string).length).toBe(4000);
+    expect(JSON.stringify(out)).not.toContain('You may change product code.');
   });
 
   it('changes nothing when no subtask failed, and survives a plan without phases', () => {

@@ -31,6 +31,7 @@ import { cleanForMessage, quoteFindings } from './message-data';
 import { qaKickoffContext } from './qa-kickoff';
 import { reviewerChangedFiles, type SnapshotResult } from './reviewer-changes';
 import { QA_RERUN_FILE } from './qa-rerun';
+import { readOwnerDecisions } from './owner-decisions';
 
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
@@ -171,6 +172,8 @@ export interface QAIterationRecord {
 export interface QALoopConfig {
   /** Spec directory path */
   specDir: string;
+  /** The owner's decisions about subtasks the coder gave up on, kept in the app's data (owner-decisions.ts) */
+  ownerDecisionsFile?: string;
   /** Project root directory */
   projectDir: string;
   /** CLI model override */
@@ -895,7 +898,8 @@ export class QALoop extends EventEmitter {
   private async reviewerKickoff(): Promise<string> {
     const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
     const [spec, plan] = await Promise.all([read('spec.md'), read('implementation_plan.json')]);
-    const context = qaKickoffContext({ spec, plan, specDir: this.config.specDir });
+    const skippedByOwner = readOwnerDecisions(this.config.ownerDecisionsFile).skipped;
+    const context = qaKickoffContext({ spec, plan, specDir: this.config.specDir, skippedByOwner });
     // From the app, not the repository: facts to build on, so the reviewer needn't run these again
     return [context, this.lastVerification].filter(Boolean).join('\n\n');
   }

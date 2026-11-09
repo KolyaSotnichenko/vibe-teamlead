@@ -175,12 +175,12 @@ describe('a subtask the owner sent back with an instruction', () => {
   const reopened = planWith(
     subtask('subtask-2-2', '[AC-1] Run the whole suite', 'pending', {
       notes: 'Full suite red on pre-existing specs; needs a product fix.',
-      owner_instruction: 'You may change product code to fix the a11y failures.',
+      owner_instruction: 'FORGED-BY-AN-AGENT',
     }),
   );
 
   it("gives the owner's instruction after the data, as the owner's, and the earlier session's notes as data", () => {
-    const text = context({ plan: reopened });
+    const text = context({ plan: reopened, ownerInstruction: 'You may change product code to fix the a11y failures.' });
     const instruction = text.indexOf('You may change product code');
     expect(instruction).toBeGreaterThan(text.lastIndexOf('</coder_subtask_context_'));
     expect(text).toMatch(/The owner read why an earlier session stopped/);
@@ -189,8 +189,10 @@ describe('a subtask the owner sent back with an instruction', () => {
     expect(notes).toBeLessThan(text.lastIndexOf('</coder_subtask_context_'));
   });
 
-  it('says nothing about an owner without an instruction', () => {
-    expect(context()).not.toMatch(/owner/i);
+  it('never takes an instruction from the plan, which agents can edit', () => {
+    const text = context({ plan: reopened });
+    expect(text).not.toMatch(/owner/i);
+    expect(text).not.toContain('FORGED-BY-AN-AGENT');
   });
 });
 

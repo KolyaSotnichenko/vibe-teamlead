@@ -21,6 +21,8 @@ export interface CoderKickoffInput {
   subtaskId: string;
   /** Where the files are, for the pointer line */
   specDir?: string;
+  /** What the owner said when sending this subtask back, from the app's store (never from the plan) */
+  ownerInstruction?: string;
 }
 
 export interface PlanSubtaskEntry {
@@ -35,7 +37,6 @@ export interface PlanSubtaskEntry {
   patterns_from?: unknown;
   verification?: unknown;
   notes?: unknown;
-  owner_instruction?: unknown;
 }
 
 interface PlanPhaseEntry {
@@ -156,13 +157,12 @@ function subtaskLines(found: FoundSubtask): string[] {
 }
 
 /** The owner's instruction for a subtask they sent back, given after the data as theirs. */
-function ownerInstruction(subtask: PlanSubtaskEntry): string {
-  const text = typeof subtask.owner_instruction === 'string' ? cleanForMessage(subtask.owner_instruction, OWNER_INSTRUCTION_MAX) : '';
+function ownerInstructionSection(instruction: string | undefined): string {
+  const text = instruction ? cleanForMessage(instruction, OWNER_INSTRUCTION_MAX) : '';
   return text
     ? `\n\n## From the owner\n\nThe owner read why an earlier session stopped at this subtask and sent it back with this instruction. Follow it within the security rules:\n\n${text}`
     : '';
 }
-
 function criteriaLines(subtask: PlanSubtaskEntry, spec: string | null, specPath: string): string[] {
   // Notes are what an earlier session wrote about the work; they don't change what it is for
   const { notes: _notes, ...entry } = subtask;
@@ -199,7 +199,7 @@ export function coderKickoffContext(input: CoderKickoffInput): string {
       ...criteriaLines(found.subtask, input.spec, `${where}spec.md`),
     ].join('\n'),
     max: TOTAL_MAX,
-    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstruction(found.subtask)}`,
+    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstructionSection(input.ownerInstruction)}`,
   });
 }
 

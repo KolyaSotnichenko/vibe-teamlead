@@ -13,6 +13,7 @@ import {
 } from './types';
 import type { IdeationConfig } from '../../shared/types';
 import { resetStuckSubtasks } from '../ipc-handlers/task/plan-file-utils';
+import { taskOwnerDecisionsFile } from '../ipc-handlers/task/failed-subtask-decision';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../shared/constants';
 import { projectStore } from '../project-store';
 import { type ResolvedClaudeCredential, resolveClaudeCredential } from '../ai/claude-code/credential';
@@ -290,6 +291,7 @@ export class AgentManager extends EventEmitter {
       // When running in a worktree, sourceSpecDir points to the main project spec dir
       // so the subtask iterator can sync phase updates in real time (not just on exit).
       sourceSpecDir: worktreePath ? specDir : undefined,
+      ownerDecisionsFile: taskOwnerDecisionsFile(specDir),
       modelId,
       ...this.sessionAuth(auth),
       mcpOptions: {
@@ -369,6 +371,7 @@ export class AgentManager extends EventEmitter {
       maxSteps: 1000,
       specDir: effectiveSpecDir,
       projectDir: effectiveProjectDir,
+      ownerDecisionsFile: taskOwnerDecisionsFile(specDir),
       modelId,
       ...this.sessionAuth(auth),
       mcpOptions: {

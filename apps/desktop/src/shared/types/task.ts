@@ -42,14 +42,21 @@ export interface Subtask {
   id: string;
   title: string;
   description: string;
-  status: SubtaskStatus;
+  status: SubtaskStatus | 'blocked';
   files: string[];
+  /** What the coder wrote about it, such as why it stopped */
+  notes?: string;
+  /** The owner went on without it after the coder gave up */
+  skippedByOwner?: boolean;
   verification?: {
     type: 'command' | 'browser';
     run?: string;
     scenario?: string;
   };
 }
+
+/** What the owner decided about subtasks the coder gave up on. */
+export type FailedSubtaskDecision = { action: 'skip' } | { action: 'retry'; instruction?: string };
 
 export interface QAReport {
   status: 'passed' | 'failed' | 'pending';

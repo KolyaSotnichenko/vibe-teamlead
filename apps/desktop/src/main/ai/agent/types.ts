@@ -47,6 +47,8 @@ export interface SerializableSessionConfig {
   projectDir: string;
   /** Source spec dir in main project (for worktree → main sync during execution) */
   sourceSpecDir?: string;
+  /** The owner's decisions about subtasks the coder gave up on, in the app's data */
+  ownerDecisionsFile?: string;
   phase?: SessionConfig['phase'];
   modelShorthand?: SessionConfig['modelShorthand'];
   thinkingLevel?: SessionConfig['thinkingLevel'];

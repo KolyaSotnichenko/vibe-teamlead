@@ -757,6 +757,7 @@ async function runBuildOrchestrator(
     specDir: session.specDir,
     projectDir: session.projectDir,
     sourceSpecDir: session.sourceSpecDir,
+    ownerDecisionsFile: session.ownerDecisionsFile,
     abortSignal: abortController.signal,
     architectMode: session.architectMode,
 
@@ -960,6 +961,7 @@ async function runQualityAssurance(
   const verificationBaseResults = new Map<string, CheckOutcome>();
   const qaLoop = new QALoop({
     specDir: session.specDir,
+    ownerDecisionsFile: session.ownerDecisionsFile,
     projectDir: session.projectDir,
     abortSignal: abortController.signal,
     maxIterations: DEFAULT_QA_ITERATIONS,

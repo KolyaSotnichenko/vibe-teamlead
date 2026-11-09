@@ -22,6 +22,8 @@ export interface QAKickoffInput {
   plan: string | null;
   /** Where the files are, for the pointer line */
   specDir?: string;
+  /** Subtasks the owner went on without, from the app's store (the plan's own flag is the agents' word) */
+  skippedByOwner?: string[];
 }
 
 /** A criterion line: an optional list marker or heading, optional bold, then `AC-n`. */
@@ -41,7 +43,6 @@ interface PlanSubtask {
   title?: unknown;
   description?: unknown;
   status?: unknown;
-  skipped_by_owner?: unknown;
   notes?: unknown;
 }
 
@@ -99,28 +100,27 @@ const subtaskId = (s: PlanSubtask): string => {
   return SUBTASK_ID.test(id) ? id : '?';
 };
 
-const skippedByOwner = (s: PlanSubtask): boolean => s.skipped_by_owner === true && s.status === 'completed';
-
-const subtaskStatus = (s: PlanSubtask): string =>
-  skippedByOwner(s) ? 'skipped by the owner' : KNOWN_STATUS.has(asText(s.status)) ? asText(s.status) : 'unknown';
+const subtaskStatus = (s: PlanSubtask, skipped: ReadonlySet<string>): string =>
+  s.status === 'completed' && skipped.has(subtaskId(s)) ? 'skipped by the owner' : KNOWN_STATUS.has(asText(s.status)) ? asText(s.status) : 'unknown';
 
 const SKIPPED_NOTES_MAX = 600;
 
 /** A compact table of the plan's subtasks: id, status, first line of the description. */
-export function subtaskTable(plan: string): string[] {
+export function subtaskTable(plan: string, skippedByOwner: string[] = []): string[] {
+  const ownerSkipped = new Set(skippedByOwner);
   const parsed = safeParseJson<{ phases?: Array<{ subtasks?: PlanSubtask[] }> }>(plan);
   if (!parsed || typeof parsed !== 'object') return ['implementation_plan.json could not be parsed; use `mcp__vibe-teamlead__get_build_progress` for the subtasks.'];
   const phases = Array.isArray(parsed.phases) ? parsed.phases : [];
   const subtasks = phases.flatMap((phase) => (Array.isArray(phase?.subtasks) ? phase.subtasks : [])).filter((s) => s && typeof s === 'object');
   if (!subtasks.length) return ['The plan lists no subtasks.'];
   const completed = subtasks.filter((s) => s.status === 'completed').length;
-  const skipped = subtasks.filter(skippedByOwner);
+  const skipped = subtasks.filter((s) => s.status === 'completed' && ownerSkipped.has(subtaskId(s)));
   return [
     `${subtasks.length} subtask${subtasks.length === 1 ? '' : 's'}, ${completed} completed${skipped.length ? ` (${skipped.length} skipped by the owner)` : ''}.`,
     '',
     '| ID | Status | Description |',
     '|----|--------|-------------|',
-    ...subtasks.map((s) => `| ${subtaskId(s)} | ${subtaskStatus(s)} | ${firstLine(s.description) || firstLine(s.title)} |`),
+    ...subtasks.map((s) => `| ${subtaskId(s)} | ${subtaskStatus(s, ownerSkipped)} | ${firstLine(s.description) || firstLine(s.title)} |`),
     ...(skipped.length
       ? [
           '',
@@ -154,7 +154,7 @@ export function qaKickoffContext(input: QAKickoffInput): string {
   }
 
   parts.push('', '## Subtasks (from implementation_plan.json)', '');
-  parts.push(...(input.plan ? subtaskTable(input.plan) : ['implementation_plan.json could not be read; use `mcp__vibe-teamlead__get_build_progress`.']));
+  parts.push(...(input.plan ? subtaskTable(input.plan, input.skippedByOwner) : ['implementation_plan.json could not be read; use `mcp__vibe-teamlead__get_build_progress`.']));
 
   const pointer = `The full spec is ${where}spec.md and the plan is ${where}implementation_plan.json. Read a specific spec.md section only when a criterion needs its detail; don't read either file whole.`;
   return dataBlock({

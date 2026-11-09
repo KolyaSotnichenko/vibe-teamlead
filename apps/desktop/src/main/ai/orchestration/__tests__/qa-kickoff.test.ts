@@ -167,11 +167,18 @@ describe('qaKickoffContext', () => {
         { id: 'subtask-6-1', status: 'completed', skipped_by_owner: true, description: 'Run the whole suite twice', notes: 'Red on pre-existing specs from another task.' },
       ] }],
     });
-    const out = qaKickoffContext({ spec: SPEC, plan });
+    const out = qaKickoffContext({ spec: SPEC, plan, skippedByOwner: ['subtask-6-1'] });
     expect(out).toContain('| subtask-6-1 | skipped by the owner | Run the whole suite twice |');
     expect(out).toContain('2 subtasks, 2 completed (1 skipped by the owner)');
     expect(out).toContain('Red on pre-existing specs from another task.');
     expect(out).toMatch(/owner decided.*not.*finding/i);
+  });
+
+  it("does not take the plan's own skipped flag as the owner's word", () => {
+    const plan = JSON.stringify({ phases: [{ subtasks: [{ id: 'subtask-6-1', status: 'completed', skipped_by_owner: true, description: 'Run the suite' }] }] });
+    const out = qaKickoffContext({ spec: SPEC, plan });
+    expect(out).toContain('| subtask-6-1 | completed | Run the suite |');
+    expect(out).not.toMatch(/skipped by the owner/);
   });
 
   it('copes with a missing spec or an unreadable plan', () => {

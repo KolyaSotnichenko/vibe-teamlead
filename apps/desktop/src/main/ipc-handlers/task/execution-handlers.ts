@@ -23,6 +23,7 @@ import {
 } from './plan-file-utils';
 import { writeFileAtomicSync } from '../../utils/atomic-file';
 import { findTaskWorktree } from '../../worktree-paths';
+import { applyFailedSubtaskDecision, parseFailedSubtaskDecision, taskOwnerDecisionsFile } from './failed-subtask-decision';
 import { projectStore } from '../../project-store';
 import { getIsolatedGitEnv, detectWorktreeBranch } from '../../utils/git-isolation';
 import { cancelFallbackTimer } from '../agent-events-handlers';
@@ -817,6 +818,30 @@ export function registerTaskExecutionHandlers(
     async (_, taskId: string): Promise<IPCResult<boolean>> => {
       const isRunning = agentManager.isRunning(taskId);
       return { success: true, data: isRunning };
+    }
+  );
+
+  /**
+   * What the owner decided about subtasks the coder gave up on: skip them, or send them
+   * back with an instruction. The renderer resumes the task afterwards.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_RESOLVE_FAILED_SUBTASKS,
+    async (_, taskId: string, decision: unknown): Promise<IPCResult<{ changed: string[] }>> => {
+      const parsed = parseFailedSubtaskDecision(decision);
+      if (!parsed) return { success: false, error: 'Unknown decision' };
+      if (agentManager.isRunning(taskId)) return { success: false, error: 'Task is still running' };
+      const { task, project } = findTaskAndProject(taskId);
+      if (!task || !project) return { success: false, error: 'Task not found' };
+      const specsBaseDir = getSpecsDir(project.autoBuildPath);
+      const worktreePath = findTaskWorktree(project.path, task.specId);
+      const mainSpecDir = path.join(project.path, specsBaseDir, task.specId);
+      const planPaths = [worktreePath ? path.join(worktreePath, specsBaseDir, task.specId) : null, mainSpecDir]
+        .filter((dir): dir is string => !!dir)
+        .map((dir) => path.join(dir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN))
+        .filter((planPath) => existsSync(planPath));
+      if (!planPaths.length) return { success: false, error: 'The task has no plan' };
+      return { success: true, data: await applyFailedSubtaskDecision(planPaths, parsed, taskOwnerDecisionsFile(mainSpecDir)) };
     }
   );
 

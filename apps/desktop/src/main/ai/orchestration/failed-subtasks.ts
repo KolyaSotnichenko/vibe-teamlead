@@ -2,7 +2,9 @@
  * What the owner decided about subtasks a coder gave up on (status `failed` or `blocked`,
  * with its reason in `notes`). Resuming as is gives the coder the same subtask under the same
  * limits, and it stops again; the owner either skips the subtask, so the task goes on to QA,
- * or sends it back with an instruction the coder gets on its next session.
+ * or sends it back with an instruction the coder gets on its next session. The plan only
+ * shows the decision (`skipped_by_owner` is for display); what the agents are told comes
+ * from owner-decisions.ts.
  */
 
 /** Statuses a coder sets when it can't finish its subtask. */
@@ -35,11 +37,9 @@ export function resolveFailedSubtasks<T extends PlanLike>(
         subtask.completed_at = now;
         continue;
       }
+      // The instruction goes to the app's own store (owner-decisions.ts), never into the plan agents write
       subtask.status = 'pending';
       delete subtask.skipped_by_owner;
-      const instruction = (decision.instruction ?? '').trim().slice(0, OWNER_INSTRUCTION_MAX);
-      if (instruction) subtask.owner_instruction = instruction;
-      else delete subtask.owner_instruction;
     }
   }
   return { plan, changed };

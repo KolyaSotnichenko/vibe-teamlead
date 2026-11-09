@@ -63,6 +63,8 @@ export const taskMock = {
   // Task status operations
   updateTaskStatus: async (_taskId: string, _status: string, _options?: { forceCleanup?: boolean }) => ({ success: true }),
 
+  resolveFailedSubtasks: async () => ({ success: true, data: { changed: [] } }),
+
   recoverStuckTask: async (taskId: string, options?: TaskRecoveryOptions) => ({
     success: true,
     data: {

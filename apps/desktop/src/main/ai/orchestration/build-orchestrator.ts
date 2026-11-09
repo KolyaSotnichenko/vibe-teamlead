@@ -31,6 +31,7 @@ import {
   IMPLEMENTATION_PLAN_SCHEMA_HINT } from '../schema';
 import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
+import { readOwnerDecisions } from './owner-decisions';
 import { coderKickoffContext, findPlanSubtask, type PlanSubtaskEntry } from './coder-kickoff';
 import { cleanForMessage } from './message-data';
 import { iterateSubtasks } from './subtask-iterator';
@@ -90,6 +91,8 @@ export function architectWanted(mode: ArchitectMode | undefined, complexity: str
 
 /** Configuration for the build orchestrator */
 export interface BuildOrchestratorConfig {
+  /** The owner's decisions about subtasks the coder gave up on, kept in the app's data (owner-decisions.ts) */
+  ownerDecisionsFile?: string;
   /** Spec directory path (e.g., .vibe-teamlead/specs/001-feature/) */
   specDir: string;
   /** Project root directory */
@@ -622,7 +625,8 @@ export class BuildOrchestrator extends EventEmitter {
   private async coderKickoff(subtaskId: string): Promise<string> {
     const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
     const [plan, spec] = await Promise.all([read('implementation_plan.json'), read('spec.md')]);
-    const context = coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir });
+    const ownerInstruction = readOwnerDecisions(this.config.ownerDecisionsFile).instructions[subtaskId];
+    const context = coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir, ownerInstruction });
     const found = findPlanSubtask(plan, subtaskId);
     const log = (line: string) => this.emitTyped('log', line);
     if (!this.config.subtaskCodeContext) return context;
