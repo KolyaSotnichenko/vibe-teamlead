@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
@@ -25,8 +25,9 @@ describe('DesignSystemTab', () => {
     (window as unknown as { electronAPI: { design: typeof designMock } }).electronAPI.design = designMock;
     render(<DesignSystemTab projectId="p1" />);
 
-    expect(await screen.findByText('context.design.extractTitle')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'context.design.generate' }));
+    expect(await screen.findByText('context.design.start.title')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'context.design.start.extract' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'context.design.start.design' }));
     const propose_ = screen.getByRole('button', { name: /context.design.propose/ });
     expect(propose_).toBeDisabled();
     fireEvent.change(screen.getByLabelText('context.design.brief.product'), { target: { value: 'An app for AI teams' } });
@@ -57,5 +58,19 @@ describe('DesignSystemTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /context.design.extractAgain/ }));
     fireEvent.click(screen.getByRole('button', { name: 'context.design.replace' }));
     await waitFor(() => expect(extract).toHaveBeenCalledWith('p1'));
+  });
+
+  it('asks for an update when references were added after the system was written', async () => {
+    const meta = { writtenAt: '2020-01-01T00:00:00Z', how: 'extract' as const, referenceIds: [] };
+    const get = vi.spyOn(designMock, 'get').mockResolvedValue({ success: true, data: { ...(await designMock.extract('p1')).data!, meta } });
+    const extract = vi.spyOn(designMock, 'extract');
+    extract.mockClear();
+    (window as unknown as { electronAPI: { design: typeof designMock } }).electronAPI.design = designMock;
+    render(<DesignSystemTab projectId="p1" />);
+    const banner = await screen.findByRole('region', { name: /context.design.stale.title/ });
+    fireEvent.click(within(banner).getByRole('button', { name: 'context.design.stale.refresh' }));
+    await waitFor(() => expect(extract).toHaveBeenCalledWith('p1'));
+    expect(screen.getAllByText('context.design.refs.fresh').length).toBeGreaterThan(0);
+    get.mockRestore();
   });
 });

@@ -23,10 +23,20 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function setup(result: unknown) {
+const audit = {
+  findings: 37,
+  files: 12,
+  uiFiles: 169,
+  top: [
+    { file: 'src/components/app-shell.tsx', count: 9, rules: ['off-palette-color', 'shadow'] },
+    { file: 'src/components/ui/button.tsx', count: 6, rules: ['radius'] },
+  ],
+};
+
+function setup(result: unknown, a: unknown = audit) {
   const redesignBrief = vi.fn(async () => result);
   (window as unknown as { electronAPI: unknown }).electronAPI = { design: { redesignBrief } };
-  render(<ApplyDesignSystem projectId="p1" />);
+  render(<ApplyDesignSystem projectId="p1" audit={a as never} />);
   return { redesignBrief };
 }
 
@@ -37,6 +47,21 @@ describe('ApplyDesignSystem', () => {
     expect(redesignBrief).toHaveBeenCalledWith('p1');
     expect(await screen.findByRole('dialog')).toHaveTextContent('# Redesign: bring the existing UI…');
     expect(screen.getByText('context.design.apply.found {"findings":37,"files":12}')).toBeInTheDocument();
+  });
+
+  it('shows where the code differs, the files with the most, and what happens next', () => {
+    setup({ success: true, data: {} });
+    expect(screen.getByText('context.design.apply.diffTitle')).toBeInTheDocument();
+    expect(screen.getByText('src/components/app-shell.tsx')).toBeInTheDocument();
+    expect(screen.getByText(/9 · context.design.apply.rules.off-palette-color, context.design.apply.rules.shadow/)).toBeInTheDocument();
+    expect(screen.getByText('context.design.apply.more {"count":10}')).toBeInTheDocument();
+    expect(screen.getByText('context.design.apply.nextTitle')).toBeInTheDocument();
+  });
+
+  it('still offers a redesign when the code already follows the system', () => {
+    setup({ success: true, data: {} }, { findings: 0, files: 0, uiFiles: 169, top: [] });
+    expect(screen.getByText('context.design.apply.cleanTitle')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'context.design.apply.run' })).toBeEnabled();
   });
 
   it('says why it could not', async () => {

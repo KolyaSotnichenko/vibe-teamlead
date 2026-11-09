@@ -2,13 +2,17 @@
  * Context → Design system: the rules and tokens agents build UI by, how QA
  * checks them, and the project's Storybook.
  *
- * Empty: extract it from the code, design a new one from a brief (three
- * directions to choose from), or point at a file already in the repository.
+ * One flow in three steps (references → the system → applying it to the code), with the
+ * step to do next marked. Empty: two paths — keep the current look (extract it from the
+ * code) or a new one (references, then three directions to choose from) — or a file already
+ * in the repository. References added after the system was written ask for an update.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, Loader2, Pencil, Play, RefreshCw, ScanSearch, Sparkles, Square } from 'lucide-react';
+import { DesignSteps } from './DesignSteps';
+import { designFlow } from './design-flow';
 import { Button } from '../ui/button';
 import { ApplyDesignSystem } from './ApplyDesignSystem';
 import { Input } from '../ui/input';
@@ -20,7 +24,7 @@ import { cn } from '../../lib/utils';
 import { EmptyState, Notice, SectionHeader, WorkspaceMarkdown } from '../task-detail/workspace/workspace-ui';
 import { loadProjects } from '../../stores/project-store';
 import { DesignReferences } from './DesignReferences';
-import type { DesignBrief, DesignDirection, DesignQaMode, DesignSystemInfo, DesignTokens } from '../../../shared/types';
+import type { DesignAudit, DesignBrief, DesignDirection, DesignQaMode, DesignReferenceList, DesignSystemInfo, DesignTokens } from '../../../shared/types';
 
 type Busy = 'extract' | 'propose' | 'write' | 'save' | 'storybook' | null;
 
@@ -136,6 +140,10 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
   const [storybookUrl, setStorybookUrl] = useState<string | null>(null);
   // Extract again / new design replace the current document and tokens: ask first
   const [confirmReplace, setConfirmReplace] = useState<'extract' | 'generate' | null>(null);
+  const [showRepo, setShowRepo] = useState(false);
+  // The references list (read by DesignReferences) and the whole-UI design check, for the steps
+  const [refList, setRefList] = useState<DesignReferenceList | null>(null);
+  const [audit, setAudit] = useState<DesignAudit | null | undefined>(undefined);
 
   const refresh = useCallback(async () => {
     const result = await window.electronAPI.design.get(projectId);
@@ -151,6 +159,21 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
     setGenerating(false);
     void refresh();
   }, [refresh]);
+
+  // Check the code again whenever the system's tokens change (no model: git ls-files + a lint)
+  const tokensKey = info?.exists ? JSON.stringify(info.tokens ?? null) : null;
+  useEffect(() => {
+    setAudit(undefined);
+    if (tokensKey === null || !window.electronAPI.design.audit) return;
+    let live = true;
+    void window.electronAPI.design
+      .audit(projectId)
+      .then((result) => live && setAudit(result.success ? (result.data ?? null) : null))
+      .catch(() => live && setAudit(null));
+    return () => {
+      live = false;
+    };
+  }, [projectId, tokensKey]);
 
   useEffect(
     () => window.electronAPI.design.onProgress((event) => event.projectId === projectId && setProgress(event.message)),
@@ -297,6 +320,9 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
   }
 
   const qaModes: DesignQaMode[] = ['block', 'warn', 'off'];
+  const flow = designFlow({ exists: info.exists, meta: info.meta, references: refList?.references ?? [], audit });
+  const extract = () => void run('extract', () => window.electronAPI.design.extract(projectId), setInfo);
+  const toReferences = () => document.getElementById('ds-refs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
     <ScrollArea className="h-full">
@@ -308,47 +334,90 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         )}
         {progressLine}
 
-        {!info.exists && !generating && (
-          <section className="space-y-4" aria-labelledby="ds-empty">
-            <SectionHeader id="ds-empty" title={t('context.design.title')} />
-            <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.emptyBody')}</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="flex flex-col gap-3 border border-border p-4">
-                <ScanSearch className="h-5 w-5 text-foreground" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{t('context.design.extractTitle')}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{t('context.design.extractBody')}</p>
-                </div>
-                <Button className="mt-auto" variant="outline" disabled={working} onClick={() => void run('extract', () => window.electronAPI.design.extract(projectId), setInfo)}>
-                  {t('context.design.extract')}
-                </Button>
-              </div>
-              <div className="flex flex-col gap-3 border border-foreground p-4">
-                <Sparkles className="h-5 w-5 text-foreground" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{t('context.design.generateTitle')}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{t('context.design.generateBody')}</p>
-                </div>
-                <Button className="mt-auto" disabled={working} onClick={() => setGenerating(true)}>
-                  {t('context.design.generate')}
-                </Button>
-              </div>
-              <div className="flex flex-col gap-3 border border-border p-4">
-                <Pencil className="h-5 w-5 text-foreground" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{t('context.design.repoTitle')}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{t('context.design.repoBody')}</p>
-                </div>
-                <Input value={repoPath} placeholder="design/DESIGN-SYSTEM.md" className="font-mono" onChange={(e) => setRepoPath(e.target.value)} />
-                <Button variant="outline" disabled={!repoPath.trim() || working} onClick={() => void updateSettings({ designSystemPath: repoPath.trim() })}>
-                  {t('context.design.useFile')}
-                </Button>
-              </div>
+        {!generating && <DesignSteps flow={flow} meta={info.meta} />}
+
+        {info.exists && !generating && flow.system.status === 'stale' && (
+          <section aria-labelledby="ds-stale" className="flex flex-col gap-4 border border-l-[3px] border-foreground border-l-[var(--vt-signal)] bg-card px-5 py-4 md:flex-row md:items-center md:gap-8">
+            <div className="flex-1 space-y-1.5">
+              <h3 id="ds-stale" className="text-base font-semibold text-foreground">{t('context.design.stale.title', { count: flow.references.fresh })}</h3>
+              <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.stale.body')}</p>
+            </div>
+            <div className="flex flex-col gap-2 md:min-w-[260px]">
+              <Button disabled={working} onClick={() => setGenerating(true)}>
+                {t('context.design.stale.newDirection')}
+              </Button>
+              <Button variant="outline" disabled={working} onClick={extract}>
+                {t('context.design.stale.refresh')}
+              </Button>
             </div>
           </section>
         )}
 
-        {!info.exists && <DesignReferences projectId={projectId} />}
+        {!info.exists && !generating && (
+          <section className="space-y-4" aria-labelledby="ds-start">
+            <div className="space-y-1.5">
+              <h3 id="ds-start" className="text-lg font-semibold text-foreground">{t('context.design.start.title')}</h3>
+              <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.start.body')}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-3 border border-foreground bg-card p-5">
+                <span className="font-mono text-xs uppercase text-muted-foreground">{t('context.design.start.pathA')}</span>
+                <h4 className="text-lg font-semibold text-foreground">{t('context.design.start.keepTitle')}</h4>
+                <p className="text-sm text-muted-foreground">{t('context.design.start.keepBody')}</p>
+                <ol className="list-decimal space-y-0.5 pl-5 text-sm text-foreground">
+                  <li>{t('context.design.start.keep1')}</li>
+                  <li>{t('context.design.start.keep2')}</li>
+                </ol>
+                <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
+                  <Button disabled={working} onClick={extract}>
+                    <ScanSearch className="mr-2 h-4 w-4" />
+                    {t('context.design.start.extract')}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{t('context.design.start.oneSession')}</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 border border-foreground bg-card p-5">
+                <span className="font-mono text-xs uppercase text-muted-foreground">{t('context.design.start.pathB')}</span>
+                <h4 className="text-lg font-semibold text-foreground">{t('context.design.start.newTitle')}</h4>
+                <p className="text-sm text-muted-foreground">{t('context.design.start.newBody')}</p>
+                <ol className="list-decimal space-y-0.5 pl-5 text-sm text-foreground">
+                  <li>
+                    {t('context.design.start.new1')} <span className="text-muted-foreground">{t('context.design.start.new1Hint')}</span>
+                  </li>
+                  <li>{t('context.design.start.new2')}</li>
+                  <li>{t('context.design.start.new3')}</li>
+                </ol>
+                <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
+                  <Button variant="outline" onClick={toReferences}>
+                    {t('context.design.start.addRefs')}
+                  </Button>
+                  <Button disabled={working} onClick={() => setGenerating(true)}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {t('context.design.start.design')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {t('context.design.start.repoQuestion')}{' '}
+                <button type="button" aria-expanded={showRepo} onClick={() => setShowRepo(!showRepo)} className="text-foreground underline underline-offset-4">
+                  {t('context.design.start.repoLink')}
+                </button>
+              </p>
+              {showRepo && (
+                <div className="flex max-w-xl gap-2">
+                  <Input aria-label={t('context.design.repoTitle')} value={repoPath} placeholder="design/DESIGN-SYSTEM.md" className="font-mono" onChange={(e) => setRepoPath(e.target.value)} />
+                  <Button variant="outline" disabled={!repoPath.trim() || working} onClick={() => void updateSettings({ designSystemPath: repoPath.trim() })}>
+                    {t('context.design.useFile')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {!info.exists && <DesignReferences projectId={projectId} onList={setRefList} />}
 
         {generateFlow}
 
@@ -389,7 +458,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
                       onClick={() => {
                         const kind = confirmReplace;
                         setConfirmReplace(null);
-                        if (kind === 'extract') void run('extract', () => window.electronAPI.design.extract(projectId), setInfo);
+                        if (kind === 'extract') extract();
                         else setGenerating(true);
                       }}
                     >
@@ -402,9 +471,9 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
               {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
             </section>
 
-            <ApplyDesignSystem projectId={projectId} />
+            <ApplyDesignSystem projectId={projectId} audit={audit} />
 
-            <DesignReferences projectId={projectId} />
+            <DesignReferences projectId={projectId} onList={setRefList} fresh={info.meta ? flow.freshIds : null} />
 
             <section className="space-y-3" aria-labelledby="ds-qa">
               <SectionHeader id="ds-qa" title={t('context.design.qaTitle')} />

@@ -9,10 +9,17 @@
 
 **Where it lives.** In the project's `.vibe-teamlead/`, or in a repository file (`DESIGN-SYSTEM.md` at the root, `design/` or `docs/`), or at a path you specify.
 
-**How it's created** (Context → Design system):
-- **Extract from the code:** the agent reads the theme, CSS variables and components and writes down the visual language that already exists;
-- **Design a new one:** you describe the product, audience and mood → the agent proposes three different directions (palette, fonts, principles) → you choose → it writes the full system;
-- **File in the repository:** point to your own document.
+**Three steps.** The tab opens with a strip of three steps; the dark one is what to do next:
+1. **References** (optional): sites, screenshots, a brand book you like.
+2. **Design system**: the rules and tokens themselves.
+3. **Apply to the project**: tasks that bring code written before the system up to it. The step shows how many places in how many files differ (checked without a model each time the tokens change).
+
+**Where to start** (Context → Design system, while there is no system yet), two paths:
+- **Path A — "I like how it looks now": Extract from the code.** The agent reads the theme, CSS variables and components and writes down the visual language that already exists;
+- **Path B — "I want a new look": Add references, then Design.** You describe the product, audience and mood → the agent proposes three different directions (palette, fonts, principles) → you choose → it writes the full system. If there is code already, step 3 applies it;
+- **Point at the file** (under the two paths): use a design system document already in the repository.
+
+**When references come after the system.** The app remembers which references the system was written from. Ones added later are marked **new** (the others **in the system**), and a banner asks for an update: **New direction with the references** (three directions again) or **Only update from "As is" references** (extract again: the code plus the references). Until then the agents see the new references' notes, but the system's colours, fonts and radii stay as they were.
 
 The document and tokens can be edited right in the tab. The model for this agent is "Design system" in the feature models.
 
@@ -38,7 +45,7 @@ The document and tokens can be edited right in the tab. The model for this agent
 - **Check modes:** Block (default; QA won't approve with findings), Report only, Off.
 - **Visual review.** The QA reviewer takes screenshots of the changed screens and states, compares them with the document and adds a "Design Review" table to the report.
 
-**Applying a changed design system** (Context → Design system → Apply to the project): when the design system changes after the app is built, **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
+**Applying a changed design system** (Context → Design system → Apply to the project): when the design system changes after the app is built, the block lists the files with the most differences and what happens next; **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
 
 **Storybook** (a project option, off by default):
 - when enabled, every new or changed UI component gets stories for its states (default, empty, loading, error, long text), and QA takes screenshots of them;

@@ -140,6 +140,12 @@ let nextRef = 10;
 
 export const designMock: DesignAPI = {
   redesignBrief: async () => ({ success: false, error: 'Not available in the browser' }),
+  audit: async () => ({
+    success: true,
+    data: info.exists && info.tokens
+      ? { findings: 37, files: 12, uiFiles: 169, top: [{ file: 'src/components/app-shell.tsx', count: 9, rules: ['off-palette-color', 'shadow'] }, { file: 'src/components/ui/button.tsx', count: 6, rules: ['radius'] }, { file: 'src/app/p/[slug]/page.tsx', count: 5, rules: ['off-palette-color'] }] }
+      : null,
+  }),
   get: async () => ({ success: true, data: info }),
   save: async (_projectId, content) => {
     info = { ...(info.exists ? info : withSample()), ...(content.markdown !== undefined ? { markdown: content.markdown } : {}), ...(content.tokens ? { tokens: content.tokens } : {}) };
@@ -147,16 +153,16 @@ export const designMock: DesignAPI = {
   },
   extract: async () => {
     await delay(600);
-    info = withSample();
+    info = { ...withSample(), meta: { writtenAt: new Date().toISOString(), how: 'extract', referenceIds: refs.filter((r) => r.status === 'ready').map((r) => r.id) } };
     return { success: true, data: info };
   },
   propose: async () => {
     await delay(600);
     return { success: true, data: directions };
   },
-  write: async () => {
+  write: async (_projectId, _brief, direction) => {
     await delay(600);
-    info = withSample();
+    info = { ...withSample(), meta: { writtenAt: new Date().toISOString(), how: 'direction', direction: direction.name, referenceIds: refs.filter((r) => r.status === 'ready').map((r) => r.id) } };
     return { success: true, data: info };
   },
   cancel: async () => ({ success: true }),

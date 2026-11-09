@@ -70,7 +70,7 @@ function Status({ item: r, onRetry }: { item: DesignReference; onRetry: () => vo
   );
 }
 
-function ReferenceRow({ row, onRole, onRemove, onRetry }: { row: Row; onRole: (r: DesignReferenceRole) => void; onRemove: () => void; onRetry: () => void }) {
+function ReferenceRow({ row, mark, onRole, onRemove, onRetry }: { row: Row; mark?: 'held' | 'fresh'; onRole: (r: DesignReferenceRole) => void; onRemove: () => void; onRetry: () => void }) {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const Icon = KIND_ICON[row.kind];
@@ -101,6 +101,11 @@ function ReferenceRow({ row, onRole, onRemove, onRetry }: { row: Row; onRole: (r
               {notes?.theme ? ` · ${t(`context.design.refs.theme.${notes.theme}`)}` : ''}
             </span>
             <Status item={row} onRetry={onRetry} />
+            {mark && (
+              <span className={cn('shrink-0 font-mono text-[11px]', mark === 'fresh' ? 'text-destructive' : 'text-muted-foreground')}>
+                {t(`context.design.refs.${mark}`)}
+              </span>
+            )}
           </span>
         </span>
         <Swatches colors={palette} />
@@ -143,7 +148,12 @@ function ReferenceRow({ row, onRole, onRemove, onRetry }: { row: Row; onRole: (r
   );
 }
 
-export function DesignReferences({ projectId }: { projectId: string }) {
+/**
+ * `fresh`: the ids added after the design system was written (marked "new"; the other ready
+ * ones are "in the system"); null when there is no system to compare with.
+ * `onList`: the tab reads the same list for its steps.
+ */
+export function DesignReferences({ projectId, fresh = null, onList }: { projectId: string; fresh?: string[] | null; onList?: (list: DesignReferenceList) => void }) {
   const { t } = useTranslation('common');
   const design = window.electronAPI.design;
   const [list, setList] = useState<DesignReferenceList | null>(null);
@@ -154,9 +164,10 @@ export function DesignReferences({ projectId }: { projectId: string }) {
   const apply = useCallback((result: { success: boolean; data?: DesignReferenceList; error?: string }) => {
     if (result.success && result.data) {
       setList(result.data);
+      onList?.(result.data);
       setError(null);
     } else if (!result.success) setError(result.error ?? t('context.design.refs.failed'));
-  }, [t]);
+  }, [t, onList]);
 
   const load = useCallback(() => {
     void design?.listReferences?.(projectId).then(apply).catch(() => {});
@@ -274,6 +285,7 @@ export function DesignReferences({ projectId }: { projectId: string }) {
                     <ReferenceRow
                       key={row.id}
                       row={row}
+                      mark={fresh && row.status === 'ready' ? (fresh.includes(row.id) ? 'fresh' : 'held') : undefined}
                       onRole={(role) => void design.setReferenceRole(projectId, row.id, role).then(apply)}
                       onRemove={() => void design.removeReference(projectId, row.id).then(apply)}
                       onRetry={() => void design.retryReference(projectId, row.id).then(apply)}
