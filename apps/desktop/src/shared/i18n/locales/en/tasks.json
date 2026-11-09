@@ -1100,7 +1100,8 @@
       "resetYes": "Reset",
       "resetNo": "Keep",
       "services": "Services",
-      "ux": "UX review"
+      "ux": "UX review",
+      "notes": "Notes"
     },
     "services": {
       "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's files. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
@@ -1137,6 +1138,27 @@
       "createAll_one": "One task for the {{count}} blocking problem",
       "createAll_other": "One task for the {{count}} blocking problems",
       "taskCreated": "Task created"
+    },
+    "notes": {
+      "pick": "Pick on the page",
+      "howTo": "Click an element, or drag over an area, then write what to change.",
+      "off": "The page works as usual. Turn picking on to add notes.",
+      "textLabel": "What should change here?",
+      "placeholder": "Enter saves, Shift+Enter is a new line, Escape cancels.",
+      "save": "Save note",
+      "cancel": "Cancel",
+      "delete": "Delete note",
+      "empty": "No notes yet. With picking on, click what you want changed.",
+      "detached": "Its element is no longer on this page.",
+      "send_one": "Send {{count}} note to an agent",
+      "send_other": "Send {{count}} notes to an agent",
+      "title": "Task title",
+      "quick": "Quick fix",
+      "quickHint": "a short spec and straight to code; for visual and copy changes",
+      "full": "Full pipeline",
+      "fullHint": "spec, plan and architecture, as for any new task",
+      "sendNow": "Create the task",
+      "sendFailed": "The task could not be created. The notes are kept."
     }
   },
   "looseEnds": {

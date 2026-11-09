@@ -7,13 +7,25 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { PreviewService, Project } from '../../../shared/types';
+import type { PreviewNote, PreviewService, Project } from '../../../shared/types';
 import { updateProjectSettings } from '../../stores/project-store';
 import { EmptyState, Notice } from '../task-detail/workspace/workspace-ui';
 import { PreviewServicesForm } from './PreviewServicesForm';
 import { PreviewToolbar, type PreviewSide, type PreviewWidth } from './PreviewToolbar';
 import { UxReviewPanel } from './UxReviewPanel';
+import { NotesPanel } from './NotesPanel';
+import { notesImages, notesTask } from './notes-task';
+import { createTask, startTaskOrQueue } from '../../stores/task-store';
 import { usePreviewSession } from './usePreviewSession';
+
+/** Notes as one task, in the queue: it starts when a slot is free */
+async function sendNotes(projectId: string, notes: PreviewNote[], title: string, quickFix: boolean): Promise<boolean> {
+  const task = notesTask(notes, title);
+  const created = await createTask(projectId, task.title, task.description, { sourceType: 'manual', previewQuickFix: quickFix, attachedImages: notesImages(notes) });
+  if (!created) return false;
+  await startTaskOrQueue(created.id);
+  return true;
+}
 
 export function PreviewPage({ project }: { project: Project }) {
   const { t } = useTranslation(['tasks']);
@@ -87,6 +99,11 @@ export function PreviewPage({ project }: { project: Project }) {
           )}
         </div>
       </div>
+      {side === 'notes' && (
+        <aside aria-label={t('preview.toolbar.notes')} className="w-96 shrink-0 border-l border-border bg-background">
+          <NotesPanel projectId={project.id} ready={ready} onSend={(notes, title, quick) => sendNotes(project.id, notes, title, quick)} />
+        </aside>
+      )}
       {side === 'ux' && (
         <aside aria-label={t('preview.toolbar.ux')} className="w-96 shrink-0 border-l border-border bg-background">
           <UxReviewPanel projectId={project.id} ready={ready} />

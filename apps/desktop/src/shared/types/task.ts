@@ -235,6 +235,8 @@ export interface TaskMetadata {
   codeQualitySeverity?: 'suggestion' | 'minor' | 'major' | 'critical';
 
   // Image attachments (screenshots, mockups, diagrams)
+  /** Made from Preview notes with Quick fix: the spec runs its simple path */
+  previewQuickFix?: boolean;
   attachedImages?: ImageAttachment[];
 
   // Referenced files (files/folders from project for context)

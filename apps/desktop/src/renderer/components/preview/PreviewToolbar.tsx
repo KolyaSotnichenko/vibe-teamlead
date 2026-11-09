@@ -59,6 +59,9 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
       ) : (
         <Button variant="outline" size="sm" onClick={() => setConfirmReset(true)}>{t('preview.toolbar.reset')}</Button>
       )}
+      <Button variant={side === 'notes' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'notes'} onClick={() => onSide(side === 'notes' ? null : 'notes')}>
+        {t('preview.toolbar.notes')}
+      </Button>
       <Button variant={side === 'ux' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'ux'} onClick={() => onSide(side === 'ux' ? null : 'ux')}>
         {t('preview.toolbar.ux')}
       </Button>
