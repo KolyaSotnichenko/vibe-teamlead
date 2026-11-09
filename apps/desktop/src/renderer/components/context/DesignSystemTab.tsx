@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, Loader2, Pencil, Play, RefreshCw, ScanSearch, Sparkles, Square } from 'lucide-react';
 import { Button } from '../ui/button';
+import { ApplyDesignSystem } from './ApplyDesignSystem';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
@@ -400,6 +401,8 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
               {info.tokensError && <Notice>{info.tokensError}</Notice>}
               {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
             </section>
+
+            <ApplyDesignSystem projectId={projectId} />
 
             <DesignReferences projectId={projectId} />
 

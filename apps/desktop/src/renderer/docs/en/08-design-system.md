@@ -38,6 +38,8 @@ The document and tokens can be edited right in the tab. The model for this agent
 - **Check modes:** Block (default; QA won't approve with findings), Report only, Off.
 - **Visual review.** The QA reviewer takes screenshots of the changed screens and states, compares them with the document and adds a "Design Review" table to the report.
 
+**Applying a changed design system** (Context → Design system → Apply to the project): when the design system changes after the app is built, **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
+
 **Storybook** (a project option, off by default):
 - when enabled, every new or changed UI component gets stories for its states (default, empty, loading, error, long text), and QA takes screenshots of them;
 - if the project doesn't have Storybook yet, the next UI task sets it up. This adds dev dependencies to the project, which is why the option is explicit;

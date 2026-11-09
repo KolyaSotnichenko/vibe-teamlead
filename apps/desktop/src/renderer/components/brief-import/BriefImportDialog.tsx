@@ -36,15 +36,17 @@ export interface BriefImportDialogProps {
   onShowOnBoard?: () => void;
   /** Start in the review step with this proposal (tests, previews) */
   initialProposal?: BriefProposal;
+  /** Start with this brief in the text box, for the owner to read before Analyse (the design system's redesign) */
+  initialText?: string;
 }
 
-export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard, initialProposal }: BriefImportDialogProps) {
+export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard, initialProposal, initialText }: BriefImportDialogProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const brief = window.electronAPI.brief;
 
   const [step, setStep] = useState<BriefStep>(initialProposal ? 'review' : 'input');
   const [file, setFile] = useState<BriefFile | null>(null);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText ?? '');
   const [analyseError, setAnalyseError] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [startedAt, setStartedAt] = useState(0);
@@ -73,7 +75,7 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
     runRef.current += 1;
     setStep(initialProposal ? 'review' : 'input');
     setFile(null);
-    setText('');
+    setText(initialText ?? '');
     setAnalyseError(null);
     setLines([]);
     setCancelling(false);
@@ -88,7 +90,7 @@ export function BriefImportDialog({ projectId, open, onOpenChange, onShowOnBoard
     setConfirm(null);
     setQuestion(null);
     setAsked([]);
-  }, [initialProposal]);
+  }, [initialProposal, initialText]);
 
   // Fresh dialog every time it opens
   const wasOpen = useRef(open);

@@ -9,7 +9,7 @@ import path from 'node:path';
 import { type BrowserWindow, dialog, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DesignBrief, DesignDirection, DesignReferenceRole, DesignSystemInfo, DesignTokens, IPCResult, TaskStorybookStatus } from '../../shared/types';
+import type { DesignBrief, DesignDirection, DesignReferenceRole, DesignSystemInfo, DesignTokens, IPCResult, RedesignBrief, TaskStorybookStatus } from '../../shared/types';
 import {
   addReferenceFiles,
   addReferenceUrls,
@@ -22,6 +22,8 @@ import {
 } from '../design/reference-service';
 import { extractDesignSystem, proposeDirections, writeDesignSystem } from '../ai/design/design-agent';
 import { loadDesignSystem, saveDesignSystem } from '../ai/design/design-system';
+import { auditProjectDesign, redesignBrief } from '../ai/design/redesign';
+import { getToolPath } from '../cli-tool-manager';
 import {
   installDependencies,
   isInstalling,
@@ -107,6 +109,20 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
       if (running.get(projectId) === controller) running.delete(projectId);
     }
   };
+
+  ipcMain.handle(IPC_CHANNELS.DESIGN_REDESIGN_BRIEF, async (_e, projectId: string): Promise<IPCResult<RedesignBrief>> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    const info = loadDesignSystem(project.path, project.settings);
+    if (!info.exists || !info.markdown || !info.markdownPath) return { success: false, error: 'The project has no design system yet.' };
+    try {
+      const { findings, uiFiles } = info.tokens ? await auditProjectDesign(project.path, info.tokens, getToolPath('git')) : { findings: [], uiFiles: [] };
+      const brief = redesignBrief({ designSystemPath: info.markdownPath, designSystem: info.markdown, findings, uiFiles });
+      return { success: true, data: { brief, findings: findings.length, files: new Set(findings.map((f) => f.file)).size } };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
 
   ipcMain.handle(IPC_CHANNELS.DESIGN_GET, async (_e, projectId: string): Promise<IPCResult<DesignSystemInfo>> => {
     try {

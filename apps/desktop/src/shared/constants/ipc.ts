@@ -96,6 +96,7 @@ export const IPC_CHANNELS = {
   DESIGN_PROPOSE: 'design:propose',
   DESIGN_WRITE: 'design:write',
   DESIGN_CANCEL: 'design:cancel',
+  DESIGN_REDESIGN_BRIEF: 'design:redesignBrief',
   DESIGN_PROGRESS: 'design:progress',  // Event: design agent progress line (main -> renderer)
   STORYBOOK_START: 'design:storybookStart',
   STORYBOOK_STOP: 'design:storybookStop',

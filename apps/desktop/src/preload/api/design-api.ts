@@ -7,6 +7,7 @@ export type { DesignAPI };
 
 export const createDesignAPI = (): DesignAPI => ({
   get: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_GET, projectId),
+  redesignBrief: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_REDESIGN_BRIEF, projectId),
   save: (projectId, content) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_SAVE, projectId, content),
   extract: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_EXTRACT, projectId),
   propose: (projectId, brief) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PROPOSE, projectId, brief),

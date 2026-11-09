@@ -139,6 +139,7 @@ const finishLater = (projectId: string, id: string) =>
 let nextRef = 10;
 
 export const designMock: DesignAPI = {
+  redesignBrief: async () => ({ success: false, error: 'Not available in the browser' }),
   get: async () => ({ success: true, data: info }),
   save: async (_projectId, content) => {
     info = { ...(info.exists ? info : withSample()), ...(content.markdown !== undefined ? { markdown: content.markdown } : {}), ...(content.tokens ? { tokens: content.tokens } : {}) };

@@ -1311,6 +1311,13 @@
           "inspiration_other": "Inspiration · {{count}}"
         },
         "tooMany": "{{count}} inspiration references: the agent opens 6 of them and knows the rest from their notes. Many different ones blur the direction; keep the ones that matter."
+      },
+      "apply": {
+        "title": "Apply to the project",
+        "body": "Code written before the design system changed keeps its old look: the design check only looks at what each task adds. This checks every UI file against the design system, without a model, and turns what it finds into a redesign brief. The spec analyst splits it into tasks, shell and shared components first, and you review them before they are created.",
+        "run": "Plan the redesign",
+        "failed": "The redesign could not be planned.",
+        "found": "{{findings}} places in {{files}} files don't follow the design system. Read the brief, then Analyse."
       }
     }
   },

@@ -13,6 +13,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 - UX review in Preview: one agent session goes through the whole app from its home page and lists what stops people, with a task per finding or one for everything that blocks. Its model is a feature setting.
 - A task's Preview: while a task waits in review, its window runs the task's own code on a copy of the preview data; notes there go back into the task.
 - UI tasks wait for my preview: with auto-merge on, an approved task that changed UI waits in review for you to look at it.
+- Apply a changed design system to a built project: Design system → Plan the redesign checks every UI file against it, without a model, and opens the spec import with a redesign brief for the spec analyst to split into tasks you review.
 - UX review in QA: for a task that changed UI, the reviewer opens the changed pages in a real browser at phone and desktop widths, goes through them by keyboard, checks their empty, loading and error states and how a person reaches them, against Vercel's Web Interface Guidelines and Impeccable's audit and harden checklists. Problems that stop a person from using a page block approval.
 
 ## 2.0.0-beta.13 - 2026-11-09

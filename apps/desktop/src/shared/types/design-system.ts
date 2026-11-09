@@ -207,8 +207,17 @@ export interface TaskStorybookStatus {
 }
 
 /** window.electronAPI.design */
+/** A brief to bring the existing UI to the design system, from the design check over the whole UI */
+export interface RedesignBrief {
+  brief: string;
+  /** Places that don't follow the design system, and the files they are in */
+  findings: number;
+  files: number;
+}
+
 export interface DesignAPI {
   get: (projectId: string) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
+  redesignBrief: (projectId: string) => Promise<import('./common').IPCResult<RedesignBrief>>;
   save: (projectId: string, content: { markdown?: string; tokens?: DesignTokens }) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
   /** Read the project's styles and components and write the design system they form */
   extract: (projectId: string) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
