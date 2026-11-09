@@ -4,7 +4,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { ipcMain } from 'electron';
@@ -18,18 +18,21 @@ const run = promisify(execFile);
 
 /** Larger files are generated or data, not pages */
 const FILE_MAX = 512 * 1024;
+const READ_AT_ONCE = 32;
 
 /** The project's loose ends, without the ones the owner said to leave. */
 export async function projectLooseEnds(projectPath: string, ignored: string[], git = 'git'): Promise<LooseEnd[]> {
   const { stdout } = await run(git, ['ls-files', '-z'], { cwd: projectPath, maxBuffer: 64 * 1024 * 1024 });
   const files = looseEndFiles(stdout.split('\0').filter(Boolean));
   const contents = new Map<string, string>();
-  await Promise.all(
-    files.map(async (file) => {
-      const text = await readFile(path.join(projectPath, file), 'utf-8').catch(() => '');
-      if (text.length <= FILE_MAX) contents.set(file, text);
-    }),
-  );
+  // Regular files only, sized before reading: a tracked link could point at a device or outside the project
+  const readOne = async (file: string) => {
+    const full = path.join(projectPath, file);
+    const info = await lstat(full).catch(() => null);
+    if (!info?.isFile() || info.size > FILE_MAX) return;
+    contents.set(file, await readFile(full, 'utf-8').catch(() => ''));
+  };
+  for (let i = 0; i < files.length; i += READ_AT_ONCE) await Promise.all(files.slice(i, i + READ_AT_ONCE).map(readOne));
   const skip = new Set(ignored);
   return findLooseEnds({ files, read: (file) => contents.get(file) ?? null }).filter((end) => !skip.has(looseEndKey(end)));
 }

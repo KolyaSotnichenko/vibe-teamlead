@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -25,5 +25,14 @@ describe('projectLooseEnds', () => {
     writeFileSync(join(root, 'untracked.tsx'), '<p>Coming soon</p>');
     expect((await projectLooseEnds(root, [])).map((e) => e.file)).toEqual(['app/billing/page.tsx', 'app/page.tsx']);
     expect((await projectLooseEnds(root, ['app/billing/page.tsx\n<p>Coming soon</p>'])).map((e) => e.file)).toEqual(['app/page.tsx']);
+  });
+
+  it('reads only regular files of a sane size, never what a tracked link points at', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'vtl-outside-'));
+    writeFileSync(join(outside, 'secret.html'), '<p>Coming soon</p>');
+    const root = repo({ 'app/big.tsx': `<p>Coming soon</p>${' '.repeat(600 * 1024)}` });
+    symlinkSync(join(outside, 'secret.html'), join(root, 'linked.html'));
+    execFileSync('git', ['add', '-A'], { cwd: root });
+    expect(await projectLooseEnds(root, [])).toEqual([]);
   });
 });
