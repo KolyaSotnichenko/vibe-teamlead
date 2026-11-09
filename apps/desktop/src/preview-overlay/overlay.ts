@@ -26,7 +26,14 @@ export interface OverlayDeps {
 
 const SIGNAL = '#D6401A';
 const DRAG_MIN = 6;
-const PRESS_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchend'] as const;
+/** How long a pick waits for its source location */
+const CONTEXT_WAIT_MS = 1000;
+/**
+ * Presses taken as picks arrive as pointer events: cancelling a pointerdown (so the app's menus
+ * and drags don't start) makes the browser skip the mousedown and mouseup that would follow.
+ * The mouse and touch presses are only kept from the app.
+ */
+const BLOCKED_PRESSES = ['mousedown', 'mouseup', 'touchstart', 'touchend'] as const;
 
 const collapse = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
 
@@ -50,7 +57,12 @@ function frameworkFrame(element: Element): SourceFrame | null {
 async function describe(element: Element, deps: OverlayDeps): Promise<Omit<Pick, 'kind' | 'rect' | 'elements'>> {
   let context: Awaited<ReturnType<OverlayDeps['getElementContext']>> = null;
   try {
-    context = await deps.getElementContext(element);
+    // Finding the source can fetch source maps from the dev server and take long, or never end:
+    // the pick goes without it rather than not at all
+    context = await Promise.race([
+      deps.getElementContext(element),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), CONTEXT_WAIT_MS)),
+    ]);
   } catch {
     context = null;
   }
@@ -202,15 +214,17 @@ export function startOverlay(win: Window, deps: OverlayDeps): () => void {
   };
 
   const onDown = (event: MouseEvent) => {
-    if (!on || event.button !== 0) return;
+    if (!on) return;
     block(event);
+    if (event.button !== 0) return;
     start = { x: event.clientX, y: event.clientY };
     dragging = false;
   };
 
   const onUp = async (event: MouseEvent) => {
-    if (!on || !start) return;
+    if (!on) return;
     block(event);
+    if (!start) return;
     const from = start;
     const wasDrag = dragging;
     start = null;
@@ -263,13 +277,13 @@ export function startOverlay(win: Window, deps: OverlayDeps): () => void {
   const capture = { capture: true } as const;
   win.addEventListener('message', onMessage);
   win.addEventListener('mousemove', onMove, capture);
-  win.addEventListener('mousedown', onDown, capture);
-  win.addEventListener('mouseup', onUp, capture);
+  win.addEventListener('pointerdown', onDown, capture);
+  win.addEventListener('pointerup', onUp, capture);
   win.addEventListener('click', block, capture);
   win.addEventListener('dblclick', block, capture);
   win.addEventListener('contextmenu', block, capture);
   // Menus, selects and drags often act on pointer or touch presses, not on click
-  for (const type of PRESS_EVENTS) win.addEventListener(type, block, capture);
+  for (const type of BLOCKED_PRESSES) win.addEventListener(type, block, capture);
   win.addEventListener('keydown', onKey, capture);
   win.addEventListener('scroll', schedulePins, capture);
   // Pages render after the pins arrive, and their layout moves: place the pins again when the page changes
@@ -283,12 +297,12 @@ export function startOverlay(win: Window, deps: OverlayDeps): () => void {
   return () => {
     win.removeEventListener('message', onMessage);
     win.removeEventListener('mousemove', onMove, capture);
-    win.removeEventListener('mousedown', onDown, capture);
-    win.removeEventListener('mouseup', onUp, capture);
+    win.removeEventListener('pointerdown', onDown, capture);
+    win.removeEventListener('pointerup', onUp, capture);
     win.removeEventListener('click', block, capture);
     win.removeEventListener('dblclick', block, capture);
     win.removeEventListener('contextmenu', block, capture);
-    for (const type of PRESS_EVENTS) win.removeEventListener(type, block, capture);
+    for (const type of BLOCKED_PRESSES) win.removeEventListener(type, block, capture);
     win.removeEventListener('keydown', onKey, capture);
     win.removeEventListener('scroll', schedulePins, capture);
     changes?.disconnect();

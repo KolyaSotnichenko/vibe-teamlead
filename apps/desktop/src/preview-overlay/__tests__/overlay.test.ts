@@ -49,10 +49,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** As Chromium does it: a cancelled pointerdown means no mousedown and no mouseup follow */
 const click = (target: Element) => {
-  target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 5, clientY: 5 }));
-  target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX: 5, clientY: 5 }));
-  return target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+  const init = { bubbles: true, cancelable: true, button: 0, clientX: 5, clientY: 5 };
+  const downGoesOn = target.dispatchEvent(new MouseEvent('pointerdown', init));
+  if (downGoesOn) target.dispatchEvent(new MouseEvent('mousedown', init));
+  const upGoesOn = target.dispatchEvent(new MouseEvent('pointerup', init));
+  if (downGoesOn && upGoesOn) target.dispatchEvent(new MouseEvent('mouseup', init));
+  return target.dispatchEvent(new MouseEvent('click', init));
 };
 
 describe('the notes overlay', () => {
@@ -92,6 +96,19 @@ describe('the notes overlay', () => {
     host({ type: 'mode', on: false });
     go.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(pressed).toHaveBeenCalledTimes(1);
+  });
+
+  it("still takes the pick when finding the source hangs (Next's dev server fetching source maps)", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      setup({ getElementContext: () => new Promise(() => {}) });
+      host({ type: 'mode', on: true });
+      click(document.getElementById('title')!);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(posted.find((p) => p.type === 'picked')?.pick).toMatchObject({ selector: 'main > h1', text: 'Roadmaply', frames: [] });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to a computed selector and no frames when the framework says nothing', async () => {
