@@ -45,6 +45,17 @@ describe('verifyTask', () => {
     expect(report.checks).toMatchObject([{ command: 'test -f good.txt', outcome: 'passed' }]);
   });
 
+  it('says in the task log what it is doing and how each check ended, with its time', async () => {
+    const lines: string[] = [];
+    await verify({ commands: ['test -f good.txt', 'test -f never.txt'], onLog: (line) => lines.push(line) });
+    expect(lines).toContainEqual(expect.stringMatching(/^App checks: a clean copy of [0-9a-f]{7}/));
+    expect(lines).toContain('App checks: running test -f good.txt');
+    expect(lines).toContainEqual(expect.stringMatching(/^App checks: test -f good\.txt passed in \d+(\.\d)?s$/));
+    expect(lines).toContainEqual(expect.stringMatching(/^App checks: test -f never\.txt failed in /));
+    expect(lines).toContain('App checks: test -f never.txt failed: running it on main to see whether the task broke it');
+    expect(lines).toContainEqual(expect.stringMatching(/^App checks: on main, test -f never\.txt failed too/));
+  });
+
   it('blocks a failure the task brought: the same check passes on the base', async () => {
     unlinkSync(join(wt, 'good.txt'));
     commit(wt, 'task broke it');
@@ -200,6 +211,15 @@ describe('verifyTask', () => {
       expect(report.status).toBe('passed');
       expect(report.services).toEqual({ status: 'started', images: ['postgres:18-alpine'] });
       expect(calls).toContainEqual(['rm', '-f', '-v', 'container-1']);
+    });
+
+    it('says when the database is up and when the migrations run', async () => {
+      const { docker } = fakeDocker();
+      const lines: string[] = [];
+      await verify({ docker, commands: ['true'], detected: { install: [], prepare: ['true'], checks: [] }, onLog: (line) => lines.push(line) });
+      expect(lines).toContain('App checks: starting postgres:18-alpine for this copy');
+      expect(lines).toContain('App checks: database up');
+      expect(lines).toContain('App checks: migrations: true');
     });
 
     it('runs migrations once the database is up, and a broken one is the task breaking things', async () => {

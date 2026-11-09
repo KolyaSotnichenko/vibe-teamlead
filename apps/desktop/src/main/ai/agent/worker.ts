@@ -987,7 +987,8 @@ async function runQualityAssurance(
             lockDir: verification.lockDir,
             baseResults: verificationBaseResults,
             signal: abortController.signal,
-            onLog: postLog,
+            // Into the task's QA log: these checks take minutes, and a silent log looks stuck
+            onLog: qaLog,
           });
           return report;
         }

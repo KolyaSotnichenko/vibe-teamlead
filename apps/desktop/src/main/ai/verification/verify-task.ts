@@ -267,6 +267,13 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
   };
 }
 
+/** A duration for the log: 4.2s, 1m16s */
+function took(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s`;
+  return `${Math.floor(seconds / 60)}m${String(Math.round(seconds % 60)).padStart(2, '0')}s`;
+}
+
 export async function verifyTask(options: VerifyTaskOptions): Promise<VerificationReport> {
   return withVerifyLock(options.lockDir, () => verifyNow(options), { signal: options.signal });
 }
@@ -310,16 +317,22 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     const outcome: CheckOutcome = result.timedOut ? 'timed_out' : result.code === 0 ? 'passed' : result.code === 127 || result.code === 126 ? 'unavailable' : 'failed';
     return { outcome, exitCode: result.code, tail };
   };
+  /** Progress for the task's log: these checks take minutes, and a silent log looks stuck */
+  const say = (line: string) => onLog?.(`App checks: ${line}`);
   /** A clean copy of a commit, gone afterwards */
   const inCopy = async <T>(at: string, work: (cwd: string) => Promise<T>): Promise<T> => {
     const parent = mkdtempSync(join(tmpdir(), 'vibe-teamlead-verify-'));
     const cwd = join(parent, 'copy');
+    say(`a clean copy of ${at.slice(0, 7)}`);
     try {
       const cloned = await run(['clone', '-q', '--no-hardlinks', '--no-checkout', worktreePath, cwd]);
       if (!cloned.ok) throw new Error(cloned.output || 'git clone failed');
       const checkedOut = await run(['checkout', '-q', '--detach', at], cwd);
       if (!checkedOut.ok) throw new Error(checkedOut.output || 'git checkout failed');
+      if (base.images.length) say(`starting ${base.images.map((image) => image.image).join(', ')} for this copy`);
       const started = await startTestServices(base.images, { docker, label: serviceLabel });
+      if (started.status === 'started') say('database up');
+      else if (started.status === 'unavailable') say(`no database: ${started.reason ?? 'it could not start'}`);
       try {
         if (started.status !== 'none') {
           services ??= { status: started.status, images: base.images.map((image) => image.image), ...(started.reason ? { reason: started.reason } : {}) };
@@ -347,10 +360,12 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   /** The first install that fails, if any */
   const install = async (cwd: string): Promise<CheckResult | undefined> => {
     for (const command of detected.install) {
-      onLog?.(`Checks: ${command}`);
+      say(`installing: ${command}`);
+      const startedAt = Date.now();
       let result = await shell(command, cwd, installTimeout);
       // A stall says more about the machine than the task: asleep, or busy with other tasks
       if (result.outcome === 'timed_out') result = await shell(command, cwd, installTimeout);
+      say(`${command} ${result.outcome.replace('_', ' ')} in ${took(Date.now() - startedAt)}`);
       if (result.outcome !== 'passed') return { name: 'install', command, ...result };
     }
     if (!migratable) {
@@ -358,7 +373,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       return undefined;
     }
     for (const command of detected.prepare ?? []) {
-      onLog?.(`Checks: ${command}`);
+      say(`migrations: ${command}`);
       const result = await shell(command, cwd, installTimeout);
       if (result.outcome !== 'passed') return { name: 'prepare', command, ...result };
     }
@@ -370,7 +385,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     if (failedInstall) return [failedInstall];
     const done: CheckResult[] = [];
     for (const check of checks) {
-      onLog?.(`Checks: ${check.command}`);
+      say(`running ${check.command}`);
+      const startedAt = Date.now();
       let result = await shell(check.command, cwd, checkTimeout);
       let flaky = false;
       if (result.outcome === 'failed' || result.outcome === 'timed_out') {
@@ -380,6 +396,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
           result = again;
         }
       }
+      say(`${check.command} ${result.outcome.replace('_', ' ')} in ${took(Date.now() - startedAt)}${flaky ? ' (on the second try)' : ''}`);
       done.push({ ...check, ...result, ...(flaky ? { flaky } : {}) });
     }
     return done;
@@ -390,6 +407,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const baseTails = new Map<string, string>();
   const unknown = failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
   if (unknown.length) {
+    for (const result of unknown) say(`${result.command} ${result.outcome.replace('_', ' ')}: running it on ${baseRef} to see whether the task broke it`);
     await inCopy(baseCommit, async (cwd) => {
       const failedInstall = await install(cwd);
       for (const result of unknown) {
@@ -404,6 +422,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
           if (onBase.outcome === 'failed') onBase = await shell(result.command, cwd, checkTimeout);
           baseResults.set(key, onBase.outcome);
           baseTails.set(key, onBase.tail ?? '');
+          say(`on ${baseRef}, ${result.command} ${onBase.outcome === 'passed' ? 'passed: the task broke it' : `${onBase.outcome.replace('_', ' ')} too: it says nothing about the task`}`);
         }
       }
     });
