@@ -91,7 +91,8 @@ export function QaOutcomePanel({ task }: { task: Task }) {
 
   if (task.status !== 'human_review') return null;
   // A run from before QA recorded its outcome: say where to look, and offer a fresh run
-  if (!outcome && task.reviewReason === 'errors') {
+  // A build that stopped before QA (a subtask unfinished) has no QA run to explain
+  if (!outcome && task.reviewReason === 'errors' && !(task.subtasks ?? []).some((s) => s.status !== 'completed')) {
     return (
       <section aria-labelledby="qa-outcome" className="border border-foreground">
         <header className="border-b border-l-2 border-b-border border-l-[var(--vt-signal)] px-4 py-3">

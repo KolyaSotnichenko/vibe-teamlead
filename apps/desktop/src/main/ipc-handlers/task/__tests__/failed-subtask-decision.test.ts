@@ -3,9 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }));
+const { getPath } = vi.hoisted(() => ({ getPath: vi.fn((_name: string) => process.env.TMPDIR ?? '/tmp') }));
+vi.mock('electron', () => ({ app: { getPath: (name: string) => getPath(name) } }));
 
-import { applyFailedSubtaskDecision, parseFailedSubtaskDecision } from '../failed-subtask-decision';
+import { applyFailedSubtaskDecision, parseFailedSubtaskDecision, taskOwnerDecisionsFile } from '../failed-subtask-decision';
 import { readOwnerDecisions } from '../../../ai/orchestration/owner-decisions';
 
 const PLAN = { status: 'human_review', phases: [{ name: 'P', subtasks: [{ id: 's1', status: 'completed' }, { id: 's2', status: 'failed', notes: 'why' }] }] };
@@ -54,5 +55,15 @@ describe('parseFailedSubtaskDecision', () => {
     expect(parseFailedSubtaskDecision({ action: 'retry', instruction: 5 })).toEqual({ action: 'retry', instruction: undefined });
     expect(parseFailedSubtaskDecision({ action: 'delete' })).toBeNull();
     expect(parseFailedSubtaskDecision('skip')).toBeNull();
+  });
+});
+
+describe('taskOwnerDecisionsFile', () => {
+  it("is in the app's data, and undefined (no decisions trusted) when that folder can't be found", () => {
+    expect(taskOwnerDecisionsFile('/p/specs/023')).toMatch(/\/owner-decisions\/[0-9a-f]{24}\.json$/);
+    getPath.mockImplementationOnce(() => {
+      throw new Error('no app');
+    });
+    expect(taskOwnerDecisionsFile('/p/specs/023')).toBeUndefined();
   });
 });

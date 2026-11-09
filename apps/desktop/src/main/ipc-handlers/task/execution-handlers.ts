@@ -841,7 +841,9 @@ export function registerTaskExecutionHandlers(
         .map((dir) => path.join(dir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN))
         .filter((planPath) => existsSync(planPath));
       if (!planPaths.length) return { success: false, error: 'The task has no plan' };
-      return { success: true, data: await applyFailedSubtaskDecision(planPaths, parsed, taskOwnerDecisionsFile(mainSpecDir)) };
+      const decisionsFile = taskOwnerDecisionsFile(mainSpecDir);
+      if (!decisionsFile) return { success: false, error: "The app's data folder could not be found" };
+      return { success: true, data: await applyFailedSubtaskDecision(planPaths, parsed, decisionsFile) };
     }
   );
 

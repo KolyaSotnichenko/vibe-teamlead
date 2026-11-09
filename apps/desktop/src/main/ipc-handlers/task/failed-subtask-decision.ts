@@ -10,9 +10,17 @@ import { resolveFailedSubtasks, type FailedSubtaskAction } from '../../ai/orches
 import { ownerDecisionsPath, recordOwnerDecision } from '../../ai/orchestration/owner-decisions';
 import { updatePlanFile } from './plan-file-utils';
 
-/** Where the owner's decisions for a task are kept: the app's data, keyed by its spec directory in the main project. */
-export function taskOwnerDecisionsFile(mainSpecDir: string): string {
-  return ownerDecisionsPath(app.getPath('userData'), mainSpecDir);
+/**
+ * Where the owner's decisions for a task are kept: the app's data, keyed by its spec directory
+ * in the main project. Undefined when the app's data folder can't be found: the agents are then
+ * told no decision, which is safe, and the task still runs.
+ */
+export function taskOwnerDecisionsFile(mainSpecDir: string): string | undefined {
+  try {
+    return ownerDecisionsPath(app.getPath('userData'), mainSpecDir);
+  } catch {
+    return undefined;
+  }
 }
 
 /**

@@ -34,7 +34,7 @@ import { useProjectStore } from '../../stores/project-store';
 import { TASK_STATUS_LABELS } from '../../../shared/constants';
 import { TaskEditDialog } from '../TaskEditDialog';
 import { useTaskDetail } from './hooks/useTaskDetail';
-import { TaskWarnings } from './TaskWarnings';
+import { TaskWarnings, gaveUpSubtasks } from './TaskWarnings';
 import { MergeStateNotice } from './MergeStateNotice';
 import { SecurityQaNotice } from './SecurityQaNotice';
 import { VerificationNotice } from './VerificationNotice';
@@ -48,7 +48,7 @@ import { TaskReview } from './TaskReview';
 import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
-import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
+import type { FailedSubtaskDecision, Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
   open: boolean;
@@ -112,16 +112,37 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
           return;
         }
       }
-      const result = await startTaskOrQueue(task.id);
-      if (!result.success) {
-        toast({
-          title: t('tasks:wizard.errors.startFailed'),
-          description: result.error,
-          variant: 'destructive',
-        });
-      } else if (result.action === 'queued') {
-        toast({ title: t('tasks:queue.movedToQueue') });
+      await startNow();
+    }
+  };
+
+  const startNow = async () => {
+    const result = await startTaskOrQueue(task.id);
+    if (!result.success) {
+      toast({
+        title: t('tasks:wizard.errors.startFailed'),
+        description: result.error,
+        variant: 'destructive',
+      });
+    } else if (result.action === 'queued') {
+      toast({ title: t('tasks:queue.movedToQueue') });
+    }
+  };
+
+  // Subtasks the coder gave up on and said why: resuming as is would stop at them again
+  const gaveUp = state.isIncomplete ? gaveUpSubtasks(task.subtasks) : [];
+  const [isDeciding, setIsDeciding] = useState(false);
+  const handleFailedSubtasks = async (decision: FailedSubtaskDecision) => {
+    setIsDeciding(true);
+    try {
+      const saved = await window.electronAPI.resolveFailedSubtasks(task.id, decision);
+      if (!saved.success) {
+        toast({ title: t('tasks:taskDetail.warnings.decisionFailed'), description: saved.error, variant: 'destructive' });
+        return;
       }
+      await startNow();
+    } finally {
+      setIsDeciding(false);
     }
   };
 
@@ -306,6 +327,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
         </Button>
       );
     }
+
+    // The banner offers what can help instead: a plain Resume would stop at the same subtask
+    if (state.isIncomplete && gaveUp.length > 0) return null;
 
     if (state.isIncomplete) {
       return (
@@ -496,6 +520,10 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     taskProgress={state.taskProgress}
                     onRecover={handleRecover}
                     onResume={handleStartStop}
+                    gaveUp={gaveUp}
+                    isDeciding={isDeciding}
+                    onSkipFailed={() => void handleFailedSubtasks({ action: 'skip' })}
+                    onRetryFailed={(instruction) => void handleFailedSubtasks({ action: 'retry', instruction })}
                   />
                 </div>
               )}

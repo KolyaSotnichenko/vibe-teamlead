@@ -1045,3 +1045,11 @@ describe('ProjectStore', () => {
     });
   });
 });
+
+describe('extraSubtaskFields', () => {
+  it("carries the coder's notes and the owner's skip to the task list, and nothing else", async () => {
+    const { extraSubtaskFields } = await import('../project-store');
+    expect(extraSubtaskFields({ notes: 'why', skipped_by_owner: true })).toEqual({ notes: 'why', skippedByOwner: true });
+    expect(extraSubtaskFields({ notes: '', skipped_by_owner: 'yes' })).toEqual({});
+  });
+});

@@ -119,6 +119,19 @@ describe('QaOutcomePanel', () => {
     expect(await screen.findByText('qaOutcome.unrecorded')).toBeInTheDocument();
   });
 
+  it('says nothing about QA when the build stopped before QA, at an unfinished subtask', async () => {
+    const save = vi.fn();
+    (window as unknown as { electronAPI: unknown }).electronAPI = {
+      getTaskWorkspace: vi.fn(async () => ({ success: true, data: { qaOutcome: undefined } })),
+      design: { get: vi.fn(), save },
+    };
+    const incomplete = { ...task, subtasks: [{ id: 's1', title: 'A', description: '', status: 'failed', files: [] }] } as unknown as Task;
+    const { container } = render(<QaOutcomePanel task={incomplete} />);
+    await waitFor(() => expect(window.electronAPI.getTaskWorkspace).toHaveBeenCalled());
+    expect(screen.queryByText('qaOutcome.unrecorded')).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('escapes regex characters for an exact match', () => {
     expect(exactPattern('rounded-[12px] (x)')).toBe('rounded-\\[12px\\] \\(x\\)');
   });

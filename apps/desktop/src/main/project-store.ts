@@ -41,6 +41,14 @@ interface TasksCacheEntry {
 /**
  * Persistent storage for projects and settings
  */
+/** What the coder wrote about a subtask, and whether the owner went on without it (display only). Pure. */
+export function extraSubtaskFields(subtask: Record<string, unknown>): { notes?: string; skippedByOwner?: true } {
+  return {
+    ...(typeof subtask.notes === 'string' && subtask.notes ? { notes: subtask.notes } : {}),
+    ...(subtask.skipped_by_owner === true ? { skippedByOwner: true as const } : {}),
+  };
+}
+
 export class ProjectStore {
   private storePath: string;
   private data: StoreData;
@@ -538,7 +546,8 @@ export class ProjectStore {
               title,
               description,
               status: subtask.status,
-              files: []
+              files: [],
+              ...extraSubtaskFields(subtask as unknown as Record<string, unknown>)
             };
           });
         }) || [];

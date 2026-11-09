@@ -779,7 +779,17 @@
       "stuckBody": "It is marked as running, but no agent process was found. This happens when the app quit or the process was killed.",
       "incompleteTitle": "Task did not finish",
       "incompleteBody": "It has a spec and a plan, but {{done}} of {{total}} subtasks are done. Resume to continue the implementation.",
-      "recoverRestart": "Recover and restart"
+      "recoverRestart": "Recover and restart",
+      "gaveUpTitle": "The coder stopped at “{{title}}”",
+      "gaveUpBody": "It wrote why above. Resuming as is would stop there again. Go on without this subtask: QA reviews the task and is told you skipped it and why. Or send it back with an instruction, for example what it may change.",
+      "noReason": "It did not write why. Look at the end of Logs.",
+      "skipFailed": "Continue without it",
+      "retryFailed": "Send back with an instruction",
+      "instructionLabel": "What the coder should know this time",
+      "instructionPlaceholder": "For example: you may change product code to fix these failures.",
+      "sendBack": "Send back and resume",
+      "cancel": "Cancel",
+      "decisionFailed": "Could not save the decision"
     },
     "completedSuccessfully": "Task completed successfully",
     "currentSubtask": "Subtask: {{subtask}}",

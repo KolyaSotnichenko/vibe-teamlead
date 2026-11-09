@@ -46,6 +46,8 @@ QA couldn't approve the task and, after the fixer's attempts, handed it to you. 
 
 A run cut off before any code was written has nothing to review, so the task window offers "Resume" instead: coding starts from the plan already written. A run an error stopped partway through the plan also gets "Resume", on its card too: coding carries on with the subtasks left, and what is already built stays there to look at.
 
+When the coder itself stopped at a subtask and wrote why (it needs code outside the task, say, or a decision only you can make), resuming would stop there again, so the window shows its reason instead and offers two things. **Continue without it** goes on to QA, which is told you skipped the subtask and why. **Send back with an instruction** gives the subtask to the coder again with what you wrote, for example that it may change product code. Your decision is kept in the app, not in the task's files, so an agent can't make it up.
+
 These actions don't touch your project's uncommitted files. While a merge of the task waits for your confirmation, commit or cancel it first.
 
 Tasks that failed before this panel existed show a short note and the "Run QA again" button. The details are still in Workspace → Security and in `qa_report.md`.
