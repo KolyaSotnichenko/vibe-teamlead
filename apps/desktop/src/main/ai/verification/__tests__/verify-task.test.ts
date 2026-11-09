@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { DockerRun } from '../test-services';
-import { describeVerification, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
+import { describeVerification, failureSummary, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
 
 describe('verifyTask', () => {
   let repo: string;
@@ -646,3 +646,45 @@ describe('a test script that only names more test files', () => {
     expect(onlyAddsTestFiles(was, is)).toBe(false);
   });
 });
+
+describe('failureSummary', () => {
+  // What `pnpm run test` printed on task 022: 1140 passing API tests, then the web build failing
+  const TAIL = [
+    'apps/api test:  ✓  e2e  test/prisma.service.e2e-spec.ts (2 tests) 87ms',
+    'apps/api test:  Test Files  115 passed (115)',
+    'apps/api test:       Tests  1140 passed (1140)',
+    '$ next build',
+    '✓ Compiled successfully in 2.0s',
+    'Error: Route "/app/[orgSlug]/changelog": Next.js encountered URL data `usePathname()` in a Client Component outside of `<Suspense>`.',
+    '    at <unknown> (src/components/app-shell/app-shell.tsx:31:28)',
+    'Error occurred prerendering page "/app/[orgSlug]/changelog". Read more: https://nextjs.org/docs/messages/prerender-error',
+    '⨯ Next.js build worker exited with code: 1 and signal: null',
+    '[ELIFECYCLE] Command failed with exit code 1.',
+    'Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL',
+    '  × "pnpm recursive run" failed in /private/var/folders/',
+    '  │ y1/2nf1dsnj4qxd5vtxf7m68pfc0000gn/T/vibe-teamlead-verify-455m6A/copy/apps/',
+    '  │ web',
+  ].join('\n');
+
+  it('names the workspace package that failed and puts its error lines first', () => {
+    const summary = failureSummary(TAIL);
+    expect(summary).toMatch(/^Failed in apps\/web\./);
+    expect(summary).toContain('usePathname()');
+    expect(summary).toContain('app-shell.tsx:31:28');
+    expect(summary).not.toContain('1140 passed');
+  });
+
+  it('is empty when nothing in the output looks like the failure', () => {
+    expect(failureSummary('all good\nDone')).toBe('');
+  });
+
+  it("leads the fixer's issue with it, before the end of the output", () => {
+    const [issue] = verificationIssues({
+      status: 'regression', commit: 'c', baseCommit: 'b', tamper: [], runnerConfigChanged: [],
+      checks: [{ name: 'test', command: 'pnpm run test', outcome: 'failed', exitCode: 1, tail: TAIL, onBase: 'passed' }],
+    } as never);
+    expect(issue.description.indexOf('usePathname()')).toBeLessThan(issue.description.indexOf('1140 passed'));
+    expect(issue.description).toMatch(/Failed in apps\/web/);
+  });
+});
+

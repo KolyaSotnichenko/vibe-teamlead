@@ -456,13 +456,43 @@ export function describeVerification(report: VerificationReport): string {
 }
 
 /** What must be fixed before a review can pass. Keys ignore the wording, to compare rounds. Pure. */
+/** Lines that say what failed, in the output of test runners, builds and package managers */
+const FAILURE_LINE = /(^|\s)(Error|ERROR|error TS\d+|FAIL|FAILED|AssertionError|TypeError|ReferenceError|SyntaxError|ERR!|\u2717|\u00d7|\u2a2f)\b|(^|\s)(\u00d7|\u2a2f|\u2717)\s|\bfailed\b|Cannot find|at <unknown> \(|^\s+at .*\.(t|j)sx?:\d+/;
+const PASSING_LINE = /\bpassed\b|\u2713/;
+const SUMMARY_LINES = 15;
+const SUMMARY_CHARS = 1500;
+
+/**
+ * The part of a failing check's output that says what failed: the workspace
+ * package a recursive run stopped in, and the error lines. The end of the output
+ * alone can be mostly passing tests of another package, and a fixer went after
+ * those instead. Empty when nothing looks like a failure. Pure.
+ */
+export function failureSummary(tail: string): string {
+  // pnpm draws its error in a box and wraps the path across lines
+  const unboxed = tail.replace(/\n\s*\u2502\s?/g, '');
+  const where = /recursive run" failed in \S*?\/copy\/(\S+?)\/?(\s|$)/.exec(unboxed)?.[1];
+  const lines: string[] = [];
+  for (const raw of tail.split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    if (!line.trim() || PASSING_LINE.test(line) || /^\s*\u2502/.test(line) || !FAILURE_LINE.test(line)) continue;
+    if (!lines.includes(line)) lines.push(line.slice(0, 300));
+    if (lines.length >= SUMMARY_LINES) break;
+  }
+  if (!where && !lines.length) return '';
+  return [where ? `Failed in ${where}.` : '', ...lines].filter(Boolean).join('\n').slice(0, SUMMARY_CHARS);
+}
+
 export function verificationIssues(report: VerificationReport): { key: string; type: 'critical'; title: string; description: string; location?: string; fix_required: string }[] {
   return [
     ...report.checks.filter((check) => check.outcome !== 'passed' && check.onBase === 'passed').map((check) => ({
       key: `check:${check.command}`,
       type: 'critical' as const,
       title: `\`${check.command}\` ${check.outcome === 'timed_out' ? 'runs out of time' : 'fails'} on this task and passes on the commit it started from`,
-      description: `Exit code ${check.exitCode}. The end of its output:\n${check.tail ?? ''}`,
+      description: (() => {
+        const summary = failureSummary(check.tail ?? '');
+        return `Exit code ${check.exitCode}.${summary ? `\n\nWhat failed:\n${summary}\n` : ''}\nThe end of its output:\n${check.tail ?? ''}`;
+      })(),
       fix_required: 'Fix the code so that this passes. Commit it: the app checks what is committed, on a clean copy.',
     })),
     ...report.tamper.map((finding) => ({
