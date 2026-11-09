@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { PreviewAPI, PreviewStatus } from '../../shared/types/preview';
+import type { PreviewAPI, PreviewOverlayEvent, PreviewStatus } from '../../shared/types/preview';
 
 export type { PreviewAPI };
 
@@ -20,4 +20,14 @@ export const createPreviewAPI = (): PreviewAPI => ({
   uxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW, projectId),
   cancelUxReview: () => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_CANCEL),
   lastUxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_LAST, projectId),
+  setNotesMode: (on) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_MODE, on),
+  setPins: (pins) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_PINS, pins),
+  focusPin: (n) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_FOCUS_PIN, n),
+  onOverlayEvent: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, overlayEvent: PreviewOverlayEvent) => callback(overlayEvent);
+    ipcRenderer.on(IPC_CHANNELS.PREVIEW_OVERLAY_EVENT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PREVIEW_OVERLAY_EVENT, handler);
+  },
+  loadNotes: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_LOAD, projectId),
+  saveNotes: (projectId, notes) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_SAVE, projectId, notes),
 });

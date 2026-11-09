@@ -109,6 +109,12 @@ export const IPC_CHANNELS = {
   PREVIEW_NAVIGATE: 'preview:navigate',
   PREVIEW_PROPOSE_SERVICES: 'preview:proposeServices',
   PREVIEW_UX_REVIEW: 'preview:uxReview',
+  PREVIEW_NOTES_MODE: 'preview:notesMode',
+  PREVIEW_PINS: 'preview:pins',
+  PREVIEW_FOCUS_PIN: 'preview:focusPin',
+  PREVIEW_OVERLAY_EVENT: 'preview:overlayEvent',  // Event: what the page's notes overlay reported (main -> renderer)
+  PREVIEW_NOTES_LOAD: 'preview:notesLoad',
+  PREVIEW_NOTES_SAVE: 'preview:notesSave',
   PREVIEW_UX_REVIEW_CANCEL: 'preview:uxReviewCancel',
   PREVIEW_UX_REVIEW_LAST: 'preview:uxReviewLast',
   PROJECT_LOOSE_ENDS: 'project:looseEnds',  // Placeholders left in the project's UI files

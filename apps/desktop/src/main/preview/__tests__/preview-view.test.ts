@@ -19,6 +19,13 @@ function fakeView() {
     navigationHistory: { canGoBack: () => true, goBack: vi.fn(), canGoForward: () => false, goForward: vi.fn() },
     isDestroyed: () => false,
     close: vi.fn(),
+    send: vi.fn(),
+    id: 77,
+    getURL: () => 'http://localhost:4100/login?next=/app',
+    capturePage: vi.fn(async () => {
+      const small = { toDataURL: () => 'data:image/png;base64,SMALL' };
+      return { getSize: () => ({ width: 1600, height: 400 }), resize: vi.fn(() => small), toDataURL: () => 'data:image/png;base64,BIG' };
+    }),
   };
   const view = { webContents: contents, setBounds: vi.fn(), setVisible: vi.fn() };
   return { view, contents, handlers, open: (url: string) => openHandler?.({ url }), permission: () => { const cb = vi.fn(); permissionHandler?.({}, 'media', cb); return cb; } };
@@ -123,5 +130,82 @@ describe('the preview view', () => {
     preview.destroy();
     expect(window.contentView.removeChildView).toHaveBeenCalled();
     expect(contents.close).toHaveBeenCalled();
+  });
+});
+
+describe('notes in the preview view', () => {
+  const pick = {
+    kind: 'element',
+    rect: { x: 10, y: 20, width: 300, height: 40 },
+    selector: 'main > h1',
+    text: 'Roadmaply',
+    html: '<h1>Roadmaply</h1>',
+    frames: [{ file: '/wt/p1/apps/web/src/app/page.tsx', line: 7 }, { file: '/Users/me/elsewhere/x.ts', line: 1 }],
+  };
+
+  function notes() {
+    const ctx = setup();
+    const events: unknown[] = [];
+    ctx.preview.onOverlayEvent((event) => events.push(event));
+    ctx.preview.setWorktree('/wt/p1');
+    ctx.preview.setBounds({ x: 0, y: 40, width: 1280, height: 800 });
+    return { ...ctx, events };
+  }
+
+  it('tells the page overlay the mode and the pins', () => {
+    const { preview, contents } = notes();
+    preview.setNotesMode(true);
+    preview.setPins([{ n: 1, selector: '#title' }]);
+    preview.focusPin(1);
+    expect(contents.send).toHaveBeenCalledWith('preview:overlay-command', { type: 'mode', on: true });
+    expect(contents.send).toHaveBeenCalledWith('preview:overlay-command', { type: 'pins', pins: [{ n: 1, selector: '#title' }] });
+    expect(contents.send).toHaveBeenCalledWith('preview:overlay-command', { type: 'focus', n: 1 });
+  });
+
+  it('turns a pick into a note draft: route, width, source frames relative to the worktree, and a screenshot of the element', async () => {
+    const { preview, contents, events } = notes();
+    preview.setNotesMode(true);
+    await preview.handleOverlayMessage(77, { type: 'picked', pick });
+    expect(contents.capturePage).toHaveBeenCalledWith({ x: 0, y: 4, width: 326, height: 72 });
+    expect(events).toEqual([
+      {
+        type: 'picked',
+        route: '/login?next=/app',
+        width: 1280,
+        image: 'data:image/png;base64,SMALL',
+        pick: { ...pick, kind: 'element', frames: [{ file: 'apps/web/src/app/page.tsx', line: 7 }] },
+      },
+    ]);
+  });
+
+  it('ignores picks while notes mode is off, from another page, or that are not picks', async () => {
+    const { preview, events } = notes();
+    await preview.handleOverlayMessage(77, { type: 'picked', pick });
+    preview.setNotesMode(true);
+    await preview.handleOverlayMessage(12, { type: 'picked', pick });
+    await preview.handleOverlayMessage(77, { type: 'picked', pick: { kind: 'evil' } });
+    expect(events).toEqual([]);
+  });
+
+  it('passes on detached pins and Escape, and reports the route as the page moves', async () => {
+    const { preview, events, handlers } = notes();
+    await preview.handleOverlayMessage(77, { type: 'detached', ns: [2, 'x'] });
+    await preview.handleOverlayMessage(77, { type: 'escape' });
+    handlers['did-navigate-in-page']({}, 'http://localhost:4100/p/demo#top', true);
+    expect(events).toEqual([{ type: 'detached', ns: [2] }, { type: 'escape' }, { type: 'route', route: '/p/demo' }]);
+  });
+
+  it('serves the overlay only to its own page', () => {
+    const { preview } = notes();
+    expect(preview.isOwnPage(77)).toBe(true);
+    expect(preview.isOwnPage(5)).toBe(false);
+  });
+
+  it('turns notes mode on again in a page that loaded anew', () => {
+    const { preview, contents, handlers } = notes();
+    preview.setNotesMode(true);
+    contents.send.mockClear();
+    handlers['dom-ready']();
+    expect(contents.send).toHaveBeenCalledWith('preview:overlay-command', { type: 'mode', on: true });
   });
 });

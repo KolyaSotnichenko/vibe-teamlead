@@ -12,11 +12,12 @@ import path from 'node:path';
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewStatus, UxReviewResult } from '../../shared/types';
+import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewNote, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
 import { currentPreview, startPreview, stopPreview } from '../preview/preview-session';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
+import { readNotesDraft, writeNotesDraft } from '../preview/notes-draft';
 import { previewWorktreePath } from '../preview/preview-worktree';
 import { runClaudeTask } from '../ai/claude-code/task';
 import { getFeatureSettings } from './feature-settings-helper';
@@ -62,6 +63,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
     watchReloads();
+    view.setWorktree(previewWorktreePath(previewWorktreesRoot(), projectId));
     try {
       const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() }, { resetData });
       return { success: true, data: status };
@@ -97,6 +99,60 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       return { success: false, error: controller.signal.aborted ? 'The UX review was stopped.' : errorMessage(error) };
     } finally {
       if (uxReview === controller) uxReview = null;
+    }
+  });
+
+  // Notes: the page's overlay asks for its script and reports picks; the renderer drives the mode and pins
+  let overlaySource: string | null = null;
+  ipcMain.on('preview:overlay-source', (event) => {
+    if (!view.isOwnPage(event.sender.id)) {
+      event.returnValue = '';
+      return;
+    }
+    if (overlaySource === null) {
+      try {
+        overlaySource = readFileSync(path.join(app.getAppPath(), 'out', 'preview', 'overlay.js'), 'utf-8');
+      } catch {
+        overlaySource = '';
+      }
+    }
+    event.returnValue = overlaySource;
+  });
+  ipcMain.on('preview:overlay-event', (event, data: unknown) => void view.handleOverlayMessage(event.sender.id, data));
+  view.onOverlayEvent((overlayEvent) => {
+    const window = getMainWindow();
+    if (!window || window.isDestroyed()) return;
+    window.webContents.send(IPC_CHANNELS.PREVIEW_OVERLAY_EVENT, overlayEvent);
+    // The note's text is typed in the app's own panel
+    if (overlayEvent.type === 'picked') window.webContents.focus();
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_MODE, (_e, on: unknown): IPCResult => {
+    view.setNotesMode(on === true);
+    return { success: true };
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_PINS, (_e, pins: unknown): IPCResult => {
+    const clean = (Array.isArray(pins) ? pins : [])
+      .filter((p): p is { n: number; selector: string } => typeof p?.n === 'number' && typeof p?.selector === 'string')
+      .slice(0, 200)
+      .map((p) => ({ n: p.n, selector: p.selector.slice(0, 500) }));
+    view.setPins(clean);
+    return { success: true };
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_FOCUS_PIN, (_e, n: unknown): IPCResult => {
+    if (typeof n === 'number') view.focusPin(n);
+    return { success: true };
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_LOAD, (_e, projectId: string): IPCResult<PreviewNote[]> => {
+    const project = projectStore.getProject(projectId);
+    return project ? { success: true, data: readNotesDraft(project.path) } : { success: false, error: 'Project not found' };
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_NOTES_SAVE, (_e, projectId: string, notes: unknown): IPCResult<PreviewNote[]> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    try {
+      return { success: true, data: writeNotesDraft(project.path, notes) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
     }
   });
 

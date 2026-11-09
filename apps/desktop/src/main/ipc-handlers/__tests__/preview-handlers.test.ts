@@ -24,15 +24,24 @@ type Invoke = (channel: string, event: unknown, ...args: unknown[]) => Promise<u
 const invoke = (channel: string, ...args: unknown[]) => (ipcMain as unknown as { invokeHandler: Invoke }).invokeHandler(channel, {}, ...args);
 
 function fakeView() {
-  return { show: vi.fn(), hide: vi.fn(), setBounds: vi.fn(), navigate: vi.fn(), destroy: vi.fn() };
+  let listener: (event: unknown) => void = () => {};
+  return {
+    show: vi.fn(), hide: vi.fn(), setBounds: vi.fn(), navigate: vi.fn(), destroy: vi.fn(),
+    setWorktree: vi.fn(), setNotesMode: vi.fn(), setPins: vi.fn(), focusPin: vi.fn(),
+    isOwnPage: vi.fn((id: number) => id === 77),
+    handleOverlayMessage: vi.fn(async () => {}),
+    onOverlayEvent: vi.fn((l: (event: unknown) => void) => { listener = l; return () => {}; }),
+    emit: (event: unknown) => listener(event),
+  };
 }
 
 describe('preview IPC', () => {
   let view: ReturnType<typeof fakeView>;
-  const window = { isDestroyed: () => false, webContents: { send: vi.fn(), on: vi.fn() } };
+  const window = { isDestroyed: () => false, webContents: { send: vi.fn(), on: vi.fn(), focus: vi.fn() } };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (ipcMain as unknown as { removeAllListeners: () => void }).removeAllListeners();
     view = fakeView();
     registerPreviewHandlers(() => window as never, view as never);
   });
@@ -89,5 +98,37 @@ describe('preview IPC', () => {
     listener({ isMainFrame: true, isSameDocument: false });
     expect(view.destroy).toHaveBeenCalled();
     expect(stopPreview).toHaveBeenCalled();
+  });
+
+  describe('notes', () => {
+    const emitter = ipcMain as unknown as { emit: (channel: string, ...args: unknown[]) => void };
+
+    it("serves the overlay's script to the previewed page only", () => {
+      const own = { sender: { id: 77 }, returnValue: undefined as unknown };
+      const other = { sender: { id: 5 }, returnValue: undefined as unknown };
+      emitter.emit('preview:overlay-source', own);
+      emitter.emit('preview:overlay-source', other);
+      expect(typeof own.returnValue).toBe('string');
+      expect(other.returnValue).toBe('');
+    });
+
+    it("passes the page's messages to the view with who sent them", () => {
+      emitter.emit('preview:overlay-event', { sender: { id: 77 } }, { type: 'escape' });
+      expect(view.handleOverlayMessage).toHaveBeenCalledWith(77, { type: 'escape' });
+    });
+
+    it('sends a pick to the app and gives it the keyboard for the note', () => {
+      view.emit({ type: 'picked', route: '/', width: 1280, pick: {} });
+      expect(window.webContents.send).toHaveBeenCalledWith('preview:overlayEvent', { type: 'picked', route: '/', width: 1280, pick: {} });
+      expect(window.webContents.focus).toHaveBeenCalled();
+    });
+
+    it('turns notes mode on and off, and passes only well-formed pins', async () => {
+      await invoke('preview:notesMode', true);
+      await invoke('preview:notesMode', 'yes');
+      expect(view.setNotesMode.mock.calls).toEqual([[true], [false]]);
+      await invoke('preview:pins', [{ n: 1, selector: '#a' }, { n: 'x' }, null]);
+      expect(view.setPins).toHaveBeenCalledWith([{ n: 1, selector: '#a' }]);
+    });
   });
 });

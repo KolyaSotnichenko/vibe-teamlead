@@ -1,0 +1,109 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { startOverlay, type OverlayDeps } from '../overlay';
+import { FROM_HOST, FROM_OVERLAY } from '../protocol';
+
+let stop: () => void = () => {};
+let posted: Array<Record<string, unknown>> = [];
+
+function host(command: Record<string, unknown>) {
+  window.dispatchEvent(new MessageEvent('message', { data: { source: FROM_HOST, ...command }, source: window }));
+}
+
+function setup(overrides: Partial<OverlayDeps> = {}) {
+  document.body.innerHTML = '<main><h1 id="title">Roadmaply</h1><button id="go">Go</button></main>';
+  const deps: OverlayDeps = {
+    getElementAtPoint: () => document.getElementById('title'),
+    getElementContext: async () => ({
+      selector: '#title',
+      htmlPreview: '<h1 id="title">Roadmaply</h1>',
+      componentName: 'Home',
+      filePath: '/wt/apps/web/src/app/page.tsx',
+      lineNumber: 7,
+      stack: [
+        { fileName: '/wt/apps/web/src/app/page.tsx', lineNumber: 7 },
+        { fileName: '/wt/apps/web/src/app/layout.tsx', lineNumber: 20, functionName: 'Layout' },
+        { fileName: 'node:internal', isIgnoreListed: true },
+      ],
+    }),
+    finder: () => 'main > h1',
+    ...overrides,
+  };
+  stop = startOverlay(window, deps);
+  return deps;
+}
+
+beforeEach(() => {
+  posted = [];
+  vi.spyOn(window, 'postMessage').mockImplementation((message: unknown) => {
+    const data = message as Record<string, unknown>;
+    if (data.source === FROM_OVERLAY) posted.push(data);
+  });
+});
+
+afterEach(() => {
+  stop();
+  vi.restoreAllMocks();
+});
+
+const click = (target: Element) => {
+  target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 5, clientY: 5 }));
+  target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX: 5, clientY: 5 }));
+  return target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+};
+
+describe('the notes overlay', () => {
+  it("leaves the app's clicks alone until notes mode is on", () => {
+    setup();
+    const onClick = vi.fn();
+    document.getElementById('go')!.addEventListener('click', onClick);
+    click(document.getElementById('go')!);
+    expect(onClick).toHaveBeenCalled();
+    expect(posted).toEqual([]);
+  });
+
+  it('in notes mode, takes a click as a pick with the selector, text, component and source frames, and the app never sees it', async () => {
+    setup();
+    host({ type: 'mode', on: true });
+    const onClick = vi.fn();
+    document.getElementById('go')!.addEventListener('click', onClick);
+    click(document.getElementById('go')!);
+    await vi.waitFor(() => expect(posted.some((p) => p.type === 'picked')).toBe(true));
+    expect(onClick).not.toHaveBeenCalled();
+    const pick = posted.find((p) => p.type === 'picked')!.pick as Record<string, unknown>;
+    expect(pick).toMatchObject({ kind: 'element', selector: '#title', text: 'Roadmaply', component: 'Home' });
+    expect(pick.frames).toEqual([
+      { file: '/wt/apps/web/src/app/page.tsx', line: 7, column: undefined, name: 'Home' },
+      { file: '/wt/apps/web/src/app/layout.tsx', line: 20, column: undefined, name: 'Layout' },
+    ]);
+  });
+
+  it('falls back to a computed selector and no frames when the framework says nothing', async () => {
+    setup({ getElementContext: async () => { throw new Error('no React'); } });
+    host({ type: 'mode', on: true });
+    click(document.getElementById('title')!);
+    await vi.waitFor(() => expect(posted.some((p) => p.type === 'picked')).toBe(true));
+    expect(posted.find((p) => p.type === 'picked')!.pick).toMatchObject({ selector: 'main > h1', frames: [] });
+  });
+
+  it('reports pins whose element is gone, and Escape', () => {
+    setup();
+    host({ type: 'pins', pins: [{ n: 1, selector: '#title' }, { n: 2, selector: '#gone' }] });
+    expect(posted).toContainEqual({ source: FROM_OVERLAY, type: 'detached', ns: [2] });
+    host({ type: 'mode', on: true });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(posted).toContainEqual({ source: FROM_OVERLAY, type: 'escape' });
+  });
+
+  it('ignores commands that are not from the host', () => {
+    setup();
+    window.dispatchEvent(new MessageEvent('message', { data: { source: 'someone', type: 'mode', on: true }, source: window }));
+    const onClick = vi.fn();
+    document.getElementById('go')!.addEventListener('click', onClick);
+    click(document.getElementById('go')!);
+    expect(onClick).toHaveBeenCalled();
+  });
+});

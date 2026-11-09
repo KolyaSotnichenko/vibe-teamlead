@@ -5,10 +5,26 @@
  * way off its local origin: links elsewhere open in the default browser.
  */
 
-import { type BrowserWindow, shell, WebContentsView } from 'electron';
+import { join } from 'node:path';
+import { app, type BrowserWindow, shell, WebContentsView } from 'electron';
 
-import type { PreviewBounds, PreviewNavigation } from '../../shared/types/preview';
+import type { PreviewBounds, PreviewNavigation, PreviewOverlayEvent } from '../../shared/types/preview';
+import { cleanPick, relativeSourceFile } from '../../preview-overlay/protocol';
 import { isAllowedPreviewUrl } from './allowed-url';
+
+/** Around a picked element in its screenshot, in CSS pixels */
+const SHOT_MARGIN = 16;
+/** Longest side of a note's screenshot */
+const SHOT_MAX = 800;
+
+const routeOf = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return '/';
+  }
+};
 
 const opensOutside = (url: string) => /^https?:\/\//i.test(url);
 
@@ -16,11 +32,24 @@ export class PreviewView {
   private view: WebContentsView | null = null;
   private origins: string[] = [];
   private bounds: PreviewBounds | null = null;
+  private worktree = '';
+  private notesOn = false;
+  private listeners = new Set<(event: PreviewOverlayEvent) => void>();
 
   constructor(
     private readonly getWindow: () => BrowserWindow | null,
     private readonly makeView: (partition: string) => WebContentsView = (partition) =>
-      new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition, spellcheck: false } }),
+      new WebContentsView({
+        webPreferences: {
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          partition,
+          spellcheck: false,
+          // Runs the notes overlay in the page and relays its messages (scripts/build-preview-assets.mjs)
+          preload: join(app.getAppPath(), 'out', 'preview', 'view-preload.js'),
+        },
+      }),
   ) {}
 
   /** Show `url` for this project, creating the view the first time. */
@@ -38,6 +67,13 @@ export class PreviewView {
         if (openOutside && opensOutside(target)) void shell.openExternal(target);
       };
       contents.on('will-navigate', (event, target) => guard(event, target, true));
+      const route = (_event: unknown, url: string) => this.emit({ type: 'route', route: routeOf(url) });
+      contents.on('did-navigate', route);
+      contents.on('did-navigate-in-page', route);
+      // A full load starts a new overlay: tell it the mode again (the pins follow the route)
+      contents.on('dom-ready', () => {
+        if (this.notesOn) this.command({ type: 'mode', on: true });
+      });
       contents.on('will-redirect', (event, target) => guard(event, target, false));
       contents.setWindowOpenHandler(({ url: target }) => {
         if (opensOutside(target)) void shell.openExternal(target);
@@ -92,7 +128,87 @@ export class PreviewView {
     }
   }
 
+  /** The previewed worktree, to make the page's source paths relative to it */
+  setWorktree(worktree: string): void {
+    this.worktree = worktree;
+  }
+
+  onOverlayEvent(listener: (event: PreviewOverlayEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(event: PreviewOverlayEvent): void {
+    for (const listener of this.listeners) listener(event);
+  }
+
+  private command(command: Record<string, unknown>): void {
+    const contents = this.view?.webContents;
+    if (contents && !contents.isDestroyed()) contents.send('preview:overlay-command', command);
+  }
+
+  setNotesMode(on: boolean): void {
+    this.notesOn = on;
+    this.command({ type: 'mode', on });
+  }
+
+  setPins(pins: Array<{ n: number; selector: string }>): void {
+    this.command({ type: 'pins', pins });
+  }
+
+  focusPin(n: number): void {
+    this.command({ type: 'focus', n });
+  }
+
+  /** Whether a message comes from the previewed page itself */
+  isOwnPage(webContentsId: number): boolean {
+    return !!this.view && !this.view.webContents.isDestroyed() && this.view.webContents.id === webContentsId;
+  }
+
+  /** A message from the page's overlay, relayed by its preload: data from code agents wrote. */
+  async handleOverlayMessage(webContentsId: number, raw: unknown): Promise<void> {
+    if (!this.isOwnPage(webContentsId) || !raw || typeof raw !== 'object') return;
+    const message = raw as Record<string, unknown>;
+    if (message.type === 'escape') return this.emit({ type: 'escape' });
+    if (message.type === 'detached') {
+      const ns = (Array.isArray(message.ns) ? message.ns : []).filter((n): n is number => typeof n === 'number').slice(0, 200);
+      return this.emit({ type: 'detached', ns });
+    }
+    if (message.type !== 'picked' || !this.notesOn) return;
+    const pick = cleanPick(message.pick);
+    const contents = this.view?.webContents;
+    if (!pick || !contents) return;
+    pick.frames = pick.frames.flatMap((frame) => {
+      const file = relativeSourceFile(frame.file, this.worktree);
+      return file ? [{ ...frame, file }] : [];
+    });
+    this.emit({ type: 'picked', route: routeOf(contents.getURL()), width: this.bounds?.width ?? 0, pick, image: await this.shot(pick.rect) });
+  }
+
+  /** The picked area with a margin, at most SHOT_MAX on its longest side */
+  private async shot(rect: { x: number; y: number; width: number; height: number }): Promise<string | undefined> {
+    const contents = this.view?.webContents;
+    if (!contents) return undefined;
+    const x = Math.max(0, Math.floor(rect.x - SHOT_MARGIN));
+    const y = Math.max(0, Math.floor(rect.y - SHOT_MARGIN));
+    const right = Math.ceil(rect.x + rect.width + SHOT_MARGIN);
+    const bottom = Math.ceil(rect.y + rect.height + SHOT_MARGIN);
+    const maxW = this.bounds?.width ?? right;
+    const maxH = this.bounds?.height ?? bottom;
+    const area = { x, y, width: Math.max(1, Math.min(right, maxW) - x), height: Math.max(1, Math.min(bottom, maxH) - y) };
+    try {
+      const image = await contents.capturePage(area);
+      const { width, height } = image.getSize();
+      const longest = Math.max(width, height);
+      const sized = longest > SHOT_MAX ? image.resize(width >= height ? { width: SHOT_MAX } : { height: SHOT_MAX }) : image;
+      return sized.toDataURL();
+    } catch {
+      return undefined;
+    }
+  }
+
   destroy(): void {
+    this.notesOn = false;
     const view = this.view;
     this.view = null;
     this.origins = [];

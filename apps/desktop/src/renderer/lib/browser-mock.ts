@@ -223,6 +223,12 @@ const browserMockAPI: ElectronAPI = {
     uxReview: async () => ({ success: false, error: 'Not available in the browser' }),
     cancelUxReview: async () => ({ success: true }),
     lastUxReview: async () => ({ success: true, data: null }),
+    setNotesMode: async () => ({ success: true }),
+    setPins: async () => ({ success: true }),
+    focusPin: async () => ({ success: true }),
+    onOverlayEvent: () => () => {},
+    loadNotes: async () => ({ success: true, data: [] }),
+    saveNotes: async (_projectId: string, notes: unknown[]) => ({ success: true, data: notes as never[] }),
   },
   usage: usageMock,
 

@@ -28,6 +28,28 @@ export interface PreviewBounds {
 
 export type PreviewNavigation = { action: 'back' | 'forward' | 'reload' } | { url: string };
 
+/** What the page's notes overlay reports, after the main process checked it */
+export type PreviewOverlayEvent =
+  | { type: 'picked'; route: string; width: number; pick: import('../../preview-overlay/protocol').Pick; image?: string }
+  | { type: 'detached'; ns: number[] }
+  | { type: 'escape' }
+  | { type: 'route'; route: string };
+
+/** A note the owner left on an element or a region of the previewed app */
+export interface PreviewNote {
+  id: string;
+  /** Its pin's number */
+  n: number;
+  route: string;
+  /** The view's width when it was left, in pixels */
+  width: number;
+  text: string;
+  pick: import('../../preview-overlay/protocol').Pick;
+  /** PNG data URL of the element or region */
+  image?: string;
+  createdAt: string;
+}
+
 /** One problem the UX review found on the running app */
 export interface UxFinding {
   /** The route, e.g. `/login` */
@@ -63,4 +85,13 @@ export interface PreviewAPI {
   cancelUxReview: () => Promise<IPCResult>;
   /** The last review of this project, if any */
   lastUxReview: (projectId: string) => Promise<IPCResult<UxReviewResult | null>>;
+  /** Notes mode: the page outlines elements and takes clicks and drags as notes */
+  setNotesMode: (on: boolean) => Promise<IPCResult>;
+  /** The pins of the page's current route */
+  setPins: (pins: Array<{ n: number; selector: string }>) => Promise<IPCResult>;
+  focusPin: (n: number) => Promise<IPCResult>;
+  onOverlayEvent: (callback: (event: PreviewOverlayEvent) => void) => () => void;
+  loadNotes: (projectId: string) => Promise<IPCResult<PreviewNote[]>>;
+  /** Replaces the draft; returns what was kept */
+  saveNotes: (projectId: string, notes: PreviewNote[]) => Promise<IPCResult<PreviewNote[]>>;
 }
