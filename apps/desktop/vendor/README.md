@@ -27,3 +27,7 @@ Also bundled from npm at packaging time (pinned, see package.json), run on Elect
 Security-gate scanners are downloaded by `scripts/fetch-scanners.cjs` in the release workflow (pinned versions, SHA-256 checked) into `vendor-bin/`, packaged as `Resources/scanners/`:
 
 - gitleaks (MIT), OSV-Scanner (Apache-2.0).
+
+## Bundled npm packages
+
+The Preview's notes overlay (`out/preview/overlay.js`, built by `scripts/build-preview-assets.mjs`) bundles [react-grab](https://github.com/aidenybai/react-grab) 0.2.0 (MIT) and [@medv/finder](https://github.com/antonmedv/finder) 4.0.2 (MIT); their license notices are kept at the end of the bundle.

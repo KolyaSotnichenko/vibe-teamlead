@@ -43,3 +43,21 @@ The page runs in a view of its own, separate from the app: no access to your fil
 ## When it does not start
 
 The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped. Fix the command under **Services** and open Preview again.
+
+## Notes
+
+**Notes** in the toolbar opens the notes panel and turns picking on. Hover the page: the element under the pointer is outlined. Click it, or drag over an area, and write what should change; Enter saves, Escape cancels. Each note is a numbered pin on its page, found again when you come back to that page. While picking is on, your clicks don't reach the app; turn it off to use the app between notes.
+
+With each note the app keeps the page, the width, the element's selector and text, a screenshot, and where it is in the code when the framework says (React exactly; Vue and Svelte when their dev build names the file). Notes stay as a draft until you send them, after a restart too.
+
+**Send to an agent** makes one task: a section and an acceptance criterion per note, with its screenshot attached, so QA checks every one. It goes to the queue. **Quick fix**, the default, writes a short spec and goes straight to code, which suits visual and copy changes; **Full pipeline** runs it like any new task.
+
+## UX review
+
+**UX review** in the toolbar runs one agent session through the app as a person would use it: from the home page through its own navigation, at 375 and 1280 pixels, by keyboard, in dark mode when the design system has one, through empty, loading and error states. It checks against Vercel's Web Interface Guidelines, Impeccable's audit and harden checklists, and your design system. The result lists what blocks people first, then smaller notes; make a task from one finding, or one task from everything that blocks. Its model is under Settings → Feature models → UX review. QA runs the same review on the pages a task changed, by itself, for every task that changes UI.
+
+## A task's preview
+
+While a task waits in review, its window has **Workspace → Preview**: the task's own code, before it merges, never moved by merges into main. Its database starts as a copy of the project's preview data, so your account is there, and the task's migrations change only the copy, which goes away with the task's worktree. Notes there go back into the same task as a fix round, with their screenshots; after QA passes it waits for you again.
+
+**UI tasks wait for my preview**, in the queue settings while auto-merge is on, holds every approved task that changed UI files in review instead of merging it, marked "Waiting for your preview". If the changed files can't be listed, it holds the task too. A held task keeps its slot: with one slot, the queue waits until you merge it or send notes.

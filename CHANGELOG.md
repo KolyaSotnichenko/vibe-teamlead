@@ -9,6 +9,10 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 - The board names placeholders left in the product (a page that says it is a placeholder, "coming soon", "lorem ipsum") after every merge, with a task to replace each, or Leave it. A text search, no model.
 - When a brief is split into tasks, the spec analyst checks how a person reaches every page from the home page and who replaces a placeholder a task leaves.
 - Preview runs Python (Django, FastAPI, Flask), Ruby (Rails), PHP (Laravel) and Go projects, not only JavaScript: it proposes the services, installs dependencies with the project's own tool when they change, and runs the framework's migrations.
+- Preview notes: click an element or drag over an area in the running app, write what should change, and send the notes as one task, with screenshots and the source location where the framework knows it. Quick fix, the default, takes a short path to code.
+- UX review in Preview: one agent session goes through the whole app from its home page and lists what stops people, with a task per finding or one for everything that blocks. Its model is a feature setting.
+- A task's Preview: while a task waits in review, its window runs the task's own code on a copy of the preview data; notes there go back into the task.
+- UI tasks wait for my preview: with auto-merge on, an approved task that changed UI waits in review for you to look at it.
 - UX review in QA: for a task that changed UI, the reviewer opens the changed pages in a real browser at phone and desktop widths, goes through them by keyboard, checks their empty, loading and error states and how a person reaches them, against Vercel's Web Interface Guidelines and Impeccable's audit and harden checklists. Problems that stop a person from using a page block approval.
 
 ## 2.0.0-beta.13 - 2026-11-09
