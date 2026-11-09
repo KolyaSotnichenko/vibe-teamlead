@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.19 - 2026-11-09
+
+- The Design system tab has two parts. Setup: pick path A (keep the current look: brand rules, then extract from the code) or path B (a new look: references, then a brief and three directions); each path's steps open under it, with the references where they are used. Below: applying the system to the code, the QA check and Storybook. Overview: the colours, fonts, rules and document, editable. A status line says how the system was made and how many differences the code has.
+- Preview: a sign-in made while clicking through no longer sticks: stopping the preview clears the page's cookies and storage, and Reset session (next to Reload) does it on the spot.
+
 ## 2.0.0-beta.18 - 2026-11-09
 
 - The Design system tab is one flow in three steps — references (optional), the design system, applying it to the code — with the next one marked. Without a system it starts with two paths: keep the current look (extract it from the code) or a new one (references, then three directions), and a link to a file already in the repository.
