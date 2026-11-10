@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.23 - 2026-11-10
+
+- Design before code. For a task that changes the interface, a designer agent draws wireframes after the spec, then the screens in the project's design system, before the architecture and the plan. The task waits on its new Design tab ("Design: your turn"): click a spot on a frame to comment and send the comments for a redraw, or approve. The coder builds to the approved design; QA compares the built pages with it, and blocking differences go to the fixer. Run prototype plays any frame at phone, tablet and desktop widths, with its links and animations. On by default; Context → Design system → Setup → Design before code turns it off, to wireframes only, or lets the designer go on by itself. Its model is Designer in the feature models.
+- The project's design library: every finished design goes into it, and the next task's designer starts from it. Context → Design system → Screens shows all of the project's wireframes and screens on one canvas.
+- GreenSock's official GSAP skills are bundled, for the designer and for the UI coders of a project that animates with GSAP.
+- Frames are shown sandboxed, with no network except Google Fonts and a pinned GSAP.
+
 ## 2.0.0-beta.22 - 2026-11-10
 
 - Project memory reports in the task's log: how many memories went into each agent's prompt, and after each coder subtask whether its lessons were saved, there was nothing new, or why they couldn't be taken or saved. Before, every memory step failed silently.
