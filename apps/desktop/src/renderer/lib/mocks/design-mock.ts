@@ -138,8 +138,45 @@ const finishLater = (projectId: string, id: string) =>
   }, 1500);
 let nextRef = 10;
 
+
+// Design before code (browser preview): a task waiting at its wireframes, with a design drawn next to them
+const wire = (title: string, w: number, h: number, cols: number) =>
+  `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><body style="margin:0;width:${w}px;height:${h}px;font-family:system-ui;background:#fff;color:#555"><div style="height:44px;border-bottom:1px solid #ccc;display:flex;align-items:center;gap:10px;padding:0 16px"><span style="width:22px;height:22px;background:#ccc"></span><span style="width:90px;height:10px;background:#ccc"></span></div><div style="padding:20px 16px 8px"><div style="width:180px;height:16px;background:#999"></div><p style="font-size:12px;margin:8px 0 0">${title}</p></div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;padding:8px 16px">${Array.from({ length: cols }, (_, i) => `<section style="border:1px dashed #999;padding:8px;display:flex;flex-direction:column;gap:8px"><span style="font-size:11px">Stage ${i + 1}</span><div style="height:46px;border:1px solid #ccc"></div><div style="height:46px;border:1px solid #ccc"></div></section>`).join('')}</div></body></html>`)}`;
+const screen = (w: number, h: number, cols: number) =>
+  `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><body style="margin:0;width:${w}px;height:${h}px;font-family:system-ui;background:#f8f9f9;color:#181818"><div style="height:48px;background:#fff;border-bottom:1px solid #e3e6e9;display:flex;align-items:center;gap:10px;padding:0 16px"><span style="width:24px;height:24px;border-radius:6px;background:#181818"></span><b>Acme</b></div><h1 style="font-size:22px;margin:16px">Roadmap</h1><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;padding:0 16px">${['Planned', 'In progress', 'Shipped'].slice(0, cols).map((s, i) => `<section style="background:${i === 1 ? '#d6e9f9' : '#eef0f2'};border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;font-weight:600">${s}</span><a href="#" style="background:#fff;border-radius:10px;padding:10px;border:1px solid #e3e6e9;color:inherit;text-decoration:none">CSV export of ideas<br><small style="color:#5f6670">▲ 48 votes</small></a></section>`).join('')}</div></body></html>`)}`;
+const taskDesignFrames = [
+  { file: 'wireframes/roadmap-desktop.html', title: 'Roadmap · desktop', kind: 'wireframe' as const, width: 1280, height: 720, x: 0, y: 0 },
+  { file: 'wireframes/roadmap-phone.html', title: 'Roadmap · phone', kind: 'wireframe' as const, width: 390, height: 720, x: 1360, y: 0 },
+  { file: 'screens/roadmap-desktop.html', title: 'Roadmap · desktop', kind: 'screen' as const, width: 1280, height: 720, x: 0, y: 1200 },
+  { file: 'screens/roadmap-phone.html', title: 'Roadmap · phone', kind: 'screen' as const, width: 390, height: 720, x: 1360, y: 1200 },
+];
+let taskDesignWaiting: 'wireframes' | 'design' | null = 'wireframes';
+
 export const designMock: DesignAPI = {
   redesignBrief: async () => ({ success: false, error: 'Not available in the browser' }),
+  taskDesign: async () => ({
+    success: true,
+    data: {
+      frames: taskDesignWaiting === 'wireframes' ? taskDesignFrames.filter((f) => f.kind === 'wireframe') : taskDesignFrames,
+      stage: taskDesignWaiting ?? 'design',
+      round: taskDesignWaiting === 'wireframes' ? 1 : 2,
+      approved: taskDesignWaiting === 'wireframes' ? {} : { wireframes: new Date().toISOString() },
+      waiting: taskDesignWaiting,
+      compare: null,
+      settings: { mode: 'full', approval: 'owner' },
+      frameSrc: {
+        'wireframes/roadmap-desktop.html': wire('Planned, in progress and shipped, as columns', 1280, 720, 3),
+        'wireframes/roadmap-phone.html': wire('Stages as tabs on a phone', 390, 720, 1),
+        'screens/roadmap-desktop.html': screen(1280, 720, 3),
+        'screens/roadmap-phone.html': screen(390, 720, 1),
+      },
+    },
+  }),
+  approveTaskDesign: async (_taskId, stage) => {
+    taskDesignWaiting = stage === 'wireframes' ? 'design' : null;
+    return { success: true };
+  },
+  commentTaskDesign: async () => ({ success: true }),
   audit: async () => ({
     success: true,
     data: info.exists && info.tokens

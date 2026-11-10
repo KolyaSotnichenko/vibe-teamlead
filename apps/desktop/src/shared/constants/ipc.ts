@@ -98,6 +98,10 @@ export const IPC_CHANNELS = {
   DESIGN_CANCEL: 'design:cancel',
   DESIGN_REDESIGN_BRIEF: 'design:redesignBrief',
   DESIGN_AUDIT: 'design:audit',
+  // Design before code: a task's wireframes and screens (Design tab)
+  TASK_DESIGN_GET: 'taskDesign:get',
+  TASK_DESIGN_APPROVE: 'taskDesign:approve',
+  TASK_DESIGN_COMMENT: 'taskDesign:comment',
   DESIGN_PROGRESS: 'design:progress',  // Event: design agent progress line (main -> renderer)
   STORYBOOK_START: 'design:storybookStart',
   STORYBOOK_STOP: 'design:storybookStop',

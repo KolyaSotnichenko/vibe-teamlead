@@ -50,6 +50,46 @@ export interface DesignTokens {
 /** How the QA loop treats design-check findings */
 export type DesignQaMode = 'block' | 'warn' | 'off';
 
+/** One frame on a task's design canvas (design before code) */
+export interface TaskDesignFrame {
+  /** Relative to the task's design/ folder; served as vt-design://task/<taskId>/<file> */
+  file: string;
+  title: string;
+  kind: 'wireframe' | 'screen';
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  note?: string;
+}
+
+export interface TaskDesignComment {
+  /** Frame file, or '' for the whole set */
+  frame: string;
+  selector?: string;
+  x?: number;
+  y?: number;
+  text: string;
+}
+
+/** A task's design for the Design tab */
+export interface TaskDesign {
+  frames: TaskDesignFrame[];
+  /** Where the design is: null before the designer ran */
+  stage: 'wireframes' | 'design' | 'skipped' | null;
+  round: number;
+  approved: { wireframes?: string; design?: string };
+  /** The stage the task waits at for the owner, or null */
+  waiting: 'wireframes' | 'design' | null;
+  /** Design-check findings left in the screens */
+  checkFindings?: number;
+  /** QA's comparison of the built pages with the design */
+  compare: { screens: Array<{ file: string; width: number; built?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }> } | null;
+  settings: { mode: 'off' | 'wireframes' | 'full'; approval: 'owner' | 'auto' };
+  /** Browser preview only: a frame's page as a data: URL instead of vt-design:// */
+  frameSrc?: Record<string, string>;
+}
+
 export interface StorybookInfo {
   /** Storybook is set up somewhere in the project */
   detected: boolean;
@@ -240,6 +280,12 @@ export interface DesignAPI {
   redesignBrief: (projectId: string) => Promise<import('./common').IPCResult<RedesignBrief>>;
   /** The UI files checked against the design system, without a model; null without tokens */
   audit: (projectId: string) => Promise<import('./common').IPCResult<DesignAudit | null>>;
+  /** Design before code: a task's frames, state and QA comparison */
+  taskDesign: (taskId: string) => Promise<import('./common').IPCResult<TaskDesign>>;
+  /** Approve the stage the task waits at; the build goes on */
+  approveTaskDesign: (taskId: string, stage: 'wireframes' | 'design') => Promise<import('./common').IPCResult>;
+  /** Send comments for the designer's next round; the build redraws */
+  commentTaskDesign: (taskId: string, comments: TaskDesignComment[]) => Promise<import('./common').IPCResult>;
   save: (projectId: string, content: { markdown?: string; tokens?: DesignTokens }) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
   /** Read the project's styles and components and write the design system they form */
   extract: (projectId: string) => Promise<import('./common').IPCResult<DesignSystemInfo>>;

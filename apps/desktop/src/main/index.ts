@@ -57,7 +57,9 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, dialog, ipcMain, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor, protocol } from 'electron';
+import { DESIGN_SCHEME } from './design/design-protocol';
+import { registerDesignProtocol } from './ipc-handlers/task-design-handlers';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -360,6 +362,13 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  // Frames inside the app (a task's design on the Design tab) stay on vt-design://: a link in a
+  // designer-written frame to anywhere else is not followed
+  mainWindow.webContents.on('will-frame-navigate', (event) => {
+    if (event.isMainFrame) return;
+    if (!event.url.startsWith(`${DESIGN_SCHEME}:`)) event.preventDefault();
+  });
+
   // The app window never navigates away from the app (e.g. a link in agent-written
   // markdown). External links open in the browser; everything else is ignored.
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -413,8 +422,12 @@ if (isWindows()) {
   console.log('[main] Applied Windows GPU cache fixes');
 }
 
+// vt-design:// serves a task's design frames to the Design tab (task-design-handlers.ts); registered before ready
+protocol.registerSchemesAsPrivileged([{ scheme: DESIGN_SCHEME, privileges: { standard: true, secure: true } }]);
+
 // Initialize the application
 app.whenReady().then(() => {
+  registerDesignProtocol();
   // What a crashed preview left running: its servers, and its database (the volume stays)
   cleanUpPreviewLeftovers(previewWorktreesRoot(), cleanUpLeftovers);
   void removePreviewLeftovers(hostDocker(process.env)).catch(() => undefined);
