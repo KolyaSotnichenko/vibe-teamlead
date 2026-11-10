@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.21 - 2026-11-10
+
+- When the app checks find a check that fails on main too, the app creates one urgent task that fixes main and starts it at once, past the queue. Tasks that hit the same failure while it is open don't start another; once it is merged, a main that fails again gets a new one.
+
 ## 2.0.0-beta.20 - 2026-11-10
 
 - Design system: the brief's last field asks only for the mood; references are the step above it. Apply to the project is in Overview, under the system it compares the code with.
