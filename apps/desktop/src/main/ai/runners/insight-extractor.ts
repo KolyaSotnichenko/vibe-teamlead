@@ -79,6 +79,8 @@ export interface ExtractedInsights {
   approach_outcome: ApproachOutcome;
   /** Recommendations for future sessions */
   recommendations: string[];
+  /** Why nothing was extracted, when the extraction itself failed (not a session with nothing to learn) */
+  failure?: string;
   /** Metadata */
   subtask_id: string;
   session_num: number;
@@ -200,8 +202,9 @@ function parseInsights(responseText: string): Record<string, unknown> | null {
  * Return generic insights when extraction fails or is disabled.
  * Mirrors Python's `_get_generic_insights()`.
  */
-function getGenericInsights(subtaskId: string, success: boolean): ExtractedInsights {
+export function getGenericInsights(subtaskId: string, success: boolean, failure?: string): ExtractedInsights {
   return {
+    ...(failure ? { failure } : {}),
     file_insights: [],
     patterns_discovered: [],
     gotchas_discovered: [],
@@ -307,8 +310,8 @@ export async function extractSessionInsights(
       };
     }
 
-    return getGenericInsights(subtaskId, success);
-  } catch {
-    return getGenericInsights(subtaskId, success);
+    return getGenericInsights(subtaskId, success, 'the model answered with no lessons it could read');
+  } catch (error) {
+    return getGenericInsights(subtaskId, success, error instanceof Error ? error.message : String(error));
   }
 }

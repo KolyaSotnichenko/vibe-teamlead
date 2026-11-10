@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { runProcess } from '../../platform/exec';
 import { safeParseJson } from '../../utils/json-repair';
 import type { ExtractedInsights, InsightExtractionConfig } from '../runners/insight-extractor';
-import { extractSessionInsights } from '../runners/insight-extractor';
+import { extractSessionInsights, getGenericInsights } from '../runners/insight-extractor';
 import type { SessionResult } from '../session/types';
 import type { SubtaskInfo } from './build-orchestrator';
 import {
@@ -551,8 +551,9 @@ async function extractInsightsAfterSession(
     };
 
     return await extractSessionInsights(insightConfig);
-  } catch {
-    return null;
+  } catch (error) {
+    // Reading the session's changes failed: say so, instead of a memory that silently stays empty
+    return getGenericInsights(subtask.id, result.outcome === 'completed', error instanceof Error ? error.message : String(error));
   }
 }
 

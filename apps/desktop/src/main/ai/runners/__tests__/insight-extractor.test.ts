@@ -220,7 +220,21 @@ describe('extractSessionInsights', () => {
 
     expect(result.subtask_id).toBe('sub-error');
     expect(result.success).toBe(true);
-    expect(result.file_insights).toEqual([]);
+    expect(result.file_insights).toEqual([]);    // Says why, so the task log can tell a failed extraction from a session with nothing to learn
+    expect(result.failure).toBe('API unavailable');
+  });
+
+  it('says why when the model answered with nothing it could read', async () => {
+    mockRunClaudeTask.mockResolvedValue({ output: null, text: 'not valid json' });
+    vi.mocked(parseLLMJson).mockReturnValueOnce(null);
+    const result = await extractSessionInsights(baseConfig());
+    expect(result.failure).toMatch(/no lessons it could read/);
+  });
+
+  it('a successful extraction has no failure', async () => {
+    mockRunClaudeTask.mockResolvedValue({ output: { file_insights: [], patterns_discovered: ['p'], gotchas_discovered: [], approach_outcome: { success: true, approach_used: 'x', why_it_worked: null, why_it_failed: null, alternatives_tried: [] }, recommendations: [] }, text: '' });
+    const result = await extractSessionInsights(baseConfig());
+    expect(result.failure).toBeUndefined();
   });
 
   // ---------------------------------------------------------------------------

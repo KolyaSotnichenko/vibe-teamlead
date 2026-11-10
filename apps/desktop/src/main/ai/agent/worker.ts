@@ -21,6 +21,7 @@ import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import type { MemoryRequest } from './types';
+import { insightsLogLine, promptMemoryLogLine } from '../memory/memory-log';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
@@ -202,14 +203,26 @@ function taskFocusText(session: SerializableSessionConfig): string {
 
 const memorySections = new Map<string, Promise<string>>();
 
+/** The task log phase an agent's prompt belongs to */
+function phaseOfPrompt(promptName: string): Phase {
+  if (promptName.startsWith('qa_')) return 'qa';
+  if (promptName.startsWith('spec')) return 'spec';
+  if (promptName === 'planner' || promptName === 'architect') return 'planning';
+  return 'coding';
+}
+
 /** "## Project memory" section for a prompt ('' when memory is off or empty); one lookup per focus. */
-function memorySection(session: SerializableSessionConfig, focus?: string): Promise<string> {
+function memorySection(session: SerializableSessionConfig, focus?: string, phase: Phase = 'coding'): Promise<string> {
   const query = [focus, taskFocusText(session)].filter(Boolean).join('\n');
   const key = focus ?? '';
   let section = memorySections.get(key);
   if (!section) {
     section = query.trim()
-      ? memoryRequest({ op: 'prompt', query }).then((reply) => (reply.ok ? reply.text ?? '' : ''))
+      ? memoryRequest({ op: 'prompt', query }).then((reply) => {
+          // Into the task's log: a memory that stays empty should say why
+          taskLogger(postLog, logWriter, phase)(promptMemoryLogLine(reply));
+          return reply.ok ? reply.text ?? '' : '';
+        })
       : Promise.resolve('');
     memorySections.set(key, section);
   }
@@ -496,7 +509,7 @@ async function assemblePrompt(
     projectInstructions: cachedProjectInstructions,
   });
   const design = designSection(promptName, session, subtask);
-  const memory = await memorySection(session, memoryFocus);
+  const memory = await memorySection(session, memoryFocus, phaseOfPrompt(promptName));
   return [prompt, design, memory].filter(Boolean).join('\n\n');
 }
 
@@ -766,10 +779,12 @@ async function runBuildOrchestrator(
     // What each coder session learned goes to the project's memory
     insightModel: await phaseModel(session.specDir, 'coding', session.modelId),
     onInsights: (_subtask, insights) => {
-      void memoryRequest({ op: 'insights', insights }).then((reply) => {
-        const count = Number(reply.text ?? 0);
-        if (reply.ok && count > 0) postLog(`Saved ${count} memor${count === 1 ? 'y' : 'ies'} from subtask ${insights.subtask_id}`);
-      });
+      const log = taskLogger(postLog, logWriter, 'coding');
+      if (insights.failure) {
+        log(insightsLogLine(insights.subtask_id, insights));
+        return;
+      }
+      void memoryRequest({ op: 'insights', insights }).then((reply) => log(insightsLogLine(insights.subtask_id, insights, reply)));
     },
 
     subtaskCodeContext: (subtask, log) =>
