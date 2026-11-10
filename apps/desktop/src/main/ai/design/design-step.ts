@@ -42,6 +42,8 @@ export interface DesignState {
   comments?: DesignComment[];
   /** Design-check findings left in the screens after the designer's pass */
   checkFindings?: number;
+  /** The finished design is in the project's library (design-library.ts) */
+  published?: boolean;
 }
 
 export interface DesignFrame {

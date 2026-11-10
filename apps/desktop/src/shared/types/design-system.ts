@@ -72,6 +72,13 @@ export interface TaskDesignComment {
   text: string;
 }
 
+/** The project's design library: the latest version of every frame the tasks drew */
+export interface DesignLibrary {
+  frames: Array<TaskDesignFrame & { taskId: string; taskTitle?: string; updatedAt: string }>;
+  /** Browser preview only */
+  frameSrc?: Record<string, string>;
+}
+
 /** A task's design for the Design tab */
 export interface TaskDesign {
   frames: TaskDesignFrame[];
@@ -280,6 +287,8 @@ export interface DesignAPI {
   redesignBrief: (projectId: string) => Promise<import('./common').IPCResult<RedesignBrief>>;
   /** The UI files checked against the design system, without a model; null without tokens */
   audit: (projectId: string) => Promise<import('./common').IPCResult<DesignAudit | null>>;
+  /** The project's design library (Context → Design system → Screens) */
+  library: (projectId: string) => Promise<import('./common').IPCResult<DesignLibrary>>;
   /** Design before code: a task's frames, state and QA comparison */
   taskDesign: (taskId: string) => Promise<import('./common').IPCResult<TaskDesign>>;
   /** Approve the stage the task waits at; the build goes on */

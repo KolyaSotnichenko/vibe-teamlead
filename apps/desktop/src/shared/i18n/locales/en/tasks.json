@@ -1257,6 +1257,7 @@
       "drawingBody": "For a task that changes UI, the designer draws its wireframes here before the plan.",
       "notYetTitle": "No design yet",
       "notYetBody": "When this task runs, the designer draws its wireframes here after the spec, if it changes UI."
-    }
+    },
+    "sendNone": "Send comments"
   }
 }

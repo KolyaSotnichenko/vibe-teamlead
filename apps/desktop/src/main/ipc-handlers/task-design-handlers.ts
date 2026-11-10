@@ -10,10 +10,12 @@ import path from 'node:path';
 import { BrowserWindow, ipcMain, protocol } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, TaskDesign, TaskDesignComment } from '../../shared/types';
+import type { DesignLibrary, IPCResult, TaskDesign, TaskDesignComment } from '../../shared/types';
 import { AgentManager } from '../agent';
 import { readDesignCanvas, readDesignState, writeDesignState } from '../ai/design/design-step';
-import { DESIGN_SCHEME, designAsset, parseDesignUrl } from '../design/design-protocol';
+import { DESIGN_SCHEME, designAsset, libraryAsset, parseDesignUrl, parseLibraryUrl } from '../design/design-protocol';
+import { readLibrary } from '../ai/design/design-library';
+import { projectStore } from '../project-store';
 import { approvedState, commentedState, parseCompare } from '../design/task-design';
 import { startTask } from './task/execution-handlers';
 import { findTaskAndProject } from './task/shared';
@@ -84,6 +86,13 @@ async function renderShots(taskId: string, specDir: string): Promise<void> {
 /** vt-design:// in the main session (sandboxed iframes on the Design tab, offscreen shots) */
 export function registerDesignProtocol(): void {
   protocol.handle(DESIGN_SCHEME, (request) => {
+    const library = parseLibraryUrl(request.url);
+    if (library) {
+      const project = projectStore.getProject(library.projectId);
+      const asset = project ? libraryAsset(project.path, library.file) : null;
+      if (!asset) return new Response('Not found', { status: 404 });
+      return new Response(asset.body as BodyInit, { headers: { 'Content-Type': asset.mime, ...asset.headers } });
+    }
     const target = parseDesignUrl(request.url);
     const specDir = target ? resolveSpecDir(target.taskId) : null;
     const asset = target && specDir ? designAsset(specDir, target) : null;
@@ -96,6 +105,14 @@ export function registerTaskDesignHandlers(agentManager: AgentManager, getMainWi
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_GET, (_e, taskId: string): IPCResult<TaskDesign> => {
     const design = typeof taskId === 'string' ? taskDesign(taskId) : null;
     return design ? { success: true, data: design } : { success: false, error: 'Task not found' };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DESIGN_LIBRARY_GET, (_e, projectId: string): IPCResult<DesignLibrary> => {
+    const project = typeof projectId === 'string' ? projectStore.getProject(projectId) : undefined;
+    if (!project) return { success: false, error: 'Project not found' };
+    const tasks = projectStore.getTasks(projectId);
+    const frames = readLibrary(project.path).frames.map((f) => ({ ...f, taskTitle: tasks.find((t) => t.id === f.taskId)?.title }));
+    return { success: true, data: { frames } };
   });
 
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_APPROVE, async (_e, taskId: string, stage: unknown): Promise<IPCResult> => {

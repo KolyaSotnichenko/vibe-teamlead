@@ -32,6 +32,10 @@ export interface DesignStepDeps {
   /** Design-check findings in design/screens (0 without a design system) */
   checkScreens: () => number;
   log: (line: string) => void;
+  /** Before the first drawing: the project's library as design/base/, for the designer to start from */
+  prepareBase?: () => void;
+  /** When the design is done: into the project's library */
+  publish?: () => void;
 }
 
 export type DesignStepResult = { paused?: 'wireframes' | 'design'; error?: string };
@@ -81,13 +85,22 @@ export async function runDesignStep(deps: DesignStepDeps): Promise<DesignStepRes
 
   for (let draws = 0; draws < MAX_DRAWS; draws++) {
     const action = nextDesignAction(state, settings);
-    if (action.kind === 'continue') return {};
+    if (action.kind === 'continue') {
+      if (state && state.stage !== 'skipped' && !state.published && deps.publish) {
+        deps.publish();
+        state = { ...state, published: true };
+        writeDesignState(specDir, state);
+        deps.log("Design: added to the project's design library");
+      }
+      return {};
+    }
     if (action.kind === 'pause') {
       deps.log(`Design: the ${action.stage === 'wireframes' ? 'wireframes are' : 'design is'} ready for the owner`);
       return { paused: action.stage };
     }
 
     const job = action.job;
+    if (!state && job === 'wireframes') deps.prepareBase?.();
     deps.log(`Design: ${job === 'wireframes' ? 'drawing the wireframes' : job === 'design' ? 'drawing the screens in the design system' : "changing what the owner commented on"}`);
     const result = await deps.runDesigner(job, brief(job, state, specDir));
     if (!result.ok) {

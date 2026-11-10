@@ -44,7 +44,7 @@ export function zoomAt(view: View, at: { x: number; y: number }, factor: number)
 
 export type FrameFilter = 'wireframes' | 'screens' | 'all';
 
-export function visibleFrames(frames: TaskDesignFrame[], filter: FrameFilter): TaskDesignFrame[] {
+export function visibleFrames<T extends TaskDesignFrame>(frames: T[], filter: FrameFilter): T[] {
   if (filter === 'all') return frames;
   return frames.filter((f) => (filter === 'wireframes' ? f.kind === 'wireframe' : f.kind === 'screen'));
 }

@@ -1355,7 +1355,8 @@
       },
       "tabs": {
         "setup": "Setup",
-        "view": "Overview"
+        "view": "Overview",
+        "screens": "Screens"
       },
       "status": {
         "none": "not set up yet",
@@ -1393,6 +1394,30 @@
         "emptyTitle": "No design system yet",
         "emptyBody": "Set one up: extract it from the code or design a new one. It will show here.",
         "setUp": "Set up"
+      },
+      "library": {
+        "body": "The latest version of every wireframe and screen the tasks drew. Each task's designer starts from these and adds its own.",
+        "emptyTitle": "No screens yet",
+        "emptyBody": "When a task that changes UI finishes its design, its wireframes and screens appear here."
+      },
+      "beforeCode": {
+        "title": "Design before code",
+        "body": "For a task that changes the interface, a designer agent draws its screens before the plan, on the task's Design tab. The coder builds to them and QA compares the result.",
+        "approval": "Who approves",
+        "modes": {
+          "off": "Off",
+          "offHint": "Coders build from the spec and the design system",
+          "wireframes": "Wireframes",
+          "wireframesHint": "Structure of every screen and state, styled by the coder",
+          "full": "Wireframes and design",
+          "fullHint": "Then the screens in the design system: the coder's reference"
+        },
+        "approvals": {
+          "owner": "I approve each step",
+          "ownerHint": "The task waits on its Design tab for you, at the wireframes and at the design",
+          "auto": "Go on by itself",
+          "autoHint": "The designer checks its own frames against the spec and the design system; you see them on the Design tab and in review"
+        }
       }
     }
   },

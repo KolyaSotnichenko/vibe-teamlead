@@ -20,13 +20,14 @@ import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '../../lib/utils';
 import { EmptyState, Notice, SectionHeader, WorkspaceMarkdown } from '../task-detail/workspace/workspace-ui';
-import { loadProjects } from '../../stores/project-store';
+import { loadProjects, useProjectStore } from '../../stores/project-store';
 import { DesignReferences } from './DesignReferences';
+import { DesignLibraryView } from './DesignLibraryView';
 import { designFlow } from './design-flow';
 import type { DesignAudit, DesignBrief, DesignDirection, DesignQaMode, DesignReferenceList, DesignSystemInfo, DesignTokens } from '../../../shared/types';
 
 type Busy = 'extract' | 'propose' | 'write' | 'save' | 'storybook' | null;
-type Part = 'setup' | 'view';
+type Part = 'setup' | 'view' | 'screens';
 type Path = 'keep' | 'new';
 
 function Swatch({ name, value, role }: { name: string; value: string; role?: string }) {
@@ -171,6 +172,7 @@ function PathCard({ label, title, body, selected, current, onSelect }: { label: 
 export function DesignSystemTab({ projectId }: { projectId: string }) {
   const { t, i18n } = useTranslation('common');
   const [info, setInfo] = useState<DesignSystemInfo | null>(null);
+  const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
   const [part, setPart] = useState<Part | null>(null);
   const [path, setPath] = useState<Path | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
@@ -473,6 +475,48 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         </div>
       </section>
 
+      <section className="space-y-3" aria-labelledby="ds-before-code">
+        <SectionHeader id="ds-before-code" title={t('context.design.beforeCode.title')} />
+        <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.beforeCode.body')}</p>
+        <div role="radiogroup" aria-label={t('context.design.beforeCode.title')} className="grid max-w-3xl grid-cols-1 gap-2 sm:grid-cols-3">
+          {(['off', 'wireframes', 'full'] as const).map((mode) => {
+            const on = (project?.settings.designMode ?? 'full') === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => void updateSettings({ designMode: mode })}
+                className={cn('flex min-h-11 flex-col items-start border px-3 py-2 text-left', on ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:bg-accent')}
+              >
+                <span className="text-sm font-medium">{t(`context.design.beforeCode.modes.${mode}`)}</span>
+                <span className={cn('text-xs', on ? 'text-background/80' : 'text-muted-foreground')}>{t(`context.design.beforeCode.modes.${mode}Hint`)}</span>
+              </button>
+            );
+          })}
+        </div>
+        {(project?.settings.designMode ?? 'full') !== 'off' && (
+          <div role="radiogroup" aria-label={t('context.design.beforeCode.approval')} className="flex max-w-3xl flex-col border-t border-border">
+            {(['owner', 'auto'] as const).map((approval) => (
+              <label key={approval} className="flex cursor-pointer items-start gap-3 border-b border-border py-2.5">
+                <input
+                  type="radio"
+                  name="ds-design-approval"
+                  checked={(project?.settings.designApproval ?? 'owner') === approval}
+                  onChange={() => void updateSettings({ designApproval: approval })}
+                  className="mt-1 h-4 w-4"
+                />
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium text-foreground">{t(`context.design.beforeCode.approvals.${approval}`)}</span>
+                  <span className="text-xs text-muted-foreground">{t(`context.design.beforeCode.approvals.${approval}Hint`)}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </section>
+
       {info.exists && (
         <section className="space-y-3" aria-labelledby="ds-qa">
           <SectionHeader id="ds-qa" title={t('context.design.qaTitle')} />
@@ -617,7 +661,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
       <div className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="flex flex-wrap items-end justify-between gap-x-4 border-b border-foreground">
           <div role="tablist" aria-label={t('context.design.title')} className="flex">
-            {(['setup', 'view'] as const).map((p) => (
+            {(['setup', 'view', 'screens'] as const).map((p) => (
               <button
                 key={p}
                 type="button"
@@ -641,7 +685,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         {progressLine}
 
         <div role="tabpanel" aria-label={t(`context.design.tabs.${shown}`)}>
-          {shown === 'setup' ? setupPart : viewPart}
+          {shown === 'setup' ? setupPart : shown === 'screens' ? <DesignLibraryView projectId={projectId} /> : viewPart}
         </div>
       </div>
     </ScrollArea>

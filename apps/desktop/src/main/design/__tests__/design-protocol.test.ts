@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { DESIGN_CSP, designAsset, parseDesignUrl } from '../design-protocol';
+import { DESIGN_CSP, designAsset, libraryAsset, parseDesignUrl, parseLibraryUrl } from '../design-protocol';
 
 function specDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'vtl-proto-'));
@@ -59,5 +59,22 @@ describe('links in the design folder', () => {
     writeFileSync(outside, '<p>secret</p>');
     symlinkSync(outside, path.join(dir, 'design', 'screens', 'leak.html'));
     expect(designAsset(dir, { taskId: '031', file: 'screens/leak.html', area: 'design' })).toBeNull();
+  });
+});
+
+describe("the project's library over vt-design://project/", () => {
+  it('names a project and a file under its library', () => {
+    expect(parseLibraryUrl('vt-design://project/p-1/screens/roadmap.html')).toEqual({ projectId: 'p-1', file: 'screens/roadmap.html' });
+    expect(parseLibraryUrl('vt-design://task/t/screens/roadmap.html')).toBeNull();
+  });
+
+  it('serves its frames with the same CSP, and nothing outside it', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-proj-'));
+    const lib = path.join(root, '.vibe-teamlead', 'design', 'library', 'screens');
+    mkdirSync(lib, { recursive: true });
+    writeFileSync(path.join(lib, 'roadmap.html'), '<body>r</body>');
+    writeFileSync(path.join(root, '.vibe-teamlead', 'design', 'secret.html'), 'no');
+    expect(libraryAsset(root, 'screens/roadmap.html')?.headers['Content-Security-Policy']).toBe(DESIGN_CSP);
+    expect(libraryAsset(root, '../secret.html')).toBeNull();
   });
 });

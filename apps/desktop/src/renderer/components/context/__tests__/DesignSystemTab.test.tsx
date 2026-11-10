@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
 }));
-vi.mock('../../../stores/project-store', () => ({ loadProjects: vi.fn(async () => {}) }));
+vi.mock('../../../stores/project-store', () => ({ loadProjects: vi.fn(async () => {}), useProjectStore: (select: (s: { projects: unknown[] }) => unknown) => select({ projects: [{ id: 'p1', settings: {} }] }) }));
 
 import type { DesignSystemInfo } from '../../../../shared/types';
 import { designMock } from '../../../lib/mocks/design-mock';
@@ -102,5 +102,13 @@ describe('DesignSystemTab', () => {
     fireEvent.click(within(banner).getByRole('button', { name: 'context.design.stale.refresh' }));
     const panel = screen.getByRole('list', { name: 'context.design.start.keepTitle' });
     expect((await within(panel).findAllByText('context.design.refs.fresh')).length).toBeGreaterThan(0);
+  });
+
+  it('Setup turns design before code off, wireframes only, or full, and who approves', async () => {
+    mount({ get: async () => ({ success: true, data: empty }) });
+    fireEvent.click(await screen.findByRole('radio', { name: /^context.design.beforeCode.modes.wireframes/ }));
+    await waitFor(() => expect(updateProjectSettings).toHaveBeenCalledWith('p1', { designMode: 'wireframes' }));
+    fireEvent.click(screen.getByRole('radio', { name: /^context.design.beforeCode.approvals.auto/ }));
+    await waitFor(() => expect(updateProjectSettings).toHaveBeenCalledWith('p1', { designApproval: 'auto' }));
   });
 });

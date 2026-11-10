@@ -94,4 +94,27 @@ describe('the design step of a build', () => {
     expect(await runDesignStep(deps)).toEqual({});
     expect(runDesigner).not.toHaveBeenCalled();
   });
+
+  it("starts from the project's library and puts the finished design into it, once", async () => {
+    const prepareBase = vi.fn();
+    const publish = vi.fn();
+    const { deps, specDir } = setup({ settings: { mode: 'full', approval: 'auto' }, prepareBase, publish });
+    expect(await runDesignStep(deps)).toEqual({});
+    expect(prepareBase).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(readDesignState(specDir)?.published).toBe(true);
+    // A resumed build doesn't publish it again
+    expect(await runDesignStep(deps)).toEqual({});
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes nothing while the owner has not approved, or when there was no UI', async () => {
+    const publish = vi.fn();
+    const waiting = setup({ publish });
+    await runDesignStep(waiting.deps);
+    expect(publish).not.toHaveBeenCalled();
+    const noUi = setup({ publish, touchesUi: () => false });
+    await runDesignStep(noUi.deps);
+    expect(publish).not.toHaveBeenCalled();
+  });
 });

@@ -24,6 +24,7 @@ import type { MemoryRequest } from './types';
 import { insightsLogLine, promptMemoryLogLine } from '../memory/memory-log';
 import { animatesWithGsap } from '../design/animation';
 import { runDesignStep } from '../design/design-runner';
+import { copyLibraryToBase, publishToLibrary } from '../design/design-library';
 import { designReferencePrompt, lintDesignScreens, readDesignCanvas, readDesignState, specTouchesUi } from '../design/design-step';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
@@ -265,6 +266,16 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
         return tokens ? lintDesignScreens(session.specDir, tokens).length : 0;
       },
       log,
+      // The project's design library (in the main project, not this worktree): earlier tasks' screens
+      prepareBase: () => {
+        const root = projectRootFor(session.projectDir);
+        const count = root ? copyLibraryToBase(root, session.specDir) : 0;
+        if (count) log(`Design: starting from the project's ${count} existing frame(s) (design/base/)`);
+      },
+      publish: () => {
+        const root = projectRootFor(session.projectDir);
+        if (root) publishToLibrary(root, session.specDir, { taskId: config.taskId });
+      },
     });
   } catch (error) {
     log(`Design: ${error instanceof Error ? error.message : String(error)}; building without a design`);

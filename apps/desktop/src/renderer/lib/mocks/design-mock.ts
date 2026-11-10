@@ -172,6 +172,18 @@ export const designMock: DesignAPI = {
       },
     },
   }),
+  library: async () => ({
+    success: true,
+    data: {
+      frames: taskDesignFrames.map((f) => ({ ...f, taskId: '051-roadmap', taskTitle: 'Redesign the public roadmap board', updatedAt: new Date().toISOString() })),
+      frameSrc: {
+        'wireframes/roadmap-desktop.html': wire('Planned, in progress and shipped, as columns', 1280, 720, 3),
+        'wireframes/roadmap-phone.html': wire('Stages as tabs on a phone', 390, 720, 1),
+        'screens/roadmap-desktop.html': screen(1280, 720, 3),
+        'screens/roadmap-phone.html': screen(390, 720, 1),
+      },
+    },
+  }),
   approveTaskDesign: async (_taskId, stage) => {
     taskDesignWaiting = stage === 'wireframes' ? 'design' : null;
     return { success: true };

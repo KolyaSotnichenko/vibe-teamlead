@@ -102,6 +102,7 @@ export const IPC_CHANNELS = {
   TASK_DESIGN_GET: 'taskDesign:get',
   TASK_DESIGN_APPROVE: 'taskDesign:approve',
   TASK_DESIGN_COMMENT: 'taskDesign:comment',
+  DESIGN_LIBRARY_GET: 'design:library',
   DESIGN_PROGRESS: 'design:progress',  // Event: design agent progress line (main -> renderer)
   STORYBOOK_START: 'design:storybookStart',
   STORYBOOK_STOP: 'design:storybookStop',

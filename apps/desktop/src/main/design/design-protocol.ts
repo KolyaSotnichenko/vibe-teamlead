@@ -3,6 +3,7 @@
  *
  *   vt-design://task/<taskId>/<file under design/>    the frames (HTML), their shots (PNG)
  *   vt-design://task/<taskId>/spec/<image>             QA's screenshots of the built pages
+ *   vt-design://project/<projectId>/<file>             the project's design library (design-library.ts)
  *
  * The HTML is written by the designer agent: it is served with a strict CSP (no network except
  * Google Fonts and the pinned GSAP, no fetches, no forms) into sandboxed iframes, and a small
@@ -12,7 +13,7 @@
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
-import { designFile } from '../ai/design/design-step';
+import { libraryDir } from '../ai/design/design-library';
 
 export const DESIGN_SCHEME = 'vt-design';
 
@@ -78,19 +79,43 @@ function insideSpec(specDir: string, relative: string): string | null {
   return full.startsWith(root + path.sep) ? full : null;
 }
 
+type Asset = { mime: string; body: Buffer | string; headers: Record<string, string> };
+
 /** The response for one URL, or null (not found / not allowed). Never throws. */
-export function designAsset(specDir: string, target: DesignUrl): { mime: string; body: Buffer | string; headers: Record<string, string> } | null {
+export function designAsset(specDir: string, target: DesignUrl): Asset | null {
+  const rootDir = target.area === 'design' ? path.join(specDir, 'design') : specDir;
+  return serve(rootDir, target.file, target.area === 'spec' ? SPEC_IMAGES : null);
+}
+
+/** A file of the project's design library (vt-design://project/<projectId>/<file>). Never throws. */
+export function libraryAsset(projectRoot: string, file: string): Asset | null {
+  return serve(libraryDir(projectRoot), file, null);
+}
+
+export function parseLibraryUrl(raw: string): { projectId: string; file: string } | null {
+  let url: URL;
   try {
-    const full = target.area === 'design' ? designFile(specDir, target.file) : insideSpec(specDir, target.file);
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== `${DESIGN_SCHEME}:` || url.hostname !== 'project') return null;
+  const parts = url.pathname.split('/').filter(Boolean).map((p) => decodeURIComponent(p));
+  return parts.length >= 2 ? { projectId: parts[0], file: parts.slice(1).join('/') } : null;
+}
+
+function serve(rootDir: string, file: string, only: Set<string> | null): Asset | null {
+  try {
+    const full = insideSpec(rootDir, file);
     if (!full) return null;
     const ext = path.extname(full).toLowerCase();
     const mime = MIME[ext];
-    if (!mime || (target.area === 'spec' && !SPEC_IMAGES.has(ext))) return null;
+    if (!mime || (only && !only.has(ext))) return null;
     if (!existsSync(full)) return null;
     // No links: a symlink in the folder must not reach a file outside it
     if (!lstatSync(full).isFile()) return null;
     const real = realpathSync(full);
-    const root = realpathSync(target.area === 'design' ? path.join(specDir, 'design') : specDir);
+    const root = realpathSync(rootDir);
     if (!real.startsWith(root + path.sep)) return null;
     const headers = { 'Content-Security-Policy': DESIGN_CSP, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
     if (ext === '.html') return { mime, body: withPickScript(readFileSync(full, 'utf-8')), headers };
