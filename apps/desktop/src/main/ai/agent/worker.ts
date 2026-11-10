@@ -62,7 +62,7 @@ import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking, modelPhaseFor, resolvePhaseModel, resolveModelId } from '../config/phase-config';
-import { TaskLogWriter, logRunFailure, taskLogger } from '../logging/task-log-writer';
+import { type LogPhase, TaskLogWriter, logRunFailure, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import { runStandaloneQa } from './standalone-qa';
@@ -225,15 +225,24 @@ function specChangesUi(session: SerializableSessionConfig): boolean {
 async function runTaskDesignStep(session: SerializableSessionConfig, toolContext: ToolContext): Promise<{ paused?: 'wireframes' | 'design'; error?: string }> {
   const design = session.design;
   if (!design || design.mode === 'off') return {};
-  const log = taskLogger(postLog, logWriter, 'planning');
+  // The design gets its own part of the task's log, between planning and coding, once something is
+  // drawn (a task with no UI only says so, under planning)
+  let designLogStarted = false;
+  const log = (line: string) => taskLogger(postLog, logWriter, designLogStarted ? 'design' : 'planning')(line);
+  const startDesignLog = () => {
+    if (designLogStarted) return;
+    designLogStarted = true;
+    logWriter?.startPhase('design', 'Designing the screens');
+  };
   try {
     let designerRound = 0;
-    return await runDesignStep({
+    const result = await runDesignStep({
       specDir: session.specDir,
       settings: { mode: design.mode, approval: design.approval },
       touchesUi: () => specChangesUi(session),
       runDesigner: async (job, message) => {
         designerRound++;
+        startDesignLog();
         // The card and the pipeline show the designer at work (task-stage.ts planningSubStage)
         postMessage({ type: 'execution-progress', taskId: config.taskId, data: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens' }, projectId: config.projectId });
         try {
@@ -253,7 +262,7 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
             true,
             undefined,
             [FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS],
-            { model: design.model, thinking: design.thinking },
+            { model: design.model, thinking: design.thinking, logPhase: 'design' },
           );
           const ok = result.outcome === 'completed' || result.outcome === 'max_steps';
           return ok ? { ok } : { ok, error: result.error?.message ?? result.outcome };
@@ -277,6 +286,8 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
         if (root) publishToLibrary(root, session.specDir, { taskId: config.taskId });
       },
     });
+    if (designLogStarted) logWriter?.endPhase('design', !result.error);
+    return result;
   } catch (error) {
     log(`Design: ${error instanceof Error ? error.message : String(error)}; building without a design`);
     return {};
@@ -539,7 +550,7 @@ function compactForRelay(event: StreamEvent): StreamEvent {
 }
 
 /** Event sink: task_logs.json + live relay to the main thread. */
-function relayEvents(phase: Phase) {
+function relayEvents(phase: LogPhase) {
   return (event: StreamEvent) => {
     logWriter?.processEvent(event, phase);
     postMessage({
@@ -651,14 +662,15 @@ async function runSingleSession(
   outputSchema?: import('zod').ZodSchema,
   /** Skills for this session on top of the agent's own */
   extraSkills?: string[],
-  /** A feature model instead of the phase's (the designer) */
-  modelOverride?: { model?: string; thinking?: string },
+  /** A feature model instead of the phase's, and a log phase of its own (the designer: 'design') */
+  modelOverride?: { model?: string; thinking?: string; logPhase?: LogPhase },
 ): Promise<SessionResult> {
+  const logPhase: LogPhase = modelOverride?.logPhase ?? phase;
   // The QA fixer edits code, so it runs on the coding model; the log stays in the QA phase
   const modelPhase = modelPhaseFor(agentType, phase);
   const phaseThinking = modelOverride?.thinking ?? (await getPhaseThinking(specDir, modelPhase));
   const model = modelOverride?.model ? resolveModelId(modelOverride.model) : await phaseModel(specDir, modelPhase, baseSession.modelId);
-  const sessionLog = taskLogger(postLog, logWriter, phase);
+  const sessionLog = taskLogger(postLog, logWriter, logPhase);
   sessionLog(`${agentType} on ${model} (${phase}${modelPhase !== phase ? `, ${modelPhase} model` : ''})`);
 
   // Build initial messages: use provided kickoff message, or fall back to session messages
@@ -708,7 +720,7 @@ async function runSingleSession(
   let sessionResult: SessionResult;
   try {
     sessionResult = await runAgentSession(sessionConfig, {
-      onEvent: relayEvents(phase),
+      onEvent: relayEvents(logPhase),
       askUser: askUserFor(sessionConfig.agentType),
       onLog: sessionLog,
     });

@@ -130,6 +130,10 @@ export class TaskLogService extends EventEmitter {
       updated_at: worktreeLogs.updated_at > mainLogs.updated_at ? worktreeLogs.updated_at : mainLogs.updated_at,
       phases: {
         planning: this.combinePhaseLogs(mainLogs.phases.planning, worktreeLogs.phases.planning),
+        // The designer runs in the build, in the worktree
+        design: (worktreeLogs.phases.design && (worktreeLogs.phases.design.entries?.length > 0 || worktreeLogs.phases.design.status !== 'pending'))
+          ? worktreeLogs.phases.design
+          : mainLogs.phases.design,
         // Use worktree logs for coding/validation if they have entries, otherwise fall back to main
         coding: (worktreeLogs.phases.coding?.entries?.length > 0 || worktreeLogs.phases.coding?.status !== 'pending')
           ? worktreeLogs.phases.coding
@@ -230,7 +234,7 @@ export class TaskLogService extends EventEmitter {
     const logs = this.loadLogs(specDir);
     if (!logs) return null;
 
-    const phases: TaskLogPhase[] = ['planning', 'coding', 'validation'];
+    const phases: TaskLogPhase[] = ['planning', 'design', 'coding', 'validation'];
     for (const phase of phases) {
       if (logs.phases[phase]?.status === 'active') {
         return phase;

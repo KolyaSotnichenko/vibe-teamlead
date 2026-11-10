@@ -17,7 +17,7 @@
 
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import type { TaskLogs, TaskLogPhase, TaskLogPhaseStatus, TaskLogEntry, TaskLogEntryType } from '../../../shared/types';
+import type { TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogPhaseStatus, TaskLogEntry, TaskLogEntryType } from '../../../shared/types';
 import type { StreamEvent } from '../session/types';
 import type { Phase } from '../config/types';
 import { writeFileReplacingSync } from '../safe-write';
@@ -27,8 +27,13 @@ import { writeFileReplacingSync } from '../safe-write';
 // =============================================================================
 
 /** Map execution phase to log phase */
-function toLogPhase(phase: Phase | undefined): TaskLogPhase {
+/** A pipeline phase, or the designer's own log phase */
+export type LogPhase = Phase | 'design';
+
+function toLogPhase(phase: LogPhase | undefined): TaskLogPhase {
   switch (phase) {
+    case 'design':
+      return 'design';
     case 'spec':
     case 'planning':
       return 'planning';
@@ -53,7 +58,7 @@ function toLogPhase(phase: Phase | undefined): TaskLogPhase {
 export function taskLogger(
   post: (line: string) => void,
   writer: Pick<TaskLogWriter, 'logText'> | null | undefined,
-  phase: Phase,
+  phase: LogPhase,
 ): (line: string) => void {
   return (line) => {
     post(line);
@@ -111,7 +116,7 @@ export class TaskLogWriter {
   /**
    * Mark a phase as started. Flushes any pending text from the previous phase.
    */
-  startPhase(phase: Phase, message?: string): void {
+  startPhase(phase: LogPhase, message?: string): void {
     this.flushPendingText();
     const logPhase = toLogPhase(phase);
     this.currentPhase = logPhase;
@@ -119,13 +124,13 @@ export class TaskLogWriter {
     // Auto-close any other active phases (handles resume/restart scenarios)
     for (const [key, phaseData] of Object.entries(this.data.phases)) {
       if (key !== logPhase && phaseData.status === 'active') {
-        this.data.phases[key as TaskLogPhase].status = 'completed';
-        this.data.phases[key as TaskLogPhase].completed_at = this.timestamp();
+        this.phaseLog(key as TaskLogPhase).status = 'completed';
+        this.phaseLog(key as TaskLogPhase).completed_at = this.timestamp();
       }
     }
 
-    this.data.phases[logPhase].status = 'active';
-    this.data.phases[logPhase].started_at = this.timestamp();
+    this.phaseLog(logPhase).status = 'active';
+    this.phaseLog(logPhase).started_at = this.timestamp();
 
     const content = message ?? `Starting ${logPhase} phase`;
     this.addEntry(logPhase, 'phase_start', content);
@@ -135,12 +140,12 @@ export class TaskLogWriter {
   /**
    * Mark a phase as completed or failed.
    */
-  endPhase(phase: Phase, success: boolean, message?: string): void {
+  endPhase(phase: LogPhase, success: boolean, message?: string): void {
     this.flushPendingText();
     const logPhase = toLogPhase(phase);
     const status: TaskLogPhaseStatus = success ? 'completed' : 'failed';
-    this.data.phases[logPhase].status = status;
-    this.data.phases[logPhase].completed_at = this.timestamp();
+    this.phaseLog(logPhase).status = status;
+    this.phaseLog(logPhase).completed_at = this.timestamp();
 
     const content = message ?? `${success ? 'Completed' : 'Failed'} ${logPhase} phase`;
     this.addEntry(logPhase, 'phase_end', content);
@@ -158,7 +163,7 @@ export class TaskLogWriter {
    * Process a stream event from the AI SDK session.
    * Routes to the appropriate log entry writer.
    */
-  processEvent(event: StreamEvent, phase?: Phase): void {
+  processEvent(event: StreamEvent, phase?: LogPhase): void {
     const logPhase = phase ? toLogPhase(phase) : this.currentPhase;
 
     switch (event.type) {
@@ -207,7 +212,7 @@ export class TaskLogWriter {
   /**
    * Write a plain text log message to the current phase.
    */
-  logText(content: string, phase?: Phase, entryType: TaskLogEntryType = 'text'): void {
+  logText(content: string, phase?: LogPhase, entryType: TaskLogEntryType = 'text'): void {
     this.flushPendingText();
     const logPhase = phase ? toLogPhase(phase) : this.currentPhase;
     this.addEntry(logPhase, entryType, content);
@@ -248,18 +253,17 @@ export class TaskLogWriter {
       ...extra,
     };
 
-    // Ensure phase exists and is initialized
-    if (!this.data.phases[phase]) {
-      this.data.phases[phase] = {
-        phase,
-        status: 'pending',
-        started_at: null,
-        completed_at: null,
-        entries: [],
-      };
-    }
+    this.phaseLog(phase).entries.push(entry);
+  }
 
-    this.data.phases[phase].entries.push(entry);
+  /** A phase's log, created when missing (a file from before the design phase) */
+  private phaseLog(phase: TaskLogPhase): TaskPhaseLog {
+    let log = this.data.phases[phase];
+    if (!log) {
+      log = { phase, status: 'pending', started_at: null, completed_at: null, entries: [] };
+      this.data.phases[phase] = log;
+    }
+    return log;
   }
 
   /** Agent tool call id → the subagent it started */
@@ -392,7 +396,10 @@ export class TaskLogWriter {
     if (existsSync(this.logFile)) {
       try {
         const content = readFileSync(this.logFile, 'utf-8');
-        return JSON.parse(content) as TaskLogs;
+        const loaded = JSON.parse(content) as TaskLogs;
+        // Logs written before the design phase existed
+        loaded.phases.design ??= { phase: 'design', status: 'pending', started_at: null, completed_at: null, entries: [] };
+        return loaded;
       } catch {
         // Corrupted file — start fresh
       }
@@ -405,6 +412,7 @@ export class TaskLogWriter {
       updated_at: now,
       phases: {
         planning: { phase: 'planning', status: 'pending', started_at: null, completed_at: null, entries: [] },
+        design: { phase: 'design', status: 'pending', started_at: null, completed_at: null, entries: [] },
         coding: { phase: 'coding', status: 'pending', started_at: null, completed_at: null, entries: [] },
         validation: { phase: 'validation', status: 'pending', started_at: null, completed_at: null, entries: [] },
       },

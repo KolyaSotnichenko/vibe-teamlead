@@ -236,7 +236,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
         if (result.success && result.data) {
           setPhaseLogs(result.data);
           // Auto-expand active phase
-          const activePhase = (['planning', 'coding', 'validation'] as TaskLogPhase[]).find(
+          const activePhase = (['planning', 'design', 'coding', 'validation'] as TaskLogPhase[]).find(
             phase => result.data?.phases[phase]?.status === 'active'
           );
           if (activePhase) {
@@ -260,7 +260,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
       if (specId === task.specId) {
         setPhaseLogs(logs);
         // Auto-expand newly active phase
-        const activePhase = (['planning', 'coding', 'validation'] as TaskLogPhase[]).find(
+        const activePhase = (['planning', 'design', 'coding', 'validation'] as TaskLogPhase[]).find(
           phase => logs.phases[phase]?.status === 'active'
         );
         if (activePhase) {

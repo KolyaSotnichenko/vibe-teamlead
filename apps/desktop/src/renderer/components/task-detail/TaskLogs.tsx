@@ -1,25 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Terminal,
-  Loader2,
-  Pencil,
-  FileCode,
-  FlaskConical,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  Search,
-  FolderSearch,
-  Wrench,
-  Bot,
-  Info,
-  Brain,
-  Cpu
-} from 'lucide-react';
+import { Terminal, Loader2, Pencil, FileCode, FlaskConical, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight, FileText, Search, FolderSearch, Wrench, Bot, Info, Brain, Cpu, PenTool } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { cn } from '../../lib/utils';
@@ -43,12 +24,14 @@ interface TaskLogsProps {
 // i18n keys (tasks namespace) for the log phase labels
 const PHASE_LABEL_KEYS: Record<TaskLogPhase, string> = {
   planning: 'tasks:logs.phases.planning',
+  design: 'tasks:logs.phases.design',
   coding: 'tasks:logs.phases.coding',
   validation: 'tasks:logs.phases.validation'
 };
 
 const PHASE_ICONS: Record<TaskLogPhase, typeof Pencil> = {
   planning: Pencil,
+  design: PenTool,
   coding: FileCode,
   validation: FlaskConical
 };
@@ -107,6 +90,7 @@ export function pairToolEntries(entries: TaskLogEntry[]): LogItem[] {
 // Note: 'planning' log phase covers both spec creation and implementation planning
 const LOG_PHASE_TO_CONFIG_PHASE: Record<TaskLogPhase, keyof PhaseModelConfig> = {
   planning: 'spec',  // Planning log phase primarily shows spec creation
+  design: 'planning', // Not shown: the designer runs on its own feature model
   coding: 'coding',
   validation: 'qa'
 };
@@ -130,7 +114,8 @@ function getPhaseConfig(
   metadata: TaskMetadata | undefined,
   logPhase: TaskLogPhase
 ): { model: string; thinking: string } | null {
-  if (!metadata) return null;
+  // The designer runs on the Designer feature model, not a phase model of the task
+  if (!metadata || logPhase === 'design') return null;
 
   const configPhase = LOG_PHASE_TO_CONFIG_PHASE[logPhase];
 
@@ -181,11 +166,14 @@ export function TaskLogs({
         ) : phaseLogs ? (
           <>
             {/* Phase-based collapsible logs */}
-            {(['planning', 'coding', 'validation'] as TaskLogPhase[]).map((phase) => (
+            {/* The design phase shows only for a task that has a design (design before code) */}
+            {(['planning', 'design', 'coding', 'validation'] as TaskLogPhase[])
+              .filter((phase) => phase !== 'design' || (phaseLogs.phases.design && (phaseLogs.phases.design.entries.length > 0 || phaseLogs.phases.design.status !== 'pending')))
+              .map((phase) => (
               <PhaseLogSection
                 key={phase}
                 phase={phase}
-                phaseLog={phaseLogs.phases[phase]}
+                phaseLog={phaseLogs.phases[phase] ?? null}
                 isExpanded={expandedPhases.has(phase)}
                 onToggle={() => onTogglePhase(phase)}
                 isTaskStuck={isStuck}

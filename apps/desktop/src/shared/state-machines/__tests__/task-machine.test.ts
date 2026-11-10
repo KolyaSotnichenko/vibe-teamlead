@@ -77,6 +77,14 @@ describe('taskMachine', () => {
       expect(snapshot.context.reviewReason).toBe('design_review');
     });
 
+    it('waits for the owner too when the task started from the queue (its machine still in backlog) or was restored as coding', () => {
+      for (const from of ['backlog', 'coding']) {
+        const snapshot = runEvents([{ type: 'DESIGN_REVIEW', stage: 'wireframes' }], from);
+        expect(snapshot.value).toBe('design_review');
+        expect(snapshot.context.reviewReason).toBe('design_review');
+      }
+    });
+
     it('goes back to planning when the owner approves or comments', () => {
       const snapshot = runEvents([{ type: 'DESIGN_RESUMED' }], 'design_review');
       expect(snapshot.value).toBe('planning');

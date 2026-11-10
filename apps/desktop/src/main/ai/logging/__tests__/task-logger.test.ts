@@ -5,6 +5,36 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TaskLogWriter, logRunFailure, taskLogger } from '../task-log-writer';
 
+describe('the design log', () => {
+  it("keeps the designer's work in its own phase, between planning and coding", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'vtl-tasklog-'));
+    const writer = new TaskLogWriter(dir, 'spec');
+    writer.startPhase('design', 'Designing the screens');
+    writer.processEvent({ type: 'text-delta', text: 'Drawing the roadmap wireframes.' } as never, 'design');
+    taskLogger(() => {}, writer, 'design')('Design: the wireframes are ready for the owner');
+    writer.endPhase('design', true);
+    const logs = JSON.parse(readFileSync(path.join(dir, 'task_logs.json'), 'utf-8'));
+    expect(logs.phases.design.status).toBe('completed');
+    expect(logs.phases.design.entries.map((e: { content: string }) => e.content)).toEqual([
+      'Designing the screens',
+      'Drawing the roadmap wireframes.',
+      'Design: the wireframes are ready for the owner',
+      expect.any(String),
+    ]);
+    expect(logs.phases.planning.entries).toEqual([]);
+  });
+
+  it('adds the phase to a log file written before it existed', async () => {
+    const { writeFileSync } = await import('node:fs');
+    const dir = mkdtempSync(path.join(tmpdir(), 'vtl-tasklog-'));
+    const empty = { status: 'pending', started_at: null, completed_at: null, entries: [] };
+    writeFileSync(path.join(dir, 'task_logs.json'), JSON.stringify({ spec_id: 's', created_at: 'x', updated_at: 'x', phases: { planning: { phase: 'planning', ...empty }, coding: { phase: 'coding', ...empty }, validation: { phase: 'validation', ...empty } } }));
+    const writer = new TaskLogWriter(dir, 's');
+    taskLogger(() => {}, writer, 'design')('Design: drawing the wireframes');
+    expect(JSON.parse(readFileSync(path.join(dir, 'task_logs.json'), 'utf-8')).phases.design.entries).toHaveLength(1);
+  });
+});
+
 describe('taskLogger', () => {
   it('sends a line to the live log and keeps it in task_logs.json under its phase', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'vtl-tasklog-'));

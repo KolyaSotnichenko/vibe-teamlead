@@ -963,6 +963,7 @@
   "logs": {
     "phases": {
       "planning": "Planning",
+      "design": "Design",
       "coding": "Coding",
       "validation": "Validation"
     },

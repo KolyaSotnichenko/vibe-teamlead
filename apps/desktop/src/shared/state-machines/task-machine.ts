@@ -56,6 +56,8 @@ export const taskMachine = createMachine(
           PLANNING_STARTED: 'planning',
           // Fallback: if coding starts from backlog (e.g., resumed task), go to coding
           CODING_STARTED: 'coding',
+          // A task started from the queue keeps its machine here through the spec and the design
+          DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
           USER_STOPPED: 'backlog'
         }
       },
@@ -102,6 +104,8 @@ export const taskMachine = createMachine(
       },
       coding: {
         on: {
+          // A machine restored as coding (in progress, phase unknown) while the build draws its design
+          DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
           QA_STARTED: 'qa_review',
           // ALL_SUBTASKS_DONE means coder finished but QA hasn't started yet
           // Transition to qa_review - QA will emit QA_PASSED or QA_FAILED

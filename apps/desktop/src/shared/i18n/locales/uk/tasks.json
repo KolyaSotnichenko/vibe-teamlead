@@ -1001,6 +1001,7 @@
   "logs": {
     "phases": {
       "planning": "Планування",
+      "design": "Дизайн",
       "coding": "Розробка",
       "validation": "Валідація"
     },
