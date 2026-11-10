@@ -23,7 +23,7 @@
     "dev": "node scripts/build-preview-assets.mjs && electron-vite dev",
     "dev:debug": "node scripts/build-preview-assets.mjs && cross-env DEBUG=true electron-vite dev",
     "dev:mcp": "electron-vite dev -- --remote-debugging-port=9222",
-    "build": "electron-vite build && node scripts/build-preview-assets.mjs",
+    "build": "electron-vite build && node scripts/check-main-bundle.mjs && node scripts/build-preview-assets.mjs",
     "start": "electron .",
     "start:mcp": "electron . --remote-debugging-port=9222",
     "preview": "electron-vite preview",

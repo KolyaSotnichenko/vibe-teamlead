@@ -217,7 +217,7 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
     // Superpowers brainstorming drives the questions (only when clarifying)
     skills: clarify ? ['superpowers:brainstorming'] : [],
     askUser,
-    // Settings → Agents → feature models ("Spec document import")
+    // Settings → Agents → feature models (the spec document feature)
     model: feature.model,
     thinkingLevel: feature.thinkingLevel as ThinkingLevel,
     tools: clarify ? [...READ_TOOLS, 'AskUserQuestion', 'Skill'] : READ_TOOLS,
