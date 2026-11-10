@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.24 - 2026-11-10
+
+- A task started from the queue waits on its Design tab when its wireframes are ready; it showed Needs Recovery instead. Recover such a task once after updating: it goes straight to waiting, without drawing again.
+- The task's Logs have a Design part, between planning and coding, with what the designer does.
+
 ## 2.0.0-beta.23 - 2026-11-10
 
 - Design before code. For a task that changes the interface, a designer agent draws wireframes after the spec, then the screens in the project's design system, before the architecture and the plan. The task waits on its new Design tab ("Design: your turn"): click a spot on a frame to comment and send the comments for a redraw, or approve. The coder builds to the approved design; QA compares the built pages with it, and blocking differences go to the fixer. Run prototype plays any frame at phone, tablet and desktop widths, with its links and animations. On by default; Context → Design system → Setup → Design before code turns it off, to wireframes only, or lets the designer go on by itself. Its model is Designer in the feature models.
