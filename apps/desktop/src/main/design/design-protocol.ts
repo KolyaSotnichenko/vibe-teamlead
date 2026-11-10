@@ -62,10 +62,21 @@ export function parseDesignUrl(raw: string): DesignUrl | null {
 }
 
 /**
- * Picks for comments: in comment mode a click is not followed; its element (a CSS path) and point
- * go to the Design tab. Runs inside the frame, posts only to its parent.
+ * The script added to every frame. Comment mode: a click is not followed; its element (a CSS path)
+ * and point go to the Design tab. Always: where the links to other screens are (for the flow
+ * arrows on the canvas, and which page the prototype is on), and a click beside any link flashes
+ * the clickable spots, as in Figma's prototype. Posts only to its parent.
  */
-const PICK_SCRIPT = `<script>(()=>{let on=false;const sel=(el)=>{const p=[];while(el&&el.nodeType===1&&el!==document.body&&p.length<8){let s=el.tagName.toLowerCase();if(el.id){p.unshift(s+'#'+CSS.escape(el.id));break;}const sib=el.parentElement?[...el.parentElement.children].filter((c)=>c.tagName===el.tagName):[];if(sib.length>1)s+=':nth-of-type('+(sib.indexOf(el)+1)+')';p.unshift(s);el=el.parentElement;}return p.join(' > ');};addEventListener('message',(e)=>{if(e.source!==parent)return;const d=e.data||{};if(d.type==='vt-design:mode'){on=!!d.on;document.documentElement.style.cursor=on?'crosshair':'';}});addEventListener('click',(e)=>{if(!on)return;e.preventDefault();e.stopPropagation();const t=e.target instanceof Element?e.target:null;parent.postMessage({type:'vt-design:pick',selector:t?sel(t):'',x:Math.round(e.pageX),y:Math.round(e.pageY),text:t?(t.textContent||'').trim().slice(0,120):''},'*');},true);})();</script>`;
+const PICK_SCRIPT = `<script>(()=>{let on=false;
+const screenLink=(h)=>/\\.html([?#]|$)/.test(h||'')&&!/^[a-z][a-z0-9+.-]*:|^\\/\\//i.test(h||'');
+const sel=(el)=>{const p=[];while(el&&el.nodeType===1&&el!==document.body&&p.length<8){let s=el.tagName.toLowerCase();if(el.id){p.unshift(s+'#'+CSS.escape(el.id));break;}const sib=el.parentElement?[...el.parentElement.children].filter((c)=>c.tagName===el.tagName):[];if(sib.length>1)s+=':nth-of-type('+(sib.indexOf(el)+1)+')';p.unshift(s);el=el.parentElement;}return p.join(' > ');};
+const links=()=>[...document.querySelectorAll('a[href]')].filter((a)=>screenLink(a.getAttribute('href'))).map((a)=>{const r=a.getBoundingClientRect();return{href:a.getAttribute('href'),x:Math.round(r.left+scrollX),y:Math.round(r.top+scrollY),w:Math.round(r.width),h:Math.round(r.height)};}).filter((l)=>l.w>0&&l.h>0).slice(0,200);
+const report=()=>parent.postMessage({type:'vt-design:links',page:location.pathname,links:links()},'*');
+addEventListener('load',()=>{report();setTimeout(report,600);});addEventListener('resize',report);
+const flash=()=>{for(const l of links()){const d=document.createElement('div');d.style.cssText='position:absolute;pointer-events:none;z-index:2147483647;box-sizing:border-box;border:2px solid #2f6feb;background:rgba(47,111,235,.18);transition:opacity .35s;left:'+l.x+'px;top:'+l.y+'px;width:'+l.w+'px;height:'+l.h+'px';document.body.appendChild(d);setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),400);},500);}};
+addEventListener('message',(e)=>{if(e.source!==parent)return;const d=e.data||{};if(d.type==='vt-design:mode'){on=!!d.on;document.documentElement.style.cursor=on?'crosshair':'';}});
+addEventListener('click',(e)=>{const t=e.target instanceof Element?e.target:null;if(on){e.preventDefault();e.stopPropagation();parent.postMessage({type:'vt-design:pick',selector:t?sel(t):'',x:Math.round(e.pageX),y:Math.round(e.pageY),text:t?(t.textContent||'').trim().slice(0,120):''},'*');return;}if(t&&t.closest('a[href],button,input,select,textarea,label,summary,[role=button],[onclick]'))return;flash();},true);
+})();</script>`;
 
 function withPickScript(html: string): string {
   const at = html.search(/<\/body>/i);

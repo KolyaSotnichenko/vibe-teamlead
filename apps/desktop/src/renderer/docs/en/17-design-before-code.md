@@ -15,7 +15,9 @@ Right after the spec, for every task whose spec names a UI file (or names no fil
 5. **Plan and code.** The planner names the design files each subtask builds; the coder builds to them at the same widths, with the project's real components and data.
 6. **QA.** The QA reviewer opens the built pages at each screen's width and compares them with the design (a picture of each approved screen is made for it). Missing elements, states or layouts block like any QA issue; small differences within the design system are listed for you under **Built vs design** on the Design tab.
 
-**Run prototype** plays any frame full size at 390, 768 or 1280 px: links between screens work, and so do animations.
+Each screen is one responsive page, shown on the canvas at the widths that matter (phone 390, desktop 1280, tablet 768 when it differs). The designer links the screens like a real flow: on the canvas, **Show flows** draws an arrow from each link to the screen it opens.
+
+**Run prototype** opens the first screen of the flow full size: click through the screens as a person would, **← Back** goes back along them, and 390 / 768 / 1280 resize the page live. Clicking beside a link briefly highlights everything clickable, as in Figma. Animations play too.
 
 ## Animations
 

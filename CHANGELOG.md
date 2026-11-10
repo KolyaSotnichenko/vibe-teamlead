@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.26 - 2026-11-10
+
+- Prototype flows: the designer links the screens like a real flow, and the canvas draws an arrow from each link to the screen it opens (Show flows / Hide flows). Run prototype starts at the first screen of the flow, follows the pages you click through with a Back button, keeps the page when you change the width, and a click beside a link highlights what is clickable.
+
 ## 2.0.0-beta.25 - 2026-11-10
 
 - Designs are responsive pages, like the real UI: one file per screen, shown on the canvas at phone and desktop widths, and the prototype's 390 / 768 / 1280 buttons resize the page live. Before, each width was its own fixed page and the buttons only cropped it.

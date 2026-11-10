@@ -75,7 +75,7 @@ export function DesignLibraryView({ projectId }: { projectId: string }) {
       <div className="flex h-[620px] border border-foreground">
         <DesignCanvas frames={frames} urlFor={urlFor} onPlay={(frame) => setPrototype({ frame, width: frame.width })} />
       </div>
-      <PrototypeDialog prototype={prototype} onChange={setPrototype} urlFor={urlFor} />
+      <PrototypeDialog prototype={prototype} onChange={setPrototype} urlFor={urlFor} frames={frames} />
     </section>
   );
 }

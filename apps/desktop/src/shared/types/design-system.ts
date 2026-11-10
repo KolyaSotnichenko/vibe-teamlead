@@ -61,6 +61,8 @@ export interface TaskDesignFrame {
   x: number;
   y: number;
   note?: string;
+  /** Where the prototype starts (the first screen of the flow) */
+  start?: boolean;
 }
 
 export interface TaskDesignComment {

@@ -1259,6 +1259,10 @@
       "notYetTitle": "No design yet",
       "notYetBody": "When this task runs, the designer draws its wireframes here after the spec, if it changes UI."
     },
-    "sendNone": "Send comments"
+    "sendNone": "Send comments",
+    "showFlows": "Show flows",
+    "hideFlows": "Hide flows",
+    "back": "← Back",
+    "prototypeHint": "Click through the screens; clicking beside a link shows what is clickable"
   }
 }

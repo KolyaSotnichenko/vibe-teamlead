@@ -15,7 +15,7 @@ import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/button';
 import { Textarea } from '../../ui/textarea';
 import { EmptyState } from '../workspace/workspace-ui';
-import { type FrameFilter, frameUrl, visibleFrames } from './design-canvas';
+import { type FrameFilter, frameUrl, startFrame, visibleFrames } from './design-canvas';
 import { DesignCanvas, type Draft, PrototypeDialog } from './DesignCanvas';
 
 const POLL_MS = 5000;
@@ -136,7 +136,15 @@ export function DesignTab({ task }: { task: Task }) {
               {commenting ? t('design.commentingOn') : t('design.comment')}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setPrototype({ frame: frames.find((f) => f.kind === 'screen') ?? frames[0], width: (frames.find((f) => f.kind === 'screen') ?? frames[0]).width })}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // The first screen of the flow (marked start by the designer), at its width
+              const first = startFrame(frames) ?? frames[0];
+              setPrototype({ frame: first, width: first.width });
+            }}
+          >
             <Play className="mr-1.5 h-3.5 w-3.5" />
             {t('design.runPrototype')}
           </Button>
@@ -242,7 +250,7 @@ export function DesignTab({ task }: { task: Task }) {
         )}
       </aside>
 
-      <PrototypeDialog prototype={prototype} onChange={setPrototype} urlFor={urlFor} />
+      <PrototypeDialog prototype={prototype} onChange={setPrototype} urlFor={urlFor} frames={design.frames} />
     </div>
   );
 }

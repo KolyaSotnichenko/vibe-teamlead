@@ -32,6 +32,22 @@ describe('what vt-design:// serves', () => {
     expect(asset?.headers['Content-Security-Policy']).toBe(DESIGN_CSP);
     expect(String(asset?.body)).toContain('<a href="item.html">Item</a>');
     expect(String(asset?.body)).toContain('vt-design:pick');
+    // Where the links to other screens are, for the flow arrows and the prototype
+    expect(String(asset?.body)).toContain('vt-design:links');
+  });
+
+  it('the added script parses and finds screen links', () => {
+    const dir = specDir();
+    const body = String(designAsset(dir, { taskId: '031', file: 'screens/roadmap.html', area: 'design' })?.body);
+    const script = body.slice(body.indexOf('<script>') + 8, body.indexOf('</script>'));
+    expect(() => new Function(script)).not.toThrow();
+    const test = /const screenLink=\(h\)=>(.*?);\n/.exec(script);
+    const screenLink = new Function('h', `return ${test?.[1]}`) as (h: string) => boolean;
+    expect(screenLink('item.html')).toBe(true);
+    expect(screenLink('../wireframes/a.html#x')).toBe(true);
+    expect(screenLink('https://example.com/a.html')).toBe(false);
+    expect(screenLink('//cdn.example.com/a.html')).toBe(false);
+    expect(screenLink('#top')).toBe(false);
   });
 
   it('images of the design and of the QA comparison, nothing else of the spec', () => {

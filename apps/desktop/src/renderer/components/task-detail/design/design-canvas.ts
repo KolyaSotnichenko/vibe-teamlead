@@ -54,3 +54,58 @@ export function frameUrl(taskId: string, file: string, mock?: Record<string, str
   if (mock?.[file]) return mock[file];
   return `vt-design://task/${encodeURIComponent(taskId)}/${file.split('/').map(encodeURIComponent).join('/')}`;
 }
+
+/** A link on a frame's page, in the page's CSS px (reported by the frame's script) */
+export interface FrameLink {
+  href: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface FlowArrow {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  key: string;
+}
+
+export const frameKey = (frame: Pick<TaskDesignFrame, 'file' | 'width'>) => `${frame.file}@${frame.width}`;
+
+/** The design file a link opens, relative to design/, or null for anything else */
+export function resolveLink(fromFile: string, href: string): string | null {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) return null;
+  try {
+    const url = new URL(href, `https://frame.invalid/${fromFile}`);
+    if (url.host !== 'frame.invalid') return null;
+    const file = decodeURIComponent(url.pathname.slice(1));
+    return file.endsWith('.html') ? file : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Arrows from each link to the frame it opens (at the same width when that frame has one). Canvas coordinates. */
+export function flowArrows(frames: TaskDesignFrame[], links: Record<string, FrameLink[]>): FlowArrow[] {
+  const arrows: FlowArrow[] = [];
+  for (const frame of frames) {
+    (links[frameKey(frame)] ?? []).forEach((link, i) => {
+      const file = resolveLink(frame.file, link.href);
+      if (!file || file === frame.file) return;
+      const targets = frames.filter((f) => f.file === file);
+      const target = targets.find((f) => f.width === frame.width) ?? targets[0];
+      if (!target) return;
+      arrows.push({
+        from: { x: frame.x + link.x + link.w, y: frame.y + link.y + link.h / 2 },
+        to: { x: target.x, y: target.y + 40 },
+        key: `${frameKey(frame)}>${frameKey(target)}#${i}`,
+      });
+    });
+  }
+  return arrows;
+}
+
+/** Where the prototype starts: the frame marked start, else the first screen, else the first frame */
+export function startFrame<T extends TaskDesignFrame>(frames: T[]): T | undefined {
+  return frames.find((f) => f.start) ?? frames.find((f) => f.kind === 'screen') ?? frames[0];
+}

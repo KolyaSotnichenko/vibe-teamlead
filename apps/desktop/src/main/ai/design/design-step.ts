@@ -59,6 +59,8 @@ export interface DesignFrame {
   y: number;
   /** Phone, desktop… what the frame shows (free text) */
   note?: string;
+  /** Where the prototype starts */
+  start?: boolean;
 }
 
 export type DesignAction = { kind: 'draw'; job: DesignJob } | { kind: 'pause'; stage: 'wireframes' | 'design' } | { kind: 'continue' };
@@ -152,6 +154,7 @@ export function readDesignCanvas(specDir: string): { frames: DesignFrame[] } {
         x: num(frame.x, 0),
         y: num(frame.y, 0),
         ...(typeof frame.note === 'string' ? { note: frame.note.slice(0, 200) } : {}),
+        ...(frame.start === true ? { start: true } : {}),
       });
     }
     return { frames: frames.slice(0, 60) };
