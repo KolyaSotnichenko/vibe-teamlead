@@ -1207,7 +1207,7 @@
     },
     "comment": "Comment",
     "commentingOn": "Click a spot",
-    "runPrototype": "Run prototype",
+    "runPrototype": "Play prototype",
     "kicker": {
       "wireframes": "Wireframes · your turn",
       "design": "Design · your turn",
@@ -1245,7 +1245,7 @@
     "frames_one": "{{count}} frame",
     "frames_other": "{{count}} frames",
     "clickToComment": "Click a spot to comment",
-    "dragToMove": "Drag to move, ⌘ + scroll to zoom",
+    "dragToMove": "Drag to move, ⌘ + scroll to zoom, point at a frame to see its flows",
     "fit": "Fit",
     "playFrame": "Run {{frame}} as a prototype",
     "empty": {
@@ -1260,8 +1260,8 @@
       "notYetBody": "When this task runs, the designer draws its wireframes here after the spec, if it changes UI."
     },
     "sendNone": "Send comments",
-    "showFlows": "Show flows",
-    "hideFlows": "Hide flows",
+    "showFlows": "Show all flows",
+    "hideFlows": "Only the frame under the pointer",
     "back": "← Back",
     "prototypeHint": "Click through the screens; clicking beside a link shows what is clickable"
   }

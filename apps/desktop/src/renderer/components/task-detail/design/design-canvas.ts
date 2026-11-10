@@ -109,3 +109,23 @@ export function flowArrows(frames: TaskDesignFrame[], links: Record<string, Fram
 export function startFrame<T extends TaskDesignFrame>(frames: T[]): T | undefined {
   return frames.find((f) => f.start) ?? frames.find((f) => f.kind === 'screen') ?? frames[0];
 }
+
+/** The arrows to draw: all of them, or only those into and out of the focused frame */
+export function visibleArrows(arrows: FlowArrow[], focus: string | null, all: boolean): FlowArrow[] {
+  if (all) return arrows;
+  if (!focus) return [];
+  return arrows.filter((a) => {
+    const [from, rest] = a.key.split('>');
+    return from === focus || rest.split('#')[0] === focus;
+  });
+}
+
+/** How many transitions leave each frame (frameKey → count) */
+export function outgoingCounts(arrows: FlowArrow[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const a of arrows) {
+    const from = a.key.split('>')[0];
+    counts[from] = (counts[from] ?? 0) + 1;
+  }
+  return counts;
+}

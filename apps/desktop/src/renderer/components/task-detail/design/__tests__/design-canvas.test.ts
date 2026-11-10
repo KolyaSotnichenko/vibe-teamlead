@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fitView, flowArrows, frameUrl, resolveLink, startFrame, visibleFrames, zoomAt } from '../design-canvas';
+import { fitView, flowArrows, frameUrl, outgoingCounts, resolveLink, startFrame, visibleArrows, visibleFrames, zoomAt } from '../design-canvas';
 
 const frames = [
   { file: 'wireframes/a.html', title: 'A', kind: 'wireframe' as const, width: 1280, height: 900, x: 0, y: 0 },
@@ -69,5 +69,23 @@ describe('flows between frames', () => {
     expect(resolveLink('screens/table.html', '../wireframes/table.html')).toBe('wireframes/table.html');
     expect(resolveLink('screens/table.html', 'table-states.html?x=1')).toBe('screens/table-states.html');
     expect(resolveLink('screens/table.html', 'https://example.com/a.html')).toBeNull();
+  });
+});
+
+describe('which arrows show', () => {
+  const arrows = [
+    { from: { x: 0, y: 0 }, to: { x: 1, y: 1 }, key: 'a.html@1280>b.html@1280#0' },
+    { from: { x: 0, y: 0 }, to: { x: 1, y: 1 }, key: 'b.html@1280>c.html@1280#0' },
+    { from: { x: 0, y: 0 }, to: { x: 1, y: 1 }, key: 'c.html@390>a.html@390#0' },
+  ];
+
+  it("only the focused frame's, in and out, unless all are asked for", () => {
+    expect(visibleArrows(arrows, 'b.html@1280', false).map((a) => a.key)).toEqual(['a.html@1280>b.html@1280#0', 'b.html@1280>c.html@1280#0']);
+    expect(visibleArrows(arrows, null, false)).toEqual([]);
+    expect(visibleArrows(arrows, null, true)).toHaveLength(3);
+  });
+
+  it('counts the transitions out of each frame', () => {
+    expect(outgoingCounts(arrows)).toEqual({ 'a.html@1280': 1, 'b.html@1280': 1, 'c.html@390': 1 });
   });
 });

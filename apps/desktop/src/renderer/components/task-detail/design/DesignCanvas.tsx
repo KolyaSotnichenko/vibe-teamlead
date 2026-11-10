@@ -12,7 +12,7 @@ import type { TaskDesignComment, TaskDesignFrame } from '../../../../shared/type
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/button';
 import { Dialog, DialogContent, DialogTitle } from '../../ui/dialog';
-import { type FrameLink, fitView, flowArrows, frameKey, type View, zoomAt } from './design-canvas';
+import { type FrameLink, fitView, flowArrows, frameKey, outgoingCounts, type View, visibleArrows, zoomAt } from './design-canvas';
 
 const PROTOTYPE_WIDTHS = [390, 768, 1280] as const;
 
@@ -135,8 +135,14 @@ export function DesignCanvas({
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 0.3 });
   // Where each frame's links to other screens are (its script reports them), and whether to draw the flows
   const [links, setLinks] = useState<Record<string, FrameLink[]>>({});
-  const [showFlows, setShowFlows] = useState(true);
-  const arrows = useMemo(() => (showFlows && !commenting ? flowArrows(frames, links) : []), [showFlows, commenting, frames, links]);
+  // As in Figma: the arrows of the frame under the pointer (or the one clicked), all of them on request
+  const [showAll, setShowAll] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const allArrows = useMemo(() => flowArrows(frames, links), [frames, links]);
+  const counts = useMemo(() => outgoingCounts(allArrows), [allArrows]);
+  const arrows = commenting ? [] : visibleArrows(allArrows, selected ?? hovered, showAll);
+  const moved = useRef(false);
   const drag = useRef<{ x: number; y: number; view: View } | null>(null);
   const framesKey = frames.map((f) => f.file).join('|');
   /** A comment pin's size in canvas px: about 24 px on screen */
@@ -183,11 +189,14 @@ export function DesignCanvas({
   const onPointerDown = (e: ReactPointerEvent) => {
     if (commenting || e.button !== 0) return;
     drag.current = { x: e.clientX, y: e.clientY, view };
+    moved.current = false;
     (e.target as Element).setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: ReactPointerEvent) => {
     const d = drag.current;
-    if (d) setView({ ...d.view, x: d.view.x + e.clientX - d.x, y: d.view.y + e.clientY - d.y });
+    if (!d) return;
+    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) moved.current = true;
+    setView({ ...d.view, x: d.view.x + e.clientX - d.x, y: d.view.y + e.clientY - d.y });
   };
 
   return (
@@ -202,10 +211,22 @@ export function DesignCanvas({
     >
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
         {frames.map((frame) => (
-          <div key={frameKey(frame)} className="absolute" style={{ left: frame.x, top: frame.y, width: frame.width }}>
+          <div
+            key={frameKey(frame)}
+            onPointerEnter={() => setHovered(frameKey(frame))}
+            onPointerLeave={() => setHovered((h) => (h === frameKey(frame) ? null : h))}
+            onClick={() => {
+              if (!moved.current) setSelected((s) => (s === frameKey(frame) ? null : frameKey(frame)));
+            }}
+            className={cn('absolute', selected === frameKey(frame) && 'outline outline-2 outline-[var(--vt-signal)]')}
+            style={{ left: frame.x, top: frame.y, width: frame.width }}
+          >
             {/* The title stays readable at any zoom: sized in screen px, above the frame */}
             <div className="absolute inset-x-0 bottom-full flex items-center justify-between gap-2" style={{ fontSize: Math.min(48, 13 / view.scale), paddingBottom: 4 / view.scale }}>
-              <span className="truncate font-mono text-muted-foreground">{frame.title}</span>
+              <span className="truncate font-mono text-muted-foreground">
+                {frame.title}
+                {counts[frameKey(frame)] ? <span className="ml-2 text-[var(--vt-signal)]">→ {counts[frameKey(frame)]}</span> : null}
+              </span>
               <button type="button" onClick={() => onPlay(frame)} className="font-mono text-muted-foreground underline-offset-4 hover:underline" aria-label={t('design.playFrame', { frame: frame.title })}>
                 ▶
               </button>
@@ -266,9 +287,9 @@ export function DesignCanvas({
         <span className="font-mono">{t('design.frames', { count: frames.length })}</span>
         <span className="text-muted-foreground">·</span>
         <span>{commenting ? t('design.clickToComment') : t('design.dragToMove')}</span>
-        {!commenting && (
-          <button type="button" aria-pressed={showFlows} onClick={() => setShowFlows(!showFlows)} className="ml-1 underline-offset-4 hover:underline">
-            {showFlows ? t('design.hideFlows') : t('design.showFlows')}
+        {!commenting && allArrows.length > 0 && (
+          <button type="button" aria-pressed={showAll} onClick={() => setShowAll(!showAll)} className="ml-1 underline-offset-4 hover:underline">
+            {showAll ? t('design.hideFlows') : t('design.showFlows')}
           </button>
         )}
         <button type="button" onClick={fit} className="ml-1 flex items-center gap-1 underline-offset-4 hover:underline">
