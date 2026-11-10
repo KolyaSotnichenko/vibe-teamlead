@@ -22,6 +22,7 @@ import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import type { MemoryRequest } from './types';
 import { insightsLogLine, promptMemoryLogLine } from '../memory/memory-log';
+import { animatesWithGsap } from '../design/animation';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
@@ -200,6 +201,9 @@ function taskFocusText(session: SerializableSessionConfig): string {
   const first = session.initialMessages?.[0]?.content;
   return typeof first === 'string' ? first.slice(0, 1500) : '';
 }
+
+/** Whether this task animates with GSAP (its UI coders get the GSAP skills); read once */
+let projectAnimates: boolean | undefined;
 
 const memorySections = new Map<string, Promise<string>>();
 
@@ -799,6 +803,7 @@ async function runBuildOrchestrator(
           subtaskSkills([...(context.subtask.filesToCreate ?? []), ...(context.subtask.filesToModify ?? [])], {
             isUiFile,
             projectHasUi: !!(caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native),
+            animates: (projectAnimates ??= animatesWithGsap(session.projectDir, session.specDir)),
           }),
         );
       }

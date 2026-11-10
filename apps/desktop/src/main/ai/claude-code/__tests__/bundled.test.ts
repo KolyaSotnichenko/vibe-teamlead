@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { codegraphMcpServer, excludeIndexFromGit } from '../codegraph';
 import { buildQueryOptions } from '../runner';
-import { FRONTEND_DESIGN_SKILL, qaSkills, skillsForAgent, subtaskSkills, UX_REVIEW_SKILL } from '../skills';
+import { FRONTEND_DESIGN_SKILL, GSAP_SKILLS, qaSkills, skillsForAgent, subtaskSkills, UX_REVIEW_SKILL } from '../skills';
 import { PLAYWRIGHT_TOOLS } from '../../config/agent-configs';
 import { isUiFile } from '../../design/design-lint';
 import { type AgentQuestion, buildAskUserHook } from '../user-questions';
@@ -174,6 +174,46 @@ describe('frontend-design for UI subtasks', () => {
     );
     expect(missing.skills).not.toContain(FRONTEND_DESIGN_SKILL);
     expect((missing.systemPrompt as { append: string }).append).not.toMatch(/frontend-design skill/);
+  });
+});
+
+describe('GSAP skills for animation', () => {
+  const base: Parameters<typeof buildQueryOptions>[0] = {
+    agentType: 'coder',
+    model: 'claude-sonnet-5-5',
+    auth: { apiKey: 'sk-ant-test' },
+    systemPrompt: 'You are the coder.',
+    initialMessages: [{ role: 'user', content: 'go' }],
+    toolContext: { cwd: '/work', projectDir: '/work', specDir: '/work/spec', securityProfile: undefined as never },
+    maxSteps: 10,
+    specDir: '/work/spec',
+    projectDir: '/work',
+    bundled: { superpowersDir: '/r/superpowers', gsapSkillsDir: '/r/gsap-skills' },
+  };
+
+  it('go to a UI subtask of a project that animates with GSAP, not to one that does not', () => {
+    const opts = { isUiFile, projectHasUi: true };
+    expect(subtaskSkills(['src/components/Hero.tsx'], { ...opts, animates: true })).toEqual([FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS]);
+    expect(subtaskSkills(['src/components/Hero.tsx'], opts)).toEqual([FRONTEND_DESIGN_SKILL]);
+    expect(subtaskSkills(['src/api/votes.ts'], { ...opts, animates: true })).toEqual([]);
+  });
+
+  it('loads the plugin with them and says motion follows the design and reduced motion', () => {
+    const options = buildQueryOptions({ ...base, extraSkills: [...GSAP_SKILLS] }, new AbortController(), { codegraphReady: false });
+    expect(options.plugins).toContainEqual({ type: 'local', path: '/r/gsap-skills' });
+    expect(options.skills).toEqual(expect.arrayContaining([...GSAP_SKILLS]));
+    expect((options.systemPrompt as { append: string }).append).toMatch(/prefers-reduced-motion/);
+    const without = buildQueryOptions(base, new AbortController(), { codegraphReady: false });
+    expect(without.plugins).not.toContainEqual({ type: 'local', path: '/r/gsap-skills' });
+  });
+
+  it('ships the plugin under the name the skill ids use, with every skill', () => {
+    const root = join(__dirname, '..', '..', '..', '..', '..', 'vendor', 'gsap-skills');
+    expect(JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf-8')).name).toBe(GSAP_SKILLS[0].split(':')[0]);
+    for (const skill of GSAP_SKILLS) {
+      const name = skill.split(':')[1];
+      expect(readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf-8')).toMatch(new RegExp(`^name: ${name}$`, 'm'));
+    }
   });
 });
 

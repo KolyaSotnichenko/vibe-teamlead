@@ -226,6 +226,10 @@
         "to": "plugins/ux-review"
       },
       {
+        "from": "vendor/gsap-skills",
+        "to": "plugins/gsap-skills"
+      },
+      {
         "from": "vendor/drawio-viewer",
         "to": "drawio-viewer"
       },

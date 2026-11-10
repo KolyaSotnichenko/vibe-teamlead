@@ -15,6 +15,7 @@
  *   <Resources>/plugins/vibe-teamlead-skills/
  *   <Resources>/plugins/frontend-design/
  *   <Resources>/plugins/ux-review/
+ *   <Resources>/plugins/gsap-skills/
  *   <Resources>/drawio-viewer/viewer-static.min.js
  *   <Resources>/codegraph/bin/codegraph
  *   <Resources>/scanners/{gitleaks,osv-scanner}
@@ -43,6 +44,8 @@ export interface BundledTools {
   frontendDesignDir?: string;
   /** The UX review skill (vendor/ux-review), for the QA reviewer of tasks that change UI */
   uxReviewDir?: string;
+  /** GreenSock's GSAP skills (vendor/gsap-skills, MIT), for the designer and UI coders that animate */
+  gsapSkillsDir?: string;
   /** draw.io offline viewer script, used to render diagrams for review */
   drawioViewerScript?: string;
   /** mermaid.min.js, to check and render .mmd diagrams for the architect */
@@ -102,6 +105,7 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     vibeSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'vibe-teamlead-skills')]),
     frontendDesignDir: firstExisting([join(resourcesPath, 'plugins', 'frontend-design')]),
     uxReviewDir: firstExisting([join(resourcesPath, 'plugins', 'ux-review')]),
+    gsapSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'gsap-skills')]),
     drawioViewerScript: firstExisting([join(resourcesPath, 'drawio-viewer', 'viewer-static.min.js')]),
     mermaidScript: firstExisting([join(resourcesPath, 'mermaid', 'mermaid.min.js')]),
     codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', 'codegraph')]),
@@ -134,6 +138,7 @@ export function resolveDevTools(appRoot: string): BundledTools {
     vibeSkillsDir: firstExisting([join(appRoot, 'vendor', 'vibe-teamlead-skills')]),
     frontendDesignDir: firstExisting([join(appRoot, 'vendor', 'frontend-design')]),
     uxReviewDir: firstExisting([join(appRoot, 'vendor', 'ux-review')]),
+    gsapSkillsDir: firstExisting([join(appRoot, 'vendor', 'gsap-skills')]),
     drawioViewerScript: firstExisting([join(appRoot, 'vendor', 'drawio-viewer', 'viewer-static.min.js')]),
     mermaidScript: firstExisting(
       [resolveFromPackage('mermaid', join('dist', 'mermaid.min.js'))].filter((p): p is string => !!p),

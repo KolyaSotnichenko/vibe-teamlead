@@ -48,11 +48,28 @@ export const FRONTEND_DESIGN_SKILL = 'frontend-design:frontend-design';
  */
 export function subtaskSkills(
   files: string[],
-  opts: { isUiFile: (file: string) => boolean; projectHasUi: boolean },
+  opts: { isUiFile: (file: string) => boolean; projectHasUi: boolean; animates?: boolean },
 ): string[] {
   const ui = files.length > 0 ? files.some(opts.isUiFile) : opts.projectHasUi;
-  return ui ? [FRONTEND_DESIGN_SKILL] : [];
+  if (!ui) return [];
+  return opts.animates ? [FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS] : [FRONTEND_DESIGN_SKILL];
 }
+
+/** GreenSock's official GSAP skills (vendor/gsap-skills, MIT): for the designer, and UI coders of a project that animates with GSAP */
+export const GSAP_SKILLS = [
+  'gsap-skills:gsap-core',
+  'gsap-skills:gsap-timeline',
+  'gsap-skills:gsap-scrolltrigger',
+  'gsap-skills:gsap-plugins',
+  'gsap-skills:gsap-utils',
+  'gsap-skills:gsap-react',
+  'gsap-skills:gsap-frameworks',
+  'gsap-skills:gsap-performance',
+] as const;
+
+export const GSAP_INSTRUCTIONS = `
+## GSAP skills
+Animation here uses GSAP: load the GSAP skill that fits (Skill tool) before writing animation code. Motion follows the design and the design system: purposeful, short, never decoration for its own sake. Wrap animations in gsap.matchMedia() and honour prefers-reduced-motion (no motion, or a simple fade). Clean up on unmount (useGSAP or gsap.context()).`;
 
 export const FRONTEND_DESIGN_INSTRUCTIONS = `
 ## frontend-design skill
