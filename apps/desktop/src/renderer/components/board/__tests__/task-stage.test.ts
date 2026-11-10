@@ -125,6 +125,23 @@ describe('getTaskStage', () => {
     expect(info.states.qa).toBe('upcoming');
   });
 
+  it('a task waiting on its design: the designer stage is the owner\'s turn, nothing after it ran', () => {
+    const info = getTaskStage(task({ status: 'human_review', reviewReason: 'design_review' }));
+    expect(info.current).toBe('designer');
+    expect(info.agent).toBe('you');
+    expect(info.states.spec).toBe('done');
+    expect(info.states.designer).toBe('current');
+    expect(info.states.architect).toBe('upcoming');
+    expect(info.states.coder).toBe('upcoming');
+  });
+
+  it('the designer at work is its own stage, between the spec and the architecture', () => {
+    expect(planningSubStage('Designing the screens', false)).toBe('designer');
+    const info = getTaskStage(task({ status: 'in_progress', executionProgress: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens' } as never }));
+    expect(info.current).toBe('designer');
+    expect(info.running).toBe(true);
+  });
+
   it('a stopped task only marks the stages its recorded phases prove', () => {
     const info = getTaskStage(
       task({

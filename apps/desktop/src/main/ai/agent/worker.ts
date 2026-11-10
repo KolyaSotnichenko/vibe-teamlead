@@ -233,6 +233,8 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
       touchesUi: () => specChangesUi(session),
       runDesigner: async (job, message) => {
         designerRound++;
+        // The card and the pipeline show the designer at work (task-stage.ts planningSubStage)
+        postMessage({ type: 'execution-progress', taskId: config.taskId, data: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens' }, projectId: config.projectId });
         try {
           const prompt = await assemblePrompt('designer', session);
           const result = await runSingleSession(

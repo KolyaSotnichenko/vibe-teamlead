@@ -39,7 +39,8 @@
     "hasErrors": "Has Errors",
     "qaIssues": "QA Issues",
     "approvePlan": "Approve Plan",
-    "stopped": "Stopped"
+    "stopped": "Stopped",
+    "approveDesign": "Design: your turn"
   },
   "tooltips": {
     "archiveTask": "Archive task",
@@ -562,6 +563,7 @@
     },
     "stages": {
       "spec": "Spec",
+      "designer": "Design",
       "architect": "Architecture",
       "planner": "Plan",
       "coder": "Code",
@@ -575,7 +577,8 @@
       "coder": "Coder",
       "qa": "QA reviewer",
       "qaFixer": "QA fixer",
-      "you": "You"
+      "you": "You",
+      "designer": "Designer"
     },
     "line": {
       "prCreated": "PR created",
@@ -644,7 +647,8 @@
         "planner": "Subtasks, each with its failing test",
         "coder": "Test first, in an isolated worktree",
         "qa": "Security gates, AC coverage, Strix",
-        "review": "You approve and merge"
+        "review": "You approve and merge",
+        "designer": "Wireframes and screens, before the plan"
       }
     },
     "question": {
@@ -1190,5 +1194,69 @@
     "createTask": "Create a task",
     "taskCreated": "Task created",
     "leave": "Leave it"
+  },
+  "design": {
+    "tab": "Design",
+    "show": "Show",
+    "panel": "Design comments",
+    "filter": {
+      "wireframes": "Wireframes",
+      "screens": "Screens",
+      "all": "Both"
+    },
+    "comment": "Comment",
+    "commentingOn": "Click a spot",
+    "runPrototype": "Run prototype",
+    "kicker": {
+      "wireframes": "Wireframes · your turn",
+      "design": "Design · your turn",
+      "wireframesDone": "Wireframes",
+      "designDone": "Design"
+    },
+    "intro": {
+      "wireframes": "The structure of every screen and state the spec names: layout and hierarchy only, no colours yet. Comment on a spot, or approve and the designer draws them in the design system.",
+      "design": "The approved wireframes in the project's design system. Comment on a spot, or approve and the plan and the code follow this design."
+    },
+    "approvedOn": "Approved {{date}}. The coder builds to it and QA compares the result.",
+    "goesOn": "The designer checks its own frames; the task goes on without waiting.",
+    "checkFindings_one": "{{count}} place in the screens is outside the design system",
+    "checkFindings_other": "{{count}} places in the screens are outside the design system",
+    "howToComment": "Turn on Comment and click a spot on a frame, or write about the whole set below.",
+    "commentOn": "Comment on {{frame}}",
+    "commentPlaceholder": "What should change here?",
+    "removeComment": "Remove comment",
+    "general": "Comment on the whole set",
+    "send_one": "Send {{count}} comment",
+    "send_other": "Send {{count}} comments",
+    "sendFirst": "Send or remove the comments first",
+    "approveWireframes": "Approve wireframes",
+    "approveDesign": "Approve design and plan the code",
+    "sendHint": "Sending: one designer session changes only what you commented on.",
+    "compare": {
+      "title": "Built vs design",
+      "built": "The built page at {{width}} px",
+      "blocking": "Blocks",
+      "minor": "Minor",
+      "matches": "Matches the design"
+    },
+    "prototypeTitle": "Prototype · {{frame}}",
+    "width": "Width",
+    "frames_one": "{{count}} frame",
+    "frames_other": "{{count}} frames",
+    "clickToComment": "Click a spot to comment",
+    "dragToMove": "Drag to move, ⌘ + scroll to zoom",
+    "fit": "Fit",
+    "playFrame": "Run {{frame}} as a prototype",
+    "empty": {
+      "errorTitle": "The design could not be loaded",
+      "offTitle": "Design before code is off",
+      "offBody": "This project's tasks are built from the spec and the design system. Turn it on in Context → Design system → Setup.",
+      "noUiTitle": "No design for this task",
+      "noUiBody": "It changes no UI, so the designer had nothing to draw.",
+      "drawingTitle": "The design comes after the spec",
+      "drawingBody": "For a task that changes UI, the designer draws its wireframes here before the plan.",
+      "notYetTitle": "No design yet",
+      "notYetBody": "When this task runs, the designer draws its wireframes here after the spec, if it changes UI."
+    }
   }
 }

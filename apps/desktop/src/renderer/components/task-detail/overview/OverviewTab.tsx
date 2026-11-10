@@ -31,12 +31,15 @@ export function OverviewTab({
   reviewSlot,
   onOpenWorkspace,
   onOpenSubtasks,
+  onOpenDesign,
 }: {
   task: Task;
   /** Human review block (merge / feedback), rendered right under the pipeline */
   reviewSlot?: ReactNode;
   onOpenWorkspace: (section: WorkspaceSection) => void;
   onOpenSubtasks: () => void;
+  /** The Design tab (design before code) */
+  onOpenDesign?: () => void;
 }) {
   const pendingQuestion = useAgentQuestionsStore(selectTaskQuestion(task.id));
   const openQuestion = useAgentQuestionsStore((s) => s.open);
@@ -45,6 +48,7 @@ export function OverviewTab({
 
   const openTarget = (target: Exclude<StageTarget, null>) => {
     if (target === 'subtasks') onOpenSubtasks();
+    else if (target === 'design') onOpenDesign?.();
     else onOpenWorkspace(target);
   };
 

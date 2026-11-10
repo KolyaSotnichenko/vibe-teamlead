@@ -58,8 +58,15 @@ async function renderShots(taskId: string, specDir: string): Promise<void> {
       show: false,
       width: frame.width,
       height: frame.height,
-      webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'design-shots' },
     });
+    // The frame is agent-written: no new windows, no leaving vt-design://
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    const stay = (event: { preventDefault(): void }, url: string) => {
+      if (!url.startsWith(`${DESIGN_SCHEME}:`)) event.preventDefault();
+    };
+    win.webContents.on('will-navigate', stay);
+    win.webContents.on('will-redirect', stay);
     try {
       await win.loadURL(`${DESIGN_SCHEME}://task/${encodeURIComponent(taskId)}/${frame.file.split('/').map(encodeURIComponent).join('/')}`);
       await new Promise((resolve) => setTimeout(resolve, SHOT_SETTLE_MS));

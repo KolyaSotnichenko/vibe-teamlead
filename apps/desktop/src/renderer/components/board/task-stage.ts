@@ -2,7 +2,8 @@
  * Where a task is in the agent pipeline, derived only from data on the Task:
  * status, reviewReason, executionProgress (phase, message, completedPhases) and subtasks.
  *
- * Pipeline: spec → architect → planner → coder → QA → human review.
+ * Pipeline: spec → designer → architect → planner → coder → QA → human review.
+ * The designer draws a UI task's wireframes and screens before the plan ("Designing the screens").
  * The orchestrator reports spec, architecture and planning all as the `planning`
  * phase; the sub-stage is told apart by the progress message it sends
  * ("Spec creation: …", "Designing the architecture", "Creating implementation plan").
@@ -12,14 +13,14 @@
 
 import type { ExecutionPhase, Task } from '../../../shared/types';
 
-export const PIPELINE_STAGES = ['spec', 'architect', 'planner', 'coder', 'qa', 'review'] as const;
+export const PIPELINE_STAGES = ['spec', 'designer', 'architect', 'planner', 'coder', 'qa', 'review'] as const;
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
 /** done = passed, current = the stage the task is at now, failed = the stage that sent it back */
 export type StageState = 'done' | 'current' | 'failed' | 'upcoming';
 
 /** The agent role at work (QA fixing is a coder-type agent inside the QA stage) */
-export type StageAgent = 'spec' | 'architect' | 'planner' | 'coder' | 'qa' | 'qaFixer' | 'you';
+export type StageAgent = 'spec' | 'designer' | 'architect' | 'planner' | 'coder' | 'qa' | 'qaFixer' | 'you';
 
 export interface TaskStageInfo {
   /** Stage the task is at; null before anything ran, or once the task is done */
@@ -45,8 +46,9 @@ const ACTIVE_PHASES: ReadonlySet<ExecutionPhase> = new Set([
 ]);
 
 /** Which planning sub-stage a progress message belongs to. Exported for tests. */
-export function planningSubStage(message: string | undefined, hasSubtasks: boolean): 'spec' | 'architect' | 'planner' {
+export function planningSubStage(message: string | undefined, hasSubtasks: boolean): 'spec' | 'designer' | 'architect' | 'planner' {
   const text = message ?? '';
+  if (/^designing the screens/i.test(text)) return 'designer';
   if (/^spec creation/i.test(text)) return 'spec';
   if (/architect/i.test(text)) return 'architect';
   if (/implementation plan|\(planning\)/i.test(text)) return 'planner';
@@ -107,6 +109,11 @@ export function getTaskStage(task: Task): TaskStageInfo {
     let failed: PipelineStage | undefined;
     if (task.reviewReason === 'qa_rejected') failed = 'qa';
     else if (task.reviewReason === 'errors' || task.status === 'error') failed = failedStage(task);
+    if (task.reviewReason === 'design_review') {
+      // Wireframes or screens drawn, waiting for the owner on the Design tab; nothing after ran
+      const states = statesFor('designer');
+      return { ...base, current: 'designer', agent: 'you', states };
+    }
     if (task.reviewReason === 'plan_review') {
       // Plan is written and waits for approval before any code
       const states = statesFor('review');

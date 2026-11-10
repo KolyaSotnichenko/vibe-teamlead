@@ -333,6 +333,7 @@ export const TaskCard = memo(function TaskCard({
       if (reason === 'errors') return { tone: 'attention', label: t('reviewReason.hasErrors') };
       if (reason === 'qa_rejected') return { tone: 'attention', label: t('reviewReason.qaIssues') };
       if (reason === 'plan_review') return { tone: 'outline', label: t('reviewReason.approvePlan') };
+      if (reason === 'design_review') return { tone: 'attention', label: t('reviewReason.approveDesign') };
       if (reason === 'stopped') return { tone: 'outline', label: t('reviewReason.stopped') };
       if (reason === 'completed' && securityQaError) return { tone: 'attention', label: t('board.chip.securityQaFailed') };
       if (reason === 'completed' && task.waitingForPreview) return { tone: 'attention', label: t('board.chip.waitingForPreview') };

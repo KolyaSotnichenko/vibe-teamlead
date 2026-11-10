@@ -9,7 +9,7 @@
  * script is added so a click on an element can become a comment.
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { designFile } from '../ai/design/design-step';
@@ -86,7 +86,12 @@ export function designAsset(specDir: string, target: DesignUrl): { mime: string;
     const ext = path.extname(full).toLowerCase();
     const mime = MIME[ext];
     if (!mime || (target.area === 'spec' && !SPEC_IMAGES.has(ext))) return null;
-    if (!existsSync(full) || !statSync(full).isFile()) return null;
+    if (!existsSync(full)) return null;
+    // No links: a symlink in the folder must not reach a file outside it
+    if (!lstatSync(full).isFile()) return null;
+    const real = realpathSync(full);
+    const root = realpathSync(target.area === 'design' ? path.join(specDir, 'design') : specDir);
+    if (!real.startsWith(root + path.sep)) return null;
     const headers = { 'Content-Security-Policy': DESIGN_CSP, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
     if (ext === '.html') return { mime, body: withPickScript(readFileSync(full, 'utf-8')), headers };
     return { mime, body: readFileSync(full), headers };

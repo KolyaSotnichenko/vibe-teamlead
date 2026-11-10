@@ -48,6 +48,7 @@ import { TaskReview } from './TaskReview';
 import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
+import { DesignTab } from './design/DesignTab';
 import type { FailedSubtaskDecision, Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -287,6 +288,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
         return { label: t('tasks:reviewReason.qaIssues'), attention: true };
       case 'plan_review':
         return { label: t('tasks:reviewReason.approvePlan'), attention: false };
+      case 'design_review':
+        return { label: t('tasks:reviewReason.approveDesign'), attention: true };
       case 'stopped':
         return { label: t('tasks:reviewReason.stopped'), attention: false };
       default:
@@ -548,6 +551,15 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     {t('tasks:workspace.tab')}
                   </TabsTrigger>
                   <TabsTrigger
+                    value="design"
+                    className={tabTriggerClass}
+                  >
+                    {t('tasks:design.tab')}
+                    {task.reviewReason === 'design_review' && task.status === 'human_review' && (
+                      <span aria-hidden="true" className="ml-2 inline-block h-1.5 w-1.5 bg-destructive" />
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="subtasks"
                     className={tabTriggerClass}
                   >
@@ -577,6 +589,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       <OverviewTab
                         task={task}
                         onOpenWorkspace={openWorkspaceSection}
+                        onOpenDesign={() => state.setActiveTab('design')}
                         onOpenSubtasks={() => state.setActiveTab('subtasks')}
                         reviewSlot={
                           state.needsReview ? (
@@ -633,6 +646,11 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 </TabsContent>
 
                 {/* Subtasks Tab */}
+                {/* Design Tab: the task's wireframes and screens (design before code) */}
+                <TabsContent value="design" className="flex-1 min-h-0 overflow-hidden mt-0">
+                  {state.activeTab === 'design' && <DesignTab task={task} />}
+                </TabsContent>
+
                 <TabsContent value="subtasks" className="flex-1 min-h-0 overflow-hidden mt-0">
                   <TaskSubtasks task={task} />
                 </TabsContent>

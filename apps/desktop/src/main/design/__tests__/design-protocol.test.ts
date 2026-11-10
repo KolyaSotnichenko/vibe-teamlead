@@ -50,3 +50,14 @@ describe('what vt-design:// serves', () => {
     expect(DESIGN_CSP).toContain("connect-src 'none'");
   });
 });
+
+describe('links in the design folder', () => {
+  it('a symlink that points outside is not served', async () => {
+    const { symlinkSync } = await import('node:fs');
+    const dir = specDir();
+    const outside = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-out-')), 'secret.html');
+    writeFileSync(outside, '<p>secret</p>');
+    symlinkSync(outside, path.join(dir, 'design', 'screens', 'leak.html'));
+    expect(designAsset(dir, { taskId: '031', file: 'screens/leak.html', area: 'design' })).toBeNull();
+  });
+});
