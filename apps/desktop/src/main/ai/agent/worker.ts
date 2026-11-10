@@ -43,6 +43,7 @@ import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { type CheckOutcome, verifyTask } from '../verification/verify-task';
+import { baseFailures } from '../verification/base-fix';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
 import { listCommittedFiles, takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
@@ -990,6 +991,9 @@ async function runQualityAssurance(
             // Into the task's QA log: these checks take minutes, and a silent log looks stuck
             onLog: qaLog,
           });
+          // Failing on main too says nothing about this task: the main process starts one task to fix main
+          const failures = baseFailures(report);
+          if (failures.length) postMessage({ type: 'base-failures', taskId: config.taskId, projectId: config.projectId, data: { failures, baseCommit: report.baseCommit } });
           return report;
         }
       : undefined,

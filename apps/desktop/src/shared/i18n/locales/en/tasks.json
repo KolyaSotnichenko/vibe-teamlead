@@ -1055,7 +1055,7 @@
       "failed": "failed",
       "noTool": "its tool isn't installed",
       "timedOut": "ran out of time",
-      "sameOnBase": "fails without this task too, so it says nothing about it"
+      "sameOnBase": "fails without this task too, so it says nothing about it. A task that fixes main starts on its own"
     }
   },
   "mergeState": {

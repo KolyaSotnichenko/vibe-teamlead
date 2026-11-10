@@ -32,7 +32,7 @@ import { inMergeQueue } from '../../../ai/merge/merge-queue';
 import { requestQaRerun } from '../../../ai/orchestration/qa-rerun';
 import { registerTaskExecutionHandlers } from '../execution-handlers';
 
-const agent = { isRunning: vi.fn(), startQAProcess: vi.fn(), killTask: vi.fn() };
+const agent = { isRunning: vi.fn(), startQAProcess: vi.fn(), killTask: vi.fn(), on: vi.fn() };
 const review = () => handlers.get(IPC_CHANNELS.TASK_REVIEW)!({}, 't', false, undefined, undefined, { rerunOnly: true });
 
 beforeEach(() => {

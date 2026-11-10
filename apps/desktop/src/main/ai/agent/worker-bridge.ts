@@ -273,6 +273,10 @@ export class WorkerBridge extends EventEmitter {
         this.emitTyped('agent-question-cancelled', message.taskId, message.questionId, this.projectId);
         break;
 
+      case 'base-failures':
+        this.emitTyped('base-failures', message.taskId, message.data, message.projectId);
+        break;
+
       case 'render-diagram':
         void this.renderDiagram(message.requestId, message.path);
         break;

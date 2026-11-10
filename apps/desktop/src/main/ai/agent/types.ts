@@ -124,7 +124,16 @@ export type WorkerMessage =
   | WorkerQuestionMessage
   | WorkerQuestionCancelledMessage
   | WorkerRenderDiagramMessage
-  | WorkerMemoryRequestMessage;
+  | WorkerMemoryRequestMessage
+  | WorkerBaseFailuresMessage;
+
+/** App checks that fail on main too: the main process starts one task to fix main (verification/base-fix.ts) */
+export interface WorkerBaseFailuresMessage {
+  type: 'base-failures';
+  taskId: string;
+  projectId?: string;
+  data: { failures: import('../verification/base-fix').BaseFailure[]; baseCommit: string };
+}
 
 /** Project memory work the worker asks the main process to do (memory lives in main). */
 export type MemoryRequest =
