@@ -12,7 +12,9 @@
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import { BrowserWindow, nativeImage, session } from 'electron';
 import { z } from 'zod';
@@ -28,6 +30,7 @@ import { getFeatureSettings } from '../ipc-handlers/feature-settings-helper';
 import { runClaudeTask } from '../ai/claude-code/task';
 import type { ThinkingLevel } from '../ai/config/types';
 import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
+import { isMacOS } from '../platform';
 import {
   REFERENCES_DIR,
   absoluteIn,
@@ -95,11 +98,25 @@ export function listReferences(projectPath: string): DesignReferenceList {
 // ---------------------------------------------------------------------------
 
 /** A PNG the agent can look at: the image itself, downscaled, or a PDF's first page (macOS Quick Look). */
-async function makePreview(source: string, target: string, kind: DesignReference['kind']): Promise<boolean> {
+/** macOS's own converter: reads WebP (and HEIC, TIFF) that nativeImage can't decode */
+async function sipsToPng(source: string, target: string): Promise<boolean> {
+  if (!isMacOS()) return false;
+  try {
+    await promisify(execFile)('sips', ['-s', 'format', 'png', source, '--out', target], { timeout: 30_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A PNG preview of the reference (its colours are measured from it). Exported for tests. */
+export async function makePreview(source: string, target: string, kind: DesignReference['kind'], convert = sipsToPng): Promise<boolean> {
   try {
     let image = kind === 'pdf'
       ? await nativeImage.createThumbnailFromPath(source, { width: PREVIEW_PX, height: PREVIEW_PX })
       : nativeImage.createFromPath(source);
+    // WebP and the like: convert to PNG first, then size it like any other
+    if (image.isEmpty() && kind === 'image' && (await convert(source, target))) image = nativeImage.createFromPath(target);
     if (image.isEmpty()) return false;
     const { width, height } = image.getSize();
     if (Math.max(width, height) > PREVIEW_PX) {
@@ -234,10 +251,12 @@ export function resumePending(projectPath: string): void {
 const queue: Array<{ projectPath: string; id: string }> = [];
 const queued = new Set<string>();
 let running = false;
+/** The reference being digested now: resuming the list mustn't queue it again */
+let current: string | null = null;
 
 function enqueue(projectPath: string, id: string): void {
   const key = `${projectPath}|${id}`;
-  if (queued.has(key)) return;
+  if (queued.has(key) || current === key) return;
   queued.add(key);
   queue.push({ projectPath, id });
   void drain();
@@ -251,7 +270,9 @@ async function drain(): Promise<void> {
       const job = queue.shift() as { projectPath: string; id: string };
       queued.delete(`${job.projectPath}|${job.id}`);
       const ref = readReferences(job.projectPath).find((r) => r.id === job.id);
-      if (!ref) continue;
+      // Only what still waits: a ready or failed one is digested again only by Retry (it sets pending)
+      if (!ref || ref.status === 'ready' || ref.status === 'error') continue;
+      current = `${job.projectPath}|${job.id}`;
       updateReference(job.projectPath, ref.id, (r) => ({ ...r, status: 'digesting', error: undefined }));
       notifyChanged(job.projectPath);
       try {
@@ -260,11 +281,13 @@ async function drain(): Promise<void> {
       } catch (error) {
         updateReference(job.projectPath, ref.id, (r) => ({ ...r, status: 'error', error: error instanceof Error ? error.message : String(error) }));
       }
+      current = null;
       thumbs.delete(`${job.projectPath}|${ref.id}`);
       notifyChanged(job.projectPath);
     }
   } finally {
     running = false;
+    current = null;
   }
 }
 

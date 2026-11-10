@@ -5,6 +5,8 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 ## 2.0.0-beta.20 - 2026-11-10
 
 - Design system: the brief's last field asks only for the mood; references are the step above it. Apply to the project is in Overview, under the system it compares the code with.
+- A reference is digested once. Reading the list while one was being digested queued it again, so it was looked at over and over, each time a new agent session.
+- WebP references get a thumbnail and measured colours: they are converted to PNG first.
 
 ## 2.0.0-beta.19 - 2026-11-09
 
