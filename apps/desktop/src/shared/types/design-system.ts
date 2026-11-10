@@ -66,6 +66,8 @@ export interface TaskDesignFrame {
 export interface TaskDesignComment {
   /** Frame file, or '' for the whole set */
   frame: string;
+  /** The width it was seen at (a responsive page is on the canvas at several) */
+  width?: number;
   selector?: string;
   x?: number;
   y?: number;

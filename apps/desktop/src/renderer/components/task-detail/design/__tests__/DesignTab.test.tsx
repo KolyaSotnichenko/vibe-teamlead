@@ -56,7 +56,7 @@ describe('DesignTab', () => {
     expect(screen.getByRole('button', { name: 'design.approveWireframes' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'design.send:1' }));
     await waitFor(() =>
-      expect(api.commentTaskDesign).toHaveBeenCalledWith('t1', [{ frame: 'wireframes/roadmap.html', selector: 'main > section', x: 120, y: 80, text: 'Votes on every card' }]),
+      expect(api.commentTaskDesign).toHaveBeenCalledWith('t1', [{ frame: 'wireframes/roadmap.html', width: 1280, selector: 'main > section', x: 120, y: 80, text: 'Votes on every card' }]),
     );
   });
 

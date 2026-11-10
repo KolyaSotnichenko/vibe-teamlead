@@ -107,7 +107,9 @@ export function DesignCanvas({
       if (!commenting || data?.type !== 'vt-design:pick') return;
       const entry = [...iframes.current.entries()].find(([, frame]) => frame.contentWindow === event.source);
       if (!entry) return;
-      onPick?.({ frame: entry[0], selector: typeof data.selector === 'string' ? data.selector : undefined, x: data.x, y: data.y, text: '' });
+      // The same file can be on the canvas at several widths: key = file@width
+      const [file, width] = entry[0].split('@');
+      onPick?.({ frame: file, width: Number(width), selector: typeof data.selector === 'string' ? data.selector : undefined, x: data.x, y: data.y, text: '' });
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -141,7 +143,7 @@ export function DesignCanvas({
     >
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
         {frames.map((frame) => (
-          <div key={frame.file} className="absolute" style={{ left: frame.x, top: frame.y, width: frame.width }}>
+          <div key={`${frame.file}@${frame.width}`} className="absolute" style={{ left: frame.x, top: frame.y, width: frame.width }}>
             {/* The title stays readable at any zoom: sized in screen px, above the frame */}
             <div className="absolute inset-x-0 bottom-full flex items-center justify-between gap-2" style={{ fontSize: Math.min(48, 13 / view.scale), paddingBottom: 4 / view.scale }}>
               <span className="truncate font-mono text-muted-foreground">{frame.title}</span>
@@ -152,8 +154,8 @@ export function DesignCanvas({
             <div className="relative border border-border bg-white" style={{ width: frame.width, height: frame.height }}>
               <iframe
                 ref={(el) => {
-                  if (el) iframes.current.set(frame.file, el);
-                  else iframes.current.delete(frame.file);
+                  if (el) iframes.current.set(`${frame.file}@${frame.width}`, el);
+                  else iframes.current.delete(`${frame.file}@${frame.width}`);
                 }}
                 title={frame.title}
                 src={urlFor(frame.file)}
@@ -162,7 +164,7 @@ export function DesignCanvas({
                 style={{ width: frame.width, height: frame.height, border: 0, pointerEvents: commenting ? 'auto' : 'none' }}
               />
               {drafts.map((d, i) =>
-                d.frame === frame.file && d.x !== undefined && d.y !== undefined ? (
+                d.frame === frame.file && (d.width === undefined || d.width === frame.width) && d.x !== undefined && d.y !== undefined ? (
                   <span
                     key={d.id}
                     aria-hidden="true"

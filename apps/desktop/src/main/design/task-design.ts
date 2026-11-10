@@ -26,6 +26,7 @@ export function commentedState(state: DesignState | undefined, raw: unknown, fra
     const frame = typeof c.frame === 'string' ? c.frame : '';
     if (!text || (frame && !frames.includes(frame))) continue;
     const comment: DesignComment = { n: comments.length + 1, frame, text };
+    if (typeof c.width === 'number' && Number.isFinite(c.width)) comment.width = Math.round(c.width);
     if (typeof c.selector === 'string' && c.selector) comment.selector = c.selector.slice(0, 300);
     if (typeof c.x === 'number' && Number.isFinite(c.x)) comment.x = Math.round(c.x);
     if (typeof c.y === 'number' && Number.isFinite(c.y)) comment.y = Math.round(c.y);

@@ -85,4 +85,15 @@ describe('what the library refuses', () => {
     expect(copyLibraryToBase(root, next)).toBe(1);
     expect(existsSync(path.join(next, 'design', 'base', 'screens', 'b.html'))).toBe(false);
   });
+
+  it('keeps a responsive page once per width it is shown at', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    const spec = taskSpec(root, '062', [{ file: 'screens/table.html', title: 'Table · desktop', kind: 'screen', html: 't' }]);
+    writeFileSync(path.join(spec, 'design', 'canvas.json'), JSON.stringify({ frames: [
+      { file: 'screens/table.html', title: 'Table · desktop', kind: 'screen', width: 1280, height: 900, x: 0, y: 0 },
+      { file: 'screens/table.html', title: 'Table · phone', kind: 'screen', width: 390, height: 844, x: 1360, y: 0 },
+    ] }));
+    publishToLibrary(root, spec, { taskId: '062' });
+    expect(readLibrary(root).frames.map((f) => [f.file, f.width])).toEqual([['screens/table.html', 1280], ['screens/table.html', 390]]);
+  });
 });

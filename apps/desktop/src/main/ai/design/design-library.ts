@@ -67,7 +67,8 @@ export function publishToLibrary(projectRoot: string, specDir: string, opts: { t
       mkdirSync(path.dirname(path.join(dir, frame.file)), { recursive: true });
       copyFileSync(source, path.join(dir, frame.file));
       const entry: LibraryFrame = { ...frame, taskId: opts.taskId, updatedAt: at };
-      const index = library.findIndex((f) => f.file === frame.file);
+      // A responsive page is on the canvas once per width
+      const index = library.findIndex((f) => f.file === frame.file && f.width === frame.width);
       if (index === -1) library.push(entry);
       else library[index] = entry;
     }

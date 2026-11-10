@@ -26,6 +26,8 @@ export interface DesignComment {
   n: number;
   /** The frame's file, relative to design/ */
   frame: string;
+  /** The width the owner saw it at */
+  width?: number;
   /** Where on the frame: an element selector and the click point in the frame's CSS px */
   selector?: string;
   x?: number;
