@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.20 - 2026-11-10
+
+- Design system: the brief's last field asks only for the mood; references are the step above it. Apply to the project is in Overview, under the system it compares the code with.
+
 ## 2.0.0-beta.19 - 2026-11-09
 
 - The Design system tab has two parts. Setup: pick path A (keep the current look: brand rules, then extract from the code) or path B (a new look: references, then a brief and three directions); each path's steps open under it, with the references where they are used. Below: applying the system to the code, the QA check and Storybook. Overview: the colours, fonts, rules and document, editable. A status line says how the system was made and how many differences the code has.
