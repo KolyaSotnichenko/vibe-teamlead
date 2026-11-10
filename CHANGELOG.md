@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.25 - 2026-11-10
+
+- Designs are responsive pages, like the real UI: one file per screen, shown on the canvas at phone and desktop widths, and the prototype's 390 / 768 / 1280 buttons resize the page live. Before, each width was its own fixed page and the buttons only cropped it.
+
 ## 2.0.0-beta.24 - 2026-11-10
 
 - A task started from the queue waits on its Design tab when its wireframes are ready; it showed Needs Recovery instead. Recover such a task once after updating: it goes straight to waiting, without drawing again.
