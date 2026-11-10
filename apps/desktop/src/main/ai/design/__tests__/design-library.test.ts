@@ -49,3 +49,40 @@ describe("the project's design library", () => {
     expect(copyLibraryToBase(mkdtempSync(path.join(tmpdir(), 'vtl-empty-')), next)).toBe(0);
   });
 });
+
+describe('what the library refuses', () => {
+  it('a frame that is a link, or whose path leaves the library, is not copied', async () => {
+    const { symlinkSync } = await import('node:fs');
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    const spec = taskSpec(root, '060', [{ file: 'screens/ok.html', title: 'Ok', kind: 'screen', html: 'ok' }]);
+    const outside = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-out-')), 'secret.html');
+    writeFileSync(outside, 'secret');
+    symlinkSync(outside, path.join(spec, 'design', 'screens', 'leak.html'));
+    mkdirSync(path.join(spec, 'design', 'other'), { recursive: true });
+    writeFileSync(path.join(spec, 'design', 'other', 'x.html'), 'x');
+    writeFileSync(path.join(spec, 'design', 'canvas.json'), JSON.stringify({ frames: [
+      { file: 'screens/ok.html', title: 'Ok', kind: 'screen', width: 400, height: 400, x: 0, y: 0 },
+      { file: 'screens/leak.html', title: 'Leak', kind: 'screen', width: 400, height: 400, x: 0, y: 0 },
+      { file: 'other/x.html', title: 'Elsewhere', kind: 'screen', width: 400, height: 400, x: 0, y: 0 },
+    ] }));
+    expect(publishToLibrary(root, spec, { taskId: '060' })).toBe(1);
+    expect(readLibrary(root).frames.map((f) => f.file)).toEqual(['screens/ok.html']);
+    expect(existsSync(path.join(libraryDir(root), 'screens', 'leak.html'))).toBe(false);
+    expect(existsSync(path.join(libraryDir(root), 'other'))).toBe(false);
+  });
+
+  it('a library entry that is a link is not copied into a task', async () => {
+    const { symlinkSync } = await import('node:fs');
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    publishToLibrary(root, taskSpec(root, '061', [{ file: 'screens/a.html', title: 'A', kind: 'screen', html: 'a' }]), { taskId: '061' });
+    const outside = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-out-')), 'secret.html');
+    writeFileSync(outside, 'secret');
+    symlinkSync(outside, path.join(libraryDir(root), 'screens', 'b.html'));
+    const canvas = JSON.parse(readFileSync(path.join(libraryDir(root), 'canvas.json'), 'utf-8'));
+    canvas.frames.push({ ...canvas.frames[0], file: 'screens/b.html' });
+    writeFileSync(path.join(libraryDir(root), 'canvas.json'), JSON.stringify(canvas));
+    const next = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-wt-')), 'spec');
+    expect(copyLibraryToBase(root, next)).toBe(1);
+    expect(existsSync(path.join(next, 'design', 'base', 'screens', 'b.html'))).toBe(false);
+  });
+});

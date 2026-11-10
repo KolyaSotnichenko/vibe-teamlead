@@ -10,10 +10,10 @@
  * copy of it (design/base/ in its spec folder). Context → Design system → Screens shows it.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { type DesignFrame, designFile, readDesignCanvas } from './design-step';
+import { type DesignFrame, designFile, frameFileOk, readDesignCanvas, realFileInside } from './design-step';
 
 export interface LibraryFrame extends DesignFrame {
   taskId: string;
@@ -28,8 +28,9 @@ export const libraryDir = (projectRoot: string) => path.join(projectRoot, '.vibe
 export function readLibrary(projectRoot: string): { frames: LibraryFrame[] } {
   try {
     const parsed = JSON.parse(readFileSync(path.join(libraryDir(projectRoot), 'canvas.json'), 'utf-8')) as { frames?: LibraryFrame[] };
+    const root = libraryDir(projectRoot);
     const frames = (Array.isArray(parsed?.frames) ? parsed.frames : []).filter(
-      (f) => typeof f?.file === 'string' && existsSync(path.join(libraryDir(projectRoot), f.file)) && !f.file.includes('..'),
+      (f) => typeof f?.file === 'string' && frameFileOk(f.file) && realFileInside(root, path.join(root, f.file)),
     );
     return { frames };
   } catch {
@@ -60,8 +61,9 @@ export function publishToLibrary(projectRoot: string, specDir: string, opts: { t
     const library = readLibrary(projectRoot).frames;
     const at = (opts.now ?? new Date()).toISOString();
     for (const frame of frames) {
+      // readDesignCanvas lists only regular files inside design/ with a wireframes|screens/<name>.html path
       const source = designFile(specDir, frame.file);
-      if (!source) continue;
+      if (!source || !frameFileOk(frame.file)) continue;
       mkdirSync(path.dirname(path.join(dir, frame.file)), { recursive: true });
       copyFileSync(source, path.join(dir, frame.file));
       const entry: LibraryFrame = { ...frame, taskId: opts.taskId, updatedAt: at };
