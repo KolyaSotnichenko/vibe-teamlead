@@ -1233,8 +1233,8 @@
         "productPlaceholder": "A desktop app where a team of AI agents builds software from a spec…",
         "audience": "Who uses it?",
         "audiencePlaceholder": "Engineering leads in 20–200 person teams",
-        "mood": "Mood and references (optional)",
-        "moodPlaceholder": "calm, precise, like an instrument panel; not playful"
+        "mood": "Mood (optional)",
+        "moodPlaceholder": "calm, trustworthy, clear; not playful"
       },
       "propose": "Propose directions",
       "chooseDirection": "Three directions. Pick the one that fits; the agent then writes the full design system for it.",

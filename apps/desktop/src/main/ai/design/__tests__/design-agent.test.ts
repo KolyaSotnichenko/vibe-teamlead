@@ -28,6 +28,8 @@ describe('design agent', () => {
     const call = vi.mocked(runClaudeTask).mock.calls[0][0];
     expect(call.prompt).toContain('Job: DIRECTIONS.');
     expect(call.prompt).toContain('Product: A CAD tool for bakers');
+    // References are a separate section; the brief's field is only the mood
+    expect(call.prompt).toContain('Mood: warm');
     expect(call.tools).toEqual(['Read', 'Glob', 'Grep']);
     expect(call.model).toBe('opus');
     expect(call.agentType).toBe('design_system');

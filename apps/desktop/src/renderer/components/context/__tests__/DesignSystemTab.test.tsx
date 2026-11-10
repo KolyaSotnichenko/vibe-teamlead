@@ -68,14 +68,15 @@ describe('DesignSystemTab', () => {
     expect((await screen.findAllByText('#E8EAE3')).length).toBeGreaterThan(0);
   }, 15_000);
 
-  it('opens on View when the system is up to date; Setup holds applying it, QA and Storybook', async () => {
+  it('opens on Overview when the system is up to date, with how far the code is from it; Setup holds QA and Storybook', async () => {
     const info = (await designMock.extract('p1')).data!;
     mount({ get: async () => ({ success: true, data: { ...info, meta: { writtenAt: '2999-01-01T00:00:00Z', how: 'extract', referenceIds: [] } } }) });
     expect(await screen.findByRole('tab', { name: 'context.design.tabs.view' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByText('#E8EAE3').length).toBeGreaterThan(0);
+    expect(screen.getByText('context.design.apply.title')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'context.design.tabs.setup' }));
     expect(screen.getByText('context.design.setup.current')).toBeInTheDocument();
-    expect(screen.getByText('context.design.apply.title')).toBeInTheDocument();
+    expect(screen.queryByText('context.design.apply.title')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /context.design.qaModes.warn/ }));
     await waitFor(() => expect(updateProjectSettings).toHaveBeenCalledWith('p1', { designQaMode: 'warn' }));
   });

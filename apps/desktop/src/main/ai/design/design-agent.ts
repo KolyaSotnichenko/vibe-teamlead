@@ -60,7 +60,7 @@ function briefText(brief: DesignBrief): string {
   return [
     `Product: ${brief.product.trim()}`,
     brief.audience?.trim() ? `Audience: ${brief.audience.trim()}` : '',
-    brief.mood?.trim() ? `Mood and references: ${brief.mood.trim()}` : '',
+    brief.mood?.trim() ? `Mood: ${brief.mood.trim()}` : '',
   ]
     .filter(Boolean)
     .join('\n');

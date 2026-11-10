@@ -10,8 +10,8 @@
 **Where it lives.** In the project's `.vibe-teamlead/`, or in a repository file (`DESIGN-SYSTEM.md` at the root, `design/` or `docs/`), or at a path you specify.
 
 **The tab has two parts** (Context → Design system):
-- **Setup** — how the system is made, applying it to the code, the QA check and Storybook. It opens first while there is no system or when it needs an update.
-- **Overview** — the system itself: colours, fonts, rules and the document, editable. It opens first otherwise.
+- **Setup** — how the system is made, the QA check and Storybook. It opens first while there is no system or when it needs an update.
+- **Overview** — the system itself: colours, fonts, rules and the document, editable, with **Apply to the project** under the tokens. It opens first otherwise.
 
 The line next to the parts says where things stand: how the system was made and when, and how many differences the code has from it.
 
@@ -48,7 +48,7 @@ The document and tokens can be edited right in the tab. The model for this agent
 - **Check modes:** Block (default; QA won't approve with findings), Report only, Off.
 - **Visual review.** The QA reviewer takes screenshots of the changed screens and states, compares them with the document and adds a "Design Review" table to the report.
 
-**Applying a changed design system** (Context → Design system → Setup → Apply to the project): when the design system changes after the app is built, the block lists the files with the most differences and what happens next; **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
+**Applying a changed design system** (Context → Design system → Overview → Apply to the project): when the design system changes after the app is built, the block lists the files with the most differences and what happens next; **Plan the redesign** runs the same check over every UI file, without a model, and opens the spec import with a redesign brief: what the design system says, which files don't follow it and how many places, and how to split the work (the shell and shared components first, then the screens, behaviour unchanged). Read it, add what you want, and Analyse: the spec analyst proposes the tasks and you review them before they are created. Each one passes the design check and the UX review in QA, and you can look at it in Preview.
 
 **Storybook** (a project option, off by default):
 - when enabled, every new or changed UI component gets stories for its states (default, empty, loading, error, long text), and QA takes screenshots of them;

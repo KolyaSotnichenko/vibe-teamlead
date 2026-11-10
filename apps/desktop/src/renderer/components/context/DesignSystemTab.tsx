@@ -2,9 +2,10 @@
  * Context → Design system, in two parts:
  * - Setup: pick a path — A, keep the current look (extract it from the code, with brand rules
  *   if you have them) or B, a new look (references, then a brief and three directions) — or a
- *   file already in the repository; then apply the system to the code, how QA checks it and
- *   Storybook. References live inside the path that uses them.
- * - View: the system itself (colours, fonts, rules, the document), editable.
+ *   file already in the repository; how QA checks it and Storybook. References live inside the
+ *   path that uses them.
+ * - Overview: the system itself (colours, fonts, rules), how far the code is from it with
+ *   the redesign that closes the gap, and the document, editable.
  */
 
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
@@ -472,8 +473,6 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         </div>
       </section>
 
-      {info.exists && <ApplyDesignSystem projectId={projectId} audit={audit} />}
-
       {info.exists && (
         <section className="space-y-3" aria-labelledby="ds-qa">
           <SectionHeader id="ds-qa" title={t('context.design.qaTitle')} />
@@ -570,6 +569,8 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         {info.tokensError && <Notice>{info.tokensError}</Notice>}
         {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
       </section>
+      {/* How far the code is from this system, and the redesign that closes the gap */}
+      <ApplyDesignSystem projectId={projectId} audit={audit} />
       <section className="space-y-3" aria-labelledby="ds-doc">
         <SectionHeader
           id="ds-doc"
