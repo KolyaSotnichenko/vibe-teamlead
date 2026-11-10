@@ -24,6 +24,7 @@ export const TURN_LIMITS: Partial<Record<AgentType, number>> = {
   qa_fixer: 200,
   planner: 120,
   architect: 120,
+  designer: 80,
 };
 
 export const TURN_LIMITS_FILE = 'turn_limits.json';

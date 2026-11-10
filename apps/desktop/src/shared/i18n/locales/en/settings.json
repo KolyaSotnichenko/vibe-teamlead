@@ -1037,6 +1037,10 @@
     "uxReview": {
       "label": "UX review",
       "description": "Reviews the running app in Preview as a person would use it"
+    },
+    "designer": {
+      "label": "Designer",
+      "description": "Draws wireframes and screens before the code of tasks that change UI"
     }
   },
   "agentCategories": {

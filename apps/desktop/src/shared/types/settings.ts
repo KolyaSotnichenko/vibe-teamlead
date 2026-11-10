@@ -212,6 +212,7 @@ export interface FeatureModelConfig {
   briefImport: string;  // Spec document (ТЗ) → tasks
   designSystem: string; // Design system: extract from code, generate directions
   uxReview: string;     // Preview's UX review of the running app
+  designer: string;     // Wireframes and design before code (pipeline)
 }
 
 // Feature-specific thinking level configuration
@@ -226,6 +227,7 @@ export interface FeatureThinkingConfig {
   briefImport: ThinkingLevel;
   designSystem: ThinkingLevel;
   uxReview: ThinkingLevel;
+  designer: ThinkingLevel;
 }
 
 // Agent profile for preset model/thinking configurations

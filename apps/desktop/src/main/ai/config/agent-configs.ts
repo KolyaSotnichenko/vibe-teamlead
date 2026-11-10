@@ -170,7 +170,8 @@ export type AgentType =
   | 'ideation'
   | 'brief_analyst'
   | 'design_system'
-  | 'ux_reviewer';
+  | 'ux_reviewer'
+  | 'designer';
 
 /** Configuration for a single agent type */
 export interface AgentConfig {
@@ -366,6 +367,16 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     mcpServers: [],
     appTools: [],
     thinkingDefault: 'high',
+  },
+  /**
+   * Designer — draws a UI task's wireframes and screens as HTML under the spec's design/ folder,
+   * before the plan (ai/design/design-step.ts). Writes are confined to the spec directory.
+   */
+  designer: {
+    tools: [...BASE_READ_TOOLS, 'Write', 'Edit'],
+    mcpServers: [],
+    appTools: [],
+    thinkingDefault: 'medium',
   },
   design_system: {
     // Reads the project's styles and components; the design system comes back as structured output.

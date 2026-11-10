@@ -40,6 +40,10 @@ export interface ProjectSettings {
   designSystemPath?: string;
   /** How QA treats design-check findings (default: block when a design system exists) */
   designQaMode?: import('./design-system').DesignQaMode;
+  /** Design before code for tasks that change UI: wireframes, then screens in the design system (default: full) */
+  designMode?: 'off' | 'wireframes' | 'full';
+  /** Who approves wireframes and design: the owner (the task waits) or the designer itself (default: owner) */
+  designApproval?: 'owner' | 'auto';
   /** Agents may add Storybook and write stories for UI components (default: off) */
   storybookEnabled?: boolean;
   /** What the Preview runs, confirmed by the owner (proposed on first open) */

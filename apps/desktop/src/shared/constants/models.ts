@@ -153,7 +153,8 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
   naming: 'haiku',        // Fast, cheap model for task titles and terminal names
   briefImport: 'opus',    // Reads the whole spec document and the project
   designSystem: 'opus',   // Visual direction and a coherent token system
-  uxReview: 'sonnet'      // Goes through the running app in a browser
+  uxReview: 'sonnet',     // Goes through the running app in a browser
+  designer: 'sonnet'      // Wireframes and screens in the design system, as HTML
 };
 
 // Default feature thinking configuration
@@ -167,7 +168,8 @@ export const DEFAULT_FEATURE_THINKING: FeatureThinkingConfig = {
   naming: 'low',          // No thinking needed for short name generation
   briefImport: 'high',    // Splitting a spec into tasks needs deep thinking
   designSystem: 'high',   // Distinctive, consistent design choices
-  uxReview: 'medium'      // Many pages and states, judged against checklists
+  uxReview: 'medium',     // Many pages and states, judged against checklists
+  designer: 'medium'      // Layout and states from the spec, then the design system
 };
 
 // Feature labels for UI display
@@ -182,6 +184,7 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
   briefImport: { label: 'Spec document import', description: 'Splits an uploaded spec document into tasks' },
   designSystem: { label: 'Design system', description: 'Extracts or designs the project design system' },
   uxReview: { label: 'UX review', description: "Reviews the running app in Preview as a person would use it" },
+  designer: { label: 'Designer', description: 'Draws wireframes and screens before the code of tasks that change UI' },
 };
 
 // Default agent profiles for preset model/thinking configurations

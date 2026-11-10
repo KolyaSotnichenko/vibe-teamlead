@@ -8,8 +8,8 @@ import { clearTurnLimits, parseTurnLimits, recordTurnLimit, TURN_LIMITS, TURN_LI
 const dir = () => mkdtempSync(join(tmpdir(), 'vtl-turns-'));
 
 describe('turn limits per agent', () => {
-  it('gives a coder session 120 turns, QA 200, planner and architect 120', () => {
-    expect(TURN_LIMITS).toEqual({ coder: 120, qa_reviewer: 200, qa_fixer: 200, planner: 120, architect: 120 });
+  it('gives a coder session 120 turns, QA 200, planner and architect 120, the designer 80', () => {
+    expect(TURN_LIMITS).toEqual({ coder: 120, qa_reviewer: 200, qa_fixer: 200, planner: 120, architect: 120, designer: 80 });
   });
 });
 
