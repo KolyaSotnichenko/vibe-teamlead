@@ -320,3 +320,12 @@ describe('the UX reviewer the Preview runs', () => {
     expect(options.allowedTools ?? options.tools).not.toContain('Write');
   });
 });
+
+describe('bundled tools in a worker thread', () => {
+  it('uses the tools the main process handed the worker (Electron is not loadable there)', async () => {
+    const { resolveBundledTools, setDefaultBundledTools } = await import('../bundled-tools');
+    setDefaultBundledTools({ claudeCodeExecutable: '/Applications/Vibe Teamlead.app/Contents/Resources/claude-code/claude' });
+    expect(resolveBundledTools().claudeCodeExecutable).toBe('/Applications/Vibe Teamlead.app/Contents/Resources/claude-code/claude');
+    setDefaultBundledTools(undefined);
+  });
+});

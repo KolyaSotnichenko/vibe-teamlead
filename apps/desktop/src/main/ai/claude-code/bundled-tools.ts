@@ -165,10 +165,19 @@ export function resolveDevTools(appRoot: string): BundledTools {
   };
 }
 
+/** What a worker thread was handed by the main process (it can't load Electron to find them) */
+let registered: BundledTools | undefined;
+
+export function setDefaultBundledTools(tools: BundledTools | undefined): void {
+  registered = tools;
+}
+
 /**
- * Resolve bundled tools for the current process (main process only).
+ * Resolve bundled tools for the current process: the ones registered (a worker thread), else
+ * from Electron's app paths (main process).
  */
 export function resolveBundledTools(): BundledTools {
+  if (registered) return registered;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { app } = require('electron') as typeof import('electron');

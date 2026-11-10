@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 
 import { toClaudeAuth } from '../claude-code/auth';
 import { setDefaultClaudeAuthProvider } from '../claude-code/default-auth';
+import { setDefaultBundledTools } from '../claude-code/bundled-tools';
 import { runAgentSession } from '../claude-code/runner';
 import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions';
 import type { MemoryRequest } from './types';
@@ -94,6 +95,8 @@ if (!config?.taskId || !config?.session || !config.promptsDir) {
 }
 setPromptsDir(config.promptsDir);
 // Utility tasks in this thread (spec fixer, compactor, insights) use the session's credential
+// runClaudeTask in this thread (insight extraction) needs the bundled Claude Code too
+setDefaultBundledTools(config.session.bundled);
 setDefaultClaudeAuthProvider(() =>
   toClaudeAuth(config.session.apiKey, config.session.baseURL, config.session.allowSubscriptionLogin === true),
 );

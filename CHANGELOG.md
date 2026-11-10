@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.28 - 2026-11-10
+
+- Project memory saves what each coder subtask learned again. Taking the lessons ran inside the task's worker, which could not find the bundled Claude Code, so it failed every time (the task's log now says "saved N lessons" or "nothing new").
+
 ## 2.0.0-beta.27 - 2026-11-10
 
 - Flow arrows no longer cover the design: they show for the frame under the pointer (or the one you click), in and out; a frame's title shows how many transitions leave it, and Show all flows draws the whole map.
