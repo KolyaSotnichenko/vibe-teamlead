@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.22 - 2026-11-10
+
+- Project memory reports in the task's log: how many memories went into each agent's prompt, and after each coder subtask whether its lessons were saved, there was nothing new, or why they couldn't be taken or saved. Before, every memory step failed silently.
+
 ## 2.0.0-beta.21 - 2026-11-10
 
 - When the app checks find a check that fails on main too, the app creates one urgent task that fixes main and starts it at once, past the queue. Tasks that hit the same failure while it is open don't start another; once it is merged, a main that fails again gets a new one.
