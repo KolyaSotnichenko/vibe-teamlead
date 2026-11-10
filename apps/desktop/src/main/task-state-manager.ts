@@ -22,6 +22,8 @@ interface TaskContextEntry {
 const TERMINAL_EVENTS = new Set<string>([
   'QA_PASSED',
   'PLANNING_COMPLETE',
+  // The build stops for the owner's design review: the code-0 exit after it is expected
+  'DESIGN_REVIEW',
   'PLANNING_FAILED',
   'CODING_FAILED',
   'QA_MAX_ITERATIONS',
@@ -136,6 +138,8 @@ export class TaskStateManager {
         const currentState = this.getCurrentState(taskId);
         if (currentState === 'plan_review') {
           this.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);
+        } else if (currentState === 'design_review' || (!currentState && task.reviewReason === 'design_review')) {
+          this.handleUiEvent(taskId, { type: 'DESIGN_RESUMED' }, task, project);
         } else if (currentState === 'human_review' || currentState === 'error') {
           this.handleUiEvent(taskId, { type: 'USER_RESUMED' }, task, project);
         } else if (!currentState && task.reviewReason === 'plan_review') {
@@ -397,7 +401,7 @@ export class TaskStateManager {
         stateValue = 'qa_review';
         break;
       case 'human_review':
-        stateValue = reviewReason === 'plan_review' ? 'plan_review' : 'human_review';
+        stateValue = reviewReason === 'plan_review' ? 'plan_review' : reviewReason === 'design_review' ? 'design_review' : 'human_review';
         contextReviewReason = reviewReason;
         break;
       case 'pr_created':

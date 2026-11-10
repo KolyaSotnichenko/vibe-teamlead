@@ -15,6 +15,10 @@ export type TaskEvent =
       requireReviewBeforeCoding: boolean;
     }
   | { type: 'PLAN_APPROVED' }
+  /** Design before code: the build stopped for the owner at the wireframes or the design */
+  | { type: 'DESIGN_REVIEW'; stage: 'wireframes' | 'design' }
+  /** The owner approved or commented: the build goes on (or redraws) */
+  | { type: 'DESIGN_RESUMED' }
   | { type: 'CODING_STARTED'; subtaskId: string; subtaskDescription: string }
   | { type: 'SUBTASK_COMPLETED'; subtaskId: string; completedCount: number; totalCount: number }
   | { type: 'ALL_SUBTASKS_DONE'; totalCount: number }
@@ -65,6 +69,7 @@ export const taskMachine = createMachine(
             },
             { target: 'coding', actions: 'clearReviewReason' }
           ],
+          DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
           // Fallback: if CODING_STARTED arrives while in planning, transition to coding
           CODING_STARTED: { target: 'coding', actions: 'clearReviewReason' },
           // Fallback: if ALL_SUBTASKS_DONE arrives while in planning, go directly to qa_review
@@ -78,6 +83,13 @@ export const taskMachine = createMachine(
             { target: 'backlog', guard: 'noPlanYet', actions: 'clearReviewReason' },
             { target: 'human_review', actions: 'setReviewReasonStopped' }
           ],
+          PROCESS_EXITED: { target: 'error', guard: 'unexpectedExit', actions: 'setReviewReasonErrors' }
+        }
+      },
+      design_review: {
+        on: {
+          DESIGN_RESUMED: { target: 'planning', actions: 'clearReviewReason' },
+          USER_STOPPED: { target: 'backlog', actions: 'clearReviewReason' },
           PROCESS_EXITED: { target: 'error', guard: 'unexpectedExit', actions: 'setReviewReasonErrors' }
         }
       },
@@ -166,6 +178,7 @@ export const taskMachine = createMachine(
     },
     actions: {
       setReviewReasonPlan: assign({ reviewReason: () => 'plan_review' }),
+      setReviewReasonDesign: assign({ reviewReason: () => 'design_review' }),
       setReviewReasonCompleted: assign({ reviewReason: () => 'completed' }),
       setReviewReasonStopped: assign({ reviewReason: () => 'stopped' }),
       setReviewReasonQaRejected: assign({ reviewReason: () => 'qa_rejected' }),

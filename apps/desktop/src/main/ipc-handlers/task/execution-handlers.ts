@@ -196,7 +196,10 @@ export async function startTask(agentManager: AgentManager, getMainWindow: () =>
   const currentXState = taskStateManager.getCurrentState(taskId);
   console.warn('[TASK_START] Current XState:', currentXState, '| Task status:', task.status, task.reviewReason);
 
-  if (currentXState === 'plan_review') {
+  if (currentXState === 'design_review' || (!currentXState && task.status === 'human_review' && task.reviewReason === 'design_review')) {
+    // Design before code: the owner approved or commented; the build goes on (or redraws)
+    taskStateManager.handleUiEvent(taskId, { type: 'DESIGN_RESUMED' }, task, project);
+  } else if (currentXState === 'plan_review') {
     // XState says plan_review - send PLAN_APPROVED
     console.warn('[TASK_START] XState: plan_review -> coding via PLAN_APPROVED');
     taskStateManager.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);

@@ -70,6 +70,25 @@ describe('taskMachine', () => {
     });
   });
 
+  describe('design_review flow (design before code)', () => {
+    it('waits for the owner when the build stops at the wireframes or the design', () => {
+      const snapshot = runEvents([{ type: 'PLANNING_STARTED' }, { type: 'DESIGN_REVIEW', stage: 'wireframes' }]);
+      expect(snapshot.value).toBe('design_review');
+      expect(snapshot.context.reviewReason).toBe('design_review');
+    });
+
+    it('goes back to planning when the owner approves or comments', () => {
+      const snapshot = runEvents([{ type: 'DESIGN_RESUMED' }], 'design_review');
+      expect(snapshot.value).toBe('planning');
+      expect(snapshot.context.reviewReason).toBeUndefined();
+    });
+
+    it('a code-0 exit while waiting is expected; stopping goes to the backlog', () => {
+      expect(runEvents([{ type: 'PROCESS_EXITED', exitCode: 0 }], 'design_review').value).toBe('design_review');
+      expect(runEvents([{ type: 'USER_STOPPED' }], 'design_review').value).toBe('backlog');
+    });
+  });
+
   describe('plan_review flow (requireReviewBeforeCoding: true)', () => {
     it('should go to plan_review when requireReviewBeforeCoding is true', () => {
       const events: TaskEvent[] = [

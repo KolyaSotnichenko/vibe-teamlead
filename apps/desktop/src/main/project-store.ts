@@ -782,6 +782,7 @@ export class ProjectStore {
       'backlog': 'idle',
       'planning': 'planning',
       'plan_review': 'planning',
+      'design_review': 'planning',
       'coding': 'coding',
       'qa_review': 'qa_review',
       'qa_fixing': 'qa_fixing',
