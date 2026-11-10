@@ -101,6 +101,9 @@ describe('what the planner, the coder and QA are told about the design', () => {
     expect(text).toContain('390');
     expect(text).not.toContain('wireframes/roadmap.html');
     expect(text).toMatch(/build to/i);
+    // The flow and the responsive page are part of the design
+    expect(text).toMatch(/navigation/i);
+    expect(text).toMatch(/one responsive page/i);
   });
 
   it('with wireframes only, they are the reference for layout and states', () => {
@@ -113,6 +116,8 @@ describe('what the planner, the coder and QA are told about the design', () => {
     const text = designReferencePrompt('qa_reviewer', '/s', frames, { stage: 'design', round: 2, approved: { wireframes: 'a', design: 'b' } });
     expect(text).toContain('design_compare.json');
     expect(text).toMatch(/blocking/);
+    // QA walks the design's links in the built app
+    expect(text).toMatch(/every link between screens/i);
   });
 });
 

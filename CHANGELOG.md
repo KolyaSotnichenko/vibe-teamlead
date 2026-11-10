@@ -4,7 +4,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.26 - 2026-11-10
 
-- Prototype flows: the designer links the screens like a real flow, and the canvas draws an arrow from each link to the screen it opens (Show flows / Hide flows). Run prototype starts at the first screen of the flow, follows the pages you click through with a Back button, keeps the page when you change the width, and a click beside a link highlights what is clickable.
+- Prototype flows: the designer links the screens like a real flow, and the canvas draws an arrow from each link to the screen it opens (Show flows / Hide flows). Run prototype starts at the first screen of the flow, follows the pages you click through with a Back button, keeps the page when you change the width, and a click beside a link highlights what is clickable. The coder builds the design's links as the app's navigation and one responsive page per screen; QA walks every link of the design in the built app, and a missing transition blocks.
 
 ## 2.0.0-beta.25 - 2026-11-10
 
