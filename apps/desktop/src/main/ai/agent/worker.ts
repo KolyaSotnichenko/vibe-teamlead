@@ -23,13 +23,15 @@ import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions
 import type { MemoryRequest } from './types';
 import { insightsLogLine, promptMemoryLogLine } from '../memory/memory-log';
 import { animatesWithGsap } from '../design/animation';
+import { runDesignStep } from '../design/design-runner';
+import { designReferencePrompt, lintDesignScreens, readDesignCanvas, readDesignState, specTouchesUi } from '../design/design-step';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
 import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
 import { languagesFromIndex, lspLogLine, lspServersFor, scanProjectLanguages } from '../claude-code/lsp-registry';
 import { defaultClaudeConfigDir } from '../claude-code/runner';
 import { findOnPath } from '../../platform/exec';
-import { qaSkills, subtaskSkills } from '../claude-code/skills';
+import { qaSkills, subtaskSkills, FRONTEND_DESIGN_SKILL, GSAP_SKILLS } from '../claude-code/skills';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
 import type {
@@ -58,7 +60,7 @@ import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
 import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
-import { getPhaseThinking, modelPhaseFor, resolvePhaseModel } from '../config/phase-config';
+import { getPhaseThinking, modelPhaseFor, resolvePhaseModel, resolveModelId } from '../config/phase-config';
 import { TaskLogWriter, logRunFailure, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
@@ -202,6 +204,72 @@ function taskFocusText(session: SerializableSessionConfig): string {
   return typeof first === 'string' ? first.slice(0, 1500) : '';
 }
 
+/** Whether the task's spec changes UI (design-step.ts specTouchesUi) */
+function specChangesUi(session: SerializableSessionConfig): boolean {
+  const caps = projectCapabilities(session);
+  const projectHasUi = !!(caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native);
+  let specMd = '';
+  try {
+    specMd = readFileSync(join(session.specDir, 'spec.md'), 'utf-8');
+  } catch {
+    // no spec: decided by the project alone
+  }
+  return specTouchesUi(specMd, { projectHasUi, isUiFile });
+}
+
+/**
+ * Design before code (design-runner.ts) for this task: the designer draws its wireframes and
+ * screens under <spec>/design/, before the architecture and the plan. Never rejects.
+ */
+async function runTaskDesignStep(session: SerializableSessionConfig, toolContext: ToolContext): Promise<{ paused?: 'wireframes' | 'design'; error?: string }> {
+  const design = session.design;
+  if (!design || design.mode === 'off') return {};
+  const log = taskLogger(postLog, logWriter, 'planning');
+  try {
+    let designerRound = 0;
+    return await runDesignStep({
+      specDir: session.specDir,
+      settings: { mode: design.mode, approval: design.approval },
+      touchesUi: () => specChangesUi(session),
+      runDesigner: async (job, message) => {
+        designerRound++;
+        try {
+          const prompt = await assemblePrompt('designer', session);
+          const result = await runSingleSession(
+            'designer',
+            'planning',
+            prompt,
+            session.specDir,
+            session.projectDir,
+            designerRound,
+            undefined,
+            session,
+            // The designer draws; it writes only inside the spec's design/ folder
+            { ...toolContext, allowedWritePaths: [join(session.specDir, 'design')] },
+            message,
+            true,
+            undefined,
+            [FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS],
+            { model: design.model, thinking: design.thinking },
+          );
+          const ok = result.outcome === 'completed' || result.outcome === 'max_steps';
+          return ok ? { ok } : { ok, error: result.error?.message ?? result.outcome };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      },
+      checkScreens: () => {
+        const tokens = session.designSystem?.tokens;
+        return tokens ? lintDesignScreens(session.specDir, tokens).length : 0;
+      },
+      log,
+    });
+  } catch (error) {
+    log(`Design: ${error instanceof Error ? error.message : String(error)}; building without a design`);
+    return {};
+  }
+}
+
 /** Whether this task animates with GSAP (its UI coders get the GSAP skills); read once */
 let projectAnimates: boolean | undefined;
 
@@ -211,7 +279,7 @@ const memorySections = new Map<string, Promise<string>>();
 function phaseOfPrompt(promptName: string): Phase {
   if (promptName.startsWith('qa_')) return 'qa';
   if (promptName.startsWith('spec')) return 'spec';
-  if (promptName === 'planner' || promptName === 'architect') return 'planning';
+  if (promptName === 'planner' || promptName === 'architect' || promptName === 'designer') return 'planning';
   return 'coding';
 }
 
@@ -513,12 +581,14 @@ async function assemblePrompt(
     projectInstructions: cachedProjectInstructions,
   });
   const design = designSection(promptName, session, subtask);
+  // The task's approved wireframes or screens (design before code), for the roles that build or check to them
+  const taskDesign = designReferencePrompt(promptName, session.specDir, readDesignCanvas(session.specDir).frames, readDesignState(session.specDir));
   const memory = await memorySection(session, memoryFocus, phaseOfPrompt(promptName));
-  return [prompt, design, memory].filter(Boolean).join('\n\n');
+  return [prompt, design, taskDesign, memory].filter(Boolean).join('\n\n');
 }
 
 /** Agents that shape or check UI get the design system (and anti-slop rules for UI projects). */
-const DESIGN_BUILDERS = new Set(['spec_writer', 'spec_quick', 'spec_critic', 'architect', 'planner', 'coder', 'qa_fixer', 'followup_planner']);
+const DESIGN_BUILDERS = new Set(['spec_writer', 'spec_quick', 'spec_critic', 'architect', 'planner', 'coder', 'qa_fixer', 'followup_planner', 'designer']);
 
 function designSection(
   promptName: string,
@@ -568,11 +638,13 @@ async function runSingleSession(
   outputSchema?: import('zod').ZodSchema,
   /** Skills for this session on top of the agent's own */
   extraSkills?: string[],
+  /** A feature model instead of the phase's (the designer) */
+  modelOverride?: { model?: string; thinking?: string },
 ): Promise<SessionResult> {
   // The QA fixer edits code, so it runs on the coding model; the log stays in the QA phase
   const modelPhase = modelPhaseFor(agentType, phase);
-  const phaseThinking = await getPhaseThinking(specDir, modelPhase);
-  const model = await phaseModel(specDir, modelPhase, baseSession.modelId);
+  const phaseThinking = modelOverride?.thinking ?? (await getPhaseThinking(specDir, modelPhase));
+  const model = modelOverride?.model ? resolveModelId(modelOverride.model) : await phaseModel(specDir, modelPhase, baseSession.modelId);
   const sessionLog = taskLogger(postLog, logWriter, phase);
   sessionLog(`${agentType} on ${model} (${phase}${modelPhase !== phase ? `, ${modelPhase} model` : ''})`);
 
@@ -846,6 +918,8 @@ async function runBuildOrchestrator(
     },
 
     runQA: (hooks) => runQualityAssurance(session, toolContext, hooks),
+
+    designStep: () => runTaskDesignStep(session, toolContext),
   });
 
   orchestrator.on('phase-change', (phase: ExecutionPhase, message: string) => {
@@ -947,7 +1021,10 @@ async function runBuildOrchestrator(
 
   // Emit task events based on orchestration outcome so XState machine
   // can transition to the correct state (e.g., human_review on success).
-  if (outcome.success) {
+  if (outcome.paused) {
+    // Waiting for the owner on the Design tab; approving starts the task again
+    postTaskEvent('DESIGN_REVIEW', { stage: outcome.paused });
+  } else if (outcome.success) {
     postTaskEvent('QA_PASSED');
     postTaskEvent('BUILD_COMPLETE');
   } else if (outcome.codingCompleted) {
@@ -1223,6 +1300,8 @@ async function runSpecOrchestrator(
     projectIndex: projectIndexContent,
     abortSignal: abortController.signal,
     architectMode: session.architectMode,
+    // Design before code: a UI task's plan is made in the build, after its design
+    planAfterDesign: () => !!session.design && session.design.mode !== 'off' && specChangesUi(session),
 
     generatePrompt: async (_agentType, phase, context) => {
       const promptName = specPhaseToPromptName(phase);

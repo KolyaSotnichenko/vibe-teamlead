@@ -173,3 +173,47 @@ describe('spec pipeline architecture phase', () => {
     });
   });
 });
+
+describe('design before code', () => {
+  it('the spec stops before the architecture and the plan when the task gets a design', async () => {
+    const { SpecOrchestrator } = await import('../spec-orchestrator');
+    const dir = mkdtempSync(join(tmpdir(), 'vtl-spec-design-'));
+    const ran: string[] = [];
+    const o = new SpecOrchestrator({
+      specDir: dir,
+      projectDir: dir,
+      taskDescription: 'Redesign the public roadmap board with stage columns, vote counts and a phone layout',
+      complexityOverride: 'complex',
+      useAiAssessment: false,
+      generatePrompt: vi.fn().mockResolvedValue('p'),
+      runSession: vi.fn(),
+      planAfterDesign: () => true,
+    } as never) as unknown as { run(): Promise<{ success: boolean }>; runPhase(p: string): Promise<{ success: boolean; errors: string[] }>; capturePhaseOutput(): Promise<void> };
+    o.runPhase = async (phase: string) => {
+      ran.push(phase);
+      return { success: true, errors: [] };
+    };
+    o.capturePhaseOutput = async () => {};
+    expect((await o.run()).success).toBe(true);
+    expect(ran).toContain('spec_writing');
+    expect(ran).not.toContain('architecture');
+    expect(ran).not.toContain('planning');
+    expect(ran).not.toContain('validation');
+  });
+
+  it('the build draws the design first and stops there for the owner', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vtl-build-design-'));
+    const runSession = vi.fn();
+    const o = new BuildOrchestrator({
+      specDir: dir,
+      projectDir: dir,
+      generatePrompt: vi.fn().mockResolvedValue('p'),
+      runSession,
+      runQA: vi.fn(),
+      designStep: vi.fn().mockResolvedValue({ paused: 'wireframes' }),
+    });
+    const outcome = await o.run();
+    expect(outcome).toMatchObject({ success: true, paused: 'wireframes' });
+    expect(runSession).not.toHaveBeenCalled();
+  });
+});

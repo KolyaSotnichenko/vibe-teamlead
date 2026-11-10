@@ -38,6 +38,7 @@ import { loadDesignSystem } from '../design/design-system';
 import { projectStore } from '../../project-store';
 import { projectVerification } from '../verification/verify-task';
 import { resolvePromptsDir } from '../prompts/prompt-loader';
+import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
 import type { AgentAnswers } from '../claude-code/user-questions';
 import type { StreamEvent } from '../session/types';
 
@@ -56,6 +57,22 @@ function readDesignSystem(projectId: string | undefined) {
   } catch {
     return undefined;
   }
+}
+
+/** Design before code: the project's settings (default: full, the owner approves) and the Designer model. */
+function readDesignSettings(projectId: string | undefined): WorkerConfig['session']['design'] {
+  const project = projectId ? projectStore.getProject(projectId) : undefined;
+  if (!project) return undefined;
+  let model: string | undefined;
+  let thinking: string | undefined;
+  try {
+    const feature = getFeatureSettings('designer');
+    model = feature.model;
+    thinking = feature.thinkingLevel;
+  } catch {
+    // the phase model then
+  }
+  return { mode: project.settings.designMode ?? 'full', approval: project.settings.designApproval ?? 'owner', model, thinking };
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -150,6 +167,7 @@ export class WorkerBridge extends EventEmitter {
         lspEnabled: config.session.lspEnabled ?? isLspEnabled(),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
         verification: config.session.verification ?? readVerification(config.projectId),
+        design: config.session.design ?? readDesignSettings(config.projectId),
       },
       promptsDir: resolvePromptsDir(),
     };

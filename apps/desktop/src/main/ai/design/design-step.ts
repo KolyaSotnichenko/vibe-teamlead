@@ -10,10 +10,12 @@
  * the file helpers never throw.
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
+import type { DesignFinding, DesignTokens } from '../../../shared/types';
 import { writeFileReplacingSync } from '../safe-write';
+import { lintAddedLines } from './design-lint';
 
 export type DesignMode = 'off' | 'wireframes' | 'full';
 export type DesignApproval = 'owner' | 'auto';
@@ -136,4 +138,51 @@ export function readDesignCanvas(specDir: string): { frames: DesignFrame[] } {
   } catch {
     return { frames: [] };
   }
+}
+
+/** The design check over every line of the task's screens (design/screens/*.html). Never throws. */
+export function lintDesignScreens(specDir: string, tokens: DesignTokens): DesignFinding[] {
+  try {
+    const dir = path.join(designDir(specDir), 'screens');
+    const files = readdirSync(dir).filter((file) => file.endsWith('.html')).sort();
+    return lintAddedLines(
+      files.map((file) => ({
+        file: `design/screens/${file}`,
+        lines: readFileSync(path.join(dir, file), 'utf-8').split('\n').map((text, i) => ({ n: i + 1, text })),
+      })),
+      tokens,
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What the planner, the coder and QA are told about the task's design (none without one): the
+ * screens (or, with wireframes only, the wireframes) are the reference for what each page shows.
+ * Pure.
+ */
+export function designReferencePrompt(role: string, specDir: string, frames: DesignFrame[], state: DesignState | undefined): string {
+  if (!state || state.stage === 'skipped') return '';
+  const screens = frames.filter((f) => f.kind === 'screen');
+  const reference = screens.length ? screens : frames.filter((f) => f.kind === 'wireframe');
+  if (!reference.length) return '';
+  const kind = screens.length ? 'screens, in the design system' : 'wireframes (layout and states; styling comes from the design system)';
+  const list = reference.map((f) => `- \`${path.join(specDir, 'design', f.file)}\` — ${f.title}, ${f.width}px wide${f.note ? ` (${f.note})` : ''}`).join('\n');
+  const intro = `## The task's design\n\nThe owner approved these ${kind} before the plan. They are HTML files: read them for layout, hierarchy, copy, states and exact styles.\n\n${list}`;
+  if (role === 'planner' || role === 'architect') {
+    return `${intro}\n\nName in each UI subtask the design files it builds (in its description), so the coder knows which screen is its reference. Every screen and state drawn here belongs to some subtask.`;
+  }
+  if (role === 'coder' || role === 'qa_fixer') {
+    return `${intro}\n\nBuild to them: the same structure, copy, states and styles at the same widths, with the project's real components and data instead of the sample data. Where the design and the design system disagree, the design system wins; where a screen is missing a state the spec needs, follow the closest screen. Motion in the design (CSS or GSAP) is part of it.`;
+  }
+  if (role === 'qa_reviewer') {
+    return [
+      intro,
+      '',
+      "Compare the built pages with the design: for each screen, open the page the task built at the screen's width in the browser, take a screenshot, and compare it with the design file (a rendered picture of it is in `design/shots/` when the app made one; otherwise read the HTML). Look at structure, content, states and styles, not pixels.",
+      `Write \`${path.join(specDir, 'design_compare.json')}\`: {"screens":[{"file":"screens/<name>.html","width":390,"built":"<path of your screenshot under the spec directory>","differences":[{"severity":"blocking"|"minor","text":"…"}]}]}. A difference is blocking when the built page is missing an element, a state or a layout the design (and the spec) require; it goes in your QA issues like any other. Minor ones (a radius, a spacing step, both within the design system) stay in this file for the owner.`,
+    ].join('\n');
+  }
+  return '';
 }

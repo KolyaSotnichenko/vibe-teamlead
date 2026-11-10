@@ -160,6 +160,11 @@ export interface SpecOrchestratorConfig {
   useAiAssessment?: boolean;
   /** When the architect designs before the planner (default: complex tasks only) */
   architectMode?: ArchitectMode;
+  /**
+   * Design before code: true when this task gets a design (asked once the spec is written). The
+   * spec then stops before the architecture and the plan, which the build makes after the design.
+   */
+  planAfterDesign?: () => boolean;
   /** Pre-generated project index JSON content (injected into all phases) */
   projectIndex?: string;
   /** CLI model override */
@@ -379,6 +384,12 @@ export class SpecOrchestrator extends EventEmitter {
       for (const phase of phasesToRun) {
         if (this.aborted) {
           return this.outcome(false, phasesExecuted, Date.now() - startTime, 'Cancelled');
+        }
+
+        // Design before code: the architecture and the plan follow the design, in the build
+        if ((phase === 'architecture' || phase === 'planning') && this.config.planAfterDesign?.()) {
+          this.emitTyped('log', 'Design first: the architecture and the plan come after the design is drawn');
+          break;
         }
 
         const result = await this.runPhase(phase, phasesExecuted.length + 1, phasesToRun.length + (phasesExecuted.includes('complexity_assessment') ? 1 : 0));

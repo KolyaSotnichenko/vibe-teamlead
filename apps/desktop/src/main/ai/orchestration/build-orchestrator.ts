@@ -127,6 +127,11 @@ export interface BuildOrchestratorConfig {
   /** Model for insight extraction (the task's model) */
   insightModel?: string;
   runQA: (hooks: QAPhaseHooks) => Promise<{ approved: boolean; error?: string }>;
+  /**
+   * Design before code (design-runner.ts): draws the task's wireframes and screens before the
+   * architecture and the plan. `paused` stops the build for the owner. Never rejects.
+   */
+  designStep?: () => Promise<{ paused?: 'wireframes' | 'design'; error?: string }>;
   /** The code a coder session starts with, as a block for its first message ('' for none). Never rejects. */
   subtaskCodeContext?: (subtask: PlanSubtaskEntry, log: (line: string) => void) => Promise<string>;
   /** Optional callback for syncing spec to source (worktree mode) */
@@ -212,6 +217,8 @@ export interface BuildOutcome {
   error?: string;
   /** Whether the coding phase completed before failure (indicates QA-phase failure) */
   codingCompleted: boolean;
+  /** The build stopped for the owner to look at the wireframes or the design (design-runner.ts) */
+  paused?: 'wireframes' | 'design';
 }
 
 // =============================================================================
@@ -316,6 +323,12 @@ export class BuildOrchestrator extends EventEmitter {
     const startTime = Date.now();
 
     try {
+      // Design before code: the screens first, so the architecture and the plan follow them
+      if (this.config.designStep) {
+        const design = await this.config.designStep();
+        if (design.paused) return { ...this.buildOutcome(true, Date.now() - startTime), paused: design.paused };
+      }
+
       // Determine starting phase
       const isFirstRun = await this.isFirstRun();
 

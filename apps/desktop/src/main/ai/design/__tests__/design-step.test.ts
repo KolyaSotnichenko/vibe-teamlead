@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { isUiFile } from '../design-lint';
-import { nextDesignAction, readDesignCanvas, readDesignState, specTouchesUi, writeDesignState } from '../design-step';
+import { designReferencePrompt, lintDesignScreens, nextDesignAction, readDesignCanvas, readDesignState, specTouchesUi, writeDesignState } from '../design-step';
 
 const spec = (files: string[]) => `# Spec\n\n## Files to Modify\n\n${files.map((f) => `- \`${f}\` — change`).join('\n')}\n\n## Requirements\n`;
 
@@ -70,5 +70,48 @@ describe('the design files', () => {
       ] }),
     );
     expect(readDesignCanvas(specDir).frames.map((f) => f.file)).toEqual(['wireframes/roadmap.html']);
+  });
+
+  it("checks the screens against the design system, every line", () => {
+    const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-design-'));
+    mkdirSync(path.join(specDir, 'design', 'screens'), { recursive: true });
+    writeFileSync(path.join(specDir, 'design', 'screens', 'roadmap.html'), '<style>\n.card { background: #ff00aa; border-radius: 10px; }\n</style>');
+    const tokens = { colors: [{ name: 'ink', value: '#181818' }], fonts: [], radius: [10], shadows: false, gradients: false };
+    const findings = lintDesignScreens(specDir, tokens as never);
+    expect(findings.map((f) => [f.file, f.line, f.rule])).toEqual([['design/screens/roadmap.html', 2, 'off-palette-color']]);
+    expect(lintDesignScreens(mkdtempSync(path.join(tmpdir(), 'vtl-none-')), tokens as never)).toEqual([]);
+  });
+});
+
+describe('what the planner, the coder and QA are told about the design', () => {
+  const frames = [
+    { file: 'wireframes/roadmap.html', title: 'Roadmap · desktop', kind: 'wireframe' as const, width: 1280, height: 900, x: 0, y: 0 },
+    { file: 'screens/roadmap-desktop.html', title: 'Roadmap · desktop', kind: 'screen' as const, width: 1280, height: 900, x: 0, y: 1200 },
+    { file: 'screens/roadmap-phone.html', title: 'Roadmap · phone', kind: 'screen' as const, width: 390, height: 844, x: 1360, y: 1200 },
+  ];
+
+  it('nothing without a finished design', () => {
+    expect(designReferencePrompt('coder', '/s', frames, undefined)).toBe('');
+    expect(designReferencePrompt('coder', '/s', frames, { stage: 'skipped', round: 1 })).toBe('');
+  });
+
+  it('the coder builds to the screens, at their widths', () => {
+    const text = designReferencePrompt('coder', '/s', frames, { stage: 'design', round: 2, approved: { wireframes: 'a', design: 'b' } });
+    expect(text).toContain('/s/design/screens/roadmap-phone.html');
+    expect(text).toContain('390');
+    expect(text).not.toContain('wireframes/roadmap.html');
+    expect(text).toMatch(/build to/i);
+  });
+
+  it('with wireframes only, they are the reference for layout and states', () => {
+    const text = designReferencePrompt('planner', '/s', frames.slice(0, 1), { stage: 'wireframes', round: 1, approved: { wireframes: 'a' } });
+    expect(text).toContain('/s/design/wireframes/roadmap.html');
+    expect(text).toMatch(/subtask/i);
+  });
+
+  it('QA compares the built pages with the screens and writes design_compare.json', () => {
+    const text = designReferencePrompt('qa_reviewer', '/s', frames, { stage: 'design', round: 2, approved: { wireframes: 'a', design: 'b' } });
+    expect(text).toContain('design_compare.json');
+    expect(text).toMatch(/blocking/);
   });
 });

@@ -72,6 +72,8 @@ export interface SerializableSessionConfig {
   lspEnabled?: boolean;
   /** The project's design system (resolved in the main process; .vibe-teamlead/ is not in worktrees) */
   designSystem?: import('../../../shared/types').DesignSystemInfo;
+  /** Design before code for UI tasks: the project's settings and the Designer model (resolved in the main process) */
+  design?: { mode: 'off' | 'wireframes' | 'full'; approval: 'owner' | 'auto'; model?: string; thinking?: string };
   /** The app's own run of the project's checks (resolved in the main process); absent when off */
   verification?: { commands?: string[]; env: Record<string, string>; lockDir: string };
   /** The app's Claude credential: an API key, or a subscription token (personal mode only) */
