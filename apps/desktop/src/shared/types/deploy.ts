@@ -166,3 +166,50 @@ export interface VercelError {
 }
 
 export type VercelEnvTarget = 'production' | 'preview' | 'development';
+
+/** What the Deploy tab has set up for a project; each step is recorded as it completes (setup is idempotent). */
+export interface DeployProjectSettings {
+  enabled: boolean;
+  /** `createdByApp`: the app created the repository (and pushes the main branch to it). */
+  repo?: { owner: string; repo: string; createdByApp: boolean; public?: boolean };
+  vercel?: { projectId: string; projectName: string; teamId?: string };
+  database?: { provider: 'neon'; addedAt: string };
+  /** ISO time setup finished. */
+  setUpAt?: string;
+}
+
+export type NeededFromYouKind =
+  | 'vercel-sign-in'
+  | 'github-sign-in'
+  | 'github-app-install'
+  | 'vercel-git-access'
+  | 'non-github-remote'
+  | 'public-repo-warning'
+  | 'variable'
+  | 'database-dashboard';
+
+/** Something only the owner can do (or should know) before setup can go on. `message` is English; the UI maps `kind` to i18n. */
+export interface NeededFromYou {
+  id: string;
+  kind: NeededFromYouKind;
+  message: string;
+  actionUrl?: string;
+  variable?: string;
+}
+
+export type DeploySetupStep = 'repo' | 'push' | 'vercel' | 'done';
+
+export interface DeploySetupError {
+  /** A GitHub/Vercel error kind, or `invalid` / `unknown`. */
+  kind: string;
+  /** Never contains a token or secret. */
+  message: string;
+}
+
+export interface DeploySetupState {
+  settings: DeployProjectSettings;
+  needed: NeededFromYou[];
+  /** The step setup reached (where it stopped, or `done`). */
+  step?: DeploySetupStep;
+  error?: DeploySetupError;
+}

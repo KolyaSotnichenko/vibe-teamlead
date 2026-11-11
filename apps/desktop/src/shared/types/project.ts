@@ -52,6 +52,8 @@ export interface ProjectSettings {
   previewEnv?: Record<string, string>;
   /** Placeholders the owner said to leave, as `file\ntext` (loose-ends.ts) */
   ignoredLooseEnds?: string[];
+  /** Deploy tab: what has been set up (repository, Vercel project, database) */
+  deploy?: import('./deploy').DeployProjectSettings;
 }
 
 /** One process the Preview starts, through the app's dev-server manager. */
