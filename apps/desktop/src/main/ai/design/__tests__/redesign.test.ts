@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { DesignFinding } from '../../../../shared/types';
-import { auditProjectDesign, redesignBrief } from '../redesign';
+import { auditProjectDesign, matchPackageComponents, redesignBrief } from '../redesign';
 
 const TOKENS = { colors: [{ name: 'ink', value: '#111111' }], fonts: [], radius: [0], shadows: false } as never;
 
@@ -59,5 +59,26 @@ describe('redesignBrief', () => {
     const text = redesignBrief({ designSystemPath: 'DESIGN.md', designSystem: 'New look.', findings: [], uiFiles: ['src/A.tsx'] });
     expect(text).toMatch(/passes the design check/i);
     expect(text).toMatch(/layout|hierarchy/i);
+  });
+});
+
+describe('matchPackageComponents: the project\'s look-alikes of package components', () => {
+  const pkg = { componentsDir: 'src/components/mhp', components: [{ name: 'Button' }, { name: 'Card' }] };
+  const uiFiles = ['src/components/ui/button.tsx', 'src/components/mhp/Button/Button.tsx', 'src/pages/Home.tsx'];
+
+  it('matches by base name, case-insensitively, and ignores the package components dir', () => {
+    expect(matchPackageComponents(uiFiles, pkg)).toEqual([{ component: 'Button', files: ['src/components/ui/button.tsx'] }]);
+  });
+
+  it('matches a file inside a folder named like the component', () => {
+    expect(matchPackageComponents(['src/ui/Card/index.tsx'], pkg)).toEqual([{ component: 'Card', files: ['src/ui/Card/index.tsx'] }]);
+  });
+
+  it('puts a rebuild section in the brief only with a package', () => {
+    const base = { designSystemPath: 'DESIGN.md', designSystem: '# DS', findings: [], uiFiles };
+    const withPkg = redesignBrief({ ...base, package: pkg });
+    expect(withPkg).toContain('Package components to rebuild');
+    expect(withPkg).toContain('src/components/ui/button.tsx');
+    expect(redesignBrief(base)).not.toContain('Package components to rebuild');
   });
 });

@@ -10,7 +10,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import type { DesignAudit, DesignFinding, DesignTokens } from '../../../shared/types';
+import type { DesignAudit, DesignFinding, DesignPackageInfo, DesignTokens } from '../../../shared/types';
 import { type AddedLines, isUiFile, lintAddedLines } from './design-lint';
 
 const run = promisify(execFile);
@@ -43,6 +43,29 @@ export interface RedesignInput {
   designSystem: string;
   findings: DesignFinding[];
   uiFiles: string[];
+  /** The imported design package, when the project has one */
+  package?: Pick<DesignPackageInfo, 'components' | 'componentsDir'>;
+}
+
+/**
+ * The project's own look-alikes of package components: a UI file whose base name equals the
+ * component name (case-insensitive) or that sits in a folder of that name, outside the
+ * package components dir. Pure.
+ */
+export function matchPackageComponents(uiFiles: string[], pkg: Pick<DesignPackageInfo, 'components' | 'componentsDir'>): Array<{ component: string; files: string[] }> {
+  const dir = pkg.componentsDir.replace(/\/+$/, '');
+  const outside = uiFiles.filter((file) => !dir || !(file === dir || file.startsWith(`${dir}/`)));
+  const result: Array<{ component: string; files: string[] }> = [];
+  for (const { name } of pkg.components) {
+    const wanted = name.toLowerCase();
+    const files = outside.filter((file) => {
+      const parts = file.split('/');
+      const base = parts[parts.length - 1].replace(/\.[^.]*$/, '').toLowerCase();
+      return base === wanted || parts.slice(0, -1).some((folder) => folder.toLowerCase() === wanted);
+    });
+    if (files.length) result.push({ component: name, files });
+  }
+  return result;
 }
 
 /** The redesign brief for the spec analyst. Pure. */
@@ -64,6 +87,18 @@ export function redesignBrief(input: RedesignInput): string {
       ]
     : ['The code already passes the design check (palette, radii, shadows), so what is left is what a check can\'t see: layout, hierarchy, type scale, spacing and components.'];
 
+  const matches = input.package ? matchPackageComponents(input.uiFiles, input.package) : [];
+  const rebuild = matches.length
+    ? [
+        '',
+        '## Package components to rebuild',
+        '',
+        'The project already has its own versions of these components from the design package. None of them counts as already built. Rebuild each one from the package spec in place, keeping its exports and call sites so the screens that use it keep working. One task per component, before the screens.',
+        '',
+        ...matches.map(({ component, files }) => `- ${component}: ${files.map((file) => `\`${file}\``).join(', ')}`),
+      ]
+    : [];
+
   return [
     '# Redesign: bring the existing UI to the project\'s design system',
     '',
@@ -78,6 +113,7 @@ export function redesignBrief(input: RedesignInput): string {
     ...violations,
     '',
     `The project has ${input.uiFiles.length} UI files.`,
+    ...rebuild,
     '',
     '## How to split the work',
     '',

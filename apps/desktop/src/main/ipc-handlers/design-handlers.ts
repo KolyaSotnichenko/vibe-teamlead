@@ -138,7 +138,7 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
     if (!info.exists || !info.markdown || !info.markdownPath) return { success: false, error: 'The project has no design system yet.' };
     try {
       const { findings, uiFiles } = info.tokens ? await auditProjectDesign(project.path, info.tokens, getToolPath('git')) : { findings: [], uiFiles: [] };
-      const brief = redesignBrief({ designSystemPath: info.markdownPath, designSystem: info.markdown, findings, uiFiles });
+      const brief = redesignBrief({ designSystemPath: info.markdownPath, designSystem: info.markdown, findings, uiFiles, package: info.package });
       return { success: true, data: { brief, findings: findings.length, files: new Set(findings.map((f) => f.file)).size } };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
