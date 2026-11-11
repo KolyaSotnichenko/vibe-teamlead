@@ -18,6 +18,7 @@ import { RunsList } from './RunsList';
 import { RunGraph } from './RunGraph';
 import { JobPanel } from './JobPanel';
 import { EnvironmentTab } from './EnvironmentTab';
+import { DeployChecklist } from './DeployChecklist';
 import { useDeployEnv } from './useDeployEnv';
 import { displayUrl, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
@@ -81,6 +82,8 @@ export function DeployPage({ projectId }: { projectId: string }) {
   const [nodeKey, setNodeKey] = useState<string | undefined>();
   const [signingIn, setSigningIn] = useState(false);
   const [tab, setTab] = useState<'runs' | 'environment'>('runs');
+  // Bumped after a GitHub sign-in so the checklist reads the accounts again
+  const [accountsKey, setAccountsKey] = useState(0);
   // Setup may have created the repository: the poller looks again
   const restartRuns = useCallback(() => void window.electronAPI.deploy.startRuns(projectId, selectedRef.current), [projectId]);
   const env = useDeployEnv(projectId, restartRuns);
@@ -194,6 +197,16 @@ export function DeployPage({ projectId }: { projectId: string }) {
     );
   }
 
+  // What is still missing, numbered, on top of both tabs (hidden once all is done)
+  const checklist = env.state ? (
+    <DeployChecklist
+      setUp={!notSetUp}
+      refreshKey={accountsKey}
+      onConnectGitHub={() => setSigningIn(true)}
+      onSetUp={() => setTab('environment')}
+    />
+  ) : null;
+
   return (
     <div className="flex h-full flex-col">
       <div role="tablist" aria-label={t('deploy:title')} className="flex border-b border-border px-6">
@@ -217,14 +230,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
       </div>
       {tab === 'runs' ? (
         <div role="tabpanel" id="deploy-panel-runs" aria-labelledby="deploy-tab-runs" className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-          {notSetUp && (
-            <div role="status" className="flex flex-wrap items-center gap-3 border-l-2 border-foreground bg-muted px-3 py-2 text-sm text-foreground">
-              <span className="min-w-0 flex-1">{t('deploy:setup.notSetUp')}</span>
-              <Button size="sm" onClick={() => setTab('environment')}>
-                {t('deploy:setup.cta')}
-              </Button>
-            </div>
-          )}
+          {checklist}
           {state?.repo && state.error && (
             <ErrorNotice
               error={state.error}
@@ -236,6 +242,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+          {checklist && <div className="mb-6">{checklist}</div>}
           <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
         </div>
       )}
@@ -250,6 +257,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
             <GitHubOAuthFlow
               onSuccess={() => {
                 setSigningIn(false);
+                setAccountsKey((k) => k + 1);
                 void window.electronAPI.deploy.startRuns(projectId, selectedRef.current);
                 void env.refresh();
               }}

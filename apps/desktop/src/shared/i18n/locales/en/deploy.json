@@ -70,7 +70,6 @@
   "setup": {
     "title": "Set up deploy",
     "description": "Vibe Teamlead creates a private GitHub repository if the project has none, pushes the main branch, and connects it to a Vercel project. Every merge into main then goes to production.",
-    "notSetUp": "Deploy isn’t set up for this project yet.",
     "cta": "Set up deploy",
     "team": "Vercel account",
     "personal": "Personal ({{name}})",
@@ -203,6 +202,18 @@
       "timeout": "It took too long. Try again.",
       "saved-failed": "It was done, but the app couldn’t save that. Try again to record it.",
       "unknown": "Something went wrong. Try again."
+    }
+  },
+  "checklist": {
+    "title": "Before deploy works",
+    "github": "Sign in to GitHub",
+    "app": "Install the Vibe Teamlead GitHub App",
+    "vercel": "Connect Vercel",
+    "setUp": "Set up deploy for this project",
+    "actions": {
+      "github": "Sign in",
+      "app": "Install",
+      "vercel": "Connect"
     }
   }
 }
