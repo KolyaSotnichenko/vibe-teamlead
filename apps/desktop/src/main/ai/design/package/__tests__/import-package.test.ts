@@ -219,6 +219,37 @@ describe('package text from an untrusted package', () => {
   });
 });
 
+describe('package paths from an untrusted package', () => {
+  it('inspect refuses a package whose top folder is not a plain name, and leaves no staging', async () => {
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-root-'));
+    try {
+      const top = path.join(src, 'kit`echo hi`');
+      mkdirSync(top, { recursive: true });
+      writeFileSync(path.join(top, 'README.md'), '# Kit\n');
+      writeFileSync(path.join(top, 'tokens.css'), ':root{--a:#111111}');
+      await expect(inspectDesignPackage(project, undefined, src)).rejects.toThrow(/top folder/i);
+      expect(existsSync(path.join(project, STAGING))).toBe(false);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+
+  it('import records only logos and fonts with plain names', async () => {
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-names-'));
+    try {
+      mkdirSync(path.join(src, 'logos'), { recursive: true });
+      writeFileSync(path.join(src, 'README.md'), '# Kit\n');
+      writeFileSync(path.join(src, 'logos/mark.svg'), '<svg/>');
+      writeFileSync(path.join(src, 'logos/mark`x`.svg'), '<svg/>');
+      await inspectDesignPackage(project, undefined, src);
+      await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+      expect(readPackageMeta(project)?.logos).toEqual([`${PACKAGE_DIR}/logos/mark.svg`]);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('setDesignThemes', () => {
   it('refuses a package without token files and changes nothing', async () => {
     await inspectDesignPackage(project, undefined, flat);

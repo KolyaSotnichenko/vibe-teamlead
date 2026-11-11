@@ -45,6 +45,8 @@ export const REPO_CANDIDATES = [
 const MAX_MARKDOWN_BYTES = 256 * 1024;
 /** Markdown put into agent prompts is capped; the full file stays on disk */
 export const PROMPT_MARKDOWN_CHARS = 14_000;
+/** Package component names listed in a builder's prompt, built and not built together */
+const PROMPT_COMPONENT_NAMES = 60;
 
 const HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
@@ -280,10 +282,17 @@ function packagePromptSection(pkg: DesignPackageInfo, role: 'builder' | 'qa'): s
     const wired = [pkg.tokensCss ? `\`${pkg.tokensCss}\`` : '', pkg.fonts.length > 0 ? 'the fonts' : ''].filter(Boolean).join(' and ');
     if (wired) lines.push(`Wire ${wired} in once, in the first UI task where the stack expects global styles.`);
     lines.push(both ? 'Themes: build both light and dark, with a theme switch; screens are checked in both.' : 'Themes: light theme only.');
+    // Both lists share one budget of names: a big package must not swamp every coder turn
     const built = pkg.built ?? [];
-    const names = pkg.components.map((c) => c.name);
-    lines.push(`Built: ${built.join(', ') || 'none'}`);
-    lines.push(`Not built yet: ${names.filter((n) => !built.includes(n)).join(', ') || 'none'}`);
+    const notBuilt = pkg.components.map((c) => c.name).filter((n) => !built.includes(n));
+    const builtShown = Math.min(built.length, PROMPT_COMPONENT_NAMES);
+    const list = (names: string[], shown: number) => {
+      if (!names.length) return 'none';
+      const more = names.length - shown;
+      return [names.slice(0, shown).join(', '), more > 0 ? `…and ${more} more` : ''].filter(Boolean).join(', ');
+    };
+    lines.push(`Built: ${list(built, builtShown)}`);
+    lines.push(`Not built yet: ${list(notBuilt, Math.min(notBuilt.length, PROMPT_COMPONENT_NAMES - builtShown))}`);
   }
   return lines.join('\n');
 }

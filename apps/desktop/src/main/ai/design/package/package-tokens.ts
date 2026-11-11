@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DesignThemes, DesignTokens } from '../../../../shared/types/design-system';
 import { parseTokenFile } from '../references';
+import { cleanPackageText } from './package-meta';
 import type { DesignPackage } from './read-package';
 
 type Parsed = Partial<DesignTokens>;
@@ -51,16 +52,53 @@ function hasShadow(text: string, ext: string): boolean {
   return /"[^"]*shadow[^"]*"\s*:/i.test(text) || /"\$?type"\s*:\s*"shadow"/i.test(text);
 }
 
+const NAME_MAX = 64;
+
+/** A colour name safe in every prompt: [\w./-] only, capped; undefined when nothing is left. */
+function safeColourName(name: unknown): string | undefined {
+  if (typeof name !== 'string') return undefined;
+  const clean = name.replace(/[^\w./-]/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '').slice(0, NAME_MAX);
+  return clean || undefined;
+}
+
+function safeColours(colours: Colour[]): Colour[] {
+  return colours.flatMap((c) => {
+    const name = safeColourName(c.name);
+    if (!name) return [];
+    const raw = (c as { role?: unknown }).role;
+    const role = typeof raw === 'string' ? cleanPackageText(raw).slice(0, NAME_MAX).trim() : '';
+    return [{ name, value: c.value, ...(role ? { role } : {}) }];
+  });
+}
+
+type FontRole = 'display' | 'sans' | 'serif' | 'mono' | 'font';
+
+/** A font role from a fixed set, derived from the package's role name and family. */
+function fontRole(role: unknown, family: string): FontRole {
+  const text = `${typeof role === 'string' ? role : ''} ${family}`.toLowerCase();
+  if (/mono|code/.test(text)) return 'mono';
+  if (/display|heading|headline|title/.test(text)) return 'display';
+  if (/(^|[^-])serif/.test(text.replace(/sans[\s-]?serif/g, 'sans'))) return 'serif';
+  if (/sans|body|text|base|ui|primary/.test(text)) return 'sans';
+  return 'font';
+}
+
 function assemble(light: Colour[], dark: Colour[], rest: Parsed[], themes: DesignThemes, shadows: boolean): DesignTokens | undefined {
-  const colors = [...light, ...(themes === 'light-dark' ? dark.map((c) => ({ ...c, name: DARK_PREFIX + c.name })) : [])];
+  const colors = [...safeColours(light), ...(themes === 'light-dark' ? safeColours(dark).map((c) => ({ ...c, name: DARK_PREFIX + c.name })) : [])];
   if (!colors.length) return undefined;
   const fonts: DesignTokens['fonts'] = [];
   const radius = new Set<number>();
   const spacing = new Set<number>();
   for (const p of rest) {
-    for (const f of p.fonts ?? []) if (!fonts.some((g) => g.family === f.family && g.role === f.role)) fonts.push(f);
-    for (const r of p.radius ?? []) radius.add(r);
-    for (const s of p.spacing ?? []) spacing.add(s);
+    for (const f of p.fonts ?? []) {
+      if (typeof f?.family !== 'string') continue;
+      const family = cleanPackageText(f.family).slice(0, NAME_MAX).trim();
+      if (!family) continue;
+      const role = fontRole(f.role, family);
+      if (!fonts.some((g) => g.family === family && g.role === role)) fonts.push({ role, family });
+    }
+    for (const r of p.radius ?? []) if (typeof r === 'number' && Number.isFinite(r) && r >= 0) radius.add(r);
+    for (const s of p.spacing ?? []) if (typeof s === 'number' && Number.isFinite(s) && s >= 0) spacing.add(s);
   }
   const sorted = (s: Set<number>) => [...s].sort((a, b) => a - b);
   return {

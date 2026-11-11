@@ -19,10 +19,12 @@ import { DesignTokensSchema, resolveDesignSystemPaths, saveDesignSystem } from '
 import { readReferences } from '../references';
 import { recordSystemMeta } from '../system-meta';
 import {
+  COMPONENT_NAME,
   PACKAGE_DIR,
   PACKAGE_META_FILE,
   cleanPackageText,
   componentsDirFor,
+  isPlainPackagePath,
   readPackageMeta,
   safeNamespace,
   writePackageMeta,
@@ -41,6 +43,9 @@ const DARK_PREFIX = 'dark/';
 
 const abs = (projectPath: string, rel: string) => path.join(projectPath, ...rel.split('/'));
 
+const ROOT_NAME_ERROR =
+  "The package's top folder name can use only Latin letters, digits, spaces and . _ - @ ( ) + (at most 64 characters). Rename the folder and choose the package again.";
+
 /** Unpacks `source` into a clean staging folder and says what the package holds. */
 export async function inspectDesignPackage(
   projectPath: string,
@@ -51,6 +56,11 @@ export async function inspectDesignPackage(
   await rm(staging, { recursive: true, force: true });
   const { skipped } = await unpackDesignPackage(source, staging);
   const pkg = readDesignPackage(staging);
+  // The top folder is part of every path the builders are given
+  if (pkg.root && !isPlainPackagePath(pkg.root)) {
+    await rm(staging, { recursive: true, force: true });
+    throw new Error(ROOT_NAME_ERROR);
+  }
   const tokens = packageTokens(staging, pkg, 'light-dark');
   const dark = tokens?.colors.filter((c) => c.name.startsWith(DARK_PREFIX)).length ?? 0;
   const system = resolveDesignSystemPaths(projectPath, settings);
@@ -193,7 +203,10 @@ function newReferences(pkgDir: string, pkg: DesignPackage, existing: () => Array
 
 /** What the package holds, with paths relative to the project and its text cleaned. */
 function packageInfo(projectPath: string, pkg: DesignPackage, themes: DesignThemes): DesignPackageInfo {
+  if (pkg.root && !isPlainPackagePath(pkg.root)) throw new Error(ROOT_NAME_ERROR);
   const rel = (p: string) => `${PACKAGE_DIR}/${p}`;
+  // Only plain names reach the builders' prompts; anything else is left out of the meta
+  const plain = (p: string | undefined) => (p && isPlainPackagePath(p) ? rel(p) : undefined);
   const namespace = safeNamespace(pkg.namespace);
   const licenceLine = pkg.licenceLine ? cleanPackageText(pkg.licenceLine) : '';
   return {
@@ -202,12 +215,15 @@ function packageInfo(projectPath: string, pkg: DesignPackage, themes: DesignThem
     importedAt: new Date().toISOString(),
     dir: pkg.root ? rel(pkg.root) : PACKAGE_DIR,
     componentsDir: componentsDirFor(projectPath, namespace),
-    components: pkg.components.map((c) => (c.readme ? { name: c.name, readme: rel(c.readme) } : { name: c.name })),
-    ...(pkg.componentFiles.css ? { componentCss: rel(pkg.componentFiles.css) } : {}),
-    ...(pkg.componentFiles.types ? { componentTypes: rel(pkg.componentFiles.types) } : {}),
-    ...(pkg.tokenFiles.css ? { tokensCss: rel(pkg.tokenFiles.css) } : {}),
-    logos: pkg.logos.map(rel),
-    fonts: pkg.fonts.map(rel),
+    components: pkg.components.filter((c) => COMPONENT_NAME.test(c.name)).map((c) => {
+      const readme = plain(c.readme);
+      return readme ? { name: c.name, readme } : { name: c.name };
+    }),
+    ...(plain(pkg.componentFiles.css) ? { componentCss: plain(pkg.componentFiles.css) } : {}),
+    ...(plain(pkg.componentFiles.types) ? { componentTypes: plain(pkg.componentFiles.types) } : {}),
+    ...(plain(pkg.tokenFiles.css) ? { tokensCss: plain(pkg.tokenFiles.css) } : {}),
+    logos: pkg.logos.flatMap((p) => plain(p) ?? []),
+    fonts: pkg.fonts.flatMap((p) => plain(p) ?? []),
     ...(licenceLine ? { licenceLine } : {}),
     themes,
   };

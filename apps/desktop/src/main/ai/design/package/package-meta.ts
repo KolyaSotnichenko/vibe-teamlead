@@ -37,7 +37,7 @@ export function writePackageMeta(projectPath: string, info: DesignPackageInfo): 
   writeFileReplacingSync(metaFile(projectPath), `${JSON.stringify(info, null, 2)}\n`, 'utf-8');
 }
 
-const COMPONENT_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
+export const COMPONENT_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const NAMESPACE = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 const TEXT_MAX = 200;
 
@@ -69,6 +69,16 @@ function safeRelative(value: unknown): value is string {
 const underDir = (value: unknown, dir: string): value is string =>
   safeRelative(value) && (value === dir || value.startsWith(`${dir}/`));
 
+/** One folder or file name of a package path: plain characters only, so it is safe in prompts. */
+const PATH_SEGMENT = /^[\w .@()+-]{1,64}$/;
+
+/** A path whose every segment is a plain name (no newlines, backticks, `.` or `..`). */
+export function isPlainPackagePath(value: string): boolean {
+  return value.split('/').every((s) => PATH_SEGMENT.test(s) && s !== '.' && s !== '..');
+}
+
+const packagePath = (value: unknown, dir: string): value is string => underDir(value, dir) && isPlainPackagePath(value);
+
 export function readPackageMeta(projectPath: string): DesignPackageInfo | undefined {
   let raw: Record<string, unknown>;
   try {
@@ -79,9 +89,13 @@ export function readPackageMeta(projectPath: string): DesignPackageInfo | undefi
   if (!raw || typeof raw !== 'object') return undefined;
   const { name, namespace, importedAt, dir, componentsDir } = raw;
   if (typeof name !== 'string' || typeof namespace !== 'string' || typeof importedAt !== 'string') return undefined;
-  if (!underDir(dir, PACKAGE_DIR) || !safeRelative(componentsDir)) return undefined;
-  const packageFile = (value: unknown) => (underDir(value, dir) ? value : undefined);
-  const files = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => underDir(v, dir)) : []);
+  if (!packagePath(dir, PACKAGE_DIR) || !safeRelative(componentsDir)) return undefined;
+  // These paths reach every builder prompt: one that is not plain makes the whole meta untrusted
+  for (const value of [raw.componentCss, raw.componentTypes, raw.tokensCss]) {
+    if (underDir(value, dir) && !isPlainPackagePath(value)) return undefined;
+  }
+  const packageFile = (value: unknown) => (packagePath(value, dir) ? value : undefined);
+  const files = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => packagePath(v, dir)) : []);
   const components = (Array.isArray(raw.components) ? raw.components : []).flatMap((c: unknown) => {
     const entry = c as { name?: unknown; readme?: unknown } | null;
     if (!entry || typeof entry.name !== 'string' || !COMPONENT_NAME.test(entry.name)) return [];

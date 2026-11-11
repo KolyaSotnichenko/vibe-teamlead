@@ -123,6 +123,17 @@ describe('designPromptSection', () => {
       }
     });
 
+    it('lists at most 60 component names in all, with how many more', () => {
+      const components = Array.from({ length: 150 }, (_, i) => ({ name: `C${i}` }));
+      const built = components.slice(0, 20).map((c) => c.name);
+      const text = designPromptSection(withPkg({ components, built }), { role: 'builder', storybookEnabled: false });
+      const lists = text.split('\n').filter((l) => l.startsWith('Built:') || l.startsWith('Not built yet:')).join('\n');
+      const names = lists.match(/\bC\d+\b/g) ?? [];
+      expect(names.length).toBeLessThanOrEqual(60);
+      expect(text).toContain('Built: C0,');
+      expect(text).toMatch(/Not built yet: C20, .*…and 90 more/);
+    });
+
     it('has no package heading without a package', () => {
       expect(designPromptSection(loadDesignSystem(project(), undefined), { role: 'builder', storybookEnabled: false })).not.toContain('Design package components');
     });
