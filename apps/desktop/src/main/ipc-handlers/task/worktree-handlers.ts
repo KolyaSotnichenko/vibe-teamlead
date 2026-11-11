@@ -35,6 +35,9 @@ import { markWaitingForPreview } from './preview-hold';
 import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
+import { safeSendToRenderer } from '../utils';
+import { pushMainAfterMerge } from '../../deploy/push-after-merge';
+import { pushWithAppToken } from '../../deploy/github-write';
 import type { MergeWorktreeOptions } from '../../../shared/types/task';
 
 // Regex pattern for validating git branch names
@@ -2252,6 +2255,16 @@ export function registerWorktreeHandlers(
                 planStatus = 'completed';
                 message = 'Changes merged successfully';
                 staged = false;
+
+                // Deploy: send the new main to GitHub (fire and forget; never blocks or fails the merge)
+                void pushMainAfterMerge(
+                  project,
+                  {
+                    push: pushWithAppToken,
+                    emit: (result) => { safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PUSH_RESULT, result); },
+                  },
+                  effectiveBaseBranch,
+                ).catch(() => undefined);
 
                 // Clean up worktree after successful full merge (fixes #243)
                 // This allows drag-to-Done workflow since TASK_UPDATE_STATUS blocks 'done' when worktree exists

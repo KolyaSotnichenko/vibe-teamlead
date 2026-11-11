@@ -619,6 +619,7 @@ export const IPC_CHANNELS = {
   DEPLOY_RUNS_STOP: 'deploy:runsStop',
   DEPLOY_JOB_LOG: 'deploy:jobLog',
   DEPLOY_RUNS_UPDATE: 'deploy:runsUpdate',  // Event: runs state (main -> renderer)
+  DEPLOY_PUSH_RESULT: 'deploy:pushResult',  // Event: push of main after a merge finished (main -> renderer)
 
   // Vercel account (Settings → Vercel)
   VERCEL_STATUS: 'vercel:status',
