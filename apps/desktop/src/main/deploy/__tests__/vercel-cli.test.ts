@@ -171,8 +171,11 @@ describe('ensureVercelCli', () => {
       (src) => {
         mkdirSync(path.join(src, 'package/bin'), { recursive: true });
         writeFileSync(path.join(src, 'package/bin/vercel'), 'x');
+        writeFileSync(path.join(src, 'package/bin/other'), 'y');
       },
-      (src) => ['package/bin/vercel', path.join(src, 'package/bin/vercel')],
+      // A different file: GNU tar (Linux CI) stores the same file added twice as a hard link,
+      // which is refused earlier for its entry type instead of its path
+      (src) => ['package/bin/vercel', path.join(src, 'package/bin/other')],
     );
     await rejectedAndClean(tgz, /unsafe/);
   });
