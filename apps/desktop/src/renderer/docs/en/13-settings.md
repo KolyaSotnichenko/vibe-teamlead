@@ -12,7 +12,7 @@
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
 | **Project → General** | The project's agent model, CLAUDE.md, notifications. |
 | **Project → GitHub / GitLab / Linear** | Repository, token, base branch, branch pushing, issue sync. |
-| **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory. You can run it again. |
+| **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory, accounts (an optional GitHub sign-in; if skipped, connect it later in Project → GitHub). You can run it again. |
 
 ## Updates
 

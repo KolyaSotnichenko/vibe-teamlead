@@ -289,4 +289,17 @@ describe('OnboardingWizard Integration Tests', () => {
       await waitFor(() => expect(screen.getByText(/Connect Claude/)).toBeInTheDocument());
     });
   });
+
+  describe('Accounts Step', () => {
+    it('sits between Memory and Done in the progress indicator', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
+      await waitFor(() => expect(screen.getByText(/Connect Claude/)).toBeInTheDocument());
+      const labels = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
+      const at = (name: string) => labels.findIndex((l) => l.includes(name));
+      expect(at('steps.memory')).toBeGreaterThan(-1);
+      expect(at('steps.accounts')).toBe(at('steps.memory') + 1);
+      expect(at('steps.done')).toBe(at('steps.accounts') + 1);
+    });
+  });
 });

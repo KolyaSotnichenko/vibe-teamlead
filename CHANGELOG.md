@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.33 - 2026-11-11
+
+- First-run wizard: an optional Accounts step between Memory and Done signs you in to GitHub in the browser (for pushing branches, pull requests and, later, deploy). Skip it and connect later in the project's settings, under GitHub.
+
 ## 2.0.0-beta.32 - 2026-11-11
 
 - Design system, Path C: import a designer's design-system package (a zip or a folder). Its tokens are taken exactly, one design-system agent run writes the document, components are rebuilt in the project's own code on first need, logos and fonts are committed with the code, and you choose Light only or Light and dark. Package scripts never run.

@@ -17,6 +17,7 @@ import { ToolsStep } from './ToolsStep';
 import { DevToolsStep } from './DevToolsStep';
 import { PrivacyStep } from './PrivacyStep';
 import { MemoryStep } from './MemoryStep';
+import { AccountsStep } from './AccountsStep';
 import { CompletionStep } from './CompletionStep';
 import { useSettingsStore } from '../../stores/settings-store';
 
@@ -28,7 +29,7 @@ interface OnboardingWizardProps {
 }
 
 // Wizard step identifiers
-type WizardStepId = 'welcome' | 'claude' | 'tools' | 'devtools' | 'privacy' | 'memory' | 'completion';
+type WizardStepId = 'welcome' | 'claude' | 'tools' | 'devtools' | 'privacy' | 'memory' | 'accounts' | 'completion';
 
 // Step configuration with translation keys
 const WIZARD_STEPS: { id: WizardStepId; labelKey: string }[] = [
@@ -38,6 +39,7 @@ const WIZARD_STEPS: { id: WizardStepId; labelKey: string }[] = [
   { id: 'devtools', labelKey: 'steps.devtools' },
   { id: 'privacy', labelKey: 'steps.privacy' },
   { id: 'memory', labelKey: 'steps.memory' },
+  { id: 'accounts', labelKey: 'steps.accounts' },
   { id: 'completion', labelKey: 'steps.done' }
 ];
 
@@ -171,6 +173,13 @@ export function OnboardingWizard({
       case 'memory':
         return (
           <MemoryStep
+            onNext={goToNextStep}
+            onBack={goToPreviousStep}
+          />
+        );
+      case 'accounts':
+        return (
+          <AccountsStep
             onNext={goToNextStep}
             onBack={goToPreviousStep}
           />
