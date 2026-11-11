@@ -220,6 +220,15 @@ describe('DeployPage', () => {
     expect(list.closest('[data-radix-scroll-area-viewport]')).not.toBeNull();
   });
 
+  it('keeps the graph its full height when a long job log opens under it (nothing in the column shrinks)', () => {
+    const { emit } = setup({ state: 'ready', text: 'line' });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    const column = screen.getByText('npm run typecheck').closest('section')?.parentElement as HTMLElement;
+    expect(column.className).toContain('overflow-y-auto');
+    expect(column.className).toContain('[&>*]:shrink-0');
+  });
+
   it('shows the steps of a clicked completed job and its log', async () => {
     const { deploy, emit } = setup({ state: 'ready', text: 'line one\nline two' });
     emit(base());

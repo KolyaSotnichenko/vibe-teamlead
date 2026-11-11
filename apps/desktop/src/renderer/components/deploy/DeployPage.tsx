@@ -138,7 +138,8 @@ export function DeployPage({ projectId }: { projectId: string }) {
         <ScrollArea className="min-h-0" viewportClassName="[&>div]:!block">
           <RunsList runs={runs} selectedId={selectedId} onSelect={selectRun} />
         </ScrollArea>
-        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+        {/* The column scrolls; its blocks keep their height (the graph scrolls sideways and would otherwise shrink to nothing) */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto [&>*]:shrink-0">
           {run && (
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
