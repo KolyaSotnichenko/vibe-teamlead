@@ -276,8 +276,10 @@ async function readText(file: string, max = SMALL_FILE): Promise<string | null> 
   if (st.size > max) throw invalid('The project has an unexpectedly large git file and was not pushed');
   const handle = await open(file, 'r');
   try {
-    const buf = Buffer.alloc(max + 1);
-    const { bytesRead } = await handle.read(buf, 0, max + 1, 0);
+    // sized to the file (+1 to notice growth past the cap), not to the cap
+    const size = Math.min(st.size, max) + 1;
+    const buf = Buffer.alloc(size);
+    const { bytesRead } = await handle.read(buf, 0, size, 0);
     if (bytesRead > max) throw invalid('The project has an unexpectedly large git file and was not pushed');
     return buf.subarray(0, bytesRead).toString('utf-8');
   } finally {

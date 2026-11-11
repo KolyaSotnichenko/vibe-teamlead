@@ -354,6 +354,19 @@ describe('push and origin (real local bare remote)', () => {
     expect(head(bare, 'refs/heads/main')).toBe(sha);
   });
 
+  it('reads git files with a buffer sized to the file, not to the cap (no 64 MB per packed-refs read)', async () => {
+    const { bare, work } = setup();
+    git(work, 'pack-refs', '--all');
+    const alloc = vi.spyOn(Buffer, 'alloc');
+    try {
+      await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
+      const sizes = alloc.mock.calls.map((c) => Number(c[0]));
+      expect(Math.max(0, ...sizes)).toBeLessThan(64 * 1024);
+    } finally {
+      alloc.mockRestore();
+    }
+  });
+
   it('resolves HEAD and a src:dst refspec', async () => {
     const { bare, work } = setup();
     const sha = head(work);

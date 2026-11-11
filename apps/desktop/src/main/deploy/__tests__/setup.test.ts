@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -702,6 +702,30 @@ describe('readGitInfo', () => {
       expect(info?.originUnclear).toBeUndefined();
       await rm(p, { recursive: true, force: true });
     }
+  });
+
+  it('an oversized git config: origin unclear (never "no origin")', async () => {
+    const big = `[remote "origin"]\n\turl = https://github.com/acme/shop\n${'# pad\n'.repeat(20_000)}`;
+    const p = await repo({ '.git/HEAD': 'ref: refs/heads/main\n', '.git/config': big });
+    const info = await readGitInfo(p);
+    expect(info?.originUnclear).toBe(true);
+    expect(info?.originUrl).toBeUndefined();
+  });
+
+  it('an unreadable git config (a directory, a symlink): origin unclear', async () => {
+    const p = await repo({ '.git/HEAD': 'ref: refs/heads/main\n', 'elsewhere.cfg': '[core]\n' });
+    await mkdir(path.join(p, '.git', 'config'));
+    expect((await readGitInfo(p))?.originUnclear).toBe(true);
+    await rm(path.join(p, '.git', 'config'), { recursive: true });
+    await symlink(path.join(p, 'elsewhere.cfg'), path.join(p, '.git', 'config'));
+    expect((await readGitInfo(p))?.originUnclear).toBe(true);
+  });
+
+  it('no git config at all: not unclear', async () => {
+    const p = await repo({ '.git/HEAD': 'ref: refs/heads/main\n' });
+    const info = await readGitInfo(p);
+    expect(info?.originUnclear).toBeUndefined();
+    expect(info?.originUrl).toBeUndefined();
   });
 
   it('not a git repository → null', async () => {

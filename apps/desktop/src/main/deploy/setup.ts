@@ -217,7 +217,7 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
       if (info.originUnclear) {
         throw new Stop({
           kind: 'invalid',
-          message: "The project's git config includes other files, so the app can't tell where origin points. Remove the include, then try again.",
+          message: "The app can't tell where the project's origin points: its git config includes other files, or can't be read. Fix the config, then try again.",
         });
       }
       if (info.originUrl || info.originRewritten) {
@@ -469,7 +469,12 @@ export async function readGitInfo(projectPath: string): Promise<GitInfo | null> 
   const headText = await readSmall(path.join(gitDir, 'HEAD'));
   if (headText === null) return null;
 
-  const config = (await readSmall(path.join(commonDir, 'config'))) ?? '';
+  // A config that exists but can't be read in full (too large, not a regular file) hides where
+  // origin points: that is "unclear", never "no origin" (setup would create a new repo).
+  const configFile = path.join(commonDir, 'config');
+  const configText = await readSmall(configFile);
+  const configUnreadable = configText === null && (await lstat(configFile).then(() => true, () => false));
+  const config = configText ?? '';
   const branches: string[] = [];
   await looseBranches(path.join(commonDir, 'refs', 'heads'), '', branches);
   const packed = (await readSmall(path.join(commonDir, 'packed-refs'), PACKED_MAX)) ?? '';
@@ -483,7 +488,7 @@ export async function readGitInfo(projectPath: string): Promise<GitInfo | null> 
     branches,
     ...(head ? { head } : {}),
     ...(origin.url ? { originUrl: origin.url } : {}),
-    ...(origin.unclear ? { originUnclear: true } : {}),
+    ...(origin.unclear || configUnreadable ? { originUnclear: true } : {}),
     ...(origin.rewritten ? { originRewritten: true } : {}),
   };
 }
