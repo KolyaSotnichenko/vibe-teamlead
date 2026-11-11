@@ -1,9 +1,10 @@
 /**
- * Sidebar → Deploy: the project's GitHub Actions runs, live (layout B: runs on the left, the selected
- * run's graph and the clicked job on the right). Polling runs in the main process while this page is
- * open and the window is visible.
+ * Sidebar → Deploy. Runs: the project's GitHub Actions runs, live (layout B: runs on the left, the
+ * selected run's graph and the clicked job on the right); polling runs in the main process while this
+ * page is open and the window is visible. Environment: set up deploy, what exists, variables, database.
+ * Until deploy is set up, both tabs offer Set up deploy.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeployRunsState, GitHubError } from '../../../shared/types/deploy';
 import { GITHUB_APP_INSTALL_URL, GITHUB_INSTALLATIONS_SETTINGS_URL } from '../../../shared/constants/github';
@@ -16,6 +17,8 @@ import { cn } from '../../lib/utils';
 import { RunsList } from './RunsList';
 import { RunGraph } from './RunGraph';
 import { JobPanel } from './JobPanel';
+import { EnvironmentTab } from './EnvironmentTab';
+import { useDeployEnv } from './useDeployEnv';
 import { displayUrl, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
 const ATTENTION: ReadonlySet<GitHubError['kind']> = new Set(['no-connection', 'permissions', 'not-found']);
@@ -77,6 +80,11 @@ export function DeployPage({ projectId }: { projectId: string }) {
   const [pickedRunId, setPickedRunId] = useState<number | undefined>();
   const [nodeKey, setNodeKey] = useState<string | undefined>();
   const [signingIn, setSigningIn] = useState(false);
+  const [tab, setTab] = useState<'runs' | 'environment'>('runs');
+  // Setup may have created the repository: the poller looks again
+  const restartRuns = useCallback(() => void window.electronAPI.deploy.startRuns(projectId, selectedRef.current), [projectId]);
+  const env = useDeployEnv(projectId, restartRuns);
+  const notSetUp = !!env.state && !env.state.settings?.enabled;
 
   const runs = state?.runs ?? [];
   // A picked run that dropped off the list falls back to the poller's choice, as in the main process
@@ -189,25 +197,48 @@ export function DeployPage({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-full flex-col">
       <div role="tablist" aria-label={t('deploy:title')} className="flex border-b border-border px-6">
-        <button
-          type="button"
-          role="tab"
-          aria-selected="true"
-          className="min-h-11 border-b-2 border-foreground px-3.5 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {t('deploy:tabs.runs')}
-        </button>
+        {(['runs', 'environment'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`deploy-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls={`deploy-panel-${id}`}
+            onClick={() => setTab(id)}
+            className={cn(
+              'min-h-11 border-b-2 px-3.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              tab === id ? 'border-foreground font-semibold text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {t(`deploy:tabs.${id}`)}
+          </button>
+        ))}
       </div>
-      <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-        {state?.repo && state.error && (
-          <ErrorNotice
-            error={state.error}
-            repo={`${state.repo.owner}/${state.repo.repo}`}
-            onConnect={() => setSigningIn(true)}
-          />
-        )}
-        {body}
-      </div>
+      {tab === 'runs' ? (
+        <div role="tabpanel" id="deploy-panel-runs" aria-labelledby="deploy-tab-runs" className="flex min-h-0 flex-1 flex-col gap-4 p-6">
+          {notSetUp && (
+            <div role="status" className="flex flex-wrap items-center gap-3 border-l-2 border-foreground bg-muted px-3 py-2 text-sm text-foreground">
+              <span className="min-w-0 flex-1">{t('deploy:setup.notSetUp')}</span>
+              <Button size="sm" onClick={() => setTab('environment')}>
+                {t('deploy:setup.cta')}
+              </Button>
+            </div>
+          )}
+          {state?.repo && state.error && (
+            <ErrorNotice
+              error={state.error}
+              repo={`${state.repo.owner}/${state.repo.repo}`}
+              onConnect={() => setSigningIn(true)}
+            />
+          )}
+          {body}
+        </div>
+      ) : (
+        <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+          <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} />
+        </div>
+      )}
 
       <Dialog open={signingIn} onOpenChange={setSigningIn}>
         <DialogContent>

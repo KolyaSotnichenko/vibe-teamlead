@@ -1,0 +1,346 @@
+/**
+ * Deploy → Environment: set up deploy (Vercel account or team, then the steps), what the owner
+ * must do, what exists (repository, Vercel project, production URL, database), the variables,
+ * and the last push of main after a merge.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type {
+  DeployListVariablesResult,
+  DeployProjectSettings,
+  DeploySetupStep,
+  DeployVariableInput,
+  GraphNodeStatus,
+  NeededFromYou as NeededItem,
+  VercelStatus,
+} from '../../../shared/types/deploy';
+import { Button } from '../ui/button';
+import { cn } from '../../lib/utils';
+import { NeededFromYou } from './NeededFromYou';
+import { VariableDialog } from './VariableDialog';
+import type { DeployEnv } from './useDeployEnv';
+import { displayUrl, formatRelative, isWebUrl, openWebUrl, StatusMark, useDeployErrorText } from './status';
+
+const STEPS: DeploySetupStep[] = ['repo', 'push', 'vercel', 'done'];
+const TARGETS: ReadonlySet<string> = new Set(['production', 'preview', 'development']);
+
+function stepStatus(
+  step: DeploySetupStep,
+  at: { current?: DeploySetupStep; running: boolean; failed: boolean; settings: DeployProjectSettings | null }
+): GraphNodeStatus {
+  if (step === 'push' && at.settings?.repo && !at.settings.repo.createdByApp) return 'skipped';
+  if (at.current === 'done' || (!at.running && at.settings?.enabled)) return 'success';
+  // Before 'repo' setup checks the accounts: shown as the first step
+  const current = STEPS.indexOf(at.current ?? 'repo');
+  const index = STEPS.indexOf(step);
+  if (index < current) return 'success';
+  if (index > current) return 'queued';
+  if (at.running) return 'running';
+  return at.failed ? 'failure' : 'queued';
+}
+
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id: string }) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h3 id={id} className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function Notice({ tone, children }: { tone: 'attention' | 'info'; children: React.ReactNode }) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        'border-l-2 bg-muted px-3 py-2 text-sm',
+        tone === 'attention' ? 'border-destructive text-foreground' : 'border-foreground text-muted-foreground'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function LinkButton({ url, children, mono }: { url: string; children: React.ReactNode; mono?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => openWebUrl(url)}
+      className={cn(
+        'text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        mono && 'font-mono text-[13px]'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[140px_minmax(0,1fr)] items-baseline gap-3 border-b border-border px-3 py-2 last:border-b-0">
+      <dt className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+export interface EnvironmentTabProps {
+  projectId: string;
+  env: DeployEnv;
+  productionUrl?: string | null;
+}
+
+export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTabProps) {
+  const { t, i18n } = useTranslation(['deploy']);
+  const errorText = useDeployErrorText();
+  const { state } = env;
+  const settings = state?.settings ?? null;
+  const setupRunning = !!state?.setupRunning;
+  const databaseRunning = !!state?.databaseRunning;
+  const lastSetup = state?.lastSetup;
+
+  const [vercel, setVercel] = useState<VercelStatus | null>(null);
+  const [team, setTeam] = useState<string | null | undefined>(undefined);
+  const [acknowledged, setAcknowledged] = useState<ReadonlySet<string>>(new Set());
+  const [dialog, setDialog] = useState<{ name?: string } | null>(null);
+  const [variables, setVariables] = useState<DeployListVariablesResult | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(window.electronAPI.vercel.status())
+      .then((r) => {
+        if (!cancelled && r.success && r.data) setVercel(r.data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const hasVariables = !!settings?.repo && !!settings?.vercel;
+  const loadVariables = useCallback(async () => {
+    try {
+      const r = await window.electronAPI.deploy.listVariables(projectId);
+      setVariables(r.success && r.data ? r.data : { ok: false, kind: 'unknown', message: '' });
+    } catch {
+      setVariables({ ok: false, kind: 'unknown', message: '' });
+    }
+  }, [projectId]);
+  useEffect(() => {
+    if (hasVariables) void loadVariables();
+  }, [hasVariables, loadVariables]);
+
+  if (!state) {
+    return <p className="text-sm text-muted-foreground">{t('deploy:env.loading')}</p>;
+  }
+
+  const teams = vercel?.connected ? (vercel.teams ?? []) : [];
+  const pickTeam = teams.length > 0 && !settings?.vercel;
+  const chosenTeam = team !== undefined ? team : (settings?.vercelTeamId ?? null);
+  const repoName = settings?.repo ? `${settings.repo.owner}/${settings.repo.repo}` : undefined;
+
+  const needed: NeededItem[] = [
+    ...(lastSetup?.needed ?? []),
+    ...(state.lastDatabase && !state.lastDatabase.ok && 'needed' in state.lastDatabase && !settings?.database ? [state.lastDatabase.needed] : []),
+  ].filter((n) => !acknowledged.has(n.id));
+
+  const setupDone = !!settings?.enabled;
+  const setupFailed = !!lastSetup?.error;
+  const showSetup = !setupDone || setupRunning || (lastSetup && lastSetup.step !== 'done');
+  const current = setupRunning ? (env.progress ?? undefined) : lastSetup?.step;
+
+  const vercelScope = settings?.vercel?.teamId
+    ? vercel?.teams?.find((x) => x.id === settings.vercel?.teamId)?.slug
+    : vercel?.user?.username;
+  const vercelUrl = settings?.vercel && vercelScope ? `https://vercel.com/${vercelScope}/${settings.vercel.projectName}` : undefined;
+
+  const databaseError = state.lastDatabase && !state.lastDatabase.ok && 'error' in state.lastDatabase && !settings?.database ? state.lastDatabase.error : undefined;
+  const push = state.lastPush;
+
+  const saveVariable = async (input: DeployVariableInput) => {
+    const r = await window.electronAPI.deploy.setVariable(projectId, input);
+    return r.success && r.data ? r.data : null;
+  };
+
+  return (
+    <div className="flex max-w-3xl flex-col gap-6">
+      {env.requestFailed && <Notice tone="attention">{t('deploy:env.errors.request')}</Notice>}
+
+      {push && (
+        <Notice tone={push.ok ? 'info' : 'attention'}>
+          {push.ok
+            ? t('deploy:push.ok', { ago: formatRelative(push.at, i18n.language) })
+            : t('deploy:push.failed', { reason: errorText(push.error?.kind), ago: formatRelative(push.at, i18n.language) })}
+        </Notice>
+      )}
+
+      {showSetup && (
+        <Section id="deploy-setup-title" title={t('deploy:setup.title')}>
+          <p className="text-sm text-muted-foreground">{t('deploy:setup.description')}</p>
+          {pickTeam && (
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="mb-1.5 text-sm text-foreground">{t('deploy:setup.team')}</legend>
+              <div className="flex flex-wrap">
+                {[{ id: null as string | null, label: t('deploy:setup.personal', { name: vercel?.user?.username ?? '' }) }, ...teams.map((x) => ({ id: x.id as string | null, label: x.name || x.slug }))].map((opt) => (
+                  <button
+                    key={opt.id ?? '__personal'}
+                    type="button"
+                    aria-pressed={chosenTeam === opt.id}
+                    disabled={setupRunning}
+                    onClick={() => setTeam(opt.id)}
+                    className={cn(
+                      '-ml-px min-h-11 border border-foreground px-3.5 text-sm first:ml-0 focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+                      chosenTeam === opt.id ? 'bg-foreground text-background' : 'bg-transparent text-foreground hover:bg-muted'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          <div>
+            <Button
+              disabled={setupRunning}
+              onClick={() => void env.setUp(pickTeam ? { vercelTeamId: chosenTeam } : undefined)}
+            >
+              {setupRunning ? t('deploy:setup.running') : lastSetup ? t('deploy:setup.retry') : t('deploy:setup.start')}
+            </Button>
+          </div>
+          {(setupRunning || lastSetup) && (
+            <ol aria-label={t('deploy:setup.steps')} className="flex flex-col border border-foreground">
+              {STEPS.map((step) => (
+                <li key={step} className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0">
+                  <StatusMark status={stepStatus(step, { current, running: setupRunning, failed: setupFailed, settings })} />
+                  <span>{t(`deploy:setup.step.${step}`)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          {lastSetup?.error && !setupRunning && <Notice tone="attention">{errorText(lastSetup.error.kind)}</Notice>}
+        </Section>
+      )}
+
+      <NeededFromYou
+        items={needed}
+        repo={repoName}
+        setupRunning={setupRunning}
+        databaseRunning={databaseRunning}
+        onChooseProject={(choice) => void env.chooseVercelProject(choice)}
+        onAcknowledge={(id) => setAcknowledged((s) => new Set([...s, id]))}
+        onAddValue={(name) => setDialog({ name })}
+        onAcceptTerms={() => {
+          if (!databaseRunning) void env.addDatabase(true);
+        }}
+      />
+
+      {(settings?.repo || settings?.vercel || settings?.database) && (
+        <Section id="deploy-exists-title" title={t('deploy:exists.title')}>
+          <dl className="border border-foreground">
+            {settings.repo && repoName && (
+              <Row label={t('deploy:exists.repo')}>
+                <LinkButton url={`https://github.com/${repoName}`} mono>
+                  {repoName}
+                </LinkButton>
+                <span className="text-xs text-muted-foreground">
+                  {settings.repo.public ? t('deploy:exists.public') : t('deploy:exists.private')}
+                </span>
+              </Row>
+            )}
+            {settings.vercel && (
+              <Row label={t('deploy:exists.vercel')}>
+                {vercelUrl ? (
+                  <LinkButton url={vercelUrl} mono>
+                    {settings.vercel.projectName}
+                  </LinkButton>
+                ) : (
+                  <span className="font-mono text-[13px]">{settings.vercel.projectName}</span>
+                )}
+              </Row>
+            )}
+            {isWebUrl(productionUrl) && (
+              <Row label={t('deploy:exists.production')}>
+                <LinkButton url={productionUrl} mono>
+                  {displayUrl(productionUrl)}
+                </LinkButton>
+              </Row>
+            )}
+            {settings.vercel && (
+              <Row label={t('deploy:exists.database')}>
+                {settings.database ? (
+                  <span>{t('deploy:database.neon')}</span>
+                ) : (
+                  <span className="text-muted-foreground">{t('deploy:database.none')}</span>
+                )}
+              </Row>
+            )}
+          </dl>
+        </Section>
+      )}
+
+      {settings?.vercel && !settings.database && (
+        <Section id="deploy-database-title" title={t('deploy:database.title')}>
+          <p className="text-sm text-muted-foreground">{t('deploy:database.description')}</p>
+          <div>
+            <Button disabled={databaseRunning} onClick={() => void env.addDatabase()}>
+              {databaseRunning ? t('deploy:database.adding') : t('deploy:database.add')}
+            </Button>
+          </div>
+          {databaseError && !databaseRunning && <Notice tone="attention">{errorText(databaseError.kind)}</Notice>}
+        </Section>
+      )}
+
+      {hasVariables && (
+        <Section id="deploy-variables-title" title={t('deploy:variables.title')}>
+          {variables === null ? (
+            <p className="text-sm text-muted-foreground">{t('deploy:variables.loading')}</p>
+          ) : !variables.ok ? (
+            <Notice tone="attention">{errorText(variables.kind)}</Notice>
+          ) : variables.variables.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('deploy:variables.empty')}</p>
+          ) : (
+            <ul aria-label={t('deploy:variables.title')} className="flex flex-col border border-foreground">
+              {variables.variables.map((v) => (
+                <li key={v.name} className="flex flex-wrap items-baseline gap-3 border-b border-border px-3 py-2 last:border-b-0">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-foreground">{v.name}</span>
+                  {v.targets.map((target) => (
+                    <span key={target} className="border border-border px-1.5 font-mono text-[11px] text-muted-foreground">
+                      {TARGETS.has(target) ? t(`deploy:variables.target.${target}`) : target}
+                    </span>
+                  ))}
+                  {v.inGitHub && <span className="bg-muted px-1.5 font-mono text-[11px] text-foreground">{t('deploy:variables.inGitHub')}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {variables?.ok && variables.githubUnavailable && (
+            <p className="text-xs text-muted-foreground">{t('deploy:variables.githubUnavailable')}</p>
+          )}
+          {savedNote && <p role="status" className="text-sm text-muted-foreground">{savedNote}</p>}
+          <div>
+            <Button variant="outline" onClick={() => setDialog({})}>
+              {t('deploy:variables.add')}
+            </Button>
+          </div>
+        </Section>
+      )}
+
+      <VariableDialog
+        open={dialog !== null}
+        initialName={dialog?.name}
+        onClose={() => setDialog(null)}
+        onSave={saveVariable}
+        onSaved={(name, result) => {
+          setDialog(null);
+          setSavedNote(result.github === 'ok' ? t('deploy:variables.savedBoth', { name }) : t('deploy:variables.saved', { name }));
+          void loadVariables();
+        }}
+      />
+    </div>
+  );
+}

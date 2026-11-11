@@ -70,13 +70,17 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     stopRuns: vi.fn(async () => ({ success: true })),
     jobLog: vi.fn(async () => ({ success: true, data: log })),
     onRunsUpdate: vi.fn((cb: (s: DeployRunsState) => void) => { push = cb; return unsubscribe; }),
+    // Environment (deploy set up, so no call to action over the runs)
+    state: vi.fn(async () => ({ success: true, data: { settings: { enabled: true }, setupRunning: false, databaseRunning: false } })),
+    onSetupProgress: vi.fn(() => () => undefined),
+    onPushResult: vi.fn(() => () => undefined),
   };
   const openExternal = vi.fn(async () => undefined);
   const getGitHubAppAccess = vi.fn(async (_repo?: string) => ({
     success: true,
     data: { installed: true, repositorySelection: 'all', repoReachable: true } as Record<string, unknown>,
   }));
-  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal, getGitHubAppAccess };
+  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal, getGitHubAppAccess, vercel: { status: vi.fn(async () => ({ success: true, data: { connected: false } })) } };
   const view = render(<DeployPage projectId="p1" />);
   const emit = (s: DeployRunsState) => act(() => push?.(s));
   return { deploy, emit, view, unsubscribe, openExternal, getGitHubAppAccess };

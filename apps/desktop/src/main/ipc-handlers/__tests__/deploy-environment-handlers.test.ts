@@ -64,6 +64,12 @@ type Invoke = (channel: string, event: unknown, ...args: unknown[]) => Promise<u
 const invoke = (channel: string, ...args: unknown[]) =>
   (ipcMain as unknown as { invokeHandler: Invoke }).invokeHandler(channel, {}, ...args);
 
+function p1() {
+  const p = store.projects.get('p1');
+  if (!p) throw new Error('no p1');
+  return p;
+}
+
 function deferred<T>() {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((r) => { resolve = r; });
@@ -113,7 +119,7 @@ describe('deploy environment IPC', () => {
       expect(setup.createSetupDeps.mock.calls[1][1].vercelTeamId).toBeUndefined();
 
       // omitted: the stored choice stays
-      store.projects.get('p1')!.settings.deploy = { enabled: false, vercelTeamId: 'team_2' };
+      p1().settings.deploy = { enabled: false, vercelTeamId: 'team_2' };
       await invoke(IPC_CHANNELS.DEPLOY_SETUP, 'p1');
       expect(setup.createSetupDeps.mock.calls[2][1]).toMatchObject({ vercelTeamId: 'team_2' });
     });
@@ -147,7 +153,7 @@ describe('deploy environment IPC', () => {
 
   describe('state', () => {
     it('returns the stored settings, the last setup and the last push', async () => {
-      store.projects.get('p1')!.settings.deploy = { enabled: true, repo: { owner: 'o', repo: 'r', createdByApp: true } };
+      p1().settings.deploy = { enabled: true, repo: { owner: 'o', repo: 'r', createdByApp: true } };
       push.lastPushResult.mockReturnValueOnce({ projectId: 'p1', ok: true, at: 't' });
       expect(await invoke(IPC_CHANNELS.DEPLOY_STATE, 'p1')).toEqual({
         success: true,
@@ -191,7 +197,7 @@ describe('deploy environment IPC', () => {
 
   describe('addDatabase', () => {
     beforeEach(() => {
-      store.projects.get('p1')!.settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app' } };
+      p1().settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app' } };
     });
 
     it('wires the CLI paths, the token, the personal user id, the fresh project and the settings store', async () => {
@@ -202,7 +208,7 @@ describe('deploy environment IPC', () => {
       expect(opts).toEqual({ acceptTerms: true });
       expect(deps).toMatchObject({ binary: '/fake/vercel', configDir: '/fake/config', userId: 'u1' });
       expect(await deps.getToken()).toBe('tok');
-      store.projects.get('p1')!.settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app' }, pendingDatabase: { name: 'x', at: 't' } };
+      p1().settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app' }, pendingDatabase: { name: 'x', at: 't' } };
       expect((await deps.loadProject()).settings.deploy.pendingDatabase).toEqual({ name: 'x', at: 't' });
       await deps.saveSettings({ database: { provider: 'neon', addedAt: 'a' }, pendingDatabase: undefined });
       expect(store.projects.get('p1')?.settings.deploy).toEqual({ enabled: true, vercel: { projectId: 'prj', projectName: 'app' }, database: { provider: 'neon', addedAt: 'a' } });
@@ -212,7 +218,7 @@ describe('deploy environment IPC', () => {
       db.addDatabase.mockResolvedValue({ ok: true });
       await invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, 'p1', { acceptTerms: 'yes' });
       expect(db.addDatabase.mock.calls[0][2]).toEqual({ acceptTerms: false });
-      store.projects.get('p1')!.settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app', teamId: 'team_1' } };
+      p1().settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app', teamId: 'team_1' } };
       cred.vercelStatus.mockClear();
       await invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, 'p1');
       expect(cred.vercelStatus).not.toHaveBeenCalled();
@@ -246,7 +252,7 @@ describe('deploy environment IPC', () => {
   describe('variables', () => {
     const settings = { enabled: true, repo: { owner: 'o', repo: 'r', createdByApp: true }, vercel: { projectId: 'prj', projectName: 'app' } };
     beforeEach(() => {
-      store.projects.get('p1')!.settings.deploy = settings;
+      p1().settings.deploy = settings;
     });
 
     it('setVariable passes the stored settings, a clean input and the real deps', async () => {
@@ -282,7 +288,7 @@ describe('deploy environment IPC', () => {
     });
 
     it('not set up when deploy was never started', async () => {
-      store.projects.get('p1')!.settings = {};
+      p1().settings = {};
       vars.listDeployVariables.mockResolvedValue({ ok: false, kind: 'not-set-up', message: 'm' });
       await invoke(IPC_CHANNELS.DEPLOY_LIST_VARIABLES, 'p1');
       expect(vars.listDeployVariables.mock.calls[0][0]).toEqual({ enabled: false });

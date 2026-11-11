@@ -92,6 +92,32 @@ export function useGitHubErrorText() {
   };
 }
 
+/** Error kinds the Environment tab has words for (setup, variables, database, Vercel, GitHub, the push after a merge). */
+const DEPLOY_ERROR_KINDS: ReadonlySet<string> = new Set([
+  'no-connection',
+  'permissions',
+  'forbidden',
+  'not-found',
+  'rate-limit',
+  'unavailable',
+  'git-not-connected',
+  'conflict',
+  'bad-request',
+  'invalid',
+  'not-set-up',
+  'auth',
+  'cli',
+  'timeout',
+  'saved-failed',
+  'unknown',
+]);
+
+/** Words for a deploy error kind; main's English message is never shown. */
+export function useDeployErrorText() {
+  const { t } = useTranslation(['deploy']);
+  return (kind: string | undefined): string => t(`deploy:env.errors.${kind && DEPLOY_ERROR_KINDS.has(kind) ? kind : 'unknown'}`);
+}
+
 /** Only http(s) URLs become links; anything else from GitHub or a host is not shown as one. */
 export function isWebUrl(url: string | null | undefined): url is string {
   if (!url) return false;

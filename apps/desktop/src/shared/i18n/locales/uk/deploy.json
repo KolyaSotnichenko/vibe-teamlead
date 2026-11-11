@@ -1,7 +1,8 @@
 {
   "title": "Деплой",
   "tabs": {
-    "runs": "Запуски"
+    "runs": "Запуски",
+    "environment": "Середовище"
   },
   "loading": "Завантажуємо запуски GitHub Actions…",
   "empty": {
@@ -64,5 +65,133 @@
     "pending": "Лог з’явиться, коли джоб завершиться",
     "expired": "GitHub більше не зберігає цей лог",
     "preparing": "GitHub ще готує цей лог"
+  },
+  "setup": {
+    "title": "Налаштувати деплой",
+    "description": "Vibe Teamlead створить приватний репозиторій на GitHub, якщо в проєкту його нема, запушить головну гілку й підключить її до проєкту Vercel. Далі кожне злиття в main іде в продакшн.",
+    "notSetUp": "Деплой для цього проєкту ще не налаштовано.",
+    "cta": "Налаштувати деплой",
+    "team": "Обліковий запис Vercel",
+    "personal": "Особистий ({{name}})",
+    "start": "Налаштувати деплой",
+    "running": "Налаштовуємо…",
+    "retry": "Спробувати ще раз",
+    "steps": "Кроки налаштування",
+    "step": {
+      "repo": "Репозиторій GitHub",
+      "push": "Пуш головної гілки",
+      "vercel": "Проєкт Vercel",
+      "done": "Деплой увімкнено"
+    }
+  },
+  "needed": {
+    "title": "Потрібно від вас",
+    "policyLinks": "Правила",
+    "vercel-sign-in": "Спершу увійдіть у Vercel.",
+    "github-sign-in": "Спершу увійдіть у GitHub.",
+    "github-app-install": "Дайте застосунку Vibe Teamlead на GitHub доступ до цього репозиторію, потім спробуйте ще раз.",
+    "vercel-git-access": "Дайте GitHub-застосунку Vercel доступ до цього репозиторію, потім спробуйте ще раз.",
+    "vercel-existing-project": "У Vercel вже є проєкт для цього репозиторію. Використайте його або створіть новий.",
+    "non-github-remote": "Origin проєкту не на GitHub. Деплой працює лише з репозиторіями GitHub.",
+    "public-repo-warning": "{{repo}} публічний: його код може прочитати будь-хто.",
+    "variable": "{{name}} потребує значення.",
+    "database-terms": "Перш ніж додати базу даних, Vercel просить прийняти умови Marketplace для {{integration}}. Спершу прочитайте їх:",
+    "database-dashboard": "Завершіть додавання бази даних у панелі Vercel і поверніться сюди.",
+    "actions": {
+      "connectVercel": "Підключити Vercel",
+      "connectGitHub": "Підключити GitHub",
+      "installApp": "Встановити застосунок",
+      "grantVercel": "Дати доступ Vercel",
+      "useProject": "Використати {{name}}",
+      "createNew": "Створити новий проєкт",
+      "repoSettings": "Налаштування репозиторію",
+      "acknowledge": "Зрозуміло",
+      "addValue": "Додати значення",
+      "acceptTerms": "Прийняти й додати базу даних",
+      "openDashboard": "Відкрити панель Vercel"
+    }
+  },
+  "exists": {
+    "title": "Що вже є",
+    "repo": "Репозиторій",
+    "public": "Публічний",
+    "private": "Приватний",
+    "vercel": "Проєкт Vercel",
+    "production": "Продакшн",
+    "database": "База даних"
+  },
+  "database": {
+    "title": "База даних",
+    "description": "Додайте безкоштовну базу Postgres (Neon) до проєкту Vercel. Її змінні підключення потраплять у Production і Preview.",
+    "add": "Додати базу даних",
+    "adding": "Додаємо базу даних…",
+    "neon": "Postgres (Neon)",
+    "none": "Поки нема"
+  },
+  "variables": {
+    "title": "Змінні",
+    "loading": "Завантажуємо змінні…",
+    "empty": "Змінних поки нема.",
+    "add": "Додати змінну",
+    "inGitHub": "У GitHub",
+    "githubUnavailable": "Не вдалося прочитати секрети GitHub, тож позначок «У GitHub» може бракувати.",
+    "saved": "{{name}} збережено у Vercel.",
+    "savedBoth": "{{name}} збережено у Vercel і як секрет GitHub.",
+    "target": {
+      "production": "Production",
+      "preview": "Preview",
+      "development": "Development"
+    }
+  },
+  "variableDialog": {
+    "title": "Додати змінну",
+    "description": "Зберігається в проєкті Vercel як чутлива змінна. Значення більше ніколи не показується.",
+    "name": "Назва",
+    "value": "Значення",
+    "valueHint": "У назві — великі літери, цифри й підкреслення. Після збереження значення не прочитати.",
+    "production": "Production",
+    "preview": "Preview",
+    "alsoGitHub": "Також як секрет GitHub",
+    "cancel": "Скасувати",
+    "save": "Зберегти",
+    "saving": "Зберігаємо…",
+    "result": {
+      "vercel": {
+        "ok": "Vercel: збережено",
+        "skipped": "Vercel: не збережено",
+        "failed": "Vercel: не вдалося. {{reason}}"
+      },
+      "github": {
+        "ok": "GitHub: збережено",
+        "skipped": "GitHub: не збережено",
+        "failed": "GitHub: не вдалося. {{reason}}"
+      }
+    }
+  },
+  "push": {
+    "ok": "Main запушено на GitHub {{ago}}.",
+    "failed": "Не вдалося запушити main на GitHub {{ago}}. {{reason}}"
+  },
+  "env": {
+    "loading": "Завантаження…",
+    "errors": {
+      "request": "Застосунок не відповів. Спробуйте ще раз.",
+      "no-connection": "Немає підключення: увійдіть у GitHub або Vercel у Налаштуваннях.",
+      "permissions": "GitHub-застосунку Vibe Teamlead бракує потрібного дозволу. Дайте йому доступ на GitHub.",
+      "forbidden": "Vercel відмовив: ваш обліковий запис не має доступу до цього проєкту чи команди.",
+      "not-found": "Чогось, що потрібно застосунку, вже нема на GitHub чи Vercel, або застосунок не має до нього доступу.",
+      "rate-limit": "Досягнуто ліміту запитів GitHub або Vercel. Спробуйте за кілька хвилин.",
+      "unavailable": "GitHub або Vercel не відповідає. Спробуйте ще раз.",
+      "git-not-connected": "Vercel не бачить репозиторію: дайте GitHub-застосунку Vercel доступ до нього.",
+      "conflict": "Цю назву вже зайнято на GitHub або Vercel.",
+      "bad-request": "Vercel відхилив запит. Перевірте назву й значення, потім спробуйте ще раз.",
+      "invalid": "Проєкт не готовий: це має бути git-репозиторій із комітом у головній гілці, а введені дані — коректні.",
+      "not-set-up": "Спершу налаштуйте деплой для цього проєкту.",
+      "auth": "Спершу увійдіть у Vercel.",
+      "cli": "Vercel CLI не завершив роботу. Спробуйте ще раз.",
+      "timeout": "Це тривало занадто довго. Спробуйте ще раз.",
+      "saved-failed": "Зроблено, але застосунок не зміг це зберегти. Спробуйте ще раз, щоб записати.",
+      "unknown": "Щось пішло не так. Спробуйте ще раз."
+    }
   }
 }
