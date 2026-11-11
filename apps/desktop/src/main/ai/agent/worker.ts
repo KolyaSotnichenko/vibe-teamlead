@@ -65,6 +65,7 @@ import type { ExecutionPhase } from '../../../shared/constants/phase-protocol';
 import { getPhaseThinking, modelPhaseFor, resolvePhaseModel, resolveModelId } from '../config/phase-config';
 import { type LogPhase, TaskLogWriter, logRunFailure, taskLogger } from '../logging/task-log-writer';
 import { designPromptSection } from '../design/design-system';
+import { builtComponents } from '../design/package/package-meta';
 import { addedUiLines, lintAddedLines } from '../design/design-lint';
 import { runStandaloneQa } from './standalone-qa';
 import { qaApprovalsDir, workTreeFingerprint } from '../orchestration/qa-approval';
@@ -636,7 +637,11 @@ function designSection(
   const caps = projectCapabilities(session);
   const hasUi = caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native;
   if (!info.exists && !hasUi && !info.storybook.enabled) return '';
-  return designPromptSection(info, { role: qa ? 'qa' : 'builder', storybookEnabled: info.storybook.enabled, storybook: info.storybook });
+  // Which package components this task's worktree already has (a copy: session.designSystem is shared)
+  const forTask = info.package
+    ? { ...info, package: { ...info.package, built: builtComponents(session.projectDir, info.package.componentsDir, info.package.components.map((c) => c.name)) } }
+    : info;
+  return designPromptSection(forTask, { role: qa ? 'qa' : 'builder', storybookEnabled: info.storybook.enabled, storybook: info.storybook });
 }
 
 // =============================================================================

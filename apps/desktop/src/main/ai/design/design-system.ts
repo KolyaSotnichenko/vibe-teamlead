@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { readReferences, referencesPromptSection } from './references';
 
 import type {
+  DesignPackageInfo,
   DesignQaMode,
   DesignSystemInfo,
   DesignTokens,
@@ -250,6 +251,35 @@ export interface DesignPromptOptions {
   storybook?: StorybookInfo;
 }
 
+/** The imported design package: kept compact, it is re-sent every coder turn. */
+function packagePromptSection(pkg: DesignPackageInfo, role: 'builder' | 'qa'): string {
+  const lines = ['### Design package components', ''];
+  const both = pkg.themes === 'light-dark';
+  if (role === 'qa') {
+    lines.push(`Screens must use the components of the design package "${pkg.name}" (the project's rebuilt ones in \`${pkg.componentsDir}/\`). A hand-made look-alike of a package component is a major issue.`);
+    if (both) lines.push('The project has light and dark themes: take screenshots of every changed screen in both themes.');
+  } else {
+    const prefix = `${pkg.namespace.toLowerCase()}-`;
+    lines.push(`Rebuild package components in this project's own code under \`${pkg.componentsDir}/<Name>/\` (for example \`${pkg.componentsDir}/${pkg.components[0]?.name ?? 'Button'}/\`), one folder per component, in the project's framework, with tests.`);
+    const refs = [
+      pkg.componentCss ? `the look comes from \`${pkg.componentCss}\` (its \`${prefix}\` classes and states)` : '',
+      pkg.componentTypes ? `props from \`${pkg.componentTypes}\`` : '',
+      'usage rules from the component\'s README',
+    ].filter(Boolean);
+    lines.push(`${refs.join(', ')}.`);
+    lines.push('Reuse a built component, never write a look-alike; never load or run the package\'s scripts.');
+    lines.push(`Logos are the SVGs in \`${pkg.dir}/logos\` (never redrawn).`);
+    const wired = [pkg.tokensCss ? `\`${pkg.tokensCss}\`` : '', pkg.fonts.length > 0 ? 'the fonts' : ''].filter(Boolean).join(' and ');
+    if (wired) lines.push(`Wire ${wired} in once, in the first UI task where the stack expects global styles.`);
+    lines.push(both ? 'Themes: build both light and dark, with a theme switch; screens are checked in both.' : 'Themes: light theme only.');
+    const built = pkg.built ?? [];
+    const names = pkg.components.map((c) => c.name);
+    lines.push(`Built: ${built.join(', ') || 'none'}`);
+    lines.push(`Not built yet: ${names.filter((n) => !built.includes(n)).join(', ') || 'none'}`);
+  }
+  return lines.join('\n');
+}
+
 /** The prompt section agents get about the design system. Pure — tested directly. */
 export function designPromptSection(info: DesignSystemInfo, options: DesignPromptOptions): string {
   const parts: string[] = [];
@@ -284,6 +314,10 @@ export function designPromptSection(info: DesignSystemInfo, options: DesignPromp
   if (options.role === 'qa' && info.exists) {
     parts.push('');
     parts.push('Design review (when UI changed): take screenshots of every changed screen and state (empty, loading, error, long text), compare them with the design system and the rules above, and add a "Design Review" table to qa_report.md: | Screen | Rule | Finding | Result |. The app also runs a static design check on the lines this task added; its results are in `design_check.md` in the spec directory (read it), and in blocking mode they arrive as QA issues. The check runs inside Vibe Teamlead, not in this project: its rules are the design system above (including the patterns allowed on purpose), so do not search the project for its code or config.');
+  }
+  if (info.package) {
+    parts.push('');
+    parts.push(packagePromptSection(info.package, options.role));
   }
   const refs = referencesPromptSection(info.references, { audience: options.role });
   if (refs) {

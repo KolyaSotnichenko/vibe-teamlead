@@ -71,4 +71,46 @@ describe('designPromptSection', () => {
     expect(text).toContain('no design system file yet');
     expect(text).toContain('Anti-slop rules');
   });
+
+  describe('design package components', () => {
+    const pkg = {
+      name: 'MHP', namespace: 'Mhp', importedAt: '2026-11-11', dir: '.vibe-teamlead/design/package/mhp',
+      componentsDir: 'src/components/mhp',
+      components: [{ name: 'Button', readme: '.vibe-teamlead/design/package/mhp/components/Button/README.md' }, { name: 'Card' }],
+      componentCss: '.vibe-teamlead/design/package/mhp/components.css',
+      componentTypes: '.vibe-teamlead/design/package/mhp/components.d.ts',
+      tokensCss: '.vibe-teamlead/design/package/mhp/tokens.css',
+      logos: ['logo.svg'], fonts: ['a.woff2'], themes: 'light' as const, built: ['Button'],
+    };
+    const withPkg = (over = {}) => ({ ...loadDesignSystem(project(), undefined), package: { ...pkg, ...over } });
+
+    it('tells builders to rebuild components in the project and what is built', () => {
+      const text = designPromptSection(withPkg(), { role: 'builder', storybookEnabled: false });
+      expect(text).toContain('### Design package components');
+      expect(text).toContain('src/components/mhp/Button/');
+      expect(text).toContain('never load or run');
+      expect(text).toContain('mhp-');
+      expect(text).toContain('Built: Button');
+      expect(text).toContain('Not built yet: Card');
+      expect(text).toContain('.vibe-teamlead/design/package/mhp/logos');
+      expect(text).toContain('light theme only');
+      expect(text).not.toContain('theme switch');
+    });
+
+    it('light-dark asks for both themes and a switch', () => {
+      const text = designPromptSection(withPkg({ themes: 'light-dark' }), { role: 'builder', storybookEnabled: false });
+      expect(text).toContain('theme switch');
+    });
+
+    it('tells QA look-alikes are major issues, and about both themes when light-dark', () => {
+      const qa = designPromptSection(withPkg(), { role: 'qa', storybookEnabled: false });
+      expect(qa).toContain('look-alike');
+      expect(qa).not.toContain('both themes');
+      expect(designPromptSection(withPkg({ themes: 'light-dark' }), { role: 'qa', storybookEnabled: false })).toContain('both themes');
+    });
+
+    it('has no package heading without a package', () => {
+      expect(designPromptSection(loadDesignSystem(project(), undefined), { role: 'builder', storybookEnabled: false })).not.toContain('Design package components');
+    });
+  });
 });
