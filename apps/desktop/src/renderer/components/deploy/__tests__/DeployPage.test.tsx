@@ -137,17 +137,27 @@ describe('DeployPage', () => {
     expect(document.querySelectorAll('[data-connector="live"]')).toHaveLength(1);
   });
 
-  it('lets node labels wrap to two lines and gives the full label in a tooltip', () => {
+  /** The node's ink-plate tooltip (Radix, opened by keyboard focus), as text lines. */
+  async function tooltipLines(node: HTMLElement): Promise<string[]> {
+    fireEvent.focus(node);
+    const tip = await screen.findByRole('tooltip');
+    return Array.from(tip.querySelectorAll('span')).map((s) => s.textContent ?? '');
+  }
+
+  it('lets node labels wrap to two lines and gives the full label in an ink tooltip, not a title', async () => {
     const { emit } = setup();
     emit(base());
     const node = screen.getByRole('button', { name: /^typecheck/ });
-    expect(node).toHaveAttribute('title', 'typecheck');
+    expect(node).not.toHaveAttribute('title');
     const label = within(node).getByText('typecheck');
     expect(label).toHaveClass('line-clamp-2');
     expect(label).not.toHaveClass('truncate');
+    expect(await tooltipLines(node)).toEqual(['typecheck']);
+    // same job name as the label: nothing more to say
+    expect(node.getAttribute('aria-label')).toBe('typecheck, deploy:status.success');
   });
 
-  it('names the jobs of a matrix node in its tooltip, and lets the panel pick a job', () => {
+  it('names the jobs of a matrix node in its tooltip and aria-label, and lets the panel pick a job', async () => {
     const { emit } = setup();
     const matrixJobs: DeployJob[] = [
       { id: 21, name: 'Image (api)', status: 'completed', conclusion: 'success', steps: [{ name: 'build api', status: 'completed', conclusion: 'success', number: 1 }] },
@@ -156,23 +166,45 @@ describe('DeployPage', () => {
     const g: RunGraph = { columns: [{ stage: 'level-1', nodes: [{ key: 'image', label: 'Image …', jobIds: [21, 22], status: 'success' }] }] };
     emit(base({ selected: { runId: 18, jobs: matrixJobs, graph: g } }));
     const node = screen.getByRole('button', { name: /^Image …/ });
-    expect(node).toHaveAttribute('title', 'Image …\nImage (api)\nImage (web)');
+    expect(node.getAttribute('aria-label')).toBe('Image …, deploy:status.success, Image (api), Image (web)');
+    expect(await tooltipLines(node)).toEqual(['Image …', 'Image (api)', 'Image (web)']);
     fireEvent.click(node);
     expect(screen.getByText('build api')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Image \(web\)/ }));
+    const panel = screen.getByRole('region', { name: 'Image …' });
+    fireEvent.click(within(panel).getByRole('button', { name: /Image \(web\)/ }));
     expect(screen.getByText('build web')).toBeInTheDocument();
     expect(screen.queryByText('build api')).not.toBeInTheDocument();
   });
 
-  it('shows no duration for a deployment, and when it went live in the tooltip', () => {
+  it('names a single job whose name differs from the node label', async () => {
+    const { emit } = setup();
+    const one: DeployJob[] = [{ id: 31, name: 'Image (api)', status: 'completed', conclusion: 'success', steps: [] }];
+    const g: RunGraph = { columns: [{ stage: 'level-1', nodes: [{ key: 'image', label: 'Image …', jobIds: [31], status: 'success' }] }] };
+    emit(base({ selected: { runId: 18, jobs: one, graph: g } }));
+    const node = screen.getByRole('button', { name: /^Image …/ });
+    expect(node.getAttribute('aria-label')).toBe('Image …, deploy:status.success, Image (api)');
+    expect(await tooltipLines(node)).toEqual(['Image …', 'Image (api)']);
+  });
+
+  it('shows no duration for a deployment, and when it went live in the tooltip and aria-label', async () => {
     const { emit } = setup();
     const deployedAt = new Date(Date.now() - 18 * 86_400_000).toISOString();
     const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'success', deployedAt }] }] };
     emit(base({ selected: { runId: 18, jobs, graph: g } }));
     const node = screen.getByRole('button', { name: /^production/ });
     expect(node.textContent).not.toMatch(/\d+:\d{2}/);
-    expect(node.getAttribute('aria-label')).not.toMatch(/\d+:\d{2}/);
-    expect(node).toHaveAttribute('title', 'production\ndeploy:graph.deployed {"ago":"18 days ago"}');
+    expect(node.getAttribute('aria-label')).toBe('production, deploy:status.success, deploy:graph.deployed {"ago":"18 days ago"}');
+    expect(await tooltipLines(node)).toEqual(['production', 'deploy:graph.deployed {"ago":"18 days ago"}']);
+  });
+
+  it('does not say when a deployment went live while it is still running', async () => {
+    const { emit } = setup();
+    const deployedAt = new Date(Date.now() - 60_000).toISOString();
+    const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'running', deployedAt }] }] };
+    emit(base({ selected: { runId: 18, jobs, graph: g } }));
+    const node = screen.getByRole('button', { name: /^production/ });
+    expect(node.getAttribute('aria-label')).toBe('production, deploy:status.running');
+    expect(await tooltipLines(node)).toEqual(['production']);
   });
 
   it('scrolls the runs list in the app\'s thin scroll area', () => {

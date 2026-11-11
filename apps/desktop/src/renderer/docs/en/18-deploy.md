@@ -10,7 +10,7 @@ Status is live. The view refreshes every 5 seconds while something is running an
 
 Click a job to see its steps, updated while it runs. Its log, the last 2 000 lines, appears once the job finishes. GitHub keeps logs for a limited time, so an old run may say that GitHub no longer keeps its log; **Full log on GitHub** opens it there.
 
-A job that runs several times (a matrix, such as one image per app, or a reusable workflow) is one box in the graph. Parts of its name that GitHub fills in while it runs (`${{ … }}`) show as `…`; hover the box to see the names of its jobs, and click it to pick which one's steps and log to see. A box in the **Deploy** stage shows no duration; hover it to see how long ago that deployment went live.
+A job that runs several times (a matrix, such as one image per app, or a reusable workflow) is one box in the graph. Parts of its name that GitHub fills in while it runs (`${{ … }}`) show as `…`; hover the box to see the names of its jobs, and click it to pick which one's steps and log to see. A box in the **Deploy** stage shows no duration; hover or focus it to see how long ago that deployment went live (once it is live).
 
 ## Deployment and production link
 

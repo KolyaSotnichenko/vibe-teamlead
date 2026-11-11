@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { DeployJob, GraphNode, RunGraph as RunGraphData } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
 import { StatusMark, formatDuration, formatRelative } from './status';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 interface RunGraphProps {
   graph: RunGraphData;
@@ -45,60 +46,75 @@ function Connector({ state }: { state: ConnectorState }) {
   );
 }
 
-/** The full label, then the jobs behind the node when it folds several, or when a deployment went live. */
-function useNodeTitle() {
+/** What a node stands for beyond its label: the jobs behind it, and when a deployment went live. */
+function useNodeDetails() {
   const { t, i18n } = useTranslation(['deploy']);
-  return (node: GraphNode, jobs: DeployJob[]): string => {
-    const lines = [node.label];
-    if (node.jobIds.length > 1) {
-      for (const id of node.jobIds) {
-        const job = jobs.find((j) => j.id === id);
-        if (job) lines.push(job.name);
-      }
-    }
-    if (node.deployedAt) {
+  return (node: GraphNode, jobs: DeployJob[]): string[] => {
+    const details: string[] = [];
+    const names = node.jobIds.map((id) => jobs.find((j) => j.id === id)?.name).filter((n): n is string => !!n);
+    // Several jobs folded into one node, or a single job whose name differs from the label (e.g. "Image …")
+    if (names.length > 1 || (names.length === 1 && names[0] !== node.label)) details.push(...names);
+    // Only a deployment that is live: not while it is still queued or running
+    if (node.deployedAt && node.status !== 'running' && node.status !== 'queued') {
       const ago = formatRelative(node.deployedAt, i18n.language);
-      if (ago) lines.push(t('deploy:graph.deployed', { ago }));
+      if (ago) details.push(t('deploy:graph.deployed', { ago }));
     }
-    return lines.join('\n');
+    return details;
   };
 }
 
-function NodeButton({ node, title, selected, onSelect }: { node: GraphNode; title: string; selected: boolean; onSelect: () => void }) {
+function NodeButton({ node, details, selected, onSelect }: { node: GraphNode; details: string[]; selected: boolean; onSelect: () => void }) {
   const { t } = useTranslation(['deploy']);
   const duration = formatDuration(node.startedAt, node.completedAt);
+  const label = [node.label, t(`deploy:status.${node.status}`), duration, ...details].filter(Boolean).join(', ');
   return (
-    <button
-      type="button"
-      data-status={node.status}
-      title={title}
-      aria-pressed={selected}
-      aria-label={`${node.label}, ${t(`deploy:status.${node.status}`)}${duration ? `, ${duration}` : ''}`}
-      onClick={onSelect}
-      className={cn(
-        'relative flex min-h-10 w-full items-center gap-2 overflow-hidden border bg-card px-2.5 py-2 text-left text-sm transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        node.status === 'running' && 'border-foreground',
-        node.status === 'failure' && 'border-destructive',
-        node.status !== 'running' && node.status !== 'failure' && 'border-border',
-        (node.status === 'queued' || node.status === 'skipped' || node.status === 'cancelled') && 'text-muted-foreground',
-        selected ? 'bg-accent' : 'hover:bg-muted'
-      )}
-    >
-      <StatusMark status={node.status} />
-      <span className="line-clamp-2 min-w-0 flex-1 break-words">{node.label}</span>
-      {duration && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{duration}</span>}
-      {node.status === 'running' && (
-        <span data-progress aria-hidden="true" className="vt-deploy-progress absolute bottom-0 left-0 h-0.5 bg-foreground" />
-      )}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          data-status={node.status}
+          aria-pressed={selected}
+          aria-label={label}
+          onClick={onSelect}
+          className={cn(
+            'relative flex min-h-10 w-full items-center gap-2 overflow-hidden border bg-card px-2.5 py-2 text-left text-sm transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            node.status === 'running' && 'border-foreground',
+            node.status === 'failure' && 'border-destructive',
+            node.status !== 'running' && node.status !== 'failure' && 'border-border',
+            (node.status === 'queued' || node.status === 'skipped' || node.status === 'cancelled') && 'text-muted-foreground',
+            selected ? 'bg-accent' : 'hover:bg-muted'
+          )}
+        >
+          <StatusMark status={node.status} />
+          <span className="line-clamp-2 min-w-0 flex-1 break-words">{node.label}</span>
+          {duration && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{duration}</span>}
+          {node.status === 'running' && (
+            <span data-progress aria-hidden="true" className="vt-deploy-progress absolute bottom-0 left-0 h-0.5 bg-foreground" />
+          )}
+        </button>
+      </TooltipTrigger>
+      {/* Design system: tooltips are an ink plate, mono 12px, paper text */}
+      <TooltipContent
+        side="bottom"
+        className="max-w-xs rounded-none border-0 bg-[var(--vt-ink)] font-mono text-xs text-[var(--vt-paper)] shadow-none"
+      >
+        <span className="block break-words">{node.label}</span>
+        {details.map((d) => (
+          <span key={d} className="block break-words opacity-80">
+            {d}
+          </span>
+        ))}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
 export function RunGraph({ graph, jobs, selectedKey, onSelect }: RunGraphProps) {
   const stageLabel = useStageLabel();
-  const nodeTitle = useNodeTitle();
+  const nodeDetails = useNodeDetails();
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="flex items-start overflow-x-auto pb-1">
       {graph.columns.map((column, i) => (
         <Fragment key={column.stage}>
@@ -108,11 +124,12 @@ export function RunGraph({ graph, jobs, selectedKey, onSelect }: RunGraphProps) 
               {stageLabel(column.stage)}
             </div>
             {column.nodes.map((node) => (
-              <NodeButton key={node.key} node={node} title={nodeTitle(node, jobs)} selected={node.key === selectedKey} onSelect={() => onSelect(node)} />
+              <NodeButton key={node.key} node={node} details={nodeDetails(node, jobs)} selected={node.key === selectedKey} onSelect={() => onSelect(node)} />
             ))}
           </div>
         </Fragment>
       ))}
     </div>
+    </TooltipProvider>
   );
 }
