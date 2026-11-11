@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { execFileSync, execFile } from 'child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import sodium from 'libsodium-wrappers';
@@ -351,6 +351,60 @@ describe('push and origin (real local bare remote)', () => {
     expect(runner).not.toHaveBeenCalled();
   });
 
+  describe('hostile or unsupported repositories', () => {
+    const fail = async (work: string, spec = 'main') => {
+      const runner = vi.fn(async () => '');
+      const err = await pushWithAppToken(work, URL_OK, spec, { getToken, runner }).catch((e) => e);
+      expect(runner).not.toHaveBeenCalled();
+      return err;
+    };
+
+    it('rejects HEAD as a FIFO without hanging', async () => {
+      const { work } = setup();
+      rmSync(path.join(work, '.git', 'HEAD'));
+      execFileSync('mkfifo', [path.join(work, '.git', 'HEAD')]);
+      const err = await fail(work, 'HEAD:refs/heads/x');
+      expect(err.kind).toBe('invalid');
+    }, 4000);
+
+    it('rejects a ref that is a symlink to /dev/zero without reading it', async () => {
+      const { work } = setup();
+      const ref = path.join(work, '.git', 'refs', 'heads', 'main');
+      rmSync(ref);
+      symlinkSync('/dev/zero', ref);
+      const err = await fail(work);
+      expect(err.kind).toBe('invalid');
+    }, 4000);
+
+    it('rejects an oversized ref file', async () => {
+      const { work } = setup();
+      writeFileSync(path.join(work, '.git', 'refs', 'heads', 'main'), 'a'.repeat(10_000));
+      expect((await fail(work)).kind).toBe('invalid');
+    });
+
+    it('explains reftable repositories', async () => {
+      const { work } = setup();
+      appendFileSync(path.join(work, '.git', 'config'), '[extensions]\n\trefStorage = reftable\n');
+      const err = await fail(work);
+      expect(err.kind).toBe('invalid');
+      expect(err.message).toMatch(/reftable/);
+    });
+
+    it('explains SHA-256 repositories', async () => {
+      const { work } = setup();
+      writeFileSync(path.join(work, '.git', 'refs', 'heads', 'main'), `${'ab'.repeat(32)}\n`);
+      const err = await fail(work);
+      expect(err.kind).toBe('invalid');
+      expect(err.message).toMatch(/SHA-256/);
+    });
+
+    it.each(['refs/tags/v1', 'refs/remotes/origin/main', 'refs/tags/v1:refs/heads/x'])('rejects the source %s up front', async (spec) => {
+      const { work } = setup();
+      const err = await fail(work, spec);
+      expect(err.kind).toBe('invalid');
+    });
+  });
+
   it('fails clearly when the project is not a git repository', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'gw-nogit-'));
     const runner = vi.fn(async () => '');
@@ -382,6 +436,16 @@ describe('push and origin (real local bare remote)', () => {
       GIT_TRACE_PERFORMANCE: '1',
       GIT_TRACE_PACK_ACCESS: '1',
       HTTPS_PROXY: 'http://corp-proxy:3128',
+      GIT_SSH_COMMAND: 'evil',
+      GIT_ASKPASS: '/evil',
+      SSH_ASKPASS: '/evil',
+      GIT_PROXY_COMMAND: 'evil',
+      GIT_EXEC_PATH: '/evil',
+      GIT_NAMESPACE: 'ns',
+      GIT_REPLACE_REF_BASE: 'refs/x/',
+      GIT_SHALLOW_FILE: '/evil',
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: '/evil',
+      GIT_OBJECT_DIRECTORY: '/evil',
     });
     const calls: Rec[] = [];
     try {
@@ -397,7 +461,7 @@ describe('push and origin (real local bare remote)', () => {
       Object.assign(process.env, saved);
     }
     const env = calls[0].env;
-    for (const k of ['GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_TRACE_PACKET', 'GIT_TRACE_SETUP', 'GIT_CURL_VERBOSE', 'GIT_TRACE2', 'GIT_TRACE2_EVENT', 'GIT_CONFIG_PARAMETERS', 'GIT_SSL_NO_VERIFY', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH', 'CURL_CA_BUNDLE', 'GIT_TRACE_PERFORMANCE', 'GIT_TRACE_PACK_ACCESS']) {
+    for (const k of ['GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_TRACE_PACKET', 'GIT_TRACE_SETUP', 'GIT_CURL_VERBOSE', 'GIT_TRACE2', 'GIT_TRACE2_EVENT', 'GIT_CONFIG_PARAMETERS', 'GIT_SSL_NO_VERIFY', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH', 'CURL_CA_BUNDLE', 'GIT_TRACE_PERFORMANCE', 'GIT_TRACE_PACK_ACCESS', 'GIT_SSH_COMMAND', 'GIT_ASKPASS', 'SSH_ASKPASS', 'GIT_PROXY_COMMAND', 'GIT_EXEC_PATH', 'GIT_NAMESPACE', 'GIT_REPLACE_REF_BASE', 'GIT_SHALLOW_FILE', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_OBJECT_DIRECTORY']) {
       expect(env[k]).toBeUndefined();
     }
     expect(envPairs(env)['http.proxy']).toBeUndefined();

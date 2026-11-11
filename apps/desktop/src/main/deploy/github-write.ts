@@ -7,7 +7,7 @@
  * a remote URL or git config, and never appears in errors or logs.
  */
 import { execFile } from 'child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, open, rm, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import sodium from 'libsodium-wrappers';
@@ -188,6 +188,16 @@ function isUnsafeGitVar(key: string): boolean {
     key === 'GIT_SSL_CAINFO' ||
     key === 'GIT_SSL_CAPATH' ||
     key === 'CURL_CA_BUNDLE' ||
+    key === 'GIT_SSH_COMMAND' ||
+    key === 'GIT_ASKPASS' ||
+    key === 'SSH_ASKPASS' ||
+    key === 'GIT_PROXY_COMMAND' ||
+    key === 'GIT_EXEC_PATH' ||
+    key === 'GIT_NAMESPACE' ||
+    key === 'GIT_REPLACE_REF_BASE' ||
+    key === 'GIT_SHALLOW_FILE' ||
+    key === 'GIT_ALTERNATE_OBJECT_DIRECTORIES' ||
+    key === 'GIT_OBJECT_DIRECTORY' ||
     key.startsWith('GIT_TRACE2') ||
     key === 'GIT_CONFIG_PARAMETERS' ||
     key === 'GIT_CONFIG_COUNT' ||
@@ -203,16 +213,33 @@ function scrubbedGitEnv(): Record<string, string | undefined> {
   return env;
 }
 
-const HEX_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const SHA1 = /^[0-9a-f]{40}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 const BRANCH_NAME = /^[A-Za-z0-9._/-]{1,200}$/;
+const SMALL_FILE = 4096;
+const PACKED_REFS_MAX = 64 * 1024 * 1024;
 
 const invalid = (message: string): GitHubWriteError => new GitHubWriteError('invalid', message);
 
-async function readText(file: string): Promise<string | null> {
+/** A small regular file's text, read with a bound; null when missing. Anything else (FIFO, symlink, device, huge) is refused without being read. */
+async function readText(file: string, max = SMALL_FILE): Promise<string | null> {
+  let st;
   try {
-    return await readFile(file, 'utf-8');
+    st = await lstat(file);
   } catch {
     return null;
+  }
+  if (st.isDirectory()) return null;
+  if (!st.isFile()) throw invalid('The project has an unexpected git file and was not pushed');
+  if (st.size > max) throw invalid('The project has an unexpectedly large git file and was not pushed');
+  const handle = await open(file, 'r');
+  try {
+    const buf = Buffer.alloc(max + 1);
+    const { bytesRead } = await handle.read(buf, 0, max + 1, 0);
+    if (bytesRead > max) throw invalid('The project has an unexpectedly large git file and was not pushed');
+    return buf.subarray(0, bytesRead).toString('utf-8');
+  } finally {
+    await handle.close();
   }
 }
 
@@ -233,10 +260,18 @@ async function locateGitDirs(projectPath: string): Promise<{ gitDir: string; com
   }
   const common = (await readText(path.join(gitDir, 'commondir')))?.trim();
   const commonDir = common ? path.resolve(gitDir, common) : gitDir;
-  if (!(await readText(path.join(commonDir, 'HEAD'))) && !(await readText(path.join(gitDir, 'HEAD')))) {
-    throw invalid('The project is not a git repository');
+  const headText = (await readText(path.join(gitDir, 'HEAD'))) ?? (await readText(path.join(commonDir, 'HEAD')));
+  if (headText === null) throw invalid('The project is not a git repository');
+  const config = (await readText(path.join(commonDir, 'config'), 64 * 1024)) ?? '';
+  if (/^\s*ref:\s*refs\/heads\/\.invalid\s*$/.test(headText) || /^\s*refstorage\s*=\s*reftable\b/im.test(config)) {
+    throw invalid("This repository uses reftable refs, which Vibe Teamlead can't push yet");
   }
   return { gitDir, commonDir };
+}
+
+function checkSha(value: string): string | null {
+  if (SHA256.test(value)) throw invalid("SHA-256 repositories aren't supported by GitHub");
+  return SHA1.test(value) ? value : null;
 }
 
 async function readRef(gitDir: string, commonDir: string, ref: string, depth = 0): Promise<string | null> {
@@ -246,13 +281,13 @@ async function readRef(gitDir: string, commonDir: string, ref: string, depth = 0
   if (loose) {
     const sym = /^ref:\s*(\S+)$/.exec(loose);
     if (sym) return readRef(gitDir, commonDir, sym[1], depth + 1);
-    return HEX_SHA.test(loose) ? loose : null;
+    return checkSha(loose);
   }
-  const packed = (await readText(path.join(commonDir, 'packed-refs'))) ?? '';
+  const packed = (await readText(path.join(commonDir, 'packed-refs'), PACKED_REFS_MAX)) ?? '';
   for (const line of packed.split('\n')) {
     if (line.startsWith('#') || line.startsWith('^')) continue;
     const [sha, name] = line.trim().split(' ');
-    if (name === ref && HEX_SHA.test(sha ?? '')) return sha;
+    if (name === ref) return checkSha(sha ?? '');
   }
   return null;
 }
@@ -266,6 +301,9 @@ async function resolvePushSource(
   const [src, dstRaw, ...extra] = refspec.split(':');
   if (extra.length || !src || !BRANCH_NAME.test(src) || (dstRaw !== undefined && !BRANCH_NAME.test(dstRaw))) {
     throw invalid('Invalid refspec');
+  }
+  if (src !== 'HEAD' && src.startsWith('refs/') && !src.startsWith('refs/heads/')) {
+    throw invalid('Only branches can be pushed');
   }
   const { gitDir, commonDir } = await locateGitDirs(projectPath);
   const candidates = src === 'HEAD' || src.startsWith('refs/') ? [src] : [`refs/heads/${src}`];
