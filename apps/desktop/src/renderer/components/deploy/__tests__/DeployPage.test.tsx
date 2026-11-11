@@ -256,6 +256,35 @@ describe('DeployPage', () => {
     await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledTimes(2));
   });
 
+  it('asks again for a rate-limited log on a poll once the limit has reset', async () => {
+    const resetAt = new Date(Date.now() - 1_000).toISOString();
+    const { deploy, emit } = setup({ state: 'error', error: { kind: 'rate-limit', resetAt, message: '' } });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledTimes(1));
+    emit(base({ nextPollAt: '2026-11-11T10:06:05Z' }));
+    await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not ask again for a rate-limited log before the limit resets', async () => {
+    const resetAt = new Date(Date.now() + 3_600_000).toISOString();
+    const { deploy, emit } = setup({ state: 'error', error: { kind: 'rate-limit', resetAt, message: '' } });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledTimes(1));
+    emit(base({ nextPollAt: '2026-11-11T10:06:05Z' }));
+    await act(async () => undefined);
+    expect(deploy.jobLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('links to the app installations when the repository is not found (a private repo the app cannot reach)', () => {
+    const { emit, openExternal } = setup();
+    emit(base({ runs: [], selected: undefined, error: { kind: 'not-found', message: '' } }));
+    expect(screen.getByText('deploy:errors.not-found')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'deploy:errors.manageAccess' }));
+    expect(openExternal).toHaveBeenCalledWith('https://github.com/settings/installations');
+  });
+
   it('shows no link for a URL that is not http(s), and survives a failed openExternal', async () => {
     const { emit, openExternal } = setup();
     openExternal.mockImplementation(async () => { throw new Error('nope'); });

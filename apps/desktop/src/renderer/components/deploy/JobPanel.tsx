@@ -53,7 +53,12 @@ function JobLog({ projectId, job, fullLogUrl, pollKey }: { projectId: string; jo
   const log = entry?.jobId === job.id ? entry.log : undefined;
   // A log GitHub has not made yet, or a request GitHub may answer later, is asked for again on a later poll.
   // A request in flight is never cancelled or sent twice: a large log would otherwise never arrive.
-  const retryable = log?.state === 'pending' || (log?.state === 'error' && log.error.kind === 'unavailable');
+  // A rate-limited log is asked for again once the limit has reset.
+  const retryable =
+    log?.state === 'pending' ||
+    (log?.state === 'error' &&
+      (log.error.kind === 'unavailable' ||
+        (log.error.kind === 'rate-limit' && (!log.error.resetAt || Date.now() >= Date.parse(log.error.resetAt)))));
   const fetchKey = !log ? 'first' : retryable && entry?.poll !== pollKey ? pollKey : 'settled';
 
   useEffect(() => {

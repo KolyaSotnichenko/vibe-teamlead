@@ -37,7 +37,8 @@ function ErrorNotice({ error, onConnect }: { error: GitHubError; onConnect: () =
           {t('deploy:errors.connect')}
         </Button>
       )}
-      {error.kind === 'permissions' && (
+      {/* A private repository the app cannot reach arrives as 404 */}
+      {(error.kind === 'permissions' || error.kind === 'not-found') && (
         <Button size="sm" variant="outline" onClick={() => openWebUrl(GITHUB_INSTALLATIONS_URL)}>
           {t('deploy:errors.manageAccess')}
         </Button>
