@@ -1,0 +1,3 @@
+{"total_count":1,"jobs":[{"id":555,"name":"build","status":"completed","conclusion":"failure","started_at":"2026-11-10T10:00:05Z","completed_at":"2026-11-10T10:04:00Z","steps":[
+{"name":"Set up job","status":"completed","conclusion":"success","number":1},
+{"name":"npm test","status":"completed","conclusion":"failure","number":2}]}]}

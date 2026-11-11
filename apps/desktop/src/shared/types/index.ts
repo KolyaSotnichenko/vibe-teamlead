@@ -26,6 +26,7 @@ export * from './pr-status';
 export * from './claude-credential';
 export * from './design-system';
 export * from './preview';
+export * from './deploy';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';
