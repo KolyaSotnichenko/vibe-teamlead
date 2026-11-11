@@ -48,6 +48,9 @@ export interface DesignTokens {
 }
 
 /** How the QA loop treats design-check findings */
+/** Which themes of an imported package's tokens are kept. */
+export type DesignThemes = 'light' | 'light-dark';
+
 export type DesignQaMode = 'block' | 'warn' | 'off';
 
 /** One frame on a task's design canvas (design before code) */
