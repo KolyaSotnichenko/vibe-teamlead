@@ -60,8 +60,39 @@ describe('VercelPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(api.cancelConnect).toHaveBeenCalled();
-    await act(async () => finishConnect?.({ success: false, error: 'Vercel sign-in was cancelled' }));
+    await act(async () => finishConnect?.({ success: false, error: 'cancelled' }));
     expect(await screen.findByRole('button', { name: 'Connect Vercel' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['timeout', 'Vercel didn’t respond in time. Try again.'],
+    ['download', 'The Vercel CLI couldn’t be downloaded. Check your connection and try again.'],
+    ['cli', 'The Vercel sign-in didn’t finish. Try again.'],
+    ['busy', 'A Vercel sign-in is already running.'],
+    ['Some raw English from main', 'Something went wrong. Try again.'],
+  ])('a failed sign-in of kind %s shows its own text', async (error, text) => {
+    render(<VercelPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Vercel' }));
+    await act(async () => finishConnect?.({ success: false, error }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+  });
+
+  it('a status error shows text by kind', async () => {
+    api.status.mockResolvedValue({ success: true, data: { connected: false, error: 'unreachable' } });
+    render(<VercelPanel />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Vercel couldn’t be reached. Check your connection.');
+  });
+
+  it('a token refused for lack of encryption says so', async () => {
+    api.setToken.mockResolvedValue({ success: false, error: 'encryption-unavailable' });
+    render(<VercelPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paste a token instead' }));
+    fireEvent.change(screen.getByLabelText('Vercel token'), { target: { value: 'tok' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save token' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This Mac can’t encrypt the token right now, so it wasn’t saved. Sign in in the browser instead.',
+    );
   });
 
   it('connected: shows the user and teams, and Disconnect', async () => {

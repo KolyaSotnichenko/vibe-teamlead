@@ -55,7 +55,24 @@ describe('vercel IPC', () => {
     expect(cred.connectVercel).toHaveBeenCalledTimes(1);
     await invoke(IPC_CHANNELS.VERCEL_CANCEL_CONNECT);
     expect(seen?.aborted).toBe(true);
-    expect(await pending).toMatchObject({ success: false, error: 'Vercel sign-in was cancelled' });
+    expect(await pending).toEqual({ success: false, error: 'cancelled' });
+  });
+
+  it('a second connect while one runs answers busy', async () => {
+    cred.connectVercel.mockImplementation(() => new Promise<void>(() => undefined));
+    void invoke(IPC_CHANNELS.VERCEL_CONNECT);
+    expect(await invoke(IPC_CHANNELS.VERCEL_CONNECT)).toEqual({ success: false, error: 'busy' });
+  });
+
+  it('errors cross IPC as kinds only, never as main-process text', async () => {
+    cred.connectVercel.mockRejectedValueOnce(Object.assign(new Error('Vercel CLI download timed out at /Users/x'), { kind: 'timeout' }));
+    expect(await invoke(IPC_CHANNELS.VERCEL_CONNECT)).toEqual({ success: false, error: 'timeout' });
+    cred.setVercelToken.mockRejectedValueOnce(Object.assign(new Error('Encryption is unavailable'), { kind: 'encryption-unavailable' }));
+    expect(await invoke(IPC_CHANNELS.VERCEL_SET_TOKEN, 'tok')).toEqual({ success: false, error: 'encryption-unavailable' });
+    cred.setVercelToken.mockRejectedValueOnce(new Error('ENOENT: /Users/x/secret'));
+    expect(await invoke(IPC_CHANNELS.VERCEL_SET_TOKEN, 'tok')).toEqual({ success: false, error: 'unknown' });
+    cred.vercelStatus.mockRejectedValueOnce(new Error('boom'));
+    expect(await invoke(IPC_CHANNELS.VERCEL_STATUS)).toEqual({ success: false, error: 'unknown' });
   });
 
   it('setToken, disconnect and status go to the credential', async () => {

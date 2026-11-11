@@ -2,6 +2,10 @@
  * The Vercel CLI: downloaded on first use (pinned native package from the npm
  * registry, checked against a pinned sha512 before anything is extracted) and
  * run directly as a child process in its own process group.
+ *
+ * Failures carry a `kind` (`VercelCliError`): `timeout` (no bytes for a while, the total
+ * download cap, or a run's time limit), `cancelled`, `download` (HTTP, integrity, unpacking)
+ * and `start` (the binary could not be started).
  */
 import { spawn, execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -9,6 +13,24 @@ import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
 import { finished, pipeline } from 'node:stream/promises';
 import type { Writable } from 'node:stream';
 import path from 'node:path';
+
+export type VercelCliErrorKind = 'timeout' | 'cancelled' | 'download' | 'start';
+
+export class VercelCliError extends Error {
+  readonly kind: VercelCliErrorKind;
+  constructor(kind: VercelCliErrorKind, message: string) {
+    super(message);
+    this.name = 'VercelCliError';
+    this.kind = kind;
+  }
+}
+
+/** No bytes for this long aborts the download. */
+const STALL_TIMEOUT_MS = 60_000;
+/** The whole download, however slow, is given up after this. */
+const TOTAL_TIMEOUT_MS = 15 * 60_000;
+
+const aborted = () => new VercelCliError('cancelled', 'Vercel CLI download aborted');
 
 export interface VercelCliPackage {
   name: string;
@@ -52,6 +74,10 @@ export interface EnsureVercelCliOptions {
   registry?: string;
   /** Tests only: where the tarball is written. */
   createWriteStream?: (file: string) => Writable;
+  /** Tests only: the stall timeout (default 60 s without a byte). */
+  stallTimeoutMs?: number;
+  /** Tests only: the total download cap (default 15 min). */
+  totalTimeoutMs?: number;
 }
 
 interface Inflight {
@@ -68,7 +94,7 @@ export function ensureVercelCli(opts: EnsureVercelCliOptions): Promise<string> {
   const arch = opts.arch ?? (process.arch === 'arm64' ? 'arm64' : 'x64');
   const root = path.join(opts.userDataDir, 'vercel-cli');
   const key = `${root}\0${pin.version}\0${arch}`;
-  if (opts.signal?.aborted) return Promise.reject(new Error('Vercel CLI download aborted'));
+  if (opts.signal?.aborted) return Promise.reject(aborted());
 
   let entry = inflight.get(key);
   if (!entry) {
@@ -101,7 +127,7 @@ export function ensureVercelCli(opts: EnsureVercelCliOptions): Promise<string> {
       leave();
       shared.waiters -= 1;
       if (shared.waiters <= 0) shared.controller.abort();
-      reject(new Error('Vercel CLI download aborted'));
+      reject(aborted());
     };
     opts.signal?.addEventListener('abort', onAbort, { once: true });
     shared.promise.then(
@@ -141,6 +167,15 @@ async function installedBinary(finalDir: string, binary: string, integrity: stri
   } catch {
     return false;
   }
+}
+
+/** The installed, verified binary, or null. Never downloads. */
+export async function findInstalledVercelCli(opts: { userDataDir: string; arch?: 'arm64' | 'x64'; pin?: VercelCliPin }): Promise<string | null> {
+  const pin = opts.pin ?? VERCEL_CLI;
+  const arch = opts.arch ?? (process.arch === 'arm64' ? 'arm64' : 'x64');
+  const finalDir = path.join(opts.userDataDir, 'vercel-cli', pin.version, arch);
+  const binary = path.join(finalDir, 'vercel');
+  return (await installedBinary(finalDir, binary, pin.packages[arch].integrity)) ? binary : null;
 }
 
 async function doEnsure(
@@ -208,18 +243,38 @@ async function download(
   const f = opts.fetchImpl ?? fetch;
   const url = tarballUrl(opts.registry ?? 'https://registry.npmjs.org', pkg.name, pin.version);
   const out = opts.createWriteStream ? opts.createWriteStream(dest) : createWriteStream(dest);
+  // the fetch gets its own controller: a stall or the cap aborts it too
+  const local = new AbortController();
   let onAbort: (() => void) | undefined;
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  let totalTimer: ReturnType<typeof setTimeout> | undefined;
+  let timeout: (() => void) | undefined;
+  const stallMs = opts.stallTimeoutMs ?? STALL_TIMEOUT_MS;
   const failed = new Promise<never>((_, reject) => {
     out.once('error', reject);
-    onAbort = () => reject(new Error('Vercel CLI download aborted'));
+    // reject first: the race must see the reason, not the fetch's own abort error
+    onAbort = () => {
+      reject(aborted());
+      local.abort();
+    };
+    timeout = () => {
+      reject(new VercelCliError('timeout', 'Vercel CLI download timed out'));
+      local.abort();
+    };
     if (signal.aborted) onAbort();
     else signal.addEventListener('abort', onAbort, { once: true });
   });
   failed.catch(() => undefined);
+  const resetStall = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => timeout?.(), stallMs);
+  };
+  resetStall();
+  totalTimer = setTimeout(() => timeout?.(), opts.totalTimeoutMs ?? TOTAL_TIMEOUT_MS);
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    const res = await Promise.race([f(url, { signal }), failed]);
-    if (!res.ok || !res.body) throw new Error(`Vercel CLI download failed (HTTP ${res.status})`);
+    const res = await Promise.race([f(url, { signal: local.signal }), failed]);
+    if (!res.ok || !res.body) throw new VercelCliError('download', `Vercel CLI download failed (HTTP ${res.status})`);
     const total = Number(res.headers.get('content-length') ?? 0);
     const hash = createHash('sha512');
     reader = res.body.getReader();
@@ -227,6 +282,7 @@ async function download(
     for (;;) {
       const { done, value } = await Promise.race([reader.read(), failed]);
       if (done) break;
+      resetStall();
       hash.update(value);
       received += value.length;
       if (!out.write(value)) {
@@ -237,13 +293,16 @@ async function download(
     out.end();
     await Promise.race([finished(out), failed]);
     if (`sha512-${hash.digest('base64')}` !== pkg.integrity) {
-      throw new Error('Vercel CLI download failed the integrity check');
+      throw new VercelCliError('download', 'Vercel CLI download failed the integrity check');
     }
   } catch (err) {
     await reader?.cancel().catch(() => undefined);
     out.destroy();
     throw err;
   } finally {
+    if (stallTimer) clearTimeout(stallTimer);
+    if (totalTimer) clearTimeout(totalTimer);
+    totalTimer = undefined;
     if (onAbort) signal.removeEventListener('abort', onAbort);
   }
 }
@@ -285,6 +344,7 @@ export interface RunVercelCliOptions {
   binary: string;
   configDir: string;
   token?: string;
+  /** Default: the private config dir (never the app's own cwd). */
   cwd?: string;
   timeoutMs?: number;
   onOutput?: (line: string) => void;
@@ -315,7 +375,7 @@ export function runVercelCli(args: string[], opts: RunVercelCliOptions): Promise
   return new Promise((resolve, reject) => {
     const fullArgs = [...args, '--global-config', opts.configDir];
     const child = spawn(opts.binary, fullArgs, {
-      cwd: opts.cwd,
+      cwd: opts.cwd ?? opts.configDir,
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: buildEnv(opts.token),
@@ -336,15 +396,15 @@ export function runVercelCli(args: string[], opts: RunVercelCliOptions): Promise
         }
       }
     };
-    const fail = (message: string) => {
-      failure ??= new Error(message);
+    const fail = (kind: VercelCliErrorKind, message: string) => {
+      failure ??= new VercelCliError(kind, message);
       killGroup();
     };
     const timer =
       opts.timeoutMs !== undefined
-        ? setTimeout(() => fail(`Vercel CLI timed out after ${opts.timeoutMs} ms`), opts.timeoutMs)
+        ? setTimeout(() => fail('timeout', `Vercel CLI timed out after ${opts.timeoutMs} ms`), opts.timeoutMs)
         : undefined;
-    const onAbort = () => fail('Vercel CLI run was cancelled');
+    const onAbort = () => fail('cancelled', 'Vercel CLI run was cancelled');
     if (opts.signal?.aborted) onAbort();
     else opts.signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -374,7 +434,7 @@ export function runVercelCli(args: string[], opts: RunVercelCliOptions): Promise
     };
     // a straggler holding stdio must not keep the call waiting
     child.once('exit', killGroup);
-    child.once('error', () => finish(() => reject(new Error('Vercel CLI could not be started'))));
+    child.once('error', () => finish(() => reject(new VercelCliError('start', 'Vercel CLI could not be started'))));
     child.once('close', (code) => {
       // the group may hold stragglers even after a normal exit
       killGroup();

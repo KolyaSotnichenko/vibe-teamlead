@@ -1,17 +1,31 @@
 /**
  * Vercel IPC (Settings → Vercel): status, browser sign-in with progress and
- * cancel, a pasted token, disconnect. Tokens never travel to the renderer.
+ * cancel, a pasted token, disconnect. Tokens never travel to the renderer; an error
+ * travels as its kind (`VercelCredentialErrorKind`) only.
  */
 import { type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult } from '../../shared/types';
-import type { VercelStatus } from '../../shared/types/deploy';
+import type { VercelCredentialErrorKind, VercelStatus } from '../../shared/types/deploy';
 import { connectVercel, disconnectVercel, setVercelToken, vercelStatus } from '../deploy/vercel-credential';
 import { safeSendToRenderer } from './utils';
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+const KINDS: ReadonlySet<string> = new Set<VercelCredentialErrorKind>([
+  'cancelled',
+  'timeout',
+  'busy',
+  'download',
+  'cli',
+  'empty',
+  'encryption-unavailable',
+  'unknown',
+]);
+
+/** Only a known kind crosses IPC: the renderer shows its own text, never main-process English. */
+function errorKind(error: unknown): VercelCredentialErrorKind {
+  const kind = (error as { kind?: unknown })?.kind;
+  return typeof kind === 'string' && KINDS.has(kind) ? (kind as VercelCredentialErrorKind) : 'unknown';
 }
 
 export function registerVercelHandlers(getMainWindow: () => BrowserWindow | null): void {
@@ -21,12 +35,12 @@ export function registerVercelHandlers(getMainWindow: () => BrowserWindow | null
     try {
       return { success: true, data: await vercelStatus() };
     } catch (error) {
-      return { success: false, error: errorMessage(error) };
+      return { success: false, error: errorKind(error) };
     }
   });
 
   ipcMain.handle(IPC_CHANNELS.VERCEL_CONNECT, async (): Promise<IPCResult<VercelStatus>> => {
-    if (running) return { success: false, error: 'A Vercel sign-in is already running' };
+    if (running) return { success: false, error: 'busy' };
     const controller = new AbortController();
     running = controller;
     try {
@@ -36,7 +50,7 @@ export function registerVercelHandlers(getMainWindow: () => BrowserWindow | null
       );
       return { success: true, data: await vercelStatus() };
     } catch (error) {
-      return { success: false, error: errorMessage(error) };
+      return { success: false, error: controller.signal.aborted ? 'cancelled' : errorKind(error) };
     } finally {
       if (running === controller) running = null;
     }
@@ -51,7 +65,7 @@ export function registerVercelHandlers(getMainWindow: () => BrowserWindow | null
     try {
       return { success: true, data: await setVercelToken(String(token ?? '')) };
     } catch (error) {
-      return { success: false, error: errorMessage(error) };
+      return { success: false, error: errorKind(error) };
     }
   });
 
@@ -61,7 +75,7 @@ export function registerVercelHandlers(getMainWindow: () => BrowserWindow | null
       await disconnectVercel();
       return { success: true, data: { connected: false } };
     } catch (error) {
-      return { success: false, error: errorMessage(error) };
+      return { success: false, error: errorKind(error) };
     }
   });
 }

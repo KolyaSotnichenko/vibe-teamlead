@@ -5,7 +5,8 @@ import { Writable } from 'node:stream';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureVercelCli, runVercelCli, VERCEL_CLI, type VercelCliPin } from '../vercel-cli';
+import { existsSync as exists2, realpathSync } from 'node:fs';
+import { ensureVercelCli, findInstalledVercelCli, runVercelCli, VERCEL_CLI, type VercelCliPin } from '../vercel-cli';
 
 let work: string;
 beforeEach(() => {
@@ -322,6 +323,80 @@ describe('ensureVercelCli', () => {
     expect(readdirSync(root).sort()).toEqual(['1.2.3', 'config']);
   });
 
+  it('aborts a download that stalls (no bytes) with kind timeout, and leaves nothing behind', async () => {
+    const tgz = good();
+    const f = (async (_url: string, init?: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new Uint8Array(tgz.subarray(0, 10)));
+        },
+        pull() {
+          return new Promise(() => undefined);
+        },
+      });
+      void init;
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    const err = await ensureVercelCli({ userDataDir: userData(), arch: 'arm64', pin: pinFor(tgz), fetchImpl: f, stallTimeoutMs: 50 }).catch((e) => e);
+    expect(err).toMatchObject({ kind: 'timeout' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(readdirSync(path.join(userData(), 'vercel-cli'))).toEqual([]);
+  });
+
+  it('aborts a response that never starts with kind timeout', async () => {
+    const tgz = good();
+    const f = ((_url: string, init?: RequestInit) =>
+      new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))) as unknown as typeof fetch;
+    const err = await ensureVercelCli({ userDataDir: userData(), arch: 'arm64', pin: pinFor(tgz), fetchImpl: f, stallTimeoutMs: 50 }).catch((e) => e);
+    expect(err).toMatchObject({ kind: 'timeout' });
+  });
+
+  it('caps the whole download even while bytes trickle in', async () => {
+    const tgz = good();
+    const f = (async () => {
+      let timer: ReturnType<typeof setInterval> | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          timer = setInterval(() => c.enqueue(new Uint8Array([1])), 10);
+        },
+        cancel() {
+          clearInterval(timer);
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    const err = await ensureVercelCli({ userDataDir: userData(), arch: 'arm64', pin: pinFor(tgz), fetchImpl: f, stallTimeoutMs: 1000, totalTimeoutMs: 120 }).catch((e) => e);
+    expect(err).toMatchObject({ kind: 'timeout' });
+  });
+
+  it('a cancelled download rejects with kind cancelled', async () => {
+    const tgz = good();
+    const ctrl = new AbortController();
+    const f = (async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new Uint8Array(tgz.subarray(0, 10)));
+          setTimeout(() => ctrl.abort(), 10);
+        },
+        pull() {
+          return new Promise(() => undefined);
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    const err = await ensureVercelCli({ userDataDir: userData(), arch: 'arm64', pin: pinFor(tgz), fetchImpl: f, signal: ctrl.signal }).catch((e) => e);
+    expect(err).toMatchObject({ kind: 'cancelled' });
+  });
+
+  it('findInstalledVercelCli never downloads: null before, the binary after install', async () => {
+    const tgz = good();
+    const pin = pinFor(tgz);
+    expect(await findInstalledVercelCli({ userDataDir: userData(), arch: 'arm64', pin })).toBeNull();
+    expect(exists2(path.join(userData(), 'vercel-cli'))).toBe(false);
+    const bin = await ensureVercelCli({ userDataDir: userData(), arch: 'arm64', pin, fetchImpl: fetchOf(tgz) });
+    expect(await findInstalledVercelCli({ userDataDir: userData(), arch: 'arm64', pin })).toBe(bin);
+  });
+
   it('fails on an HTTP error', async () => {
     const tgz = good();
     const f = (async () => new Response('no', { status: 404 })) as unknown as typeof fetch;
@@ -339,6 +414,7 @@ describe('runVercelCli', () => {
   it('passes args and config dir; token goes in env, not argv; no default config dir', async () => {
     const binary = fakeBinary('echo "ARGS:$*"; echo "CI=$CI TEL=$VERCEL_TELEMETRY_DISABLED STORE=$VERCEL_TOKEN_STORAGE TOKEN=[$VERCEL_TOKEN]"; pwd');
     const cfg = path.join(work, 'cfg');
+    mkdirSync(cfg);
     const r = await runVercelCli(['whoami'], { binary, configDir: cfg, cwd: work });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain(`ARGS:whoami --global-config ${cfg}`);
@@ -385,6 +461,14 @@ describe('runVercelCli', () => {
     expect(alive(pid)).toBe(false);
   }, 10_000);
 
+  it('runs in the private config dir when no cwd is given', async () => {
+    const binary = fakeBinary('pwd -P');
+    const cfg = path.join(work, 'cfg-cwd');
+    mkdirSync(cfg);
+    const r = await runVercelCli([], { binary, configDir: cfg });
+    expect(r.stdout.trim()).toBe(realpathSync(cfg));
+  });
+
   it('reports exit codes, stderr and lines', async () => {
     const binary = fakeBinary('echo one; echo two >&2; exit 3');
     const lines: string[] = [];
@@ -427,6 +511,7 @@ describe('runVercelCli', () => {
     const err = await p.then(() => null, (e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect(err?.message).toMatch(/timed out/);
+    expect(err).toMatchObject({ kind: 'timeout' });
     expect(err?.message).not.toContain('sekret-token');
     const pid = Number(readFileSync(pidFile, 'utf8'));
     await waitFor(() => !alive(pid));
@@ -440,6 +525,7 @@ describe('runVercelCli', () => {
     ctrl.abort();
     const err = await p.then(() => null, (e: Error) => e);
     expect(err?.message).toMatch(/cancelled/);
+    expect(err).toMatchObject({ kind: 'cancelled' });
     expect(err?.message).not.toContain('sekret-token');
     const pid = Number(readFileSync(pidFile, 'utf8'));
     await waitFor(() => !alive(pid));

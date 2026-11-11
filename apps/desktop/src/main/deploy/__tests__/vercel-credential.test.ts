@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +20,7 @@ const authFile = () => path.join(configDir(), 'auth.json');
 const pastedFile = () => path.join(userData(), 'vercel-credential.json');
 
 /** A fake CLI: `login` prints the device URL, then runs `loginBody`; `whoami` runs `whoamiBody`. */
-function fakeCli(opts: { loginBody?: string; whoamiBody?: string } = {}): string {
+function fakeCli(opts: { loginBody?: string; whoamiBody?: string; noDeviceUrl?: boolean } = {}): string {
   const bin = path.join(work, 'fake-vercel');
   const script = `#!/bin/sh
 cmd="$1"
@@ -30,10 +30,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 echo "$cmd" >> "${work}/calls.log"
+pwd -P >> "${work}/cwd.log"
 case "$cmd" in
   login)
     echo "Vercel CLI 65.14.0"
-    echo "  Visit https://vercel.com/oauth/device?user_code=ABCD-EFGH"
+    ${opts.noDeviceUrl ? 'echo "  Waiting…"' : 'echo "  Visit https://vercel.com/oauth/device?user_code=ABCD-EFGH"'}
     ${opts.loginBody ?? 'exit 1'}
     ;;
   whoami)
@@ -81,7 +82,19 @@ function fakeApi(valid: string[], calls: ApiCall[] = []): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
-function make(opts: { bin?: string; valid?: string[]; apiCalls?: ApiCall[]; openExternal?: (url: string) => void; ensure?: (o: EnsureVercelCliOptions) => Promise<string> } = {}) {
+function make(
+  opts: {
+    bin?: string;
+    valid?: string[];
+    apiCalls?: ApiCall[];
+    openExternal?: (url: string) => void;
+    ensure?: (o: EnsureVercelCliOptions) => Promise<string>;
+    installed?: boolean;
+    canEncrypt?: boolean;
+    fetchImpl?: typeof fetch;
+    deviceUrlTimeoutMs?: number;
+  } = {},
+) {
   const bin = opts.bin ?? fakeCli();
   const ensureCli =
     opts.ensure ??
@@ -91,17 +104,21 @@ function make(opts: { bin?: string; valid?: string[]; apiCalls?: ApiCall[]; open
       return bin;
     });
   const openExternal = opts.openExternal ?? vi.fn();
+  const findCli = vi.fn(async () => (opts.installed === false ? null : bin));
   const cred = createVercelCredential({
     userDataDir: userData(),
     ensureCli,
+    findCli,
+    canEncrypt: () => opts.canEncrypt ?? true,
+    ...(opts.deviceUrlTimeoutMs ? { deviceUrlTimeoutMs: opts.deviceUrlTimeoutMs } : {}),
     openExternal,
-    fetchImpl: fakeApi(opts.valid ?? [], opts.apiCalls),
+    fetchImpl: opts.fetchImpl ?? fakeApi(opts.valid ?? [], opts.apiCalls),
     // reversible stand-in for safeStorage, so a plain-text token on disk is detectable
     encrypt: (s) => `enc:${Buffer.from(s).toString('base64')}`,
     decrypt: (s) => (s.startsWith('enc:') ? Buffer.from(s.slice(4), 'base64').toString() : ''),
     now: () => NOW * 1000,
   });
-  return { cred, ensureCli, openExternal };
+  return { cred, ensureCli, openExternal, findCli };
 }
 
 describe('connectVercel', () => {
@@ -155,11 +172,42 @@ describe('connectVercel', () => {
     const done = cred.connectVercel((s) => {
       if (s.phase === 'waiting') controller.abort();
     }, controller.signal);
-    await expect(done).rejects.toThrow(/cancel/i);
+    await expect(done).rejects.toMatchObject({ kind: 'cancelled' });
     await new Promise((r) => setTimeout(r, 3500));
     expect(existsSync(authFile())).toBe(false);
     expect(await cred.getVercelToken()).toBeNull();
   }, 10_000);
+
+  it('gives up with kind timeout when the CLI shows no device URL in time, and kills it', async () => {
+    const bin = fakeCli({ noDeviceUrl: true, loginBody: `sleep 5; ${writeAuthBody('vca_late', NOW + 28800)}` });
+    const { cred, openExternal } = make({ bin, deviceUrlTimeoutMs: 200 });
+    const started = Date.now();
+    await expect(cred.connectVercel(() => undefined, new AbortController().signal)).rejects.toMatchObject({ kind: 'timeout' });
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(existsSync(authFile())).toBe(false);
+  }, 10_000);
+
+  it('a failed CLI download rejects with its kind', async () => {
+    const ensure = vi.fn(async () => {
+      throw Object.assign(new Error('Vercel CLI download timed out'), { kind: 'timeout' });
+    });
+    const { cred } = make({ ensure });
+    await expect(cred.connectVercel(() => undefined, new AbortController().signal)).rejects.toMatchObject({ kind: 'timeout' });
+  });
+
+  it('a CLI exiting non-zero rejects with kind cli', async () => {
+    const { cred } = make({ bin: fakeCli({ loginBody: 'exit 1' }) });
+    await expect(cred.connectVercel(() => undefined, new AbortController().signal)).rejects.toMatchObject({ kind: 'cli' });
+  });
+
+  it('runs the CLI in the private config dir', async () => {
+    const bin = fakeCli({ loginBody: writeAuthBody('vca_browser', NOW + 28800) });
+    const { cred } = make({ bin, valid: ['vca_browser'] });
+    await cred.connectVercel(() => undefined, new AbortController().signal);
+    const cwds = readFileSync(path.join(work, 'cwd.log'), 'utf8').trim().split('\n');
+    expect(cwds).toEqual([realpathSync(configDir())]);
+  });
 
   it('a browser sign-in replaces a pasted token', async () => {
     const bin = fakeCli({ loginBody: writeAuthBody('vca_browser', NOW + 28800) });
@@ -200,6 +248,30 @@ describe('getVercelToken', () => {
     expect(cliCalls()).toEqual(['whoami']);
   });
 
+  it('never downloads the CLI: when it is not installed, a near-expiry token is returned as is', async () => {
+    writeAuth('vca_old', NOW + 120);
+    const { cred, ensureCli } = make({ installed: false });
+    expect(await cred.getVercelToken()).toBe('vca_old');
+    expect(ensureCli).not.toHaveBeenCalled();
+    expect(cliCalls()).toEqual([]);
+  });
+
+  it('never downloads the CLI: when it is not installed, an expired token gives null (reconnect)', async () => {
+    writeAuth('vca_dead', NOW - 10);
+    const { cred, ensureCli } = make({ installed: false, valid: ['vca_dead'] });
+    expect(await cred.getVercelToken()).toBeNull();
+    expect((await cred.vercelStatus()).connected).toBe(false);
+    expect(ensureCli).not.toHaveBeenCalled();
+  });
+
+  it('refreshes in the private config dir', async () => {
+    writeAuth('vca_old', NOW + 120);
+    const bin = fakeCli({ whoamiBody: writeAuthBody('vca_new', NOW + 28800) });
+    const { cred } = make({ bin });
+    await cred.getVercelToken();
+    expect(readFileSync(path.join(work, 'cwd.log'), 'utf8').trim()).toBe(realpathSync(configDir()));
+  });
+
   it('a pasted token wins over the browser sign-in', async () => {
     writeAuth('vca_browser', NOW + 3600);
     const { cred } = make({ valid: ['pasted_tok'] });
@@ -219,6 +291,19 @@ describe('setVercelToken', () => {
     expect(raw.startsWith('enc:')).toBe(true);
     expect(statSync(pastedFile()).mode & 0o777).toBe(0o600);
     expect(await cred.getVercelToken()).toBe('pasted_tok');
+  });
+
+  it('refuses to store a token when encryption is unavailable (never as plain text)', async () => {
+    const calls: ApiCall[] = [];
+    const { cred } = make({ valid: ['pasted_tok'], canEncrypt: false, apiCalls: calls });
+    await expect(cred.setVercelToken('pasted_tok')).rejects.toMatchObject({ kind: 'encryption-unavailable' });
+    expect(existsSync(pastedFile())).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it('an empty token rejects with kind empty', async () => {
+    const { cred } = make();
+    await expect(cred.setVercelToken('   ')).rejects.toMatchObject({ kind: 'empty' });
   });
 
   it('a bad token → connected:false and nothing stored', async () => {
@@ -245,6 +330,14 @@ describe('vercelStatus', () => {
     expect(calls[0]).toEqual({ url: 'https://api.vercel.com/v2/user', auth: 'Bearer vca_revoked' });
   });
 
+  it('reports unreachable / unavailable as kinds, not text', async () => {
+    writeAuth('vca_ok', NOW + 3600);
+    const down = make({ fetchImpl: (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch });
+    expect(await down.cred.vercelStatus()).toEqual({ connected: false, error: 'unreachable' });
+    const err = make({ fetchImpl: (async () => new Response('x', { status: 502 })) as unknown as typeof fetch });
+    expect(await err.cred.vercelStatus()).toEqual({ connected: false, error: 'unavailable' });
+  });
+
   it('carries the user id (the org of a personal-account project) and the teams', async () => {
     writeAuth('vca_ok', NOW + 3600);
     const { cred } = make({ valid: ['vca_ok'] });
@@ -262,6 +355,20 @@ describe('cliPaths', () => {
     expect(a).toEqual(b);
     expect(a.configDir).toBe(path.join(userData(), 'vercel-cli', 'config'));
     expect(ensureCli).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes download progress and the cancel signal to the download', async () => {
+    const { cred, ensureCli } = make();
+    const onProgress = vi.fn();
+    const signal = new AbortController().signal;
+    await cred.cliPaths({ onProgress, signal });
+    expect(ensureCli).toHaveBeenCalledWith(expect.objectContaining({ onProgress, signal }));
+  });
+
+  it('isCliInstalled never downloads', async () => {
+    const { cred, ensureCli } = make({ installed: false });
+    expect(await cred.isCliInstalled()).toBe(false);
+    expect(ensureCli).not.toHaveBeenCalled();
   });
 });
 

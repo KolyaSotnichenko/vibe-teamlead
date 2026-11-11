@@ -140,9 +140,25 @@ export interface VercelStatus {
   /** `id`: the account's id (the org of a project in the personal account). */
   user?: { id?: string; username: string; email?: string };
   teams?: Array<{ id: string; slug: string; name: string }>;
-  /** Vercel could not be reached or answered with an error other than 401/403. */
-  error?: string;
+  /** `unreachable`: Vercel could not be reached; `unavailable`: it answered with an error other than 401/403. */
+  error?: VercelStatusErrorKind;
 }
+
+export type VercelStatusErrorKind = 'unreachable' | 'unavailable';
+
+/**
+ * Why a Vercel sign-in, a pasted token or the CLI download failed (the IPC error is this code;
+ * the renderer shows its own text). `cancelled` is not an error to show.
+ */
+export type VercelCredentialErrorKind =
+  | 'cancelled'
+  | 'timeout'
+  | 'busy'
+  | 'download'
+  | 'cli'
+  | 'empty'
+  | 'encryption-unavailable'
+  | 'unknown';
 
 /** Progress of a browser sign-in. */
 export type VercelConnectState =

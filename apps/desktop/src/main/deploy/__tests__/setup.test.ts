@@ -318,7 +318,7 @@ describe('setUpDeploy', () => {
 
   it('Vercel unreachable: an error, not a sign-in item', async () => {
     const { deps } = world();
-    deps.vercelStatus = vi.fn(async () => ({ connected: false, error: 'Vercel answered 503' }));
+    deps.vercelStatus = vi.fn(async () => ({ connected: false, error: 'unavailable' as const }));
     const result = await setUpDeploy(project(), deps);
     expect(result.needed).toEqual([]);
     expect(result.error?.kind).toBe('unavailable');

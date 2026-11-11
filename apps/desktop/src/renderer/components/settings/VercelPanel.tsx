@@ -12,6 +12,19 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import type { VercelConnectState, VercelStatus } from '../../../shared/types';
 
+/** Error codes from main (credential kinds and status kinds); anything else shows the generic text. */
+const ERROR_KINDS: ReadonlySet<string> = new Set([
+  'timeout',
+  'busy',
+  'download',
+  'cli',
+  'empty',
+  'encryption-unavailable',
+  'unknown',
+  'unreachable',
+  'unavailable',
+]);
+
 type Phase = { kind: 'idle' } | { kind: 'starting' } | { kind: 'connecting'; state: VercelConnectState };
 
 export function VercelPanel() {
@@ -22,17 +35,21 @@ export function VercelPanel() {
   const [showPaste, setShowPaste] = useState(false);
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState<'token' | 'disconnect' | null>(null);
+  const errorText = useCallback(
+    (kind: string | undefined): string => t(`vercel.errors.${kind && ERROR_KINDS.has(kind) ? kind : 'unknown'}`),
+    [t],
+  );
 
   const load = useCallback(async () => {
     const result = await window.electronAPI.vercel.status();
     if (result.success && result.data) {
       setStatus(result.data);
-      if (result.data.error) setError(result.data.error);
+      if (result.data.error) setError(errorText(result.data.error));
     } else {
       setStatus({ connected: false });
-      setError(result.error ?? t('vercel.errors.statusFailed'));
+      setError(t('vercel.errors.statusFailed'));
     }
-  }, [t]);
+  }, [t, errorText]);
 
   useEffect(() => {
     void load();
@@ -46,8 +63,8 @@ export function VercelPanel() {
       const result = await window.electronAPI.vercel.connect();
       if (result.success && result.data) {
         setStatus(result.data);
-      } else if (result.error && !/cancel/i.test(result.error)) {
-        setError(result.error);
+      } else if (result.error !== 'cancelled') {
+        setError(errorText(result.error));
       }
     } finally {
       setPhase({ kind: 'idle' });
@@ -64,7 +81,7 @@ export function VercelPanel() {
     try {
       const result = await window.electronAPI.vercel.disconnect();
       if (result.success && result.data) setStatus(result.data);
-      else setError(result.error ?? t('vercel.errors.disconnectFailed'));
+      else setError(t('vercel.errors.disconnectFailed'));
     } finally {
       setBusy(null);
     }
@@ -80,9 +97,9 @@ export function VercelPanel() {
         setToken('');
         setShowPaste(false);
       } else if (result.success) {
-        setError(result.data?.error ?? t('vercel.errors.tokenRejected'));
+        setError(result.data?.error ? errorText(result.data.error) : t('vercel.errors.tokenRejected'));
       } else {
-        setError(result.error ?? t('vercel.errors.tokenRejected'));
+        setError(errorText(result.error));
       }
     } finally {
       setBusy(null);

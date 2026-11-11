@@ -1171,7 +1171,16 @@
     "errors": {
       "statusFailed": "Couldn’t check the Vercel account.",
       "disconnectFailed": "Couldn’t disconnect.",
-      "tokenRejected": "Vercel did not accept this token."
+      "tokenRejected": "Vercel did not accept this token.",
+      "timeout": "Vercel didn’t respond in time. Try again.",
+      "busy": "A Vercel sign-in is already running.",
+      "download": "The Vercel CLI couldn’t be downloaded. Check your connection and try again.",
+      "cli": "The Vercel sign-in didn’t finish. Try again.",
+      "empty": "Paste a token first.",
+      "encryption-unavailable": "This Mac can’t encrypt the token right now, so it wasn’t saved. Sign in in the browser instead.",
+      "unknown": "Something went wrong. Try again.",
+      "unreachable": "Vercel couldn’t be reached. Check your connection.",
+      "unavailable": "Vercel isn’t responding. Try again later."
     }
   }
 }
