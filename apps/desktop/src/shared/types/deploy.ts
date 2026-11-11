@@ -62,3 +62,20 @@ export interface DeployDeployment {
   logUrl?: string;
   createdAt: string;
 }
+
+export type GraphNodeStatus = 'queued' | 'running' | 'success' | 'failure' | 'skipped' | 'cancelled';
+
+export interface GraphNode {
+  key: string;
+  label: string;
+  jobIds: number[];
+  status: GraphNodeStatus;
+  startedAt?: string;
+  completedAt?: string;
+  deploymentUrl?: string;
+  logUrl?: string;
+}
+
+export interface RunGraph {
+  columns: Array<{ stage: string; nodes: GraphNode[] }>;
+}
