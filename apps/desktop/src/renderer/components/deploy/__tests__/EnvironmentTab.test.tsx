@@ -166,7 +166,7 @@ describe('Set up deploy', () => {
 
 describe('Needed from you', () => {
   it('Connect Vercel opens the Vercel section of Settings (a real section)', async () => {
-    setup({ env: needed([{ id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'm' }]) });
+    setup({ env: needed([{ id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'm' }]), vercel: { connected: false } });
     const sections: unknown[] = [];
     const listener = (e: Event) => sections.push((e as CustomEvent).detail);
     window.addEventListener('open-app-settings', listener);
@@ -176,6 +176,24 @@ describe('Needed from you', () => {
     window.removeEventListener('open-app-settings', listener);
     expect(sections).toEqual(['vercel']);
     expect(APP_SECTIONS).toContain(sections[0]);
+  });
+
+  it('Sign in to Vercel from an earlier run is gone once Vercel is connected', async () => {
+    setup({ env: needed([{ id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'm' }], { step: undefined }) });
+    const panel = await openEnvironment();
+    const steps = await within(panel).findByRole('list', { name: 'deploy:setup.steps' });
+    await waitFor(() => expect(within(panel).queryByText('deploy:needed.vercel-sign-in')).not.toBeInTheDocument());
+    const mark = within(steps).getByText('deploy:setup.step.repo').closest('li')?.querySelector('[data-marker]')?.getAttribute('data-marker');
+    expect(mark).toBe('queued');
+  });
+
+  it('coming back to the app re-reads the Vercel connection', async () => {
+    const h = setup({ env: needed([{ id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'm' }]), vercel: { connected: false } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByText('deploy:needed.vercel-sign-in')).toBeInTheDocument();
+    h.vercel.status.mockResolvedValue({ success: true, data: { connected: true, user: { id: 'u1', username: 'ada' }, teams: [] } });
+    await act(async () => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(within(panel).queryByText('deploy:needed.vercel-sign-in')).not.toBeInTheDocument());
   });
 
   it('Connect GitHub opens the GitHub sign-in dialog, not Settings', async () => {

@@ -104,15 +104,21 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
   const [variables, setVariables] = useState<DeployListVariablesResult | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
 
+  // Re-read on returning to the app: the Vercel sign-in finishes in the browser
   useEffect(() => {
     let cancelled = false;
-    Promise.resolve(window.electronAPI.vercel.status())
-      .then((r) => {
-        if (!cancelled && r.success && r.data) setVercel(r.data);
-      })
-      .catch(() => undefined);
+    const load = () => {
+      Promise.resolve(window.electronAPI.vercel.status())
+        .then((r) => {
+          if (!cancelled && r.success && r.data) setVercel(r.data);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    window.addEventListener('focus', load);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', load);
     };
   }, []);
 
@@ -138,14 +144,16 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
   const chosenTeam = team !== undefined ? team : (settings?.vercelTeamId ?? null);
   const repoName = settings?.repo ? `${settings.repo.owner}/${settings.repo.repo}` : undefined;
 
+  // A sign-in asked for by an earlier run is done once Vercel is connected
+  const open = (n: NeededItem) => !acknowledged.has(n.id) && !(n.kind === 'vercel-sign-in' && vercel?.connected);
   const needed: NeededItem[] = [
     ...(lastSetup?.needed ?? []),
     ...(state.lastDatabase && !state.lastDatabase.ok && 'needed' in state.lastDatabase && !settings?.database ? [state.lastDatabase.needed] : []),
-  ].filter((n) => !acknowledged.has(n.id));
+  ].filter(open);
 
   const setupDone = !!settings?.enabled;
   const setupFailed = !!lastSetup?.error;
-  const setupWaiting = (lastSetup?.needed ?? []).some((n) => n.kind !== 'public-repo-warning' && !acknowledged.has(n.id));
+  const setupWaiting = (lastSetup?.needed ?? []).some((n) => n.kind !== 'public-repo-warning' && open(n));
   const showSetup = !setupDone || setupRunning || (lastSetup && lastSetup.step !== 'done');
   const current = setupRunning ? (env.progress ?? undefined) : lastSetup?.step;
 
