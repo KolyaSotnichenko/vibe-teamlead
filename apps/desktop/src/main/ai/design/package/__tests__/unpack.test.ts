@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sy
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PACKAGE_EXTENSIONS, PACKAGE_LIMITS, unpackDesignPackage } from '../unpack';
+import { PACKAGE_EXTENSIONS, PACKAGE_LIMITS, parseZipTotals, unpackDesignPackage } from '../unpack';
 
 let root: string;
 beforeEach(() => {
@@ -143,5 +143,45 @@ describe('unpackDesignPackage', () => {
     write(zip);
     await expect(unpackDesignPackage(zip, path.join(root, 'dest'))).rejects.toThrow(/overlap/i);
     expect(existsSync(zip)).toBe(true);
+  });
+
+  it('parseZipTotals reads only the final summary line', () => {
+    const listing = [
+      'Archive:  x.zip',
+      '  Length      Date    Time    Name',
+      '---------  ---------- -----   ----',
+      '        5  11-11-2026 13:47   1   1 file',
+      '   1   1 file',
+      '---------                     -------',
+      '  999999                     42 files',
+      '',
+    ].join('\n');
+    expect(parseZipTotals(listing)).toEqual({ bytes: 999999, files: 42 });
+    expect(parseZipTotals('garbage')).toBeNull();
+  });
+
+  it('kills unzip and throws when the bytes actually written exceed totalBytes', async () => {
+    const log = path.join(root, 'dir.log');
+    const fake = path.join(root, 'bomb.sh');
+    writeFileSync(
+      fake,
+      `#!/bin/sh
+if [ "$1" = "-l" ]; then echo "        0                     0 files"; exit 0; fi
+for last; do :; done
+echo "$last" > "${log}"
+i=0
+while [ $i -lt 40 ]; do head -c 1000 /dev/zero > "$last/f$i.md"; i=$((i+1)); sleep 0.1; done
+`,
+    );
+    chmodSync(fake, 0o755);
+    const zip = path.join(root, 'p.zip');
+    writeFileSync(zip, 'zip');
+    const dest = path.join(root, 'dest');
+    write(path.join(dest, 'keep.md'));
+    await expect(unpackDesignPackage(zip, dest, { unzip: fake, limits: { totalBytes: 2500 } })).rejects.toThrow(
+      /too large/i,
+    );
+    expect(existsSync(path.join(dest, 'keep.md'))).toBe(true);
+    expect(existsSync(readFileSync(log, 'utf8').trim())).toBe(false);
   });
 });

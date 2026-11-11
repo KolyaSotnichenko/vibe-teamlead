@@ -11,18 +11,74 @@ import os from 'node:os';
 import path from 'node:path';
 
 const UNZIP_TIMEOUT_MS = 60_000;
+const EXTRACT_POLL_MS = 250;
 
-/** Runs unzip with stdin closed (no password prompt) and a timeout. */
-function runUnzip(bin: string, args: string[]): Promise<string> {
+/** Sum of the sizes of every file under `dir` (lstat, never following links). */
+async function dirBytes(dir: string): Promise<number> {
+  let total = 0;
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return 0;
+  }
+  for (const name of entries) {
+    const abs = path.join(dir, name);
+    try {
+      const st = await lstat(abs);
+      if (st.isDirectory()) total += await dirBytes(abs);
+      else total += st.size;
+    } catch {
+      // vanished while unzip is running
+    }
+  }
+  return total;
+}
+
+/**
+ * Runs unzip with stdin closed (no password prompt) and a timeout. When
+ * `watch` is given, the directory's real size is polled and unzip is killed
+ * as soon as it exceeds `watch.maxBytes`.
+ */
+function runUnzip(bin: string, args: string[], watch?: { dir: string; maxBytes: number }): Promise<string> {
   return new Promise((resolve, reject) => {
+    let tooLarge = false;
+    let timer: NodeJS.Timeout | undefined;
     const child = execFile(
       bin,
       args,
       { timeout: UNZIP_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 },
-      (err, stdout) => (err ? reject(err) : resolve(String(stdout))),
+      (err, stdout) => {
+        if (timer) clearInterval(timer);
+        if (tooLarge) reject(new Error('Design package is too large'));
+        else if (err) reject(err);
+        else resolve(String(stdout));
+      },
     );
     child.stdin?.end();
+    if (watch) {
+      let busy = false;
+      timer = setInterval(() => {
+        if (busy || tooLarge) return;
+        busy = true;
+        void dirBytes(watch.dir).then((n) => {
+          busy = false;
+          if (n > watch.maxBytes && !tooLarge) {
+            tooLarge = true;
+            child.kill('SIGKILL');
+          }
+        });
+      }, EXTRACT_POLL_MS);
+    }
   });
+}
+
+/** Totals from the last non-empty line of `unzip -l` output; null if it is not a summary. */
+export function parseZipTotals(listing: string): { bytes: number; files: number } | null {
+  const lines = listing.split('\n').filter((l) => l.trim() !== '');
+  const last = lines[lines.length - 1] ?? '';
+  const m = /^\s*(\d+)\s+(\d+)\s+files?\s*$/.exec(last);
+  return m ? { bytes: Number(m[1]), files: Number(m[2]) } : null;
 }
 
 function assertNoOverlap(source: string, dest: string): void {
@@ -87,11 +143,14 @@ export async function unpackDesignPackage(
       tmp = await mkdtemp(path.join(os.tmpdir(), 'vt-design-pkg-'));
       const bin = opts.unzip ?? '/usr/bin/unzip';
       const listing = await runUnzip(bin, ['-l', '-P', '', source]);
-      const m = /^\s*(\d+)\s+(\d+)\s+files?\s*$/m.exec(listing);
-      if (!m) throw new Error('Could not read the design package archive');
-      if (Number(m[1]) > limits.totalBytes) throw new Error('Design package is too large');
-      if (Number(m[2]) > limits.files) throw new Error('Design package has too many files');
-      await runUnzip(bin, ['-qq', '-o', '-P', '', source, '-d', tmp]);
+      const totals = parseZipTotals(listing);
+      if (!totals) throw new Error('Could not read the design package archive');
+      if (totals.bytes > limits.totalBytes) throw new Error('Design package is too large');
+      if (totals.files > limits.files) throw new Error('Design package has too many files');
+      await runUnzip(bin, ['-qq', '-o', '-P', '', source, '-d', tmp], {
+        dir: tmp,
+        maxBytes: limits.totalBytes,
+      });
       root = tmp;
     } else if (!info.isDirectory()) {
       throw new Error('Design package must be a zip file or a folder');
