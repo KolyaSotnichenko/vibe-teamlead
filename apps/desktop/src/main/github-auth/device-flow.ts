@@ -8,13 +8,13 @@
  * Docs: https://docs.github.com/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app
  */
 
-/** Public identifiers of the Vibe Teamlead GitHub App (not secrets). */
+import { GITHUB_APP_SLUG } from '../../shared/constants/github';
+
+/** Public identifiers of the Vibe Teamlead GitHub App (not secrets). The slug and install URL live in shared/constants/github.ts. */
 export const GITHUB_APP = {
   clientId: 'Iv23liatVHpmqmpbu4xo',
-  slug: 'vibe-teamlead-app',
+  slug: GITHUB_APP_SLUG,
 } as const;
-
-export const GITHUB_INSTALL_URL = `https://github.com/apps/${GITHUB_APP.slug}/installations/new`;
 
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const TOKEN_URL = 'https://github.com/login/oauth/access_token';

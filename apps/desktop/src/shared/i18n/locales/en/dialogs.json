@@ -331,6 +331,7 @@
     "body": "You’re signed in. Now install the Vibe Teamlead app on GitHub and choose the repositories it may use: all of them, or only the ones you pick. Without this it can’t see your private repositories.",
     "install": "Install the app on GitHub",
     "checkAgain": "I’ve done it — check again",
+    "continueAnyway": "Continue anyway",
     "checking": "Checking access to your repositories…",
     "stillMissing": "The app isn’t installed yet. Finish installing it on GitHub, then check again.",
     "error": "Couldn’t check the app’s access on GitHub. Check your connection and try again.",

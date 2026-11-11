@@ -79,6 +79,21 @@ describe('GitHubAppInstallStep', () => {
     expect(screen.queryByText('dialogs:githubAppAccess.title')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'dialogs:githubAppAccess.checkAgain' })).toBeInTheDocument();
   });
+
+  it('lets the user continue anyway when the check fails', async () => {
+    api.getGitHubAppAccess.mockResolvedValue({ success: false, error: 'offline' });
+    const onInstalled = vi.fn();
+    render(<GitHubAppInstallStep onInstalled={onInstalled} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'dialogs:githubAppAccess.continueAnyway' }));
+    expect(onInstalled).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no "continue anyway" when the app is known to be missing', async () => {
+    api.getGitHubAppAccess.mockResolvedValue({ success: true, data: { installed: false } });
+    render(<GitHubAppInstallStep onInstalled={vi.fn()} />);
+    await screen.findByText('dialogs:githubAppAccess.title');
+    expect(screen.queryByRole('button', { name: 'dialogs:githubAppAccess.continueAnyway' })).not.toBeInTheDocument();
+  });
 });
 
 describe('GitHubRepoAccessNotice', () => {
@@ -104,6 +119,39 @@ describe('GitHubRepoAccessNotice', () => {
     expect(screen.getByText('dialogs:githubAppAccess.repoNotInstalled {"owner":"acme"}')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'dialogs:githubAppAccess.installApp' }));
     expect(api.openExternal).toHaveBeenCalledWith('https://github.com/apps/vibe-teamlead-app/installations/new');
+  });
+
+  it('uses "manage access" when the app is on selected repositories but reaching the repo is not known to fail', () => {
+    render(
+      <GitHubRepoAccessNotice
+        repo="acme/app"
+        access={{ installed: true, repositorySelection: 'selected', repoReachable: true }}
+        onCheckAgain={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('dialogs:githubAppAccess.repoSelected')).not.toBeInTheDocument();
+    expect(screen.getByText('dialogs:githubAppAccess.repoUnknown')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'dialogs:githubAppAccess.manageAccess' })).toBeInTheDocument();
+  });
+
+  it('checks again on window focus at most once per 10 seconds', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-11-11T10:00:00Z'));
+      const onCheckAgain = vi.fn();
+      render(<GitHubRepoAccessNotice repo="acme/app" access={null} onCheckAgain={onCheckAgain} />);
+      window.dispatchEvent(new Event('focus'));
+      window.dispatchEvent(new Event('focus'));
+      expect(onCheckAgain).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(new Date('2026-11-11T10:00:09Z'));
+      window.dispatchEvent(new Event('focus'));
+      expect(onCheckAgain).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(new Date('2026-11-11T10:00:11Z'));
+      window.dispatchEvent(new Event('focus'));
+      expect(onCheckAgain).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to "manage access" when it cannot tell', () => {

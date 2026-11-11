@@ -5,11 +5,19 @@
  * repository only once the app is installed on the repository's owner (for
  * all repositories, or with the repository among the selected ones).
  *
+ * Limits:
+ * - `GET /user/installations` lists only installations the user can access
+ *   explicitly. An organization installation the user has no explicit access to
+ *   (not an org owner, and not given access to any of its repositories) isn't
+ *   listed, so it reads as "not installed" on that owner.
+ * - Selected repositories are read up to 10 pages of 100 (1000 repositories);
+ *   a repository past that cap reads as not reachable.
+ *
  * Docs: https://docs.github.com/rest/apps/installations#list-app-installations-accessible-to-the-user-access-token
  */
 
 import type { GitHubAppAccess } from '../../shared/types/integrations';
-import { GITHUB_APP } from './device-flow';
+import { GITHUB_APP_SLUG } from '../../shared/constants/github';
 import { getValidAccessToken } from './token-store';
 
 const GITHUB_API = 'https://api.github.com';
@@ -65,7 +73,7 @@ export async function getGitHubAppAccess(
 
     const installations = (
       await getAll<Installation>(fetchImpl, token, '/user/installations?per_page=100', 'installations', MAX_INSTALLATION_PAGES)
-    ).filter((i) => i.app_slug === GITHUB_APP.slug);
+    ).filter((i) => i.app_slug === GITHUB_APP_SLUG);
 
     if (!repo) {
       const [first] = installations;

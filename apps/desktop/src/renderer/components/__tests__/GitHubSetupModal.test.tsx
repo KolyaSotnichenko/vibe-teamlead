@@ -93,6 +93,14 @@ describe('GitHubSetupModal: a repository the app cannot see', () => {
     expect(api.openExternal).toHaveBeenCalledWith('https://github.com/apps/vibe-teamlead-app/installations/new');
   });
 
+  it('goes on to repository detection when the installation check fails', async () => {
+    api.getGitHubAppAccess.mockResolvedValue({ success: false, error: 'offline' });
+    render(<GitHubSetupModal open onOpenChange={vi.fn()} project={project} onComplete={vi.fn()} onSkip={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: /githubSetup.confirmAndContinue/ })).toBeInTheDocument();
+    expect(api.detectGitHubRepo).toHaveBeenCalledWith('/tmp/app');
+    expect(screen.queryByRole('button', { name: 'oauth-flow' })).not.toBeInTheDocument();
+  });
+
   it('starts at sign-in when signed in but the app is not installed anywhere', async () => {
     api.getGitHubAppAccess.mockResolvedValue({ success: true, data: { installed: false } });
     render(<GitHubSetupModal open onOpenChange={vi.fn()} project={project} onComplete={vi.fn()} onSkip={vi.fn()} />);

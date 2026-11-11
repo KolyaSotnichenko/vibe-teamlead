@@ -5,7 +5,8 @@
  * repositories once it is installed on the account and given the repository.
  * - GitHubAppInstallStep: shown after sign-in until the app is installed.
  * - GitHubRepoAccessNotice: shown when GitHub answers 404 for a repository.
- * Both check again when the window regains focus (the user comes back from GitHub).
+ * Both check again when the window regains focus (the user comes back from GitHub);
+ * the repository notice at most once per FOCUS_RECHECK_MS.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,6 +15,9 @@ import { ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { GITHUB_APP_INSTALL_URL, GITHUB_INSTALLATIONS_SETTINGS_URL } from '../../../shared/constants/github';
 import type { GitHubAppAccess } from '../../../shared/types';
+
+/** The repository notice re-checks on focus at most this often (each check is a GitHub call). */
+const FOCUS_RECHECK_MS = 10_000;
 
 function openUrl(url: string): void {
   void Promise.resolve(window.electronAPI.openExternal(url)).catch(() => undefined);
@@ -123,6 +127,20 @@ export function GitHubAppInstallStep({ onInstalled, onCancel }: GitHubAppInstall
           )}
           {t('dialogs:githubAppAccess.checkAgain')}
         </Button>
+        {status === 'error' && (
+          // The check could not tell: don't trap the sign-in (setup treats an unknown result as "go ahead" too)
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (done.current) return;
+              done.current = true;
+              onInstalledRef.current();
+            }}
+            className="h-11"
+          >
+            {t('dialogs:githubAppAccess.continueAnyway')}
+          </Button>
+        )}
         {onCancel && (
           <Button variant="ghost" onClick={onCancel} className="h-11">
             {t('dialogs:githubSignIn.cancel')}
@@ -148,8 +166,13 @@ export function GitHubRepoAccessNotice({ repo, access, onCheckAgain, checking }:
   const owner = repo.split('/')[0];
   const checkingRef = useRef(checking);
   checkingRef.current = checking;
+  const lastFocusCheck = useRef(0);
   useOnWindowFocus(() => {
-    if (!checkingRef.current) onCheckAgain();
+    if (checkingRef.current) return;
+    const now = Date.now();
+    if (now - lastFocusCheck.current < FOCUS_RECHECK_MS) return;
+    lastFocusCheck.current = now;
+    onCheckAgain();
   });
 
   let body: string;
@@ -157,7 +180,7 @@ export function GitHubRepoAccessNotice({ repo, access, onCheckAgain, checking }:
   if (access && !access.installed) {
     body = t('dialogs:githubAppAccess.repoNotInstalled', { owner });
     action = { label: t('dialogs:githubAppAccess.installApp'), url: GITHUB_APP_INSTALL_URL };
-  } else if (access?.repositorySelection === 'selected') {
+  } else if (access?.repositorySelection === 'selected' && access.repoReachable === false) {
     body = t('dialogs:githubAppAccess.repoSelected');
     action = { label: t('dialogs:githubAppAccess.addRepo'), url: GITHUB_INSTALLATIONS_SETTINGS_URL };
   } else {
