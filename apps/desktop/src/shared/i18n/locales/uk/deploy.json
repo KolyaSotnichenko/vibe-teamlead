@@ -172,7 +172,13 @@
   },
   "push": {
     "ok": "Main запушено на GitHub {{ago}}.",
-    "failed": "Не вдалося запушити main на GitHub {{ago}}. {{reason}}"
+    "failed": "Не вдалося запушити main на GitHub {{ago}}. {{reason}}",
+    "errors": {
+      "conflict": "У main на GitHub є коміти, яких немає на цьому Mac. Підтягніть їх у проєкт — наступне злиття запушить main.",
+      "permissions": "GitHub App Vibe Teamlead не має права пушити в цей репозиторій. Надайте їй доступ на GitHub.",
+      "no-connection": "GitHub не прийняв вхід. Увійдіть у GitHub знову в Налаштуваннях.",
+      "unavailable": "Не вдалося зв’язатися з GitHub. Наступне злиття спробує знову."
+    }
   },
   "env": {
     "loading": "Завантаження…",

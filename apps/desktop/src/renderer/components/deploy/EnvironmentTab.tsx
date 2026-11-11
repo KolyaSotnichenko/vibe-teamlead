@@ -21,6 +21,9 @@ import { VariableDialog } from './VariableDialog';
 import type { DeployEnv } from './useDeployEnv';
 import { displayUrl, formatRelative, isWebUrl, LinkButton, StatusMark, useDeployErrorText } from './status';
 
+/** Push failures with their own text; any other kind uses the shared deploy error text. */
+const PUSH_ERROR_KINDS: ReadonlySet<string> = new Set(['conflict', 'permissions', 'no-connection', 'unavailable']);
+
 const STEPS: DeploySetupStep[] = ['repo', 'push', 'vercel', 'done'];
 const TARGETS: ReadonlySet<string> = new Set(['production', 'preview', 'development']);
 
@@ -86,6 +89,8 @@ export interface EnvironmentTabProps {
 export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub }: EnvironmentTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
   const errorText = useDeployErrorText();
+  const pushErrorText = (kind: string | undefined): string =>
+    kind && PUSH_ERROR_KINDS.has(kind) ? t(`deploy:push.errors.${kind}`) : errorText(kind);
   const { state } = env;
   const settings = state?.settings ?? null;
   const setupRunning = !!state?.setupRunning;
@@ -165,7 +170,7 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
         <Notice tone={push.ok ? 'info' : 'attention'}>
           {push.ok
             ? t('deploy:push.ok', { ago: formatRelative(push.at, i18n.language) })
-            : t('deploy:push.failed', { reason: errorText(push.error?.kind), ago: formatRelative(push.at, i18n.language) })}
+            : t('deploy:push.failed', { reason: pushErrorText(push.error?.kind), ago: formatRelative(push.at, i18n.language) })}
         </Notice>
       )}
 

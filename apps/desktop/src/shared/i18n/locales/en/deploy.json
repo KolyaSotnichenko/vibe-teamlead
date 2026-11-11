@@ -172,7 +172,13 @@
   },
   "push": {
     "ok": "Main was pushed to GitHub {{ago}}.",
-    "failed": "Pushing main to GitHub failed {{ago}}. {{reason}}"
+    "failed": "Pushing main to GitHub failed {{ago}}. {{reason}}",
+    "errors": {
+      "conflict": "GitHub’s main has commits this Mac doesn’t have. Pull them into the project; the next merge then pushes.",
+      "permissions": "The Vibe Teamlead GitHub App isn’t allowed to push to this repository. Give it access on GitHub.",
+      "no-connection": "GitHub didn’t accept the sign-in. Sign in to GitHub again in Settings.",
+      "unavailable": "GitHub couldn’t be reached. The next merge tries again."
+    }
   },
   "env": {
     "loading": "Loading…",

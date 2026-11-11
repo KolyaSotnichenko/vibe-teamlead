@@ -2,9 +2,10 @@
  * GitHub write operations for the Deploy view: create a private repo, push with the
  * GitHub App user token, add the origin remote, set Actions secrets, read visibility.
  *
- * The token is only ever sent as an Authorization header (REST) or as a one-shot
- * `-c http.extraheader=…` argument of a single git command. It is never written to
- * a remote URL or git config, and never appears in errors or logs.
+ * The token is only ever sent as an Authorization header (REST) or, for a push, as
+ * scoped git config in the child's env (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/
+ * `GIT_CONFIG_VALUE_n`, an `http.extraheader`), never in argv. It is never written to
+ * a remote URL or a git config file, and never appears in errors or logs.
  */
 import { execFile } from 'child_process';
 import { chmod, lstat, mkdir, mkdtemp, open, rm, stat, writeFile } from 'fs/promises';
@@ -367,6 +368,14 @@ async function resolvePushSource(
   return { sha, dst, commonDir };
 }
 
+/** The kind of a failed push, from git's stderr. */
+export function classifyPushFailure(stderr: string): GitHubWriteError['kind'] {
+  if (/\[rejected\]|non-fast-forward|fetch first/i.test(stderr)) return 'conflict';
+  if (/\berror: 403\b|not accessible by integration|Permission to \S+ denied/i.test(stderr)) return 'permissions';
+  if (/\berror: 401\b|Authentication failed|could not read Username/i.test(stderr)) return 'no-connection';
+  return 'unavailable';
+}
+
 /**
  * Pushes `refspec` (`branch[:dst]`, or `HEAD:dst`) to the GitHub repo at `url`
  * (exactly https://github.com/<owner>/<repo>[.git]) authenticating with the App user token.
@@ -428,7 +437,7 @@ export async function pushWithAppToken(
   } catch (error) {
     const raw = String((error as { stderr?: unknown }).stderr ?? '').trim() || 'git push failed';
     const clean = raw.split(token).join('***').split(basic).join('***').slice(0, 500);
-    throw new GitHubWriteError('unavailable', `git push failed: ${clean}`);
+    throw new GitHubWriteError(classifyPushFailure(raw), `git push failed: ${clean}`);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -544,6 +544,26 @@ describe('push and origin (real local bare remote)', () => {
     expect(err.message).toContain('***');
   });
 
+  it.each([
+    [' ! [rejected]        abc -> main (fetch first)\nerror: failed to push some refs', 'conflict'],
+    [' ! [rejected]        abc -> main (non-fast-forward)', 'conflict'],
+    ['hint: Updates were rejected because the remote contains work that you do not have locally (fetch first)', 'conflict'],
+    ['remote: Permission to me/app.git denied to vibe-teamlead[bot].\nfatal: unable to access', 'permissions'],
+    ['remote: Resource not accessible by integration', 'permissions'],
+    ['fatal: unable to access \'https://github.com/me/app.git/\': The requested URL returned error: 403', 'permissions'],
+    ['remote: Invalid username or token.\nfatal: Authentication failed for \'https://github.com/me/app.git/\'', 'no-connection'],
+    ['fatal: unable to access \'https://github.com/me/app.git/\': The requested URL returned error: 401', 'no-connection'],
+    ["fatal: could not read Username for 'https://github.com': terminal prompts disabled", 'no-connection'],
+    ['fatal: unable to access \'https://github.com/me/app.git/\': Could not resolve host: github.com', 'unavailable'],
+    ['', 'unavailable'],
+  ])('classifies push stderr %j as %s', async (stderr, kind) => {
+    const runner: GitRunner = async () => {
+      throw Object.assign(new Error('Command failed'), { stderr });
+    };
+    const err = await pushWithAppToken(setup().work, URL_OK, 'main', { getToken, runner }).catch((e) => e);
+    expect(err).toMatchObject({ name: 'GitHubWriteError', kind });
+  });
+
   it('refuses without a token', async () => {
     const err = await pushWithAppToken(setup().work, URL_OK, 'main', { getToken: async () => null, runner: vi.fn() }).catch((e) => e);
     expect(err.kind).toBe('no-connection');

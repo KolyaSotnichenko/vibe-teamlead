@@ -407,9 +407,24 @@ describe('Push after merge', () => {
   it('shows the last failed push, and a new result as it arrives', async () => {
     const h = setup({ env: { settings: setUpSettings, lastPush: { projectId: 'p1', ok: false, error: { kind: 'permissions', message: 'RAW' }, at: '2026-11-11T10:00:00Z' } } });
     const panel = await openEnvironment();
-    expect(await within(panel).findByText(/^deploy:push\.failed/)).toHaveTextContent('deploy:env.errors.permissions');
+    expect(await within(panel).findByText(/^deploy:push\.failed/)).toHaveTextContent('deploy:push.errors.permissions');
     h.push({ projectId: 'p1', ok: true, at: '2026-11-11T11:00:00Z' });
     expect(await within(panel).findByText(/^deploy:push\.ok/)).toBeInTheDocument();
     expect(within(panel).queryByText(/^deploy:push\.failed/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['conflict', 'deploy:push.errors.conflict'],
+    ['permissions', 'deploy:push.errors.permissions'],
+    ['no-connection', 'deploy:push.errors.no-connection'],
+    ['unavailable', 'deploy:push.errors.unavailable'],
+    ['invalid', 'deploy:env.errors.invalid'],
+    ['weird', 'deploy:env.errors.unknown'],
+  ])('a failed push of kind %s shows %s', async (kind, text) => {
+    setup({ env: { settings: setUpSettings, lastPush: { projectId: 'p1', ok: false, error: { kind, message: 'RAW' }, at: '2026-11-11T10:00:00Z' } } });
+    const panel = await openEnvironment();
+    const notice = await within(panel).findByText(/^deploy:push\.failed/);
+    expect(notice).toHaveTextContent(text);
+    expect(notice).not.toHaveTextContent('RAW');
   });
 });
