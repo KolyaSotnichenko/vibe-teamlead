@@ -25,7 +25,7 @@ export function IssueDetail({
   autoFixConfig,
   autoFixQueueItem,
 }: IssueDetailProps) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   // Determine which task ID to use - either already linked or just created
   const taskId = linkedTaskId || (investigationResult?.success ? investigationResult.taskId : undefined);
   const hasLinkedTask = !!taskId;
@@ -58,7 +58,7 @@ export function IssueDetail({
               parts={[
                 `#${issue.number}`,
                 issue.author.login,
-                formatDate(issue.createdAt),
+                formatDate(issue.createdAt, i18n.language, { withYear: true }),
                 issue.commentsCount > 0 && t('issues.detail.comments', { count: issue.commentsCount }),
               ]}
             />

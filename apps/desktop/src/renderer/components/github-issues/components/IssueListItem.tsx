@@ -6,7 +6,7 @@ import { formatDate } from '../utils';
 import type { IssueListItemProps } from '../types';
 
 export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: IssueListItemProps) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   return (
     <li className="group relative">
       <button
@@ -21,7 +21,7 @@ export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: Iss
           parts={[
             `#${issue.number}`,
             issue.author.login,
-            formatDate(issue.createdAt),
+            formatDate(issue.createdAt, i18n.language),
             issue.commentsCount > 0 && t('issues.detail.comments', { count: issue.commentsCount }),
           ]}
         />

@@ -17,7 +17,7 @@ const GITLAB_COMPLEXITY_COLORS: Record<string, string> = {
 };
 
 export function IssueDetail({ issue, onInvestigate, investigationResult, linkedTaskId, onViewTask }: IssueDetailProps) {
-  const { t } = useTranslation(['gitlab', 'common']);
+  const { t, i18n } = useTranslation(['gitlab', 'common']);
   // Determine which task ID to use - either already linked or just created
   const taskId = linkedTaskId || (investigationResult?.success ? investigationResult.taskId : undefined);
   const hasLinkedTask = !!taskId;
@@ -48,7 +48,7 @@ export function IssueDetail({ issue, onInvestigate, investigationResult, linkedT
               parts={[
                 `#${issue.iid}`,
                 issue.author.username,
-                formatDate(issue.createdAt),
+                formatDate(issue.createdAt, i18n.language, { withYear: true }),
                 issue.userNotesCount > 0 && `${issue.userNotesCount} ${t('detail.notes')}`,
               ]}
             />

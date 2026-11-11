@@ -11,11 +11,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GitHubIssue } from '../../../../../shared/types';
+import { formatDate } from '../../../../lib/format-date';
 
+const ui = vi.hoisted(() => ({ language: 'en' }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, o?: Record<string, unknown>) => (o && 'count' in o ? `${key} ${o.count}` : key),
-    i18n: { language: 'en' },
+    i18n: ui,
   }),
 }));
 
@@ -24,6 +26,7 @@ import { IssueListItem } from '../IssueListItem';
 import { IssueDetail } from '../IssueDetail';
 
 afterEach(() => {
+  ui.language = 'en';
   cleanup();
   vi.clearAllMocks();
 });
@@ -105,7 +108,7 @@ describe('GitHub Issues list row', () => {
     expect(other).toHaveClass('border-l-transparent');
     const meta = within(selected).getByText(/^#4 · kolya · /);
     expect(meta).toHaveClass('font-mono');
-    expect(meta.textContent).toBe('#4 · kolya · Sep 30, 2026');
+    expect(meta.textContent).toBe(`#4 · kolya · ${formatDate(issue.createdAt, 'en')}`);
     fireEvent.click(selected);
     expect(onClick).toHaveBeenCalled();
   });
@@ -119,7 +122,7 @@ describe('GitHub Issues detail', () => {
     const link = screen.getByRole('link', { name: 'accessibility.openOnGitHubAriaLabel' });
     expect(link).toHaveAttribute('href', 'https://github.com/acme/app/issues/4');
     expect(screen.getByText('prReview.state.open')).toHaveClass('font-mono', 'uppercase');
-    expect(screen.getByText('#4 · kolya · Sep 30, 2026')).toHaveClass('font-mono');
+    expect(screen.getByText(`#4 · kolya · ${formatDate(issue.createdAt, 'en', { withYear: true })}`)).toHaveClass('font-mono');
     const create = screen.getByRole('button', { name: 'insights.createTask' });
     expect(create).toHaveClass('bg-primary', 'h-10');
     expect(create).not.toHaveClass('flex-1');
@@ -135,5 +138,14 @@ describe('GitHub Issues detail', () => {
     expect(screen.queryByRole('button', { name: 'insights.createTask' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'roadmap.viewTask' }));
     expect(onViewTask).toHaveBeenCalledWith('042-fix');
+  });
+
+  it('dates rows and the detail in the UI language', () => {
+    ui.language = 'uk';
+    render(<ul><IssueListItem issue={issue} isSelected={false} onClick={vi.fn()} onInvestigate={vi.fn()} /></ul>);
+    expect(screen.getByText(`#4 · kolya · ${formatDate(issue.createdAt, 'uk')}`)).toBeInTheDocument();
+    cleanup();
+    render(<IssueDetail issue={issue} onInvestigate={vi.fn()} investigationResult={null} />);
+    expect(screen.getByText(`#4 · kolya · ${formatDate(issue.createdAt, 'uk', { withYear: true })}`)).toBeInTheDocument();
   });
 });

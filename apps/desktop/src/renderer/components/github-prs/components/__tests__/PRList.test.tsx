@@ -6,14 +6,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { PRData } from '../../hooks/useGitHubPRs';
+import { formatRelative } from '../../../deploy/status';
 
+const ui = vi.hoisted(() => ({ language: 'en' }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: ui }),
 }));
 
 import { PRList } from '../PRList';
 
-afterEach(cleanup);
+afterEach(() => {
+  ui.language = 'en';
+  cleanup();
+});
 
 const pr = (number: number, title: string): PRData => ({
   number, title, body: '', state: 'open', author: { login: 'kolya' }, headRefName: `feat-${number}`, baseRefName: 'main',
@@ -42,8 +47,18 @@ describe('PRList', () => {
     expect(other).not.toHaveAttribute('aria-current');
     expect(other).toHaveClass('border-l-transparent');
     expect(within(selected).getByText(/^#7 · kolya · /)).toHaveClass('font-mono');
+    expect(within(selected).getByText(/^#7 · kolya · /).textContent).toBe(`#7 · kolya · ${formatRelative(pr(7, '').updatedAt, 'en')}`);
     expect(within(selected).getByText('feat-7')).toHaveClass('font-mono');
     fireEvent.click(other);
     expect(onSelectPR).toHaveBeenCalledWith(8);
+  });
+
+  it('says how long ago a PR changed in the UI language', () => {
+    ui.language = 'uk';
+    render(
+      <PRList prs={[pr(7, 'Add login')]} selectedPRNumber={null} isLoading={false} hasMore={false} error={null}
+        getReviewStateForPR={() => null} onSelectPR={vi.fn()} />
+    );
+    expect(screen.getByText(/^#7 · kolya · /).textContent).toBe(`#7 · kolya · ${formatRelative(pr(7, '').updatedAt, 'uk')}`);
   });
 });

@@ -33,7 +33,7 @@ export function InvestigationDialog({
   onClose,
   projectId
 }: InvestigationDialogProps) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const [comments, setComments] = useState<GitHubComment[]>([]);
   const [selectedCommentIds, setSelectedCommentIds] = useState<number[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -166,7 +166,7 @@ export function InvestigationDialog({
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span className="font-medium">{comment.user.login}</span>
                             <span>•</span>
-                            <span>{formatDate(comment.created_at)}</span>
+                            <span>{formatDate(comment.created_at, i18n.language, { withYear: true })}</span>
                           </div>
                           <p className="text-sm text-foreground whitespace-pre-wrap break-words line-clamp-3">
                             {comment.body}

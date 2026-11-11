@@ -1,12 +1,7 @@
 import type { GitHubIssue } from '../../../../shared/types';
 
-export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-}
+/** Dates on the Issues pages, in the UI language (see lib/format-date). */
+export { formatDate } from '../../../lib/format-date';
 
 export function filterIssuesBySearch(issues: GitHubIssue[], searchQuery: string): GitHubIssue[] {
   if (!searchQuery) {

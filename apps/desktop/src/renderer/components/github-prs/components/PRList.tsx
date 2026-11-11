@@ -7,6 +7,7 @@ import type { NewCommitsCheck } from '../../../../preload/api/modules/github-api
 import type { ChecksStatus, ReviewsStatus, MergeableState } from '../../../../shared/types/pr-status';
 import { useTranslation } from 'react-i18next';
 import { CompactStatusIndicator } from './StatusIndicator';
+import { formatRelative } from '../../deploy/status';
 import { MetaLine, listRowClass } from '../../shared/integration-page';
 
 /**
@@ -185,26 +186,6 @@ interface PRListProps {
   isLoadingMore?: boolean;
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours === 0) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return `${diffMins}m ago`;
-    }
-    return `${diffHours}h ago`;
-  }
-  if (diffDays === 1) return 'yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return date.toLocaleDateString();
-}
-
 export function PRList({
   prs,
   selectedPRNumber,
@@ -216,7 +197,7 @@ export function PRList({
   onLoadMore,
   isLoadingMore,
 }: PRListProps) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
 
   if (isLoading && prs.length === 0) {
     return (
@@ -268,7 +249,7 @@ export function PRList({
             >
               <span className="block truncate text-sm font-medium text-foreground">{pr.title}</span>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <MetaLine className="inline" parts={[`#${pr.number}`, pr.author.login, formatDate(pr.updatedAt)]} />
+                <MetaLine className="inline" parts={[`#${pr.number}`, pr.author.login, formatRelative(pr.updatedAt, i18n.language)]} />
                 <span className="font-mono text-xs">
                   <span className="text-success">+{pr.additions}</span>{' '}
                   <span className="text-destructive">-{pr.deletions}</span>

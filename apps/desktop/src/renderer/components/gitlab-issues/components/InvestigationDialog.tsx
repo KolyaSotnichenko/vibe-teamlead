@@ -26,7 +26,7 @@ export function InvestigationDialog({
   onClose,
   projectId
 }: InvestigationDialogProps) {
-  const { t } = useTranslation('gitlab');
+  const { t, i18n } = useTranslation('gitlab');
   const [notes, setNotes] = useState<GitLabNote[]>([]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -162,7 +162,7 @@ export function InvestigationDialog({
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span className="font-medium">{note.author.username}</span>
                             <span>•</span>
-                            <span>{formatDate(note.createdAt)}</span>
+                            <span>{formatDate(note.createdAt, i18n.language, { withYear: true })}</span>
                           </div>
                           <p className="text-sm text-foreground whitespace-pre-wrap break-words line-clamp-3">
                             {note.body}

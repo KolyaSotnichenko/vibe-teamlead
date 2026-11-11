@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GitLabIssue } from '../../../../../shared/types';
+import { formatDate } from '../../../../lib/format-date';
 
+const ui = vi.hoisted(() => ({ language: 'en' }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: ui }),
 }));
 
 import { IssueListHeader } from '../IssueListHeader';
@@ -16,6 +18,7 @@ import { IssueListItem } from '../IssueListItem';
 import { IssueDetail } from '../IssueDetail';
 
 afterEach(() => {
+  ui.language = 'en';
   cleanup();
   vi.clearAllMocks();
 });
@@ -51,7 +54,13 @@ describe('GitLab Issues', () => {
     const row = screen.getByRole('button', { name: /Signup confirms the address/ });
     expect(row).toHaveAttribute('aria-current', 'true');
     expect(row).toHaveClass('border-l-foreground');
-    expect(within(row).getByText('#12 · kolya · Sep 30, 2026')).toHaveClass('font-mono');
+    expect(within(row).getByText(`#12 · kolya · ${formatDate(issue.createdAt, 'en')}`)).toHaveClass('font-mono');
+  });
+
+  it('dates rows in the UI language', () => {
+    ui.language = 'uk';
+    render(<ul><IssueListItem issue={issue} isSelected={false} onClick={vi.fn()} onInvestigate={vi.fn()} /></ul>);
+    expect(screen.getByText(`#12 · kolya · ${formatDate(issue.createdAt, 'uk')}`)).toBeInTheDocument();
   });
 
   it('shows one primary Create task and a small-caps Description label', () => {

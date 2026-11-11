@@ -1,6 +1,7 @@
 import { GitMerge, GitPullRequest, Lock, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../../lib/utils';
+import { formatDate } from '../../../lib/format-date';
 import { MetaLine, listRowClass } from '../../shared/integration-page';
 import type { GitLabMergeRequest } from '../../../../shared/types';
 
@@ -24,11 +25,8 @@ const stateIcons = {
   locked: Lock
 };
 
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
 export function MergeRequestItem({ mr, isSelected, onClick }: MergeRequestItemProps) {
-  const { t } = useTranslation(['gitlab', 'common']);
+  const { t, i18n } = useTranslation(['gitlab', 'common']);
   const StateIcon = stateIcons[mr.state] || GitPullRequest;
 
   return (
@@ -43,7 +41,7 @@ export function MergeRequestItem({ mr, isSelected, onClick }: MergeRequestItemPr
           <StateIcon className={cn('mt-0.5 h-4 w-4 shrink-0', stateColors[mr.state])} aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-foreground">{mr.title}</span>
-            <MetaLine className="mt-0.5" parts={[`!${mr.iid}`, mr.author.username, formatDate(mr.createdAt)]} />
+            <MetaLine className="mt-0.5" parts={[`!${mr.iid}`, mr.author.username, formatDate(mr.createdAt, i18n.language)]} />
             <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">{`${mr.sourceBranch} → ${mr.targetBranch}`}</span>
             {mr.labels.length > 0 && (
               <span className="mt-1 flex items-center gap-2">

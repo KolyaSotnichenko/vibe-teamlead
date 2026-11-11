@@ -10,9 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GitLabMergeRequest } from '../../../../shared/types';
+import { formatDate } from '../../../lib/format-date';
 
+const ui = vi.hoisted(() => ({ language: 'en' }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key), i18n: { language: 'en' } }),
+  useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key), i18n: ui }),
 }));
 
 const hook = vi.hoisted(() => ({ calls: [] as Array<{ stateFilter: string }>, refresh: vi.fn(), selectMR: vi.fn() }));
@@ -45,6 +47,7 @@ beforeEach(() => {
   hook.calls.length = 0;
 });
 afterEach(() => {
+  ui.language = 'en';
   cleanup();
   vi.clearAllMocks();
 });
@@ -80,11 +83,17 @@ describe('GitLabMergeRequests', () => {
     const row = screen.getByRole('button', { name: /Add billing/ });
     expect(row).toHaveAttribute('aria-current', 'true');
     expect(row).toHaveClass('border-l-foreground');
-    expect(within(row).getByText(/^!5 · kolya · /)).toHaveClass('font-mono');
+    expect(within(row).getByText(`!5 · kolya · ${formatDate(mrs[0].createdAt, 'en')}`)).toHaveClass('font-mono');
     expect(within(row).getByText('billing → main')).toHaveClass('font-mono');
     const other = screen.getByRole('button', { name: /Fix login/ });
     expect(other).toHaveClass('border-l-transparent');
     fireEvent.click(other);
     expect(hook.selectMR).toHaveBeenCalledWith(6);
+  });
+
+  it('dates rows in the UI language', () => {
+    ui.language = 'uk';
+    render(<GitLabMergeRequests projectId="p1" />);
+    expect(screen.getByText(`!5 · kolya · ${formatDate(mrs[0].createdAt, 'uk')}`)).toBeInTheDocument();
   });
 });
