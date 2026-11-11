@@ -38,7 +38,8 @@
     "description": "Опис",
     "noDescription": "Опису немає.",
     "assignees": "Виконавці",
-    "milestone": "Віха"
+    "milestone": "Віха",
+    "openOnGitLab": "GitLab"
   },
   "investigation": {
     "title": "Створити задачу з issue",

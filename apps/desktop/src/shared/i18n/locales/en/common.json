@@ -751,7 +751,8 @@
       "taskLinked": "Task Linked",
       "taskId": "Task ID: {{id}}",
       "assignees": "Assignees",
-      "milestone": "Milestone"
+      "milestone": "Milestone",
+      "openOnGitHub": "GitHub"
     },
     "autoFix": {
       "specCreated": "Spec created from issue",

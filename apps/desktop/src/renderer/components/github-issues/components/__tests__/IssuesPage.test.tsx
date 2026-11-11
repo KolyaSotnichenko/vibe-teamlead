@@ -103,6 +103,8 @@ describe('GitHub Issues list row', () => {
     const selected = screen.getByRole('button', { name: /Check the connection message/ });
     expect(selected).toHaveAttribute('aria-current', 'true');
     expect(selected).toHaveClass('border-l-foreground');
+    // the row itself leaves room for the hover button, so it never covers the meta line
+    expect(selected).toHaveClass('pr-12');
     const other = screen.getByRole('button', { name: /Other/ });
     expect(other).not.toHaveAttribute('aria-current');
     expect(other).toHaveClass('border-l-transparent');
@@ -121,6 +123,7 @@ describe('GitHub Issues detail', () => {
     expect(screen.getByRole('heading', { name: 'Check the connection message' })).toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'accessibility.openOnGitHubAriaLabel' });
     expect(link).toHaveAttribute('href', 'https://github.com/acme/app/issues/4');
+    expect(link).toHaveTextContent('issues.detail.openOnGitHub');
     expect(screen.getByText('prReview.state.open')).toHaveClass('font-mono', 'uppercase');
     expect(screen.getByText(`#4 · kolya · ${formatDate(issue.createdAt, 'en', { withYear: true })}`)).toHaveClass('font-mono');
     const create = screen.getByRole('button', { name: 'insights.createTask' });

@@ -53,7 +53,7 @@ describe('GitLab Issues', () => {
     render(<ul><IssueListItem issue={issue} isSelected onClick={vi.fn()} onInvestigate={vi.fn()} /></ul>);
     const row = screen.getByRole('button', { name: /Signup confirms the address/ });
     expect(row).toHaveAttribute('aria-current', 'true');
-    expect(row).toHaveClass('border-l-foreground');
+    expect(row).toHaveClass('border-l-foreground', 'pr-12');
     expect(within(row).getByText(`#12 · kolya · ${formatDate(issue.createdAt, 'en')}`)).toHaveClass('font-mono');
   });
 
@@ -67,7 +67,9 @@ describe('GitLab Issues', () => {
     const onInvestigate = vi.fn();
     render(<IssueDetail issue={issue} onInvestigate={onInvestigate} investigationResult={null} />);
     expect(screen.getByRole('heading', { name: 'Signup confirms the address' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'common:accessibility.openOnGitLabAriaLabel' })).toHaveAttribute('href', issue.webUrl);
+    const link = screen.getByRole('link', { name: 'common:accessibility.openOnGitLabAriaLabel' });
+    expect(link).toHaveAttribute('href', issue.webUrl);
+    expect(link).toHaveTextContent('detail.openOnGitLab');
     expect(screen.getByText('states.opened')).toHaveClass('font-mono', 'uppercase');
     const create = screen.getByRole('button', { name: 'detail.createTask' });
     expect(create).not.toHaveClass('flex-1');

@@ -35,9 +35,9 @@ export function MergeRequestItem({ mr, isSelected, onClick }: MergeRequestItemPr
         type="button"
         aria-current={isSelected ? 'true' : undefined}
         onClick={onClick}
-        className={listRowClass(isSelected)}
+        className={cn(listRowClass(isSelected), 'pr-12')}
       >
-        <span className="flex items-start gap-2 pr-8">
+        <span className="flex items-start gap-2">
           <StateIcon className={cn('mt-0.5 h-4 w-4 shrink-0', stateColors[mr.state])} aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-foreground">{mr.title}</span>

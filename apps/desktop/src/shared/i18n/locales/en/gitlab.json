@@ -38,7 +38,8 @@
     "description": "Description",
     "noDescription": "No description provided.",
     "assignees": "Assignees",
-    "milestone": "Milestone"
+    "milestone": "Milestone",
+    "openOnGitLab": "GitLab"
   },
   "investigation": {
     "title": "Create Task from Issue",

@@ -1,7 +1,7 @@
 /**
  * Segmented control: a few mutually exclusive options side by side in one hairline frame
- * (e.g. Open / Closed / All). A radio group: arrow keys move the choice, only the checked
- * option is in the tab order.
+ * (e.g. Open / Closed / All). A radio group: arrow keys (and Home / End) move the choice, only the
+ * checked option (or the first, when none is) is in the tab order.
  */
 import { useRef, type KeyboardEvent } from 'react';
 import { cn } from '../../lib/utils';
@@ -28,13 +28,19 @@ export function SegmentedControl<T extends string>({ label, value, options, onCh
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-    if (!step) return;
+    const last = options.length - 1;
+    let next: number;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = index === last ? 0 : index + 1;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = index === 0 ? last : index - 1;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = last;
+    else return;
     e.preventDefault();
-    const next = (index + step + options.length) % options.length;
     refs.current[next]?.focus();
     pick(options[next].value);
   };
+  // The group stays reachable by Tab even when the value is none of the options
+  const tabbable = Math.max(0, options.findIndex((o) => o.value === value));
 
   return (
     <div role="radiogroup" aria-label={label} className={cn('inline-flex shrink-0 border border-border', className)}>
@@ -49,7 +55,7 @@ export function SegmentedControl<T extends string>({ label, value, options, onCh
             type="button"
             role="radio"
             aria-checked={checked}
-            tabIndex={checked ? 0 : -1}
+            tabIndex={i === tabbable ? 0 : -1}
             onClick={() => pick(option.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(

@@ -32,6 +32,7 @@ export function GitLabMergeRequests({ projectId, onOpenSettings }: GitLabMergeRe
   // Use the new hook for MR state management
   const {
     mergeRequests,
+    projectPath,
     isLoading,
     error,
     selectedMR,
@@ -76,7 +77,7 @@ export function GitLabMergeRequests({ projectId, onOpenSettings }: GitLabMergeRe
 
   return (
     <div className="flex h-full flex-col">
-      <IntegrationPageHeader title={t('mergeRequests.title')}>
+      <IntegrationPageHeader title={t('mergeRequests.title')} subtitle={projectPath ?? undefined}>
         <Button variant="outline" onClick={() => setShowCreateDialog(true)}>
           <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
           {t('mergeRequests.newMR')}

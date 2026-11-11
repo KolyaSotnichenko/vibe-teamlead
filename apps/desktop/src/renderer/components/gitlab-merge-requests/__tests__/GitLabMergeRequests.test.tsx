@@ -28,7 +28,7 @@ vi.mock('../hooks/useGitLabMRs', () => ({
   useGitLabMRs: (_projectId: string, options: { stateFilter: string }) => {
     hook.calls.push(options);
     return {
-      mergeRequests: mrs, isLoading: false, error: null, selectedMR: mrs[0], selectedMRIid: 5,
+      mergeRequests: mrs, projectPath: 'acme/app', isLoading: false, error: null, selectedMR: mrs[0], selectedMRIid: 5,
       reviewResult: null, reviewProgress: null, isReviewing: false, selectMR: hook.selectMR, refresh: hook.refresh,
       runReview: vi.fn(), runFollowupReview: vi.fn(), checkNewCommits: vi.fn(), cancelReview: vi.fn(), postReview: vi.fn(),
       postNote: vi.fn(), mergeMR: vi.fn(), assignMR: vi.fn(), approveMR: vi.fn(),
@@ -56,6 +56,7 @@ describe('GitLabMergeRequests', () => {
   it('has a header with a normal-size New merge request and a ghost refresh', () => {
     render(<GitLabMergeRequests projectId="p1" />);
     expect(screen.getByRole('heading', { name: 'mergeRequests.title' })).toBeInTheDocument();
+    expect(screen.getByText('acme/app')).toHaveClass('font-mono');
     const create = screen.getByRole('button', { name: 'mergeRequests.newMR' });
     expect(create).not.toHaveClass('w-full');
     fireEvent.click(create);
@@ -82,7 +83,7 @@ describe('GitLabMergeRequests', () => {
     render(<GitLabMergeRequests projectId="p1" />);
     const row = screen.getByRole('button', { name: /Add billing/ });
     expect(row).toHaveAttribute('aria-current', 'true');
-    expect(row).toHaveClass('border-l-foreground');
+    expect(row).toHaveClass('border-l-foreground', 'pr-12');
     expect(within(row).getByText(`!5 · kolya · ${formatDate(mrs[0].createdAt, 'en')}`)).toHaveClass('font-mono');
     expect(within(row).getByText('billing → main')).toHaveClass('font-mono');
     const other = screen.getByRole('button', { name: /Fix login/ });

@@ -45,4 +45,19 @@ describe('SegmentedControl', () => {
     fireEvent.keyDown(screen.getByRole('radio', { name: 'Open' }), { key: 'ArrowLeft' });
     expect(onChange).toHaveBeenLastCalledWith('all');
   });
+
+  it('jumps to the first and last option with Home and End', () => {
+    const onChange = vi.fn();
+    render(<SegmentedControl label="Issue state" value="closed" options={options} onChange={onChange} />);
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Closed' }), { key: 'End' });
+    expect(onChange).toHaveBeenLastCalledWith('all');
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Closed' }), { key: 'Home' });
+    expect(onChange).toHaveBeenLastCalledWith('open');
+  });
+
+  it('keeps the first option tabbable when the value is none of the options', () => {
+    render(<SegmentedControl label="Issue state" value={'other' as 'open'} options={options} onChange={() => undefined} />);
+    expect(screen.getAllByRole('radio').map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
+    expect(screen.getAllByRole('radio').every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
+  });
 });

@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../ui/button';
+import { cn } from '../../../lib/utils';
 import { MetaLine, listRowClass } from '../../shared/integration-page';
 import { formatDate } from '../utils';
 import type { IssueListItemProps } from '../types';
@@ -12,10 +13,10 @@ export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: Iss
       <button
         type="button"
         aria-current={isSelected ? 'true' : undefined}
-        className={listRowClass(isSelected)}
+        className={cn(listRowClass(isSelected), 'pr-12')}
         onClick={onClick}
       >
-        <span className="block truncate pr-8 text-sm font-medium text-foreground">{issue.title}</span>
+        <span className="block truncate text-sm font-medium text-foreground">{issue.title}</span>
         <MetaLine
           className="mt-0.5"
           parts={[

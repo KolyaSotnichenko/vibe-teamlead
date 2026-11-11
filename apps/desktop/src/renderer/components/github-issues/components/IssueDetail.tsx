@@ -43,9 +43,10 @@ export function IssueDetail({
         <div>
           <div className="flex items-start gap-3">
             <h2 className="flex-1 text-xl font-semibold leading-snug text-foreground">{issue.title}</h2>
-            <Button variant="ghost" size="icon" asChild className="shrink-0 text-muted-foreground">
+            <Button variant="ghost" asChild className="shrink-0 text-muted-foreground">
               <a href={issue.htmlUrl} target="_blank" rel="noopener noreferrer" aria-label={t('accessibility.openOnGitHubAriaLabel')}>
-                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                {t('issues.detail.openOnGitHub')}
               </a>
             </Button>
           </div>

@@ -766,7 +766,8 @@
       "taskLinked": "Задачу пов’язано",
       "taskId": "ID задачі: {{id}}",
       "assignees": "Виконавці",
-      "milestone": "Віха"
+      "milestone": "Віха",
+      "openOnGitHub": "GitHub"
     },
     "autoFix": {
       "specCreated": "Специфікацію створено з issue",
