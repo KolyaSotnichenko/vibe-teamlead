@@ -193,6 +193,7 @@ export type NeededFromYouKind =
   | 'non-github-remote'
   | 'public-repo-warning'
   | 'variable'
+  | 'database-terms'
   | 'database-dashboard';
 
 /** Something only the owner can do (or should know) before setup can go on. `message` is English; the UI maps `kind` to i18n. */
@@ -204,6 +205,9 @@ export interface NeededFromYou {
   variable?: string;
   /** vercel-existing-project: the Vercel projects already linked to the repository. */
   projects?: Array<{ id: string; name: string }>;
+  /** database-terms: the integration the terms are for, and the policy links to show (https only). */
+  integration?: string;
+  policyLinks?: Array<{ name: string; url: string }>;
 }
 
 export type DeploySetupStep = 'repo' | 'push' | 'vercel' | 'done';
