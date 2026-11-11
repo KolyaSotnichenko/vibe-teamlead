@@ -118,3 +118,29 @@ export interface DeployAPI {
   jobLog: (projectId: string, jobId: number) => Promise<import('./common').IPCResult<DeployJobLog>>;
   onRunsUpdate: (callback: (state: DeployRunsState) => void) => () => void;
 }
+
+/** The Vercel account the app is signed in to (Settings → Vercel). Never carries a token. */
+export interface VercelStatus {
+  connected: boolean;
+  /** `browser`: signed in with `vercel login`; `token`: a pasted token. */
+  source?: 'browser' | 'token';
+  user?: { username: string; email?: string };
+  teams?: Array<{ id: string; slug: string; name: string }>;
+  /** Vercel could not be reached or answered with an error other than 401/403. */
+  error?: string;
+}
+
+/** Progress of a browser sign-in. */
+export type VercelConnectState =
+  | { phase: 'downloading'; percent: number }
+  | { phase: 'waiting'; url: string; code?: string };
+
+export interface VercelAPI {
+  status: () => Promise<import('./common').IPCResult<VercelStatus>>;
+  /** Resolves when the sign-in finishes, fails or is cancelled. */
+  connect: () => Promise<import('./common').IPCResult<VercelStatus>>;
+  cancelConnect: () => Promise<import('./common').IPCResult>;
+  setToken: (token: string) => Promise<import('./common').IPCResult<VercelStatus>>;
+  disconnect: () => Promise<import('./common').IPCResult<VercelStatus>>;
+  onConnectState: (callback: (state: VercelConnectState) => void) => () => void;
+}
