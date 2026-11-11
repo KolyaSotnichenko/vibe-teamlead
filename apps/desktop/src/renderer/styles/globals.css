@@ -719,6 +719,12 @@
   }
 }
 
+/* The window never scrolls: the app frame (AppShell) is exactly the window's height, and its content area scrolls itself */
+html,
+body {
+  overflow: hidden;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);

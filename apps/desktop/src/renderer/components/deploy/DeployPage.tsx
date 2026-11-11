@@ -122,7 +122,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
     body = state.error ? null : <EmptyState title={t('deploy:empty.noRuns')} body={t('deploy:empty.noRunsBody')} />;
   } else {
     body = (
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4">
         <div className="min-h-0 overflow-y-auto">
           <RunsList runs={runs} selectedId={selectedId} onSelect={selectRun} />
         </div>

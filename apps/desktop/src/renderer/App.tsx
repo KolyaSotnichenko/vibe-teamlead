@@ -31,6 +31,7 @@ import {
   DialogTitle
 } from './components/ui/dialog';
 import { Sidebar, type SidebarView } from './components/Sidebar';
+import { AppShell } from './components/AppShell';
 import { KanbanBoard } from './components/KanbanBoard';
 import { TaskDetailModal } from './components/task-detail/TaskDetailModal';
 import { TaskCreationWizard } from './components/TaskCreationWizard';
@@ -786,19 +787,18 @@ export function App() {
   return (
     <ViewStateProvider>
       <TooltipProvider>
-      <div className="flex h-screen bg-background">
-        {/* Sidebar */}
-        <Sidebar
-          onSettingsClick={() => setIsSettingsDialogOpen(true)}
-          onNewTaskClick={() => setIsNewTaskDialogOpen(true)}
-          activeView={activeView}
-          onViewChange={setActiveView}
-        />
-
-        {/* Main content */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Project Tabs */}
-          {projectTabs.length > 0 && (
+      <AppShell
+        sidebar={
+          <Sidebar
+            onSettingsClick={() => setIsSettingsDialogOpen(true)}
+            onNewTaskClick={() => setIsNewTaskDialogOpen(true)}
+            activeView={activeView}
+            onViewChange={setActiveView}
+          />
+        }
+        header={
+          /* Project Tabs */
+          projectTabs.length > 0 && (
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -828,10 +828,10 @@ export function App() {
                 )}
               </DragOverlay>
             </DndContext>
-          )}
-
-          {/* Main content area */}
-          <main className="flex-1 overflow-hidden">
+          )
+        }
+        content={
+          <>
             {/* Documentation needs no project */}
             {activeView === 'docs' ? (
               <DocsView />
@@ -927,9 +927,9 @@ export function App() {
                 }}
               />
             )}
-          </main>
-        </div>
-
+          </>
+        }
+      >
         {/* Task detail modal */}
         <TaskDetailModal
           open={!!selectedTask}
@@ -1117,7 +1117,7 @@ export function App() {
 
         {/* Toast notifications */}
         <Toaster />
-      </div>
+      </AppShell>
       </TooltipProvider>
     </ViewStateProvider>
   );
