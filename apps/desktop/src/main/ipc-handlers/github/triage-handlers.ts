@@ -16,7 +16,7 @@ import {
   DEFAULT_FEATURE_MODELS,
   DEFAULT_FEATURE_THINKING,
 } from '../../../shared/constants';
-import { getGitHubConfig, githubFetch } from './utils';
+import { getGitHubConfigAsync, githubFetch } from './utils';
 import { readSettingsFile } from '../../settings-utils';
 import { getAugmentedEnv } from '../../env-utils';
 import type { Project, AppSettings } from '../../../shared/types';
@@ -290,7 +290,7 @@ async function runTriage(
     project.id,
   );
 
-  const config = getGitHubConfig(project);
+  const config = await getGitHubConfigAsync(project);
   if (!config) {
     throw new Error('No GitHub configuration found for project');
   }
@@ -521,7 +521,7 @@ export function registerTriageHandlers(getMainWindow: () => BrowserWindow | null
     async (_, projectId: string, issueNumbers: number[]): Promise<boolean> => {
       debugLog('applyTriageLabels handler called', { projectId, issueNumbers });
       const applyResult = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog('No GitHub config found');
           return false;

@@ -12,10 +12,11 @@ import type { Project } from '../../../../shared/types';
 import { IPC_CHANNELS } from '../../../../shared/constants';
 
 const handlers = vi.hoisted(() => new Map<string, Function>());
+const listeners = vi.hoisted(() => new Map<string, Function>());
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (channel: string, fn: Function) => handlers.set(channel, fn),
-    on: vi.fn(),
+    on: (channel: string, fn: Function) => listeners.set(channel, fn),
     removeHandler: vi.fn(),
   },
   app: { getPath: vi.fn(() => '/tmp'), on: vi.fn() },
@@ -52,7 +53,17 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
+// Create task: the spec is written by spec-utils (not under test here)
+const createSpecForIssue = vi.hoisted(() => vi.fn(async () => ({ specId: '042-issue-4' })));
+vi.mock('../spec-utils', () => ({
+  createSpecForIssue,
+  buildIssueContext: vi.fn(() => 'context'),
+  buildInvestigationTask: vi.fn(() => 'task'),
+}));
+vi.mock('../../../agent', () => ({ AgentManager: class {} }));
+
 import { registerCheckConnection } from '../repository-handlers';
+import { registerInvestigateIssue } from '../investigation-handlers';
 import { getGitHubConfigAsync } from '../utils';
 
 let dir: string;
@@ -68,6 +79,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   handlers.clear();
+  listeners.clear();
   tokens.stored = null;
   tokens.valid = null;
   fetchMock.mockReset();
@@ -119,5 +131,28 @@ describe('GitHub connection check', () => {
     };
     expect(result.data.connected).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('creates a task from an issue with an expired stored token that getValidAccessToken refreshes', async () => {
+    projectRef.current = makeProject('GITHUB_REPO=acme/app\nGITHUB_AUTH_METHOD=oauth\n');
+    tokens.stored = null;
+    tokens.valid = 'ghu_fresh';
+    fetchMock.mockImplementation(async (url: string) => {
+      const body = String(url).endsWith('/comments')
+        ? []
+        : { number: 4, title: 'Bug', body: 'x', labels: [], html_url: 'https://github.com/acme/app/issues/4' };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const send = vi.fn();
+    registerInvestigateIssue({} as never, () => ({ webContents: { send } }) as never);
+    await listeners.get(IPC_CHANNELS.GITHUB_INVESTIGATE_ISSUE)?.({}, 'p1', 4);
+    expect(send).not.toHaveBeenCalledWith(IPC_CHANNELS.GITHUB_INVESTIGATION_ERROR, 'p1', expect.anything());
+    expect(send).toHaveBeenCalledWith(
+      IPC_CHANNELS.GITHUB_INVESTIGATION_COMPLETE,
+      'p1',
+      expect.objectContaining({ success: true, taskId: '042-issue-4' })
+    );
+    const auth = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    expect(auth.Authorization).toBe('Bearer ghu_fresh');
   });
 });

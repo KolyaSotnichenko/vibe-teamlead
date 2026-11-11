@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 
 vi.mock('../../ipc-handlers/github/utils', () => ({
-  getGitHubConfig: vi.fn(),
+  getGitHubConfigAsync: vi.fn(),
   normalizeRepoReference: (r: string) =>
     r.replace(/\.git$/, '').replace(/^(https?:\/\/github\.com\/|git@github\.com:)/, '').trim(),
 }));
@@ -11,7 +11,7 @@ vi.mock('child_process', () => ({ execFile: vi.fn() }));
 vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 
 import { createActionsClient, classifyGitHubError, resolveRepo } from '../github-actions';
-import { getGitHubConfig } from '../../ipc-handlers/github/utils';
+import { getGitHubConfigAsync } from '../../ipc-handlers/github/utils';
 import { execFile } from 'child_process';
 
 /** execFile answering with stdout, or failing. */
@@ -216,26 +216,26 @@ describe('classifyGitHubError', () => {
 describe('resolveRepo', () => {
   const project = { path: '/p', autoBuildPath: '.vt' } as never;
   it('uses GITHUB_REPO config', async () => {
-    vi.mocked(getGitHubConfig).mockReturnValue({ token: 't', repo: 'https://github.com/acme/app.git' });
+    vi.mocked(getGitHubConfigAsync).mockResolvedValue({ token: 't', repo: 'https://github.com/acme/app.git' });
     expect(await resolveRepo(project)).toEqual({ owner: 'acme', repo: 'app' });
   });
   it('falls back to ssh origin', async () => {
-    vi.mocked(getGitHubConfig).mockReturnValue(null);
+    vi.mocked(getGitHubConfigAsync).mockResolvedValue(null);
     gitAnswers('git@github.com:acme/app.git\n');
     expect(await resolveRepo(project)).toEqual({ owner: 'acme', repo: 'app' });
   });
   it('falls back to https origin', async () => {
-    vi.mocked(getGitHubConfig).mockReturnValue(null);
+    vi.mocked(getGitHubConfigAsync).mockResolvedValue(null);
     gitAnswers('https://github.com/acme/app\n');
     expect(await resolveRepo(project)).toEqual({ owner: 'acme', repo: 'app' });
   });
   it('null for GitLab', async () => {
-    vi.mocked(getGitHubConfig).mockReturnValue(null);
+    vi.mocked(getGitHubConfigAsync).mockResolvedValue(null);
     gitAnswers('git@gitlab.com:acme/app.git\n');
     expect(await resolveRepo(project)).toBeNull();
   });
   it('null when git fails', async () => {
-    vi.mocked(getGitHubConfig).mockReturnValue(null);
+    vi.mocked(getGitHubConfigAsync).mockResolvedValue(null);
     gitAnswers(new Error('no remote'));
     expect(await resolveRepo(project)).toBeNull();
   });

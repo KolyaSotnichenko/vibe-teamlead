@@ -7,7 +7,7 @@ import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult, GitHubImportResult, Task } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { AgentManager } from '../../agent';
-import { getGitHubConfig, githubFetch } from './utils';
+import { getGitHubConfigAsync, githubFetch } from './utils';
 import { createSpecForIssue } from './spec-utils';
 
 /**
@@ -22,7 +22,7 @@ export function registerImportIssues(agentManager: AgentManager): void {
         return { success: false, error: 'Project not found' };
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         return { success: false, error: 'No GitHub token or repository configured' };
       }

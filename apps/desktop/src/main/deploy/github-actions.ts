@@ -12,7 +12,7 @@ import type {
   DeployStatus,
   GitHubError,
 } from '../../shared/types/deploy';
-import { getGitHubConfig, normalizeRepoReference } from '../ipc-handlers/github/utils';
+import { getGitHubConfigAsync, normalizeRepoReference } from '../ipc-handlers/github/utils';
 import { getToolPath } from '../cli-tool-manager';
 import { getIsolatedGitSpawnOptions } from '../utils/git-isolation';
 
@@ -216,7 +216,7 @@ function gitOutput(args: string[], cwd: string): Promise<string> {
 
 /** Repo of a project: GITHUB_REPO from its config, else the git origin; null when not GitHub. */
 export async function resolveRepo(project: Project): Promise<{ owner: string; repo: string } | null> {
-  const config = getGitHubConfig(project);
+  const config = await getGitHubConfigAsync(project);
   if (config?.repo) {
     const parsed = parseOwnerRepo(config.repo);
     if (parsed) return parsed;

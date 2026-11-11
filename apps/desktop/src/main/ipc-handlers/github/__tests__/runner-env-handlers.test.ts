@@ -147,10 +147,6 @@ vi.mock('../../../ai/runners/github/duplicate-detector', () => ({
 }));
 
 vi.mock('../utils', () => ({
-  getGitHubConfig: vi.fn(() => ({
-    token: 'mock-github-token',
-    repo: 'owner/repo',
-  })),
   getGitHubConfigAsync: vi.fn(async () => ({
     token: 'mock-github-token',
     repo: 'owner/repo',

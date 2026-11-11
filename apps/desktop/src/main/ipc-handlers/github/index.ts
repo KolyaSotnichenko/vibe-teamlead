@@ -45,5 +45,5 @@ export function registerGithubHandlers(
 }
 
 // Re-export utilities for potential external use
-export { getGitHubConfig, githubFetch } from './utils';
+export { getGitHubConfigAsync, githubFetch } from './utils';
 export type { GitHubConfig } from './types';

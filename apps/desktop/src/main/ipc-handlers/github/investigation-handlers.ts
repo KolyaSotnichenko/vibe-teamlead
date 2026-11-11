@@ -8,7 +8,7 @@ import { IPC_CHANNELS } from '../../../shared/constants';
 import type { GitHubInvestigationResult, GitHubInvestigationStatus } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { AgentManager } from '../../agent';
-import { getGitHubConfig, githubFetch } from './utils';
+import { getGitHubConfigAsync, githubFetch } from './utils';
 import type { GitHubAPIComment } from './types';
 import { createSpecForIssue, buildIssueContext, buildInvestigationTask } from './spec-utils';
 
@@ -76,7 +76,7 @@ export function registerInvestigateIssue(
         return;
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         sendError(mainWindow, projectId, 'No GitHub token or repository configured');
         return;

@@ -13,7 +13,7 @@ import type { BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { IPC_CHANNELS } from '../../../shared/constants';
-import { getGitHubConfig, githubFetch } from './utils';
+import { getGitHubConfigAsync, githubFetch } from './utils';
 import { createSpecForIssue, buildIssueContext, buildInvestigationTask, updateImplementationPlanStatus } from './spec-utils';
 import type { Project } from '../../../shared/types';
 import { createContextLogger } from './utils/logger';
@@ -214,7 +214,7 @@ async function checkAutoFixLabels(project: Project): Promise<number[]> {
     return [];
   }
 
-  const ghConfig = getGitHubConfig(project);
+  const ghConfig = await getGitHubConfigAsync(project);
   if (!ghConfig) {
     return [];
   }
@@ -266,7 +266,7 @@ async function checkNewIssues(project: Project): Promise<Array<{ number: number 
     return [];
   }
 
-  const ghConfig = getGitHubConfig(project);
+  const ghConfig = await getGitHubConfigAsync(project);
   if (!ghConfig) {
     throw new Error('No GitHub configuration found');
   }
@@ -308,7 +308,7 @@ async function startAutoFix(
     project.id
   );
 
-  const ghConfig = getGitHubConfig(project);
+  const ghConfig = await getGitHubConfigAsync(project);
   if (!ghConfig) {
     throw new Error('No GitHub configuration found');
   }
@@ -563,7 +563,7 @@ export function registerAutoFixHandlers(
             batchCount: 0,
           });
 
-          const ghConfig = getGitHubConfig(project);
+          const ghConfig = await getGitHubConfigAsync(project);
           if (!ghConfig) {
             throw new Error('No GitHub configuration found');
           }
@@ -721,7 +721,7 @@ export function registerAutoFixHandlers(
           debugLog('Starting analyze-preview');
           sendProgress({ phase: 'analyzing', progress: 10, message: 'Fetching issues for analysis...' });
 
-          const ghConfig = getGitHubConfig(project);
+          const ghConfig = await getGitHubConfigAsync(project);
           if (!ghConfig) {
             throw new Error('No GitHub configuration found');
           }
@@ -831,7 +831,7 @@ export function registerAutoFixHandlers(
       debugLog('approveBatches handler called', { projectId, batchCount: approvedBatches.length });
       const result = await withProjectOrNull(projectId, async (project) => {
         try {
-          const ghConfig = getGitHubConfig(project);
+          const ghConfig = await getGitHubConfigAsync(project);
           if (!ghConfig) {
             throw new Error('No GitHub configuration found');
           }

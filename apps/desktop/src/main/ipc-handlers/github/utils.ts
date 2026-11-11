@@ -2,9 +2,9 @@
  * GitHub utility functions
  */
 
-import { getStoredAccessTokenSync, getValidAccessToken } from '../../github-auth/token-store';
+import { getValidAccessToken } from '../../github-auth/token-store';
 import { existsSync, readFileSync } from 'fs';
-import { execFileSync, execFile } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import type { Project } from '../../../shared/types';
@@ -171,25 +171,6 @@ async function getTokenFromGhCliAsync(): Promise<string | null> {
 }
 
 /**
- * Get GitHub token from gh CLI if available (sync version for getGitHubConfig)
- * Uses augmented PATH to find gh CLI in common locations (e.g., Homebrew on macOS)
- */
-function getTokenFromGhCliSync(): string | null {
-  const appToken = getStoredAccessTokenSync();
-  if (appToken) return appToken;
-  try {
-    const token = execFileSync(getToolPath('gh'), ['auth', 'token'], {
-      encoding: 'utf-8',
-      stdio: 'pipe',
-      env: getAugmentedEnv()
-    }).trim();
-    return token || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Get a fresh GitHub token for subprocess use (async to avoid blocking main thread)
  * Always fetches fresh from gh CLI - no caching to ensure account changes are reflected
  * @returns The current GitHub token or null if not authenticated
@@ -213,19 +194,6 @@ function readProjectGitHubEnv(project: Project): { repo?: string; pat?: string }
   } catch {
     return null;
   }
-}
-
-/**
- * Get GitHub configuration from project environment file
- * Falls back to gh CLI token if GITHUB_TOKEN not in .env.
- * Synchronous: an App token that has just expired counts as missing until it is refreshed —
- * prefer getGitHubConfigAsync() wherever the caller can await.
- */
-export function getGitHubConfig(project: Project): GitHubConfig | null {
-  const env = readProjectGitHubEnv(project);
-  if (!env?.repo) return null;
-  const token = env.pat ?? getTokenFromGhCliSync() ?? undefined;
-  return token ? { token, repo: env.repo } : null;
 }
 
 /**
