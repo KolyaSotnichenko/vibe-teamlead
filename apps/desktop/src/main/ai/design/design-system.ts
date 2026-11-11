@@ -176,7 +176,8 @@ export function loadDesignSystem(projectPath: string, settings: DesignSettings):
   const { tokens, error } = tokensRaw !== undefined ? parseTokens(tokensRaw) : {};
   const exists = markdown !== undefined;
   const meta = exists ? readSystemMeta(projectPath) : undefined;
-  const pkg = readPackageMeta(projectPath);
+  // The package is in effect only while the system is the one written from it
+  const pkg = meta?.how === 'package' ? readPackageMeta(projectPath) : undefined;
   return {
     ...(meta ? { meta } : {}),
     ...(pkg ? { package: pkg } : {}),

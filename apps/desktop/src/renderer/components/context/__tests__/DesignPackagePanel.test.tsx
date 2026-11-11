@@ -29,6 +29,7 @@ const summary: DesignPackageSummary = {
   licenceLine: 'The fonts are commercial: use them within the licence.',
   replaces: '.vibe-teamlead/design-system.md',
   skipped: [{ path: 'source/Design.fig', reason: 'type' }],
+  references: { added: 0, skipped: 0 },
 };
 
 type ProgressEvent = { projectId: string; message: string };
@@ -235,5 +236,23 @@ describe('DesignSystemTab with a package', () => {
     // Setup marks the package path as current
     fireEvent.click(screen.getByRole('tab', { name: 'context.design.tabs.setup' }));
     expect(screen.getByRole('button', { name: /context.design.package.title/ })).toHaveTextContent('context.design.setup.current');
+  });
+
+  it('Overview offers no themes choice for a package without dark colours', async () => {
+    const imported = (await designMock.importPackage('p1', { themes: 'light' })).data!;
+    const info = { ...imported, meta: { ...imported.meta!, writtenAt: '2999-01-01T00:00:00Z' }, package: { ...imported.package!, hasDark: false } };
+    api({ get: async () => ({ success: true, data: info }) });
+    render(<DesignSystemTab projectId="p1" />);
+    await screen.findByRole('tab', { name: 'context.design.tabs.view' });
+    await waitFor(() => expect(screen.queryByText('context.design.package.themes.body')).not.toBeInTheDocument());
+    expect(screen.queryByRole('radio', { name: /context.design.package.themes.lightDark$/ })).not.toBeInTheDocument();
+  });
+
+  it('the summary says how many images and PDFs become references, and how many are left out', async () => {
+    api({ inspectPackage: vi.fn(async () => ({ success: true, data: { ...summary, references: { added: 10, skipped: 3 } } })) });
+    render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+    await choose();
+    expect(screen.getByText('context.design.package.references 10')).toBeInTheDocument();
+    expect(screen.getByText('context.design.package.referencesSkipped 3 10')).toBeInTheDocument();
   });
 });

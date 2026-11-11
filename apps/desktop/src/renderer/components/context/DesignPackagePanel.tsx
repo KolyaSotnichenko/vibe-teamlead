@@ -219,7 +219,12 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
         {count('fonts', summary.fonts)}
         {summary.hasTokens && count('colorsLight', summary.colors.light)}
         {summary.hasTokens && summary.colors.dark > 0 && count('colorsDark', summary.colors.dark)}
+        {summary.references.added > 0 && count('references', summary.references.added)}
       </ul>
+
+      {summary.references.skipped > 0 && (
+        <Notice>{t('context.design.package.referencesSkipped', { count: summary.references.skipped, max: summary.references.added })}</Notice>
+      )}
 
       {!summary.hasTokens && <Notice>{t('context.design.package.noTokens')}</Notice>}
 

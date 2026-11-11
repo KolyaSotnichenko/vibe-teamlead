@@ -129,7 +129,7 @@ export async function makePreview(source: string, target: string, kind: DesignRe
   }
 }
 
-export async function addReferenceFiles(projectPath: string, files: string[], role: DesignReferenceRole = 'inspiration'): Promise<{ list: DesignReferenceList; skipped: string[] }> {
+export async function addReferenceFiles(projectPath: string, files: string[], role: DesignReferenceRole = 'inspiration'): Promise<{ list: DesignReferenceList; skipped: string[]; added: string[] }> {
   const dir = referencesDir(projectPath);
   const skipped: string[] = [];
   const added: DesignReference[] = [];
@@ -172,7 +172,7 @@ export async function addReferenceFiles(projectPath: string, files: string[], ro
   }
   if (added.length) writeReferences(projectPath, [...readReferences(projectPath), ...added]);
   for (const ref of added) enqueue(projectPath, ref.id);
-  return { list: listReferences(projectPath), skipped };
+  return { list: listReferences(projectPath), skipped, added: added.map((r) => r.id) };
 }
 
 /** http(s) URLs only; a bare domain gets https://. Pure — tested directly. */

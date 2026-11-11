@@ -47,10 +47,10 @@ export interface DesignTokens {
   allowedPatterns?: DesignBannedPattern[];
 }
 
-/** How the QA loop treats design-check findings */
 /** Which themes of an imported package's tokens are kept. */
 export type DesignThemes = 'light' | 'light-dark';
 
+/** How the QA loop treats design-check findings */
 export type DesignQaMode = 'block' | 'warn' | 'off';
 
 /** One frame on a task's design canvas (design before code) */
@@ -155,6 +155,8 @@ export interface DesignPackageInfo {
   fonts: string[];
   licenceLine?: string;
   themes: DesignThemes;
+  /** The package's tokens have dark-theme colours: only then can the themes be 'light-dark' */
+  hasDark: boolean;
   /** Components already built in the project, filled per task by the worker */
   built?: string[];
 }
@@ -177,6 +179,8 @@ export interface DesignPackageSummary {
   /** Path of the design system the import would overwrite, relative to the project */
   replaces?: string;
   skipped: DesignPackageSkip[];
+  /** The package's extra images and PDFs: added as references (at most 10), and left out over that */
+  references: { added: number; skipped: number };
 }
 
 export interface DesignSystemInfo {

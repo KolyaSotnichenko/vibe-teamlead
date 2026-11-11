@@ -275,6 +275,7 @@ export const designMock: DesignAPI = {
         licenceLine: 'The fonts are commercial: use them within the licence and do not publish the package.',
         ...(info.exists && info.markdownPath ? { replaces: info.markdownPath } : {}),
         skipped: [{ path: 'source/Design.fig', reason: 'type' as const }],
+        references: { added: 1, skipped: 0 },
       },
     };
   },
@@ -294,6 +295,7 @@ export const designMock: DesignAPI = {
         logos: [],
         fonts: [],
         themes: options.themes,
+        hasDark: true,
       },
     };
     return { success: true, data: info };

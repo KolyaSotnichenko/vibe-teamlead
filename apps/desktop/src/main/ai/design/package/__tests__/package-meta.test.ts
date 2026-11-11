@@ -42,7 +42,7 @@ describe('package meta', () => {
       name: 'MHP', namespace: 'mhp', importedAt: '2026-01-01T00:00:00.000Z',
       dir: `${PACKAGE_DIR}/mhp-global`, componentsDir: 'src/components/mhp',
       components: [{ name: 'Button', readme: `${PACKAGE_DIR}/mhp-global/components/Button/README.md` }],
-      logos: [], fonts: [], themes: 'light-dark',
+      logos: [], fonts: [], themes: 'light-dark', hasDark: true,
     };
     expect(readPackageMeta(project)).toBeUndefined();
     writePackageMeta(project, info);
@@ -145,9 +145,38 @@ describe('builtComponents names', () => {
 });
 
 describe('loadDesignSystem package', () => {
-  it('is set when the meta file exists and absent otherwise', () => {
+  const system = () => {
+    mkdirSync(path.join(project, '.vibe-teamlead'), { recursive: true });
+    writeFileSync(path.join(project, '.vibe-teamlead/design-system.md'), '# System\n');
+  };
+  const meta = (): DesignPackageInfo => ({ name: 'MHP', namespace: 'mhp', importedAt: 'x', dir: `${PACKAGE_DIR}/mhp`, componentsDir: 'src/components/mhp', components: [], logos: [], fonts: [], themes: 'light', hasDark: true });
+
+  it('is set only while the system was written from the package', () => {
     expect(loadDesignSystem(project, {}).package).toBeUndefined();
-    writePackageMeta(project, { name: 'MHP', namespace: 'mhp', importedAt: 'x', dir: `${PACKAGE_DIR}/mhp`, componentsDir: 'src/components/mhp', components: [], logos: [], fonts: [], themes: 'light' });
+    system();
+    writePackageMeta(project, meta());
+    expect(loadDesignSystem(project, {}).package).toBeUndefined();
+    recordSystemMeta(project, { how: 'package', packageName: 'MHP' });
     expect(loadDesignSystem(project, {}).package?.name).toBe('MHP');
+  });
+
+  for (const how of ['extract', 'direction', 'edited'] as const) {
+    it(`is dropped once another system is written (${how})`, () => {
+      system();
+      writePackageMeta(project, meta());
+      recordSystemMeta(project, { how: 'package', packageName: 'MHP' });
+      recordSystemMeta(project, { how });
+      expect(loadDesignSystem(project, {}).package).toBeUndefined();
+    });
+  }
+});
+
+describe('package meta hasDark', () => {
+  it('is kept, defaults to false, and light-dark needs it', () => {
+    const info = (over: Partial<DesignPackageInfo>): DesignPackageInfo => ({ name: 'MHP', namespace: 'mhp', importedAt: 'x', dir: `${PACKAGE_DIR}/mhp`, componentsDir: 'src/components/mhp', components: [], logos: [], fonts: [], themes: 'light-dark', hasDark: true, ...over });
+    writePackageMeta(project, info({}));
+    expect(readPackageMeta(project)).toMatchObject({ hasDark: true, themes: 'light-dark' });
+    writePackageMeta(project, info({ hasDark: 'yes' as unknown as boolean }));
+    expect(readPackageMeta(project)).toMatchObject({ hasDark: false, themes: 'light' });
   });
 });

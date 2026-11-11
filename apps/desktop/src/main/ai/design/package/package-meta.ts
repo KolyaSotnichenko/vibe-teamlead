@@ -119,7 +119,9 @@ export function readPackageMeta(projectPath: string): DesignPackageInfo | undefi
     logos: files(raw.logos),
     fonts: files(raw.fonts),
     ...(typeof raw.licenceLine === 'string' && cleanPackageText(raw.licenceLine) ? { licenceLine: cleanPackageText(raw.licenceLine) } : {}),
-    themes: raw.themes === 'light-dark' ? 'light-dark' : 'light',
+    // Light and dark only when the package has dark colours (an old or edited meta says so)
+    themes: raw.themes === 'light-dark' && raw.hasDark === true ? 'light-dark' : 'light',
+    hasDark: raw.hasDark === true,
     ...(built ? { built } : {}),
   };
 }

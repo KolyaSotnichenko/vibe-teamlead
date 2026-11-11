@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DesignPackageInfo, DesignTokens } from '../../../../../shared/types';
-import { readSystemMeta } from '../../system-meta';
+import { readSystemMeta, recordSystemMeta } from '../../system-meta';
 import {
   cancelDesignPackage,
   importDesignPackage,
@@ -29,7 +29,7 @@ afterEach(() => rmSync(project, { recursive: true, force: true }));
 
 function fakeDeps() {
   const write = vi.fn(async (o: { tokens?: DesignTokens }) => ({ markdown: '# From the package', tokens: o.tokens ?? FALLBACK }));
-  const addReferences = vi.fn(async (_files: string[]) => undefined);
+  const addReferences = vi.fn(async (files: string[]) => files.map((_f, i) => `ref-${i}`));
   return { write: write as never, addReferences, calls: write };
 }
 
@@ -250,6 +250,40 @@ describe('package paths from an untrusted package', () => {
   });
 });
 
+describe('importDesignPackage extra references', () => {
+  const manyImages = (n: number) => {
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-imgs-'));
+    mkdirSync(path.join(src, 'brand'), { recursive: true });
+    writeFileSync(path.join(src, 'README.md'), '# Kit\n');
+    writeFileSync(path.join(src, 'tokens.css'), ':root{--ink:#111111}');
+    for (let i = 0; i < n; i++) writeFileSync(path.join(src, 'brand', `p${String(i).padStart(2, '0')}.png`), `png${i}`);
+    return src;
+  };
+
+  it('records the added references in the system meta, so they are not newer than the system', async () => {
+    await inspectDesignPackage(project, undefined, mhp);
+    await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+    const meta = readSystemMeta(project)!;
+    expect(meta.referenceIds).toEqual(['ref-0']);
+    expect(meta.how).toBe('package');
+  });
+
+  it('adds at most 10 and the summary says how many are added and left out', async () => {
+    const src = manyImages(13);
+    try {
+      const s = await inspectDesignPackage(project, undefined, src);
+      expect(s.references).toEqual({ added: 10, skipped: 3 });
+      const deps = fakeDeps();
+      await importDesignPackage(project, undefined, { themes: 'light' }, deps);
+      expect(deps.addReferences).toHaveBeenCalledTimes(1);
+      expect(deps.addReferences.mock.calls[0][0]).toHaveLength(10);
+      expect(readSystemMeta(project)?.referenceIds).toHaveLength(10);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('setDesignThemes', () => {
   it('refuses a package without token files and changes nothing', async () => {
     await inspectDesignPackage(project, undefined, flat);
@@ -278,6 +312,50 @@ describe('setDesignThemes', () => {
 
   it('fails without an imported package', () => {
     expect(() => setDesignThemes(project, undefined, 'light-dark')).toThrow(/no design package/i);
+  });
+
+  it('refuses once another system replaced the package one', async () => {
+    await inspectDesignPackage(project, undefined, mhp);
+    await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+    recordSystemMeta(project, { how: 'extract' });
+    const tokensBefore = readFileSync(path.join(project, '.vibe-teamlead/design-tokens.json'), 'utf-8');
+    expect(() => setDesignThemes(project, undefined, 'light-dark')).toThrow(/no longer made from the package/i);
+    expect(readFileSync(path.join(project, '.vibe-teamlead/design-tokens.json'), 'utf-8')).toBe(tokensBefore);
+  });
+
+  it('records whether the package has dark colours and refuses light-dark without them', async () => {
+    await inspectDesignPackage(project, undefined, path.join(fixtures, 'tokens-css'));
+    await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+    expect(readPackageMeta(project)?.hasDark).toBe(true);
+
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-light-'));
+    try {
+      writeFileSync(path.join(src, 'README.md'), '# Light\n');
+      writeFileSync(path.join(src, 'tokens.css'), ':root{--ink:#111111}');
+      await inspectDesignPackage(project, undefined, src);
+      await importDesignPackage(project, undefined, { themes: 'light-dark' }, fakeDeps());
+      const meta = readPackageMeta(project)!;
+      expect(meta.hasDark).toBe(false);
+      expect(meta.themes).toBe('light');
+      expect(() => setDesignThemes(project, undefined, 'light-dark')).toThrow(/no dark/i);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the token fields the package does not set', async () => {
+    await inspectDesignPackage(project, undefined, mhp);
+    await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+    const file = path.join(project, '.vibe-teamlead/design-tokens.json');
+    const edited = { ...tokensFile(), gradients: true, spacing: [4, 8], allowedPatterns: [{ pattern: 'grid-bg', message: 'the grid' }], bannedPatterns: [{ pattern: 'blur', message: 'no blur' }] };
+    writeFileSync(file, JSON.stringify(edited));
+    setDesignThemes(project, undefined, 'light-dark');
+    const after = tokensFile();
+    expect(after.colors.some((c) => c.name.startsWith('dark/'))).toBe(true);
+    expect(after.allowedPatterns).toEqual(edited.allowedPatterns);
+    expect(after.bannedPatterns).toEqual(edited.bannedPatterns);
+    expect(after.gradients).toBe(true);
+    expect(after.spacing).toEqual([4, 8]);
   });
 });
 

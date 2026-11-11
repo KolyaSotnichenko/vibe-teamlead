@@ -80,7 +80,7 @@ describe('designPromptSection', () => {
       componentCss: '.vibe-teamlead/design/package/mhp/components.css',
       componentTypes: '.vibe-teamlead/design/package/mhp/components.d.ts',
       tokensCss: '.vibe-teamlead/design/package/mhp/tokens.css',
-      logos: ['logo.svg'], fonts: ['a.woff2'], themes: 'light' as const, built: ['Button'],
+      logos: ['logo.svg'], fonts: ['a.woff2'], themes: 'light' as const, hasDark: true, built: ['Button'],
     };
     const withPkg = (over = {}) => ({ ...loadDesignSystem(project(), undefined), package: { ...pkg, ...over } });
 

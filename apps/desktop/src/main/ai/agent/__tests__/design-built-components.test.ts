@@ -19,7 +19,7 @@ const shared = (): DesignSystemInfo => ({
   storybook: { detected: false, enabled: false },
   package: {
     name: 'MHP', namespace: 'mhp', importedAt: 'x', dir: '.vibe-teamlead/design/package/mhp', componentsDir: 'src/components/mhp',
-    components: [{ name: 'Button' }, { name: 'Card' }], logos: [], fonts: [], themes: 'light',
+    components: [{ name: 'Button' }, { name: 'Card' }], logos: [], fonts: [], themes: 'light', hasDark: false,
   },
 });
 

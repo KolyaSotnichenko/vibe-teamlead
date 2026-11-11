@@ -40,8 +40,6 @@ export interface ProjectSettings {
   designSystemPath?: string;
   /** How QA treats design-check findings (default: block when a design system exists) */
   designQaMode?: import('./design-system').DesignQaMode;
-  /** Themes the design system supports (default: light) */
-  designThemes?: import('./design-system').DesignThemes;
   /** Design before code for tasks that change UI: wireframes, then screens in the design system (default: full) */
   designMode?: 'off' | 'wireframes' | 'full';
   /** Who approves wireframes and design: the owner (the task waits) or the designer itself (default: owner) */

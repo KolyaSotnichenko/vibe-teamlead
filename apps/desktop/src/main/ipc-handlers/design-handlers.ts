@@ -230,12 +230,11 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
         await agentJob(projectId, (signal, onProgress) =>
           importDesignPackage(projectPath, settings, { themes }, {
             write: writeFromPackage,
-            addReferences: (files) => addReferenceFiles(projectPath, files, 'as-is'),
+            addReferences: async (files) => (await addReferenceFiles(projectPath, files, 'as-is')).added,
             signal,
             onProgress,
           }),
         );
-        projectStore.updateProjectSettings(projectId, { designThemes: themes });
         return designInfo(projectId) as DesignSystemInfo;
       }),
   );
@@ -254,7 +253,6 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
     (_e, projectId: string, themes: unknown): Promise<IPCResult<DesignSystemInfo>> =>
       withProject(projectId, async (projectPath, settings) => {
         setDesignThemes(projectPath, settings, asThemes(themes));
-        projectStore.updateProjectSettings(projectId, { designThemes: asThemes(themes) });
         return designInfo(projectId) as DesignSystemInfo;
       }),
   );

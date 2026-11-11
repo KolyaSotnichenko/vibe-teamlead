@@ -641,7 +641,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         {info.tokensError && <Notice>{info.tokensError}</Notice>}
         {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
       </section>
-      {info.package && (
+      {info.package?.hasDark && (
         <section className="space-y-3" aria-labelledby="ds-themes">
           <SectionHeader id="ds-themes" title={t('context.design.package.themes.title')} meta={info.package.name} />
           <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.package.themes.body')}</p>
