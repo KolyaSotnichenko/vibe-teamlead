@@ -131,9 +131,11 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
       setVariables({ ok: false, kind: 'unknown', message: '' });
     }
   }, [projectId]);
+  // Re-read once a database is added: it brings its own variables (DATABASE_URL, …)
+  const databaseAddedAt = settings?.database?.addedAt;
   useEffect(() => {
     if (hasVariables) void loadVariables();
-  }, [hasVariables, loadVariables]);
+  }, [hasVariables, databaseAddedAt, loadVariables]);
 
   if (!state) {
     return <p className="text-sm text-muted-foreground">{t('deploy:env.loading')}</p>;

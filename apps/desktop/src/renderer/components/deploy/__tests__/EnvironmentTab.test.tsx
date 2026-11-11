@@ -419,6 +419,17 @@ describe('Database', () => {
     expect(await within(panel).findByText('deploy:needed.database-terms {"integration":"Neon"}')).toBeInTheDocument();
   });
 
+  it('after the database is added, the variables are read again (it adds DATABASE_URL)', async () => {
+    const h = setup({ env: { settings: setUpSettings } });
+    const panel = await openEnvironment();
+    await waitFor(() => expect(h.deploy.listVariables).toHaveBeenCalledTimes(1));
+    const withDb = { ...setUpSettings, database: { provider: 'neon', addedAt: '2026-11-11T12:00:00Z' } } satisfies DeployProjectSettings;
+    h.deploy.state.mockResolvedValue({ success: true, data: { settings: withDb, setupRunning: false, databaseRunning: false, lastDatabase: { ok: true } } });
+    h.deploy.listVariables.mockResolvedValue({ success: true, data: { ok: true, variables: [{ name: 'DATABASE_URL', targets: ['production', 'preview'], inGitHub: false }] } });
+    fireEvent.click(await within(panel).findByRole('button', { name: 'deploy:database.add' }));
+    expect(await within(panel).findByText('DATABASE_URL')).toBeInTheDocument();
+  });
+
   it('says under Add database that previews may share the database', async () => {
     setup({ env: { settings: setUpSettings } });
     const panel = await openEnvironment();
