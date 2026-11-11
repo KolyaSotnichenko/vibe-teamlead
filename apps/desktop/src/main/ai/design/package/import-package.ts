@@ -47,7 +47,7 @@ export const MAX_PACKAGE_REFERENCES = 10;
 const abs = (projectPath: string, rel: string) => path.join(projectPath, ...rel.split('/'));
 
 const ROOT_NAME_ERROR =
-  "The package's top folder name can use only Latin letters, digits, spaces and . _ - @ ( ) + (at most 64 characters). Rename the folder and choose the package again.";
+  "The package's top folder name can use only letters, digits, spaces and . _ - @ ( ) + (at most 64 characters). Rename the folder and choose the package again.";
 
 /** Unpacks `source` into a clean staging folder and says what the package holds. */
 export async function inspectDesignPackage(

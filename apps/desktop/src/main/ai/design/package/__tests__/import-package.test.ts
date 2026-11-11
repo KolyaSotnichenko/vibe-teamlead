@@ -315,6 +315,44 @@ describe('importDesignPackage extra references', () => {
   });
 });
 
+describe('a package named in Cyrillic', () => {
+  it('imports, and its meta reads back with the Cyrillic paths', async () => {
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-uk-'));
+    try {
+      const top = path.join(src, 'дизайн-система');
+      mkdirSync(path.join(top, 'логотипи'), { recursive: true });
+      mkdirSync(path.join(top, 'fonts'), { recursive: true });
+      writeFileSync(path.join(top, 'README.md'), '# Дизайн-система\n');
+      writeFileSync(path.join(top, 'tokens.css'), ':root{--ink:#111111}');
+      writeFileSync(path.join(top, 'логотипи', 'знак.svg'), '<svg/>');
+      // macOS file names come back decomposed: й is и plus a combining mark
+      writeFileSync(path.join(top, 'fonts', 'Гарний шрифт (v2).otf'.normalize('NFD').replace('и', 'й'.normalize('NFD'))), 'otf');
+      await inspectDesignPackage(project, undefined, src);
+      await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+      const meta = readPackageMeta(project)!;
+      expect(meta).toBeDefined();
+      expect(meta.dir.normalize('NFC')).toBe(`${PACKAGE_DIR}/дизайн-система`);
+      expect(meta.tokensCss?.normalize('NFC')).toBe(`${PACKAGE_DIR}/дизайн-система/tokens.css`);
+      expect(meta.fonts).toHaveLength(1);
+      expect(loadDesignSystem(project, undefined).package?.dir.normalize('NFC')).toBe(`${PACKAGE_DIR}/дизайн-система`);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+
+  it('still refuses a Cyrillic top folder with a backtick', async () => {
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-uk-bad-'));
+    try {
+      const top = path.join(src, 'система`rm`');
+      mkdirSync(top, { recursive: true });
+      writeFileSync(path.join(top, 'README.md'), '# X\n');
+      await expect(inspectDesignPackage(project, undefined, src)).rejects.toThrow(/top folder/i);
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('setDesignThemes', () => {
   it('refuses a package without token files and changes nothing', async () => {
     await inspectDesignPackage(project, undefined, flat);

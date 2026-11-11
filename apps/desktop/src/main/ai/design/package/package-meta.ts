@@ -69,8 +69,12 @@ function safeRelative(value: unknown): value is string {
 const underDir = (value: unknown, dir: string): value is string =>
   safeRelative(value) && (value === dir || value.startsWith(`${dir}/`));
 
-/** One folder or file name of a package path: plain characters only, so it is safe in prompts. */
-const PATH_SEGMENT = /^[\w .@()+-]{1,64}$/;
+/**
+ * One folder or file name of a package path: letters and digits of any script (a Ukrainian
+ * package names its folders in Cyrillic; macOS gives names decomposed, hence the marks), space
+ * and . _ @ ( ) + -. No newlines, backticks, control characters or slashes: it is safe in prompts.
+ */
+const PATH_SEGMENT = /^[\p{L}\p{N}\p{M} ._@()+-]{1,64}$/u;
 
 /** A path whose every segment is a plain name (no newlines, backticks, `.` or `..`). */
 export function isPlainPackagePath(value: string): boolean {

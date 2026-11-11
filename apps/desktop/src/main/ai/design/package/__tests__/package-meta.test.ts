@@ -100,6 +100,22 @@ describe('readPackageMeta on a hand-edited file', () => {
     put({ dir: `${PACKAGE_DIR}/MHP Global (v2) @latest+1`, componentCss: `${PACKAGE_DIR}/MHP Global (v2) @latest+1/components/bundle.css` });
     expect(readPackageMeta(project)?.componentCss).toBe(`${PACKAGE_DIR}/MHP Global (v2) @latest+1/components/bundle.css`);
   });
+  it('accepts Cyrillic segments and still refuses newlines, backticks and control characters in them', () => {
+    const uk = `${PACKAGE_DIR}/дизайн-система`;
+    put({ dir: uk, tokensCss: `${uk}/tokens.css`, logos: [`${uk}/логотипи/знак.svg`, `${uk}/логотипи/зн\nак.svg`] });
+    const m = readPackageMeta(project)!;
+    expect(m.dir).toBe(uk);
+    expect(m.tokensCss).toBe(`${uk}/tokens.css`);
+    expect(m.logos).toEqual([`${uk}/логотипи/знак.svg`]);
+    put({ dir: `${PACKAGE_DIR}/дизайн\nсистема` });
+    expect(readPackageMeta(project)).toBeUndefined();
+    put({ dir: `${PACKAGE_DIR}/дизайн\`система` });
+    expect(readPackageMeta(project)).toBeUndefined();
+    put({ dir: `${PACKAGE_DIR}/дизайн\u0007система` });
+    expect(readPackageMeta(project)).toBeUndefined();
+    put({ dir: `${PACKAGE_DIR}/дизайн\u2028система` });
+    expect(readPackageMeta(project)).toBeUndefined();
+  });
   it('drops logos, fonts and readmes whose segments are not plain names', () => {
     put({ logos: [`${dir}/logos/a.svg`, `${dir}/logos/b\n.svg`], fonts: [`${dir}/fonts/\`x\`.otf`], components: [{ name: 'Button', readme: `${dir}/components/Button/READ\nME.md` }] });
     const m = readPackageMeta(project)!;
