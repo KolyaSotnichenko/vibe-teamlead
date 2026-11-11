@@ -145,14 +145,13 @@ describe('DeployPage', () => {
     expect(window.electronAPI.openExternal).toHaveBeenCalledWith('https://github.com/acme/app/actions/runs/18/job/11');
   });
 
-  it('keeps the last 2 000 lines of a long log', async () => {
+  it('shows the log as main sent it (main trims it to the last 2 000 lines)', async () => {
     const text = Array.from({ length: 2500 }, (_, i) => `line-${i + 1}`).join('\n');
     const { emit } = setup({ state: 'ready', text });
     emit(base());
     fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
     const log = await screen.findByTestId('job-log');
-    expect(log.textContent?.startsWith('line-501\n')).toBe(true);
-    expect(log.textContent?.trimEnd().endsWith('line-2500')).toBe(true);
+    expect(log.textContent).toBe(text);
   });
 
   it('does not fetch the log of a running job', () => {

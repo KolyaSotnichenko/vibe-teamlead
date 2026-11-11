@@ -1,20 +1,12 @@
 /**
  * Deploy → Runs: the clicked node's jobs — steps with status and duration, and once a job is
- * complete, its log (last 2 000 lines) with a link to the full log on GitHub.
+ * complete, its log (main sends the last 2 000 lines, ANSI codes stripped) with a link to the full log on GitHub.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeployJob, DeployJobLog, DeployRun, GraphNode } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
 import { StatusMark, displayUrl, formatDuration, isWebUrl, openWebUrl, toNodeStatus, useGitHubErrorText } from './status';
-
-export const LOG_LINES = 2000;
-
-/** The last `LOG_LINES` lines of a log (a trailing newline does not count as a line). */
-export function lastLines(text: string, limit = LOG_LINES): string {
-  const lines = text.replace(/\n$/, '').split('\n');
-  return lines.length > limit ? lines.slice(-limit).join('\n') : lines.join('\n');
-}
 
 interface JobPanelProps {
   projectId: string;
@@ -85,7 +77,7 @@ function JobLog({ projectId, job, fullLogUrl, pollKey }: { projectId: string; jo
       .catch(() => settle({ state: 'error', error: { kind: 'unavailable', message: '' } }));
   }, [projectId, job.id, completed, fetchKey]);
 
-  const text = log?.state === 'ready' ? lastLines(log.text) : null;
+  const text = log?.state === 'ready' ? log.text : null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the end whenever the text changes
   useLayoutEffect(() => {
     const box = scrollRef.current;

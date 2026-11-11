@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DeployRun, DeployRunsState, GitHubError } from '../../../shared/types/deploy';
 import type { Project } from '../../../shared/types';
-import { createRunsPoller, fetchJobLog } from '../runs-poller';
+import { createRunsPoller, fetchJobLog, prepareLog } from '../runs-poller';
 
 const run = (id: number, status: DeployRun['status'] = 'completed'): DeployRun => ({
   id, name: 'CI', title: `run ${id}`, branch: 'main', sha: `sha${id}`, event: 'push', status,
@@ -295,10 +295,32 @@ describe('repo resolution', () => {
   });
 });
 
+describe('prepareLog', () => {
+  it('keeps the last 2 000 lines', () => {
+    const text = Array.from({ length: 2500 }, (_, i) => `line-${i + 1}`).join('\n');
+    const out = prepareLog(text);
+    expect(out.split('\n')).toHaveLength(2000);
+    expect(out.startsWith('line-501\n')).toBe(true);
+    expect(out.endsWith('line-2500')).toBe(true);
+  });
+  it('does not count a trailing newline as a line, and keeps a short log whole', () => {
+    expect(prepareLog('a\nb\n')).toBe('a\nb');
+    expect(prepareLog('a\r\nb', 1)).toBe('b');
+  });
+  it('strips ANSI escape codes (colours, cursor, OSC links)', () => {
+    expect(prepareLog('\x1b[36;1mRun npm test\x1b[0m\n\x1b[2K\x1b]8;;https://x\x07link\x1b]8;;\x07 ok')).toBe('Run npm test\nlink ok');
+  });
+});
+
 describe('fetchJobLog', () => {
   const repo = { owner: 'o', repo: 'r' };
   it('ready with text', async () => {
     expect(await fetchJobLog({ jobLog: async () => 'hi' } as never, repo, 1)).toEqual({ state: 'ready', text: 'hi' });
+  });
+  it('sends the log trimmed and without ANSI codes', async () => {
+    const text = `\x1b[31m${Array.from({ length: 2001 }, (_, i) => `l${i}`).join('\n')}\x1b[0m\n`;
+    const r = await fetchJobLog({ jobLog: async () => text } as never, repo, 1);
+    expect(r).toEqual({ state: 'ready', text: Array.from({ length: 2000 }, (_, i) => `l${i + 1}`).join('\n') });
   });
   it('404 (null) is pending', async () => {
     expect(await fetchJobLog({ jobLog: async () => null } as never, repo, 1)).toEqual({ state: 'pending' });

@@ -51,6 +51,22 @@ const asGitHubError = (e: unknown): GitHubError => {
   return { kind: 'unavailable', message: e instanceof Error ? e.message : 'Could not reach GitHub' };
 };
 
+/** Lines of a job log sent to the renderer; the rest is a link to GitHub. */
+export const LOG_LINES = 2000;
+
+// OSC sequences (e.g. hyperlinks: ESC ] ... BEL or ESC \), then CSI sequences (colours, cursor: ESC [ ... final byte),
+// then any other two-byte escape.
+const ANSI = new RegExp(
+  ['\\u001b\\][^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)', '\\u001b\\[[0-?]*[ -/]*[@-~]', '\\u001b[@-Z\\\\-_]'].join('|'),
+  'g'
+);
+
+/** The last `limit` lines of a log (a trailing newline does not count as a line), without ANSI escape codes. */
+export function prepareLog(text: string, limit = LOG_LINES): string {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
+  return (lines.length > limit ? lines.slice(-limit) : lines).join('\n').replace(ANSI, '');
+}
+
 /** A job's log for the renderer: 404 is not there yet, 410 is gone, any other failure is an error the renderer may retry. */
 export async function fetchJobLog(
   client: Pick<ActionsClient, 'jobLog'>,
@@ -59,7 +75,7 @@ export async function fetchJobLog(
 ): Promise<DeployJobLog> {
   try {
     const text = await client.jobLog(repo.owner, repo.repo, jobId);
-    return text === null ? { state: 'pending' } : { state: 'ready', text };
+    return text === null ? { state: 'pending' } : { state: 'ready', text: prepareLog(text) };
   } catch (e) {
     const error = asGitHubError(e);
     return error.kind === 'unavailable' && error.status === 410 ? { state: 'expired' } : { state: 'error', error };
