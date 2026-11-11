@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.31 - 2026-11-11
+
+- No more "Needs Recovery" after a restart. Tasks that were running when the app closed, updated or crashed are stopped at the next launch the way Stop stops them: a task with a plan waits in review with Resume, one without a plan goes back to the backlog. Nothing restarts by itself, so nothing spends tokens until you press Resume.
+
 ## 2.0.0-beta.30 - 2026-11-11
 
 - Context → Memories shows the project's whole memory, not just the last 20 entries: filter by who wrote an entry (agents chose to remember, or learned from subtasks), by type, or by any text, file name or task number, 50 at a time with Show more. Remove a wrong entry with the bin icon on its card.

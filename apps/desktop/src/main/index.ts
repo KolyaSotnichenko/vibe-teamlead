@@ -68,6 +68,9 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
 import { projectStore } from './project-store';
+import { settleInterruptedTasks } from './interrupted-tasks';
+import { taskStateManager } from './task-state-manager';
+import { hasPlanWithSubtasks } from './ipc-handlers/task/plan-file-utils';
 import { TerminalManager } from './terminal-manager';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { createSleepWatch } from './sleep-watch';
@@ -585,6 +588,19 @@ app.whenReady().then(() => {
 
   // Setup IPC handlers
   setupIpcHandlers(agentManager, terminalManager, () => mainWindow);
+
+  // Tasks the last session left running: stopped the way Stop stops them, so their cards offer Resume
+  try {
+    settleInterruptedTasks({
+      projects: projectStore.getProjects(),
+      tasksOf: (projectId) => projectStore.getTasks(projectId),
+      hasPlan: hasPlanWithSubtasks,
+      isRunning: (taskId) => agentManager?.isRunning(taskId) ?? false,
+      stop: (taskId, task, project, hasPlan) => taskStateManager.stopTask(taskId, task, project, hasPlan),
+    });
+  } catch (error) {
+    console.warn('[main] Failed to settle interrupted tasks:', error);
+  }
 
   // Move a Claude key from the removed multi-account settings (one-time)
   try {
