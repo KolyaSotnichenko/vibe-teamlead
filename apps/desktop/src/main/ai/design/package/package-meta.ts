@@ -34,19 +34,60 @@ export function writePackageMeta(projectPath: string, info: DesignPackageInfo): 
   writeFileReplacingSync(metaFile(projectPath), `${JSON.stringify(info, null, 2)}\n`, 'utf-8');
 }
 
+const COMPONENT_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
+
+/** A relative path that stays inside the project: no absolute path, no `..` segment. */
+function safeRelative(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '' || value.includes('\0')) return false;
+  if (path.isAbsolute(value) || /^[A-Za-z]:/.test(value)) return false;
+  return !value.split(/[\\/]+/).includes('..');
+}
+
+const underDir = (value: unknown, dir: string): value is string =>
+  safeRelative(value) && (value === dir || value.startsWith(`${dir}/`));
+
 export function readPackageMeta(projectPath: string): DesignPackageInfo | undefined {
+  let raw: Record<string, unknown>;
   try {
-    const raw = JSON.parse(readFileSync(metaFile(projectPath), 'utf-8')) as Partial<DesignPackageInfo>;
-    if (typeof raw.name !== 'string' || typeof raw.namespace !== 'string' || typeof raw.dir !== 'string' || typeof raw.componentsDir !== 'string') {
-      return undefined;
-    }
-    return { ...raw, themes: raw.themes === 'light-dark' ? 'light-dark' : 'light' } as DesignPackageInfo;
+    raw = JSON.parse(readFileSync(metaFile(projectPath), 'utf-8')) as Record<string, unknown>;
   } catch {
     return undefined;
   }
+  if (!raw || typeof raw !== 'object') return undefined;
+  const { name, namespace, importedAt, dir, componentsDir } = raw;
+  if (typeof name !== 'string' || typeof namespace !== 'string' || typeof importedAt !== 'string') return undefined;
+  if (!underDir(dir, PACKAGE_DIR) || !safeRelative(componentsDir)) return undefined;
+  const packageFile = (value: unknown) => (underDir(value, dir) ? value : undefined);
+  const files = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => underDir(v, dir)) : []);
+  const components = (Array.isArray(raw.components) ? raw.components : []).flatMap((c: unknown) => {
+    const entry = c as { name?: unknown; readme?: unknown } | null;
+    if (!entry || typeof entry.name !== 'string' || !COMPONENT_NAME.test(entry.name)) return [];
+    const readme = packageFile(entry.readme);
+    return [{ name: entry.name, ...(readme ? { readme } : {}) }];
+  });
+  const componentCss = packageFile(raw.componentCss);
+  const componentTypes = packageFile(raw.componentTypes);
+  const tokensCss = packageFile(raw.tokensCss);
+  const built = Array.isArray(raw.built) ? raw.built.filter((v): v is string => typeof v === 'string' && COMPONENT_NAME.test(v)) : undefined;
+  return {
+    name,
+    namespace,
+    importedAt,
+    dir,
+    componentsDir,
+    components,
+    ...(componentCss ? { componentCss } : {}),
+    ...(componentTypes ? { componentTypes } : {}),
+    ...(tokensCss ? { tokensCss } : {}),
+    logos: files(raw.logos),
+    fonts: files(raw.fonts),
+    ...(typeof raw.licenceLine === 'string' ? { licenceLine: raw.licenceLine } : {}),
+    themes: raw.themes === 'light-dark' ? 'light-dark' : 'light',
+    ...(built ? { built } : {}),
+  };
 }
 
 /** The components whose folder already exists under the components folder. */
 export function builtComponents(cwd: string, componentsDir: string, names: string[]): string[] {
-  return names.filter((name) => existsSync(path.join(cwd, componentsDir, name)));
+  return names.filter((name) => COMPONENT_NAME.test(name) && existsSync(path.join(cwd, componentsDir, name)));
 }

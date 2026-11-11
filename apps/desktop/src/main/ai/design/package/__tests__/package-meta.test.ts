@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { DesignPackageInfo } from '../../../../../shared/types';
+import { loadDesignSystem } from '../../design-system';
 import { readSystemMeta, recordSystemMeta } from '../../system-meta';
 import { PACKAGE_DIR, builtComponents, componentsDirFor, readPackageMeta, writePackageMeta } from '../package-meta';
 
@@ -53,5 +54,62 @@ describe('system meta', () => {
   it('accepts how: package with packageName', () => {
     recordSystemMeta(project, { how: 'package', packageName: 'MHP' });
     expect(readSystemMeta(project)).toMatchObject({ how: 'package', packageName: 'MHP' });
+  });
+});
+
+describe('readPackageMeta on a hand-edited file', () => {
+  const dir = `${PACKAGE_DIR}/mhp`;
+  const base = { name: 'MHP', namespace: 'mhp', importedAt: '2026-01-01T00:00:00.000Z', dir, componentsDir: 'src/components/mhp' };
+  const put = (over: Record<string, unknown>) => {
+    mkdirSync(path.join(project, '.vibe-teamlead/design'), { recursive: true });
+    writeFileSync(path.join(project, '.vibe-teamlead/design/package-meta.json'), JSON.stringify({ ...base, ...over }));
+  };
+
+  it('rejects a dir outside the package folder', () => {
+    put({ dir: '../../etc' });
+    expect(readPackageMeta(project)).toBeUndefined();
+  });
+  it('rejects an absolute or escaping componentsDir', () => {
+    put({ componentsDir: '/tmp/x' });
+    expect(readPackageMeta(project)).toBeUndefined();
+    put({ componentsDir: 'src/../../x' });
+    expect(readPackageMeta(project)).toBeUndefined();
+  });
+  it('rejects a non-string importedAt', () => {
+    put({ importedAt: 5 });
+    expect(readPackageMeta(project)).toBeUndefined();
+  });
+  it('drops escaping readmes and bad component names', () => {
+    put({ components: [{ name: 'Button', readme: '../../secret.md' }, { name: '../x' }, { name: 'Card', readme: `${dir}/components/Card/README.md` }] });
+    expect(readPackageMeta(project)?.components).toEqual([{ name: 'Button' }, { name: 'Card', readme: `${dir}/components/Card/README.md` }]);
+  });
+  it('defaults arrays and drops non-strings and unknown keys', () => {
+    put({ extra: 1 });
+    const bare = readPackageMeta(project)!;
+    expect(bare.logos).toEqual([]);
+    expect(bare.fonts).toEqual([]);
+    expect(bare.components).toEqual([]);
+    expect('extra' in bare).toBe(false);
+    put({ logos: [`${dir}/a.svg`, 3, '../b.svg', '/abs.svg', 'elsewhere/c.svg'], componentCss: '../x.css', tokensCss: `${dir}/tokens.css` });
+    const m = readPackageMeta(project)!;
+    expect(m.logos).toEqual([`${dir}/a.svg`]);
+    expect(m.componentCss).toBeUndefined();
+    expect(m.tokensCss).toBe(`${dir}/tokens.css`);
+  });
+});
+
+describe('builtComponents names', () => {
+  it('ignores names that are not plain component names', () => {
+    mkdirSync(path.join(project, 'src/components/mhp/Button'), { recursive: true });
+    mkdirSync(path.join(project, 'src/components/x'), { recursive: true });
+    expect(builtComponents(project, 'src/components/mhp', ['../x', 'Button'])).toEqual(['Button']);
+  });
+});
+
+describe('loadDesignSystem package', () => {
+  it('is set when the meta file exists and absent otherwise', () => {
+    expect(loadDesignSystem(project, {}).package).toBeUndefined();
+    writePackageMeta(project, { name: 'MHP', namespace: 'mhp', importedAt: 'x', dir: `${PACKAGE_DIR}/mhp`, componentsDir: 'src/components/mhp', components: [], logos: [], fonts: [], themes: 'light' });
+    expect(loadDesignSystem(project, {}).package?.name).toBe('MHP');
   });
 });
