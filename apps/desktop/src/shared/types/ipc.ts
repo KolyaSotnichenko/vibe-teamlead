@@ -369,7 +369,6 @@ export interface ElectronAPI {
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<RendererMemory[]>>;
 
   // Memory Management
-  verifyMemory: (memoryId: string) => Promise<IPCResult<void>>;
   pinMemory: (memoryId: string, pinned: boolean) => Promise<IPCResult<void>>;
   deprecateMemory: (memoryId: string) => Promise<IPCResult<void>>;
   deleteMemory: (memoryId: string) => Promise<IPCResult<void>>;

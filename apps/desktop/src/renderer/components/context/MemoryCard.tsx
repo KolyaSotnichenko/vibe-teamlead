@@ -11,7 +11,6 @@ import {
   ChevronUp,
   Flag,
   Pin,
-  ShieldCheck,
   Trash2
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +25,6 @@ import { cn } from '../../lib/utils';
 
 interface MemoryCardProps {
   memory: RendererMemory;
-  onVerify?: (memoryId: string) => void;
   onPin?: (memoryId: string, pinned: boolean) => void;
   onDeprecate?: (memoryId: string) => void;
 }
@@ -201,7 +199,7 @@ function WorkflowSteps({ steps, label }: { steps: string[]; label: string }) {
   );
 }
 
-export function MemoryCard({ memory, onVerify, onPin, onDeprecate }: MemoryCardProps) {
+export function MemoryCard({ memory, onPin, onDeprecate }: MemoryCardProps) {
   const { t } = useTranslation('common');
   const [expanded, setExpanded] = useState(false);
   const [filesExpanded, setFilesExpanded] = useState(false);
@@ -294,12 +292,6 @@ export function MemoryCard({ memory, onVerify, onPin, onDeprecate }: MemoryCardP
                     aria-label={t('memory.badges.needsReview')}
                   />
                 )}
-                {memory.userVerified && (
-                  <ShieldCheck
-                    className="h-3.5 w-3.5 text-green-400 shrink-0"
-                    aria-label={t('memory.badges.verified')}
-                  />
-                )}
               </div>
 
               {/* Confidence + source + timestamp */}
@@ -365,20 +357,8 @@ export function MemoryCard({ memory, onVerify, onPin, onDeprecate }: MemoryCardP
         </div>
 
         {/* Actions */}
-        {(onVerify || onPin || onDeprecate) && (
+        {(onPin || onDeprecate) && (
           <div className="flex items-center gap-1 mt-2">
-            {!memory.userVerified && onVerify && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 text-xs text-muted-foreground hover:text-green-400"
-                onClick={() => onVerify(memory.id)}
-                title={t('memory.actions.verify')}
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {t('memory.actions.verify')}
-              </Button>
-            )}
             {onPin && (
               <Button
                 variant="ghost"

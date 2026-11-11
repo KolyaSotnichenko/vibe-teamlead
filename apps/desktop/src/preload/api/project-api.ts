@@ -50,7 +50,6 @@ export interface ProjectAPI {
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<unknown>>;
 
   // Memory Management
-  verifyMemory: (memoryId: string) => Promise<IPCResult<void>>;
   pinMemory: (memoryId: string, pinned: boolean) => Promise<IPCResult<void>>;
   deprecateMemory: (memoryId: string) => Promise<IPCResult<void>>;
   deleteMemory: (memoryId: string) => Promise<IPCResult<void>>;
@@ -183,8 +182,6 @@ export const createProjectAPI = (): ProjectAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_GET_MEMORIES, projectId, limit),
 
   // Memory Management
-  verifyMemory: (memoryId: string): Promise<IPCResult<void>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_MEMORY_VERIFY, memoryId),
 
   pinMemory: (memoryId: string, pinned: boolean): Promise<IPCResult<void>> =>
     ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_MEMORY_PIN, memoryId, pinned),

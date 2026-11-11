@@ -377,16 +377,6 @@ export class MemoryServiceImpl implements MemoryService {
   }
 
   /**
-   * Mark a memory as user-verified and clear the needs_review flag.
-   */
-  async verifyMemory(memoryId: string): Promise<void> {
-    await this.db.execute({
-      sql: `UPDATE memories SET user_verified = 1, needs_review = 0 WHERE id = ?`,
-      args: [memoryId],
-    });
-  }
-
-  /**
    * Pin or unpin a memory.
    */
   async pinMemory(memoryId: string, pinned: boolean): Promise<void> {

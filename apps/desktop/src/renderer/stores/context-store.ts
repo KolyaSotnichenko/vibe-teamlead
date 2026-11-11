@@ -200,26 +200,6 @@ export async function loadRecentMemories(
 }
 
 /**
- * Verify a memory (mark as user-verified)
- */
-export async function verifyMemory(memoryId: string): Promise<boolean> {
-  try {
-    const result = await window.electronAPI.verifyMemory(memoryId);
-    if (result.success) {
-      const store = useContextStore.getState();
-      store.setRecentMemories(
-        store.recentMemories.map((m) =>
-          m.id === memoryId ? { ...m, userVerified: true, needsReview: false } : m
-        )
-      );
-    }
-    return result.success;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Pin/unpin a memory
  */
 export async function pinMemory(memoryId: string, pinned: boolean): Promise<boolean> {

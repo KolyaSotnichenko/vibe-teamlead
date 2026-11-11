@@ -231,7 +231,6 @@ export interface MemoryService {
   searchWorkflowRecipe(taskDescription: string, opts?: { limit?: number }): Promise<Memory[]>;
   updateAccessCount(memoryId: string): Promise<void>;
   deprecateMemory(memoryId: string): Promise<void>;
-  verifyMemory(memoryId: string): Promise<void>;
   pinMemory(memoryId: string, pinned: boolean): Promise<void>;
   deleteMemory(memoryId: string): Promise<void>;
 }

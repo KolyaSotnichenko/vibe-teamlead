@@ -73,20 +73,6 @@ export function registerMemoryDataHandlers(
     }
   );
 
-  // Verify a memory (mark as user-verified)
-  ipcMain.handle(
-    IPC_CHANNELS.CONTEXT_MEMORY_VERIFY,
-    async (_, memoryId: string): Promise<IPCResult<void>> => {
-      try {
-        const service = await getMemoryService();
-        await service.verifyMemory(memoryId);
-        return { success: true };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to verify memory' };
-      }
-    }
-  );
-
   // Pin/unpin a memory
   ipcMain.handle(
     IPC_CHANNELS.CONTEXT_MEMORY_PIN,

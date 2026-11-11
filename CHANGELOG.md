@@ -5,6 +5,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 ## 2.0.0-beta.31 - 2026-11-11
 
 - No more "Needs Recovery" after a restart. Tasks that were running when the app closed, updated or crashed are stopped at the next launch the way Stop stops them: a task with a plan waits in review with Resume, one without a plan goes back to the backlog. Nothing restarts by itself, so nothing spends tokens until you press Resume.
+- Memories no longer have Verify: marking an entry as verified changed nothing the agents see. Remove a wrong entry instead.
 
 ## 2.0.0-beta.30 - 2026-11-11
 

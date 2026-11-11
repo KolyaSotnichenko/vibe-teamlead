@@ -3,7 +3,7 @@ import { FolderTree, Brain, Palette } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useContextStore } from '../../stores/context-store';
-import { verifyMemory, pinMemory, deprecateMemory } from '../../stores/context-store';
+import { pinMemory, deprecateMemory } from '../../stores/context-store';
 import { useProjectContext, useRefreshIndex, useMemorySearch } from './hooks';
 import { ProjectIndexTab } from './ProjectIndexTab';
 import { MemoriesTab } from './MemoriesTab';
@@ -30,10 +30,6 @@ export function Context({ projectId }: ContextProps) {
   useProjectContext(projectId);
   const handleRefreshIndex = useRefreshIndex(projectId);
   const handleSearch = useMemorySearch(projectId);
-
-  const handleVerify = async (memoryId: string) => {
-    await verifyMemory(memoryId);
-  };
 
   const handlePin = async (memoryId: string, pinned: boolean) => {
     await pinMemory(memoryId, pinned);
@@ -83,7 +79,6 @@ export function Context({ projectId }: ContextProps) {
             searchResults={searchResults}
             searchLoading={searchLoading}
             onSearch={handleSearch}
-            onVerify={handleVerify}
             onPin={handlePin}
             onDeprecate={handleDeprecate}
           />

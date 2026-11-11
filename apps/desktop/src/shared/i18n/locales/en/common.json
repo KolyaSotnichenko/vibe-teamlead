@@ -1055,7 +1055,6 @@
     },
     "badges": {
       "needsReview": "Needs Review",
-      "verified": "Verified",
       "pinned": "Pinned",
       "confidence": "Confidence",
       "confidencePercent": "Confidence: {{percent}}%"
@@ -1070,8 +1069,7 @@
     },
     "health": {
       "totalMemories": "Total Memories",
-      "avgConfidence": "Avg Confidence",
-      "verified": "Verified"
+      "avgConfidence": "Avg Confidence"
     },
     "info": {
       "database": "Database",
@@ -1127,7 +1125,6 @@
       "steps": "Steps"
     },
     "actions": {
-      "verify": "Verify",
       "pin": "Pin",
       "unpin": "Unpin",
       "deprecate": "Remove"

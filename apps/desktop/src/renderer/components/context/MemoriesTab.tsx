@@ -35,7 +35,6 @@ interface MemoriesTabProps {
   searchResults: Array<{ type: string; content: string; score: number }>;
   searchLoading: boolean;
   onSearch: (query: string) => void;
-  onVerify?: (memoryId: string) => void;
   onPin?: (memoryId: string, pinned: boolean) => void;
   onDeprecate?: (memoryId: string) => void;
 }
@@ -84,7 +83,6 @@ export function MemoriesTab({
   searchResults,
   searchLoading,
   onSearch,
-  onVerify,
   onPin,
   onDeprecate
 }: MemoriesTabProps) {
@@ -125,12 +123,7 @@ export function MemoriesTab({
     if (recentMemories.length === 0) return null;
     const avgConfidence =
       recentMemories.reduce((sum, m) => sum + (m.confidence ?? 0), 0) / recentMemories.length;
-    const verifiedCount = recentMemories.filter((m) => m.userVerified).length;
-    return {
-      avgConfidence: Math.round(avgConfidence * 100),
-      verifiedCount,
-      verifiedPct: Math.round((verifiedCount / recentMemories.length) * 100)
-    };
+    return { avgConfidence: Math.round(avgConfidence * 100) };
   }, [recentMemories]);
 
   // Filter memories based on active filter
@@ -199,7 +192,7 @@ export function MemoriesTab({
                 {/* Memory Health Indicator */}
                 {memoryHealth && recentMemories.length > 0 && (
                   <div className="pt-3 border-t border-border/50">
-                    <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="grid grid-cols-2 gap-2 mb-3">
                       <div className="text-center p-2 rounded-lg bg-muted/30">
                         <div className="text-lg font-semibold text-foreground">
                           {recentMemories.length}
@@ -214,14 +207,6 @@ export function MemoriesTab({
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {t('memory.health.avgConfidence')}
-                        </div>
-                      </div>
-                      <div className="text-center p-2 rounded-lg bg-green-500/10">
-                        <div className="text-lg font-semibold text-green-400">
-                          {memoryHealth.verifiedPct}%
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {t('memory.health.verified')}
                         </div>
                       </div>
                     </div>
@@ -457,7 +442,6 @@ export function MemoriesTab({
                 <MemoryCard
                   key={memory.id}
                   memory={memory}
-                  onVerify={onVerify}
                   onPin={onPin}
                   onDeprecate={onDeprecate}
                 />

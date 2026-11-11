@@ -39,10 +39,6 @@ export const contextMock = {
   }),
 
   // Memory Management
-  verifyMemory: async (_memoryId: string) => ({
-    success: true
-  }),
-
   pinMemory: async (_memoryId: string, _pinned: boolean) => ({
     success: true
   }),

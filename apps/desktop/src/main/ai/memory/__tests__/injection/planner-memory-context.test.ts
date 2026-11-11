@@ -41,7 +41,6 @@ function makeMemoryService(): MemoryService {
     searchWorkflowRecipe: vi.fn().mockResolvedValue([]),
     updateAccessCount: vi.fn().mockResolvedValue(undefined),
     deprecateMemory: vi.fn().mockResolvedValue(undefined),
-    verifyMemory: vi.fn().mockResolvedValue(undefined),
     pinMemory: vi.fn().mockResolvedValue(undefined),
     deleteMemory: vi.fn().mockResolvedValue(undefined),
   };

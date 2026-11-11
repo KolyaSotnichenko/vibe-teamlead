@@ -1092,7 +1092,6 @@
     },
     "badges": {
       "needsReview": "Потребує перевірки",
-      "verified": "Перевірено",
       "pinned": "Закріплено",
       "confidence": "Впевненість",
       "confidencePercent": "Впевненість: {{percent}}%"
@@ -1107,8 +1106,7 @@
     },
     "health": {
       "totalMemories": "Усього спогадів",
-      "avgConfidence": "Середня впевненість",
-      "verified": "Перевірено"
+      "avgConfidence": "Середня впевненість"
     },
     "info": {
       "database": "База даних",
@@ -1164,7 +1162,6 @@
       "steps": "Кроки"
     },
     "actions": {
-      "verify": "Підтвердити",
       "pin": "Закріпити",
       "unpin": "Відкріпити",
       "deprecate": "Вилучити"
