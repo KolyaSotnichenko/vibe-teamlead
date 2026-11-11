@@ -7,6 +7,9 @@
  * a remote URL or git config, and never appears in errors or logs.
  */
 import { execFile } from 'child_process';
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
 import sodium from 'libsodium-wrappers';
 import type { GitHubError } from '../../shared/types/deploy';
 import { getValidAccessToken } from '../github-auth/token-store';
@@ -64,16 +67,21 @@ async function api(
   const { fetchImpl = fetch as JsonFetch, getToken = getValidAccessToken } = opts;
   const token = await getToken();
   if (!token) throw new GitHubWriteError('no-connection', 'Not signed in to GitHub. Please sign in first.');
-  const response = await fetchImpl(`${GITHUB_API}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  let response: Awaited<ReturnType<JsonFetch>>;
+  try {
+    response = await fetchImpl(`${GITHUB_API}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+  } catch {
+    throw new GitHubWriteError('unavailable', 'Could not reach GitHub. Check your connection and try again.');
+  }
   let parsed: unknown = null;
   try {
     parsed = await response.json();
@@ -95,7 +103,7 @@ export async function createPrivateRepo(
   options: GitHubWriteOptions = {},
 ): Promise<{ owner: string; repo: string; cloneUrl: string }> {
   for (let attempt = 1; attempt <= MAX_NAME_TRIES; attempt++) {
-    const candidate = attempt === 1 ? name : `${name}-${attempt}`;
+    const candidate = attempt === 1 ? name.slice(0, 100) : `${name.slice(0, 98)}-${attempt}`;
     const res = await api(options, 'POST', '/user/repos', { name: candidate, private: true, auto_init: false });
     if (res.status >= 200 && res.status < 300 && isObj(res.body)) {
       const owner = isObj(res.body.owner) ? res.body.owner.login : undefined;
@@ -164,34 +172,71 @@ const defaultRunner: GitRunner = (file, args, opts) =>
     );
   });
 
-/** Pushes `refspec` to `remote` authenticating with the App user token for this one command only. */
+const GITHUB_URL = /^https:\/\/github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?$/;
+
+/** Env variables that could print the token (tracing) or inject config; removed from the child. */
+function isUnsafeGitVar(key: string): boolean {
+  return (
+    key === 'GIT_TRACE' ||
+    key === 'GIT_TRACE_CURL' ||
+    key === 'GIT_TRACE_PACKET' ||
+    key === 'GIT_TRACE_SETUP' ||
+    key === 'GIT_CURL_VERBOSE' ||
+    key.startsWith('GIT_TRACE2') ||
+    key === 'GIT_CONFIG_PARAMETERS' ||
+    key === 'GIT_CONFIG_COUNT' ||
+    /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(key)
+  );
+}
+
+/**
+ * Pushes `refspec` to the GitHub repo at `url` (exactly https://github.com/<owner>/<repo>[.git])
+ * authenticating with the App user token for this one command only. The token travels in
+ * the child's env as scoped git config (not argv), project hooks are disabled, and
+ * redirects are refused.
+ */
 export async function pushWithAppToken(
   projectPath: string,
-  remote: string,
+  url: string,
   refspec: string,
   options: PushOptions = {},
 ): Promise<void> {
   const { getToken = getValidAccessToken, runner = defaultRunner } = options;
+  const m = GITHUB_URL.exec(url);
+  if (!m || m[2] === '.' || m[2] === '..' || refspec.startsWith('-')) {
+    throw new GitHubWriteError('invalid', 'Push target must be https://github.com/<owner>/<repo>');
+  }
   const token = await getToken();
   if (!token) throw new GitHubWriteError('no-connection', 'Not signed in to GitHub. Please sign in first.');
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
-  const args = [
-    '-c',
-    'credential.helper=',
-    '-c',
-    `http.extraheader=AUTHORIZATION: basic ${basic}`,
-    'push',
-    remote,
-    refspec,
-  ];
-  const env = { ...getIsolatedGitEnv(), GIT_TERMINAL_PROMPT: '0' };
+  const hooksDir = await mkdtemp(path.join(tmpdir(), 'vt-nohooks-'));
   try {
-    await runner(getToolPath('git'), args, { cwd: projectPath, env, timeout: PUSH_TIMEOUT_MS });
+    const env: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(getIsolatedGitEnv())) if (!isUnsafeGitVar(k)) env[k] = v;
+    const config: Array<[string, string]> = [
+      ['credential.helper', ''],
+      ['http.https://github.com/.extraheader', `AUTHORIZATION: basic ${basic}`],
+      ['http.followRedirects', 'false'],
+      ['core.hooksPath', hooksDir],
+    ];
+    env.GIT_CONFIG_COUNT = String(config.length);
+    config.forEach(([k, v], i) => {
+      env[`GIT_CONFIG_KEY_${i}`] = k;
+      env[`GIT_CONFIG_VALUE_${i}`] = v;
+    });
+    env.GIT_TRACE_REDACT = '1';
+    env.GIT_TERMINAL_PROMPT = '0';
+    await runner(getToolPath('git'), ['push', '--no-verify', '--', url, refspec], {
+      cwd: projectPath,
+      env,
+      timeout: PUSH_TIMEOUT_MS,
+    });
   } catch (error) {
-    // The command line carries the token: report git's own message, scrubbed, never the command.
     const raw = String((error as { stderr?: unknown }).stderr ?? '').trim() || 'git push failed';
     const clean = raw.split(token).join('***').split(basic).join('***').slice(0, 500);
     throw new GitHubWriteError('unavailable', `git push failed: ${clean}`);
+  } finally {
+    await rm(hooksDir, { recursive: true, force: true });
   }
 }
 
