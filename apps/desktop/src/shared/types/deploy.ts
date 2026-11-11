@@ -117,6 +117,19 @@ export interface DeployAPI {
   stopRuns: (projectId: string) => Promise<import('./common').IPCResult>;
   jobLog: (projectId: string, jobId: number) => Promise<import('./common').IPCResult<DeployJobLog>>;
   onRunsUpdate: (callback: (state: DeployRunsState) => void) => () => void;
+  /** Runs setup (or joins the run already going for the project). `vercelTeamId`: null = personal account; omitted = keep the stored choice. */
+  setUp: (projectId: string, opts?: { vercelTeamId?: string | null }) => Promise<import('./common').IPCResult<DeploySetupState>>;
+  state: (projectId: string) => Promise<import('./common').IPCResult<DeployEnvState>>;
+  /** The owner's answer to `vercel-existing-project`; setup runs again with it. */
+  chooseVercelProject: (
+    projectId: string,
+    choice: { useProjectId: string } | { createNew: true },
+  ) => Promise<import('./common').IPCResult<DeploySetupState>>;
+  setVariable: (projectId: string, input: DeployVariableInput) => Promise<import('./common').IPCResult<DeploySetVariableResult>>;
+  listVariables: (projectId: string) => Promise<import('./common').IPCResult<DeployListVariablesResult>>;
+  addDatabase: (projectId: string, opts?: { acceptTerms?: boolean }) => Promise<import('./common').IPCResult<DeployAddDatabaseResult>>;
+  onSetupProgress: (callback: (progress: DeploySetupProgress) => void) => () => void;
+  onPushResult: (callback: (result: DeployPushResult) => void) => () => void;
 }
 
 /** The Vercel account the app is signed in to (Settings → Vercel). Never carries a token. */
@@ -124,7 +137,8 @@ export interface VercelStatus {
   connected: boolean;
   /** `browser`: signed in with `vercel login`; `token`: a pasted token. */
   source?: 'browser' | 'token';
-  user?: { username: string; email?: string };
+  /** `id`: the account's id (the org of a project in the personal account). */
+  user?: { id?: string; username: string; email?: string };
   teams?: Array<{ id: string; slug: string; name: string }>;
   /** Vercel could not be reached or answered with an error other than 401/403. */
   error?: string;
@@ -184,6 +198,8 @@ export interface DeployProjectSettings {
   pendingVercel?: { name: string; at: string; teamId?: string };
   /** The owner's answer to `vercel-existing-project` (set by the UI): use that project, or create a new one anyway. */
   vercelChoice?: { useProjectId?: string; createNew?: boolean };
+  /** The Vercel team the owner picked before setup (absent: the personal account). A team already recorded in `vercel` wins. */
+  vercelTeamId?: string;
 }
 
 export type NeededFromYouKind =
@@ -228,4 +244,65 @@ export interface DeploySetupState {
   /** The step setup reached (where it stopped, or `done`). */
   step?: DeploySetupStep;
   error?: DeploySetupError;
+}
+
+export interface DeploySetupProgress {
+  projectId: string;
+  step: DeploySetupStep;
+}
+
+/** The result of pushing the project's main branch to GitHub after a merge. */
+export interface DeployPushResult {
+  projectId: string;
+  ok: boolean;
+  error?: { kind: string; message: string };
+  at: string;
+}
+
+/** A failure on one side (Vercel or GitHub) of saving a variable. */
+export interface DeploySideError {
+  kind: string;
+  message: string;
+}
+
+export type DeployVariableTarget = 'production' | 'preview';
+
+export interface DeployVariableInput {
+  name: string;
+  value: string;
+  targets: DeployVariableTarget[];
+  alsoGitHubSecret: boolean;
+}
+
+export type DeploySetVariableResult =
+  | { ok: true; vercel: 'ok'; github: 'ok' | 'skipped' }
+  | { ok: false; kind: 'not-set-up'; message: string }
+  | { ok: false; vercel: 'ok' | 'skipped' | DeploySideError; github: 'ok' | 'skipped' | DeploySideError };
+
+export interface DeployVariable {
+  name: string;
+  targets: string[];
+  inGitHub: boolean;
+}
+
+export type DeployListVariablesResult =
+  | { ok: true; variables: DeployVariable[]; githubUnavailable?: DeploySideError }
+  | { ok: false; kind: string; message: string };
+
+export type DeployDatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' | 'saved-failed' | 'unknown';
+
+export type DeployAddDatabaseResult =
+  | { ok: true }
+  | { ok: false; needed: NeededFromYou }
+  | { ok: false; error: { kind: DeployDatabaseErrorKind; message: string } };
+
+/** What the Environment tab shows for a project (main keeps the last results of this app session). */
+export interface DeployEnvState {
+  /** The stored settings; null when deploy was never started for the project. */
+  settings: DeployProjectSettings | null;
+  setupRunning: boolean;
+  lastSetup?: DeploySetupState;
+  databaseRunning: boolean;
+  lastDatabase?: DeployAddDatabaseResult;
+  lastPush?: DeployPushResult;
 }

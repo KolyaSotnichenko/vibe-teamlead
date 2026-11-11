@@ -7,14 +7,10 @@
  * goes to the emitter and back to the caller.
  */
 import type { Project } from '../../shared/types';
+import type { DeployPushResult } from '../../shared/types/deploy';
 import { readGitInfo } from './setup';
 
-export interface DeployPushResult {
-  projectId: string;
-  ok: boolean;
-  error?: { kind: string; message: string };
-  at: string;
-}
+export type { DeployPushResult };
 
 export interface PushAfterMergeDeps {
   /** `pushWithAppToken` in production */
@@ -42,6 +38,12 @@ interface ProjectState {
 }
 
 const states = new Map<string, ProjectState>();
+const lastResults = new Map<string, DeployPushResult>();
+
+/** The last push result of a project in this app session (the Deploy view shows it after a reload). */
+export function lastPushResult(projectId: string): DeployPushResult | undefined {
+  return lastResults.get(projectId);
+}
 
 async function pushOnce(
   projectId: string,
@@ -63,6 +65,7 @@ async function pushOnce(
     result = { projectId, ok: false, error: { kind, message }, at };
     outcome = { pushed: false, error: message };
   }
+  lastResults.set(projectId, result);
   try {
     deps.emit(result);
   } catch {

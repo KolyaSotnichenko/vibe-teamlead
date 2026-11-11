@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { pushMainAfterMerge, type PushAfterMergeDeps, type DeployPushResult } from '../push-after-merge';
+import { lastPushResult, pushMainAfterMerge, type PushAfterMergeDeps, type DeployPushResult } from '../push-after-merge';
 
 const project = (deploy?: unknown, mainBranch: string | null = 'main') =>
   ({ id: 'p1', path: '/proj', settings: { mainBranch, deploy } }) as never;
@@ -75,5 +75,13 @@ describe('pushMainAfterMerge', () => {
   it('a throwing emitter does not break the push', async () => {
     const d = { push: vi.fn(async () => {}), emit: () => { throw new Error('x'); } } as PushAfterMergeDeps;
     expect(await pushMainAfterMerge(project(enabled), d, 'main')).toEqual({ pushed: true });
+  });
+
+  it('keeps the last result per project for the Deploy view to show after a reload', async () => {
+    const err = Object.assign(new Error('nope'), { kind: 'permissions' });
+    const { d } = deps(vi.fn(async () => { throw err; }));
+    await pushMainAfterMerge({ id: 'p-last', path: '/proj', settings: { mainBranch: 'main', deploy: enabled } } as never, d, 'main');
+    expect(lastPushResult('p-last')).toEqual({ projectId: 'p-last', ok: false, error: { kind: 'permissions', message: 'nope' }, at: '2026-01-01T00:00:00.000Z' });
+    expect(lastPushResult('other')).toBeUndefined();
   });
 });

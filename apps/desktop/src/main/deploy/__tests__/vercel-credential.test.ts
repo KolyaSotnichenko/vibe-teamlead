@@ -125,7 +125,7 @@ describe('connectVercel', () => {
     expect(status).toEqual({
       connected: true,
       source: 'browser',
-      user: { username: 'ada', email: 'ada@example.com' },
+      user: { id: 'u1', username: 'ada', email: 'ada@example.com' },
       teams: [{ id: 't1', slug: 'acme', name: 'Acme' }],
     });
 
@@ -243,6 +243,25 @@ describe('vercelStatus', () => {
     const { cred } = make({ valid: [], apiCalls: calls });
     expect((await cred.vercelStatus()).connected).toBe(false);
     expect(calls[0]).toEqual({ url: 'https://api.vercel.com/v2/user', auth: 'Bearer vca_revoked' });
+  });
+
+  it('carries the user id (the org of a personal-account project) and the teams', async () => {
+    writeAuth('vca_ok', NOW + 3600);
+    const { cred } = make({ valid: ['vca_ok'] });
+    const status = await cred.vercelStatus();
+    expect(status.user).toEqual({ id: 'u1', username: 'ada', email: 'ada@example.com' });
+    expect(status.teams).toEqual([{ id: 't1', slug: 'acme', name: 'Acme' }]);
+  });
+});
+
+describe('cliPaths', () => {
+  it('returns the CLI binary and the private config dir, resolving the binary once per session', async () => {
+    const { cred, ensureCli } = make();
+    const a = await cred.cliPaths();
+    const b = await cred.cliPaths();
+    expect(a).toEqual(b);
+    expect(a.configDir).toBe(path.join(userData(), 'vercel-cli', 'config'));
+    expect(ensureCli).toHaveBeenCalledTimes(1);
   });
 });
 

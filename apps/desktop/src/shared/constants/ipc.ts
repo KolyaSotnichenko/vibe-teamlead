@@ -620,6 +620,13 @@ export const IPC_CHANNELS = {
   DEPLOY_JOB_LOG: 'deploy:jobLog',
   DEPLOY_RUNS_UPDATE: 'deploy:runsUpdate',  // Event: runs state (main -> renderer)
   DEPLOY_PUSH_RESULT: 'deploy:pushResult',  // Event: push of main after a merge finished (main -> renderer)
+  DEPLOY_SETUP: 'deploy:setUp',
+  DEPLOY_STATE: 'deploy:state',
+  DEPLOY_CHOOSE_VERCEL_PROJECT: 'deploy:chooseVercelProject',
+  DEPLOY_SET_VARIABLE: 'deploy:setVariable',
+  DEPLOY_LIST_VARIABLES: 'deploy:listVariables',
+  DEPLOY_ADD_DATABASE: 'deploy:addDatabase',
+  DEPLOY_SETUP_PROGRESS: 'deploy:setupProgress',  // Event: the step setup reached (main -> renderer)
 
   // Vercel account (Settings → Vercel)
   VERCEL_STATUS: 'vercel:status',

@@ -581,6 +581,29 @@ describe('saveDeployPatch', () => {
     expect(p.settings.deploy).not.toHaveProperty('pendingRepo');
   });
 
+  it('clears pendingDatabase, vercelChoice and vercelTeamId set to undefined (database and setup patches)', () => {
+    const p = project({
+      deploy: {
+        enabled: true,
+        pendingDatabase: { name: 'app-db', at: 't' },
+        vercelChoice: { useProjectId: 'prj_1' },
+        vercelTeamId: 'team_1',
+      },
+    });
+    const store = {
+      getProject: vi.fn(() => p),
+      updateProjectSettings: vi.fn((_id: string, s: Partial<Project['settings']>) => {
+        p.settings = { ...p.settings, ...s };
+        return p;
+      }),
+    };
+    saveDeployPatch(store, 'p1', { database: { provider: 'neon', addedAt: 'x' }, pendingDatabase: undefined });
+    saveDeployPatch(store, 'p1', { vercelChoice: undefined, vercelTeamId: undefined });
+    expect(p.settings.deploy).toEqual({ enabled: true, database: { provider: 'neon', addedAt: 'x' } });
+    expect(Object.keys(p.settings.deploy ?? {})).not.toContain('pendingDatabase');
+    expect(JSON.parse(JSON.stringify(p.settings.deploy))).toEqual({ enabled: true, database: { provider: 'neon', addedAt: 'x' } });
+  });
+
   it('throws when the project is gone', () => {
     const store = { getProject: vi.fn(() => undefined), updateProjectSettings: vi.fn(() => undefined) };
     expect(() => saveDeployPatch(store, 'gone', { enabled: true })).toThrow();

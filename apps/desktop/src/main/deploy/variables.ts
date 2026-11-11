@@ -6,15 +6,18 @@
  * a kind and a fixed or classified message, never the value (messages that come from
  * dependencies are replaced unless they are typed Vercel/GitHub errors, which never hold it).
  */
-import type { DeployProjectSettings, VercelError } from '../../shared/types/deploy';
+import type {
+  DeployListVariablesResult,
+  DeployProjectSettings,
+  DeploySetVariableResult,
+  DeploySideError,
+  VercelError,
+} from '../../shared/types/deploy';
 import type { GitHubWriteError } from './github-write';
 import { isVercelError, type VercelClient } from './vercel-api';
 
 type Target = 'production' | 'preview';
-export interface SideError {
-  kind: string;
-  message: string;
-}
+export type SideError = DeploySideError;
 
 export interface VariablesDeps {
   vercelClient: (scope: { teamId?: string }) => Pick<VercelClient, 'upsertEnv' | 'listEnvNames'>;
@@ -22,14 +25,8 @@ export interface VariablesDeps {
   listRepoSecretNames: (owner: string, repo: string) => Promise<string[]>;
 }
 
-export type SetVariableResult =
-  | { ok: true; vercel: 'ok'; github: 'ok' | 'skipped' }
-  | { ok: false; kind: 'not-set-up'; message: string }
-  | { ok: false; vercel: 'ok' | 'skipped' | SideError; github: 'ok' | 'skipped' | SideError };
-
-export type ListVariablesResult =
-  | { ok: true; variables: Array<{ name: string; targets: string[]; inGitHub: boolean }>; githubUnavailable?: SideError }
-  | { ok: false; kind: string; message: string };
+export type SetVariableResult = DeploySetVariableResult;
+export type ListVariablesResult = DeployListVariablesResult;
 
 const NAME = /^[A-Z_][A-Z0-9_]*$/;
 const NOT_SET_UP = 'Set up deployment for this project first (repository and Vercel project).';

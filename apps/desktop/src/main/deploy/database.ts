@@ -13,7 +13,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import type { Project } from '../../shared/types';
-import type { DeployProjectSettings, NeededFromYou } from '../../shared/types/deploy';
+import type {
+  DeployAddDatabaseResult,
+  DeployDatabaseErrorKind,
+  DeployProjectSettings,
+  NeededFromYou,
+} from '../../shared/types/deploy';
 import { runVercelCli, type RunVercelCliResult } from './vercel-cli';
 
 export interface DatabaseDeps {
@@ -33,12 +38,8 @@ export interface DatabaseDeps {
   timeoutMs?: number;
 }
 
-export type DatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' | 'saved-failed' | 'unknown';
-
-export type AddDatabaseResult =
-  | { ok: true }
-  | { ok: false; needed: NeededFromYou }
-  | { ok: false; error: { kind: DatabaseErrorKind; message: string } };
+export type DatabaseErrorKind = DeployDatabaseErrorKind;
+export type AddDatabaseResult = DeployAddDatabaseResult;
 
 const DEFAULT_PLAN = 'free_v3';
 const DEFAULT_TIMEOUT_MS = 180_000;

@@ -49,6 +49,8 @@ export interface VercelCredential {
   connectVercel: (onState: (state: VercelConnectState) => void, signal: AbortSignal) => Promise<void>;
   setVercelToken: (token: string) => Promise<VercelStatus>;
   disconnectVercel: () => Promise<void>;
+  /** The CLI binary (downloaded on first use, then kept for the session) and the private config dir. */
+  cliPaths: () => Promise<{ binary: string; configDir: string }>;
 }
 
 export function createVercelCredential(deps: VercelCredentialDeps): VercelCredential {
@@ -128,8 +130,13 @@ export function createVercelCredential(deps: VercelCredentialDeps): VercelCreden
     }
     if (userRes.status === 401 || userRes.status === 403) return { connected: false };
     if (!userRes.ok) return { connected: false, error: `Vercel answered HTTP ${userRes.status}` };
-    const body = (await userRes.json().catch(() => ({}))) as { user?: { username?: string; email?: string } };
-    const user = { username: body.user?.username ?? '', ...(body.user?.email ? { email: body.user.email } : {}) };
+    const body = (await userRes.json().catch(() => ({}))) as { user?: { id?: string; uid?: string; username?: string; email?: string } };
+    const id = body.user?.id ?? body.user?.uid;
+    const user = {
+      ...(typeof id === 'string' && id ? { id } : {}),
+      username: body.user?.username ?? '',
+      ...(body.user?.email ? { email: body.user.email } : {}),
+    };
 
     let teams: NonNullable<VercelStatus['teams']> = [];
     try {
@@ -219,7 +226,13 @@ export function createVercelCredential(deps: VercelCredentialDeps): VercelCreden
     await fs.rm(pastedFile, { force: true });
   }
 
-  return { getVercelToken, vercelStatus, connectVercel, setVercelToken, disconnectVercel };
+  async function cliPaths(): Promise<{ binary: string; configDir: string }> {
+    const bin = await cliBinary();
+    await ensureConfigDir();
+    return { binary: bin, configDir };
+  }
+
+  return { getVercelToken, vercelStatus, connectVercel, setVercelToken, disconnectVercel, cliPaths };
 }
 
 let instance: VercelCredential | undefined;
@@ -262,4 +275,8 @@ export async function setVercelToken(token: string): Promise<VercelStatus> {
 
 export async function disconnectVercel(): Promise<void> {
   return (await appCredential()).disconnectVercel();
+}
+
+export async function vercelCliPaths(): Promise<{ binary: string; configDir: string }> {
+  return (await appCredential()).cliPaths();
 }

@@ -1,7 +1,14 @@
 import { ipcRenderer } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DeployAPI, DeployRunsState, VercelAPI, VercelConnectState } from '../../shared/types/deploy';
+import type {
+  DeployAPI,
+  DeployPushResult,
+  DeployRunsState,
+  DeploySetupProgress,
+  VercelAPI,
+  VercelConnectState,
+} from '../../shared/types/deploy';
 
 export type { DeployAPI, VercelAPI };
 
@@ -15,6 +22,22 @@ export const createDeployAPI = (): DeployAPI => ({
     const handler = (_event: Electron.IpcRendererEvent, state: DeployRunsState) => callback(state);
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_RUNS_UPDATE, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_RUNS_UPDATE, handler);
+  },
+  setUp: (projectId, opts) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_SETUP, projectId, opts),
+  state: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_STATE, projectId),
+  chooseVercelProject: (projectId, choice) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_CHOOSE_VERCEL_PROJECT, projectId, choice),
+  setVariable: (projectId, input) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_SET_VARIABLE, projectId, input),
+  listVariables: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_LIST_VARIABLES, projectId),
+  addDatabase: (projectId, opts) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, projectId, opts),
+  onSetupProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: DeploySetupProgress) => callback(progress);
+    ipcRenderer.on(IPC_CHANNELS.DEPLOY_SETUP_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_SETUP_PROGRESS, handler);
+  },
+  onPushResult: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, result: DeployPushResult) => callback(result);
+    ipcRenderer.on(IPC_CHANNELS.DEPLOY_PUSH_RESULT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_PUSH_RESULT, handler);
   },
 });
 
