@@ -5,12 +5,14 @@
  */
 import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GraphNode, RunGraph as RunGraphData } from '../../../shared/types/deploy';
+import type { DeployJob, GraphNode, RunGraph as RunGraphData } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
-import { StatusMark, formatDuration } from './status';
+import { StatusMark, formatDuration, formatRelative } from './status';
 
 interface RunGraphProps {
   graph: RunGraphData;
+  /** The run's jobs, to name the jobs behind a node that folds several (matrix, reusable workflow) */
+  jobs: DeployJob[];
   selectedKey?: string;
   onSelect: (node: GraphNode) => void;
 }
@@ -43,13 +45,33 @@ function Connector({ state }: { state: ConnectorState }) {
   );
 }
 
-function NodeButton({ node, selected, onSelect }: { node: GraphNode; selected: boolean; onSelect: () => void }) {
+/** The full label, then the jobs behind the node when it folds several, or when a deployment went live. */
+function useNodeTitle() {
+  const { t, i18n } = useTranslation(['deploy']);
+  return (node: GraphNode, jobs: DeployJob[]): string => {
+    const lines = [node.label];
+    if (node.jobIds.length > 1) {
+      for (const id of node.jobIds) {
+        const job = jobs.find((j) => j.id === id);
+        if (job) lines.push(job.name);
+      }
+    }
+    if (node.deployedAt) {
+      const ago = formatRelative(node.deployedAt, i18n.language);
+      if (ago) lines.push(t('deploy:graph.deployed', { ago }));
+    }
+    return lines.join('\n');
+  };
+}
+
+function NodeButton({ node, title, selected, onSelect }: { node: GraphNode; title: string; selected: boolean; onSelect: () => void }) {
   const { t } = useTranslation(['deploy']);
   const duration = formatDuration(node.startedAt, node.completedAt);
   return (
     <button
       type="button"
       data-status={node.status}
+      title={title}
       aria-pressed={selected}
       aria-label={`${node.label}, ${t(`deploy:status.${node.status}`)}${duration ? `, ${duration}` : ''}`}
       onClick={onSelect}
@@ -64,8 +86,8 @@ function NodeButton({ node, selected, onSelect }: { node: GraphNode; selected: b
       )}
     >
       <StatusMark status={node.status} />
-      <span className="min-w-0 flex-1 truncate">{node.label}</span>
-      {duration && <span className="font-mono text-[11px] text-muted-foreground">{duration}</span>}
+      <span className="line-clamp-2 min-w-0 flex-1 break-words">{node.label}</span>
+      {duration && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{duration}</span>}
       {node.status === 'running' && (
         <span data-progress aria-hidden="true" className="vt-deploy-progress absolute bottom-0 left-0 h-0.5 bg-foreground" />
       )}
@@ -73,8 +95,9 @@ function NodeButton({ node, selected, onSelect }: { node: GraphNode; selected: b
   );
 }
 
-export function RunGraph({ graph, selectedKey, onSelect }: RunGraphProps) {
+export function RunGraph({ graph, jobs, selectedKey, onSelect }: RunGraphProps) {
   const stageLabel = useStageLabel();
+  const nodeTitle = useNodeTitle();
   return (
     <div className="flex items-start overflow-x-auto pb-1">
       {graph.columns.map((column, i) => (
@@ -85,7 +108,7 @@ export function RunGraph({ graph, selectedKey, onSelect }: RunGraphProps) {
               {stageLabel(column.stage)}
             </div>
             {column.nodes.map((node) => (
-              <NodeButton key={node.key} node={node} selected={node.key === selectedKey} onSelect={() => onSelect(node)} />
+              <NodeButton key={node.key} node={node} title={nodeTitle(node, jobs)} selected={node.key === selectedKey} onSelect={() => onSelect(node)} />
             ))}
           </div>
         </Fragment>

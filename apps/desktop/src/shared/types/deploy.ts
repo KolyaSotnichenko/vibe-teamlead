@@ -78,6 +78,8 @@ export interface GraphNode {
   status: GraphNodeStatus;
   startedAt?: string;
   completedAt?: string;
+  /** Deployment nodes only: when the deployment was created (they have no start or duration) */
+  deployedAt?: string;
   deploymentUrl?: string;
   logUrl?: string;
 }

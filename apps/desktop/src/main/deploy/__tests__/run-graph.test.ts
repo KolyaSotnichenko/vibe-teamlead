@@ -52,6 +52,22 @@ describe('buildRunGraph', () => {
     expect(n.status).toBe('running');
   });
 
+  it('labels a node whose workflow name has expressions with "…" in their place', () => {
+    const yaml = 'jobs:\n  image:\n    name: "Image ${{ matrix.app }}"\n  pub:\n    name: "${{ matrix.os }} publish ${{ inputs.tag }}"\n';
+    const g = buildRunGraph(yaml, [job('Image (api)'), job('Image (web)'), job('linux publish v1')], []);
+    const labels = g.columns.flatMap((c) => c.nodes.map((n) => [n.key, n.label, n.jobIds.length]));
+    expect(labels).toEqual([
+      ['image', 'Image …', 2],
+      ['pub', '… publish …', 1],
+    ]);
+  });
+
+  it('keeps an unclosed expression opener as text in the label', () => {
+    const yaml = 'jobs:\n  a:\n    name: "Build ${{ oops"\n';
+    const g = buildRunGraph(yaml, [job('Build ${{ oops')], []);
+    expect(g.columns[0].nodes[0].label).toBe('Build ${{ oops');
+  });
+
   it('failure wins over success in an aggregate', () => {
     const yaml = `jobs:\n  build: {runs-on: x}\n`;
     const g = buildRunGraph(yaml, [job('build (1)'), job('build (2)', { conclusion: 'failure' })], []);
@@ -113,6 +129,10 @@ describe('buildRunGraph', () => {
       ['Prod', 'running'],
     ]);
     expect(last.nodes[0].deploymentUrl).toBe('https://p.example');
+    // A deployment has no meaningful duration: no start time, only when it went live
+    expect(last.nodes[0].startedAt).toBeUndefined();
+    expect(last.nodes[0].completedAt).toBeUndefined();
+    expect(last.nodes[0].deployedAt).toBe('t');
     expect(last.nodes[0].logUrl).toBe('https://l');
   });
 

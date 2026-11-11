@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { DeployRunsState, GitHubError } from '../../../shared/types/deploy';
 import { GITHUB_APP_INSTALL_URL, GITHUB_INSTALLATIONS_SETTINGS_URL } from '../../../shared/constants/github';
 import { Button } from '../ui/button';
+import { ScrollArea } from '../ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { GitHubOAuthFlow } from '../project-settings/GitHubOAuthFlow';
 import { EmptyState } from '../task-detail/workspace/workspace-ui';
@@ -123,9 +124,9 @@ export function DeployPage({ projectId }: { projectId: string }) {
   } else {
     body = (
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4">
-        <div className="min-h-0 overflow-y-auto">
+        <ScrollArea className="min-h-0" viewportClassName="[&>div]:!block">
           <RunsList runs={runs} selectedId={selectedId} onSelect={selectRun} />
-        </div>
+        </ScrollArea>
         <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
           {run && (
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -161,7 +162,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
           {selected && run ? (
             <>
               {selected.graph.columns.length > 0 ? (
-                <RunGraph graph={selected.graph} selectedKey={nodeKey} onSelect={(n) => setNodeKey(n.key === nodeKey ? undefined : n.key)} />
+                <RunGraph graph={selected.graph} jobs={selected.jobs} selectedKey={nodeKey} onSelect={(n) => setNodeKey(n.key === nodeKey ? undefined : n.key)} />
               ) : (
                 <p className="text-sm text-muted-foreground">{t('deploy:graph.empty')}</p>
               )}

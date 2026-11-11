@@ -137,6 +137,51 @@ describe('DeployPage', () => {
     expect(document.querySelectorAll('[data-connector="live"]')).toHaveLength(1);
   });
 
+  it('lets node labels wrap to two lines and gives the full label in a tooltip', () => {
+    const { emit } = setup();
+    emit(base());
+    const node = screen.getByRole('button', { name: /^typecheck/ });
+    expect(node).toHaveAttribute('title', 'typecheck');
+    const label = within(node).getByText('typecheck');
+    expect(label).toHaveClass('line-clamp-2');
+    expect(label).not.toHaveClass('truncate');
+  });
+
+  it('names the jobs of a matrix node in its tooltip, and lets the panel pick a job', () => {
+    const { emit } = setup();
+    const matrixJobs: DeployJob[] = [
+      { id: 21, name: 'Image (api)', status: 'completed', conclusion: 'success', steps: [{ name: 'build api', status: 'completed', conclusion: 'success', number: 1 }] },
+      { id: 22, name: 'Image (web)', status: 'completed', conclusion: 'success', steps: [{ name: 'build web', status: 'completed', conclusion: 'success', number: 1 }] },
+    ];
+    const g: RunGraph = { columns: [{ stage: 'level-1', nodes: [{ key: 'image', label: 'Image …', jobIds: [21, 22], status: 'success' }] }] };
+    emit(base({ selected: { runId: 18, jobs: matrixJobs, graph: g } }));
+    const node = screen.getByRole('button', { name: /^Image …/ });
+    expect(node).toHaveAttribute('title', 'Image …\nImage (api)\nImage (web)');
+    fireEvent.click(node);
+    expect(screen.getByText('build api')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Image \(web\)/ }));
+    expect(screen.getByText('build web')).toBeInTheDocument();
+    expect(screen.queryByText('build api')).not.toBeInTheDocument();
+  });
+
+  it('shows no duration for a deployment, and when it went live in the tooltip', () => {
+    const { emit } = setup();
+    const deployedAt = new Date(Date.now() - 18 * 86_400_000).toISOString();
+    const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'success', deployedAt }] }] };
+    emit(base({ selected: { runId: 18, jobs, graph: g } }));
+    const node = screen.getByRole('button', { name: /^production/ });
+    expect(node.textContent).not.toMatch(/\d+:\d{2}/);
+    expect(node.getAttribute('aria-label')).not.toMatch(/\d+:\d{2}/);
+    expect(node).toHaveAttribute('title', 'production\ndeploy:graph.deployed {"ago":"18 days ago"}');
+  });
+
+  it('scrolls the runs list in the app\'s thin scroll area', () => {
+    const { emit } = setup();
+    emit(base());
+    const list = screen.getByRole('list', { name: 'deploy:runs.listLabel' });
+    expect(list.closest('[data-radix-scroll-area-viewport]')).not.toBeNull();
+  });
+
   it('shows the steps of a clicked completed job and its log', async () => {
     const { deploy, emit } = setup({ state: 'ready', text: 'line one\nline two' });
     emit(base());

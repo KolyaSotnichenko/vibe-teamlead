@@ -38,7 +38,8 @@
     "deploy": "Deploy",
     "loading": "Loading this run’s jobs…",
     "empty": "This run has no jobs yet",
-    "paused": "Paused by GitHub’s rate limit; this run loads when it lifts"
+    "paused": "Paused by GitHub’s rate limit; this run loads when it lifts",
+    "deployed": "Deployed {{ago}}"
   },
   "status": {
     "queued": "Queued",

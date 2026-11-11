@@ -14,6 +14,9 @@ import type {
 
 interface WorkflowJob {
   id: string;
+  /** The `name:` from the workflow file (or the id), expressions included */
+  name: string;
+  /** What the graph shows: the name with each expression as `…` */
   label: string;
   needs: string[];
   matchers: Array<(name: string) => boolean>;
@@ -104,6 +107,12 @@ function splitExpressions(text: string): string[] {
   }
 }
 
+/** A workflow name for display: each `${{ … }}` becomes `…` (an unclosed `${{` stays as text). */
+function displayLabel(name: string): string {
+  if (!name.includes('${{')) return name;
+  return splitExpressions(name).join('…');
+}
+
 /** Matches the API name against a workflow name: exact, matrix suffix " (…)", or reusable prefix "name / ". */
 function nameMatcher(workflowName: string): (name: string) => boolean {
   // Very long names match only exactly; keeps matching cheap on hostile input.
@@ -128,11 +137,11 @@ function parseWorkflow(yaml: string | null): WorkflowJob[] | null {
     const result: WorkflowJob[] = [];
     for (const [id, raw] of entries) {
       const def = raw && typeof raw === 'object' ? (raw as { name?: unknown; needs?: unknown }) : {};
-      const label = typeof def.name === 'string' && def.name ? def.name : id;
+      const name = typeof def.name === 'string' && def.name ? def.name : id;
       const needs = typeof def.needs === 'string' ? [def.needs] : Array.isArray(def.needs) ? def.needs.map(String) : [];
       const matchers = [nameMatcher(id)];
-      if (label !== id) matchers.push(nameMatcher(label));
-      result.push({ id, label, needs, matchers });
+      if (name !== id) matchers.push(nameMatcher(name));
+      result.push({ id, name, label: displayLabel(name), needs, matchers });
     }
     return result.length > 0 ? result : null;
   } catch {
@@ -201,7 +210,8 @@ function deployColumn(deployments: DeployDeployment[]): { stage: string; nodes: 
       label: d.environment,
       jobIds: [],
       status: deploymentStatus(d),
-      startedAt: d.createdAt,
+      // No duration for a deployment (it would count up from when it went live); only that time
+      deployedAt: d.createdAt,
       deploymentUrl: d.url,
       logUrl: d.logUrl,
     })),
@@ -225,7 +235,7 @@ export function buildRunGraph(
     const unmatched: DeployJob[] = [];
     for (const j of jobs) {
       // Prefer an exact match over a prefix match when several workflow jobs could claim it.
-      const exact = workflow.find((w) => w.id === j.name || w.label === j.name);
+      const exact = workflow.find((w) => w.id === j.name || w.name === j.name);
       const target = exact ?? workflow.find((w) => w.matchers.some((m) => m(j.name)));
       if (!target) unmatched.push(j);
       else assigned.set(target.id, [...(assigned.get(target.id) ?? []), j]);
