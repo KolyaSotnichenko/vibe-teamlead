@@ -148,6 +148,11 @@ export const integrationMock = {
     data: 'user/example-repo'
   }),
 
+  getGitHubAppAccess: async () => ({
+    success: true,
+    data: { installed: true, repositorySelection: 'all' as const, repoReachable: true }
+  }),
+
   getGitHubBranches: async () => ({
     success: true,
     data: ['main', 'develop', 'feature/example']

@@ -1,5 +1,6 @@
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type {
+  GitHubAppAccess,
   GitHubRepository,
   GitHubIssue,
   GitHubSyncStatus,
@@ -201,6 +202,7 @@ export interface GitHubAPI {
   // Repository detection and management
   detectGitHubRepo: (projectPath: string) => Promise<IPCResult<string>>;
   getGitHubBranches: (repo: string) => Promise<IPCResult<string[]>>;
+  getGitHubAppAccess: (repo?: string) => Promise<IPCResult<GitHubAppAccess>>;
   createGitHubRepo: (
     repoName: string,
     options: { description?: string; isPrivate?: boolean; projectPath: string; owner?: string }
@@ -611,6 +613,9 @@ export const createGitHubAPI = (): GitHubAPI => ({
   // Repository detection and management
   detectGitHubRepo: (projectPath: string): Promise<IPCResult<string>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_DETECT_REPO, projectPath),
+
+  getGitHubAppAccess: (repo?: string): Promise<IPCResult<GitHubAppAccess>> =>
+    invokeIpc(IPC_CHANNELS.GITHUB_APP_ACCESS, repo),
 
   getGitHubBranches: (repo: string): Promise<IPCResult<string[]>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_GET_BRANCHES, repo),

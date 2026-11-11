@@ -65,6 +65,18 @@ export interface LinearSyncStatus {
 // GitHub Integration Types
 // ============================================
 
+/**
+ * Whether the Vibe Teamlead GitHub App is installed for the signed-in user.
+ * Signing in only authorizes the app; it reaches repositories only once it is installed.
+ * With a repository given, `installed` and `repositorySelection` describe the installation on that
+ * repository's owner, and `repoReachable` says whether the installation includes the repository.
+ */
+export interface GitHubAppAccess {
+  installed: boolean;
+  repositorySelection?: 'all' | 'selected';
+  repoReachable?: boolean;
+}
+
 export interface GitHubRepository {
   id: number;
   name: string;

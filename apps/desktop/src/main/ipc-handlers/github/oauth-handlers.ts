@@ -11,7 +11,9 @@ import { ipcMain, shell, BrowserWindow } from 'electron';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { IPC_CHANNELS } from '../../../shared/constants';
-import type { IPCResult } from '../../../shared/types';
+import { GITHUB_REPO_NOT_FOUND_ERROR } from '../../../shared/constants/github';
+import type { GitHubAppAccess, IPCResult } from '../../../shared/types';
+import { getGitHubAppAccess } from '../../github-auth/app-access';
 import { getAugmentedEnv, findExecutable } from '../../env-utils';
 import { getToolPath } from '../../cli-tool-manager';
 import { pollForToken, requestDeviceCode } from '../../github-auth/device-flow';
@@ -65,6 +67,14 @@ function sendAuthChangedToRenderer(oldUsername: string | null, newUsername: stri
 
 const GITHUB_API = 'https://api.github.com';
 
+/** A GitHub REST call that answered with an error status. */
+class GitHubHttpError extends Error {
+  constructor(readonly status: number, path: string) {
+    super(`GitHub API ${path} returned HTTP ${status}`);
+    this.name = 'GitHubHttpError';
+  }
+}
+
 /** GET a GitHub REST endpoint with the app's user token; follows `Link: rel="next"` up to `maxPages`. */
 async function githubGet<T>(path: string, token: string, maxPages = 1): Promise<T[]> {
   const results: T[] = [];
@@ -73,7 +83,7 @@ async function githubGet<T>(path: string, token: string, maxPages = 1): Promise<
     const response: Response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
     });
-    if (!response.ok) throw new Error(`GitHub API ${path} returned HTTP ${response.status}`);
+    if (!response.ok) throw new GitHubHttpError(response.status, path);
     const body = (await response.json()) as T | T[];
     if (Array.isArray(body)) results.push(...body);
     else results.push(body);
@@ -360,8 +370,27 @@ export function registerGetGitHubBranches(): void {
         const branches = await githubGet<{ name: string }>(`/repos/${repo}/branches?per_page=100`, token, 10);
         return { success: true, data: branches.map((b) => b.name) };
       } catch (error) {
+        // With the app's token, 404 means the app is not installed on the repository (or it does not exist)
+        if (error instanceof GitHubHttpError && error.status === 404) return { success: false, error: GITHUB_REPO_NOT_FOUND_ERROR };
         return { success: false, error: error instanceof Error ? error.message : 'Failed to get branches' };
       }
+    }
+  );
+}
+
+/**
+ * Whether the GitHub App is installed (signing in only authorizes it), optionally for one repository.
+ */
+export function registerGetGitHubAppAccess(): void {
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_APP_ACCESS,
+    async (_event: Electron.IpcMainInvokeEvent, repo?: string): Promise<IPCResult<GitHubAppAccess>> => {
+      if (repo !== undefined && !isValidGitHubRepo(repo)) {
+        return { success: false, error: 'Invalid repository format. Expected: owner/repo' };
+      }
+      const [owner, name] = repo ? repo.split('/') : [];
+      const access = await getGitHubAppAccess(repo ? { owner, repo: name } : undefined);
+      return 'error' in access ? { success: false, error: access.error } : { success: true, data: access };
     }
   );
 }
@@ -480,6 +509,7 @@ export function registerGithubOAuthHandlers(): void {
   registerListUserRepos();
   registerDetectGitHubRepo();
   registerGetGitHubBranches();
+  registerGetGitHubAppAccess();
   registerCreateGitHubRepo();
   registerAddGitRemote();
   registerListGitHubOrgs();

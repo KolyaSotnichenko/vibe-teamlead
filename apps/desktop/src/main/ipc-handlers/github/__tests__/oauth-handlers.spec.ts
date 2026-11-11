@@ -19,6 +19,10 @@ vi.mock('../../../github-auth/token-store', () => ({
   clearGitHubAuth: vi.fn(),
 }));
 
+vi.mock('../../../github-auth/app-access', () => ({
+  getGitHubAppAccess: vi.fn(),
+}));
+
 vi.mock('../../../github-auth/device-flow', () => ({
   requestDeviceCode: vi.fn(),
   pollForToken: vi.fn(),
@@ -254,6 +258,52 @@ describe('GitHub OAuth Handlers', () => {
       const data = (result as { data: string[] }).data;
       expect(data).toContain('main');
       expect(data).toContain('feature-branch');
+    });
+
+    it('answers a repository GitHub cannot find with the not-found code, not the raw HTTP error', async () => {
+      const tokenStore = await import('../../../github-auth/token-store');
+      vi.mocked(tokenStore.getValidAccessToken).mockResolvedValueOnce('ghu_test');
+      vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, headers: new Headers(), json: async () => ({}) })));
+
+      const { registerGetGitHubBranches } = await import('../oauth-handlers');
+      registerGetGitHubBranches();
+      const result = await ipcMain.invokeHandler('github:getBranches', {}, 'acme/private');
+      vi.unstubAllGlobals();
+
+      expect(result).toEqual({ success: false, error: 'github:repo-not-found' });
+    });
+  });
+
+  describe('GitHub App access', () => {
+    it('reports the installation for a repository', async () => {
+      const appAccess = await import('../../../github-auth/app-access');
+      vi.mocked(appAccess.getGitHubAppAccess).mockResolvedValueOnce({ installed: true, repositorySelection: 'selected', repoReachable: false });
+
+      const { registerGetGitHubAppAccess } = await import('../oauth-handlers');
+      registerGetGitHubAppAccess();
+      const result = await ipcMain.invokeHandler('github:appAccess', {}, 'acme/app');
+
+      expect(appAccess.getGitHubAppAccess).toHaveBeenCalledWith({ owner: 'acme', repo: 'app' });
+      expect(result).toEqual({ success: true, data: { installed: true, repositorySelection: 'selected', repoReachable: false } });
+    });
+
+    it('fails (rather than saying "not installed") when the check fails', async () => {
+      const appAccess = await import('../../../github-auth/app-access');
+      vi.mocked(appAccess.getGitHubAppAccess).mockResolvedValueOnce({ error: 'GitHub returned HTTP 500' });
+
+      const { registerGetGitHubAppAccess } = await import('../oauth-handlers');
+      registerGetGitHubAppAccess();
+      const result = await ipcMain.invokeHandler('github:appAccess', {});
+
+      expect(appAccess.getGitHubAppAccess).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ success: false, error: 'GitHub returned HTTP 500' });
+    });
+
+    it('rejects a malformed repository', async () => {
+      const { registerGetGitHubAppAccess } = await import('../oauth-handlers');
+      registerGetGitHubAppAccess();
+      const result = await ipcMain.invokeHandler('github:appAccess', {}, 'owner/repo; rm -rf /');
+      expect(result).toHaveProperty('success', false);
     });
   });
 });

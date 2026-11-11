@@ -130,7 +130,8 @@ import type {
   GitLabInvestigationStatus,
   GitLabMRReviewResult,
   GitLabMRReviewProgress,
-  GitLabNewCommitsCheck
+  GitLabNewCommitsCheck,
+  GitHubAppAccess
 } from './integrations';
 import type { ClaudeCredentialStatus, ClaudeConnectionTestInput, ClaudeConnectionTestResult, ClaudeModelList } from './claude-credential';
 
@@ -427,6 +428,7 @@ export interface ElectronAPI {
   listGitHubUserRepos: () => Promise<IPCResult<{ repos: Array<{ fullName: string; description: string | null; isPrivate: boolean }> }>>;
   detectGitHubRepo: (projectPath: string) => Promise<IPCResult<string>>;
   getGitHubBranches: (repo: string) => Promise<IPCResult<string[]>>;
+  getGitHubAppAccess: (repo?: string) => Promise<IPCResult<GitHubAppAccess>>;
   createGitHubRepo: (
     repoName: string,
     options: { description?: string; isPrivate?: boolean; projectPath: string; owner?: string }
