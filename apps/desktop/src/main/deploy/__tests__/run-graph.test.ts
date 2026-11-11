@@ -107,7 +107,7 @@ describe('buildRunGraph', () => {
     ];
     const g = buildRunGraph(CHAIN, [job('build')], d);
     const last = g.columns[g.columns.length - 1];
-    expect(last.stage).toBe('Deploy');
+    expect(last.stage).toBe('deploy');
     expect(last.nodes.map((n) => [n.label, n.status])).toEqual([
       ['Preview', 'success'],
       ['Prod', 'running'],
@@ -119,5 +119,51 @@ describe('buildRunGraph', () => {
   it('does not execute custom yaml tags', () => {
     const g = buildRunGraph('jobs: !!js/function "x"', [job('a')], []);
     expect(g.columns).toHaveLength(1);
+  });
+
+  it('survives a cycle and a self-need with a flat column', () => {
+    for (const y of [
+      'jobs:\n  a: {needs: b}\n  b: {needs: a}\n',
+      'jobs:\n  a: {needs: a}\n',
+    ]) {
+      const g = buildRunGraph(y, [job('a'), job('b')], []);
+      expect(g.columns).toHaveLength(1);
+      expect(g.columns[0].stage).toBe('other');
+      expect(g.columns[0].nodes).toHaveLength(2);
+    }
+  });
+
+  it('handles a 500-job chain iteratively and a 2000-job chain flat', () => {
+    const chain = (n: number) => {
+      let y = 'jobs:\n  j0: {runs-on: x}\n';
+      for (let i = 1; i < n; i++) y += `  j${i}: {needs: j${i - 1}}\n`;
+      return y;
+    };
+    const g = buildRunGraph(chain(500), [job('j0'), job('j499')], []);
+    expect(g.columns.map((c) => c.stage)).toEqual(['level-1', 'level-2']);
+    expect(buildRunGraph(chain(2000), [job('j0'), job('j1999')], []).columns[0].stage).toBe('other');
+  });
+
+  it('skips parsing above 500 jobs or 1 MB', () => {
+    let y = 'jobs:\n';
+    for (let i = 0; i < 501; i++) y += `  j${i}: {runs-on: x}\n`;
+    expect(buildRunGraph(y, [job('j1')], []).columns[0].stage).toBe('other');
+    const big = `# ${'x'.repeat(1024 * 1024 + 1)}\njobs:\n  a: {}\n`;
+    expect(buildRunGraph(big, [job('a')], []).columns[0].stage).toBe('other');
+  });
+
+  it('matches many expression segments in linear time', () => {
+    const name = Array.from({ length: 40 }, (_, i) => `p${i}-\${{ matrix.v${i} }}`).join('-');
+    const yaml = `jobs:\n  a:\n    name: ${JSON.stringify(name)}\n`;
+    const t = Date.now();
+    const g = buildRunGraph(yaml, [job('p0-'.repeat(60).slice(0, 200))], []);
+    expect(Date.now() - t).toBeLessThan(100);
+    expect(g.columns).toHaveLength(1);
+    expect(g.columns[0].stage).toBe('other');
+  });
+
+  it('does not let a pure-expression name claim jobs', () => {
+    const g = buildRunGraph('jobs:\n  a:\n    name: ${{ matrix.x }}\n', [job('whatever')], []);
+    expect(g.columns[0].stage).toBe('other');
   });
 });

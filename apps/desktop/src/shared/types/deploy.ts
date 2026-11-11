@@ -76,6 +76,10 @@ export interface GraphNode {
   logUrl?: string;
 }
 
+/**
+ * `stage` is a stable identifier, not display text: `level-<n>` (n from 1, the n-th level of the
+ * workflow's needs), `other` (jobs not in the workflow file) or `deploy`. The UI translates it.
+ */
 export interface RunGraph {
   columns: Array<{ stage: string; nodes: GraphNode[] }>;
 }
