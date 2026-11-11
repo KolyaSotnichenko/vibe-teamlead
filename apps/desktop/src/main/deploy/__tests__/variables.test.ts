@@ -65,7 +65,8 @@ describe('setDeployVariable', () => {
     const m = makeDeps();
     m.upsertEnv.mockRejectedValueOnce(err);
     const r = await setDeployVariable(settings, input, m.deps);
-    expect(r).toMatchObject({ ok: false, vercel: { kind: 'bad-request', message: 'nope' }, github: 'skipped' });
+    expect(r).toMatchObject({ ok: false, vercel: { kind: 'bad-request' }, github: 'skipped' });
+    expect(JSON.stringify(r)).not.toContain('nope');
     expect(m.setRepoSecret).not.toHaveBeenCalled();
   });
 
@@ -143,7 +144,44 @@ describe('listDeployVariables', () => {
   it('reports a Vercel failure', async () => {
     const m = makeDeps();
     m.listEnvNames.mockRejectedValueOnce({ kind: 'unauthorized', message: 'no' });
-    expect(await listDeployVariables(settings, m.deps)).toEqual({ ok: false, kind: 'unauthorized', message: 'no' });
+    const r = await listDeployVariables(settings, m.deps);
+    expect(r).toMatchObject({ ok: false, kind: 'unauthorized' });
+    expect(JSON.stringify(r)).not.toMatch(/"no"/);
+  });
+
+  it('typed provider errors cross with a fixed message per kind, never the provider text (which may echo the value)', async () => {
+    const providerText = `Vercel said: value ${VALUE} at https://api.vercel.com/x?token=tok_123`;
+    const m = makeDeps();
+    m.upsertEnv.mockRejectedValueOnce({ kind: 'bad-request', message: providerText });
+    const r1 = await setDeployVariable(settings, input, m.deps);
+    expect(r1).toMatchObject({ vercel: { kind: 'bad-request' } });
+    const m2 = makeDeps({
+      setRepoSecret: vi.fn(async () => {
+        throw new GitHubWriteError('permissions', providerText);
+      }),
+    });
+    const r2 = await setDeployVariable(settings, input, m2.deps);
+    expect(r2).toMatchObject({ github: { kind: 'permissions' } });
+    const m3 = makeDeps({
+      listRepoSecretNames: vi.fn(async () => {
+        throw new GitHubWriteError('rate-limit', providerText);
+      }),
+    });
+    m3.listEnvNames.mockRejectedValueOnce({ kind: 'forbidden', message: providerText });
+    const r3 = await listDeployVariables(settings, m3.deps);
+    const m4 = makeDeps({
+      listRepoSecretNames: vi.fn(async () => {
+        throw new GitHubWriteError('rate-limit', providerText);
+      }),
+    });
+    const r4 = await listDeployVariables(settings, m4.deps);
+    expect(r4).toMatchObject({ ok: true, githubUnavailable: { kind: 'rate-limit' } });
+    for (const r of [r1, r2, r3, r4]) {
+      const text = JSON.stringify(r);
+      expect(text).not.toContain('DISTINCT_9f3a');
+      expect(text).not.toContain('tok_123');
+      expect(text).not.toContain('Vercel said');
+    }
   });
 
   it('returns not-set-up', async () => {

@@ -2,9 +2,9 @@
  * Deploy variables and secrets: save a variable to the Vercel project (sensitive) and,
  * when asked, as a GitHub Actions secret; list names only.
  *
- * Never throws. The value goes only into the two API calls; results and messages carry
- * a kind and a fixed or classified message, never the value (messages that come from
- * dependencies are replaced unless they are typed Vercel/GitHub errors, which never hold it).
+ * Never throws. The value goes only into the two API calls; results carry a kind and a
+ * fixed message per kind. No provider or dependency message crosses IPC (it could echo the
+ * value or a URL); the renderer shows its own text for the kind.
  */
 import type {
   DeployListVariablesResult,
@@ -34,13 +34,16 @@ const NOT_SET_UP = 'Set up deployment for this project first (repository and Ver
 function isGitHubError(e: unknown): e is GitHubWriteError {
   return e instanceof Error && e.name === 'GitHubWriteError' && typeof (e as GitHubWriteError).kind === 'string';
 }
+/** A kind is a short code; anything else (free text) is not passed on. */
+const KIND = /^[a-z-]{1,40}$/;
+
 function vercelSide(e: unknown): SideError {
-  if (isVercelError(e)) return { kind: (e as VercelError).kind, message: e.message };
-  return { kind: 'unavailable', message: 'Vercel could not save the variable.' };
+  const kind = isVercelError(e) && KIND.test((e as VercelError).kind) ? (e as VercelError).kind : 'unavailable';
+  return { kind, message: `Vercel: ${kind}` };
 }
 function githubSide(e: unknown): SideError {
-  if (isGitHubError(e)) return { kind: e.kind, message: e.message };
-  return { kind: 'unavailable', message: 'GitHub could not save the secret.' };
+  const kind = isGitHubError(e) && KIND.test(e.kind) ? e.kind : 'unavailable';
+  return { kind, message: `GitHub: ${kind}` };
 }
 
 export async function setDeployVariable(
@@ -85,7 +88,7 @@ export async function listDeployVariables(project: DeployProjectSettings, deps: 
     envs = await deps.vercelClient(teamId ? { teamId } : {}).listEnvNames(projectId);
   } catch (e) {
     const s = vercelSide(e);
-    return { ok: false, kind: s.kind, message: isVercelError(e) ? s.message : 'Vercel could not list the variables.' };
+    return { ok: false, kind: s.kind, message: s.message };
   }
   let secrets = new Set<string>();
   let githubUnavailable: SideError | undefined;
