@@ -92,6 +92,23 @@ export function useGitHubErrorText() {
   };
 }
 
+/** Only http(s) URLs become links; anything else from GitHub or a host is not shown as one. */
+export function isWebUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+/** Opens an http(s) URL in the browser; a refusal is ignored (nothing to show for it). */
+export function openWebUrl(url: string): void {
+  if (!isWebUrl(url)) return;
+  void Promise.resolve(window.electronAPI.openExternal(url)).catch(() => undefined);
+}
+
 /** Host and path of a URL, without the scheme, for display. */
 export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');

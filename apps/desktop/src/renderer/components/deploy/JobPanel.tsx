@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeployJob, DeployJobLog, DeployRun, GraphNode } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
-import { StatusMark, displayUrl, formatDuration, toNodeStatus, useGitHubErrorText } from './status';
+import { StatusMark, displayUrl, formatDuration, isWebUrl, openWebUrl, toNodeStatus, useGitHubErrorText } from './status';
 
 export const LOG_LINES = 2000;
 
@@ -26,13 +26,12 @@ interface JobPanelProps {
   pollKey: string;
 }
 
-const open = (url: string) => window.electronAPI.openExternal(url);
-
-function LinkButton({ url, children }: { url: string; children: string }) {
+function LinkButton({ url, children }: { url: string | undefined; children: string }) {
+  if (!isWebUrl(url)) return null;
   return (
     <button
       type="button"
-      onClick={() => open(url)}
+      onClick={() => openWebUrl(url)}
       className="text-sm text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {children}
@@ -43,33 +42,43 @@ function LinkButton({ url, children }: { url: string; children: string }) {
 function JobLog({ projectId, job, fullLogUrl, pollKey }: { projectId: string; job: DeployJob; fullLogUrl: string; pollKey: string }) {
   const { t } = useTranslation(['deploy']);
   const errorText = useGitHubErrorText();
-  const [entry, setEntry] = useState<{ jobId: number; log: DeployJobLog } | null>(null);
+  /** The log, and the poll it was fetched in */
+  const [entry, setEntry] = useState<{ jobId: number; log: DeployJobLog; poll: string } | null>(null);
   const scrollRef = useRef<HTMLElement>(null);
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  const pollRef = useRef(pollKey);
+  pollRef.current = pollKey;
   const completed = job.status === 'completed';
   const log = entry?.jobId === job.id ? entry.log : undefined;
-  // A log GitHub has not made yet, or a failed request GitHub may answer later, is asked for again on the next poll
-  const retry = !log || log.state === 'pending' || (log.state === 'error' && log.error.kind === 'unavailable');
-  const retryKey = retry ? pollKey : 'settled';
+  // A log GitHub has not made yet, or a request GitHub may answer later, is asked for again on a later poll.
+  // A request in flight is never cancelled or sent twice: a large log would otherwise never arrive.
+  const retryable = log?.state === 'pending' || (log?.state === 'error' && log.error.kind === 'unavailable');
+  const fetchKey = !log ? 'first' : retryable && entry?.poll !== pollKey ? pollKey : 'settled';
 
   useEffect(() => {
-    if (!completed || retryKey === 'settled') return;
-    let live = true;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!completed || fetchKey === 'settled' || inFlight.current) return;
+    inFlight.current = true;
     const jobId = job.id;
+    const poll = pollRef.current;
+    const settle = (next: DeployJobLog) => {
+      inFlight.current = false;
+      if (mounted.current) setEntry({ jobId, log: next, poll });
+    };
     window.electronAPI.deploy
       .jobLog(projectId, jobId)
-      .then((result) => {
-        if (!live) return;
-        const next: DeployJobLog =
-          result.success && result.data ? result.data : { state: 'error', error: { kind: 'unavailable', message: result.error ?? '' } };
-        setEntry({ jobId, log: next });
-      })
-      .catch(() => {
-        if (live) setEntry({ jobId, log: { state: 'error', error: { kind: 'unavailable', message: '' } } });
-      });
-    return () => {
-      live = false;
-    };
-  }, [projectId, job.id, completed, retryKey]);
+      .then((result) =>
+        settle(result.success && result.data ? result.data : { state: 'error', error: { kind: 'unavailable', message: result.error ?? '' } })
+      )
+      .catch(() => settle({ state: 'error', error: { kind: 'unavailable', message: '' } }));
+  }, [projectId, job.id, completed, fetchKey]);
 
   const text = log?.state === 'ready' ? lastLines(log.text) : null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the end whenever the text changes
@@ -78,9 +87,8 @@ function JobLog({ projectId, job, fullLogUrl, pollKey }: { projectId: string; jo
     if (box) box.scrollTop = box.scrollHeight;
   }, [text]);
 
-  if (!completed || log?.state === 'pending') {
-    return <p className="text-sm text-muted-foreground">{t('deploy:log.pending')}</p>;
-  }
+  if (!completed) return <p className="text-sm text-muted-foreground">{t('deploy:log.pending')}</p>;
+  if (log?.state === 'pending') return <p className="text-sm text-muted-foreground">{t('deploy:log.preparing')}</p>;
   if (!log) return <p className="text-sm text-muted-foreground">{t('deploy:log.loading')}</p>;
   if (log.state === 'expired') {
     return (
@@ -98,9 +106,9 @@ function JobLog({ projectId, job, fullLogUrl, pollKey }: { projectId: string; jo
         aria-label={t('deploy:log.label', { job: job.name })}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling log must be reachable by keyboard to scroll it
         tabIndex={0}
-        className="max-h-96 overflow-auto bg-foreground p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="vt-ink-surface max-h-96 overflow-auto border border-[var(--vt-ink-line)] bg-[var(--vt-ink)] p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <pre data-testid="job-log" className="whitespace-pre font-mono text-xs leading-relaxed text-background">
+        <pre data-testid="job-log" className="whitespace-pre font-mono text-xs leading-relaxed text-[var(--vt-paper)]">
           {text}
         </pre>
       </section>
@@ -149,18 +157,18 @@ export function JobPanel({ projectId, run, node, jobs, pollKey }: JobPanelProps)
 
       {!job && (
         <div className="flex flex-col gap-2">
-          {node.deploymentUrl && (
+          {isWebUrl(node.deploymentUrl) && (
             <div className="flex items-baseline gap-2">
               <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{t('deploy:job.deployment')}</span>
               <LinkButton url={node.deploymentUrl}>{displayUrl(node.deploymentUrl)}</LinkButton>
             </div>
           )}
-          {node.logUrl ? (
+          {isWebUrl(node.logUrl) ? (
             <div>
               <LinkButton url={node.logUrl}>{t('deploy:job.deploymentLog')}</LinkButton>
             </div>
           ) : (
-            !node.deploymentUrl && <p className="text-sm text-muted-foreground">{t('deploy:job.noDetails')}</p>
+            !isWebUrl(node.deploymentUrl) && <p className="text-sm text-muted-foreground">{t('deploy:job.noDetails')}</p>
           )}
         </div>
       )}

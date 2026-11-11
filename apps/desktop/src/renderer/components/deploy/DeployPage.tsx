@@ -14,7 +14,7 @@ import { cn } from '../../lib/utils';
 import { RunsList } from './RunsList';
 import { RunGraph } from './RunGraph';
 import { JobPanel } from './JobPanel';
-import { displayUrl, useGitHubErrorText } from './status';
+import { displayUrl, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
 export const GITHUB_INSTALLATIONS_URL = 'https://github.com/settings/installations';
 
@@ -38,7 +38,7 @@ function ErrorNotice({ error, onConnect }: { error: GitHubError; onConnect: () =
         </Button>
       )}
       {error.kind === 'permissions' && (
-        <Button size="sm" variant="outline" onClick={() => window.electronAPI.openExternal(GITHUB_INSTALLATIONS_URL)}>
+        <Button size="sm" variant="outline" onClick={() => openWebUrl(GITHUB_INSTALLATIONS_URL)}>
           {t('deploy:errors.manageAccess')}
         </Button>
       )}
@@ -106,13 +106,13 @@ export function DeployPage({ projectId }: { projectId: string }) {
           {run && (
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-foreground">{`#${run.number} ${run.title}`}</h2>
+                <h2 className="truncate text-base font-semibold text-foreground">{run.number > 0 ? `#${run.number} ${run.title}` : run.title}</h2>
                 <div className="mt-0.5 flex flex-wrap items-baseline gap-3">
                   <span className="font-mono text-xs text-muted-foreground">{`${run.event} · ${run.branch} · ${run.sha.slice(0, 7)}`}</span>
-                  {run.htmlUrl && (
+                  {isWebUrl(run.htmlUrl) && (
                     <button
                       type="button"
-                      onClick={() => window.electronAPI.openExternal(run.htmlUrl)}
+                      onClick={() => openWebUrl(run.htmlUrl)}
                       className="text-xs text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {t('deploy:run.openOnGitHub')}
@@ -120,15 +120,15 @@ export function DeployPage({ projectId }: { projectId: string }) {
                   )}
                 </div>
               </div>
-              {state.productionUrl && (
+              {isWebUrl(state.productionUrl) && (
                 <div className="flex items-baseline gap-2">
                   <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{t('deploy:run.production')}</span>
                   <button
                     type="button"
-                    onClick={() => window.electronAPI.openExternal(state.productionUrl as string)}
+                    onClick={() => openWebUrl(state.productionUrl as string)}
                     className="font-mono text-[13px] font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {displayUrl(state.productionUrl)}
+                    {displayUrl(state.productionUrl as string)}
                   </button>
                 </div>
               )}
@@ -147,6 +147,9 @@ export function DeployPage({ projectId }: { projectId: string }) {
                 selected.graph.columns.length > 0 && <p className="text-sm text-muted-foreground">{t('deploy:job.pick')}</p>
               )}
             </>
+          ) : state.error?.kind === 'rate-limit' ? (
+            // The poller does not fetch a newly picked run while rate-limited: say so rather than "loading"
+            <p role="status" className="text-sm text-muted-foreground">{t('deploy:graph.paused')}</p>
           ) : (
             <p role="status" aria-busy="true" className="flex items-center gap-2 text-sm text-muted-foreground">
               <span aria-hidden="true" className="vt-breathe inline-block h-2 w-2 bg-foreground" />

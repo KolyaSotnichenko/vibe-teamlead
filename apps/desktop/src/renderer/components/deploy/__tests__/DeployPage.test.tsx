@@ -71,7 +71,7 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     jobLog: vi.fn(async () => ({ success: true, data: log })),
     onRunsUpdate: vi.fn((cb: (s: DeployRunsState) => void) => { push = cb; return unsubscribe; }),
   };
-  const openExternal = vi.fn();
+  const openExternal = vi.fn(async () => undefined);
   (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal };
   const view = render(<DeployPage projectId="p1" />);
   const emit = (s: DeployRunsState) => act(() => push?.(s));
@@ -220,6 +220,69 @@ describe('DeployPage', () => {
     const { emit } = setup();
     emit(base({ error: { kind: 'unavailable', message: '' } }));
     expect(screen.getByText('deploy:errors.unavailable')).toBeInTheDocument();
+  });
+
+  it('does not resend a log request that is still in flight when a poll arrives', async () => {
+    const { deploy, emit } = setup();
+    let resolve: (v: unknown) => void = () => undefined;
+    deploy.jobLog.mockImplementation(() => new Promise((r) => { resolve = r as (v: unknown) => void; }) as never);
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledTimes(1));
+    emit(base({ nextPollAt: '2026-11-11T10:06:05Z' }));
+    emit(base({ nextPollAt: '2026-11-11T10:06:10Z' }));
+    await act(async () => resolve({ success: true, data: { state: 'ready', text: 'big log' } }));
+    expect(await screen.findByText(/big log/)).toBeInTheDocument();
+    expect(deploy.jobLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fetch a ready log again on the next poll', async () => {
+    const { deploy, emit } = setup({ state: 'ready', text: 'line one' });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    expect(await screen.findByText(/line one/)).toBeInTheDocument();
+    emit(base({ nextPollAt: '2026-11-11T10:06:05Z' }));
+    await act(async () => undefined);
+    expect(deploy.jobLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again for a log GitHub is still preparing on the next poll, and says so', async () => {
+    const { deploy, emit } = setup({ state: 'pending' });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    expect(await screen.findByText('deploy:log.preparing')).toBeInTheDocument();
+    expect(deploy.jobLog).toHaveBeenCalledTimes(1);
+    emit(base({ nextPollAt: '2026-11-11T10:06:05Z' }));
+    await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows no link for a URL that is not http(s), and survives a failed openExternal', async () => {
+    const { emit, openExternal } = setup();
+    openExternal.mockImplementation(async () => { throw new Error('nope'); });
+    const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'd', label: 'production', jobIds: [], status: 'success', deploymentUrl: 'javascript:alert(1)', logUrl: 'https://vercel.com/log' }] }] };
+    emit(base({ productionUrl: 'file:///etc/passwd', selected: { runId: 18, jobs, graph: g } }));
+    expect(screen.queryByText('/etc/passwd')).not.toBeInTheDocument();
+    expect(screen.queryByText('file:///etc/passwd')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^production/ }));
+    expect(screen.queryByText(/alert/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'deploy:job.deploymentLog' }));
+    await act(async () => undefined);
+    expect(openExternal).toHaveBeenCalledWith('https://vercel.com/log');
+  });
+
+  it('says it is paused instead of loading when a run is picked during a rate limit', () => {
+    const { emit } = setup();
+    emit(base({ error: { kind: 'rate-limit', resetAt: new Date(2026, 10, 11, 14, 5).toISOString(), message: '' } }));
+    fireEvent.click(screen.getByText('Merge task 17'));
+    expect(screen.queryByText('deploy:graph.loading')).not.toBeInTheDocument();
+    expect(screen.getByText('deploy:graph.paused')).toBeInTheDocument();
+  });
+
+  it('hides the number when GitHub gave none', () => {
+    const { emit } = setup();
+    emit(base({ runs: [run(18, { number: 0 })] }));
+    expect(screen.getByRole('heading', { name: 'Merge task 18' })).toBeInTheDocument();
+    expect(screen.queryByText(/#0/)).not.toBeInTheDocument();
   });
 
   it('stops polling while the window is hidden and on unmount', () => {

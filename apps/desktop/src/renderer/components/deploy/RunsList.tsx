@@ -34,7 +34,7 @@ export function RunsList({ runs, selectedId, onSelect }: RunsListProps) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{run.title}</span>
                 <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {`#${run.number} · ${run.branch} · ${formatRelative(run.startedAt, i18n.language)}`}
+                  {[run.number > 0 ? `#${run.number}` : null, run.branch, formatRelative(run.startedAt, i18n.language)].filter(Boolean).join(' · ')}
                 </span>
               </span>
             </button>
