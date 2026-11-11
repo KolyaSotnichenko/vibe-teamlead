@@ -9,7 +9,7 @@ import path from 'node:path';
 import { type BrowserWindow, dialog, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DesignBrief, DesignDirection, DesignReferenceRole, DesignSystemInfo, DesignTokens, IPCResult, RedesignBrief, TaskStorybookStatus, DesignAudit } from '../../shared/types';
+import type { DesignBrief, DesignDirection, DesignPackageSummary, DesignReferenceRole, DesignSystemInfo, DesignThemes, DesignTokens, IPCResult, RedesignBrief, TaskStorybookStatus, DesignAudit } from '../../shared/types';
 import {
   addReferenceFiles,
   addReferenceUrls,
@@ -20,7 +20,8 @@ import {
   retryReference,
   setReferenceRole,
 } from '../design/reference-service';
-import { extractDesignSystem, proposeDirections, writeDesignSystem } from '../ai/design/design-agent';
+import { extractDesignSystem, proposeDirections, writeDesignSystem, writeFromPackage } from '../ai/design/design-agent';
+import { cancelDesignPackage, importDesignPackage, inspectDesignPackage, setDesignThemes } from '../ai/design/package/import-package';
 import { loadDesignSystem, saveDesignSystem } from '../ai/design/design-system';
 import { auditProjectDesign, redesignBrief, summarizeAudit } from '../ai/design/redesign';
 import { recordSystemMeta } from '../ai/design/system-meta';
@@ -195,6 +196,65 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
         );
         saveDesignSystem(path, settings, result);
         recordSystemMeta(path, { how: 'direction', direction: direction.name, referenceIds: readyReferenceIds(path) });
+        return designInfo(projectId) as DesignSystemInfo;
+      }),
+  );
+
+  // ---- Design package ---------------------------------------------------
+  const asThemes = (value: unknown): DesignThemes => (value === 'light-dark' ? 'light-dark' : 'light');
+
+  ipcMain.handle(IPC_CHANNELS.DESIGN_PACKAGE_PICK, async (): Promise<IPCResult<string | null>> => {
+    const win = getMainWindow();
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile', 'openDirectory'],
+      filters: [{ name: 'Design package', extensions: ['zip'] }],
+    };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    return { success: true, data: result.canceled ? null : (result.filePaths[0] ?? null) };
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.DESIGN_PACKAGE_INSPECT,
+    (_e, projectId: string, source: unknown): Promise<IPCResult<DesignPackageSummary>> =>
+      withProject(projectId, async (projectPath, settings) => {
+        if (typeof source !== 'string' || !path.isAbsolute(source)) throw new Error('Choose a .zip file or a folder');
+        return inspectDesignPackage(projectPath, settings, source);
+      }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DESIGN_PACKAGE_IMPORT,
+    (_e, projectId: string, options: { themes?: unknown } | undefined): Promise<IPCResult<DesignSystemInfo>> =>
+      withProject(projectId, async (projectPath, settings) => {
+        const themes = asThemes(options?.themes);
+        await agentJob(projectId, (signal, onProgress) =>
+          importDesignPackage(projectPath, settings, { themes }, {
+            write: writeFromPackage,
+            addReferences: (files) => addReferenceFiles(projectPath, files, 'as-is'),
+            signal,
+            onProgress,
+          }),
+        );
+        projectStore.updateProjectSettings(projectId, { designThemes: themes });
+        return designInfo(projectId) as DesignSystemInfo;
+      }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DESIGN_PACKAGE_CANCEL,
+    (_e, projectId: string): Promise<IPCResult> =>
+      withProject(projectId, async (projectPath) => {
+        cancelDesignPackage(projectPath);
+        return undefined;
+      }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DESIGN_PACKAGE_THEMES,
+    (_e, projectId: string, themes: unknown): Promise<IPCResult<DesignSystemInfo>> =>
+      withProject(projectId, async (projectPath, settings) => {
+        setDesignThemes(projectPath, settings, asThemes(themes));
+        projectStore.updateProjectSettings(projectId, { designThemes: asThemes(themes) });
         return designInfo(projectId) as DesignSystemInfo;
       }),
   );

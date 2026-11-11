@@ -260,4 +260,47 @@ export const designMock: DesignAPI = {
     refListeners.add(callback);
     return () => refListeners.delete(callback);
   },
+  pickPackage: async () => ({ success: true, data: '/Users/demo/Downloads/mhp-global-design-system.zip' }),
+  inspectPackage: async () => {
+    await delay(400);
+    return {
+      success: true,
+      data: {
+        name: 'MHP Global',
+        components: ['Button', 'Card', 'Input', 'Badge'],
+        logos: 3,
+        fonts: 4,
+        colors: { light: 18, dark: 14 },
+        hasTokens: true,
+        licenceLine: 'The fonts are commercial: use them within the licence and do not publish the package.',
+        ...(info.exists && info.markdownPath ? { replaces: info.markdownPath } : {}),
+        skipped: [{ path: 'source/Design.fig', reason: 'type' as const }],
+      },
+    };
+  },
+  importPackage: async (_projectId, options) => {
+    await delay(600);
+    const writtenAt = new Date().toISOString();
+    info = {
+      ...withSample(),
+      meta: { writtenAt, how: 'package', packageName: 'MHP Global', referenceIds: [] },
+      package: {
+        name: 'MHP Global',
+        namespace: 'MHP',
+        importedAt: writtenAt,
+        dir: '.vibe-teamlead/design/package/mhp-global',
+        componentsDir: 'src/components/mhp',
+        components: ['Button', 'Card', 'Input', 'Badge'].map((name) => ({ name })),
+        logos: [],
+        fonts: [],
+        themes: options.themes,
+      },
+    };
+    return { success: true, data: info };
+  },
+  cancelPackage: async () => ({ success: true }),
+  setThemes: async (_projectId, themes) => {
+    if (info.package) info = { ...info, package: { ...info.package, themes } };
+    return { success: true, data: info };
+  },
 };

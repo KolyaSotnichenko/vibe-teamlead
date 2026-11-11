@@ -98,6 +98,11 @@ export const IPC_CHANNELS = {
   DESIGN_CANCEL: 'design:cancel',
   DESIGN_REDESIGN_BRIEF: 'design:redesignBrief',
   DESIGN_AUDIT: 'design:audit',
+  DESIGN_PACKAGE_PICK: 'design:packagePick',
+  DESIGN_PACKAGE_INSPECT: 'design:packageInspect',
+  DESIGN_PACKAGE_IMPORT: 'design:packageImport',
+  DESIGN_PACKAGE_CANCEL: 'design:packageCancel',
+  DESIGN_PACKAGE_THEMES: 'design:packageThemes',
   // Design before code: a task's wireframes and screens (Design tab)
   TASK_DESIGN_GET: 'taskDesign:get',
   TASK_DESIGN_APPROVE: 'taskDesign:approve',

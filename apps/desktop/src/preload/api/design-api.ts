@@ -41,4 +41,9 @@ export const createDesignAPI = (): DesignAPI => ({
     ipcRenderer.on(IPC_CHANNELS.DESIGN_REFS_CHANGED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DESIGN_REFS_CHANGED, handler);
   },
+  pickPackage: () => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_PICK),
+  inspectPackage: (projectId, source) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_INSPECT, projectId, source),
+  importPackage: (projectId, options) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_IMPORT, projectId, options),
+  cancelPackage: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_CANCEL, projectId),
+  setThemes: (projectId, themes) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_THEMES, projectId, themes),
 });

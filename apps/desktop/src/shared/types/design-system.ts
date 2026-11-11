@@ -159,6 +159,26 @@ export interface DesignPackageInfo {
   built?: string[];
 }
 
+/** A package file left out on unpack, and why */
+export interface DesignPackageSkip {
+  path: string;
+  reason: 'type' | 'size' | 'unsafe' | 'limit';
+}
+
+/** What a chosen package holds, shown before it is imported */
+export interface DesignPackageSummary {
+  name: string;
+  components: string[];
+  logos: number;
+  fonts: number;
+  colors: { light: number; dark: number };
+  hasTokens: boolean;
+  licenceLine?: string;
+  /** Path of the design system the import would overwrite, relative to the project */
+  replaces?: string;
+  skipped: DesignPackageSkip[];
+}
+
 export interface DesignSystemInfo {
   /** The imported design package, when there is one */
   package?: DesignPackageInfo;
@@ -361,4 +381,14 @@ export interface DesignAPI {
   retryReference: (projectId: string, id: string) => Promise<import('./common').IPCResult<DesignReferenceList>>;
   /** References changed (a digest finished) */
   onReferencesChanged: (callback: (projectId: string) => void) => () => void;
+  /** Choose a design package (a .zip or a folder) in the system dialog; null when cancelled */
+  pickPackage: () => Promise<import('./common').IPCResult<string | null>>;
+  /** Unpack the package into the project's staging folder and summarise it (nothing is imported yet) */
+  inspectPackage: (projectId: string, source: string) => Promise<import('./common').IPCResult<DesignPackageSummary>>;
+  /** Import the inspected package: write the design system from it; progress arrives as onProgress */
+  importPackage: (projectId: string, options: { themes: DesignThemes }) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
+  /** Drop the inspected package */
+  cancelPackage: (projectId: string) => Promise<import('./common').IPCResult>;
+  /** Switch the themes of the imported package's tokens (no model) */
+  setThemes: (projectId: string, themes: DesignThemes) => Promise<import('./common').IPCResult<DesignSystemInfo>>;
 }
