@@ -25,7 +25,7 @@ export interface VariablesDeps {
 export type SetVariableResult =
   | { ok: true; vercel: 'ok'; github: 'ok' | 'skipped' }
   | { ok: false; kind: 'not-set-up'; message: string }
-  | { ok: false; vercel: 'ok' | SideError; github: 'ok' | 'skipped' | SideError };
+  | { ok: false; vercel: 'ok' | 'skipped' | SideError; github: 'ok' | 'skipped' | SideError };
 
 export type ListVariablesResult =
   | { ok: true; variables: Array<{ name: string; targets: string[]; inGitHub: boolean }>; githubUnavailable?: SideError }
@@ -58,7 +58,7 @@ export async function setDeployVariable(
     return invalid('Choose Production, Preview or both.');
   }
   if (input.alsoGitHubSecret && input.name.startsWith('GITHUB_')) {
-    return { ok: false, vercel: 'skipped' as never, github: { kind: 'invalid', message: 'GitHub secret names cannot start with GITHUB_.' } };
+    return { ok: false, vercel: 'skipped', github: { kind: 'invalid', message: 'GitHub secret names cannot start with GITHUB_.' } };
   }
   const { projectId, teamId } = project.vercel;
   try {
