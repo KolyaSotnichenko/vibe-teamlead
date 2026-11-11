@@ -4,11 +4,11 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.35 - 2026-11-11
 
-- Deploy: connect Vercel in Settings → Vercel, with a browser sign-in (the first connect downloads the Vercel CLI once, about 180 MB) or a pasted token.
+- Deploy: connect Vercel in Settings → Vercel, with a browser sign-in (the first connect downloads the Vercel CLI once, about 180 MB) or a pasted token (stored encrypted; refused when this Mac can't encrypt it). With a pasted token the CLI is downloaded on the first **Add database** instead, with progress and Cancel; it is never downloaded in the background.
 - Deploy → Environment: **Set up deploy** creates a private GitHub repository when the project has none, links a Vercel project to it (an existing one or a new one) and turns on production deploys for every push to main. **Needed from you** lists the steps only you can do.
 - Variables: add Vercel environment variables for Production and Preview, optionally also as a GitHub Actions secret. The value is entered once and never shown again; the list shows names only.
-- Database: **Add database** adds a free Postgres (Neon) to the Vercel project; Neon's terms are accepted only when you click.
-- Main is pushed to GitHub after every merge into the project's main branch once deploy is set up. A project with an unusual git configuration is left alone with an explanation.
+- Database: **Add database** adds a free Postgres (Neon) to the Vercel project; Neon's terms are accepted only when you click. Preview deployments may share the production database unless Neon's preview branching is on; the documentation says how to check.
+- Main is pushed to GitHub after every merge into the project's main branch once deploy is set up. A refused push says why: GitHub has commits this Mac doesn't have, the app lacks permission, or the GitHub sign-in needs renewing. A project with an unusual git configuration is left alone with an explanation.
 
 ## 2.0.0-beta.34 - 2026-11-11
 

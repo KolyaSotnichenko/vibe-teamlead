@@ -128,7 +128,10 @@
     "add": "Add database",
     "adding": "Adding the database…",
     "neon": "Postgres (Neon)",
-    "none": "None yet"
+    "none": "None yet",
+    "downloading": "Downloading the Vercel CLI first… {{percent}}%",
+    "cancel": "Cancel",
+    "previewNote": "Preview deployments may use this same database unless Neon’s preview branching is on. Documentation → Deploy says how to check."
   },
   "variables": {
     "title": "Variables",

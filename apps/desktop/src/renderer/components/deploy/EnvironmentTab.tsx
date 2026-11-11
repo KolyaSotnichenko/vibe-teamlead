@@ -287,7 +287,20 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
               {databaseRunning ? t('deploy:database.adding') : t('deploy:database.add')}
             </Button>
           </div>
-          {databaseError && !databaseRunning && <Notice tone="attention">{errorText(databaseError.kind)}</Notice>}
+          <p className="text-xs text-muted-foreground">{t('deploy:database.previewNote')}</p>
+          {databaseRunning && state.databaseDownload && (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-foreground" role="status">
+                {t('deploy:database.downloading', { percent: state.databaseDownload.percent })}
+              </p>
+              <Button variant="outline" size="sm" onClick={env.cancelDatabase}>
+                {t('deploy:database.cancel')}
+              </Button>
+            </div>
+          )}
+          {databaseError && databaseError.kind !== 'cancelled' && !databaseRunning && (
+            <Notice tone="attention">{errorText(databaseError.kind)}</Notice>
+          )}
         </Section>
       )}
 

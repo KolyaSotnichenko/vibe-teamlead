@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type {
+  DeployDatabaseProgress,
   DeployEnvState,
   DeployProjectSettings,
   DeployPushResult,
@@ -58,6 +59,7 @@ function setup(opts: Opts = {}) {
   let progress: ((p: DeploySetupProgress) => void) | undefined;
   let pushResult: ((r: DeployPushResult) => void) | undefined;
   let runsUpdate: ((s: DeployRunsState) => void) | undefined;
+  let databaseProgress: ((p: DeployDatabaseProgress) => void) | undefined;
   const env: DeployEnvState = { settings: null, setupRunning: false, databaseRunning: false, ...opts.env };
   const deploy = {
     startRuns: vi.fn(async () => ({ success: true })),
@@ -73,6 +75,8 @@ function setup(opts: Opts = {}) {
     addDatabase: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true } })),
     onSetupProgress: vi.fn((cb: (p: DeploySetupProgress) => void) => { progress = cb; return () => undefined; }),
     onPushResult: vi.fn((cb: (r: DeployPushResult) => void) => { pushResult = cb; return () => undefined; }),
+    cancelDatabase: vi.fn(async () => ({ success: true })),
+    onDatabaseProgress: vi.fn((cb: (p: DeployDatabaseProgress) => void) => { databaseProgress = cb; return () => undefined; }),
   };
   const vercel = {
     status: vi.fn(async () => ({ success: true, data: opts.vercel ?? { connected: true, user: { id: 'u1', username: 'ada' }, teams: [] } })),
@@ -87,6 +91,7 @@ function setup(opts: Opts = {}) {
     progress: (step: DeploySetupProgress['step']) => act(() => progress?.({ projectId: 'p1', step })),
     push: (r: DeployPushResult) => act(() => pushResult?.(r)),
     runs: (r: DeployRunsState) => act(() => runsUpdate?.(r)),
+    databaseProgress: (p: DeployDatabaseProgress) => act(() => databaseProgress?.(p)),
   };
 }
 
@@ -394,6 +399,41 @@ describe('Database', () => {
     fireEvent.click(await within(panel).findByRole('button', { name: 'deploy:database.add' }));
     expect(h.deploy.addDatabase).toHaveBeenCalledWith('p1', undefined);
     expect(await within(panel).findByText('deploy:needed.database-terms {"integration":"Neon"}')).toBeInTheDocument();
+  });
+
+  it('says under Add database that previews may share the database', async () => {
+    setup({ env: { settings: setUpSettings } });
+    const panel = await openEnvironment();
+    await within(panel).findByRole('button', { name: 'deploy:database.add' });
+    expect(within(panel).getByText('deploy:database.previewNote')).toBeInTheDocument();
+  });
+
+  it('shows the Vercel CLI download with progress and Cancel while Add database fetches it', async () => {
+    const h = setup({ env: { settings: setUpSettings } });
+    h.deploy.addDatabase.mockImplementationOnce(() => new Promise(() => undefined));
+    const panel = await openEnvironment();
+    fireEvent.click(await within(panel).findByRole('button', { name: 'deploy:database.add' }));
+    h.databaseProgress({ projectId: 'other', download: { percent: 90 } });
+    expect(within(panel).queryByText(/deploy:database\.downloading/)).not.toBeInTheDocument();
+    h.databaseProgress({ projectId: 'p1', download: { percent: 42 } });
+    expect(await within(panel).findByText('deploy:database.downloading {"percent":42}')).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'deploy:database.cancel' }));
+    expect(h.deploy.cancelDatabase).toHaveBeenCalledWith('p1');
+    h.databaseProgress({ projectId: 'p1' });
+    await waitFor(() => expect(within(panel).queryByText(/deploy:database\.downloading/)).not.toBeInTheDocument());
+  });
+
+  it('a download in progress after a reload is shown from the state', async () => {
+    setup({ env: { settings: setUpSettings, databaseRunning: true, databaseDownload: { percent: 7 } } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByText('deploy:database.downloading {"percent":7}')).toBeInTheDocument();
+  });
+
+  it('a cancelled Add database shows no error', async () => {
+    setup({ env: { settings: setUpSettings, lastDatabase: { ok: false, error: { kind: 'cancelled', message: 'RAW' } } } });
+    const panel = await openEnvironment();
+    await within(panel).findByRole('button', { name: 'deploy:database.add' });
+    expect(within(panel).queryByText(/deploy:env\.errors/)).not.toBeInTheDocument();
   });
 
   it('a database error shows its kind', async () => {

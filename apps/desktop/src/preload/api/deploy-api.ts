@@ -3,6 +3,7 @@ import { ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type {
   DeployAPI,
+  DeployDatabaseProgress,
   DeployPushResult,
   DeployRunsState,
   DeploySetupProgress,
@@ -29,6 +30,12 @@ export const createDeployAPI = (): DeployAPI => ({
   setVariable: (projectId, input) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_SET_VARIABLE, projectId, input),
   listVariables: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_LIST_VARIABLES, projectId),
   addDatabase: (projectId, opts) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, projectId, opts),
+  cancelDatabase: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_CANCEL_DATABASE, projectId),
+  onDatabaseProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: DeployDatabaseProgress) => callback(progress);
+    ipcRenderer.on(IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, handler);
+  },
   onSetupProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: DeploySetupProgress) => callback(progress);
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_SETUP_PROGRESS, handler);

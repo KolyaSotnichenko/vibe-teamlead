@@ -128,6 +128,9 @@ export interface DeployAPI {
   setVariable: (projectId: string, input: DeployVariableInput) => Promise<import('./common').IPCResult<DeploySetVariableResult>>;
   listVariables: (projectId: string) => Promise<import('./common').IPCResult<DeployListVariablesResult>>;
   addDatabase: (projectId: string, opts?: { acceptTerms?: boolean }) => Promise<import('./common').IPCResult<DeployAddDatabaseResult>>;
+  /** Cancels Add database while it downloads the Vercel CLI. */
+  cancelDatabase: (projectId: string) => Promise<import('./common').IPCResult>;
+  onDatabaseProgress: (callback: (progress: DeployDatabaseProgress) => void) => () => void;
   onSetupProgress: (callback: (progress: DeploySetupProgress) => void) => () => void;
   onPushResult: (callback: (result: DeployPushResult) => void) => () => void;
 }
@@ -305,7 +308,13 @@ export type DeployListVariablesResult =
   | { ok: true; variables: DeployVariable[]; githubUnavailable?: DeploySideError }
   | { ok: false; kind: string; message: string };
 
-export type DeployDatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' | 'saved-failed' | 'unknown';
+export type DeployDatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' | 'cancelled' | 'conflict' | 'saved-failed' | 'unknown';
+
+/** Add database is downloading the Vercel CLI (pasted-token accounts get it on the first Add database); no `download` = not downloading. */
+export interface DeployDatabaseProgress {
+  projectId: string;
+  download?: { percent: number };
+}
 
 export type DeployAddDatabaseResult =
   | { ok: true }
@@ -319,6 +328,8 @@ export interface DeployEnvState {
   setupRunning: boolean;
   lastSetup?: DeploySetupState;
   databaseRunning: boolean;
+  /** Add database is downloading the Vercel CLI first. */
+  databaseDownload?: { percent: number };
   lastDatabase?: DeployAddDatabaseResult;
   lastPush?: DeployPushResult;
 }

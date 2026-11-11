@@ -74,6 +74,8 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     state: vi.fn(async () => ({ success: true, data: { settings: { enabled: true }, setupRunning: false, databaseRunning: false } })),
     onSetupProgress: vi.fn(() => () => undefined),
     onPushResult: vi.fn(() => () => undefined),
+    onDatabaseProgress: vi.fn(() => () => undefined),
+    cancelDatabase: vi.fn(async () => ({ success: true })),
   };
   const openExternal = vi.fn(async () => undefined);
   const getGitHubAppAccess = vi.fn(async (_repo?: string) => ({

@@ -248,6 +248,8 @@ const browserMockAPI: ElectronAPI = {
     addDatabase: async () => ({ success: false, error: 'Not available in the browser' }),
     onSetupProgress: () => () => {},
     onPushResult: () => () => {},
+    cancelDatabase: async () => ({ success: true }),
+    onDatabaseProgress: () => () => {},
   },
   vercel: {
     status: async () => ({ success: true, data: { connected: false } }),

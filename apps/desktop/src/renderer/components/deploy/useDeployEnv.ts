@@ -22,6 +22,8 @@ export interface DeployEnv {
   setUp: (opts?: { vercelTeamId?: string | null }) => Promise<DeploySetupState | undefined>;
   chooseVercelProject: (choice: { useProjectId: string } | { createNew: true }) => Promise<void>;
   addDatabase: (acceptTerms?: boolean) => Promise<void>;
+  /** Cancels Add database while it downloads the Vercel CLI. */
+  cancelDatabase: () => void;
 }
 
 const EMPTY: DeployEnvState = { settings: null, setupRunning: false, databaseRunning: false };
@@ -56,9 +58,19 @@ export function useDeployEnv(projectId: string, onSetUpDone?: () => void): Deplo
     const offPush = deploy.onPushResult((r) => {
       if (r.projectId === projectId) setState((s) => ({ ...(s ?? EMPTY), lastPush: r }));
     });
+    const offDatabase = deploy.onDatabaseProgress((p) => {
+      if (p.projectId !== projectId) return;
+      setState((s) => {
+        const next: DeployEnvState = { ...(s ?? EMPTY) };
+        if (p.download) next.databaseDownload = p.download;
+        else delete next.databaseDownload;
+        return next;
+      });
+    });
     return () => {
       offProgress();
       offPush();
+      offDatabase();
     };
   }, [projectId, refresh]);
 
@@ -119,12 +131,20 @@ export function useDeployEnv(projectId: string, onSetUpDone?: () => void): Deplo
       } catch {
         setRequestFailed(true);
       }
-      setState((s) => ({ ...(s ?? EMPTY), databaseRunning: false, ...(last ? { lastDatabase: last } : {}) }));
+      setState((s) => {
+        const next: DeployEnvState = { ...(s ?? EMPTY), databaseRunning: false, ...(last ? { lastDatabase: last } : {}) };
+        delete next.databaseDownload;
+        return next;
+      });
       // A database that was added is recorded in the settings
       await refresh();
     },
     [projectId, refresh]
   );
 
-  return { state, progress, requestFailed, refresh, setUp, chooseVercelProject, addDatabase };
+  const cancelDatabase = useCallback(() => {
+    void Promise.resolve(window.electronAPI.deploy.cancelDatabase(projectId)).catch(() => undefined);
+  }, [projectId]);
+
+  return { state, progress, requestFailed, refresh, setUp, chooseVercelProject, addDatabase, cancelDatabase };
 }

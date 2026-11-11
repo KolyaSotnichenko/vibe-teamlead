@@ -171,16 +171,41 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
 
   const databaseRuns = new Map<string, Promise<DeployAddDatabaseResult>>();
   const lastDatabase = new Map<string, DeployAddDatabaseResult>();
+  const databaseCancel = new Map<string, AbortController>();
+  const databaseDownload = new Map<string, number>();
+
+  /** The CLI (downloaded here, with progress and Cancel, when a pasted-token account has none yet). */
+  const databaseCli = async (projectId: string): Promise<{ binary: string; configDir: string } | DeployAddDatabaseResult> => {
+    const controller = new AbortController();
+    databaseCancel.set(projectId, controller);
+    const send = (percent?: number) =>
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, { projectId, ...(percent === undefined ? {} : { download: { percent } }) });
+    try {
+      return await vercelCliPaths({
+        signal: controller.signal,
+        onProgress: (received, total) => {
+          const percent = total > 0 ? Math.min(100, Math.floor((received / total) * 100)) : 0;
+          if (databaseDownload.get(projectId) === percent) return;
+          databaseDownload.set(projectId, percent);
+          send(percent);
+        },
+      });
+    } catch (error) {
+      const kind = controller.signal.aborted ? 'cancelled' : (error as { kind?: unknown })?.kind;
+      if (kind === 'cancelled') return { ok: false, error: { kind: 'cancelled', message: 'The Vercel CLI download was cancelled.' } };
+      if (kind === 'timeout') return { ok: false, error: { kind: 'timeout', message: 'The Vercel CLI download took too long.' } };
+      return { ok: false, error: { kind: 'cli', message: 'The Vercel CLI could not be prepared.' } };
+    } finally {
+      if (databaseCancel.get(projectId) === controller) databaseCancel.delete(projectId);
+      if (databaseDownload.delete(projectId)) send();
+    }
+  };
 
   const runDatabase = async (project: Project, acceptTerms: boolean): Promise<DeployAddDatabaseResult> => {
     const vercel = project.settings.deploy?.vercel;
     if (!vercel?.projectId) return { ok: false, error: { kind: 'not-set-up', message: 'This project is not set up on Vercel yet.' } };
-    let paths: { binary: string; configDir: string };
-    try {
-      paths = await vercelCliPaths();
-    } catch {
-      return { ok: false, error: { kind: 'cli', message: 'The Vercel CLI could not be prepared.' } };
-    }
+    const paths = await databaseCli(project.id);
+    if ('ok' in paths) return paths;
     // A personal-account project's org is the user: only then is the account asked for.
     const userId = vercel.teamId ? undefined : (await vercelStatus()).user?.id;
     return addDatabase(
@@ -216,6 +241,11 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       return { success: true, data: await run };
     }
   );
+
+  ipcMain.handle(IPC_CHANNELS.DEPLOY_CANCEL_DATABASE, async (_event, projectId: string): Promise<IPCResult> => {
+    databaseCancel.get(projectId)?.abort();
+    return { success: true };
+  });
 
   // --- Variables -------------------------------------------------------------------------------
 
@@ -261,6 +291,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
         settings: project.settings.deploy ?? null,
         setupRunning: setupRuns.has(projectId),
         databaseRunning: databaseRuns.has(projectId),
+        ...(databaseDownload.has(projectId) ? { databaseDownload: { percent: databaseDownload.get(projectId) as number } } : {}),
         ...(setup ? { lastSetup: setup } : {}),
         ...(database ? { lastDatabase: database } : {}),
         ...(push ? { lastPush: push } : {}),

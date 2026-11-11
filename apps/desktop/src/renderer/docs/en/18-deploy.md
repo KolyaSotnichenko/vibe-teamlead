@@ -31,17 +31,17 @@ The **Deploy** stage and the **Production** link come from GitHub Deployments, n
 
 ## Vercel account
 
-Settings → Vercel connects the Vercel account Deploy uses to set up hosting. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
+Settings → Vercel connects the Vercel account Deploy uses to set up hosting. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use; a download that gets no data for a minute is stopped), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. If this Mac can't encrypt it, the token is not saved (never as plain text): sign in in the browser instead. With a pasted token nothing is downloaded until you first click **Add database**, which then downloads the Vercel CLI with its progress and a **Cancel** button. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
 
 ## Environment: set up deploy
 
 Deploy has two tabs: **Runs** and **Environment**. Until deploy is set up for the project, both offer **Set up deploy**.
 
-Setup, on the Environment tab, goes step by step and shows each one: the GitHub repository (a private one is created when the project has none, and the main branch is pushed to it), the Vercel project linked to that repository, then deploy is on: Vercel deploys to production on every push to main. When your Vercel account already has projects, choose an existing one for the repository or create a new one. If your Vercel account has teams, choose first whether the project goes to your personal account or to a team. A step that stopped can be run again with **Try again**; nothing is created twice.
+Setup, on the Environment tab, goes step by step and shows each one: the GitHub repository (a private one is created when the project has none, and the main branch is pushed to it), the Vercel project linked to that repository, then deploy is on: Vercel deploys to production on every push to main. When a Vercel project is already linked to this repository, choose it or create a new one. If your Vercel account has teams, choose first whether the project goes to your personal account or to a team. A step that stopped can be run again with **Try again**; nothing is created twice.
 
 **Needed from you** lists what only you can do, each with its button: connect Vercel (opens Settings → Vercel) or connect GitHub (opens the GitHub sign-in dialog), install the Vibe Teamlead app or give Vercel's GitHub app access to the repository (opens GitHub), choose an existing Vercel project for the repository or create a new one, or note that the repository is public.
 
-Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, main is pushed to GitHub after every merge into the project's main branch, and Vercel deploys it; the last push and whether it worked show at the top of the tab (for pushes since the app was opened).
+Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, main is pushed to GitHub after every merge into the project's main branch, and Vercel deploys it; the last push and whether it worked show at the top of the tab (for pushes since the app was opened). When GitHub's main has commits this Mac doesn't have, the push is refused: pull them into the project, and the next merge pushes.
 
 A project whose git configuration is unusual (for example, `origin` defined through an include) is not changed: setup stops and explains what it found, so nothing is overwritten.
 
@@ -49,7 +49,9 @@ A project whose git configuration is unusual (for example, `origin` defined thro
 
 **Add variable** saves a variable to the Vercel project for Production, Preview or both, and, if you tick it, as a GitHub Actions secret too. The value is typed into a password field and never shown again; the list shows names only, where they apply and whether they are also in GitHub. When one side saves and the other fails, the dialog says which.
 
-**Add database** adds a free Postgres database (Neon) to the Vercel project. The first time, Vercel asks you to accept Neon's Marketplace terms: the tab shows the policy links with the site each one opens, and nothing is accepted until you click **Accept and add database**. If Vercel needs a step only its dashboard can do, the tab links there.
+**Add database** adds a free Postgres database (Neon) to the Vercel project. The first time, Vercel asks you to accept Neon's Marketplace terms: the tab shows the policy links with the site each one opens, and nothing is accepted until you click **Accept and add database**. If Vercel needs a step only its dashboard can do, the tab links there. With a pasted token, the first **Add database** downloads the Vercel CLI first (progress and **Cancel** show on the tab).
+
+**Preview deployments and the database.** The database's variables go to Production and Preview, so preview deployments may use the same database as production, and what a preview writes lands in your production data. That is not the case when the Neon integration's preview branching is on: then each preview gets its own copy (a database branch). To check, open Vercel → **Storage** → the database → its settings, and see whether preview deployments get their own database branch; turn it on there if you want previews kept apart.
 
 ## What comes next
 

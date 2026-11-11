@@ -247,6 +247,44 @@ describe('deploy environment IPC', () => {
       });
       expect(db.addDatabase).not.toHaveBeenCalled();
     });
+
+    it('a CLI download shows progress to the window and in the state, then clears it', async () => {
+      const gate = deferred<{ binary: string; configDir: string }>();
+      let progress: ((r: number, t: number) => void) | undefined;
+      cred.vercelCliPaths.mockImplementationOnce(async (opts?: { onProgress?: (r: number, t: number) => void }) => {
+        progress = opts?.onProgress;
+        return gate.promise;
+      });
+      db.addDatabase.mockResolvedValue({ ok: true });
+      const run = invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, 'p1');
+      await vi.waitFor(() => expect(progress).toBeDefined());
+      progress?.(50, 100);
+      progress?.(50, 100);
+      expect(window.webContents.send).toHaveBeenCalledWith(IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, { projectId: 'p1', download: { percent: 50 } });
+      expect(window.webContents.send).toHaveBeenCalledTimes(1);
+      expect(await invoke(IPC_CHANNELS.DEPLOY_STATE, 'p1')).toMatchObject({ data: { databaseRunning: true, databaseDownload: { percent: 50 } } });
+      gate.resolve({ binary: '/fake/vercel', configDir: '/fake/config' });
+      expect(await run).toEqual({ success: true, data: { ok: true } });
+      expect(window.webContents.send).toHaveBeenLastCalledWith(IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, { projectId: 'p1' });
+      expect((await invoke(IPC_CHANNELS.DEPLOY_STATE, 'p1')) as { data: Record<string, unknown> }).not.toHaveProperty('data.databaseDownload');
+    });
+
+    it('cancel aborts the CLI download: kind cancelled, nothing added', async () => {
+      cred.vercelCliPaths.mockImplementationOnce(
+        (opts?: { signal?: AbortSignal }) =>
+          new Promise((_, reject) => opts?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('x'), { kind: 'cancelled' })))),
+      );
+      const run = invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, 'p1');
+      await vi.waitFor(() => expect(cred.vercelCliPaths).toHaveBeenCalled());
+      expect(await invoke(IPC_CHANNELS.DEPLOY_CANCEL_DATABASE, 'p1')).toEqual({ success: true });
+      expect(await run).toMatchObject({ success: true, data: { ok: false, error: { kind: 'cancelled' } } });
+      expect(db.addDatabase).not.toHaveBeenCalled();
+    });
+
+    it('a stalled CLI download is a timeout', async () => {
+      cred.vercelCliPaths.mockRejectedValueOnce(Object.assign(new Error('x'), { kind: 'timeout' }));
+      expect(await invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, 'p1')).toMatchObject({ success: true, data: { ok: false, error: { kind: 'timeout' } } });
+    });
   });
 
   describe('variables', () => {
