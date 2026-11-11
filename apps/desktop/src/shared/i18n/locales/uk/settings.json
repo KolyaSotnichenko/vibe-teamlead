@@ -54,6 +54,10 @@
       "title": "Claude",
       "description": "API-ключ і базова URL-адреса"
     },
+    "vercel": {
+      "title": "Vercel",
+      "description": "Акаунт для розгортання"
+    },
     "tools": {
       "title": "Інструменти",
       "description": "Сканери, Chrome, Docker, Strix"
@@ -1141,5 +1145,37 @@
     "sameModel": "Як у агента",
     "sameModelPlaceholder": "Та сама модель, що й в агента",
     "modelHint": "Для пошуку й запуску тестів зазвичай досить дешевшої і швидшої моделі. Модель має обслуговуватися вашим endpoint."
+  },
+  "vercel": {
+    "title": "Vercel",
+    "description": "Акаунт Vercel, у який застосунок розгортає проєкти. Увійдіть у браузері або вставте токен.",
+    "loading": "Перевіряємо Vercel…",
+    "notConnected": "Vercel не підключено.",
+    "connect": "Підключити Vercel",
+    "starting": "Починаємо вхід…",
+    "downloading": "Завантажуємо Vercel CLI… {{percent}}%",
+    "waiting": {
+      "code": "Підтвердьте цей код у браузері:",
+      "label": "Чекаємо на вас у браузері…"
+    },
+    "cancel": "Скасувати",
+    "connected": {
+      "viaBrowser": "Вхід через браузер",
+      "viaToken": "Вхід за токеном",
+      "teams": "Команди",
+      "noTeams": "Команд немає — розгортання йдуть в особистий акаунт."
+    },
+    "disconnect": "Відключити",
+    "paste": {
+      "toggle": "Вставити токен натомість",
+      "label": "Токен Vercel",
+      "hint": "Створіть його у Vercel → Account Settings → Tokens. Він зберігається зашифрованим на цьому Mac.",
+      "save": "Зберегти токен"
+    },
+    "errors": {
+      "statusFailed": "Не вдалося перевірити акаунт Vercel.",
+      "disconnectFailed": "Не вдалося відключити.",
+      "tokenRejected": "Vercel не прийняв цей токен."
+    }
   }
 }

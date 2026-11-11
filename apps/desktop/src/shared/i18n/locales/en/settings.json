@@ -54,6 +54,10 @@
       "title": "Claude",
       "description": "API key & base URL"
     },
+    "vercel": {
+      "title": "Vercel",
+      "description": "Account for deploys"
+    },
     "tools": {
       "title": "Tools",
       "description": "Scanners, Chrome, Docker, Strix"
@@ -1137,5 +1141,37 @@
     "sameModel": "Use the agent's model",
     "sameModelPlaceholder": "Same model as the agent",
     "modelHint": "A cheaper, faster model is usually enough for searching and running tests. The model must be served by your endpoint."
+  },
+  "vercel": {
+    "title": "Vercel",
+    "description": "The Vercel account the app deploys to. Sign in in your browser, or paste a token.",
+    "loading": "Checking Vercel…",
+    "notConnected": "Not connected to Vercel.",
+    "connect": "Connect Vercel",
+    "starting": "Starting the sign-in…",
+    "downloading": "Downloading Vercel CLI… {{percent}}%",
+    "waiting": {
+      "code": "Confirm this code in your browser:",
+      "label": "Waiting for you in the browser…"
+    },
+    "cancel": "Cancel",
+    "connected": {
+      "viaBrowser": "Signed in in the browser",
+      "viaToken": "Signed in with a token",
+      "teams": "Teams",
+      "noTeams": "No teams — deploys go to your personal account."
+    },
+    "disconnect": "Disconnect",
+    "paste": {
+      "toggle": "Paste a token instead",
+      "label": "Vercel token",
+      "hint": "Create one in Vercel → Account Settings → Tokens. It is stored encrypted on this Mac.",
+      "save": "Save token"
+    },
+    "errors": {
+      "statusFailed": "Couldn’t check the Vercel account.",
+      "disconnectFailed": "Couldn’t disconnect.",
+      "tokenRejected": "Vercel did not accept this token."
+    }
   }
 }
