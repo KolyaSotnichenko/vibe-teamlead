@@ -1,10 +1,10 @@
 /**
  * Context → Design system, in two parts:
  * - Setup: pick a path — A, keep the current look (extract it from the code, with brand rules
- *   if you have them) or B, a new look (references, then a brief and three directions) — or a
- *   file already in the repository; how QA checks it and Storybook. References live inside the
+ *   if you have them), B, a new look (references, then a brief and three directions), or C, a
+ *   ready package from a designer — or a file already in the repository; how QA checks it and Storybook. References live inside the
  *   path that uses them.
- * - Overview: the system itself (colours, fonts, rules), how far the code is from it with
+ * - Overview: the system itself (colours, fonts, rules; the themes of an imported package), how far the code is from it with
  *   the redesign that closes the gap, and the document, editable.
  */
 
@@ -23,12 +23,13 @@ import { EmptyState, Notice, SectionHeader, WorkspaceMarkdown } from '../task-de
 import { loadProjects, useProjectStore } from '../../stores/project-store';
 import { DesignReferences } from './DesignReferences';
 import { DesignLibraryView } from './DesignLibraryView';
+import { DesignPackagePanel, ThemesChoice } from './DesignPackagePanel';
 import { designFlow } from './design-flow';
-import type { DesignAudit, DesignBrief, DesignDirection, DesignQaMode, DesignReferenceList, DesignSystemInfo, DesignTokens } from '../../../shared/types';
+import type { DesignAudit, DesignBrief, DesignDirection, DesignQaMode, DesignReferenceList, DesignSystemInfo, DesignThemes, DesignTokens } from '../../../shared/types';
 
-type Busy = 'extract' | 'propose' | 'write' | 'save' | 'storybook' | null;
+type Busy = 'extract' | 'propose' | 'write' | 'save' | 'storybook' | 'package' | 'themes' | null;
 type Part = 'setup' | 'view' | 'screens';
-type Path = 'keep' | 'new';
+type Path = 'keep' | 'new' | 'package';
 
 function Swatch({ name, value, role }: { name: string; value: string; role?: string }) {
   return (
@@ -313,7 +314,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
   // Setup first while there is nothing to view or the system needs an update
   const shown: Part = part ?? (!info.exists || stale ? 'setup' : 'view');
   const meta = info.meta;
-  const currentPath: Path | null = !info.exists || !meta ? null : meta.how === 'extract' ? 'keep' : meta.how === 'direction' ? 'new' : null;
+  const currentPath: Path | null = !info.exists || !meta ? null : meta.how === 'extract' ? 'keep' : meta.how === 'direction' ? 'new' : meta.how === 'package' ? 'package' : null;
   const fresh = meta ? flow.freshIds : null;
   const qaModes: DesignQaMode[] = ['block', 'warn', 'off'];
 
@@ -322,7 +323,9 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
     ? t('context.design.status.exists')
     : meta.how === 'direction' && meta.direction
       ? t('context.design.status.direction', { name: meta.direction, date })
-      : t(`context.design.status.${meta.how === 'direction' ? 'edited' : meta.how}`, { date });
+      : meta.how === 'package'
+        ? t('context.design.status.package', { name: meta.packageName ?? info.package?.name ?? '', date })
+        : t(`context.design.status.${meta.how === 'direction' ? 'edited' : meta.how}`, { date });
   const code = audit ? (audit.findings > 0 ? `${t('context.design.status.places', { count: audit.findings })} ${t('context.design.status.inFiles', { count: audit.files })}` : t('context.design.status.clean')) : null;
   const status = !info.exists ? t('context.design.status.none') : [made, code].filter(Boolean).join(' · ');
 
@@ -429,6 +432,23 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
     </ol>
   );
 
+  // ----- Path C: a ready package from a designer -----
+  const packagePanel = (
+    <ol className="space-y-5 border border-foreground bg-card p-5" aria-label={t('context.design.package.title')}>
+      <Step n={1} title={t('context.design.package.stepTitle')} hint={t('context.design.package.stepHint')}>
+        <DesignPackagePanel
+          projectId={projectId}
+          disabled={working && busy !== 'package'}
+          onImported={written}
+          onError={setError}
+          onBusy={(on) => setBusy(on ? 'package' : null)}
+        />
+      </Step>
+    </ol>
+  );
+
+  const setThemes = (themes: DesignThemes) => void run('themes', () => window.electronAPI.design.setThemes(projectId, themes), setInfo);
+
   const setupPart = (
     <div className="space-y-10">
       {stale && (
@@ -451,12 +471,14 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
       <section className="space-y-4" aria-labelledby="ds-start">
         <SectionHeader id="ds-start" title={info.exists ? t('context.design.setup.changeTitle') : t('context.design.start.title')} />
         <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.start.body')}</p>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <PathCard label={t('context.design.start.pathA')} title={t('context.design.start.keepTitle')} body={t('context.design.setup.keep.card')} selected={path === 'keep'} current={currentPath === 'keep'} onSelect={() => setPath(path === 'keep' ? null : 'keep')} />
           <PathCard label={t('context.design.start.pathB')} title={t('context.design.start.newTitle')} body={t('context.design.setup.new.card')} selected={path === 'new'} current={currentPath === 'new'} onSelect={() => setPath(path === 'new' ? null : 'new')} />
+          <PathCard label={t('context.design.start.pathC')} title={t('context.design.package.title')} body={t('context.design.package.card')} selected={path === 'package'} current={currentPath === 'package'} onSelect={() => setPath(path === 'package' ? null : 'package')} />
         </div>
         {path === 'keep' && keepPanel}
         {path === 'new' && newPanel}
+        {path === 'package' && packagePanel}
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
             {t('context.design.start.repoQuestion')}{' '}
@@ -613,6 +635,13 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         {info.tokensError && <Notice>{info.tokensError}</Notice>}
         {info.tokens ? <TokensView tokens={info.tokens} /> : <Notice>{t('context.design.noTokens')}</Notice>}
       </section>
+      {info.package && (
+        <section className="space-y-3" aria-labelledby="ds-themes">
+          <SectionHeader id="ds-themes" title={t('context.design.package.themes.title')} meta={info.package.name} />
+          <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.package.themes.body')}</p>
+          <ThemesChoice value={info.package.themes} disabled={working} onChange={setThemes} />
+        </section>
+      )}
       {/* How far the code is from this system, and the redesign that closes the gap */}
       <ApplyDesignSystem projectId={projectId} audit={audit} />
       <section className="space-y-3" aria-labelledby="ds-doc">

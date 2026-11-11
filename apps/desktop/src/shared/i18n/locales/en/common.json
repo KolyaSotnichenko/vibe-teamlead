@@ -1343,6 +1343,7 @@
         "body": "Pick your situation. Either way the agents build by the system and QA checks every UI change against it.",
         "pathA": "Path A",
         "pathB": "Path B",
+        "pathC": "Path C",
         "keepTitle": "I like how it looks now",
         "extract": "Extract from the code",
         "oneSession": "One agent session",
@@ -1372,7 +1373,8 @@
         "places_other": "{{count}} differences",
         "inFiles_one": "in {{count}} file",
         "inFiles_other": "in {{count}} files",
-        "clean": "the code follows it"
+        "clean": "the code follows it",
+        "package": "from the package “{{name}}”, {{date}}"
       },
       "setup": {
         "current": "current",
@@ -1422,6 +1424,47 @@
           "auto": "Go on by itself",
           "autoHint": "The designer checks its own frames against the spec and the design system; you see them on the Design tab and in review"
         }
+      },
+      "package": {
+        "title": "A ready package from a designer",
+        "card": "A design-system package as a zip or a folder: its tokens are taken exactly, the agent writes down the rules, components are rebuilt in your code.",
+        "stepTitle": "Choose the package",
+        "stepHint": "A .zip or a folder. It is unpacked into the project's .vibe-teamlead/design/package/ folder; nothing from it is ever run.",
+        "choose": "Choose a zip or folder",
+        "chooseHint": "Nothing is imported until you confirm.",
+        "reading": "Reading the package…",
+        "holds": "What the package holds",
+        "components_one": "{{count}} component",
+        "components_other": "{{count}} components",
+        "logos_one": "{{count}} logo",
+        "logos_other": "{{count}} logos",
+        "fonts_one": "{{count}} font file",
+        "fonts_other": "{{count}} font files",
+        "colorsLight_one": "{{count}} light-theme colour",
+        "colorsLight_other": "{{count}} light-theme colours",
+        "colorsDark_one": "{{count}} dark-theme colour",
+        "colorsDark_other": "{{count}} dark-theme colours",
+        "noTokens": "No tokens: the agent will extract them",
+        "licence": "Licence",
+        "replaces": "Replaces {{path}}",
+        "skipped_one": "{{count}} file left out",
+        "skipped_other": "{{count}} files left out",
+        "skipReason": {
+          "type": "kind of file not kept",
+          "size": "too large",
+          "unsafe": "unsafe path",
+          "limit": "over the package limits"
+        },
+        "themes": {
+          "title": "Themes",
+          "body": "Switching recomputes the tokens from the package; no agent runs. Tasks started afterwards follow it.",
+          "light": "Light only",
+          "lightHint": "The dark values stay in the package as reference. Cheaper: QA checks one theme.",
+          "lightDark": "Light and dark with a switch",
+          "lightDarkHint": "The planner adds the switch; the designer and QA cover both themes."
+        },
+        "import": "Import",
+        "importing": "Importing “{{name}}”…"
       }
     }
   },
