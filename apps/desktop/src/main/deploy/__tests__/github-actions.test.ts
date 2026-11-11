@@ -80,6 +80,39 @@ describe('workflowFile', () => {
   });
 });
 
+describe('non-404 failures', () => {
+  const fail = { status: 500, headers: new Headers(), body: { message: 'boom' } };
+  it('workflowFile rethrows', async () => {
+    const { c } = client({ '/repos/acme/app/contents/x.yml?ref=abc': fail });
+    await expect(c.workflowFile('acme', 'app', 'x.yml', 'abc')).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+  it('jobLog rethrows', async () => {
+    const { c } = client({ '/repos/acme/app/actions/jobs/1/logs': fail });
+    await expect(c.jobLog('acme', 'app', 1)).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+});
+
+describe('mapping details', () => {
+  it('strips @ref from workflow path and normalizes unknown status', async () => {
+    const body = { workflow_runs: [{ id: 1, name: 'n', status: 'requested', path: '.github/workflows/ci.yml@refs/heads/main', created_at: 'x' }] };
+    const { c } = client({ '/repos/acme/app/actions/runs?per_page=20': ok(body) });
+    const [r] = await c.runs('acme', 'app');
+    expect(r.workflowPath).toBe('.github/workflows/ci.yml');
+    expect(r.status).toBe('queued');
+  });
+  it('productionUrl skips a success without environment_url', async () => {
+    const { c } = client({
+      '/repos/acme/app/deployments?per_page=30': ok([
+        { id: 2, environment: 'Production', created_at: '2026-11-11T00:00:00Z' },
+        { id: 1, environment: 'Production', created_at: '2026-11-10T00:00:00Z' },
+      ]),
+      '/repos/acme/app/deployments/2/statuses?per_page=1': ok([{ state: 'success', created_at: 'a' }]),
+      '/repos/acme/app/deployments/1/statuses?per_page=1': ok([{ state: 'success', environment_url: 'https://o.example.com', created_at: 'b' }]),
+    });
+    expect(await c.productionUrl('acme', 'app')).toBe('https://o.example.com');
+  });
+});
+
 describe('jobLog', () => {
   it('returns the text', async () => {
     const { c } = client({ '/repos/acme/app/actions/jobs/555/logs': ok('line1\nline2') });
@@ -121,7 +154,6 @@ describe('productionUrl', () => {
       { id: 7, environment: 'Production', created_at: '2026-11-09T00:00:00Z' },
     ];
     const { c } = client({
-      '/repos/acme/app/deployments?environment=Production&per_page=30': ok([]),
       '/repos/acme/app/deployments?per_page=30': ok(list),
       '/repos/acme/app/deployments/8/statuses?per_page=1': ok([{ state: 'failure', created_at: 'x' }]),
       '/repos/acme/app/deployments/7/statuses?per_page=1': ok([{ state: 'success', environment_url: 'https://old.example.com', created_at: 'y' }]),
@@ -146,6 +178,20 @@ describe('classifyGitHubError', () => {
       expect(e.kind).toBe('rate-limit');
       expect(e.resetAt).toBe(new Date(1800000000 * 1000).toISOString());
     }
+  });
+  it('401 is no-connection', () => {
+    expect(classifyGitHubError(401, new Headers(), { message: 'Bad credentials' }).kind).toBe('no-connection');
+  });
+  it('secondary rate limit uses retry-after', () => {
+    const e = classifyGitHubError(403, new Headers({ 'retry-after': '60' }), { message: 'secondary rate limit' });
+    expect(e.kind).toBe('rate-limit');
+    const delta = new Date(e.resetAt as string).getTime() - Date.now();
+    expect(delta).toBeGreaterThan(50_000);
+    expect(delta).toBeLessThanOrEqual(60_000);
+  });
+  it('5xx is unavailable', () => {
+    expect(classifyGitHubError(500, new Headers(), { message: 'boom' }).kind).toBe('unavailable');
+    expect(classifyGitHubError(422, new Headers(), {}).kind).toBe('unavailable');
   });
   it('not found', () => {
     expect(classifyGitHubError(404, new Headers(), { message: 'Not Found' }).kind).toBe('not-found');

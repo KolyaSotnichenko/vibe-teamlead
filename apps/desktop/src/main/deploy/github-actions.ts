@@ -31,24 +31,39 @@ function messageOf(body: unknown): string {
 
 export function classifyGitHubError(status: number, headers: Headers, body: unknown): GitHubError {
   const message = messageOf(body);
-  if ((status === 403 || status === 429) && headers.get('x-ratelimit-remaining') === '0') {
-    const reset = Number(headers.get('x-ratelimit-reset'));
-    return {
-      kind: 'rate-limit',
-      resetAt: Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : undefined,
-      message: message || 'GitHub rate limit reached',
-    };
+  if (status === 403 || status === 429) {
+    const retryAfter = Number(headers.get('retry-after'));
+    if (headers.get('x-ratelimit-remaining') === '0') {
+      const reset = Number(headers.get('x-ratelimit-reset'));
+      return {
+        kind: 'rate-limit',
+        resetAt: Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : undefined,
+        message: message || 'GitHub rate limit reached',
+      };
+    }
+    if (headers.get('retry-after') && Number.isFinite(retryAfter) && retryAfter >= 0) {
+      return {
+        kind: 'rate-limit',
+        resetAt: new Date(Date.now() + retryAfter * 1000).toISOString(),
+        message: message || 'GitHub rate limit reached',
+      };
+    }
   }
   if (status === 429) return { kind: 'rate-limit', message: message || 'GitHub rate limit reached' };
-  if (status === 401 || status === 403) {
-    return { kind: 'permissions', message: message || 'GitHub denied access' };
+  if (status === 401) {
+    return { kind: 'no-connection', message: message || 'GitHub token is invalid or expired' };
   }
+  if (status === 403) return { kind: 'permissions', message: message || 'GitHub denied access' };
   if (status === 404) return { kind: 'not-found', message: message || 'Not found' };
-  return { kind: 'not-found', message: `GitHub API error ${status}${message ? `: ${message}` : ''}` };
+  return { kind: 'unavailable', message: `GitHub API error ${status}${message ? `: ${message}` : ''}` };
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const optStr = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+const STATUSES: readonly string[] = ['queued', 'in_progress', 'completed', 'waiting'];
+/** Unknown statuses (requested, pending) count as queued. */
+const toStatus = (v: unknown): DeployStatus =>
+  (typeof v === 'string' && STATUSES.includes(v) ? v : 'queued') as DeployStatus;
 const arr = (v: unknown): Obj[] => (Array.isArray(v) ? (v as Obj[]) : []);
 
 function mapRun(r: Obj): DeployRun {
@@ -59,11 +74,11 @@ function mapRun(r: Obj): DeployRun {
     branch: str(r.head_branch),
     sha: str(r.head_sha),
     event: str(r.event),
-    status: str(r.status) as DeployStatus,
+    status: toStatus(r.status),
     startedAt: str(r.run_started_at) || str(r.created_at),
     updatedAt: str(r.updated_at),
     htmlUrl: str(r.html_url),
-    workflowPath: str(r.path),
+    workflowPath: str(r.path).split('@')[0],
   };
   const conclusion = optStr(r.conclusion);
   if (conclusion) run.conclusion = conclusion;
@@ -74,11 +89,11 @@ function mapJob(j: Obj): DeployJob {
   const job: DeployJob = {
     id: j.id as number,
     name: str(j.name),
-    status: str(j.status) as DeployStatus,
+    status: toStatus(j.status),
     steps: arr(j.steps).map((s) => {
       const step: DeployJob['steps'][number] = {
         name: str(s.name),
-        status: str(s.status) as DeployStatus,
+        status: toStatus(s.status),
         number: s.number as number,
       };
       const c = optStr(s.conclusion);
@@ -169,7 +184,8 @@ export function createActionsClient(fetcher: GitHubFetcher) {
         .sort((a, b) => str(b.created_at).localeCompare(str(a.created_at)));
       for (const d of list) {
         const status = await latestStatus(owner, repo, d.id);
-        if (status?.state === 'success') return optStr(status.environment_url) ?? null;
+        const url = status?.state === 'success' ? optStr(status.environment_url) : undefined;
+        if (url) return url;
       }
       return null;
     },

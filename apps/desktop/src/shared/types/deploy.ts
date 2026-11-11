@@ -5,7 +5,7 @@
 
 export type DeployStatus = 'queued' | 'in_progress' | 'completed' | 'waiting';
 
-export type GitHubErrorKind = 'no-connection' | 'permissions' | 'not-found' | 'rate-limit';
+export type GitHubErrorKind = 'no-connection' | 'permissions' | 'not-found' | 'rate-limit' | 'unavailable';
 
 export interface GitHubError {
   kind: GitHubErrorKind;
