@@ -55,7 +55,7 @@ export function classifyGitHubError(status: number, headers: Headers, body: unkn
   }
   if (status === 403) return { kind: 'permissions', message: message || 'GitHub denied access' };
   if (status === 404) return { kind: 'not-found', message: message || 'Not found' };
-  return { kind: 'unavailable', message: `GitHub API error ${status}${message ? `: ${message}` : ''}` };
+  return { kind: 'unavailable', status, message: `GitHub API error ${status}${message ? `: ${message}` : ''}` };
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -149,7 +149,7 @@ export function createActionsClient(fetcher: GitHubFetcher) {
     },
 
     async jobs(owner: string, repo: string, runId: number): Promise<DeployJob[]> {
-      const body = (await get(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`)) as Obj;
+      const body = (await get(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs?per_page=100`)) as Obj;
       return arr(body?.jobs).map(mapJob);
     },
 

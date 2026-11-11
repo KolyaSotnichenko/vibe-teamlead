@@ -51,7 +51,7 @@ const asGitHubError = (e: unknown): GitHubError => {
   return { kind: 'unavailable', message: e instanceof Error ? e.message : 'Could not reach GitHub' };
 };
 
-/** A job's log for the renderer: 404 is not there yet, anything else that fails is gone. */
+/** A job's log for the renderer: 404 is not there yet, 410 is gone, any other failure is an error the renderer may retry. */
 export async function fetchJobLog(
   client: Pick<ActionsClient, 'jobLog'>,
   repo: Repo,
@@ -62,7 +62,7 @@ export async function fetchJobLog(
     return text === null ? { state: 'pending' } : { state: 'ready', text };
   } catch (e) {
     const error = asGitHubError(e);
-    return error.kind === 'unavailable' ? { state: 'expired' } : { state: 'error', error };
+    return error.kind === 'unavailable' && error.status === 410 ? { state: 'expired' } : { state: 'error', error };
   }
 }
 

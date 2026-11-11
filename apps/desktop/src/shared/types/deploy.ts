@@ -11,6 +11,8 @@ export interface GitHubError {
   kind: GitHubErrorKind;
   /** ISO time when the rate limit resets (rate-limit only). */
   resetAt?: string;
+  /** The HTTP status GitHub answered with (unavailable only; absent when GitHub could not be reached). */
+  status?: number;
   message: string;
 }
 
@@ -100,7 +102,7 @@ export interface DeployRunsState {
   nextPollAt: string;
 }
 
-/** `pending`: the job has not finished, GitHub has no log yet. `expired`: the log is gone. `error`: GitHub refused (rate limit, permissions, no connection). */
+/** `pending`: the job has not finished, GitHub has no log yet. `expired`: GitHub answered 410, the log is gone. `error`: any other failure (rate limit, permissions, no connection, network, 5xx). */
 export type DeployJobLog =
   | { state: 'ready'; text: string }
   | { state: 'pending' }

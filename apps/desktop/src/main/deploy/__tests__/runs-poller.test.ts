@@ -260,10 +260,16 @@ describe('fetchJobLog', () => {
   it('404 (null) is pending', async () => {
     expect(await fetchJobLog({ jobLog: async () => null } as never, repo, 1)).toEqual({ state: 'pending' });
   });
-  it('unavailable (e.g. 410) is expired', async () => {
-    const fail = (e: unknown) => ({ jobLog: async () => { throw e; } }) as never;
-    expect(await fetchJobLog(fail({ kind: 'unavailable', message: '' }), repo, 1)).toEqual({ state: 'expired' });
-    expect(await fetchJobLog(fail(new Error('x')), repo, 1)).toEqual({ state: 'expired' });
+  const fail = (e: unknown) => ({ jobLog: async () => { throw e; } }) as never;
+  it('410 (gone) is expired', async () => {
+    expect(await fetchJobLog(fail({ kind: 'unavailable', status: 410, message: '' }), repo, 1)).toEqual({ state: 'expired' });
+  });
+  it('a network drop, a 5xx or a thrown Error is an unavailable error, not expired', async () => {
+    const drop = { kind: 'unavailable', message: 'Could not reach GitHub' };
+    expect(await fetchJobLog(fail(drop), repo, 1)).toEqual({ state: 'error', error: drop });
+    const e5xx = { kind: 'unavailable', status: 502, message: 'GitHub API error 502' };
+    expect(await fetchJobLog(fail(e5xx), repo, 1)).toEqual({ state: 'error', error: e5xx });
+    expect(await fetchJobLog(fail(new Error('x')), repo, 1)).toEqual({ state: 'error', error: { kind: 'unavailable', message: 'x' } });
   });
   it('rate-limit, permissions, no-connection are errors', async () => {
     for (const kind of ['rate-limit', 'permissions', 'no-connection'] as const) {

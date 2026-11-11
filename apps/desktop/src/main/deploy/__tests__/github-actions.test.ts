@@ -53,7 +53,7 @@ describe('runs', () => {
 
 describe('jobs', () => {
   it('maps jobs with steps', async () => {
-    const { c } = client({ '/repos/acme/app/actions/runs/101/jobs': ok(fx('jobs.json')) });
+    const { c } = client({ '/repos/acme/app/actions/runs/101/jobs?per_page=100': ok(fx('jobs.json')) });
     const jobs = await c.jobs('acme', 'app', 101);
     expect(jobs).toEqual([{
       id: 555, name: 'build', status: 'completed', conclusion: 'failure',
@@ -188,6 +188,10 @@ describe('classifyGitHubError', () => {
     const delta = new Date(e.resetAt as string).getTime() - Date.now();
     expect(delta).toBeGreaterThan(50_000);
     expect(delta).toBeLessThanOrEqual(60_000);
+  });
+  it('an unavailable error carries the HTTP status, so a 410 can be told apart', () => {
+    expect(classifyGitHubError(410, new Headers(), { message: 'Gone' })).toMatchObject({ kind: 'unavailable', status: 410 });
+    expect(classifyGitHubError(503, new Headers(), {})).toMatchObject({ kind: 'unavailable', status: 503 });
   });
   it('5xx is unavailable', () => {
     expect(classifyGitHubError(500, new Headers(), { message: 'boom' }).kind).toBe('unavailable');
