@@ -3,7 +3,7 @@
  * nothing from the package is executed; bundle.js is read only for the first
  * 2 KB, as text, to find its `@ds-bundle` header.
  */
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, lstatSync, readSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 export interface DesignPackage {
@@ -48,12 +48,25 @@ function isDir(p: string): boolean {
   }
 }
 
-function walkFiles(dir: string, rel: string, out: string[]): void {
+const MAX_DEPTH = 12;
+const MAX_FILES = 5000;
+
+/** Lists regular files only: symbolic links and special files are skipped, depth and count are capped. */
+function walkFiles(dir: string, rel: string, out: string[], depth = 0): void {
+  if (depth > MAX_DEPTH) return;
   for (const name of listDir(dir)) {
+    if (out.length >= MAX_FILES) return;
     const abs = path.join(dir, name);
     const r = rel ? `${rel}/${name}` : name;
-    if (isDir(abs)) walkFiles(abs, r, out);
-    else out.push(r);
+    let st;
+    try {
+      st = lstatSync(abs);
+    } catch {
+      continue;
+    }
+    if (st.isSymbolicLink()) continue;
+    if (st.isDirectory()) walkFiles(abs, r, out, depth + 1);
+    else if (st.isFile()) out.push(r);
   }
 }
 

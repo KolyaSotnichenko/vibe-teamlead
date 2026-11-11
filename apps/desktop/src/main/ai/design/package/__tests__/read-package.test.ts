@@ -1,3 +1,5 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { readDesignPackage } from '../read-package';
@@ -40,5 +42,25 @@ describe('readDesignPackage', () => {
     expect(pkg.components).toEqual([]);
     expect(pkg.tokenFiles).toEqual({ css: 'tokens.css' });
     expect(pkg.logos).toEqual([]);
+  });
+
+  it('does not follow symbolic links out of the package', () => {
+    const tmp = mkdtempSync(path.join(tmpdir(), 'dsp-'));
+    try {
+      const outside = path.join(tmp, 'outside');
+      mkdirSync(outside);
+      writeFileSync(path.join(outside, 'secret.png'), 'x');
+      const pkgDir = path.join(tmp, 'pkg');
+      mkdirSync(path.join(pkgDir, 'logos'), { recursive: true });
+      writeFileSync(path.join(pkgDir, 'README.md'), '# Kit\n');
+      writeFileSync(path.join(pkgDir, 'logos', 'a.svg'), '<svg/>');
+      symlinkSync(outside, path.join(pkgDir, 'linked'));
+      symlinkSync(path.join(outside, 'secret.png'), path.join(pkgDir, 'logos', 'b.png'));
+      const pkg = readDesignPackage(pkgDir);
+      expect(pkg.logos).toEqual(['logos/a.svg']);
+      expect(pkg.extraReferences).toEqual([]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

@@ -61,3 +61,6 @@ bun.lockb
 test-*.js
 test-*.cjs
 vendor-bin/
+
+# Test fixtures are source, not build output
+!src/**/__tests__/fixtures/**
