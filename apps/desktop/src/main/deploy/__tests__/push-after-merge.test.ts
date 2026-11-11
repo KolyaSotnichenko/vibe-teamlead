@@ -14,9 +14,9 @@ describe('pushMainAfterMerge', () => {
   it('does nothing when deploy is not enabled or has no repo', async () => {
     const push = vi.fn(async () => {});
     const { d, emitted } = deps(push);
-    expect(await pushMainAfterMerge(project(undefined), d)).toEqual({ pushed: false });
-    expect(await pushMainAfterMerge(project({ enabled: false, repo: enabled.repo }), d)).toEqual({ pushed: false });
-    expect(await pushMainAfterMerge(project({ enabled: true }), d)).toEqual({ pushed: false });
+    expect(await pushMainAfterMerge(project(undefined), d, 'main')).toEqual({ pushed: false });
+    expect(await pushMainAfterMerge(project({ enabled: false, repo: enabled.repo }), d, 'main')).toEqual({ pushed: false });
+    expect(await pushMainAfterMerge(project({ enabled: true }), d, 'main')).toEqual({ pushed: false });
     expect(push).not.toHaveBeenCalled();
     expect(emitted).toEqual([]);
   });
@@ -24,17 +24,28 @@ describe('pushMainAfterMerge', () => {
   it('pushes the main branch once and emits ok', async () => {
     const push = vi.fn(async () => {});
     const { d, emitted } = deps(push);
-    expect(await pushMainAfterMerge(project(enabled, 'trunk'), d)).toEqual({ pushed: true });
+    expect(await pushMainAfterMerge(project(enabled, 'trunk'), d, 'trunk')).toEqual({ pushed: true });
     expect(push).toHaveBeenCalledTimes(1);
     expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'trunk');
     expect(emitted).toEqual([{ projectId: 'p1', ok: true, at: '2026-01-01T00:00:00.000Z' }]);
   });
 
-  it('falls back to the merge target branch', async () => {
+  it('a merge into a non-main branch does not push', async () => {
+    const push = vi.fn(async () => {});
+    const { d, emitted } = deps(push);
+    expect(await pushMainAfterMerge(project(enabled, 'main'), d, 'develop')).toEqual({ pushed: false });
+    d.branches = async () => ['main', 'develop'];
+    expect(await pushMainAfterMerge(project(enabled, null), d, 'develop')).toEqual({ pushed: false });
+    expect(push).not.toHaveBeenCalled();
+    expect(emitted).toEqual([]);
+  });
+
+  it('without a configured main, uses the repo default (master here)', async () => {
     const push = vi.fn(async () => {});
     const { d } = deps(push);
-    await pushMainAfterMerge(project(enabled, null), d, 'develop');
-    expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'develop');
+    d.branches = async () => ['master', 'develop'];
+    await pushMainAfterMerge(project(enabled, null), d, 'master');
+    expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'master');
   });
 
   it('coalesces three merges during a slow push into exactly two pushes', async () => {
@@ -42,10 +53,10 @@ describe('pushMainAfterMerge', () => {
     const gate = new Promise<void>((r) => { release = r; });
     const push = vi.fn(async () => { if (push.mock.calls.length === 1) await gate; });
     const { d, emitted } = deps(push);
-    const a = pushMainAfterMerge(project(enabled), d);
+    const a = pushMainAfterMerge(project(enabled), d, 'main');
     await Promise.resolve();
-    const b = pushMainAfterMerge(project(enabled), d);
-    const c = pushMainAfterMerge(project(enabled), d);
+    const b = pushMainAfterMerge(project(enabled), d, 'main');
+    const c = pushMainAfterMerge(project(enabled), d, 'main');
     expect(push).toHaveBeenCalledTimes(1);
     release();
     await Promise.all([a, b, c]);
@@ -56,13 +67,13 @@ describe('pushMainAfterMerge', () => {
   it('emits the error and does not throw on rejection', async () => {
     const err = Object.assign(new Error('nope'), { kind: 'auth' });
     const { d, emitted } = deps(vi.fn(async () => { throw err; }));
-    const r = await pushMainAfterMerge(project(enabled), d);
+    const r = await pushMainAfterMerge(project(enabled), d, 'main');
     expect(r).toEqual({ pushed: false, error: 'nope' });
     expect(emitted).toEqual([{ projectId: 'p1', ok: false, error: { kind: 'auth', message: 'nope' }, at: '2026-01-01T00:00:00.000Z' }]);
   });
 
   it('a throwing emitter does not break the push', async () => {
     const d = { push: vi.fn(async () => {}), emit: () => { throw new Error('x'); } } as PushAfterMergeDeps;
-    expect(await pushMainAfterMerge(project(enabled), d)).toEqual({ pushed: true });
+    expect(await pushMainAfterMerge(project(enabled), d, 'main')).toEqual({ pushed: true });
   });
 });

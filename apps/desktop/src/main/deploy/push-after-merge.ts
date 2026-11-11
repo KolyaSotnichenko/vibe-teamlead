@@ -7,6 +7,7 @@
  * goes to the emitter and back to the caller.
  */
 import type { Project } from '../../shared/types';
+import { readGitInfo } from './setup';
 
 export interface DeployPushResult {
   projectId: string;
@@ -20,6 +21,8 @@ export interface PushAfterMergeDeps {
   push: (projectPath: string, url: string, refspec: string) => Promise<void>;
   emit: (result: DeployPushResult) => void;
   now?: () => string;
+  /** The project's local branch names, read from .git files; readGitInfo in production */
+  branches?: (projectPath: string) => Promise<string[]>;
 }
 
 export interface PushAfterMergeOutcome {
@@ -72,11 +75,23 @@ async function pushOnce(
 export async function pushMainAfterMerge(
   project: Pick<Project, 'id' | 'path' | 'settings'>,
   deps: PushAfterMergeDeps,
-  mergedInto?: string,
+  mergedInto: string,
 ): Promise<PushAfterMergeOutcome> {
   const deploy = project.settings?.deploy;
   if (!deploy?.enabled || !deploy.repo) return { pushed: false };
-  const branch = project.settings.mainBranch || mergedInto || 'main';
+  let main = project.settings.mainBranch;
+  if (!main) {
+    let names: string[] = [];
+    try {
+      names = await (deps.branches ?? (async (p) => (await readGitInfo(p))?.branches ?? []))(project.path);
+    } catch {
+      // unknown: no push
+    }
+    main = names.includes('main') ? 'main' : names.includes('master') ? 'master' : undefined;
+  }
+  // Only the project's main branch goes to GitHub, never a merge into some other branch
+  if (!main || mergedInto !== main) return { pushed: false };
+  const branch = main;
   const url = `https://github.com/${deploy.repo.owner}/${deploy.repo.repo}.git`;
 
   let state = states.get(project.id);

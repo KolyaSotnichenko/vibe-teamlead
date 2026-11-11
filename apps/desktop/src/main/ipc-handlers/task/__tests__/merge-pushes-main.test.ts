@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<{ success: boolean; data?: { message?: string } }>>();
@@ -47,6 +50,21 @@ describe('merge into main pushes main', () => {
     expect(pushMain).toHaveBeenCalledTimes(1);
     expect((pushMain.mock.calls[0] as unknown[])[0]).toBe(found.project);
     expect((pushMain.mock.calls[0] as unknown[])[2]).toBe('main');
+  });
+
+  it('passes the branch the merge landed on (a task based on develop)', async () => {
+    merge.result = { status: 'merged' };
+    const dir = mkdtempSync(join(tmpdir(), 'vt-base-'));
+    mkdirSync(join(dir, '.vibe-teamlead/specs/s'), { recursive: true });
+    writeFileSync(join(dir, '.vibe-teamlead/specs/s/task_metadata.json'), JSON.stringify({ baseBranch: 'develop' }));
+    found.project.path = dir;
+    try {
+      await mergeTask({});
+    } finally {
+      found.project.path = '/no/such/project';
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect((pushMain.mock.calls[0] as unknown[])[2]).toBe('develop');
   });
 
   it('does not call it for a stage-only merge', async () => {
