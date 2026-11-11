@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createVercelClient, type VercelFetcher } from '../vercel-api';
+import { createVercelClient, defaultVercelFetcher, isVercelError, type VercelFetcher } from '../vercel-api';
 import type { VercelError } from '../../../shared/types/deploy';
 
 interface Call { url: string; method: string; headers: Record<string, string>; body?: string }
@@ -165,5 +165,77 @@ describe('vercel-api', () => {
     expect((await err(c.listEnvNames('p'))).kind).toBe('not-found');
     expect((await err(c.listEnvNames('p'))).kind).toBe('unavailable');
     expect((await err(c.listEnvNames('p'))).kind).toBe('unavailable');
+  });
+
+  it('git-not-connected is scoped to createProject', async () => {
+    const { fetcher } = fake([
+      { status: 400, body: { error: { code: 'bad_request', message: 'Invalid key. The Vercel GitHub App has access issues' } } },
+      { status: 400, body: { error: { code: 'bad_request', message: 'Project names can be up to 100 characters' } } },
+      { status: 409, body: { error: { code: 'conflict', message: 'Name taken; install the GitHub App to link' } } },
+    ]);
+    const c = createVercelClient(fetcher, {}, tok());
+    const e1 = await err(c.upsertEnv('p', { key: 'bad key', value: 'v', targets: ['production'], sensitive: false }));
+    expect(e1.kind).toBe('bad-request');
+    const e2 = await err(c.createProject({ name: 'A B', repo: 'o/a' }));
+    expect(e2.kind).toBe('bad-request');
+    const e3 = await err(c.createProject({ name: 'a', repo: 'o/a' }));
+    expect(e3.kind).toBe('conflict');
+  });
+
+  it('other 4xx are bad-request with the redacted message, never retried', async () => {
+    const { fetcher, calls } = fake([
+      { status: 422, body: { error: { code: 'x', message: 'bad TOKEN-SECRET' } } },
+      { status: 402, body: { error: { code: 'payment_required', message: 'Upgrade' } } },
+    ]);
+    const c = createVercelClient(fetcher, {}, tok());
+    const e = await err(c.listEnvNames('p'));
+    expect(e).toMatchObject({ kind: 'bad-request', message: 'bad ***' });
+    expect((await err(c.listEnvNames('p'))).kind).toBe('bad-request');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('actionUrl only from github.com or vercel.com over https', async () => {
+    const mk = (link: string) => fake([{ status: 400, body: { error: { code: 'repo_not_found', message: 'm', link } } }]).fetcher;
+    const fb = 'https://github.com/apps/vercel/installations/new';
+    for (const [link, want] of [
+      ['https://vercel.com/x', 'https://vercel.com/x'],
+      ['http://github.com/x', fb],
+      ['https://evil.com/x', fb],
+      ['https://github.com.evil.com/x', fb],
+      ['javascript:alert(1)', fb],
+    ]) {
+      const e = await err(createVercelClient(mk(link), {}, tok()).createProject({ name: 'a', repo: 'o/a' }));
+      expect(e.actionUrl).toBe(want);
+    }
+  });
+
+  it('default fetcher times out -> unavailable path (abort signal passed)', async () => {
+    const orig = globalThis.fetch;
+    let signal: AbortSignal | undefined;
+    globalThis.fetch = (async (_u: string, init: RequestInit) => { signal = init.signal as AbortSignal; throw new DOMException('t', 'TimeoutError'); }) as unknown as typeof fetch;
+    try {
+      const e = await err(createVercelClient(defaultVercelFetcher, {}, tok()).listEnvNames('p'));
+      expect(e.kind).toBe('unavailable');
+      expect(signal).toBeDefined();
+    } finally { globalThis.fetch = orig; }
+  });
+
+  it('createProject without an id in a 2xx body fails; link only for github', async () => {
+    const { fetcher } = fake([
+      { status: 200, body: { name: 'a' } },
+      { status: 200, body: { id: 'p', name: 'a', link: { type: 'gitlab', org: 'o', repo: 'a' } } },
+    ]);
+    const c = createVercelClient(fetcher, {}, tok());
+    expect((await err(c.createProject({ name: 'a', repo: 'o/a' }))).kind).toBe('unavailable');
+    expect(await c.findProject('a')).toEqual({ id: 'p', name: 'a' });
+  });
+
+  it('short values are not redacted; isVercelError narrows', async () => {
+    const { fetcher } = fake([{ status: 400, body: { error: { code: 'x', message: 'bad a value' } } }]);
+    const e = await err(createVercelClient(fetcher, {}, tok()).upsertEnv('p', { key: 'K', value: 'a', targets: ['production'], sensitive: false }));
+    expect(e.message).toBe('bad a value');
+    expect(isVercelError(e)).toBe(true);
+    expect(isVercelError(new Error('x'))).toBe(false);
+    expect(isVercelError(null)).toBe(false);
   });
 });

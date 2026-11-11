@@ -151,6 +151,7 @@ export type VercelErrorKind =
   | 'not-found'
   | 'git-not-connected'
   | 'conflict'
+  | 'bad-request'
   | 'rate-limit'
   | 'unavailable';
 

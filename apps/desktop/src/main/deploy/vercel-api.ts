@@ -29,7 +29,25 @@ export interface VercelClient {
   latestProductionUrl(projectId: string): Promise<string | null>;
 }
 
-export const defaultVercelFetcher: VercelFetcher = (url, init) => fetch(url, init);
+export const defaultVercelFetcher: VercelFetcher = (url, init) =>
+  fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
+
+export function isVercelError(e: unknown): e is VercelError {
+  return typeof e === 'object' && e !== null && typeof (e as VercelError).kind === 'string' && typeof (e as VercelError).message === 'string';
+}
+
+/** Only links to GitHub or Vercel over https are offered as an action. */
+function safeActionUrl(link: unknown): string {
+  if (typeof link === 'string') {
+    try {
+      const u = new URL(link);
+      if (u.protocol === 'https:' && ['github.com', 'vercel.com'].some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) return u.toString();
+    } catch {
+      /* fall through */
+    }
+  }
+  return GITHUB_APP_INSTALL_URL;
+}
 
 const defaultTokenProvider: VercelTokenProvider = async () => {
   // Lazy: keeps Electron out of tests that inject their own provider.
@@ -47,11 +65,11 @@ const defaultTokenProvider: VercelTokenProvider = async () => {
  */
 const GIT_CODES = new Set(['repo_not_found', 'repository_not_found', 'incorrect_git_source_info', 'install_github_app', 'github_app_not_installed']);
 const GIT_MESSAGE =
-  /install the github (integration|app)|github app|login connection|repository (does not exist|not found)|make sure the repository exists/i;
+  /install the github (integration|app)|login connection|github app\b[^.]*\b(access|install|grant|permission)|\b(access|install|grant)\b[^.]*github app|repository (does not exist|not found)|make sure the repository exists/i;
 
 function redact(text: string, secrets: string[]): string {
   let out = text;
-  for (const s of secrets) if (s) out = out.split(s).join('***');
+  for (const s of secrets) if (s && s.length >= 4) out = out.split(s).join('***');
   return out;
 }
 
@@ -76,6 +94,7 @@ export function createVercelClient(
     target: string,
     body?: unknown,
     secrets: string[] = [],
+    opts: { git?: boolean } = {},
   ): Promise<unknown> {
     let retried = false;
     for (;;) {
@@ -122,11 +141,12 @@ export function createVercelClient(
         fail('rate-limit', message, Number.isFinite(reset) && reset > 0 ? { resetAt: new Date(reset * 1000).toISOString() } : {});
       }
       if (res.status === 403) fail('forbidden', message);
-      if (res.status === 404 && !GIT_CODES.has(code)) fail('not-found', message);
-      if (GIT_CODES.has(code) || (res.status < 500 && GIT_MESSAGE.test(payload.error?.message ?? ''))) {
-        fail('git-not-connected', message, { actionUrl: payload.error?.link ?? GITHUB_APP_INSTALL_URL });
-      }
       if (res.status === 409) fail('conflict', message);
+      if (opts.git && res.status < 500 && (GIT_CODES.has(code) || GIT_MESSAGE.test(message))) {
+        fail('git-not-connected', message, { actionUrl: safeActionUrl(payload.error?.link) });
+      }
+      if (res.status === 404) fail('not-found', message);
+      if (res.status < 500) fail('bad-request', message);
       fail('unavailable', message);
     }
   }
@@ -137,9 +157,9 @@ export function createVercelClient(
         const p = (await request('GET', url(`/v9/projects/${encodeURIComponent(name)}`))) as {
           id: string;
           name: string;
-          link?: { org?: string; repo?: string };
+          link?: { type?: string; org?: string; repo?: string };
         };
-        const repo = p.link?.repo ? (p.link.org ? `${p.link.org}/${p.link.repo}` : p.link.repo) : undefined;
+        const repo = p.link?.type === 'github' && p.link.repo ? (p.link.org ? `${p.link.org}/${p.link.repo}` : p.link.repo) : undefined;
         return { id: p.id, name: p.name, ...(repo ? { link: { repo } } : {}) };
       } catch (e) {
         if ((e as VercelError).kind === 'not-found') return null;
@@ -151,8 +171,9 @@ export function createVercelClient(
       const body: Record<string, unknown> = { name, gitRepository: { type: 'github', repo } };
       if (framework) body.framework = framework;
       if (rootDirectory) body.rootDirectory = rootDirectory;
-      const p = (await request('POST', url('/v11/projects'), body)) as { id: string; name: string };
-      return { id: p.id, name: p.name };
+      const p = (await request('POST', url('/v11/projects'), body, [], { git: true })) as { id?: string; name?: string };
+      if (!p.id) fail('unavailable', 'Vercel answered without a project id');
+      return { id: p.id, name: p.name ?? name };
     },
 
     async upsertEnv(projectId, { key, value, targets, sensitive }) {
