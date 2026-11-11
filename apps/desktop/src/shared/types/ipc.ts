@@ -846,6 +846,8 @@ export interface ElectronAPI {
   preview: import('./preview').PreviewAPI;
   /** GitHub Actions runs for the Deploy view */
   deploy: import('./deploy').DeployAPI;
+  /** The Vercel account (Settings → Vercel) */
+  vercel: import('./deploy').VercelAPI;
   /** Token usage per project */
   usage: { get: (projectId: string) => Promise<IPCResult<import('./usage').ProjectUsageSummary>> };
 }

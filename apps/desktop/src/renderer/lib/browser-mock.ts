@@ -241,6 +241,14 @@ const browserMockAPI: ElectronAPI = {
     jobLog: async () => ({ success: true, data: { state: 'pending' as const } }),
     onRunsUpdate: () => () => {},
   },
+  vercel: {
+    status: async () => ({ success: true, data: { connected: false } }),
+    connect: async () => ({ success: false, error: 'Not available in the browser' }),
+    cancelConnect: async () => ({ success: true }),
+    setToken: async () => ({ success: false, error: 'Not available in the browser' }),
+    disconnect: async () => ({ success: true, data: { connected: false } }),
+    onConnectState: () => () => {},
+  },
   usage: usageMock,
 
   // External tools check

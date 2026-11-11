@@ -620,6 +620,14 @@ export const IPC_CHANNELS = {
   DEPLOY_JOB_LOG: 'deploy:jobLog',
   DEPLOY_RUNS_UPDATE: 'deploy:runsUpdate',  // Event: runs state (main -> renderer)
 
+  // Vercel account (Settings → Vercel)
+  VERCEL_STATUS: 'vercel:status',
+  VERCEL_CONNECT: 'vercel:connect',
+  VERCEL_CANCEL_CONNECT: 'vercel:cancelConnect',
+  VERCEL_SET_TOKEN: 'vercel:setToken',
+  VERCEL_DISCONNECT: 'vercel:disconnect',
+  VERCEL_CONNECT_STATE: 'vercel:connectState',  // Event: sign-in progress (main -> renderer)
+
   // Screenshot capture
   SCREENSHOT_GET_SOURCES: 'screenshot:getSources',  // Get available screens/windows
   SCREENSHOT_CAPTURE: 'screenshot:capture'           // Capture screenshot from source
