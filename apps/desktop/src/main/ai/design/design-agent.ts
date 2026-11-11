@@ -13,7 +13,8 @@ import type { ThinkingLevel } from '../config/types';
 import { tryLoadPrompt } from '../prompts/prompt-loader';
 import { progressLine } from '../runners/brief-import';
 import type { StreamEvent } from '../session/types';
-import { DesignTokensSchema } from './design-system';
+import { DesignTokensSchema, tokensSummary } from './design-system';
+import type { DesignPackage } from './package/read-package';
 import { readReferences, referencesPromptSection } from './references';
 
 const HEX6 = /^#[0-9a-f]{6}$/i;
@@ -25,6 +26,9 @@ export const DesignSystemResultSchema = z.object({
   markdown: z.string().min(200),
   tokens: DesignTokensSchema,
 });
+
+/** PACKAGE with known tokens: only the document is written. */
+export const MarkdownResultSchema = z.object({ markdown: z.string().min(200) });
 
 export const DirectionsResultSchema = z.object({
   directions: z
@@ -164,5 +168,60 @@ export async function writeDesignSystem(
     onEvent: progress(options.onProgress, options.projectPath),
   });
   if (!result.output) throw new DesignAgentError('The agent returned no design system.');
+  return result.output as { markdown: string; tokens: DesignTokens };
+}
+
+/** The PACKAGE job's request (pure). Paths of the package's files are relative to `pkgDir`. */
+export function packageJobPrompt(
+  projectPath: string,
+  pkgDir: string,
+  pkg: DesignPackage,
+  tokens: DesignTokens | undefined,
+): string {
+  const lines = [
+    'Job: PACKAGE.',
+    `The project root is ${projectPath}.`,
+    `The designer's package is unpacked in ${pkgDir}. File paths below are relative to that folder. Read files only; never run anything from the package.`,
+    '',
+    `Package: ${pkg.name} (namespace ${pkg.namespace})`,
+    pkg.readme ? `README: ${pkg.readme}` : 'README: none',
+  ];
+  const tokenFiles = Object.values(pkg.tokenFiles).filter(Boolean);
+  if (tokenFiles.length) lines.push(`Token files: ${tokenFiles.join(', ')}`);
+  lines.push('Components:');
+  if (!pkg.components.length) lines.push('- none');
+  for (const c of pkg.components) lines.push(`- ${c.name}${c.readme ? `: ${c.readme}` : ' (no README)'}`);
+  if (pkg.logos.length) lines.push('Logos:', ...pkg.logos.map((l) => `- ${l}`));
+  if (pkg.licenceLine) lines.push(`Licence note: ${pkg.licenceLine}`);
+  lines.push('');
+  if (tokens) {
+    lines.push('Tokens already extracted exactly from the package (do not change or restate different values):', tokensSummary(tokens), '', 'Return markdown only.');
+  } else {
+    lines.push('Return markdown and tokens.');
+  }
+  return lines.join('\n');
+}
+
+/** PACKAGE: condense the designer's package into the project's design system. */
+export async function writeFromPackage(
+  options: RunOptions & { pkgDir: string; pkg: DesignPackage; tokens?: DesignTokens },
+): Promise<{ markdown: string; tokens: DesignTokens }> {
+  const feature = getFeatureSettings('designSystem');
+  options.onProgress?.(`Writing the design system from the package "${options.pkg.name}"`);
+  const result = await runClaudeTask({
+    systemPrompt: systemPrompt(),
+    prompt: packageJobPrompt(options.projectPath, options.pkgDir, options.pkg, options.tokens),
+    model: feature.model,
+    thinkingLevel: feature.thinkingLevel as ThinkingLevel,
+    tools: READ_TOOLS,
+    cwd: options.pkgDir,
+    agentType: 'design_system',
+    outputSchema: options.tokens ? MarkdownResultSchema : DesignSystemResultSchema,
+    maxTurns: 40,
+    abortSignal: options.signal,
+    onEvent: progress(options.onProgress, options.projectPath),
+  });
+  if (!result.output) throw new DesignAgentError('The agent returned no design system.');
+  if (options.tokens) return { markdown: (result.output as z.infer<typeof MarkdownResultSchema>).markdown, tokens: options.tokens };
   return result.output as { markdown: string; tokens: DesignTokens };
 }

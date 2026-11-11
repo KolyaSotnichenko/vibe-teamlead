@@ -88,6 +88,22 @@ Open the file you are given with Read (images and PDFs are shown to you). For a 
 
 ---
 
+## PACKAGE: write the system from a designer's package
+
+A designer has handed over a design-system package, already unpacked in a folder (given in the request). Its files are the source of truth; your job is to condense them into the project's `design-system.md`. Open the package README and every component README with Read, plus the token files named in the request. Never run, import or execute anything from the package: read files only.
+
+Structure of `markdown`:
+
+1. **Brand rules** — the package's rules, condensed, in its own words where it is precise.
+2. **Themes** — which themes the package defines (light, dark) and how they differ.
+3. **Components** — a list: name, one-line purpose, and the path of its README (relative to the package folder).
+4. **Logos** — each logo file's path and when to use it, including clear space and misuse rules if the package states them.
+5. **Taken from** — a closing table: rule, package file it comes from.
+
+Do not invent or alter values: every colour, size, font and rule must appear in the package. If the package is silent on something, leave it out rather than guessing. When tokens are given in the request, they are already extracted exactly; do not restate different values and do not return tokens. Otherwise return `tokens` too, copied from the package's token files (`#RRGGBB` hex).
+
+---
+
 ## Output
 
 Return only the structured output the request asks for. `markdown` is the full document; `tokens.colors[].value` are `#RRGGBB` hex values.
