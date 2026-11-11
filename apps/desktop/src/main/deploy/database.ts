@@ -26,9 +26,9 @@ export interface DatabaseDeps {
   binary: string;
   configDir: string;
   getToken: () => Promise<string | null>;
-  /** Merges `patch` into the stored `project.settings.deploy`. Throws when it can't save. */
   /** The project's current stored settings (re-read after a lock wait so "already recorded" is fresh). */
   loadProject?: () => Promise<Project | undefined> | Project | undefined;
+  /** Merges `patch` into the stored `project.settings.deploy`. Throws when it can't save. */
   saveSettings: (patch: Partial<DeployProjectSettings>) => Promise<void> | void;
   /** The signed-in Vercel user's id: the org of a project in the personal account. */
   userId?: string;
@@ -220,10 +220,15 @@ async function run(given: Project, deps: DatabaseDeps, opts: { acceptTerms?: boo
       return { ok: true };
     };
 
+    /** Run in the link dir, so the list is this project's resources. */
+    const listedHere = async (): Promise<boolean> => {
+      const list = await cli(['integration', 'list', '--json']);
+      return list.code === 0 && mentionsName(parseCliJson(list.stdout), dbName.toLowerCase());
+    };
+
     if (vercelDeploy.pendingDatabase) {
       // A previous attempt may have created it (crash, timeout, failed save).
-      const list = await cli(['integration', 'list', '--json']);
-      if (list.code === 0 && mentionsName(parseCliJson(list.stdout), dbName.toLowerCase())) return record();
+      if (await listedHere()) return record();
     } else {
       try {
         await deps.saveSettings({ pendingDatabase: { name: dbName, at: (deps.now?.() ?? new Date()).toISOString() } });
@@ -237,7 +242,12 @@ async function run(given: Project, deps: DatabaseDeps, opts: { acceptTerms?: boo
     let accepted = false;
     for (let attempt = 0; attempt < 4; attempt++) {
       const out = classify(await cli(addArgs(plan)));
-      if (out.kind === 'ok' || out.kind === 'exists') return record();
+      if (out.kind === 'ok') return record();
+      if (out.kind === 'exists') {
+        // the name may be taken by another project or team: only this project's resource counts
+        if (await listedHere()) return record();
+        return fail('conflict', 'A database with this name already exists elsewhere on Vercel.');
+      }
       if (out.kind === 'terms') {
         if (opts.acceptTerms && !accepted && !installed) {
           accepted = true;

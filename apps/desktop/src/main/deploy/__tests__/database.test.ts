@@ -265,10 +265,39 @@ describe('addDatabase', () => {
     expect(saved.some((p) => p.database)).toBe(true);
   });
 
-  it('an "already exists" error on add counts as success', async () => {
-    const { saved, deps, project } = setup({ 'integration installations': [INSTALLED], 'integration add': [{ code: 1, out: 'Error: A resource named x already exists' }] });
+  it('"already exists" on add counts as success only when this project lists a resource with the name', async () => {
+    const { cli, saved, deps, project } = setup({
+      'integration installations': [INSTALLED],
+      'integration add': [{ code: 1, out: 'Error: A resource named my-cool-app-db already exists' }],
+      'integration list': [{ code: 0, out: '{"resources":[{"name":"my-cool-app-db"}]}' }],
+    });
     expect(await addDatabase(project, deps)).toEqual({ ok: true });
     expect(saved.some((p) => p.database)).toBe(true);
+    const list = cli.calls().find((c) => c.argv[1] === 'list');
+    expect(list?.argv).toEqual(expect.arrayContaining(['integration', 'list', '--json']));
+    // asked in the private link dir: the list is this project's
+    expect(list?.link).toEqual({ projectId: 'prj_1', orgId: 'team_1' });
+  });
+
+  it('"already exists" with no such resource on this project is a conflict, nothing recorded', async () => {
+    const { saved, deps, project } = setup({
+      'integration installations': [INSTALLED],
+      'integration add': [{ code: 1, out: 'Error: A resource named my-cool-app-db already exists' }],
+      'integration list': [{ code: 0, out: '{"resources":[{"name":"someone-elses-db"}]}' }],
+    });
+    const r: any = await addDatabase(project, deps);
+    expect(r).toMatchObject({ ok: false, error: { kind: 'conflict' } });
+    expect(saved.some((p) => p.database)).toBe(false);
+  });
+
+  it('"already exists" and the list fails: a conflict, not success', async () => {
+    const { saved, deps, project } = setup({
+      'integration installations': [INSTALLED],
+      'integration add': [{ code: 1, out: 'Error: A resource named my-cool-app-db already exists' }],
+      'integration list': [{ code: 1, out: 'Error' }],
+    });
+    expect(await addDatabase(project, deps)).toMatchObject({ ok: false, error: { kind: 'conflict' } });
+    expect(saved.some((p) => p.database)).toBe(false);
   });
 
   it('two concurrent calls run add once', async () => {

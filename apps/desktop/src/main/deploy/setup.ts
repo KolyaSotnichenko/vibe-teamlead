@@ -284,6 +284,8 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
     enter('vercel');
     const fullRepo = `${repo.owner}/${repo.repo}`;
     const choice = settings.vercelChoice;
+    // the database belongs to this Vercel project: a different one must not inherit the record
+    const previousProjectId = settings.vercel?.projectId;
     if (settings.vercel) {
       const { projectId, projectName, teamId } = settings.vercel;
       const recorded = await deps.vercelClient(teamId ? { teamId } : {}).findProject(projectId);
@@ -359,6 +361,7 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
         vercel: { projectId: found.id, projectName: found.name, ...(teamId ? { teamId } : {}) },
         pendingVercel: undefined,
         vercelChoice: undefined,
+        ...(found.id !== previousProjectId ? { database: undefined, pendingDatabase: undefined } : {}),
       });
     }
 

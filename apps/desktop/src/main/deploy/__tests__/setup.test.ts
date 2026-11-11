@@ -541,6 +541,45 @@ describe('setUpDeploy', () => {
     expect(result.settings.vercel).toEqual({ projectId: 'prj_1', projectName: 'my-app' });
   });
 
+  it('a different Vercel project recorded: the database of the old one is cleared', async () => {
+    const { deps } = world();
+    const result = await setUpDeploy(
+      project({
+        deploy: {
+          enabled: false,
+          repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
+          vercel: { projectId: 'prj_gone', projectName: 'my-app', teamId: 'team_gone' },
+          vercelChoice: { createNew: true },
+          database: { provider: 'neon', addedAt: '2026-11-10T10:00:00Z' },
+          pendingDatabase: { name: 'my-app-db', at: '2026-11-10T10:00:00Z' },
+        },
+      }),
+      deps,
+    );
+    expect(result.settings.vercel?.projectId).toBe('prj_1');
+    expect(result.settings.database).toBeUndefined();
+    expect(result.settings.pendingDatabase).toBeUndefined();
+  });
+
+  it('the same Vercel project: the database stays', async () => {
+    const { deps, state } = world();
+    state.projects.set('prj_9', { id: 'prj_9', name: 'my-app', createdAt: NOW.getTime(), link: { repo: 'nick/my-app' } });
+    const database = { provider: 'neon' as const, addedAt: '2026-11-10T10:00:00Z' };
+    const result = await setUpDeploy(
+      project({
+        deploy: {
+          enabled: false,
+          repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
+          vercel: { projectId: 'prj_9', projectName: 'my-app' },
+          database,
+        },
+      }),
+      deps,
+    );
+    expect(result.settings.vercel?.projectId).toBe('prj_9');
+    expect(result.settings.database).toEqual(database);
+  });
+
   it('never throws: GitHub and Vercel errors become state.error with their kind', async () => {
     const a = world();
     a.deps.createPrivateRepo = vi.fn(async () => {
