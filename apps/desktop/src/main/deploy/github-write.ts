@@ -186,6 +186,20 @@ export async function setRepoSecret(
   if (put.status < 200 || put.status >= 300) throw fromClassified(put.status, put.headers, put.body);
 }
 
+/** Names of the repository's Actions secrets (GitHub never returns values). Up to 10 pages of 100. */
+export async function listRepoSecretNames(owner: string, repo: string, options: GitHubWriteOptions = {}): Promise<string[]> {
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/secrets`;
+  const names: string[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await api(options, 'GET', `${base}?per_page=100${page > 1 ? `&page=${page}` : ''}`);
+    if (res.status < 200 || res.status >= 300) throw fromClassified(res.status, res.headers, res.body);
+    const list = isObj(res.body) && Array.isArray(res.body.secrets) ? res.body.secrets : [];
+    for (const s of list) if (isObj(s) && typeof s.name === 'string') names.push(s.name);
+    if (list.length < 100) break;
+  }
+  return names;
+}
+
 const defaultRunner: GitRunner = (file, args, opts) =>
   new Promise((resolve, reject) => {
     execFile(

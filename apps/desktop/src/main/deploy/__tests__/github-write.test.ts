@@ -13,6 +13,7 @@ import {
   getAuthenticatedLogin,
   inspectRepo,
   isValidSecretName,
+  listRepoSecretNames,
   type GitRunner,
 } from '../github-write';
 
@@ -554,5 +555,25 @@ describe('push and origin (real local bare remote)', () => {
     expect(git(work, 'remote', 'get-url', 'origin').trim()).toBe('https://github.com/me/app.git');
     expect(await addOriginIfMissing(work, 'https://github.com/me/other.git')).toBe(false);
     expect(git(work, 'remote', 'get-url', 'origin').trim()).toBe('https://github.com/me/app.git');
+  });
+});
+
+describe('listRepoSecretNames', () => {
+  it('returns names only, across pages', async () => {
+    const f = fakeFetch((c) =>
+      c.url.includes('page=2')
+        ? { status: 200, body: { total_count: 101, secrets: [{ name: 'LAST', created_at: 'x' }] } }
+        : { status: 200, body: { total_count: 101, secrets: Array.from({ length: 100 }, (_, i) => ({ name: `S_${i}` })) } },
+    );
+    const names = await listRepoSecretNames('me', 'app', { fetchImpl: f.impl, getToken });
+    expect(names).toHaveLength(101);
+    expect(names[100]).toBe('LAST');
+    expect(f.calls[0].url).toContain('/repos/me/app/actions/secrets?per_page=100');
+    expect(f.calls[0].method).toBe('GET');
+  });
+
+  it('classifies a permission failure', async () => {
+    const f = fakeFetch(() => ({ status: 403, body: { message: 'Resource not accessible by integration' } }));
+    await expect(listRepoSecretNames('me', 'app', { fetchImpl: f.impl, getToken })).rejects.toMatchObject({ name: 'GitHubWriteError' });
   });
 });
