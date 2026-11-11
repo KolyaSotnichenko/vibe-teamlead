@@ -31,8 +31,24 @@ The **Deploy** stage and the **Production** link come from GitHub Deployments, n
 
 ## Vercel account
 
-Settings → Vercel connects the Vercel account later versions of Deploy will use. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
+Settings → Vercel connects the Vercel account Deploy uses to set up hosting. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
+
+## Environment: set up deploy
+
+Deploy has two tabs: **Runs** and **Environment**. Until deploy is set up for the project, both offer **Set up deploy**.
+
+Setup, on the Environment tab, goes step by step and shows each one: the GitHub repository (a private one is created when the project has none, and the main branch is pushed to it), the Vercel project linked to that repository, then deploy is on. If your Vercel account has teams, choose first whether the project goes to your personal account or to a team. A step that stopped can be run again with **Try again**; nothing is created twice.
+
+**Needed from you** lists what only you can do, each with its button: connect Vercel or GitHub (opens Settings), install the Vibe Teamlead app or give Vercel's GitHub app access to the repository (opens GitHub), choose an existing Vercel project for the repository or create a new one, or note that the repository is public.
+
+Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, every merge into the project's main branch is pushed to GitHub, and Vercel deploys it; the last push and whether it worked show at the top of the tab.
+
+## Variables and database
+
+**Add variable** saves a variable to the Vercel project for Production, Preview or both, and, if you tick it, as a GitHub Actions secret too. The value is typed into a password field and never shown again; the list shows names only, where they apply and whether they are also in GitHub. When one side saves and the other fails, the dialog says which.
+
+**Add database** adds a free Postgres database (Neon) to the Vercel project. The first time, Vercel asks you to accept Neon's Marketplace terms: the tab shows the policy links with the site each one opens, and nothing is accepted until you click **Accept and add database**. If Vercel needs a step only its dashboard can do, the tab links there.
 
 ## What comes next
 
-Setting up hosting, the readiness check and previews come in later versions of Deploy. Today it only reads from GitHub and changes nothing.
+The readiness check and previews come in later versions of Deploy.
