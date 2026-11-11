@@ -59,6 +59,8 @@ for (const envPath of possibleEnvPaths) {
 
 import { app, BrowserWindow, dialog, ipcMain, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor, protocol } from 'electron';
 import { DESIGN_SCHEME } from './design/design-protocol';
+import { bundledBrowserServers } from './ai/claude-code/bundled-tools';
+import { stopOrphanedBrowserServers } from './utils/browser-mcp-orphans';
 import { registerDesignProtocol } from './ipc-handlers/task-design-handlers';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
@@ -430,6 +432,8 @@ app.whenReady().then(() => {
   registerDesignProtocol();
   // What a crashed preview left running: its servers, and its database (the volume stays)
   cleanUpPreviewLeftovers(previewWorktreesRoot(), cleanUpLeftovers);
+  // Browser servers a cut-short agent session left running (QA, the UX review)
+  void stopOrphanedBrowserServers(bundledBrowserServers());
   void removePreviewLeftovers(hostDocker(process.env)).catch(() => undefined);
   // Set app user model id for Windows
   electronApp.setAppUserModelId('com.vibeteamlead.app');

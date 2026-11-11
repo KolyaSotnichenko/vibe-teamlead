@@ -188,3 +188,9 @@ export function resolveBundledTools(): BundledTools {
   }
   return resolveDevTools(process.cwd());
 }
+
+/** The bundled browser servers' entry files: how their processes are told apart from anyone else's */
+export function bundledBrowserServers(): Array<string | undefined> {
+  const tools = resolveBundledTools();
+  return [tools.playwrightMcpCli, tools.chromeDevtoolsMcpCli];
+}

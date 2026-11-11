@@ -8,6 +8,8 @@ import type {
   AuthFailureInfo,
   ImplementationPlan,
 } from "../../shared/types";
+import { cleanUpBrowserOrphansSoon } from "../utils/browser-mcp-orphans";
+import { bundledBrowserServers } from "../ai/claude-code/bundled-tools";
 import { XSTATE_SETTLED_STATES, XSTATE_ACTIVE_STATES, XSTATE_TO_PHASE, mapStateToLegacy } from "../../shared/state-machines";
 import { AgentManager } from "../agent";
 import type { ProcessType, ExecutionProgressData } from "../agent";
@@ -90,6 +92,8 @@ export function registerAgenteventsHandlers(
   });
 
   agentManager.on("exit", (taskId: string, code: number | null, processType: ProcessType, projectId?: string) => {
+    // A session cut short can leave its browser server (Playwright, DevTools) running with no parent
+    cleanUpBrowserOrphansSoon(bundledBrowserServers);
     // Use projectId from event to scope the lookup (prevents cross-project contamination)
     const { task: exitTask, project: exitProject } = findTaskAndProject(taskId, projectId);
     const exitProjectId = exitProject?.id || projectId;

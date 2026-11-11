@@ -5,6 +5,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { cleanUpBrowserOrphansSoon } from '../utils/browser-mcp-orphans';
+import { bundledBrowserServers } from '../ai/claude-code/bundled-tools';
 import { readFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -230,6 +232,8 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
   }));
 
   ipcMain.handle(IPC_CHANNELS.PREVIEW_STOP, async (): Promise<IPCResult> => {
+    // A UX review stopped mid-way can leave its Playwright behind
+    if (uxReview) cleanUpBrowserOrphansSoon(bundledBrowserServers);
     uxReview?.abort();
     view.destroy();
     await stopPreview();

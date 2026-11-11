@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.29 - 2026-11-11
+
+- No more orphaned Playwright and Chrome processes. When an agent session is cut short (a stopped task, the app quit mid-QA, a UX review stopped with the preview), the browser server it started could keep running. The app now stops its own browser servers whose session is gone, with the browsers they started: at launch, after a task's process ends, and when the preview stops. Other Playwright or Chrome processes are never touched.
+
 ## 2.0.0-beta.28 - 2026-11-10
 
 - Project memory saves what each coder subtask learned again. Taking the lessons ran inside the task's worker, which could not find the bundled Claude Code, so it failed every time (the task's log now says "saved N lessons" or "nothing new").
