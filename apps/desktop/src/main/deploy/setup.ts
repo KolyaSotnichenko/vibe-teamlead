@@ -4,12 +4,14 @@
  * Every step records its result in `settings.deploy` (through `saveSettings`) before the
  * next one starts, so a re-run after a crash at any point picks up where it stopped and
  * creates nothing twice:
- * - a repo the app created is recorded before the origin is added and the branch pushed
- *   (adding the origin and pushing are themselves repeatable);
- * - a Vercel project created but not yet recorded is found again by name and adopted when
- *   it is linked to the same repository.
- * The one window left is between GitHub answering "created" and the settings write; a crash
- * exactly there leaves an unrecorded empty repo and the re-run creates `<name>-2`.
+ * - before asking GitHub for a repo, `pendingRepo` {base, owner, at} is recorded; a re-run
+ *   adopts a repo of that owner named base[-2..5] only if it is private, has no branches and
+ *   was created after `at` (minus 2 min skew), and never an older one;
+ * - the created repo is recorded before the origin is added and the branch pushed (both repeatable);
+ * - before asking Vercel for a project, `pendingVercel` {name, at} is recorded; a re-run (or a
+ *   409) adopts a project of that name only if linked to the same repo and created after `at`.
+ *   A project already linked to the repo that the app didn't create stops setup with
+ *   `vercel-existing-project`; the owner answers through `settings.deploy.vercelChoice`.
  *
  * `setUpDeploy` never throws: what the owner must do becomes `needed`, failures become
  * `error` (a kind + a message without secrets). All dependencies are injected.
@@ -36,6 +38,10 @@ type Repo = { owner: string; repo: string };
 /** What setup needs to know about the project's git repository, read from files only. */
 export interface GitInfo {
   originUrl?: string;
+  /** The config has include/includeIf: origin could be set or changed elsewhere. */
+  originUnclear?: boolean;
+  /** Origin has a pushurl, or a url.*.insteadOf / pushInsteadOf rule exists: pushes may go elsewhere. */
+  originRewritten?: boolean;
   /** Local branch names. */
   branches: string[];
   /** The checked-out branch, when HEAD is on one. */
@@ -47,16 +53,20 @@ export interface SetupDeps {
   /** A Vercel client for a scope (`{}` = personal account). */
   vercelClient: (scope: { teamId?: string }) => VercelClient;
   isGitHubSignedIn: () => Promise<boolean>;
+  /** Login of the GitHub user the App token acts for (GET /user). */
+  githubLogin: () => Promise<string>;
   /** `getGitHubAppAccess` (github-auth/app-access.ts). */
   appAccess: (repo?: Repo) => Promise<GitHubAppAccess | { error: string }>;
   /** null when the project is not a git repository. */
   readGit: (projectPath: string) => Promise<GitInfo | null>;
   createPrivateRepo: (name: string) => Promise<{ owner: string; repo: string; cloneUrl: string }>;
+  /** null when the repo doesn't exist. `empty`: GitHub answered with no branches. */
+  inspectRepo: (owner: string, repo: string) => Promise<{ private: boolean; createdAt: string; empty: boolean } | null>;
   repoVisibility: (owner: string, repo: string) => Promise<'private' | 'public'>;
   addOriginIfMissing: (projectPath: string, cloneUrl: string) => Promise<boolean>;
   pushWithAppToken: (projectPath: string, url: string, refspec: string) => Promise<void>;
-  /** Persists `project.settings.deploy`. */
-  saveSettings: (deploy: DeployProjectSettings) => Promise<void> | void;
+  /** Merges `patch` into the stored `project.settings.deploy` (an undefined value clears that field). Throws when it can't save. */
+  saveSettings: (patch: Partial<DeployProjectSettings>) => Promise<void> | void;
   onProgress?: (step: DeploySetupStep) => void;
   now?: () => Date;
   /** The Vercel team the owner picked; personal scope when absent. A team already recorded for the project wins. */
@@ -122,17 +132,32 @@ class Stop {
   constructor(readonly error?: DeploySetupError) {}
 }
 
+/** A resource the app asked to create counts as ours if it appeared at most this long before the request was recorded. */
+const ADOPT_SKEW_MS = 2 * 60 * 1000;
+
+/** Drops keys whose value is undefined (cleared fields). */
+function clean(settings: DeployProjectSettings): DeployProjectSettings {
+  return Object.fromEntries(Object.entries(settings).filter(([, v]) => v !== undefined)) as unknown as DeployProjectSettings;
+}
+
+/** `name`, `name-2` … as createPrivateRepo tries them. */
+function repoCandidates(base: string): string[] {
+  return [base.slice(0, 100), ...[2, 3, 4, 5].map((n) => `${base.slice(0, 98)}-${n}`)];
+}
+
 export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<DeploySetupState> {
   let settings: DeployProjectSettings = { enabled: false, ...structuredClone(project.settings.deploy ?? {}) };
   const needed: NeededFromYou[] = [];
   let step: DeploySetupStep | undefined;
   const now = deps.now ?? (() => new Date());
 
-  /** Saves `settings` with `patch` applied; the in-memory state changes only once the save succeeded. */
+  /**
+   * Saves `patch` (an undefined value clears that field); the in-memory state changes only once
+   * the save succeeded. Only the patch is sent, so fields other writers set are kept.
+   */
   const record = async (patch: Partial<DeployProjectSettings>) => {
-    const next = { ...settings, ...patch };
-    await deps.saveSettings(structuredClone(next));
-    settings = next;
+    await deps.saveSettings(structuredClone(patch));
+    settings = { ...settings, ...patch };
   };
   const enter = (s: DeploySetupStep) => {
     step = s;
@@ -163,6 +188,16 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
     return git;
   };
 
+  /** A repo from an earlier run that stopped between "create" and recording it: private, still empty, created after the request. */
+  const recoverRepo = async (pending: NonNullable<DeployProjectSettings['pendingRepo']>): Promise<Repo | null> => {
+    const since = Date.parse(pending.at) - ADOPT_SKEW_MS;
+    for (const name of repoCandidates(pending.base)) {
+      const info = await deps.inspectRepo(pending.owner, name);
+      if (info?.private && info.empty && Date.parse(info.createdAt) >= since) return { owner: pending.owner, repo: name };
+    }
+    return null;
+  };
+
   try {
     // 1. Accounts.
     const status = await deps.vercelStatus();
@@ -179,9 +214,15 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
     let repo = settings.repo;
     if (!repo) {
       const info = await readGit();
-      if (info.originUrl) {
+      if (info.originUnclear) {
+        throw new Stop({
+          kind: 'invalid',
+          message: "The project's git config includes other files, so the app can't tell where origin points. Remove the include, then try again.",
+        });
+      }
+      if (info.originUrl || info.originRewritten) {
         const gh =
-          classifyRemote(info.originUrl) ??
+          (info.originRewritten ? null : classifyRemote(info.originUrl ?? '')) ??
           need({
             id: 'non-github-remote',
             kind: 'non-github-remote',
@@ -200,10 +241,20 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
           });
         }
       } else {
+        if (info.branches.length === 0) {
+          throw new Stop({ kind: 'invalid', message: 'The project has no commits yet. Commit your code, then try again.' });
+        }
         await checkAccess();
-        const created = await deps.createPrivateRepo(repoNameFor(project.path));
-        repo = { owner: created.owner, repo: created.repo, createdByApp: true, public: false };
-        await record({ repo });
+        let made = settings.pendingRepo ? await recoverRepo(settings.pendingRepo) : null;
+        if (!made) {
+          const base = repoNameFor(project.path);
+          const owner = await deps.githubLogin();
+          await record({ pendingRepo: { base, owner, at: now().toISOString() } });
+          const created = await deps.createPrivateRepo(base);
+          made = { owner: created.owner, repo: created.repo };
+        }
+        repo = { owner: made.owner, repo: made.repo, createdByApp: true, public: false };
+        await record({ repo, pendingRepo: undefined });
         await checkAccess(repo);
       }
     } else {
@@ -215,53 +266,109 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
       enter('push');
       const url = githubUrl(repo);
       const info = await readGit();
+      const branch = mainBranchFor(project, info);
+      if (!info.branches.includes(branch)) {
+        throw new Stop({
+          kind: 'invalid',
+          message:
+            info.branches.length === 0
+              ? 'The project has no commits yet. Commit your code, then try again.'
+              : `The branch "${branch}" was not found in the project. Check the main branch in the project settings.`,
+        });
+      }
       await deps.addOriginIfMissing(project.path, url);
-      await deps.pushWithAppToken(project.path, url, mainBranchFor(project, info));
+      await deps.pushWithAppToken(project.path, url, branch);
     }
 
     // 3. Vercel project.
     enter('vercel');
-    const teamId = settings.vercel?.teamId ?? deps.vercelTeamId;
-    const client = deps.vercelClient(teamId ? { teamId } : {});
     const fullRepo = `${repo.owner}/${repo.repo}`;
-    const recorded = settings.vercel ? await client.findProject(settings.vercel.projectId) : null;
-    if (!recorded) {
-      const base = vercelNameFor(repo.repo);
-      let found: { id: string; name: string } | null = null;
-      for (let attempt = 1; attempt <= MAX_PROJECT_NAME_TRIES && !found; attempt++) {
-        const name = attempt === 1 ? base : `${base.slice(0, 97)}-${attempt}`;
-        const existing = await client.findProject(name);
-        if (existing) {
-          // Ours from a run that stopped before recording it; otherwise the name is taken.
-          if (existing.link?.repo?.toLowerCase() === fullRepo.toLowerCase()) found = existing;
-          continue;
+    const choice = settings.vercelChoice;
+    if (settings.vercel) {
+      const { projectId, projectName, teamId } = settings.vercel;
+      const recorded = await deps.vercelClient(teamId ? { teamId } : {}).findProject(projectId);
+      if (!recorded) {
+        if (!choice?.createNew) {
+          throw new Stop({
+            kind: 'not-found',
+            message: `The Vercel project "${projectName}" can't be found${teamId ? ' (its team may be gone, or your account has no access to it)' : ''}. Create a new one, or check Vercel.`,
+          });
         }
-        try {
-          found = await client.createProject({ name, repo: fullRepo });
-        } catch (e) {
-          if (isVercelError(e) && e.kind === 'conflict') continue;
-          if (isVercelError(e) && e.kind === 'git-not-connected') {
+        await record({ vercel: undefined });
+      }
+    }
+    if (!settings.vercel) {
+      const pending = settings.pendingVercel;
+      const teamId = pending?.teamId ?? deps.vercelTeamId;
+      const client = deps.vercelClient(teamId ? { teamId } : {});
+      /** Linked to this repo and created after the app asked for it. */
+      const ours = (p: { createdAt?: number; link?: { repo: string } } | null, req: { at: string }) =>
+        !!p &&
+        p.link?.repo?.toLowerCase() === fullRepo.toLowerCase() &&
+        typeof p.createdAt === 'number' &&
+        p.createdAt >= Date.parse(req.at) - ADOPT_SKEW_MS;
+
+      let found: { id: string; name: string } | null = null;
+      if (choice?.useProjectId) {
+        found = await client.findProject(choice.useProjectId);
+        if (!found) throw new Stop({ kind: 'not-found', message: "The Vercel project you chose can't be found." });
+      } else {
+        if (pending) {
+          const p = await client.findProject(pending.name);
+          if (p && ours(p, pending)) found = p;
+        }
+        if (!found && !choice?.createNew) {
+          const existing = await client.listProjectsForRepo(fullRepo);
+          if (existing.length > 0) {
             need({
-              id: 'vercel-git-access',
-              kind: 'vercel-git-access',
-              message: `Let Vercel's GitHub App access ${fullRepo}, then try again.`,
-              ...(e.actionUrl ? { actionUrl: e.actionUrl } : {}),
+              id: 'vercel-existing-project',
+              kind: 'vercel-existing-project',
+              message: `Vercel already has a project for ${fullRepo}: ${existing.map((p) => p.name).join(', ')}. Use it, or create a new one.`,
+              projects: existing.map((p) => ({ id: p.id, name: p.name })),
             });
           }
-          throw e;
         }
+        const base = vercelNameFor(repo.repo);
+        for (let attempt = 1; attempt <= MAX_PROJECT_NAME_TRIES && !found; attempt++) {
+          const name = attempt === 1 ? base : `${base.slice(0, 97)}-${attempt}`;
+          if (await client.findProject(name)) continue;
+          const req = { name, at: now().toISOString(), ...(teamId ? { teamId } : {}) };
+          await record({ pendingVercel: req });
+          try {
+            found = await client.createProject({ name, repo: fullRepo });
+          } catch (e) {
+            if (isVercelError(e) && e.kind === 'conflict') {
+              const p = await client.findProject(name);
+              if (p && ours(p, req)) found = p;
+              continue;
+            }
+            if (isVercelError(e) && e.kind === 'git-not-connected') {
+              need({
+                id: 'vercel-git-access',
+                kind: 'vercel-git-access',
+                message: `Let Vercel's GitHub App access ${fullRepo}, then try again.`,
+                ...(e.actionUrl ? { actionUrl: e.actionUrl } : {}),
+              });
+            }
+            throw e;
+          }
+        }
+        if (!found) throw new Stop({ kind: 'conflict', message: `Vercel project names for ${repo.repo} are all taken.` });
       }
-      if (!found) throw new Stop({ kind: 'conflict', message: `Vercel project names for ${repo.repo} are all taken.` });
-      await record({ vercel: { projectId: found.id, projectName: found.name, ...(teamId ? { teamId } : {}) } });
+      await record({
+        vercel: { projectId: found.id, projectName: found.name, ...(teamId ? { teamId } : {}) },
+        pendingVercel: undefined,
+        vercelChoice: undefined,
+      });
     }
 
     // 4. Enabled.
     await record({ enabled: true, setUpAt: settings.setUpAt ?? now().toISOString() });
     enter('done');
-    return { settings: structuredClone(settings), needed, step };
+    return { settings: clean(settings), needed, step };
   } catch (e) {
     const error = e instanceof Stop ? e.error : toError(e);
-    return { settings: structuredClone(settings), needed, ...(step ? { step } : {}), ...(error ? { error } : {}) };
+    return { settings: clean(settings), needed, ...(step ? { step } : {}), ...(error ? { error } : {}) };
   }
 }
 
@@ -287,21 +394,33 @@ async function readSmall(file: string, max = SMALL): Promise<string | null> {
   }
 }
 
-/** First `url` of `[remote "origin"]` in a git config text. `include`s are not followed. */
-function originFromConfig(text: string): string | undefined {
-  let inOrigin = false;
+/**
+ * First `url` of `[remote "origin"]` in a git config text, plus what makes it untrustworthy:
+ * include/includeIf (the origin could come from another file: not followed) and pushurl /
+ * insteadOf / pushInsteadOf (pushes may go elsewhere).
+ */
+function originFromConfig(text: string): { url?: string; unclear?: true; rewritten?: true } {
+  const out: { url?: string; unclear?: true; rewritten?: true } = {};
+  let section = '';
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line.startsWith('#') || line.startsWith(';')) continue;
-    const section = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\]/.exec(line);
-    if (section) {
-      inOrigin = section[1].toLowerCase() === 'remote' && section[2] === 'origin';
+    const header = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\]/.exec(line);
+    if (header) {
+      const name = header[1].toLowerCase();
+      // `[remote "origin"]`, or the old `[remote.origin]` form.
+      section = name === 'remote' && header[2] === 'origin' ? 'origin' : name === 'remote.origin' ? 'origin' : name;
+      if (section === 'include' || section === 'includeif') out.unclear = true;
       continue;
     }
-    if (!inOrigin) continue;
-    const kv = /^([A-Za-z][A-Za-z0-9-]*)\s*=\s*(.*)$/.exec(line);
-    if (!kv || kv[1].toLowerCase() !== 'url') continue;
-    let value = kv[2];
+    const kv = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/.exec(line);
+    if (!kv) continue;
+    const key = kv[1].toLowerCase();
+    if (section === 'url' && (key === 'insteadof' || key === 'pushinsteadof')) out.rewritten = true;
+    if (section !== 'origin') continue;
+    if (key === 'pushurl') out.rewritten = true;
+    if (key !== 'url' || out.url) continue;
+    let value = kv[2] ?? '';
     if (value.startsWith('"')) {
       const end = value.indexOf('"', 1);
       value = end > 0 ? value.slice(1, end) : value.slice(1);
@@ -309,9 +428,9 @@ function originFromConfig(text: string): string | undefined {
       value = value.replace(/\s[#;].*$/, '');
     }
     value = value.trim();
-    if (value) return value;
+    if (value) out.url = value;
   }
-  return undefined;
+  return out;
 }
 
 async function looseBranches(dir: string, prefix: string, out: string[], depth = 0): Promise<void> {
@@ -359,8 +478,33 @@ export async function readGitInfo(projectPath: string): Promise<GitInfo | null> 
     if (m && !branches.includes(m[1])) branches.push(m[1]);
   }
   const head = /^ref:\s*refs\/heads\/(\S+)\s*$/.exec(headText.trim())?.[1];
-  const originUrl = originFromConfig(config);
-  return { branches, ...(head ? { head } : {}), ...(originUrl ? { originUrl } : {}) };
+  const origin = originFromConfig(config);
+  return {
+    branches,
+    ...(head ? { head } : {}),
+    ...(origin.url ? { originUrl: origin.url } : {}),
+    ...(origin.unclear ? { originUnclear: true } : {}),
+    ...(origin.rewritten ? { originRewritten: true } : {}),
+  };
+}
+
+/** The part of the project store setup writes through. */
+export interface DeploySettingsStore {
+  getProject(projectId: string): Project | undefined;
+  updateProjectSettings(projectId: string, settings: Partial<Project['settings']>): Project | undefined;
+}
+
+/**
+ * Merges `patch` into the latest stored `deploy` (so fields other writers set meanwhile are kept;
+ * an undefined value clears a field). Throws when the project is gone, so setup stops instead of
+ * believing a step was recorded.
+ */
+export function saveDeployPatch(store: DeploySettingsStore, projectId: string, patch: Partial<DeployProjectSettings>): void {
+  const current = store.getProject(projectId)?.settings.deploy;
+  const merged = clean({ enabled: false, ...current, ...patch });
+  if (!store.updateProjectSettings(projectId, { deploy: merged })) {
+    throw new Error('The project could not be saved');
+  }
 }
 
 /** Production wiring: the real GitHub/Vercel functions and the project store. Imported lazily (Electron). */
@@ -386,9 +530,9 @@ export async function createSetupDeps(
     repoVisibility: (owner, repo) => githubWrite.repoVisibility(owner, repo),
     addOriginIfMissing: (p, url) => githubWrite.addOriginIfMissing(p, url),
     pushWithAppToken: (p, url, refspec) => githubWrite.pushWithAppToken(p, url, refspec),
-    saveSettings: (deploy) => {
-      store.projectStore.updateProjectSettings(project.id, { deploy });
-    },
+    githubLogin: () => githubWrite.getAuthenticatedLogin(),
+    inspectRepo: (owner, repo) => githubWrite.inspectRepo(owner, repo),
+    saveSettings: (patch) => saveDeployPatch(store.projectStore, project.id, patch),
     ...extra,
   };
 }

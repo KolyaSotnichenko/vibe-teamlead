@@ -8,7 +8,10 @@
 import type { VercelEnvTarget, VercelError } from '../../shared/types/deploy';
 
 const API = 'https://api.vercel.com';
-const GITHUB_APP_INSTALL_URL = 'https://github.com/apps/vercel/installations/new';
+/** Vercel's own GitHub App (not the Vibe Teamlead App): what Vercel needs to read the repo. */
+const VERCEL_GITHUB_APP_INSTALL_URL = 'https://github.com/apps/vercel/installations/new';
+/** Pages of 100 read at most by listProjectsForRepo. */
+const MAX_PROJECT_PAGES = 5;
 
 export interface VercelResponse {
   status: number;
@@ -22,7 +25,10 @@ export type VercelFetcher = (
 export type VercelTokenProvider = () => Promise<string | null>;
 
 export interface VercelClient {
-  findProject(name: string): Promise<{ id: string; name: string; link?: { repo: string } } | null>;
+  /** By id or name. `createdAt` in ms since the epoch. */
+  findProject(idOrName: string): Promise<{ id: string; name: string; createdAt?: number; link?: { repo: string } } | null>;
+  /** Projects linked to the GitHub repo `owner/name` (any project name). */
+  listProjectsForRepo(repo: string): Promise<Array<{ id: string; name: string; createdAt?: number }>>;
   createProject(input: { name: string; repo: string; framework?: string | null; rootDirectory?: string | null }): Promise<{ id: string; name: string }>;
   upsertEnv(projectId: string, input: { key: string; value: string; targets: VercelEnvTarget[]; sensitive: boolean }): Promise<void>;
   listEnvNames(projectId: string): Promise<Array<{ key: string; targets: string[] }>>;
@@ -46,7 +52,7 @@ function safeActionUrl(link: unknown): string {
       /* fall through */
     }
   }
-  return GITHUB_APP_INSTALL_URL;
+  return VERCEL_GITHUB_APP_INSTALL_URL;
 }
 
 const defaultTokenProvider: VercelTokenProvider = async () => {
@@ -75,6 +81,17 @@ function redact(text: string, secrets: string[]): string {
 
 function fail(kind: VercelError['kind'], message: string, extra: Partial<VercelError> = {}): never {
   throw { kind, message, ...extra } satisfies VercelError;
+}
+
+interface RawProject {
+  id: string;
+  name: string;
+  createdAt?: number;
+  link?: { type?: string; org?: string; repo?: string };
+}
+
+function linkedRepo(p: RawProject): string | undefined {
+  return p.link?.type === 'github' && p.link.repo ? (p.link.org ? `${p.link.org}/${p.link.repo}` : p.link.repo) : undefined;
 }
 
 export function createVercelClient(
@@ -154,17 +171,35 @@ export function createVercelClient(
   return {
     async findProject(name) {
       try {
-        const p = (await request('GET', url(`/v9/projects/${encodeURIComponent(name)}`))) as {
-          id: string;
-          name: string;
-          link?: { type?: string; org?: string; repo?: string };
-        };
-        const repo = p.link?.type === 'github' && p.link.repo ? (p.link.org ? `${p.link.org}/${p.link.repo}` : p.link.repo) : undefined;
-        return { id: p.id, name: p.name, ...(repo ? { link: { repo } } : {}) };
+        const p = (await request('GET', url(`/v9/projects/${encodeURIComponent(name)}`))) as RawProject;
+        const repo = linkedRepo(p);
+        return { id: p.id, name: p.name, ...(typeof p.createdAt === 'number' ? { createdAt: p.createdAt } : {}), ...(repo ? { link: { repo } } : {}) };
       } catch (e) {
         if ((e as VercelError).kind === 'not-found') return null;
         throw e;
       }
+    },
+
+    async listProjectsForRepo(repo) {
+      // Vercel's `repoUrl` filter narrows the list; the link is checked again here (unverified against a live account).
+      const want = repo.toLowerCase();
+      const out: Array<{ id: string; name: string; createdAt?: number }> = [];
+      let from: string | undefined;
+      for (let page = 0; page < MAX_PROJECT_PAGES; page++) {
+        const r = (await request(
+          'GET',
+          url('/v10/projects', { repoUrl: `https://github.com/${repo}`, limit: '100', ...(from ? { from } : {}) }),
+        )) as { projects?: RawProject[]; pagination?: { next?: number | string | null } };
+        for (const p of r.projects ?? []) {
+          if (linkedRepo(p)?.toLowerCase() === want) {
+            out.push({ id: p.id, name: p.name, ...(typeof p.createdAt === 'number' ? { createdAt: p.createdAt } : {}) });
+          }
+        }
+        const next = r.pagination?.next;
+        if (next === null || next === undefined || next === '') break;
+        from = String(next);
+      }
+      return out;
     },
 
     async createProject({ name, repo, framework, rootDirectory }) {

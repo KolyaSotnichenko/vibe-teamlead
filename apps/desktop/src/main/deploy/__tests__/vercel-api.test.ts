@@ -72,6 +72,49 @@ describe('vercel-api', () => {
     expect(e2.kind).toBe('git-not-connected');
   });
 
+  it('git-not-connected without a link points at Vercel\'s GitHub App, never the Vibe Teamlead App', async () => {
+    const { fetcher } = fake([{ status: 400, body: { error: { message: 'You need to install the GitHub integration first.' } } }]);
+    const e = await err(createVercelClient(fetcher, {}, tok()).createProject({ name: 'a', repo: 'o/a' }));
+    expect(e.kind).toBe('git-not-connected');
+    expect(e.actionUrl).toBe('https://github.com/apps/vercel/installations/new');
+    expect(e.actionUrl).not.toContain('vibe-teamlead');
+  });
+
+  it('findProject carries createdAt', async () => {
+    const { fetcher } = fake([{ status: 200, body: { id: 'p', name: 'app', createdAt: 1700000000000, link: { type: 'github', org: 'me', repo: 'app' } } }]);
+    expect(await createVercelClient(fetcher, {}, tok()).findProject('app')).toEqual({ id: 'p', name: 'app', createdAt: 1700000000000, link: { repo: 'me/app' } });
+  });
+
+  it('listProjectsForRepo filters by repoUrl, keeps only projects linked to that repo, follows pages up to a cap', async () => {
+    const page = (n: number, next: number | null) => ({
+      status: 200,
+      body: {
+        projects: [
+          { id: `p${n}`, name: `app${n}`, createdAt: n, link: { type: 'github', org: 'Me', repo: 'App' } },
+          { id: `x${n}`, name: `other${n}`, createdAt: n, link: { type: 'github', org: 'me', repo: 'other' } },
+          { id: `g${n}`, name: `gitlab${n}`, createdAt: n, link: { type: 'gitlab', org: 'me', repo: 'app' } },
+        ],
+        pagination: { next },
+      },
+    });
+    const { fetcher, calls } = fake([page(1, 111), page(2, null)]);
+    const c = createVercelClient(fetcher, { teamId: 't' }, tok());
+    const r = await c.listProjectsForRepo('me/app');
+    expect(r).toEqual([
+      { id: 'p1', name: 'app1', createdAt: 1 },
+      { id: 'p2', name: 'app2', createdAt: 2 },
+    ]);
+    const u = new URL(calls[0].url);
+    expect(u.pathname).toBe('/v10/projects');
+    expect(u.searchParams.get('repoUrl')).toBe('https://github.com/me/app');
+    expect(u.searchParams.get('teamId')).toBe('t');
+    expect(new URL(calls[1].url).searchParams.get('from')).toBe('111');
+
+    const many = fake(Array.from({ length: 20 }, (_, i) => page(i, i + 100)));
+    await createVercelClient(many.fetcher, {}, tok()).listProjectsForRepo('me/app');
+    expect(many.calls.length).toBe(5);
+  });
+
   it('upsertEnv sends the value only in the body, with targets and type', async () => {
     const { fetcher, calls } = fake([{ status: 201, body: {} }, { status: 201, body: {} }]);
     const c = createVercelClient(fetcher, { teamId: 't' }, tok());

@@ -10,6 +10,8 @@ import {
   addOriginIfMissing,
   setRepoSecret,
   repoVisibility,
+  getAuthenticatedLogin,
+  inspectRepo,
   isValidSecretName,
   type GitRunner,
 } from '../github-write';
@@ -124,6 +126,38 @@ describe('repoVisibility', () => {
     expect(a.calls[0].url).toBe('https://api.github.com/repos/me/app');
     const b = fakeFetch(() => ({ status: 200, body: { private: false } }));
     expect(await repoVisibility('me', 'app', { fetchImpl: b.impl, getToken })).toBe('public');
+  });
+});
+
+describe('getAuthenticatedLogin', () => {
+  it('returns the login of the token user', async () => {
+    const a = fakeFetch(() => ({ status: 200, body: { login: 'nick' } }));
+    expect(await getAuthenticatedLogin({ fetchImpl: a.impl, getToken })).toBe('nick');
+    expect(a.calls[0].url).toBe('https://api.github.com/user');
+  });
+  it('classified error on failure', async () => {
+    const a = fakeFetch(() => ({ status: 500 }));
+    await expect(getAuthenticatedLogin({ fetchImpl: a.impl, getToken })).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+});
+
+describe('inspectRepo', () => {
+  it('private flag, created_at and emptiness from /branches', async () => {
+    const a = fakeFetch((c) =>
+      c.url.endsWith('/branches?per_page=1')
+        ? { status: 200, body: [] }
+        : { status: 200, body: { private: true, created_at: '2026-11-11T10:00:00Z' } },
+    );
+    expect(await inspectRepo('me', 'app', { fetchImpl: a.impl, getToken })).toEqual({ private: true, createdAt: '2026-11-11T10:00:00Z', empty: true });
+    expect(a.calls.map((c) => c.url)).toEqual(['https://api.github.com/repos/me/app', 'https://api.github.com/repos/me/app/branches?per_page=1']);
+  });
+  it('not empty when a branch exists; null on 404', async () => {
+    const a = fakeFetch((c) =>
+      c.url.endsWith('/branches?per_page=1') ? { status: 200, body: [{ name: 'main' }] } : { status: 200, body: { private: true, created_at: 'x' } },
+    );
+    expect((await inspectRepo('me', 'app', { fetchImpl: a.impl, getToken }))?.empty).toBe(false);
+    const b = fakeFetch(() => ({ status: 404 }));
+    expect(await inspectRepo('me', 'gone', { fetchImpl: b.impl, getToken })).toBeNull();
   });
 });
 

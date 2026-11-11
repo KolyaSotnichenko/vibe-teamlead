@@ -176,6 +176,12 @@ export interface DeployProjectSettings {
   database?: { provider: 'neon'; addedAt: string };
   /** ISO time setup finished. */
   setUpAt?: string;
+  /** Recorded just before the app asks GitHub to create the repo, so a re-run can adopt it instead of creating a second one. */
+  pendingRepo?: { base: string; owner: string; at: string };
+  /** Recorded just before the app asks Vercel to create the project (same purpose). */
+  pendingVercel?: { name: string; at: string; teamId?: string };
+  /** The owner's answer to `vercel-existing-project` (set by the UI): use that project, or create a new one anyway. */
+  vercelChoice?: { useProjectId?: string; createNew?: boolean };
 }
 
 export type NeededFromYouKind =
@@ -183,6 +189,7 @@ export type NeededFromYouKind =
   | 'github-sign-in'
   | 'github-app-install'
   | 'vercel-git-access'
+  | 'vercel-existing-project'
   | 'non-github-remote'
   | 'public-repo-warning'
   | 'variable'
@@ -195,13 +202,16 @@ export interface NeededFromYou {
   message: string;
   actionUrl?: string;
   variable?: string;
+  /** vercel-existing-project: the Vercel projects already linked to the repository. */
+  projects?: Array<{ id: string; name: string }>;
 }
 
 export type DeploySetupStep = 'repo' | 'push' | 'vercel' | 'done';
 
+export type DeploySetupErrorKind = GitHubErrorKind | VercelErrorKind | 'conflict' | 'invalid' | 'unknown';
+
 export interface DeploySetupError {
-  /** A GitHub/Vercel error kind, or `invalid` / `unknown`. */
-  kind: string;
+  kind: DeploySetupErrorKind;
   /** Never contains a token or secret. */
   message: string;
 }

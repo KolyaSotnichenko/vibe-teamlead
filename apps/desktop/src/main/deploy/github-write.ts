@@ -130,6 +130,33 @@ export async function repoVisibility(
   return isObj(res.body) && res.body.private === true ? 'private' : 'public';
 }
 
+/** Login of the user the App token acts for. */
+export async function getAuthenticatedLogin(options: GitHubWriteOptions = {}): Promise<string> {
+  const res = await api(options, 'GET', '/user');
+  if (res.status < 200 || res.status >= 300) throw fromClassified(res.status, res.headers, res.body);
+  if (!isObj(res.body) || typeof res.body.login !== 'string') {
+    throw new GitHubWriteError('unavailable', 'GitHub returned an unexpected response for the signed-in user');
+  }
+  return res.body.login;
+}
+
+/** Visibility, creation time and whether the repo has no branches; null when it doesn't exist (or isn't visible). */
+export async function inspectRepo(
+  owner: string,
+  repo: string,
+  options: GitHubWriteOptions = {},
+): Promise<{ private: boolean; createdAt: string; empty: boolean } | null> {
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const res = await api(options, 'GET', base);
+  if (res.status === 404) return null;
+  if (res.status < 200 || res.status >= 300) throw fromClassified(res.status, res.headers, res.body);
+  const body = isObj(res.body) ? res.body : {};
+  const branches = await api(options, 'GET', `${base}/branches?per_page=1`);
+  // Only a clear "no branches" counts as empty.
+  const empty = branches.status === 200 && Array.isArray(branches.body) && branches.body.length === 0;
+  return { private: body.private === true, createdAt: typeof body.created_at === 'string' ? body.created_at : '', empty };
+}
+
 export function isValidSecretName(name: string): boolean {
   return /^[A-Z_][A-Z0-9_]*$/.test(name) && !name.startsWith('GITHUB_');
 }
