@@ -2,6 +2,14 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.35 - 2026-11-11
+
+- Deploy: connect Vercel in Settings → Vercel, with a browser sign-in (the first connect downloads the Vercel CLI once, about 180 MB) or a pasted token.
+- Deploy → Environment: **Set up deploy** creates a private GitHub repository when the project has none, links a Vercel project to it (an existing one or a new one) and turns on production deploys for every push to main. **Needed from you** lists the steps only you can do.
+- Variables: add Vercel environment variables for Production and Preview, optionally also as a GitHub Actions secret. The value is entered once and never shown again; the list shows names only.
+- Database: **Add database** adds a free Postgres (Neon) to the Vercel project; Neon's terms are accepted only when you click.
+- Main is pushed to GitHub after every merge into the project's main branch once deploy is set up. A project with an unusual git configuration is left alone with an explanation.
+
 ## 2.0.0-beta.34 - 2026-11-11
 
 - GitHub: signing in is now followed by installing the Vibe Teamlead app on GitHub. Signing in only authorized the app, so it could reach no private repository and project setup failed with "GitHub API … returned HTTP 404". After sign-in (project setup, the first-run wizard, Deploy) Vibe Teamlead asks you to install the app and choose its repositories, and checks again when you come back. A repository the app can't see now says why (installed only on selected repositories, or not installed on the owner) with a button to fix it and **Check again**, in project setup and in Deploy.

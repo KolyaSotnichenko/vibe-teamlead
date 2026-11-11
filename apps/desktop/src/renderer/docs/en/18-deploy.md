@@ -37,11 +37,13 @@ Settings → Vercel connects the Vercel account Deploy uses to set up hosting. *
 
 Deploy has two tabs: **Runs** and **Environment**. Until deploy is set up for the project, both offer **Set up deploy**.
 
-Setup, on the Environment tab, goes step by step and shows each one: the GitHub repository (a private one is created when the project has none, and the main branch is pushed to it), the Vercel project linked to that repository, then deploy is on. If your Vercel account has teams, choose first whether the project goes to your personal account or to a team. A step that stopped can be run again with **Try again**; nothing is created twice.
+Setup, on the Environment tab, goes step by step and shows each one: the GitHub repository (a private one is created when the project has none, and the main branch is pushed to it), the Vercel project linked to that repository, then deploy is on: Vercel deploys to production on every push to main. When your Vercel account already has projects, choose an existing one for the repository or create a new one. If your Vercel account has teams, choose first whether the project goes to your personal account or to a team. A step that stopped can be run again with **Try again**; nothing is created twice.
 
-**Needed from you** lists what only you can do, each with its button: connect Vercel or GitHub (opens Settings), install the Vibe Teamlead app or give Vercel's GitHub app access to the repository (opens GitHub), choose an existing Vercel project for the repository or create a new one, or note that the repository is public.
+**Needed from you** lists what only you can do, each with its button: connect Vercel (opens Settings → Vercel) or connect GitHub (opens the GitHub sign-in dialog), install the Vibe Teamlead app or give Vercel's GitHub app access to the repository (opens GitHub), choose an existing Vercel project for the repository or create a new one, or note that the repository is public.
 
-Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, every merge into the project's main branch is pushed to GitHub, and Vercel deploys it; the last push and whether it worked show at the top of the tab (for pushes since the app was opened).
+Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, main is pushed to GitHub after every merge into the project's main branch, and Vercel deploys it; the last push and whether it worked show at the top of the tab (for pushes since the app was opened).
+
+A project whose git configuration is unusual (for example, `origin` defined through an include) is not changed: setup stops and explains what it found, so nothing is overwritten.
 
 ## Variables and database
 
@@ -51,4 +53,4 @@ Once set up, the tab shows what exists: the repository and whether it is public,
 
 ## What comes next
 
-The readiness check and previews come in later versions of Deploy.
+Coming in later versions of Deploy: a readiness scan that turns blockers into tasks, a GitHub Actions workflow for the project, and previews on task cards.
