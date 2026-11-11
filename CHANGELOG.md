@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.32 - 2026-11-11
+
+- Design system, Path C: import a designer's design-system package (a zip or a folder). Its tokens are taken exactly, one design-system agent run writes the document, components are rebuilt in the project's own code on first need, logos and fonts are committed with the code, and you choose Light only or Light and dark. Package scripts never run.
+
 ## 2.0.0-beta.31 - 2026-11-11
 
 - No more "Needs Recovery" after a restart. Tasks that were running when the app closed, updated or crashed are stopped at the next launch the way Stop stops them: a task with a plan waits in review with Resume, one without a plan goes back to the backlog. Nothing restarts by itself, so nothing spends tokens until you press Resume.
