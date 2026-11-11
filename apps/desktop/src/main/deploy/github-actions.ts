@@ -2,7 +2,7 @@
  * Read-only GitHub Actions client for the Deploy view.
  * The fetcher is injected so the client is testable without the network.
  */
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import type { Project } from '../../shared/types';
 import type {
   DeployDeployment,
@@ -204,6 +204,16 @@ function parseOwnerRepo(ref: string): { owner: string; repo: string } | null {
   return m ? { owner: m[1], repo: m[2] } : null;
 }
 
+/** git's stdout, without blocking the main thread. */
+function gitOutput(args: string[], cwd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(getToolPath('git'), args, getIsolatedGitSpawnOptions(cwd, { timeout: 10_000 }), (err, stdout) => {
+      if (err) reject(err);
+      else resolve(String(stdout));
+    });
+  });
+}
+
 /** Repo of a project: GITHUB_REPO from its config, else the git origin; null when not GitHub. */
 export async function resolveRepo(project: Project): Promise<{ owner: string; repo: string } | null> {
   const config = getGitHubConfig(project);
@@ -212,13 +222,7 @@ export async function resolveRepo(project: Project): Promise<{ owner: string; re
     if (parsed) return parsed;
   }
   try {
-    const url = String(
-      execFileSync(
-        getToolPath('git'),
-        ['remote', 'get-url', 'origin'],
-        getIsolatedGitSpawnOptions(project.path)
-      )
-    ).trim();
+    const url = (await gitOutput(['remote', 'get-url', 'origin'], project.path)).trim();
     if (!/^(https?:\/\/github\.com\/|git@github\.com:)/.test(url)) return null;
     return parseOwnerRepo(url);
   } catch {

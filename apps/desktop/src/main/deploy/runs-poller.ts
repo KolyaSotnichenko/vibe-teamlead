@@ -172,6 +172,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
   }
 
   async function begin(s: Session): Promise<void> {
+    s.timer = undefined;
     let repo: Repo | null = null;
     try {
       repo = await deps.resolveRepo(s.project);
@@ -180,7 +181,9 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     }
     if (session !== s) return;
     if (!repo) {
-      deps.emit({ projectId: s.project.id, runs: [], nextPollAt: new Date(now()).toISOString() });
+      // Not (yet) a GitHub repository, or git failed: try again on the next idle tick.
+      s.timer = setTimer(() => void begin(s), IDLE_MS);
+      deps.emit({ projectId: s.project.id, runs: [], nextPollAt: new Date(now() + IDLE_MS).toISOString() });
       return;
     }
     s.repo = repo;
@@ -204,6 +207,11 @@ export function createRunsPoller(deps: RunsPollerDeps) {
         s.last.error.resetAt !== undefined &&
         Date.parse(s.last.error.resetAt) > now();
       if (!rateLimited) void tick(s);
+    },
+
+    /** The repo the current session resolved for this project, if any. */
+    repoFor(projectId: string): Repo | undefined {
+      return session?.project.id === projectId ? session.repo : undefined;
     },
 
     stopAll(): void {

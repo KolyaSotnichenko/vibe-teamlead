@@ -60,9 +60,8 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
   ipcMain.handle(
     IPC_CHANNELS.DEPLOY_JOB_LOG,
     async (_event, projectId: string, jobId: number): Promise<IPCResult<DeployJobLog>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) return { success: false, error: 'Project not found' };
-      const repo = await resolveRepo(project).catch(() => null);
+      // The repo the poller resolved for the project on screen; no second git call.
+      const repo = poller.repoFor(projectId);
       if (!repo) return { success: false, error: 'No GitHub repository' };
       return { success: true, data: await fetchJobLog(client, repo, jobId) };
     }

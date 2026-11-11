@@ -252,6 +252,49 @@ describe('createRunsPoller', () => {
   });
 });
 
+describe('repo resolution', () => {
+  it('retries a failed resolution on the next 60 s tick, then polls', async () => {
+    const t = setup();
+    t.resolveRepo.mockResolvedValueOnce(null);
+    t.poller.start(project());
+    await t.flush();
+    expect(t.emitted.at(-1)!.repo).toBeUndefined();
+    expect([...t.timers.values()].map((x) => x.ms)).toEqual([60_000]);
+    await t.fire();
+    expect(t.resolveRepo).toHaveBeenCalledTimes(2);
+    expect(t.client.runs).toHaveBeenCalled();
+    expect(t.emitted.at(-1)!.repo).toEqual({ owner: 'o', repo: 'r' });
+  });
+
+  it('retries after a resolution that throws', async () => {
+    const t = setup();
+    t.resolveRepo.mockRejectedValueOnce(new Error('git'));
+    t.poller.start(project());
+    await t.flush();
+    expect(t.timers.size).toBe(1);
+    await t.fire();
+    expect(t.resolveRepo).toHaveBeenCalledTimes(2);
+  });
+
+  it('a stopped session does not retry the resolution', async () => {
+    const t = setup();
+    t.resolveRepo.mockResolvedValue(null);
+    t.poller.start(project());
+    await t.flush();
+    t.poller.stop('p1');
+    expect(t.timers.size).toBe(0);
+  });
+
+  it('repoFor gives the resolved repo of the current project only', async () => {
+    const t = setup();
+    expect(t.poller.repoFor('p1')).toBeUndefined();
+    t.poller.start(project());
+    await t.flush();
+    expect(t.poller.repoFor('p1')).toEqual({ owner: 'o', repo: 'r' });
+    expect(t.poller.repoFor('p2')).toBeUndefined();
+  });
+});
+
 describe('fetchJobLog', () => {
   const repo = { owner: 'o', repo: 'r' };
   it('ready with text', async () => {
