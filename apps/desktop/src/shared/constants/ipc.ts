@@ -612,6 +612,13 @@ export const IPC_CHANNELS = {
   // Spell check
   SPELLCHECK_SET_LANGUAGES: 'spellcheck:setLanguages',  // Set spell check language (syncs with i18n)
 
+  // Deploy view (GitHub Actions runs)
+  DEPLOY_RUNS_START: 'deploy:runsStart',
+  DEPLOY_RUNS_SELECT: 'deploy:runsSelect',
+  DEPLOY_RUNS_STOP: 'deploy:runsStop',
+  DEPLOY_JOB_LOG: 'deploy:jobLog',
+  DEPLOY_RUNS_UPDATE: 'deploy:runsUpdate',  // Event: runs state (main -> renderer)
+
   // Screenshot capture
   SCREENSHOT_GET_SOURCES: 'screenshot:getSources',  // Get available screens/windows
   SCREENSHOT_CAPTURE: 'screenshot:capture'           // Capture screenshot from source

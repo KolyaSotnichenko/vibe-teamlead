@@ -83,3 +83,26 @@ export interface GraphNode {
 export interface RunGraph {
   columns: Array<{ stage: string; nodes: GraphNode[] }>;
 }
+
+export interface DeployRunsState {
+  projectId: string;
+  /** Absent when the project has no GitHub repository. */
+  repo?: { owner: string; repo: string };
+  runs: DeployRun[];
+  selected?: { runId: number; jobs: DeployJob[]; graph: RunGraph };
+  productionUrl?: string | null;
+  error?: GitHubError;
+  /** ISO time of the next poll. */
+  nextPollAt: string;
+}
+
+/** `pending`: the job has not finished, GitHub has no log yet. `expired`: the log is gone. */
+export type DeployJobLog = { state: 'ready'; text: string } | { state: 'pending' } | { state: 'expired' };
+
+export interface DeployAPI {
+  startRuns: (projectId: string, selectedRunId?: number) => Promise<import('./common').IPCResult>;
+  selectRun: (projectId: string, runId: number) => Promise<import('./common').IPCResult>;
+  stopRuns: (projectId: string) => Promise<import('./common').IPCResult>;
+  jobLog: (projectId: string, jobId: number) => Promise<import('./common').IPCResult<DeployJobLog>>;
+  onRunsUpdate: (callback: (state: DeployRunsState) => void) => () => void;
+}

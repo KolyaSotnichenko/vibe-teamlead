@@ -842,6 +842,8 @@ export interface ElectronAPI {
   design: import('./design-system').DesignAPI;
   /** The project's app from main, while the Preview is open */
   preview: import('./preview').PreviewAPI;
+  /** GitHub Actions runs for the Deploy view */
+  deploy: import('./deploy').DeployAPI;
   /** Token usage per project */
   usage: { get: (projectId: string) => Promise<IPCResult<import('./usage').ProjectUsageSummary>> };
 }

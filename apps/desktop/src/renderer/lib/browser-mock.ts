@@ -233,6 +233,13 @@ const browserMockAPI: ElectronAPI = {
     loadNotes: async () => ({ success: true, data: [] }),
     saveNotes: async (_projectId: string, notes: unknown[]) => ({ success: true, data: notes as never[] }),
   },
+  deploy: {
+    startRuns: async () => ({ success: true }),
+    selectRun: async () => ({ success: true }),
+    stopRuns: async () => ({ success: true }),
+    jobLog: async () => ({ success: true, data: { state: 'pending' as const } }),
+    onRunsUpdate: () => () => {},
+  },
   usage: usageMock,
 
   // External tools check

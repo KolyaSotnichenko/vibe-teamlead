@@ -17,6 +17,7 @@ import { type AgentQuestionsAPI, createAgentQuestionsAPI } from './agent-questio
 import { type BriefAPI, createBriefAPI } from './brief-api';
 import { type DesignAPI, createDesignAPI } from './design-api';
 import { type PreviewAPI, createPreviewAPI } from './preview-api';
+import { type DeployAPI, createDeployAPI } from './deploy-api';
 import { type UsageAPI, createUsageAPI } from './usage-api';
 import { createToolsCheckAPI } from './tools-check-api';
 import type { ToolsCheckAPI } from '../../shared/types/tools-check';
@@ -47,6 +48,8 @@ export interface ElectronAPI extends
   design: DesignAPI;
   /** The project's app from main, while the Preview is open */
   preview: PreviewAPI;
+  /** GitHub Actions runs for the Deploy view */
+  deploy: DeployAPI;
   /** Token usage per project */
   usage: UsageAPI;
 }
@@ -69,6 +72,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   tools: createToolsCheckAPI(),
   design: createDesignAPI(),
   preview: createPreviewAPI(),
+  deploy: createDeployAPI(),
   usage: createUsageAPI()
 });
 
