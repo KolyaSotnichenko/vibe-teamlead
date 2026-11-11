@@ -2,7 +2,7 @@ import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { IPC_CHANNELS, AUTO_BUILD_PATHS } from '../../../shared/constants';
+import { IPC_CHANNELS, AUTO_BUILD_PATHS, MEMORY_BROWSE_LIMIT } from '../../../shared/constants';
 import type {
   IPCResult,
   ProjectContextData,
@@ -68,7 +68,7 @@ async function loadRecentMemories(projectId: string): Promise<RendererMemory[]> 
     const service = await getMemoryService();
     const memories = await service.search({
       projectId,
-      limit: 20,
+      limit: MEMORY_BROWSE_LIMIT,
       sort: 'recency',
       excludeDeprecated: true,
     });

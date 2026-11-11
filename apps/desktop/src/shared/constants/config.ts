@@ -145,3 +145,6 @@ export function getSpecsDir(autoBuildPath: string | undefined): string {
   const basePath = autoBuildPath || '.vibe-teamlead';
   return `${basePath}/specs`;
 }
+
+/** How many of a project's memories Context → Memories loads to browse (newest first) */
+export const MEMORY_BROWSE_LIMIT = 2000;

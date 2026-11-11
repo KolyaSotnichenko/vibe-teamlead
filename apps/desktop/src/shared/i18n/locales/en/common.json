@@ -1095,7 +1095,14 @@
     },
     "browser": {
       "title": "Memory Browser",
-      "countOf": "{{filtered}} of {{total}} memories"
+      "countOf": "{{filtered}} of {{total}} memories",
+      "source": {
+        "all": "Everything",
+        "agent": "Agents chose to remember",
+        "learned": "Learned from subtasks"
+      },
+      "filterPlaceholder": "Filter by text, file or task…",
+      "showMore": "Show more ({{shown}} of {{total}} shown)"
     },
     "empty": "No memories yet. Memories are automatically created as agents work on tasks.",
     "emptyFilter": "No memories match the selected filter.",

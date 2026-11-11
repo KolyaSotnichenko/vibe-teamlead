@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
-import { IPC_CHANNELS } from '../../../shared/constants';
+import { IPC_CHANNELS, MEMORY_BROWSE_LIMIT } from '../../../shared/constants';
 import type {
   IPCResult,
   RendererMemory,
@@ -51,7 +51,7 @@ export function registerMemoryDataHandlers(
   // Get all memories (sorted by recency)
   ipcMain.handle(
     IPC_CHANNELS.CONTEXT_GET_MEMORIES,
-    async (_, projectId: string, limit: number = 20): Promise<IPCResult<RendererMemory[]>> => {
+    async (_, projectId: string, limit: number = MEMORY_BROWSE_LIMIT): Promise<IPCResult<RendererMemory[]>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
         return { success: false, error: 'Project not found' };

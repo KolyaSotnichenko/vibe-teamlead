@@ -11,7 +11,8 @@ import {
   Sparkles,
   RefreshCcw,
   BookOpen,
-  BarChart2
+  BarChart2,
+  Filter
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
@@ -23,6 +24,7 @@ import { cn } from '../../lib/utils';
 import { MemoryCard } from './MemoryCard';
 import { InfoItem } from './InfoItem';
 import { memoryFilterCategories, type MemoryFilterCategory } from './constants';
+import { browseMemories, type MemorySourceFilter } from './memory-browse';
 import type { MemorySystemStatus, MemorySystemState, RendererMemory } from '../../../shared/types';
 
 interface MemoriesTabProps {
@@ -61,6 +63,9 @@ function getMemoryCategory(memory: RendererMemory): MemoryFilterCategory {
   return 'calibration'; // default
 }
 
+const PAGE_SIZE = 50;
+const SOURCE_FILTERS: MemorySourceFilter[] = ['all', 'agent', 'learned'];
+
 // Filter icons for each category key
 const filterIcons: Record<MemoryFilterCategory, React.ElementType> = {
   all: Brain,
@@ -86,11 +91,20 @@ export function MemoriesTab({
   const { t } = useTranslation('common');
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<MemoryFilterCategory>('all');
+  const [sourceFilter, setSourceFilter] = useState<MemorySourceFilter>('all');
+  const [textFilter, setTextFilter] = useState('');
+  const [shown, setShown] = useState(PAGE_SIZE);
+
+  // Memories matching who wrote them and the text filter; the category pills narrow these further
+  const browsed = useMemo(
+    () => browseMemories(recentMemories, { source: sourceFilter, text: textFilter }),
+    [recentMemories, sourceFilter, textFilter]
+  );
 
   // Calculate memory counts by category
   const memoryCounts = useMemo(() => {
     const counts: Record<MemoryFilterCategory, number> = {
-      all: recentMemories.length,
+      all: browsed.length,
       patterns: 0,
       errors: 0,
       decisions: 0,
@@ -98,13 +112,13 @@ export function MemoriesTab({
       calibration: 0
     };
 
-    for (const memory of recentMemories) {
+    for (const memory of browsed) {
       const category = getMemoryCategory(memory);
       counts[category]++;
     }
 
     return counts;
-  }, [recentMemories]);
+  }, [browsed]);
 
   // Memory health metrics
   const memoryHealth = useMemo(() => {
@@ -121,9 +135,16 @@ export function MemoriesTab({
 
   // Filter memories based on active filter
   const filteredMemories = useMemo(() => {
-    if (activeFilter === 'all') return recentMemories;
-    return recentMemories.filter((memory) => getMemoryCategory(memory) === activeFilter);
-  }, [recentMemories, activeFilter]);
+    if (activeFilter === 'all') return browsed;
+    return browsed.filter((memory) => getMemoryCategory(memory) === activeFilter);
+  }, [browsed, activeFilter]);
+
+  const resetFilters = () => {
+    setActiveFilter('all');
+    setSourceFilter('all');
+    setTextFilter('');
+    setShown(PAGE_SIZE);
+  };
 
   const handleSearch = () => {
     if (localSearchQuery.trim()) {
@@ -326,6 +347,36 @@ export function MemoriesTab({
             </span>
           </div>
 
+          {/* Who wrote it, and an instant filter over text, files and tasks */}
+          <div className="flex flex-wrap items-center gap-2">
+            {SOURCE_FILTERS.map((source) => (
+              <Button
+                key={source}
+                variant={sourceFilter === source ? 'default' : 'outline'}
+                size="sm"
+                className={cn('h-8', sourceFilter === source && 'bg-accent text-accent-foreground')}
+                onClick={() => {
+                  setSourceFilter(source);
+                  setShown(PAGE_SIZE);
+                }}
+              >
+                {t(`memory.browser.source.${source}`)}
+              </Button>
+            ))}
+            <div className="relative flex-1 min-w-[200px]">
+              <Filter className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-8 pl-8"
+                placeholder={t('memory.browser.filterPlaceholder')}
+                value={textFilter}
+                onChange={(e) => {
+                  setTextFilter(e.target.value);
+                  setShown(PAGE_SIZE);
+                }}
+              />
+            </div>
+          </div>
+
           {/* Filter Pills */}
           <div className="flex flex-wrap gap-2">
             {memoryFilterCategories.map((category) => {
@@ -346,7 +397,10 @@ export function MemoriesTab({
                     isActive && 'bg-accent text-accent-foreground',
                     !isActive && count === 0 && 'opacity-50'
                   )}
-                  onClick={() => setActiveFilter(category.key)}
+                  onClick={() => {
+                    setActiveFilter(category.key);
+                    setShown(PAGE_SIZE);
+                  }}
                   disabled={count === 0 && category.key !== 'all'}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -389,7 +443,7 @@ export function MemoriesTab({
                 <Button
                   variant="link"
                   size="sm"
-                  onClick={() => setActiveFilter('all')}
+                  onClick={resetFilters}
                   className="mt-2"
                 >
                   {t('memory.showAll')}
@@ -399,7 +453,7 @@ export function MemoriesTab({
 
           {filteredMemories.length > 0 && (
             <div className="space-y-3">
-              {filteredMemories.map((memory) => (
+              {filteredMemories.slice(0, shown).map((memory) => (
                 <MemoryCard
                   key={memory.id}
                   memory={memory}
@@ -408,6 +462,11 @@ export function MemoriesTab({
                   onDeprecate={onDeprecate}
                 />
               ))}
+              {filteredMemories.length > shown && (
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setShown((n) => n + PAGE_SIZE)}>
+                  {t('memory.browser.showMore', { shown, total: filteredMemories.length })}
+                </Button>
+              )}
             </div>
           )}
         </div>

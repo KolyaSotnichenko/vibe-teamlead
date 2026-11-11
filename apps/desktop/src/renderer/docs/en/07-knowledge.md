@@ -34,4 +34,6 @@ A symbol graph: functions, classes, who calls whom, what a change will affect.
   - the Insights chat sees the memory too.
 - **Where:** locally in `~/.vibe-teamlead/memories`, separately for each project. To view it: Context → Memories. You enable it, and choose the embedding model, in Settings → Memory. Without an embedding model, search is keyword-based.
 
+- **Reviewing it:** in Context → Memories, filter by who wrote an entry (agents chose to remember / learned from subtasks), by type, or by any text, file name or task number. A wrong or outdated entry is removed with the bin icon on its card, and agents stop seeing it.
+
 The first task in a project starts with empty memory. The benefit shows from the second or third task.

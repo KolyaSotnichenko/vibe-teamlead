@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { MEMORY_BROWSE_LIMIT } from '../../shared/constants';
 import type {
   ProjectIndex,
   MemorySystemStatus,
@@ -181,7 +182,7 @@ export async function searchMemories(
  */
 export async function loadRecentMemories(
   projectId: string,
-  limit: number = 20
+  limit: number = MEMORY_BROWSE_LIMIT
 ): Promise<void> {
   const store = useContextStore.getState();
   store.setMemoriesLoading(true);
