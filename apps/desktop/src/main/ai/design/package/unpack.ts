@@ -110,8 +110,14 @@ export type SkipReason = 'type' | 'size' | 'unsafe' | 'limit';
 export interface UnpackResult {
   /** POSIX paths relative to `dest`, sorted. */
   files: string[];
+  /** At most MAX_SKIPPED_LISTED entries */
   skipped: Array<{ path: string; reason: SkipReason }>;
+  /** Skipped files past the listed ones */
+  skippedMore: number;
 }
+
+/** Skipped files listed by name; the rest are only counted */
+export const MAX_SKIPPED_LISTED = 200;
 
 export interface UnpackOptions {
   unzip?: string;
@@ -158,13 +164,23 @@ export async function unpackDesignPackage(
     const realRoot = await realpath(root);
 
     const files: string[] = [];
-    const skipped: UnpackResult['skipped'] = [];
+    const listed: UnpackResult['skipped'] = [];
+    let skippedMore = 0;
+    const skipped = {
+      push(entry: UnpackResult['skipped'][number]) {
+        if (listed.length < MAX_SKIPPED_LISTED) listed.push(entry);
+        else skippedMore++;
+      },
+    };
     const plan: string[] = [];
     let total = 0;
+    // Once a limit is reached, nothing more is walked: the package is over its limits
+    let full = false;
 
     const walk = async (dir: string): Promise<void> => {
       const entries = (await readdir(dir)).sort();
       for (const name of entries) {
+        if (full) return;
         const abs = path.join(dir, name);
         const rel = path.relative(realRoot, abs).split(path.sep).join('/');
         const st = await lstat(abs);
@@ -194,7 +210,8 @@ export async function unpackDesignPackage(
         }
         if (files.length >= limits.files || total + st.size > limits.totalBytes) {
           skipped.push({ path: rel, reason: 'limit' });
-          continue;
+          full = true;
+          return;
         }
         total += st.size;
         files.push(rel);
@@ -212,8 +229,8 @@ export async function unpackDesignPackage(
     }
 
     files.sort();
-    skipped.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    return { files, skipped };
+    listed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return { files, skipped: listed, skippedMore };
   } finally {
     if (tmp) await rm(tmp, { recursive: true, force: true });
   }

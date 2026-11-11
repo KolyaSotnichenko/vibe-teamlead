@@ -157,6 +157,8 @@ export interface DesignPackageInfo {
   themes: DesignThemes;
   /** The package's tokens have dark-theme colours: only then can the themes be 'light-dark' */
   hasDark: boolean;
+  /** The design-system markdown written from the package, relative to the project */
+  systemPath?: string;
   /** Components already built in the project, filled per task by the worker */
   built?: string[];
 }
@@ -179,6 +181,10 @@ export interface DesignPackageSummary {
   /** Path of the design system the import would overwrite, relative to the project */
   replaces?: string;
   skipped: DesignPackageSkip[];
+  /** Skipped files past the listed ones */
+  skippedMore?: number;
+  /** Colours over the cap (400, light and dark together) that were left out */
+  colorsDropped?: number;
   /** The package's extra images and PDFs: added as references (at most 10), and left out over that */
   references: { added: number; skipped: number };
 }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { readDesignPackage } from '../read-package';
-import { packageTokens } from '../package-tokens';
+import { packageTokens, readPackageTokens } from '../package-tokens';
 
 const fixtures = path.join(__dirname, 'fixtures');
 const dtcg = path.join(fixtures, 'tokens-dtcg');
@@ -56,6 +56,38 @@ describe('packageTokens', () => {
 
   it('a package without token files has no tokens', () => {
     expect(packageTokens(none, readDesignPackage(none), 'light')).toBeUndefined();
+  });
+});
+
+describe('packageTokens with many colours', () => {
+  const big = (light: number, dark: number) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'tok-big-'));
+    const hex = (i: number) => `#${(0x100000 + i).toString(16).slice(-6)}`;
+    const vars = (n: number, offset: number) => Array.from({ length: n }, (_, i) => `--c${i}: ${hex(offset + i)};`).join('\n');
+    writeFileSync(path.join(dir, 'tokens.css'), `:root{\n${vars(light, 0)}\n}\n[data-theme="dark"]{\n${vars(dark, 5000)}\n}\n`);
+    return dir;
+  };
+
+  it('keeps well over 80 colours from a package (light and dark)', () => {
+    const dir = big(150, 150);
+    try {
+      const r = readPackageTokens(dir, readDesignPackage(dir), 'light-dark');
+      expect(r.tokens?.colors).toHaveLength(300);
+      expect(r.droppedColors).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('caps at 400 and says how many were dropped', () => {
+    const dir = big(250, 250);
+    try {
+      const r = readPackageTokens(dir, readDesignPackage(dir), 'light-dark');
+      expect(r.tokens?.colors).toHaveLength(400);
+      expect(r.droppedColors).toBe(100);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

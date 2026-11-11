@@ -1450,6 +1450,8 @@
         "referencesSkipped_one": "{{count}} more image or PDF is left out: at most {{max}} become references (each one is read by a model).",
         "referencesSkipped_other": "{{count}} more images and PDFs are left out: at most {{max}} become references (each one is read by a model).",
         "noTokens": "No tokens: the agent will extract them",
+        "colorsDropped_one": "{{count}} colour is over the limit of {{max}} and is left out of the tokens.",
+        "colorsDropped_other": "{{count}} colours are over the limit of {{max}} and are left out of the tokens.",
         "licence": "Licence",
         "replaces": "Replaces {{path}}",
         "skipped_one": "{{count}} file left out",

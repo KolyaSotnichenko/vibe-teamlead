@@ -93,6 +93,23 @@ describe('unpackDesignPackage', () => {
     expect(r3.skipped).toEqual([{ path: 'big.md', reason: 'size' }]);
   });
 
+  it('stops walking once a limit is reached: one limit entry, nothing after it', async () => {
+    const src = path.join(root, 'src');
+    for (let i = 0; i < 30; i++) write(path.join(src, `d${String(i).padStart(2, '0')}`, 'a.md'));
+    const r = await unpackDesignPackage(src, path.join(root, 'dest'), { limits: { files: 3 } });
+    expect(r.files).toHaveLength(3);
+    expect(r.skipped).toEqual([{ path: 'd03/a.md', reason: 'limit' }]);
+    expect(r.skippedMore).toBe(0);
+  });
+
+  it('lists at most 200 skipped files and counts the rest', async () => {
+    const src = path.join(root, 'src');
+    for (let i = 0; i < 250; i++) write(path.join(src, `f${String(i).padStart(3, '0')}.exe`));
+    const r = await unpackDesignPackage(src, path.join(root, 'dest'));
+    expect(r.skipped).toHaveLength(200);
+    expect(r.skippedMore).toBe(50);
+  });
+
   it('replaces whatever dest held before', async () => {
     const src = path.join(root, 'src');
     write(path.join(src, 'new.md'));

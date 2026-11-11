@@ -54,6 +54,13 @@ function hasShadow(text: string, ext: string): boolean {
 
 const NAME_MAX = 64;
 
+/** Colours kept from a package, light and dark together (a reference file keeps 80) */
+export const PACKAGE_MAX_COLORS = 400;
+/** What one token file may hold before the cap above is applied */
+const PARSE_MAX_COLORS = 10_000;
+
+type Assembled = { tokens: DesignTokens; droppedColors: number } | undefined;
+
 /** A colour name safe in every prompt: [\w./-] only, capped; undefined when nothing is left. */
 function safeColourName(name: unknown): string | undefined {
   if (typeof name !== 'string') return undefined;
@@ -83,9 +90,10 @@ function fontRole(role: unknown, family: string): FontRole {
   return 'font';
 }
 
-function assemble(light: Colour[], dark: Colour[], rest: Parsed[], themes: DesignThemes, shadows: boolean): DesignTokens | undefined {
-  const colors = [...safeColours(light), ...(themes === 'light-dark' ? safeColours(dark).map((c) => ({ ...c, name: DARK_PREFIX + c.name })) : [])];
-  if (!colors.length) return undefined;
+function assemble(light: Colour[], dark: Colour[], rest: Parsed[], themes: DesignThemes, shadows: boolean): Assembled {
+  const all = [...safeColours(light), ...(themes === 'light-dark' ? safeColours(dark).map((c) => ({ ...c, name: DARK_PREFIX + c.name })) : [])];
+  if (!all.length) return undefined;
+  const colors = all.slice(0, PACKAGE_MAX_COLORS);
   const fonts: DesignTokens['fonts'] = [];
   const radius = new Set<number>();
   const spacing = new Set<number>();
@@ -102,29 +110,32 @@ function assemble(light: Colour[], dark: Colour[], rest: Parsed[], themes: Desig
   }
   const sorted = (s: Set<number>) => [...s].sort((a, b) => a - b);
   return {
-    colors,
-    fonts,
-    radius: sorted(radius),
-    shadows,
-    ...(spacing.size ? { spacing: sorted(spacing) } : {}),
+    tokens: {
+      colors,
+      fonts,
+      radius: sorted(radius),
+      shadows,
+      ...(spacing.size ? { spacing: sorted(spacing) } : {}),
+    },
+    droppedColors: all.length - colors.length,
   };
 }
 
-function fromFile(file: string, text: string, themes: DesignThemes): DesignTokens | undefined {
+function fromFile(file: string, text: string, themes: DesignThemes): Assembled {
   const ext = path.extname(file).toLowerCase();
   if (ext === '.css') {
     const light: Colour[] = [];
     const dark: Colour[] = [];
     const rest: Parsed[] = [];
     for (const seg of cssSegments(text)) {
-      const parsed = parseTokenFile(file, `${seg.body}}`);
+      const parsed = parseTokenFile(file, `${seg.body}}`, { maxColors: PARSE_MAX_COLORS });
       if (!parsed) continue;
       rest.push(parsed);
       (seg.dark ? dark : light).push(...(parsed.colors ?? []));
     }
     return assemble(light, dark, rest, themes, hasShadow(text, ext));
   }
-  const parsed = parseTokenFile(file, text);
+  const parsed = parseTokenFile(file, text, { maxColors: PARSE_MAX_COLORS });
   if (!parsed?.colors?.length) return undefined;
   const light: Colour[] = [];
   const dark: Colour[] = [];
@@ -141,6 +152,11 @@ function fromFile(file: string, text: string, themes: DesignThemes): DesignToken
 
 /** Tokens from the first token file (dtcg, json, css) that yields colours; undefined when none does. */
 export function packageTokens(dir: string, pkg: DesignPackage, themes: DesignThemes): DesignTokens | undefined {
+  return readPackageTokens(dir, pkg, themes).tokens;
+}
+
+/** The package's tokens, and how many colours were over PACKAGE_MAX_COLORS and left out. */
+export function readPackageTokens(dir: string, pkg: DesignPackage, themes: DesignThemes): { tokens?: DesignTokens; droppedColors: number } {
   for (const rel of [pkg.tokenFiles.dtcg, pkg.tokenFiles.json, pkg.tokenFiles.css]) {
     if (!rel) continue;
     let text: string;
@@ -149,8 +165,8 @@ export function packageTokens(dir: string, pkg: DesignPackage, themes: DesignThe
     } catch {
       continue;
     }
-    const tokens = fromFile(rel, text, themes);
-    if (tokens) return tokens;
+    const found = fromFile(rel, text, themes);
+    if (found) return found;
   }
-  return undefined;
+  return { droppedColors: 0 };
 }

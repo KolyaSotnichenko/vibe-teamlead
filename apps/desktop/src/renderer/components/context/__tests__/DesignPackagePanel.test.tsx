@@ -248,6 +248,14 @@ describe('DesignSystemTab with a package', () => {
     expect(screen.queryByRole('radio', { name: /context.design.package.themes.lightDark$/ })).not.toBeInTheDocument();
   });
 
+  it('the summary warns about colours over the cap and counts skipped files past the list', async () => {
+    api({ inspectPackage: vi.fn(async () => ({ success: true, data: { ...summary, colorsDropped: 100, skippedMore: 50 } })) });
+    render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+    await choose();
+    expect(screen.getByText('context.design.package.colorsDropped 100 400')).toBeInTheDocument();
+    expect(screen.getByText('context.design.package.skipped 51')).toBeInTheDocument();
+  });
+
   it('the summary says how many images and PDFs become references, and how many are left out', async () => {
     api({ inspectPackage: vi.fn(async () => ({ success: true, data: { ...summary, references: { added: 10, skipped: 3 } } })) });
     render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);

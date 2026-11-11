@@ -270,7 +270,7 @@ function fromTailwindConfig(text: string, out: Collected): void {
 }
 
 /** Tokens read exactly from a token file (undefined when it has none). Pure — tested directly. */
-export function parseTokenFile(fileName: string, text: string): Partial<DesignTokens> | undefined {
+export function parseTokenFile(fileName: string, text: string, opts: { maxColors?: number } = {}): Partial<DesignTokens> | undefined {
   const out: Collected = { colors: [], fonts: [], radius: [], spacing: [] };
   const ext = path.extname(fileName).toLowerCase();
   if (ext === '.json') {
@@ -296,7 +296,7 @@ export function parseTokenFile(fileName: string, text: string): Partial<DesignTo
     fromCss(text, out);
   }
   const seen = new Set<string>();
-  const colors = out.colors.filter((c) => (seen.has(`${c.name}|${c.value}`) ? false : (seen.add(`${c.name}|${c.value}`), true))).slice(0, 80);
+  const colors = out.colors.filter((c) => (seen.has(`${c.name}|${c.value}`) ? false : (seen.add(`${c.name}|${c.value}`), true))).slice(0, opts.maxColors ?? 80);
   const fonts = out.fonts.filter((f, i, all) => all.findIndex((g) => g.family === f.family && g.role === f.role) === i);
   if (!colors.length && !fonts.length && !out.radius.length) return undefined;
   return {

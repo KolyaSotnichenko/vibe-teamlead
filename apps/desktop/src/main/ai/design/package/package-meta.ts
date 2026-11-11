@@ -122,6 +122,7 @@ export function readPackageMeta(projectPath: string): DesignPackageInfo | undefi
     // Light and dark only when the package has dark colours (an old or edited meta says so)
     themes: raw.themes === 'light-dark' && raw.hasDark === true ? 'light-dark' : 'light',
     hasDark: raw.hasDark === true,
+    ...(safeRelative(raw.systemPath) ? { systemPath: raw.systemPath } : {}),
     ...(built ? { built } : {}),
   };
 }

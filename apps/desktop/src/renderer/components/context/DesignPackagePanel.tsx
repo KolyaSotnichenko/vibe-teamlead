@@ -13,6 +13,9 @@ import type { DesignPackageSummary, DesignSystemInfo, DesignThemes } from '../..
 
 type Stage = 'choose' | 'reading' | 'summary' | 'importing';
 
+/** Colours a package keeps, light and dark together (PACKAGE_MAX_COLORS in main) */
+const MAX_COLORS = 400;
+
 /** Progress lines kept on screen while importing */
 const MAX_LINES = 8;
 
@@ -198,6 +201,7 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
   }
 
   if (!summary) return null;
+  const skippedCount = summary.skipped.length + (summary.skippedMore ?? 0);
   const count = (label: string, n: number) => (
     <li className="flex items-baseline gap-2 border-b border-border py-2 last:border-b-0">
       <span className="text-sm text-foreground">{t(`context.design.package.${label}`, { count: n })}</span>
@@ -228,6 +232,10 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
 
       {!summary.hasTokens && <Notice>{t('context.design.package.noTokens')}</Notice>}
 
+      {(summary.colorsDropped ?? 0) > 0 && (
+        <Notice>{t('context.design.package.colorsDropped', { count: summary.colorsDropped, max: MAX_COLORS })}</Notice>
+      )}
+
       {summary.licenceLine && (
         <figure className="max-w-prose space-y-1">
           <figcaption className="font-mono text-xs uppercase text-muted-foreground">{t('context.design.package.licence')}</figcaption>
@@ -241,9 +249,9 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
         </p>
       )}
 
-      {summary.skipped.length > 0 && (
+      {skippedCount > 0 && (
         <details className="max-w-prose text-sm">
-          <summary className="cursor-pointer text-muted-foreground">{t('context.design.package.skipped', { count: summary.skipped.length })}</summary>
+          <summary className="cursor-pointer text-muted-foreground">{t('context.design.package.skipped', { count: skippedCount })}</summary>
           <ul className="mt-2 space-y-1">
             {summary.skipped.map((s) => (
               <li key={s.path} className="flex items-baseline justify-between gap-4 border-b border-border pb-1">

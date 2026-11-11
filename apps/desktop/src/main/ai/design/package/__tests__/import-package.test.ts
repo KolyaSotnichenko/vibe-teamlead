@@ -12,6 +12,7 @@ import {
   setDesignThemes,
 } from '../import-package';
 import { writeReferences } from '../../references';
+import { loadDesignSystem } from '../../design-system';
 import { PACKAGE_DIR, PACKAGE_META_FILE, readPackageMeta } from '../package-meta';
 
 const fixtures = path.join(__dirname, 'fixtures');
@@ -62,6 +63,23 @@ describe('inspectDesignPackage', () => {
     expect(s.licenceLine).toMatch(/ліценз/);
     expect(s.replaces).toBeUndefined();
     expect(Array.isArray(s.skipped)).toBe(true);
+  });
+
+  it('warns when colours are over the cap', async () => {
+    const src = mkdtempSync(path.join(tmpdir(), 'pkg-big-'));
+    try {
+      const hex = (i: number) => `#${(0x100000 + i).toString(16).slice(-6)}`;
+      const vars = (n: number, offset: number) => Array.from({ length: n }, (_, i) => `--c${i}: ${hex(offset + i)};`).join('');
+      writeFileSync(path.join(src, 'README.md'), '# Big\n');
+      writeFileSync(path.join(src, 'tokens.css'), `:root{${vars(250, 0)}}[data-theme="dark"]{${vars(250, 5000)}}`);
+      const s = await inspectDesignPackage(project, undefined, src);
+      expect(s.colorsDropped).toBe(100);
+      expect(s.colors).toEqual({ light: 250, dark: 150 });
+      const plain = await inspectDesignPackage(project, undefined, mhp);
+      expect(plain.colorsDropped).toBeUndefined();
+    } finally {
+      rmSync(src, { recursive: true, force: true });
+    }
   });
 
   it('names the system it would replace', async () => {
@@ -247,6 +265,19 @@ describe('package paths from an untrusted package', () => {
     } finally {
       rmSync(src, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the package after another system file is pointed at', () => {
+  it('is no longer in effect once the design system lives in another file', async () => {
+    await inspectDesignPackage(project, undefined, mhp);
+    await importDesignPackage(project, undefined, { themes: 'light' }, fakeDeps());
+    expect(loadDesignSystem(project, undefined).package?.name).toBeDefined();
+    mkdirSync(path.join(project, 'docs'), { recursive: true });
+    writeFileSync(path.join(project, 'docs/DESIGN-SYSTEM.md'), '# Repo system\n');
+    const repo = { designSystemPath: 'docs/DESIGN-SYSTEM.md' };
+    expect(loadDesignSystem(project, repo).package).toBeUndefined();
+    expect(() => setDesignThemes(project, repo, 'light-dark')).toThrow(/no longer made from the package/i);
   });
 });
 

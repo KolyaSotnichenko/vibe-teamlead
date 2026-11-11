@@ -29,7 +29,7 @@ import {
   safeNamespace,
   writePackageMeta,
 } from './package-meta';
-import { packageTokens } from './package-tokens';
+import { packageTokens, readPackageTokens } from './package-tokens';
 import { type DesignPackage, readDesignPackage } from './read-package';
 import { unpackDesignPackage } from './unpack';
 
@@ -57,14 +57,14 @@ export async function inspectDesignPackage(
 ): Promise<DesignPackageSummary> {
   const staging = abs(projectPath, STAGING_DIR);
   await rm(staging, { recursive: true, force: true });
-  const { skipped } = await unpackDesignPackage(source, staging);
+  const { skipped, skippedMore } = await unpackDesignPackage(source, staging);
   const pkg = readDesignPackage(staging);
   // The top folder is part of every path the builders are given
   if (pkg.root && !isPlainPackagePath(pkg.root)) {
     await rm(staging, { recursive: true, force: true });
     throw new Error(ROOT_NAME_ERROR);
   }
-  const tokens = packageTokens(staging, pkg, 'light-dark');
+  const { tokens, droppedColors } = readPackageTokens(staging, pkg, 'light-dark');
   const dark = tokens?.colors.filter((c) => c.name.startsWith(DARK_PREFIX)).length ?? 0;
   const system = resolveDesignSystemPaths(projectPath, settings);
   const licenceLine = pkg.licenceLine ? cleanPackageText(pkg.licenceLine) : '';
@@ -79,6 +79,8 @@ export async function inspectDesignPackage(
     ...(licenceLine ? { licenceLine } : {}),
     ...(system.exists ? { replaces: system.markdownPath } : {}),
     skipped,
+    ...(skippedMore > 0 ? { skippedMore } : {}),
+    ...(droppedColors > 0 ? { colorsDropped: droppedColors } : {}),
     references: {
       added: Math.min(references.length, MAX_PACKAGE_REFERENCES),
       skipped: Math.max(0, references.length - MAX_PACKAGE_REFERENCES),
@@ -151,10 +153,10 @@ export async function importDesignPackage(
     // Invalid tokens must fail here, before saveDesignSystem has written the markdown
     DesignTokensSchema.parse(result.tokens);
     const info = packageInfo(projectPath, pkg, themes, hasDark);
-    saveDesignSystem(projectPath, settings, result);
+    const saved = saveDesignSystem(projectPath, settings, result);
     systemSaved = true;
     dropBackup = true;
-    writePackageMeta(projectPath, info);
+    writePackageMeta(projectPath, { ...info, systemPath: saved.markdownPath });
     const writtenAt = new Date().toISOString();
     recordSystemMeta(projectPath, { how: 'package', packageName: info.name }, writtenAt);
     const references = newReferences(pkgDir, pkg, deps.existingReferences ?? (() => referenceSizes(projectPath)))
@@ -202,7 +204,7 @@ export function setDesignThemes(projectPath: string, settings: DesignSettings, t
   const meta = readPackageMeta(projectPath);
   const pkgDir = abs(projectPath, PACKAGE_DIR);
   if (!meta || !existsSync(pkgDir)) throw new Error('There is no design package in this project.');
-  if (readSystemMeta(projectPath)?.how !== 'package') {
+  if (!loadDesignSystem(projectPath, settings).package) {
     throw new Error('The design system is no longer made from the package, so its themes are not switched here.');
   }
   const pkg = readDesignPackage(pkgDir);
