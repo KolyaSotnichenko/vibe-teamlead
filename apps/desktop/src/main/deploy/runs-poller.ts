@@ -29,6 +29,7 @@ export interface RunsPollerDeps {
 const ACTIVE_MS = 5_000;
 const IDLE_MS = 60_000;
 const PRODUCTION_URL_MS = 60_000;
+const WORKFLOW_RETRY_MS = 60_000;
 
 interface Session {
   project: Project;
@@ -38,6 +39,8 @@ interface Session {
   repo?: Repo;
   last?: DeployRunsState;
   workflowCache: Map<string, string | null>;
+  /** Failed workflow fetches by path@sha: when, and the error. */
+  workflowFailures: Map<string, { at: number; error: GitHubError }>;
   productionUrl?: string | null;
   productionUrlAt?: number;
 }
@@ -57,8 +60,9 @@ export async function fetchJobLog(
   try {
     const text = await client.jobLog(repo.owner, repo.repo, jobId);
     return text === null ? { state: 'pending' } : { state: 'ready', text };
-  } catch {
-    return { state: 'expired' };
+  } catch (e) {
+    const error = asGitHubError(e);
+    return error.kind === 'unavailable' ? { state: 'expired' } : { state: 'error', error };
   }
 }
 
@@ -85,16 +89,29 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     return runs.some((r) => r.status !== 'completed') ? ACTIVE_MS : IDLE_MS;
   }
 
-  async function workflowYaml(s: Session, repo: Repo, run: DeployRun): Promise<string | null> {
-    if (!run.workflowPath) return null;
+  /** The workflow file; `unavailable` and `permissions` failures give a flat graph (permissions also an error). */
+  async function workflowYaml(
+    s: Session,
+    repo: Repo,
+    run: DeployRun
+  ): Promise<{ yaml: string | null; error?: GitHubError }> {
+    if (!run.workflowPath) return { yaml: null };
     const key = `${run.workflowPath}@${run.sha}`;
-    if (s.workflowCache.has(key)) return s.workflowCache.get(key) ?? null;
+    if (s.workflowCache.has(key)) return { yaml: s.workflowCache.get(key) ?? null };
+    const failed = s.workflowFailures.get(key);
+    if (failed && now() - failed.at < WORKFLOW_RETRY_MS) {
+      return { yaml: null, error: failed.error.kind === 'permissions' ? failed.error : undefined };
+    }
     try {
       const yaml = await deps.client.workflowFile(repo.owner, repo.repo, run.workflowPath, run.sha);
       s.workflowCache.set(key, yaml);
-      return yaml;
-    } catch {
-      return null; // the graph falls back to the flat list; retried next tick
+      s.workflowFailures.delete(key);
+      return { yaml };
+    } catch (e) {
+      const error = asGitHubError(e);
+      if (error.kind !== 'unavailable' && error.kind !== 'permissions') throw error;
+      s.workflowFailures.set(key, { at: now(), error });
+      return { yaml: null, error: error.kind === 'permissions' ? error : undefined };
     }
   }
 
@@ -117,23 +134,26 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     let runs = s.last?.runs ?? [];
     let selected = s.last?.selected;
     let error: GitHubError | undefined;
+    let workflowError: GitHubError | undefined;
     try {
       const repo = s.repo as Repo;
       runs = await deps.client.runs(repo.owner, repo.repo);
       if (!current()) return;
       const run = runs.find((r) => r.id === s.selectedRunId) ?? runs[0];
       s.selectedRunId = run?.id;
-      selected = undefined;
-      if (run) {
+      if (!run) selected = undefined;
+      else {
         const jobs: DeployJob[] = await deps.client.jobs(repo.owner, repo.repo, run.id);
-        const yaml = await workflowYaml(s, repo, run);
+        const wf = await workflowYaml(s, repo, run);
+        workflowError = wf.error;
         const deployments: DeployDeployment[] = await deps.client.deployments(repo.owner, repo.repo, run.sha);
-        selected = { runId: run.id, jobs, graph: buildRunGraph(yaml, jobs, deployments) };
+        selected = { runId: run.id, jobs, graph: buildRunGraph(wf.yaml, jobs, deployments) };
       }
       await refreshProductionUrl(s, repo);
     } catch (e) {
       error = asGitHubError(e);
     }
+    error ??= workflowError;
     if (!current()) return;
 
     const delay = delayFor(runs, error);
@@ -170,13 +190,13 @@ export function createRunsPoller(deps: RunsPollerDeps) {
   return {
     start(project: Project, selectedRunId?: number): void {
       if (session) halt(session);
-      session = { project, generation: 0, selectedRunId, workflowCache: new Map() };
+      session = { project, generation: 0, selectedRunId, workflowCache: new Map(), workflowFailures: new Map() };
       void begin(session);
     },
 
-    select(runId: number): void {
+    select(projectId: string, runId: number): void {
       const s = session;
-      if (!s || s.selectedRunId === runId) return;
+      if (!s || s.project.id !== projectId || s.selectedRunId === runId) return;
       s.selectedRunId = runId;
       if (!s.repo) return;
       const rateLimited =
@@ -184,6 +204,12 @@ export function createRunsPoller(deps: RunsPollerDeps) {
         s.last.error.resetAt !== undefined &&
         Date.parse(s.last.error.resetAt) > now();
       if (!rateLimited) void tick(s);
+    },
+
+    stopAll(): void {
+      if (!session) return;
+      halt(session);
+      session = null;
     },
 
     stop(projectId: string): void {

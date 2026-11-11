@@ -96,8 +96,12 @@ export interface DeployRunsState {
   nextPollAt: string;
 }
 
-/** `pending`: the job has not finished, GitHub has no log yet. `expired`: the log is gone. */
-export type DeployJobLog = { state: 'ready'; text: string } | { state: 'pending' } | { state: 'expired' };
+/** `pending`: the job has not finished, GitHub has no log yet. `expired`: the log is gone. `error`: GitHub refused (rate limit, permissions, no connection). */
+export type DeployJobLog =
+  | { state: 'ready'; text: string }
+  | { state: 'pending' }
+  | { state: 'expired' }
+  | { state: 'error'; error: GitHubError };
 
 export interface DeployAPI {
   startRuns: (projectId: string, selectedRunId?: number) => Promise<import('./common').IPCResult>;

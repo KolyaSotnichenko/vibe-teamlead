@@ -36,4 +36,22 @@ describe('githubFetcher', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ a: 1 });
   });
+
+  it('sends If-None-Match and serves the cached body on 304', async () => {
+    const f = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ a: 1 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json', etag: '"v1"' },
+        })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 304 }));
+    globalThis.fetch = f as never;
+    await githubFetcher('/repos/etag/test');
+    const res = await githubFetcher('/repos/etag/test');
+    expect((f.mock.calls[1][1] as { headers: Record<string, string> }).headers['If-None-Match']).toBe('"v1"');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ a: 1 });
+  });
 });

@@ -81,7 +81,7 @@ describe('createRunsPoller', () => {
     const t = setup();
     t.poller.start(project());
     await t.flush();
-    t.poller.select(2);
+    t.poller.select('p1', 2);
     await t.flush();
     expect(t.emitted.at(-1)!.selected?.runId).toBe(2);
     expect(t.client.jobs).toHaveBeenLastCalledWith('o', 'r', 2);
@@ -172,6 +172,74 @@ describe('createRunsPoller', () => {
     expect(s.runs.map((r) => r.id)).toEqual([3]);
   });
 
+  it('keeps the previous selected graph when a later tick fails after runs succeeded', async () => {
+    const jobs = vi.fn(async () => [{ id: 9, name: 'build', status: 'completed', steps: [] }]);
+    const t = setup({ jobs });
+    t.poller.start(project());
+    await t.flush();
+    const before = t.emitted.at(-1)!.selected;
+    expect(before?.jobs).toHaveLength(1);
+    jobs.mockRejectedValueOnce({ kind: 'unavailable', message: 'down' });
+    await t.fire();
+    const s = t.emitted.at(-1)!;
+    expect(s.error?.kind).toBe('unavailable');
+    expect(s.selected).toEqual(before);
+  });
+
+  it('workflowFile rate-limit sets the error and pauses at resetAt', async () => {
+    const err: GitHubError = { kind: 'rate-limit', resetAt: new Date(1_000_000 + 120_000).toISOString(), message: 'x' };
+    const t = setup({ workflowFile: vi.fn(async () => { throw err; }) });
+    t.poller.start(project());
+    await t.flush();
+    expect(t.emitted.at(-1)!.error).toEqual(err);
+    expect([...t.timers.values()][0].ms).toBe(120_000);
+  });
+
+  it('workflowFile permissions sets state.error and still builds a graph', async () => {
+    const t = setup({ workflowFile: vi.fn(async () => { throw { kind: 'permissions', message: 'p' }; }) });
+    t.poller.start(project());
+    await t.flush();
+    const s = t.emitted.at(-1)!;
+    expect(s.error?.kind).toBe('permissions');
+    expect(s.selected?.runId).toBe(3);
+  });
+
+  it('workflowFile unavailable gives a flat graph, no error, no refetch within 60 s', async () => {
+    const t = setup({
+      runs: vi.fn(async () => [run(3, 'in_progress')]),
+      jobs: vi.fn(async () => [{ id: 9, name: 'build', status: 'in_progress', steps: [] }]),
+      workflowFile: vi.fn(async () => { throw { kind: 'unavailable', message: 'down' }; }),
+    });
+    t.poller.start(project());
+    await t.flush();
+    const s = t.emitted.at(-1)!;
+    expect(s.error).toBeUndefined();
+    expect(s.selected?.graph.columns[0].stage).toBe('other');
+    await t.fire();
+    await t.fire();
+    expect(t.client.workflowFile).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 12; i++) await t.fire();
+    expect(t.client.workflowFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores select for a project that is not the current session', async () => {
+    const t = setup();
+    t.poller.start(project('p1'));
+    await t.flush();
+    const n = t.emitted.length;
+    t.poller.select('other', 2);
+    await t.flush();
+    expect(t.emitted).toHaveLength(n);
+  });
+
+  it('stopAll stops the current session', async () => {
+    const t = setup();
+    t.poller.start(project());
+    await t.flush();
+    t.poller.stopAll();
+    expect(t.timers.size).toBe(0);
+  });
+
   it('no repo: state without repo, no API calls', async () => {
     const t = setup();
     t.resolveRepo.mockResolvedValue(null);
@@ -192,9 +260,16 @@ describe('fetchJobLog', () => {
   it('404 (null) is pending', async () => {
     expect(await fetchJobLog({ jobLog: async () => null } as never, repo, 1)).toEqual({ state: 'pending' });
   });
-  it('unavailable (e.g. 410) is expired; other errors too, never throws', async () => {
+  it('unavailable (e.g. 410) is expired', async () => {
     const fail = (e: unknown) => ({ jobLog: async () => { throw e; } }) as never;
     expect(await fetchJobLog(fail({ kind: 'unavailable', message: '' }), repo, 1)).toEqual({ state: 'expired' });
     expect(await fetchJobLog(fail(new Error('x')), repo, 1)).toEqual({ state: 'expired' });
+  });
+  it('rate-limit, permissions, no-connection are errors', async () => {
+    for (const kind of ['rate-limit', 'permissions', 'no-connection'] as const) {
+      const e = { kind, message: 'm' };
+      const r = await fetchJobLog({ jobLog: async () => { throw e; } } as never, repo, 1);
+      expect(r).toEqual({ state: 'error', error: e });
+    }
   });
 });

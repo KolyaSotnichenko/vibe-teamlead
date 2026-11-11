@@ -21,11 +21,24 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     emit: (state) => safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_RUNS_UPDATE, state),
   });
 
+  // The renderer cannot stop polling when it reloads or goes away, so main does.
+  const watched = new WeakSet<object>();
+  const watchWindow = () => {
+    const contents = getMainWindow()?.webContents;
+    if (!contents || watched.has(contents)) return;
+    watched.add(contents);
+    contents.on('did-start-navigation', (details: { isMainFrame?: boolean; isSameDocument?: boolean }) => {
+      if (details.isMainFrame && !details.isSameDocument) poller.stopAll();
+    });
+    contents.once('destroyed', () => poller.stopAll());
+  };
+
   ipcMain.handle(
     IPC_CHANNELS.DEPLOY_RUNS_START,
     async (_event, projectId: string, selectedRunId?: number): Promise<IPCResult> => {
       const project = projectStore.getProject(projectId);
       if (!project) return { success: false, error: 'Project not found' };
+      watchWindow();
       poller.start(project, selectedRunId);
       return { success: true };
     }
@@ -33,8 +46,8 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
 
   ipcMain.handle(
     IPC_CHANNELS.DEPLOY_RUNS_SELECT,
-    async (_event, _projectId: string, runId: number): Promise<IPCResult> => {
-      poller.select(runId);
+    async (_event, projectId: string, runId: number): Promise<IPCResult> => {
+      poller.select(projectId, runId);
       return { success: true };
     }
   );
