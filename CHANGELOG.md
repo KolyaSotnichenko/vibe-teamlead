@@ -5,6 +5,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 ## 2.0.0-beta.33 - 2026-11-11
 
 - First-run wizard: an optional Accounts step between Memory and Done signs you in to GitHub in the browser (for pushing branches, pull requests and, later, deploy). Skip it and connect later in the project's settings, under GitHub.
+- Deploy view (sidebar, Y): the latest GitHub Actions runs of the project's repository with a live graph of each run's jobs and stages, steps while a job runs, its log once it finishes, and the deploy stage and production link from GitHub Deployments. Approve the app's new GitHub permissions once at github.com/settings/installations. Setting up hosting, the readiness check and previews come later.
 
 ## 2.0.0-beta.32 - 2026-11-11
 
