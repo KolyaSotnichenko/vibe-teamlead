@@ -1,6 +1,5 @@
-import { GitPullRequest, User, Clock, FileDiff, Loader2 } from 'lucide-react';
+import { GitPullRequest, Loader2 } from 'lucide-react';
 import { ScrollArea } from '../../ui/scroll-area';
-import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { cn } from '../../../lib/utils';
 import type { PRData, PRReviewProgress, PRReviewResult } from '../hooks/useGitHubPRs';
@@ -8,6 +7,7 @@ import type { NewCommitsCheck } from '../../../../preload/api/modules/github-api
 import type { ChecksStatus, ReviewsStatus, MergeableState } from '../../../../shared/types/pr-status';
 import { useTranslation } from 'react-i18next';
 import { CompactStatusIndicator } from './StatusIndicator';
+import { MetaLine, listRowClass } from '../../shared/integration-page';
 
 /**
  * Status Flow Dots Component
@@ -251,8 +251,8 @@ export function PRList({
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="divide-y divide-border">
+    <ScrollArea className="flex-1" viewportClassName="[&>div]:!block">
+      <div>
         {prs.map((pr) => {
           const reviewState = getReviewStateForPR(pr.number);
           const isReviewingPR = reviewState?.isReviewing ?? false;
@@ -261,68 +261,51 @@ export function PRList({
           return (
             <button
               key={pr.number}
+              type="button"
+              aria-current={selectedPRNumber === pr.number ? 'true' : undefined}
               onClick={() => onSelectPR(pr.number)}
-              className={cn(
-                'w-full p-4 text-left transition-colors hover:bg-accent/50',
-                selectedPRNumber === pr.number && 'bg-accent'
-              )}
+              className={listRowClass(selectedPRNumber === pr.number)}
             >
-              <div className="flex items-start gap-3">
-                <GitPullRequest className="h-5 w-5 mt-0.5 text-success shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-sm text-muted-foreground">#{pr.number}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {pr.headRefName}
-                    </Badge>
-                    {/* Review status flow dots + label */}
-                    <PRStatusFlow
-                      isReviewing={isReviewingPR}
-                      hasResult={hasReviewResult}
-                      hasPosted={
-                        Boolean(reviewState?.result?.reviewId) ||
-                        Boolean(reviewState?.result?.hasPostedFindings) ||
-                        Boolean(reviewState?.result?.postedFindingIds?.length) ||
-                        // Follow-up review with no new findings to post is effectively "posted"
-                        (Boolean(reviewState?.result?.isFollowupReview) && reviewState?.result?.findings?.length === 0)
-                      }
-                      hasBlockingFindings={
-                        // Use overallStatus from review result as source of truth
-                        reviewState?.result?.overallStatus === 'request_changes' ||
-                        // Fallback to checking findings severity
-                        Boolean(reviewState?.result?.findings?.some(
-                          f => f.severity === 'critical' || f.severity === 'high'
-                        ))
-                      }
-                      hasNewCommits={Boolean(reviewState?.newCommitsCheck?.hasNewCommits)}
-                      hasCommitsAfterPosting={reviewState?.newCommitsCheck?.hasCommitsAfterPosting ?? false}
-                      t={t}
-                    />
-                  </div>
-                  <h3 className="font-medium text-sm truncate">{pr.title}</h3>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      {pr.author.login}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {formatDate(pr.updatedAt)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FileDiff className="h-3 w-3" />
-                      <span className="text-success">+{pr.additions}</span>
-                      <span className="text-destructive">-{pr.deletions}</span>
-                    </span>
-                    {/* GitHub status indicators (CI, reviews, merge status) */}
-                    <CompactStatusIndicator
-                      checksStatus={reviewState?.checksStatus}
-                      reviewsStatus={reviewState?.reviewsStatus}
-                      mergeableState={reviewState?.mergeableState}
-                      showMergeStatus={false}
-                    />
-                  </div>
-                </div>
+              <span className="block truncate text-sm font-medium text-foreground">{pr.title}</span>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <MetaLine className="inline" parts={[`#${pr.number}`, pr.author.login, formatDate(pr.updatedAt)]} />
+                <span className="font-mono text-xs">
+                  <span className="text-success">+{pr.additions}</span>{' '}
+                  <span className="text-destructive">-{pr.deletions}</span>
+                </span>
+                {/* GitHub status indicators (CI, reviews, merge status) */}
+                <CompactStatusIndicator
+                  checksStatus={reviewState?.checksStatus}
+                  reviewsStatus={reviewState?.reviewsStatus}
+                  mergeableState={reviewState?.mergeableState}
+                  showMergeStatus={false}
+                />
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="truncate font-mono text-xs text-muted-foreground">{pr.headRefName}</span>
+                {/* Review status flow dots + label */}
+                <PRStatusFlow
+                  isReviewing={isReviewingPR}
+                  hasResult={hasReviewResult}
+                  hasPosted={
+                    Boolean(reviewState?.result?.reviewId) ||
+                    Boolean(reviewState?.result?.hasPostedFindings) ||
+                    Boolean(reviewState?.result?.postedFindingIds?.length) ||
+                    // Follow-up review with no new findings to post is effectively "posted"
+                    (Boolean(reviewState?.result?.isFollowupReview) && reviewState?.result?.findings?.length === 0)
+                  }
+                  hasBlockingFindings={
+                    // Use overallStatus from review result as source of truth
+                    reviewState?.result?.overallStatus === 'request_changes' ||
+                    // Fallback to checking findings severity
+                    Boolean(reviewState?.result?.findings?.some(
+                      f => f.severity === 'critical' || f.severity === 'high'
+                    ))
+                  }
+                  hasNewCommits={Boolean(reviewState?.newCommitsCheck?.hasNewCommits)}
+                  hasCommitsAfterPosting={reviewState?.newCommitsCheck?.hasCommitsAfterPosting ?? false}
+                  t={t}
+                />
               </div>
             </button>
           );

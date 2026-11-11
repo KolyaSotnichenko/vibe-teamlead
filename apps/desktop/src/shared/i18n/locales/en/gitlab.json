@@ -11,7 +11,8 @@
   },
   "header": {
     "open": "open",
-    "searchPlaceholder": "Search issues..."
+    "searchPlaceholder": "Search issues...",
+    "filterLabel": "Issue state"
   },
   "filters": {
     "opened": "Open",
@@ -133,6 +134,7 @@
       "merged": "Merged",
       "all": "All"
     },
+    "filterLabel": "Merge request state",
     "tryAgain": "Try Again",
     "listTitle": "Merge Requests",
     "searchPlaceholder": "Search merge requests...",

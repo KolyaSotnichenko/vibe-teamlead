@@ -75,17 +75,19 @@ export function IssueList({
   }
 
   return (
-    <ScrollArea className="flex-1" onViewportRef={setViewportElement}>
-      <div className="p-2 space-y-1">
-        {issues.map((issue) => (
-          <IssueListItem
-            key={issue.id}
-            issue={issue}
-            isSelected={selectedIssueNumber === issue.number}
-            onClick={() => onSelectIssue(issue.number)}
-            onInvestigate={() => onInvestigate(issue)}
-          />
-        ))}
+    <ScrollArea className="flex-1" onViewportRef={setViewportElement} viewportClassName="[&>div]:!block">
+      <div>
+        <ul>
+          {issues.map((issue) => (
+            <IssueListItem
+              key={issue.id}
+              issue={issue}
+              isSelected={selectedIssueNumber === issue.number}
+              onClick={() => onSelectIssue(issue.number)}
+              onInvestigate={() => onInvestigate(issue)}
+            />
+          ))}
+        </ul>
 
         {/* Load more trigger / Loading indicator */}
         {/* Inline error for load-more failures (visible even when onLoadMore is undefined during search) */}

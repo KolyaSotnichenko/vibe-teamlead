@@ -11,7 +11,8 @@
   },
   "header": {
     "open": "відкритих",
-    "searchPlaceholder": "Пошук issues..."
+    "searchPlaceholder": "Пошук issues...",
+    "filterLabel": "Стан issue"
   },
   "filters": {
     "opened": "Відкриті",
@@ -133,6 +134,7 @@
       "merged": "Злиті",
       "all": "Усі"
     },
+    "filterLabel": "Стан merge request",
     "tryAgain": "Спробувати знову",
     "listTitle": "Merge request",
     "searchPlaceholder": "Пошук merge request...",

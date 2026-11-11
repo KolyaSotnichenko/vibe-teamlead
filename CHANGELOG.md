@@ -8,6 +8,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 - The window no longer scrolls: the sidebar stays put at full height and the page area scrolls by itself when a page is taller. Opening a job log in Deploy used to slide the whole window up under the title bar.
 - Deploy graph: a matrix job whose name has `${{ … }}` reads "Image …" instead of the raw expression; hover it for the names of its jobs, click it to pick one. Labels wrap to two lines with the full name on hover. Deployments no longer show a meaningless duration (hover for how long ago they went live). The runs list uses the app's thin scrollbar.
 - GitHub PRs no longer says "GitHub Not Connected" while you are signed in. The connection check (shared with GitHub Issues) and the PR requests now use the same sign-in as Deploy, refreshing an expired GitHub App token instead of treating it as missing, and the PRs page checks again when you open it.
+- GitHub Issues restyled in the app's design: title and repository in the header with the open count, the Auto-fix switch, a normal-size Analyze & group and refresh; search with an Open / Closed / All switch instead of a dropdown; the selected issue marked with a thin left bar; one primary Create task under the issue's state and details. GitHub PRs, GitLab Issues and GitLab merge requests follow the same layout (merge requests: New merge request in the header instead of a full-width button at the bottom).
 
 ## 2.0.0-beta.33 - 2026-11-11
 

@@ -38,8 +38,8 @@ export function IssueList({
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="p-2 space-y-1">
+    <ScrollArea className="flex-1" viewportClassName="[&>div]:!block">
+      <ul>
         {issues.map((issue) => (
           <IssueListItem
             key={issue.id}
@@ -49,7 +49,7 @@ export function IssueList({
             onInvestigate={() => onInvestigate(issue)}
           />
         ))}
-      </div>
+      </ul>
     </ScrollArea>
   );
 }

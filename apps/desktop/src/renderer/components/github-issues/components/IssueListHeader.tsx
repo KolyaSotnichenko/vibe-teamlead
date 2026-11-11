@@ -1,24 +1,18 @@
 import { useTranslation } from 'react-i18next';
-import { Github, RefreshCw, Search, Filter, Wand2, Loader2, Layers } from 'lucide-react';
-import { Badge } from '../../ui/badge';
+import { RefreshCw, Search, Loader2, Layers } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Switch } from '../../ui/switch';
 import { Label } from '../../ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../ui/select';
+import { SegmentedControl } from '../../ui/segmented-control';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '../../ui/tooltip';
-import type { IssueListHeaderProps } from '../types';
+import { HeaderFigure, IntegrationPageHeader, IntegrationToolbar } from '../../shared/integration-page';
+import type { FilterState, IssueListHeaderProps } from '../types';
 
 export function IssueListHeader({
   repoFullName,
@@ -37,107 +31,77 @@ export function IssueListHeader({
   isAnalyzing,
 }: IssueListHeaderProps) {
   const { t } = useTranslation('common');
+  const filters: Array<{ value: FilterState; label: string }> = [
+    { value: 'open', label: t('issues.header.filterOpen') },
+    { value: 'closed', label: t('issues.header.filterClosed') },
+    { value: 'all', label: t('issues.header.filterAll') },
+  ];
 
   return (
-    <div className="shrink-0 p-4 border-b border-border">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-muted">
-            <Github className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              {t('issues.header.title')}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {repoFullName}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            {t('issues.header.openCount', { count: openIssuesCount })}
-          </Badge>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onRefresh}
-            disabled={isLoading}
-            aria-label={t('buttons.refresh')}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Issue Management Actions */}
-      <div className="flex items-center gap-3 mb-4">
-        {/* Analyze & Group Button (Proactive) */}
-        {onAnalyzeAndGroup && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onAnalyzeAndGroup}
-                  disabled={isAnalyzing || isLoading}
-                  className="flex-1"
-                >
-                  {isAnalyzing ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Layers className="h-4 w-4 mr-2" />
-                  )}
-                  {t('issues.batchReview.title')}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs">
-                <p>{t('issues.header.analyzeTooltip')}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+    <TooltipProvider>
+      <IntegrationPageHeader title={t('issues.header.title')} subtitle={repoFullName}>
+        <HeaderFigure>{t('issues.header.openCount', { count: openIssuesCount })}</HeaderFigure>
 
         {/* Auto-Fix Toggle (Reactive) */}
         {onAutoFixToggle && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2">
-                    {autoFixRunning ? (
-                      <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                    ) : (
-                      <Wand2 className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <Label htmlFor="auto-fix-toggle" className="text-sm cursor-pointer whitespace-nowrap">
-                      {t('issues.header.autoFixNew')}
-                    </Label>
-                    <Switch
-                      id="auto-fix-toggle"
-                      checked={autoFixEnabled ?? false}
-                      onCheckedChange={onAutoFixToggle}
-                      disabled={autoFixRunning}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs">
-                  <p>{t('issues.header.autoFixTooltip')}</p>
-                  {autoFixRunning && autoFixProcessing !== undefined && autoFixProcessing > 0 && (
-                    <p className="mt-1 text-primary">{t('issues.header.processingIssues', { count: autoFixProcessing })}</p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2">
+                {autoFixRunning && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />}
+                <Switch
+                  id="auto-fix-toggle"
+                  checked={autoFixEnabled ?? false}
+                  onCheckedChange={onAutoFixToggle}
+                  disabled={autoFixRunning}
+                />
+                <Label htmlFor="auto-fix-toggle" className="cursor-pointer whitespace-nowrap text-sm text-muted-foreground">
+                  {t('issues.header.autoFixNew')}
+                </Label>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p>{t('issues.header.autoFixTooltip')}</p>
+              {autoFixRunning && autoFixProcessing !== undefined && autoFixProcessing > 0 && (
+                <p className="mt-1">{t('issues.header.processingIssues', { count: autoFixProcessing })}</p>
+              )}
+            </TooltipContent>
+          </Tooltip>
         )}
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3">
+        {/* Analyze & Group (Proactive) */}
+        {onAnalyzeAndGroup && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={onAnalyzeAndGroup} disabled={isAnalyzing || isLoading}>
+                {isAnalyzing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Layers className="mr-2 h-4 w-4" aria-hidden="true" />
+                )}
+                {t('issues.batchReview.title')}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p>{t('issues.header.analyzeTooltip')}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onRefresh}
+          disabled={isLoading}
+          aria-label={t('buttons.refresh')}
+          className="text-muted-foreground"
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+        </Button>
+      </IntegrationPageHeader>
+
+      <IntegrationToolbar>
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
             placeholder={t('issues.header.searchPlaceholder')}
             value={searchQuery}
@@ -145,18 +109,8 @@ export function IssueListHeader({
             className="pl-9"
           />
         </div>
-        <Select value={filterState} onValueChange={onFilterChange}>
-          <SelectTrigger className="w-32">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="open">{t('prReview.state.open')}</SelectItem>
-            <SelectItem value="closed">{t('prReview.state.closed')}</SelectItem>
-            <SelectItem value="all">{t('issues.header.filterAll')}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
+        <SegmentedControl label={t('issues.header.filterLabel')} value={filterState} options={filters} onChange={onFilterChange} />
+      </IntegrationToolbar>
+    </TooltipProvider>
   );
 }

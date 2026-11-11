@@ -1,19 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ExternalLink, User, Clock, MessageCircle, Sparkles, CheckCircle2, Eye } from 'lucide-react';
+import { ExternalLink, User, Sparkles, CheckCircle2, Eye } from 'lucide-react';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { ScrollArea } from '../../ui/scroll-area';
 import { formatDate } from '../utils';
+import { MetaLine, SmallCaps } from '../../shared/integration-page';
 import type { IssueDetailProps } from '../types';
-
-// GitLab issue state colors
-const GITLAB_ISSUE_STATE_COLORS: Record<string, string> = {
-  opened: 'bg-green-500/10 text-green-500 border-green-500/20',
-  closed: 'bg-purple-500/10 text-purple-500 border-purple-500/20'
-};
 
 const GITLAB_COMPLEXITY_COLORS: Record<string, string> = {
   simple: 'bg-green-500/10 text-green-500',
@@ -35,73 +30,52 @@ export function IssueDetail({ issue, onInvestigate, investigationResult, linkedT
 
   return (
     <ScrollArea className="flex-1">
-      <div className="p-4 space-y-4">
-        {/* Header */}
-        <div className="space-y-2">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className={`${GITLAB_ISSUE_STATE_COLORS[issue.state] || ''}`}
-              >
-                {t(`states.${issue.state}`)}
-              </Badge>
-              <span className="text-sm text-muted-foreground">#{issue.iid}</span>
-            </div>
-            <Button variant="ghost" size="icon" asChild aria-label={t('common:accessibility.openOnGitLabAriaLabel')}>
-              <a href={issue.webUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4" />
+      <div className="space-y-4 px-7 py-5">
+        {/* Header: title with the link to GitLab, then state and meta */}
+        <div>
+          <div className="flex items-start gap-3">
+            <h2 className="flex-1 text-xl font-semibold leading-snug text-foreground">{issue.title}</h2>
+            <Button variant="ghost" size="icon" asChild className="shrink-0 text-muted-foreground">
+              <a href={issue.webUrl} target="_blank" rel="noopener noreferrer" aria-label={t('common:accessibility.openOnGitLabAriaLabel')}>
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </a>
             </Button>
           </div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {issue.title}
-          </h2>
-        </div>
-
-        {/* Meta */}
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <User className="h-4 w-4" />
-            {issue.author.username}
+          <div className="mt-2 flex flex-wrap items-baseline gap-3.5">
+            <SmallCaps>{t(`states.${issue.state}`)}</SmallCaps>
+            <MetaLine
+              className="inline"
+              parts={[
+                `#${issue.iid}`,
+                issue.author.username,
+                formatDate(issue.createdAt),
+                issue.userNotesCount > 0 && `${issue.userNotesCount} ${t('detail.notes')}`,
+              ]}
+            />
           </div>
-          <div className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            {formatDate(issue.createdAt)}
-          </div>
-          {issue.userNotesCount > 0 && (
-            <div className="flex items-center gap-1">
-              <MessageCircle className="h-4 w-4" />
-              {issue.userNotesCount} {t('detail.notes')}
-            </div>
-          )}
         </div>
 
         {/* Labels */}
         {issue.labels.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {issue.labels.map((label, index) => (
-              <Badge
-                key={index}
-                variant="outline"
-                className="bg-orange-500/10 text-orange-500 border-orange-500/20"
-              >
+            {issue.labels.map((label) => (
+              <Badge key={label} variant="outline">
                 {label}
               </Badge>
             ))}
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
+        {/* Actions: one primary action */}
+        <div className="flex flex-wrap items-center gap-2">
           {hasLinkedTask ? (
-            <Button onClick={handleViewTask} className="flex-1" variant="secondary">
-              <Eye className="h-4 w-4 mr-2" />
+            <Button onClick={handleViewTask} variant="outline">
+              <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
               {t('detail.viewTask')}
             </Button>
           ) : (
-            <Button onClick={onInvestigate} className="flex-1">
-              <Sparkles className="h-4 w-4 mr-2" />
+            <Button onClick={onInvestigate}>
+              <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
               {t('detail.createTask')}
             </Button>
           )}
@@ -141,52 +115,38 @@ export function IssueDetail({ issue, onInvestigate, investigationResult, linkedT
         )}
 
         {/* Body */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">{t('detail.description')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {issue.description ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.description}</ReactMarkdown>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">
-                {t('detail.noDescription')}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <section>
+          <SmallCaps as="h3" className="mb-2">{t('detail.description')}</SmallCaps>
+          {issue.description ? (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.description}</ReactMarkdown>
+            </div>
+          ) : (
+            <p className="text-sm italic text-muted-foreground">{t('detail.noDescription')}</p>
+          )}
+        </section>
 
         {/* Assignees */}
         {issue.assignees.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{t('detail.assignees')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {issue.assignees.map((assignee) => (
-                  <Badge key={assignee.username} variant="outline">
-                    <User className="h-3 w-3 mr-1" />
-                    {assignee.username}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <section>
+            <SmallCaps as="h3" className="mb-2">{t('detail.assignees')}</SmallCaps>
+            <div className="flex flex-wrap gap-2">
+              {issue.assignees.map((assignee) => (
+                <Badge key={assignee.username} variant="outline">
+                  <User className="mr-1 h-3 w-3" aria-hidden="true" />
+                  {assignee.username}
+                </Badge>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Milestone */}
         {issue.milestone && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{t('detail.milestone')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Badge variant="outline">{issue.milestone.title}</Badge>
-            </CardContent>
-          </Card>
+          <section>
+            <SmallCaps as="h3" className="mb-2">{t('detail.milestone')}</SmallCaps>
+            <Badge variant="outline">{issue.milestone.title}</Badge>
+          </section>
         )}
       </div>
     </ScrollArea>

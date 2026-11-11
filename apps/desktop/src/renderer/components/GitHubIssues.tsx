@@ -165,7 +165,7 @@ export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesP
       {/* Content */}
       <div className="flex-1 flex min-h-0">
         {/* Issue List */}
-        <div className="w-1/2 border-r border-border flex flex-col">
+        <div className="flex w-[380px] shrink-0 flex-col border-r border-border">
           <IssueList
             issues={filteredIssues}
             selectedIssueNumber={selectedIssueNumber}
@@ -182,7 +182,7 @@ export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesP
         </div>
 
         {/* Issue Detail */}
-        <div className="w-1/2 flex flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           {selectedIssue ? (
             <IssueDetail
               issue={selectedIssue}

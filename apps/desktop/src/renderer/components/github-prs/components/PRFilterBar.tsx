@@ -439,7 +439,7 @@ export function PRFilterBar({
     STATUS_OPTIONS.find((opt) => opt.value === value);
 
   return (
-    <div className="px-4 py-2 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="shrink-0 border-b border-border px-6 py-3">
       <div className="flex items-center gap-2 h-9">
         {/* Search Input - Flexible width */}
         <div className="relative flex-1 max-w-md">

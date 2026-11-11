@@ -1,8 +1,5 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, RefreshCw, GitPullRequest } from 'lucide-react';
-import { Button } from '../../ui/button';
-import { Input } from '../../ui/input';
+import { Loader2 } from 'lucide-react';
 import { ScrollArea } from '../../ui/scroll-area';
 import { MergeRequestItem } from './MergeRequestItem';
 import type { GitLabMergeRequest } from '../../../../shared/types';
@@ -12,9 +9,8 @@ interface MergeRequestListProps {
   isLoading: boolean;
   selectedMrIid: number | null;
   onSelectMr: (mr: GitLabMergeRequest) => void;
-  onRefresh: () => void;
-  stateFilter: 'opened' | 'closed' | 'merged' | 'all';
-  onStateFilterChange: (state: 'opened' | 'closed' | 'merged' | 'all') => void;
+  /** The page's search box (title, branches or number) */
+  searchQuery: string;
 }
 
 export function MergeRequestList({
@@ -22,88 +18,41 @@ export function MergeRequestList({
   isLoading,
   selectedMrIid,
   onSelectMr,
-  onRefresh,
-  stateFilter,
-  onStateFilterChange
+  searchQuery
 }: MergeRequestListProps) {
   const { t } = useTranslation('gitlab');
-  const [searchQuery, setSearchQuery] = useState('');
+  const query = searchQuery.toLowerCase();
 
-  const filteredMrs = mergeRequests.filter((mr) => {
-    const matchesSearch =
-      mr.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mr.sourceBranch.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mr.targetBranch.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(mr.iid).includes(searchQuery);
-
-    return matchesSearch;
-  });
+  const filteredMrs = mergeRequests.filter(
+    (mr) =>
+      mr.title.toLowerCase().includes(query) ||
+      mr.sourceBranch.toLowerCase().includes(query) ||
+      mr.targetBranch.toLowerCase().includes(query) ||
+      String(mr.iid).includes(searchQuery)
+  );
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b border-border space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-            <GitPullRequest className="h-4 w-4" />
-            {t('mergeRequests.listTitle')}
-          </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isLoading}
-            className="h-7 px-2"
-          >
-            <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
+    <ScrollArea className="flex-1" viewportClassName="[&>div]:!block">
+      {isLoading && mergeRequests.length === 0 ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-
-        <Input
-          placeholder={t('mergeRequests.searchPlaceholder')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8 text-sm"
-        />
-
-        <div className="flex gap-1">
-          {(['opened', 'merged', 'closed', 'all'] as const).map((state) => (
-            <Button
-              key={state}
-              variant={stateFilter === state ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => onStateFilterChange(state)}
-              className="h-7 text-xs capitalize"
-            >
-              {t(`mergeRequests.filters.${state}`)}
-            </Button>
+      ) : filteredMrs.length === 0 ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          {searchQuery ? t('mergeRequests.noMatching') : t('mergeRequests.noneFound')}
+        </div>
+      ) : (
+        <ul>
+          {filteredMrs.map((mr) => (
+            <MergeRequestItem
+              key={mr.id}
+              mr={mr}
+              isSelected={mr.iid === selectedMrIid}
+              onClick={() => onSelectMr(mr)}
+            />
           ))}
-        </div>
-      </div>
-
-      {/* List */}
-      <ScrollArea className="flex-1">
-        {isLoading && mergeRequests.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : filteredMrs.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            {searchQuery ? t('mergeRequests.noMatching') : t('mergeRequests.noneFound')}
-          </div>
-        ) : (
-          <div className="p-2 space-y-1">
-            {filteredMrs.map((mr) => (
-              <MergeRequestItem
-                key={mr.id}
-                mr={mr}
-                isSelected={mr.iid === selectedMrIid}
-                onClick={() => onSelectMr(mr)}
-              />
-            ))}
-          </div>
-        )}
-      </ScrollArea>
-    </div>
+        </ul>
+      )}
+    </ScrollArea>
   );
 }

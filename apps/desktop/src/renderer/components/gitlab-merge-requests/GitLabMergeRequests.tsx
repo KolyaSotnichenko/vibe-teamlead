@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { SegmentedControl } from '../ui/segmented-control';
+import { IntegrationPageHeader, IntegrationToolbar } from '../shared/integration-page';
 import { MergeRequestList } from './components/MergeRequestList';
 import { MRDetail } from './components/MRDetail';
 import { CreateMergeRequestDialog } from './components/CreateMergeRequestDialog';
 import { useGitLabMRs } from './hooks/useGitLabMRs';
 import { initializeMRReviewListeners } from '../../stores/gitlab';
+
+type MRStateFilter = 'opened' | 'closed' | 'merged' | 'all';
 
 interface GitLabMergeRequestsProps {
   projectId: string;
@@ -14,8 +19,9 @@ interface GitLabMergeRequestsProps {
 }
 
 export function GitLabMergeRequests({ projectId, onOpenSettings }: GitLabMergeRequestsProps) {
-  const { t } = useTranslation('gitlab');
-  const [stateFilter, setStateFilter] = useState<'opened' | 'closed' | 'merged' | 'all'>('opened');
+  const { t } = useTranslation(['gitlab', 'common']);
+  const [stateFilter, setStateFilter] = useState<MRStateFilter>('opened');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // Initialize MR review listeners on mount
@@ -64,54 +70,78 @@ export function GitLabMergeRequests({ projectId, onOpenSettings }: GitLabMergeRe
     );
   }
 
-  return (
-    <div className="flex h-full">
-      {/* List Panel */}
-      <div className="w-1/2 border-r border-border flex flex-col">
-        <MergeRequestList
-          mergeRequests={mergeRequests}
-          isLoading={isLoading}
-          selectedMrIid={selectedMRIid}
-          onSelectMr={(mr) => selectMR(mr.iid)}
-          onRefresh={refresh}
-          stateFilter={stateFilter}
-          onStateFilterChange={setStateFilter}
-        />
-        <div className="p-2 border-t border-border">
-          <Button
-            onClick={() => setShowCreateDialog(true)}
-            className="w-full gap-2"
-            size="sm"
-          >
-            <Plus className="h-4 w-4" />
-            {t('mergeRequests.newMR')}
-          </Button>
-        </div>
-      </div>
+  const filters: Array<{ value: MRStateFilter; label: string }> = (['opened', 'merged', 'closed', 'all'] as const).map(
+    (state) => ({ value: state, label: t(`mergeRequests.filters.${state}`) })
+  );
 
-      {/* Detail Panel */}
-      <div className="flex-1 flex flex-col">
-        {selectedMR ? (
-          <MRDetail
-            mr={selectedMR}
-            reviewResult={reviewResult}
-            reviewProgress={reviewProgress}
-            isReviewing={isReviewing}
-            onRunReview={() => runReview(selectedMR.iid)}
-            onRunFollowupReview={() => runFollowupReview(selectedMR.iid)}
-            onCheckNewCommits={() => checkNewCommits(selectedMR.iid)}
-            onCancelReview={() => cancelReview(selectedMR.iid)}
-            onPostReview={(selectedFindingIds) => postReview(selectedMR.iid, selectedFindingIds)}
-            onPostNote={(body) => postNote(selectedMR.iid, body)}
-            onMergeMR={(mergeMethod) => mergeMR(selectedMR.iid, mergeMethod)}
-            onAssignMR={(userIds) => assignMR(selectedMR.iid, userIds)}
-            onApproveMR={() => approveMR(selectedMR.iid)}
+  return (
+    <div className="flex h-full flex-col">
+      <IntegrationPageHeader title={t('mergeRequests.title')}>
+        <Button variant="outline" onClick={() => setShowCreateDialog(true)}>
+          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+          {t('mergeRequests.newMR')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={refresh}
+          disabled={isLoading}
+          aria-label={t('common:buttons.refresh')}
+          className="text-muted-foreground"
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+        </Button>
+      </IntegrationPageHeader>
+
+      <IntegrationToolbar>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            placeholder={t('mergeRequests.searchPlaceholder')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
           />
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            {t('mergeRequests.selectMR')}
-          </div>
-        )}
+        </div>
+        <SegmentedControl label={t('mergeRequests.filterLabel')} value={stateFilter} options={filters} onChange={setStateFilter} />
+      </IntegrationToolbar>
+
+      <div className="flex min-h-0 flex-1">
+        {/* List Panel */}
+        <div className="flex w-[380px] shrink-0 flex-col border-r border-border">
+          <MergeRequestList
+            mergeRequests={mergeRequests}
+            isLoading={isLoading}
+            selectedMrIid={selectedMRIid}
+            onSelectMr={(mr) => selectMR(mr.iid)}
+            searchQuery={searchQuery}
+          />
+        </div>
+
+        {/* Detail Panel */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {selectedMR ? (
+            <MRDetail
+              mr={selectedMR}
+              reviewResult={reviewResult}
+              reviewProgress={reviewProgress}
+              isReviewing={isReviewing}
+              onRunReview={() => runReview(selectedMR.iid)}
+              onRunFollowupReview={() => runFollowupReview(selectedMR.iid)}
+              onCheckNewCommits={() => checkNewCommits(selectedMR.iid)}
+              onCancelReview={() => cancelReview(selectedMR.iid)}
+              onPostReview={(selectedFindingIds) => postReview(selectedMR.iid, selectedFindingIds)}
+              onPostNote={(body) => postNote(selectedMR.iid, body)}
+              onMergeMR={(mergeMethod) => mergeMR(selectedMR.iid, mergeMethod)}
+              onAssignMR={(userIds) => assignMR(selectedMR.iid, userIds)}
+              onApproveMR={() => approveMR(selectedMR.iid)}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              {t('mergeRequests.selectMR')}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create Dialog */}

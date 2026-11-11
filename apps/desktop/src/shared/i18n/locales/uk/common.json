@@ -753,6 +753,9 @@
       "processingIssues_many": "Обробка {{count}} issue...",
       "processingIssues_other": "Обробка {{count}} issue...",
       "searchPlaceholder": "Пошук issue...",
+      "filterLabel": "Стан issue",
+      "filterOpen": "Відкриті",
+      "filterClosed": "Закриті",
       "filterAll": "Усі"
     },
     "detail": {

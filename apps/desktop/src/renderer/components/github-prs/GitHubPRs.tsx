@@ -6,6 +6,7 @@ import { useGitHubPRs, usePRFiltering } from "./hooks";
 import { PRList, PRDetail, PRFilterBar } from "./components";
 import { Button } from "../ui/button";
 import { ResizablePanels } from "../ui/resizable-panels";
+import { HeaderFigure, IntegrationPageHeader } from "../shared/integration-page";
 
 interface GitHubPRsProps {
   onOpenSettings?: () => void;
@@ -202,31 +203,36 @@ export function GitHubPRs({ onOpenSettings, isActive = false }: GitHubPRsProps) 
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-medium flex items-center gap-2">
-            <GitPullRequest className="h-4 w-4" />
-            {t("prReview.pullRequests")}
-          </h2>
-          {repoFullName && (
+      <IntegrationPageHeader
+        title={t("prReview.pullRequests")}
+        subtitle={
+          repoFullName && (
             <a
               href={`https://github.com/${repoFullName}/pulls`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              className="inline-flex items-center gap-1 hover:text-foreground"
             >
               {repoFullName}
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
             </a>
-          )}
-          <span className="text-xs text-muted-foreground">
-            {prs.length} {t("prReview.open")}
-          </span>
-        </div>
-        <Button variant="ghost" size="icon" onClick={refresh} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          )
+        }
+      >
+        <HeaderFigure>
+          {prs.length} {t("prReview.open")}
+        </HeaderFigure>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={refresh}
+          disabled={isLoading}
+          aria-label={t("buttons.refresh")}
+          className="text-muted-foreground"
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
         </Button>
-      </div>
+      </IntegrationPageHeader>
 
       {/* Content - Resizable split panels */}
       <ResizablePanels

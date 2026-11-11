@@ -740,6 +740,9 @@
       "processingIssues_one": "Processing {{count}} issue...",
       "processingIssues_other": "Processing {{count}} issues...",
       "searchPlaceholder": "Search issues...",
+      "filterLabel": "Issue state",
+      "filterOpen": "Open",
+      "filterClosed": "Closed",
       "filterAll": "All"
     },
     "detail": {
