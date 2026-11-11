@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -101,5 +101,47 @@ describe('unpackDesignPackage', () => {
     await unpackDesignPackage(src, dest);
     expect(existsSync(path.join(dest, 'stale.md'))).toBe(false);
     expect(existsSync(path.join(dest, 'new.md'))).toBe(true);
+  });
+
+  it('refuses a zip whose declared size or entry count exceeds the limits, leaving dest untouched', async () => {
+    const src = path.join(root, 'src');
+    write(path.join(src, 'a.md'), 'xxxxxxxxxx');
+    write(path.join(src, 'b.md'), 'xxxxxxxxxx');
+    const zip = path.join(root, 'p.zip');
+    execFileSync('/usr/bin/zip', ['-qr', zip, '.'], { cwd: src });
+    const dest = path.join(root, 'dest');
+    write(path.join(dest, 'keep.md'));
+    await expect(unpackDesignPackage(zip, dest, { limits: { totalBytes: 5 } })).rejects.toThrow(/too large/i);
+    await expect(unpackDesignPackage(zip, dest, { limits: { files: 1 } })).rejects.toThrow(/too many/i);
+    expect(existsSync(path.join(dest, 'keep.md'))).toBe(true);
+  });
+
+  it('runs unzip without a password prompt and with a timeout', async () => {
+    const log = path.join(root, 'argv.log');
+    const fake = path.join(root, 'fake-unzip.sh');
+    writeFileSync(
+      fake,
+      `#!/bin/sh\necho "$@" >> "${log}"\necho "        0                     0 files"\n`,
+    );
+    chmodSync(fake, 0o755);
+    const zip = path.join(root, 'p.zip');
+    writeFileSync(zip, 'not really a zip');
+    await unpackDesignPackage(zip, path.join(root, 'dest'), { unzip: fake });
+    const lines = readFileSync(log, 'utf8').trim().split('\n');
+    expect(lines.length).toBe(2);
+    for (const l of lines) expect(l).toContain('-P ');
+  });
+
+  it('refuses when dest and source overlap, deleting nothing', async () => {
+    const src = path.join(root, 'src');
+    write(path.join(src, 'a.md'));
+    await expect(unpackDesignPackage(src, src)).rejects.toThrow(/overlap/i);
+    await expect(unpackDesignPackage(src, path.join(root, 'src', 'inner'))).rejects.toThrow(/overlap/i);
+    await expect(unpackDesignPackage(path.join(root, 'src'), root)).rejects.toThrow(/overlap/i);
+    expect(existsSync(path.join(src, 'a.md'))).toBe(true);
+    const zip = path.join(root, 'dest', 'p.zip');
+    write(zip);
+    await expect(unpackDesignPackage(zip, path.join(root, 'dest'))).rejects.toThrow(/overlap/i);
+    expect(existsSync(zip)).toBe(true);
   });
 });

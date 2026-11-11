@@ -9,9 +9,33 @@ import { execFile } from 'node:child_process';
 import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
+const UNZIP_TIMEOUT_MS = 60_000;
+
+/** Runs unzip with stdin closed (no password prompt) and a timeout. */
+function runUnzip(bin: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      bin,
+      args,
+      { timeout: UNZIP_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 },
+      (err, stdout) => (err ? reject(err) : resolve(String(stdout))),
+    );
+    child.stdin?.end();
+  });
+}
+
+function assertNoOverlap(source: string, dest: string): void {
+  const a = path.resolve(source);
+  const b = path.resolve(dest);
+  const inside = (outer: string, inner: string): boolean => {
+    const rel = path.relative(outer, inner);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  if (inside(a, b) || inside(b, a)) {
+    throw new Error('Design package source and destination overlap');
+  }
+}
 
 export const PACKAGE_LIMITS = {
   totalBytes: 60 * 1024 * 1024,
@@ -49,13 +73,25 @@ export async function unpackDesignPackage(
   opts: UnpackOptions = {},
 ): Promise<UnpackResult> {
   const limits = { ...PACKAGE_LIMITS, ...opts.limits };
+  assertNoOverlap(source, dest);
+  try {
+    assertNoOverlap(await realpath(source), await realpath(dest));
+  } catch (e) {
+    if ((e as Error).message.includes('overlap')) throw e;
+  }
   let tmp: string | null = null;
   try {
     const info = await lstat(source);
     let root = source;
     if (info.isFile()) {
       tmp = await mkdtemp(path.join(os.tmpdir(), 'vt-design-pkg-'));
-      await execFileAsync(opts.unzip ?? '/usr/bin/unzip', ['-qq', '-o', source, '-d', tmp]);
+      const bin = opts.unzip ?? '/usr/bin/unzip';
+      const listing = await runUnzip(bin, ['-l', '-P', '', source]);
+      const m = /^\s*(\d+)\s+(\d+)\s+files?\s*$/m.exec(listing);
+      if (!m) throw new Error('Could not read the design package archive');
+      if (Number(m[1]) > limits.totalBytes) throw new Error('Design package is too large');
+      if (Number(m[2]) > limits.files) throw new Error('Design package has too many files');
+      await runUnzip(bin, ['-qq', '-o', '-P', '', source, '-d', tmp]);
       root = tmp;
     } else if (!info.isDirectory()) {
       throw new Error('Design package must be a zip file or a folder');
