@@ -16,8 +16,8 @@
  */
 
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync } from 'fs';
-import { cp, rm } from 'fs/promises';
+import { existsSync, lstatSync, mkdirSync, readdirSync } from 'fs';
+import { copyFile, cp, rm } from 'fs/promises';
 import { dirname, join, resolve } from 'path';
 import { promisify } from 'util';
 
@@ -286,21 +286,55 @@ const APP_DESIGN_FILES = ['.vibe-teamlead/design-system.md', '.vibe-teamlead/des
 export async function copyDesignFilesIntoWorktree(projectPath: string, worktreePath: string): Promise<void> {
   const at = (root: string, rel: string) => join(root, ...rel.split('/'));
   try {
-    // The package and its meta mirror the project's: a removed or replaced package leaves nothing stale
-    for (const rel of [DESIGN_PACKAGE_DIR, DESIGN_PACKAGE_META]) {
-      await rm(at(worktreePath, rel), { recursive: true, force: true });
-    }
     for (const rel of [DESIGN_PACKAGE_DIR, DESIGN_PACKAGE_META, ...APP_DESIGN_FILES]) {
+      // The worktree is the agents' to change: never delete or write through a link they left
+      if (!plainWayDown(worktreePath, rel)) {
+        console.warn(`[WorktreeManager] Warning: Not copying ${rel} into the worktree: a link or a file is in the way`);
+        continue;
+      }
+      const dest = at(worktreePath, rel);
+      // The package and its meta mirror the project's: a removed or replaced package leaves nothing stale
+      if (rel === DESIGN_PACKAGE_DIR || rel === DESIGN_PACKAGE_META) await rm(dest, { recursive: true, force: true });
       const source = at(projectPath, rel);
       if (!existsSync(source)) continue;
-      const dest = at(worktreePath, rel);
       mkdirSync(dirname(dest), { recursive: true });
-      await cp(source, dest, { recursive: true, force: true, verbatimSymlinks: true });
+      await copyRegularFiles(source, dest);
     }
   } catch (err: unknown) {
     // Non-fatal: the agents can still read the design system from their prompt
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[WorktreeManager] Warning: Could not copy the design package into the worktree: ${message}`);
+  }
+}
+
+/**
+ * True when every existing step from the worktree down to `rel` is a real folder (the last may
+ * also be a regular file): no symbolic link and nothing else that would lead outside.
+ */
+function plainWayDown(worktreePath: string, rel: string): boolean {
+  if (!lstatSync(worktreePath, { throwIfNoEntry: false })?.isDirectory()) return false;
+  const parts = rel.split('/');
+  let current = worktreePath;
+  for (let i = 0; i < parts.length; i++) {
+    current = join(current, parts[i]);
+    const st = lstatSync(current, { throwIfNoEntry: false });
+    if (!st) return true;
+    if (st.isSymbolicLink()) return false;
+    const last = i === parts.length - 1;
+    if (!st.isDirectory() && !(last && st.isFile())) return false;
+  }
+  return true;
+}
+
+/** Copies a file or a folder, regular files and folders only: links and special files are skipped. */
+async function copyRegularFiles(source: string, dest: string): Promise<void> {
+  const st = lstatSync(source, { throwIfNoEntry: false });
+  if (!st) return;
+  if (st.isFile()) {
+    await copyFile(source, dest);
+  } else if (st.isDirectory()) {
+    mkdirSync(dest, { recursive: true });
+    for (const name of readdirSync(source)) await copyRegularFiles(join(source, name), join(dest, name));
   }
 }
 
