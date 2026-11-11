@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.36 - 2026-11-11
+
+- Deploy: a numbered list on top says what is still missing (sign in to GitHub, install the GitHub App, connect Vercel, set up deploy), each with its button; it disappears once everything is done.
+- Deploy → Environment: "Sign in to Vercel" from an earlier run no longer stays after Vercel is connected; the connection is read again when you come back to the app.
+- Deploy → Environment: the variables a new database brings (DATABASE_URL, …) show right after it is added.
+- Deploy → Runs: the run graph keeps its height when a long job log opens under it.
+
 ## 2.0.0-beta.35 - 2026-11-11
 
 - Deploy: connect Vercel in Settings → Vercel, with a browser sign-in (the first connect downloads the Vercel CLI once, about 180 MB) or a pasted token (stored encrypted; refused when this Mac can't encrypt it). With a pasted token the CLI is downloaded on the first **Add database** instead, with progress and Cancel; it is never downloaded in the background.
