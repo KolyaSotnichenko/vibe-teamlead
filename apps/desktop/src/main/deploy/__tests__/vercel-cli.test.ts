@@ -380,15 +380,9 @@ describe('runVercelCli', () => {
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('hung')), 4000)),
     ]);
     expect(r.stdout).toContain('done');
-    await new Promise((res) => setTimeout(res, 200));
     const pid = Number(readFileSync(pidFile, 'utf8'));
-    let alive = true;
-    try {
-      process.kill(pid, 0);
-    } catch {
-      alive = false;
-    }
-    expect(alive).toBe(false);
+    await waitFor(() => !alive(pid));
+    expect(alive(pid)).toBe(false);
   }, 10_000);
 
   it('reports exit codes, stderr and lines', async () => {
@@ -421,28 +415,36 @@ describe('runVercelCli', () => {
     }
   };
 
+  async function waitFor(check: () => boolean, ms = 5000) {
+    const end = Date.now() + ms;
+    while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+  }
+  const pidReady = (f: string) => () => existsSync(f) && /^\d+\s*$/.test(readFileSync(f, 'utf8'));
+
   it('kills the whole process group on timeout, without leaking the token', async () => {
-    const { p, pidFile } = await groupDemo({ timeoutMs: 400 });
+    const { p, pidFile } = await groupDemo({ timeoutMs: 2500 });
+    await waitFor(pidReady(pidFile), 2000);
     const err = await p.then(() => null, (e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect(err?.message).toMatch(/timed out/);
     expect(err?.message).not.toContain('sekret-token');
     const pid = Number(readFileSync(pidFile, 'utf8'));
-    await new Promise((r) => setTimeout(r, 200));
-    expect(existsSync(pidFile) && alive(pid)).toBe(false);
-  });
+    await waitFor(() => !alive(pid));
+    expect(alive(pid)).toBe(false);
+  }, 15_000);
 
   it('kills the group on abort', async () => {
     const ctrl = new AbortController();
     const { p, pidFile } = await groupDemo({ signal: ctrl.signal });
-    setTimeout(() => ctrl.abort(), 300);
+    await waitFor(pidReady(pidFile));
+    ctrl.abort();
     const err = await p.then(() => null, (e: Error) => e);
     expect(err?.message).toMatch(/cancelled/);
     expect(err?.message).not.toContain('sekret-token');
     const pid = Number(readFileSync(pidFile, 'utf8'));
-    await new Promise((r) => setTimeout(r, 200));
+    await waitFor(() => !alive(pid));
     expect(alive(pid)).toBe(false);
-  });
+  }, 15_000);
 
   it('a missing binary rejects without the token', async () => {
     const err = await runVercelCli([], { binary: path.join(work, 'nope'), configDir: work, token: 'sekret-token' }).then(() => null, (e: Error) => e);
