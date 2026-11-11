@@ -1347,3 +1347,15 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .vt-toast-enter[data-state='open'] { animation: none; }
 }
+
+/* Deploy → Runs: a running job's progress bar, and the line into a running column, fill left to right */
+@keyframes vt-deploy-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.vt-deploy-progress { animation: vt-deploy-fill 2.4s ease-in-out infinite; }
+.vt-deploy-line { animation: vt-deploy-fill 1.6s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .vt-deploy-progress { animation: none; width: 100%; }
+  .vt-deploy-line { animation: none; width: 100%; }
+}

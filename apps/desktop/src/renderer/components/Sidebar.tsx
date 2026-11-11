@@ -22,7 +22,8 @@ import {
   PanelLeft,
   PanelLeftClose,
   FileInput,
-  ChevronDown
+  ChevronDown,
+  Rocket
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
@@ -49,7 +50,7 @@ import { TeamStatus } from './sidebar/TeamStatus';
 import { BriefImportDialog } from './brief-import';
 import type { GitStatus } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'preview' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs';
+export type SidebarView = 'kanban' | 'preview' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs' | 'deploy';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -74,6 +75,7 @@ const baseNavItems: NavItem[] = [
   { id: 'preview', labelKey: 'navigation:items.preview', icon: MonitorPlay, shortcut: 'V', group: 'build' },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A', group: 'build' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W', group: 'build' },
+  { id: 'deploy', labelKey: 'navigation:items.deploy', icon: Rocket, shortcut: 'Y', group: 'build' },
   { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D', group: 'plan' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I', group: 'plan' },
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' },

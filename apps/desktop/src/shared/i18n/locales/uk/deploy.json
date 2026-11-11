@@ -1,0 +1,64 @@
+{
+  "title": "Деплой",
+  "tabs": {
+    "runs": "Запуски"
+  },
+  "loading": "Завантажуємо запуски GitHub Actions…",
+  "empty": {
+    "noRepo": "У цього проєкту ще немає репозиторію на GitHub",
+    "noRepoBody": "Під’єднайте репозиторій GitHub у налаштуваннях проєкту, і його запуски Actions з’являться тут.",
+    "noRuns": "Запусків GitHub Actions ще немає",
+    "noRunsBody": "Запуски з’являться тут, щойно стартує workflow з .github/workflows."
+  },
+  "errors": {
+    "no-connection": "GitHub не під’єднано, тому запуски не прочитати.",
+    "connect": "Під’єднати GitHub",
+    "permissions": "GitHub App Vibe Teamlead не може читати Actions цього репозиторію. Надайте їй доступ до репозиторію.",
+    "manageAccess": "Керувати доступом на GitHub",
+    "not-found": "GitHub не знаходить цей репозиторій, або застосунок не має до нього доступу.",
+    "rate-limit": "Ліміт запитів GitHub вичерпано. Пауза до {{time}}",
+    "rateLimitNoTime": "Ліміт запитів GitHub вичерпано. Поки що пауза",
+    "unavailable": "GitHub не відповідає; пробуємо ще раз"
+  },
+  "signIn": {
+    "title": "Під’єднати GitHub",
+    "description": "Увійдіть через GitHub, щоб Vibe Teamlead міг читати запуски Actions цього репозиторію."
+  },
+  "runs": {
+    "listLabel": "Запуски GitHub Actions"
+  },
+  "run": {
+    "openOnGitHub": "Відкрити на GitHub",
+    "production": "Продакшн"
+  },
+  "graph": {
+    "stage": "Етап {{n}}",
+    "other": "Інші джоби",
+    "deploy": "Деплой",
+    "loading": "Завантажуємо джоби цього запуску…",
+    "empty": "У цього запуску ще немає джобів"
+  },
+  "status": {
+    "queued": "У черзі",
+    "running": "Виконується",
+    "success": "Пройшло",
+    "failure": "Впало",
+    "skipped": "Пропущено",
+    "cancelled": "Скасовано"
+  },
+  "job": {
+    "pick": "Клацніть джоб, щоб побачити його кроки й лог.",
+    "steps": "Кроки",
+    "noSteps": "Кроків ще немає",
+    "fullLog": "Повний лог на GitHub",
+    "deployment": "Деплой",
+    "deploymentLog": "Лог деплою",
+    "noDetails": "Хостинг ще нічого не повідомив"
+  },
+  "log": {
+    "label": "Лог {{job}}",
+    "loading": "Завантажуємо лог…",
+    "pending": "Лог з’явиться, коли джоб завершиться",
+    "expired": "GitHub більше не зберігає цей лог"
+  }
+}

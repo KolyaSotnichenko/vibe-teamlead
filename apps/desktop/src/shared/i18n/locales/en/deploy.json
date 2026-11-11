@@ -1,0 +1,64 @@
+{
+  "title": "Deploy",
+  "tabs": {
+    "runs": "Runs"
+  },
+  "loading": "Loading GitHub Actions runs…",
+  "empty": {
+    "noRepo": "This project has no GitHub repository yet",
+    "noRepoBody": "Connect a GitHub repository in the project settings, and its Actions runs will appear here.",
+    "noRuns": "No GitHub Actions runs yet",
+    "noRunsBody": "Runs appear here as soon as a workflow in .github/workflows starts."
+  },
+  "errors": {
+    "no-connection": "GitHub isn’t connected, so the runs can’t be read.",
+    "connect": "Connect GitHub",
+    "permissions": "The Vibe Teamlead GitHub App can’t read this repository’s Actions. Give it access to the repository.",
+    "manageAccess": "Manage access on GitHub",
+    "not-found": "GitHub can’t find this repository, or the app has no access to it.",
+    "rate-limit": "GitHub’s rate limit is reached. Paused until {{time}}",
+    "rateLimitNoTime": "GitHub’s rate limit is reached. Paused for now",
+    "unavailable": "GitHub isn’t responding; retrying"
+  },
+  "signIn": {
+    "title": "Connect GitHub",
+    "description": "Sign in with GitHub so Vibe Teamlead can read this repository’s Actions runs."
+  },
+  "runs": {
+    "listLabel": "GitHub Actions runs"
+  },
+  "run": {
+    "openOnGitHub": "Open on GitHub",
+    "production": "Production"
+  },
+  "graph": {
+    "stage": "Stage {{n}}",
+    "other": "Other jobs",
+    "deploy": "Deploy",
+    "loading": "Loading this run’s jobs…",
+    "empty": "This run has no jobs yet"
+  },
+  "status": {
+    "queued": "Queued",
+    "running": "Running",
+    "success": "Passed",
+    "failure": "Failed",
+    "skipped": "Skipped",
+    "cancelled": "Cancelled"
+  },
+  "job": {
+    "pick": "Click a job to see its steps and log.",
+    "steps": "Steps",
+    "noSteps": "No steps yet",
+    "fullLog": "Full log on GitHub",
+    "deployment": "Deployment",
+    "deploymentLog": "Deployment log",
+    "noDetails": "No details from the host yet"
+  },
+  "log": {
+    "label": "Log of {{job}}",
+    "loading": "Loading the log…",
+    "pending": "Log appears when the job finishes",
+    "expired": "GitHub no longer keeps this log"
+  }
+}

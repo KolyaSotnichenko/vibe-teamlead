@@ -1,0 +1,241 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { DeployJob, DeployJobLog, DeployRun, DeployRunsState, RunGraph } from '../../../../shared/types/deploy';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key),
+    i18n: { language: 'en' },
+  }),
+}));
+
+vi.mock('../../project-settings/GitHubOAuthFlow', () => ({
+  GitHubOAuthFlow: ({ onSuccess }: { onSuccess: (token: string) => void }) => (
+    <button type="button" onClick={() => onSuccess('ghu_x')}>oauth-flow</button>
+  ),
+}));
+
+import { DeployPage } from '../DeployPage';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+const run = (id: number, over: Partial<DeployRun> = {}): DeployRun => ({
+  id, number: id, name: 'CI', title: `Merge task ${id}`, branch: 'main', sha: `abcdef${id}123456`, event: 'push',
+  status: 'completed', conclusion: 'success', startedAt: '2026-11-11T10:00:00Z', updatedAt: '2026-11-11T10:05:00Z',
+  htmlUrl: `https://github.com/acme/app/actions/runs/${id}`, workflowPath: '.github/workflows/ci.yml', ...over,
+});
+
+const jobs: DeployJob[] = [
+  { id: 11, name: 'typecheck', status: 'completed', conclusion: 'success', startedAt: '2026-11-11T10:00:00Z', completedAt: '2026-11-11T10:00:18Z',
+    steps: [{ name: 'Set up job', status: 'completed', conclusion: 'success', number: 1, startedAt: '2026-11-11T10:00:00Z', completedAt: '2026-11-11T10:00:04Z' },
+      { name: 'npm run typecheck', status: 'completed', conclusion: 'success', number: 2 }] },
+  { id: 12, name: 'e2e', status: 'in_progress', startedAt: '2026-11-11T10:00:20Z',
+    steps: [{ name: 'npx playwright test', status: 'in_progress', number: 1 }] },
+  { id: 13, name: 'unit', status: 'completed', conclusion: 'failure', steps: [{ name: 'npm test', status: 'completed', conclusion: 'failure', number: 1 }] },
+];
+
+const graph: RunGraph = {
+  columns: [
+    { stage: 'level-1', nodes: [
+      { key: 'typecheck', label: 'typecheck', jobIds: [11], status: 'success' },
+      { key: 'unit', label: 'unit', jobIds: [13], status: 'failure' },
+    ] },
+    { stage: 'level-2', nodes: [{ key: 'e2e', label: 'e2e', jobIds: [12], status: 'running' }] },
+    { stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'queued' }] },
+  ],
+};
+
+const base = (over: Partial<DeployRunsState> = {}): DeployRunsState => ({
+  projectId: 'p1', repo: { owner: 'acme', repo: 'app' },
+  runs: [run(18, { status: 'in_progress', conclusion: undefined }), run(17), run(16, { conclusion: 'failure' })],
+  selected: { runId: 18, jobs, graph },
+  productionUrl: 'https://app.vercel.app',
+  nextPollAt: '2026-11-11T10:06:00Z',
+  ...over,
+});
+
+function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' }) {
+  let push: ((s: DeployRunsState) => void) | undefined;
+  const unsubscribe = vi.fn();
+  const deploy = {
+    startRuns: vi.fn(async () => ({ success: true })),
+    selectRun: vi.fn(async () => ({ success: true })),
+    stopRuns: vi.fn(async () => ({ success: true })),
+    jobLog: vi.fn(async () => ({ success: true, data: log })),
+    onRunsUpdate: vi.fn((cb: (s: DeployRunsState) => void) => { push = cb; return unsubscribe; }),
+  };
+  const openExternal = vi.fn();
+  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal };
+  const view = render(<DeployPage projectId="p1" />);
+  const emit = (s: DeployRunsState) => act(() => push?.(s));
+  return { deploy, emit, view, unsubscribe, openExternal };
+}
+
+describe('DeployPage', () => {
+  it('starts polling on mount and shows the runs with the newest selected', () => {
+    const { deploy, emit } = setup();
+    expect(deploy.startRuns).toHaveBeenCalledWith('p1', undefined);
+    expect(screen.getByText('deploy:loading')).toBeInTheDocument();
+    emit(base());
+    const list = screen.getByRole('list', { name: 'deploy:runs.listLabel' });
+    const rows = within(list).getAllByRole('button');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveAttribute('aria-current', 'true');
+    expect(rows[1]).not.toHaveAttribute('aria-current');
+    expect(within(rows[0]).getByText('Merge task 18')).toBeInTheDocument();
+    expect(within(rows[0]).getByText(/#18 · main/)).toBeInTheDocument();
+    // header of the selected run
+    expect(screen.getByRole('heading', { name: /Merge task 18/ })).toBeInTheDocument();
+    expect(screen.getByText(/push · main · abcdef1/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'app.vercel.app' })).toBeInTheDocument();
+  });
+
+  it('ignores updates for another project', () => {
+    const { emit } = setup();
+    emit(base({ projectId: 'p2' }));
+    expect(screen.getByText('deploy:loading')).toBeInTheDocument();
+  });
+
+  it('selects a run, and shows its header with a loading line until its graph arrives', () => {
+    const { deploy, emit } = setup();
+    emit(base());
+    fireEvent.click(screen.getByText('Merge task 17'));
+    expect(deploy.selectRun).toHaveBeenCalledWith('p1', 17);
+    expect(screen.getByRole('heading', { name: /Merge task 17/ })).toBeInTheDocument();
+    expect(screen.getByText('deploy:graph.loading')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^e2e/ })).not.toBeInTheDocument();
+    emit(base({ selected: { runId: 17, jobs, graph } }));
+    expect(screen.queryByText('deploy:graph.loading')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^e2e/ })).toBeInTheDocument();
+  });
+
+  it('draws the graph with stage labels and status markers', () => {
+    const { emit } = setup();
+    emit(base());
+    expect(screen.getByText('deploy:graph.stage {"n":1}')).toBeInTheDocument();
+    expect(screen.getByText('deploy:graph.deploy')).toBeInTheDocument();
+    const running = screen.getByRole('button', { name: /^e2e/ });
+    expect(running).toHaveAttribute('data-status', 'running');
+    expect(running.querySelector('[data-marker="running"]')).not.toBeNull();
+    expect(running.querySelector('[data-progress]')).not.toBeNull();
+    const failed = screen.getByRole('button', { name: /^unit/ });
+    expect(failed).toHaveAttribute('data-status', 'failure');
+    expect(failed.querySelector('[data-marker="failure"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /^typecheck/ }).querySelector('[data-marker="success"]')).not.toBeNull();
+    // the line into the running column animates
+    expect(document.querySelectorAll('[data-connector="live"]')).toHaveLength(1);
+  });
+
+  it('shows the steps of a clicked completed job and its log', async () => {
+    const { deploy, emit } = setup({ state: 'ready', text: 'line one\nline two' });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    expect(screen.getByText('npm run typecheck')).toBeInTheDocument();
+    expect(screen.getByText('0:04')).toBeInTheDocument();
+    await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledWith('p1', 11));
+    expect(await screen.findByText(/line one/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'deploy:job.fullLog' }));
+    expect(window.electronAPI.openExternal).toHaveBeenCalledWith('https://github.com/acme/app/actions/runs/18/job/11');
+  });
+
+  it('keeps the last 2 000 lines of a long log', async () => {
+    const text = Array.from({ length: 2500 }, (_, i) => `line-${i + 1}`).join('\n');
+    const { emit } = setup({ state: 'ready', text });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    const log = await screen.findByTestId('job-log');
+    expect(log.textContent?.startsWith('line-501\n')).toBe(true);
+    expect(log.textContent?.trimEnd().endsWith('line-2500')).toBe(true);
+  });
+
+  it('does not fetch the log of a running job', () => {
+    const { deploy, emit } = setup();
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^e2e/ }));
+    expect(screen.getByText('npx playwright test')).toBeInTheDocument();
+    expect(screen.getByText('deploy:log.pending')).toBeInTheDocument();
+    expect(deploy.jobLog).not.toHaveBeenCalled();
+  });
+
+  it('says when GitHub no longer keeps a log', async () => {
+    const { emit } = setup({ state: 'expired' });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    expect(await screen.findByText('deploy:log.expired')).toBeInTheDocument();
+  });
+
+  it('shows a log error with the page-level message for its kind', async () => {
+    const { emit } = setup({ state: 'error', error: { kind: 'permissions', message: 'x' } });
+    emit(base());
+    fireEvent.click(screen.getByRole('button', { name: /^typecheck/ }));
+    expect(await screen.findByText('deploy:errors.permissions')).toBeInTheDocument();
+  });
+
+  it('shows "no repository" when the project has none', () => {
+    const { emit } = setup();
+    emit({ projectId: 'p1', runs: [], nextPollAt: '' });
+    expect(screen.getByText('deploy:empty.noRepo')).toBeInTheDocument();
+  });
+
+  it('shows "no runs" when there are none', () => {
+    const { emit } = setup();
+    emit(base({ runs: [], selected: undefined }));
+    expect(screen.getByText('deploy:empty.noRuns')).toBeInTheDocument();
+  });
+
+  it('offers GitHub sign-in when not connected, and restarts after it', () => {
+    const { deploy, emit } = setup();
+    emit(base({ runs: [], selected: undefined, error: { kind: 'no-connection', message: '' } }));
+    expect(screen.getByText('deploy:errors.no-connection')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'deploy:errors.connect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'oauth-flow' }));
+    expect(deploy.startRuns).toHaveBeenCalledTimes(2);
+  });
+
+  it('links to the app installations on a permissions error', () => {
+    const { emit, openExternal } = setup();
+    emit(base({ runs: [], selected: undefined, error: { kind: 'permissions', message: '' } }));
+    expect(screen.getByText('deploy:errors.permissions')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'deploy:errors.manageAccess' }));
+    expect(openExternal).toHaveBeenCalledWith('https://github.com/settings/installations');
+  });
+
+  it('says until when it is paused on a rate limit', () => {
+    const { emit } = setup();
+    const resetAt = new Date(2026, 10, 11, 14, 5).toISOString();
+    emit(base({ error: { kind: 'rate-limit', resetAt, message: '' } }));
+    expect(screen.getByText('deploy:errors.rate-limit {"time":"14:05"}')).toBeInTheDocument();
+    // runs already known stay on screen
+    expect(screen.getByText('Merge task 17')).toBeInTheDocument();
+  });
+
+  it('says GitHub is not responding', () => {
+    const { emit } = setup();
+    emit(base({ error: { kind: 'unavailable', message: '' } }));
+    expect(screen.getByText('deploy:errors.unavailable')).toBeInTheDocument();
+  });
+
+  it('stops polling while the window is hidden and on unmount', () => {
+    const { deploy, emit, view, unsubscribe } = setup();
+    emit(base());
+    fireEvent.click(screen.getByText('Merge task 17'));
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(deploy.stopRuns).toHaveBeenCalledWith('p1');
+    hidden.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(deploy.startRuns).toHaveBeenLastCalledWith('p1', 17);
+    hidden.mockRestore();
+    deploy.stopRuns.mockClear();
+    view.unmount();
+    expect(deploy.stopRuns).toHaveBeenCalledWith('p1');
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+});

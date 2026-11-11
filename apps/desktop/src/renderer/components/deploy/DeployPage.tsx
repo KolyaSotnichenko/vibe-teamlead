@@ -1,0 +1,197 @@
+/**
+ * Sidebar → Deploy: the project's GitHub Actions runs, live (layout B: runs on the left, the selected
+ * run's graph and the clicked job on the right). Polling runs in the main process while this page is
+ * open and the window is visible.
+ */
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { DeployRunsState, GitHubError } from '../../../shared/types/deploy';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { GitHubOAuthFlow } from '../project-settings/GitHubOAuthFlow';
+import { EmptyState } from '../task-detail/workspace/workspace-ui';
+import { cn } from '../../lib/utils';
+import { RunsList } from './RunsList';
+import { RunGraph } from './RunGraph';
+import { JobPanel } from './JobPanel';
+import { displayUrl, useGitHubErrorText } from './status';
+
+export const GITHUB_INSTALLATIONS_URL = 'https://github.com/settings/installations';
+
+const ATTENTION: ReadonlySet<GitHubError['kind']> = new Set(['no-connection', 'permissions', 'not-found']);
+
+function ErrorNotice({ error, onConnect }: { error: GitHubError; onConnect: () => void }) {
+  const { t } = useTranslation(['deploy']);
+  const errorText = useGitHubErrorText();
+  return (
+    <div
+      role="status"
+      className={cn(
+        'flex flex-wrap items-center gap-3 border-l-2 bg-muted px-3 py-2 text-sm',
+        ATTENTION.has(error.kind) ? 'border-destructive text-foreground' : 'border-foreground text-muted-foreground'
+      )}
+    >
+      <span className="min-w-0 flex-1">{errorText(error)}</span>
+      {error.kind === 'no-connection' && (
+        <Button size="sm" onClick={onConnect}>
+          {t('deploy:errors.connect')}
+        </Button>
+      )}
+      {error.kind === 'permissions' && (
+        <Button size="sm" variant="outline" onClick={() => window.electronAPI.openExternal(GITHUB_INSTALLATIONS_URL)}>
+          {t('deploy:errors.manageAccess')}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function DeployPage({ projectId }: { projectId: string }) {
+  const { t } = useTranslation(['deploy']);
+  const [state, setState] = useState<DeployRunsState | null>(null);
+  const [pickedRunId, setPickedRunId] = useState<number | undefined>();
+  const [nodeKey, setNodeKey] = useState<string | undefined>();
+  const [signingIn, setSigningIn] = useState(false);
+
+  const runs = state?.runs ?? [];
+  // A picked run that dropped off the list falls back to the poller's choice, as in the main process
+  const picked = runs.some((r) => r.id === pickedRunId) ? pickedRunId : undefined;
+  const selectedId = picked ?? state?.selected?.runId ?? runs[0]?.id;
+  const selectedRef = useRef<number | undefined>(selectedId);
+  selectedRef.current = selectedId;
+
+  useEffect(() => {
+    const deploy = window.electronAPI.deploy;
+    const unsubscribe = deploy.onRunsUpdate((next) => {
+      if (next.projectId === projectId) setState(next);
+    });
+    const start = () => void deploy.startRuns(projectId, selectedRef.current);
+    const stop = () => void deploy.stopRuns(projectId);
+    const onVisibility = () => (document.visibilityState === 'hidden' ? stop() : start());
+    if (document.visibilityState !== 'hidden') start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      unsubscribe();
+      stop();
+    };
+  }, [projectId]);
+
+  const selectRun = (runId: number) => {
+    if (runId === selectedId) return;
+    setPickedRunId(runId);
+    setNodeKey(undefined);
+    void window.electronAPI.deploy.selectRun(projectId, runId);
+  };
+
+  const run = runs.find((r) => r.id === selectedId);
+  // Only the graph of the run on screen: while a switch is under way, the old run's graph stays hidden
+  const selected = state?.selected && state.selected.runId === selectedId ? state.selected : undefined;
+  const node = selected?.graph.columns.flatMap((c) => c.nodes).find((n) => n.key === nodeKey);
+
+  let body: React.ReactNode;
+  if (!state) {
+    body = <p className="text-sm text-muted-foreground">{t('deploy:loading')}</p>;
+  } else if (!state.repo) {
+    body = <EmptyState title={t('deploy:empty.noRepo')} body={t('deploy:empty.noRepoBody')} />;
+  } else if (runs.length === 0) {
+    body = state.error ? null : <EmptyState title={t('deploy:empty.noRuns')} body={t('deploy:empty.noRunsBody')} />;
+  } else {
+    body = (
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-4">
+        <div className="min-h-0 overflow-y-auto">
+          <RunsList runs={runs} selectedId={selectedId} onSelect={selectRun} />
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+          {run && (
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold text-foreground">{`#${run.number} ${run.title}`}</h2>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-3">
+                  <span className="font-mono text-xs text-muted-foreground">{`${run.event} · ${run.branch} · ${run.sha.slice(0, 7)}`}</span>
+                  {run.htmlUrl && (
+                    <button
+                      type="button"
+                      onClick={() => window.electronAPI.openExternal(run.htmlUrl)}
+                      className="text-xs text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {t('deploy:run.openOnGitHub')}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {state.productionUrl && (
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{t('deploy:run.production')}</span>
+                  <button
+                    type="button"
+                    onClick={() => window.electronAPI.openExternal(state.productionUrl as string)}
+                    className="font-mono text-[13px] font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {displayUrl(state.productionUrl)}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {selected && run ? (
+            <>
+              {selected.graph.columns.length > 0 ? (
+                <RunGraph graph={selected.graph} selectedKey={nodeKey} onSelect={(n) => setNodeKey(n.key === nodeKey ? undefined : n.key)} />
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('deploy:graph.empty')}</p>
+              )}
+              {node ? (
+                <JobPanel key={node.key} projectId={projectId} run={run} node={node} jobs={selected.jobs} pollKey={state.nextPollAt} />
+              ) : (
+                selected.graph.columns.length > 0 && <p className="text-sm text-muted-foreground">{t('deploy:job.pick')}</p>
+              )}
+            </>
+          ) : (
+            <p role="status" aria-busy="true" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span aria-hidden="true" className="vt-breathe inline-block h-2 w-2 bg-foreground" />
+              {t('deploy:graph.loading')}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div role="tablist" aria-label={t('deploy:title')} className="flex border-b border-border px-6">
+        <button
+          type="button"
+          role="tab"
+          aria-selected="true"
+          className="min-h-11 border-b-2 border-foreground px-3.5 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t('deploy:tabs.runs')}
+        </button>
+      </div>
+      <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-4 p-6">
+        {state?.repo && state.error && <ErrorNotice error={state.error} onConnect={() => setSigningIn(true)} />}
+        {body}
+      </div>
+
+      <Dialog open={signingIn} onOpenChange={setSigningIn}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('deploy:signIn.title')}</DialogTitle>
+            <DialogDescription>{t('deploy:signIn.description')}</DialogDescription>
+          </DialogHeader>
+          {signingIn && (
+            <GitHubOAuthFlow
+              onSuccess={() => {
+                setSigningIn(false);
+                void window.electronAPI.deploy.startRuns(projectId, selectedRef.current);
+              }}
+              onCancel={() => setSigningIn(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

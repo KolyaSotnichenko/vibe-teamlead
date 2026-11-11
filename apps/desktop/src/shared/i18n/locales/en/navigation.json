@@ -21,7 +21,8 @@
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
     "docs": "Documentation",
-    "preview": "Preview"
+    "preview": "Preview",
+    "deploy": "Deploy"
   },
   "actions": {
     "settings": "Settings",

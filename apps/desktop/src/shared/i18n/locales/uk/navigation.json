@@ -21,7 +21,8 @@
     "worktrees": "Worktree",
     "agentTools": "Огляд MCP",
     "docs": "Документація",
-    "preview": "Перегляд"
+    "preview": "Перегляд",
+    "deploy": "Деплой"
   },
   "actions": {
     "settings": "Налаштування",

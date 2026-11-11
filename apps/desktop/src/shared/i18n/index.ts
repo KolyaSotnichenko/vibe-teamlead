@@ -13,6 +13,7 @@ import enGitlab from './locales/en/gitlab.json';
 import enTaskReview from './locales/en/taskReview.json';
 import enTerminal from './locales/en/terminal.json';
 import enErrors from './locales/en/errors.json';
+import enDeploy from './locales/en/deploy.json';
 
 // Import Ukrainian translation resources
 import ukCommon from './locales/uk/common.json';
@@ -26,6 +27,7 @@ import ukGitlab from './locales/uk/gitlab.json';
 import ukTaskReview from './locales/uk/taskReview.json';
 import ukTerminal from './locales/uk/terminal.json';
 import ukErrors from './locales/uk/errors.json';
+import ukDeploy from './locales/uk/deploy.json';
 
 export const defaultNS = 'common';
 
@@ -41,7 +43,8 @@ export const resources = {
     gitlab: enGitlab,
     taskReview: enTaskReview,
     terminal: enTerminal,
-    errors: enErrors
+    errors: enErrors,
+    deploy: enDeploy
   },
   uk: {
     common: ukCommon,
@@ -54,7 +57,8 @@ export const resources = {
     gitlab: ukGitlab,
     taskReview: ukTaskReview,
     terminal: ukTerminal,
-    errors: ukErrors
+    errors: ukErrors,
+    deploy: ukDeploy
   }
 } as const;
 
@@ -66,7 +70,7 @@ i18n
     fallbackLng: 'en',
     supportedLngs: ['en', 'uk'],
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors'],
+    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors', 'deploy'],
     interpolation: {
       escapeValue: false // React already escapes values
     },
