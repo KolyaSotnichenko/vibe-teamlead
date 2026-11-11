@@ -2,6 +2,8 @@
 
 Deploy, in the sidebar (shortcut Y), shows what happens to your project's code after it is pushed: the GitHub Actions runs of its repository, live, and where the code went live.
 
+Until everything is ready, a numbered list on top says what is still missing: sign in to GitHub, install the Vibe Teamlead GitHub App, connect Vercel, set up deploy for the project. Each step has its button; done steps are ticked, and the list disappears once all are done.
+
 ## Runs
 
 The latest runs of the project's GitHub repository are listed on the left. Pick one and its graph opens on the right: the workflow's jobs, grouped into stages by their `needs`. Jobs that don't depend on each other sit in the same stage; the ones that wait for them come in the next.
