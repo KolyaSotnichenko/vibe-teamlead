@@ -69,6 +69,7 @@ const arr = (v: unknown): Obj[] => (Array.isArray(v) ? (v as Obj[]) : []);
 function mapRun(r: Obj): DeployRun {
   const run: DeployRun = {
     id: r.id as number,
+    number: typeof r.run_number === 'number' ? r.run_number : 0,
     name: str(r.name),
     title: str(r.display_title) || str(r.name),
     branch: str(r.head_branch),
@@ -98,6 +99,10 @@ function mapJob(j: Obj): DeployJob {
       };
       const c = optStr(s.conclusion);
       if (c) step.conclusion = c;
+      const started = optStr(s.started_at);
+      if (started) step.startedAt = started;
+      const completed = optStr(s.completed_at);
+      if (completed) step.completedAt = completed;
       return step;
     }),
   };

@@ -16,6 +16,8 @@ export interface GitHubError {
 
 export interface DeployRun {
   id: number;
+  /** The run's number in its workflow (`#17` on GitHub). */
+  number: number;
   name: string;
   title: string;
   branch: string;
@@ -34,6 +36,8 @@ export interface DeployStep {
   status: DeployStatus;
   conclusion?: string;
   number: number;
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export interface DeployJob {

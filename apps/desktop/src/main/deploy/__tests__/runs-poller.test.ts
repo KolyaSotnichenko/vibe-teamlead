@@ -5,7 +5,7 @@ import { createRunsPoller, fetchJobLog } from '../runs-poller';
 
 const run = (id: number, status: DeployRun['status'] = 'completed'): DeployRun => ({
   id, name: 'CI', title: `run ${id}`, branch: 'main', sha: `sha${id}`, event: 'push', status,
-  startedAt: '', updatedAt: '', htmlUrl: '', workflowPath: '.github/workflows/ci.yml',
+  number: 1, startedAt: '', updatedAt: '', htmlUrl: '', workflowPath: '.github/workflows/ci.yml',
 });
 const project = (id = 'p1') => ({ id, path: '/x' }) as unknown as Project;
 

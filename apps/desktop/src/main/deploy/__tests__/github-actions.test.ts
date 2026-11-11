@@ -35,7 +35,7 @@ describe('runs', () => {
     expect(calls).toEqual(['/repos/acme/app/actions/runs?per_page=20']);
     expect(runs).toHaveLength(2);
     expect(runs[0]).toEqual({
-      id: 101, name: 'CI', title: 'Add login', branch: 'main', sha: 'abc123', event: 'push',
+      id: 101, number: 17, name: 'CI', title: 'Add login', branch: 'main', sha: 'abc123', event: 'push',
       status: 'completed', conclusion: 'success', startedAt: '2026-11-10T10:00:00Z',
       updatedAt: '2026-11-10T10:05:00Z', htmlUrl: 'https://github.com/acme/app/actions/runs/101',
       workflowPath: '.github/workflows/ci.yml',
@@ -59,7 +59,7 @@ describe('jobs', () => {
       id: 555, name: 'build', status: 'completed', conclusion: 'failure',
       startedAt: '2026-11-10T10:00:05Z', completedAt: '2026-11-10T10:04:00Z',
       steps: [
-        { name: 'Set up job', status: 'completed', conclusion: 'success', number: 1 },
+        { name: 'Set up job', status: 'completed', conclusion: 'success', number: 1, startedAt: '2026-11-10T10:00:05Z', completedAt: '2026-11-10T10:00:09Z' },
         { name: 'npm test', status: 'completed', conclusion: 'failure', number: 2 },
       ],
     }]);
