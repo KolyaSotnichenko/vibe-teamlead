@@ -19,6 +19,8 @@ const READ_AT_ONCE = 32;
 const DESIGN_SYSTEM_MAX = 12_000;
 const FILES_LISTED = 80;
 const SAMPLES_PER_FILE = 2;
+const REBUILD_COMPONENTS = 40;
+const REBUILD_FILES = 5;
 
 /** Every tracked UI file of the project, checked whole against the design tokens. */
 export async function auditProjectDesign(projectPath: string, tokens: DesignTokens, git = 'git'): Promise<{ findings: DesignFinding[]; uiFiles: string[] }> {
@@ -61,7 +63,7 @@ export function matchPackageComponents(uiFiles: string[], pkg: Pick<DesignPackag
     const files = outside.filter((file) => {
       const parts = file.split('/');
       const base = parts[parts.length - 1].replace(/\.[^.]*$/, '').toLowerCase();
-      return base === wanted || parts.slice(0, -1).some((folder) => folder.toLowerCase() === wanted);
+      return base === wanted || parts.length > 1 && parts[parts.length - 2].toLowerCase() === wanted;
     });
     if (files.length) result.push({ component: name, files });
   }
@@ -95,7 +97,11 @@ export function redesignBrief(input: RedesignInput): string {
         '',
         'The project already has its own versions of these components from the design package. None of them counts as already built. Rebuild each one from the package spec in place, keeping its exports and call sites so the screens that use it keep working. One task per component, before the screens.',
         '',
-        ...matches.map(({ component, files }) => `- ${component}: ${files.map((file) => `\`${file}\``).join(', ')}`),
+        ...matches.slice(0, REBUILD_COMPONENTS).map(({ component, files }) => {
+          const more = files.length > REBUILD_FILES ? `, …and ${files.length - REBUILD_FILES} more` : '';
+          return `- ${component}: ${files.slice(0, REBUILD_FILES).map((file) => `\`${file}\``).join(', ')}${more}`;
+        }),
+        ...(matches.length > REBUILD_COMPONENTS ? [`- …and ${matches.length - REBUILD_COMPONENTS} more components`] : []),
       ]
     : [];
 

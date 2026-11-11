@@ -81,4 +81,20 @@ describe('matchPackageComponents: the project\'s look-alikes of package componen
     expect(withPkg).toContain('src/components/ui/button.tsx');
     expect(redesignBrief(base)).not.toContain('Package components to rebuild');
   });
+
+  it('matches a folder only when it is the nearest parent', () => {
+    expect(matchPackageComponents(['src/components/ui/Button/hooks/useX.ts'], pkg)).toEqual([]);
+  });
+
+  it('bounds the rebuild section: 40 components, 5 files each, with "and N more"', () => {
+    const many = Array.from({ length: 60 }, (_, i) => `Comp${i}`);
+    const files = many.flatMap((name) => Array.from({ length: 10 }, (_, j) => `src/ui/${name}/v${j}/${name}.tsx`));
+    const brief = redesignBrief({ designSystemPath: 'DESIGN.md', designSystem: '# DS', findings: [], uiFiles: files, package: { componentsDir: 'src/pkg', components: many.map((name) => ({ name })) } });
+    const section = brief.slice(brief.indexOf('## Package components to rebuild'), brief.indexOf('## How to split the work'));
+    const lines = section.split('\n').filter((l) => l.startsWith('- Comp'));
+    expect(lines).toHaveLength(40);
+    expect(lines.every((l) => (l.match(/`/g) ?? []).length / 2 === 5 && l.includes('…and 5 more'))).toBe(true);
+    expect(section).toContain('…and 20 more components');
+    expect(brief.length).toBeLessThan(30_000);
+  });
 });
