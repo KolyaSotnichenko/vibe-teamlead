@@ -18,7 +18,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync } from 'fs';
 import { cp, rm } from 'fs/promises';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 import { promisify } from 'util';
 
 import { getSpecsDir } from '../../../shared/constants';
@@ -108,6 +108,7 @@ export async function createOrGetWorktree(
       console.warn(
         `[WorktreeManager] Using existing worktree: ${specId} on branch ${branchName}`,
       );
+      await copyDesignFilesIntoWorktree(projectPath, worktreePath);
       return { worktreePath: resolve(worktreePath), branch: branchName };
     }
 
@@ -268,7 +269,39 @@ export async function createOrGetWorktree(
     }
   }
 
+  await copyDesignFilesIntoWorktree(projectPath, worktreePath);
+
   return { worktreePath: resolve(worktreePath), branch: branchName };
+}
+
+/**
+ * The imported design package and the app's design system, which the builders' prompts point
+ * at by project-relative paths. `.vibe-teamlead/` is gitignored, so a worktree has none of them:
+ * copy exactly these (fresh on every call), nothing else from `.vibe-teamlead/`.
+ */
+const DESIGN_PACKAGE_DIR = '.vibe-teamlead/design/package';
+const DESIGN_PACKAGE_META = '.vibe-teamlead/design/package-meta.json';
+const APP_DESIGN_FILES = ['.vibe-teamlead/design-system.md', '.vibe-teamlead/design-tokens.json'];
+
+export async function copyDesignFilesIntoWorktree(projectPath: string, worktreePath: string): Promise<void> {
+  const at = (root: string, rel: string) => join(root, ...rel.split('/'));
+  try {
+    // The package and its meta mirror the project's: a removed or replaced package leaves nothing stale
+    for (const rel of [DESIGN_PACKAGE_DIR, DESIGN_PACKAGE_META]) {
+      await rm(at(worktreePath, rel), { recursive: true, force: true });
+    }
+    for (const rel of [DESIGN_PACKAGE_DIR, DESIGN_PACKAGE_META, ...APP_DESIGN_FILES]) {
+      const source = at(projectPath, rel);
+      if (!existsSync(source)) continue;
+      const dest = at(worktreePath, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      await cp(source, dest, { recursive: true, force: true, verbatimSymlinks: true });
+    }
+  } catch (err: unknown) {
+    // Non-fatal: the agents can still read the design system from their prompt
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[WorktreeManager] Warning: Could not copy the design package into the worktree: ${message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

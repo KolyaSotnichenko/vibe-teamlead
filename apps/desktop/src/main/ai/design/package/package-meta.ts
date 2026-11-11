@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import type { DesignPackageInfo } from '../../../../shared/types';
+import type { DesignPackageInfo, DesignSystemInfo } from '../../../../shared/types';
 import { writeFileReplacingSync } from '../../safe-write';
 
 export const PACKAGE_DIR = '.vibe-teamlead/design/package';
@@ -113,4 +113,14 @@ export function readPackageMeta(projectPath: string): DesignPackageInfo | undefi
 /** The components whose folder already exists under the components folder. */
 export function builtComponents(cwd: string, componentsDir: string, names: string[]): string[] {
   return names.filter((name) => COMPONENT_NAME.test(name) && existsSync(path.join(cwd, componentsDir, name)));
+}
+
+/**
+ * The design system for one task: a copy whose package lists the components already built in
+ * `cwd` (the task's worktree). The shared info is never changed.
+ */
+export function withBuiltComponents(info: DesignSystemInfo, cwd: string): DesignSystemInfo {
+  if (!info.package) return info;
+  const pkg = info.package;
+  return { ...info, package: { ...pkg, built: builtComponents(cwd, pkg.componentsDir, pkg.components.map((c) => c.name)) } };
 }
