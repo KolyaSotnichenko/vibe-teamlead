@@ -8,7 +8,7 @@ The latest runs of the project's GitHub repository are listed on the left. Pick 
 
 Status is live. The view refreshes every 5 seconds while something is running and every 60 seconds otherwise. It refreshes only while Deploy is open and the window is visible.
 
-Click a job to see its steps, updated while it runs. Its log appears once the job finishes. GitHub keeps logs for a limited time, so an old run may say that GitHub no longer keeps its log; **Full log on GitHub** opens it there.
+Click a job to see its steps, updated while it runs. Its log, the last 2 000 lines, appears once the job finishes. GitHub keeps logs for a limited time, so an old run may say that GitHub no longer keeps its log; **Full log on GitHub** opens it there.
 
 ## Deployment and production link
 
@@ -17,14 +17,15 @@ The **Deploy** stage and the **Production** link come from GitHub Deployments, n
 ## What it needs
 
 - **GitHub signed in.** When it isn't, the view has a **Connect GitHub** button.
-- **The project's repository on GitHub.** Without one, the view says so.
-- **New permissions approved once.** The app's GitHub permissions now include reading Actions and Deployments. GitHub asks you to approve them once: open https://github.com/settings/installations, choose the Vibe Teamlead app and accept the request. The view has a **Manage access on GitHub** link for it.
+- **The project's repository on GitHub.** Without one, the view says so, and checks again every minute.
+- **New permissions approved once.** The app's GitHub permissions now include reading Actions and Deployments. GitHub asks you to approve them once: open https://github.com/settings/installations, choose the Vibe Teamlead app and accept the request. When access is missing, the view shows a **Manage access on GitHub** button next to its message.
 
 ## When something is wrong
 
-- **The app can't read the repository's Actions:** the permissions above aren't approved yet, or the app has no access to this repository.
+- **The app can't read the repository's Actions:** the permissions above aren't approved yet, or the app has no access to this repository. **Manage access on GitHub** opens the page to fix it.
+- **GitHub can't find this repository:** the repository is private and the app has no access to it, or it no longer exists. **Manage access on GitHub** lets you give the app access.
 - **GitHub's rate limit is reached:** the view pauses until the time it shows and continues by itself.
-- **GitHub isn't responding:** the view says so and tries again.
+- **GitHub isn't responding:** the view says so and tries again. A log that didn't load is asked for again too.
 
 ## What comes next
 
