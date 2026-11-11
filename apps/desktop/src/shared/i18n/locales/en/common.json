@@ -1248,7 +1248,8 @@
       "working": {
         "extract": "Reading the project styles…",
         "propose": "Thinking about directions…",
-        "write": "Writing the design system…"
+        "write": "Writing the design system…",
+        "package": "Importing the package…"
       },
       "storybook": {
         "notSetUp": "not set up",

@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 // Keys come back as text; interpolation values follow the key so the tests can see them
 vi.mock('react-i18next', () => ({
@@ -31,7 +31,9 @@ const summary: DesignPackageSummary = {
   skipped: [{ path: 'source/Design.fig', reason: 'type' }],
 };
 
-let progress: ((event: { projectId: string; message: string }) => void) | null = null;
+type ProgressEvent = { projectId: string; message: string };
+const listeners = new Set<(event: ProgressEvent) => void>();
+const progress = (event: ProgressEvent) => act(() => listeners.forEach((cb) => cb(event)));
 
 function api(design: Partial<typeof designMock> = {}) {
   const merged = {
@@ -41,10 +43,10 @@ function api(design: Partial<typeof designMock> = {}) {
     importPackage: vi.fn(designMock.importPackage),
     cancelPackage: vi.fn(async () => ({ success: true })),
     cancel: vi.fn(async () => ({ success: true })),
-    onProgress: (cb: (event: { projectId: string; message: string }) => void) => {
-      progress = cb;
+    onProgress: (cb: (event: ProgressEvent) => void) => {
+      listeners.add(cb);
       return () => {
-        progress = null;
+        listeners.delete(cb);
       };
     },
     ...design,
@@ -116,14 +118,43 @@ describe('DesignPackagePanel', () => {
     await choose();
     fireEvent.click(screen.getByRole('button', { name: 'context.design.package.import' }));
     await waitFor(() => expect(design.importPackage).toHaveBeenCalled());
-    progress?.({ projectId: 'p1', message: 'Reading the package README…' });
-    progress?.({ projectId: 'other', message: 'Not ours' });
+    progress({ projectId: 'p1', message: 'Reading the package README…' });
+    progress({ projectId: 'other', message: 'Not ours' });
     expect(await screen.findByText('Reading the package README…')).toBeInTheDocument();
     expect(screen.queryByText('Not ours')).not.toBeInTheDocument();
-    // Cancel while importing stops the agent job
-    fireEvent.click(screen.getByRole('button', { name: 'buttons.cancel' }));
-    expect(design.cancel).toHaveBeenCalledWith('p1');
-    finish({ success: false });
+    // A failed import puts the summary back, so it can be imported again
+    await act(async () => finish({ success: false }));
+    expect(await screen.findByRole('heading', { name: summary.name })).toBeInTheDocument();
+  });
+
+  it('a package still being read when the panel goes away is dropped', async () => {
+    let read: (v: { success: boolean; data?: DesignPackageSummary }) => void = () => {};
+    const design = api({ inspectPackage: vi.fn(() => new Promise<{ success: boolean; data?: DesignPackageSummary }>((r) => (read = r))) });
+    const { unmount } = render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'context.design.package.choose' }));
+    await waitFor(() => expect(design.inspectPackage).toHaveBeenCalled());
+    unmount();
+    await act(async () => read({ success: true, data: summary }));
+    expect(design.cancelPackage).toHaveBeenCalledWith('p1');
+  });
+
+  it('a summary does not follow the panel to another project', async () => {
+    const design = api();
+    const { rerender } = render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+    await choose();
+    rerender(<DesignPackagePanel projectId="p2" onImported={vi.fn()} onError={vi.fn()} />);
+    expect(screen.queryByRole('heading', { name: summary.name })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'context.design.package.choose' })).toBeInTheDocument();
+    expect(design.cancelPackage).toHaveBeenCalledWith('p1');
+  });
+
+  it('the themes group is named by its heading', async () => {
+    api();
+    render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+    await choose();
+    const group = screen.getByRole('radiogroup', { name: 'context.design.package.themes.title' });
+    expect(group).toHaveAttribute('aria-labelledby');
+    expect(group).not.toHaveAttribute('aria-label');
   });
 
   it('Cancel drops the inspected package and goes back to choosing', async () => {
@@ -164,6 +195,30 @@ describe('DesignSystemTab with a package', () => {
     await waitFor(() => expect(design.importPackage).toHaveBeenCalledWith('p1', { themes: 'light' }));
     await waitFor(() => expect(screen.getByRole('tab', { name: 'context.design.tabs.view' })).toHaveAttribute('aria-selected', 'true'));
     expect(screen.getByText(/context.design.status.package MHP Global/)).toBeInTheDocument();
+  });
+
+  it('while a package imports, the paths and the parts are locked and the tab shows progress with Cancel', async () => {
+    type Result = { success: boolean; data?: DesignSystemInfo; error?: string };
+    let finish: (v: Result) => void = () => {};
+    const design = api({ get: async () => ({ success: true, data: empty }), importPackage: vi.fn(() => new Promise<Result>((r) => (finish = r))) });
+    render(<DesignSystemTab projectId="p1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /context.design.package.title/ }));
+    await choose();
+    fireEvent.click(screen.getByRole('button', { name: 'context.design.package.import' }));
+    await waitFor(() => expect(design.importPackage).toHaveBeenCalled());
+    for (const name of [/context.design.start.keepTitle/, /context.design.start.newTitle/, /context.design.package.title/]) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+    for (const tab of screen.getAllByRole('tab')) expect(tab).toBeDisabled();
+    expect(screen.getByText('context.design.working.package')).toBeInTheDocument();
+    progress({ projectId: 'p1', message: 'Writing design-system.md…' });
+    expect((await screen.findAllByText('Writing design-system.md…')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'buttons.cancel' }));
+    expect(design.cancel).toHaveBeenCalledWith('p1');
+    await act(async () => finish({ success: false, error: 'Cancelled' }));
+    expect(await screen.findByRole('heading', { name: summary.name })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'context.design.tabs.view' })).not.toBeDisabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('Overview switches the themes of an imported package; an error shows as the tab error', async () => {

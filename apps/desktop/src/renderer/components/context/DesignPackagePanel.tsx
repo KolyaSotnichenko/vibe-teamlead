@@ -17,11 +17,22 @@ type Stage = 'choose' | 'reading' | 'summary' | 'importing';
 const MAX_LINES = 8;
 
 /** Light only, or light and dark with a switch */
-export function ThemesChoice({ value, onChange, disabled }: { value: DesignThemes; onChange: (themes: DesignThemes) => void; disabled?: boolean }) {
+export function ThemesChoice({
+  value,
+  onChange,
+  disabled,
+  labelledBy,
+}: {
+  value: DesignThemes;
+  onChange: (themes: DesignThemes) => void;
+  disabled?: boolean;
+  /** id of the heading that names the group */
+  labelledBy: string;
+}) {
   const { t } = useTranslation('common');
   const id = useId();
   return (
-    <div role="radiogroup" aria-label={t('context.design.package.themes.title')} className="flex max-w-3xl flex-col border-t border-border">
+    <div role="radiogroup" aria-labelledby={labelledBy} className="flex max-w-3xl flex-col border-t border-border">
       {(['light', 'light-dark'] as const).map((themes) => {
         const key = themes === 'light' ? 'light' : 'lightDark';
         return (
@@ -47,38 +58,44 @@ export function ThemesChoice({ value, onChange, disabled }: { value: DesignTheme
   );
 }
 
-export function DesignPackagePanel({
-  projectId,
-  disabled,
-  onImported,
-  onError,
-  onBusy,
-}: {
+interface PanelProps {
   projectId: string;
   /** Another design job is running */
   disabled?: boolean;
   onImported: (info: DesignSystemInfo) => void;
   /** A message for the tab's error line; null clears it */
   onError: (message: string | null) => void;
+  /** True while a package imports; the tab locks its paths and parts and shows progress with Cancel */
   onBusy?: (busy: boolean) => void;
-}) {
+}
+
+/** One panel per project: a summary never follows it to another project */
+export function DesignPackagePanel(props: PanelProps) {
+  return <PackagePanel key={props.projectId} {...props} />;
+}
+
+function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: PanelProps) {
   const { t } = useTranslation('common');
   const design = window.electronAPI.design;
   const [stage, setStage] = useState<Stage>('choose');
   const [summary, setSummary] = useState<DesignPackageSummary | null>(null);
   const [themes, setThemes] = useState<DesignThemes>('light');
+  const headingId = useId();
   const [lines, setLines] = useState<Array<{ id: number; text: string }>>([]);
   const lineId = useRef(0);
 
-  // An inspected package left behind (path closed, project switched) is dropped
+  // An inspected package left behind (path closed, project switched) is dropped; one still
+  // being read when the panel goes away is dropped once the read ends
   const pending = useRef(false);
   pending.current = stage === 'summary';
-  useEffect(
-    () => () => {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       if (pending.current) void window.electronAPI.design.cancelPackage(projectId);
-    },
-    [projectId],
-  );
+    };
+  }, [projectId]);
 
   useEffect(() => {
     if (stage !== 'importing') return;
@@ -99,8 +116,11 @@ export function DesignPackagePanel({
       }
       if (!picked.data) return;
       setStage('reading');
-      busy(true);
       const result = await design.inspectPackage(projectId, picked.data);
+      if (!mounted.current) {
+        if (result.success) void design.cancelPackage(projectId);
+        return;
+      }
       if (result.success && result.data) {
         setSummary(result.data);
         setThemes('light');
@@ -110,10 +130,9 @@ export function DesignPackagePanel({
         setStage('choose');
       }
     } catch (e) {
+      if (!mounted.current) return;
       onError(e instanceof Error ? e.message : String(e));
       setStage('choose');
-    } finally {
-      busy(false);
     }
   };
 
@@ -162,16 +181,9 @@ export function DesignPackagePanel({
 
   if (stage === 'importing') {
     return (
-      <div role="status" aria-busy="true" className="space-y-2 border-l-2 border-foreground bg-muted px-3 py-2 text-sm text-muted-foreground">
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="h-2 w-2 shrink-0 animate-pulse bg-foreground" aria-hidden="true" />
-            <span className="truncate text-foreground">{t('context.design.package.importing', { name: summary?.name ?? '' })}</span>
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => void design.cancel(projectId)}>
-            {t('buttons.cancel')}
-          </Button>
-        </div>
+      // The tab's progress line carries the latest step and Cancel; this keeps the steps so far
+      <div className="space-y-2 border-l-2 border-foreground bg-muted px-3 py-2 text-sm text-muted-foreground">
+        <p className="truncate text-foreground">{t('context.design.package.importing', { name: summary?.name ?? '' })}</p>
         {lines.length > 0 && (
           <ol className="space-y-0.5 pl-4 font-mono text-xs">
             {lines.map((line, i) => (
@@ -240,8 +252,8 @@ export function DesignPackagePanel({
 
       {summary.colors.dark > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">{t('context.design.package.themes.title')}</p>
-          <ThemesChoice value={themes} onChange={setThemes} />
+          <p id={`${headingId}-themes`} className="text-sm font-medium text-foreground">{t('context.design.package.themes.title')}</p>
+          <ThemesChoice value={themes} onChange={setThemes} labelledBy={`${headingId}-themes`} />
         </div>
       )}
 

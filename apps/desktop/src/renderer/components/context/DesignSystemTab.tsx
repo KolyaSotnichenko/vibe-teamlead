@@ -143,16 +143,17 @@ function Step({ n, title, hint, children }: { n: number; title: string; hint?: s
   );
 }
 
-function PathCard({ label, title, body, selected, current, onSelect }: { label: string; title: string; body: string; selected: boolean; current: boolean; onSelect: () => void }) {
+function PathCard({ label, title, body, selected, current, onSelect, disabled }: { label: string; title: string; body: string; selected: boolean; current: boolean; onSelect: () => void; disabled?: boolean }) {
   const { t } = useTranslation('common');
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={onSelect}
+      disabled={disabled}
       className={cn(
-        'flex min-h-11 flex-col items-start gap-2 border border-foreground p-5 text-left',
-        selected ? 'bg-foreground text-background' : 'bg-card text-foreground hover:bg-accent',
+        'flex min-h-11 flex-col items-start gap-2 border border-foreground p-5 text-left disabled:cursor-not-allowed disabled:opacity-60',
+        selected ? 'bg-foreground text-background' : 'bg-card text-foreground enabled:hover:bg-accent',
       )}
     >
       <span className={cn('flex items-center gap-3 font-mono text-xs uppercase', selected ? 'text-background/70' : 'text-muted-foreground')}>
@@ -309,6 +310,8 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
   }
 
   const working = busy !== null;
+  // A package import moves files under the project: nothing may close its panel until it ends
+  const importing = busy === 'package';
   const flow = designFlow({ exists: info.exists, meta: info.meta, references: refList?.references ?? [], audit });
   const stale = flow.system.status === 'stale';
   // Setup first while there is nothing to view or the system needs an update
@@ -329,7 +332,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
   const code = audit ? (audit.findings > 0 ? `${t('context.design.status.places', { count: audit.findings })} ${t('context.design.status.inFiles', { count: audit.files })}` : t('context.design.status.clean')) : null;
   const status = !info.exists ? t('context.design.status.none') : [made, code].filter(Boolean).join(' · ');
 
-  const progressLine = working && (busy === 'extract' || busy === 'propose' || busy === 'write') && (
+  const progressLine = working && (busy === 'extract' || busy === 'propose' || busy === 'write' || busy === 'package') && (
     <div role="status" aria-busy="true" className="flex items-center justify-between gap-4 border-l-2 border-foreground bg-muted px-3 py-2 text-sm text-muted-foreground">
       <span className="flex min-w-0 items-center gap-2">
         <span className="h-2 w-2 shrink-0 animate-pulse bg-foreground" aria-hidden="true" />
@@ -441,7 +444,10 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
           disabled={working && busy !== 'package'}
           onImported={written}
           onError={setError}
-          onBusy={(on) => setBusy(on ? 'package' : null)}
+          onBusy={(on) => {
+            setBusy(on ? 'package' : null);
+            setProgress(null);
+          }}
         />
       </Step>
     </ol>
@@ -472,9 +478,9 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         <SectionHeader id="ds-start" title={info.exists ? t('context.design.setup.changeTitle') : t('context.design.start.title')} />
         <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.start.body')}</p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <PathCard label={t('context.design.start.pathA')} title={t('context.design.start.keepTitle')} body={t('context.design.setup.keep.card')} selected={path === 'keep'} current={currentPath === 'keep'} onSelect={() => setPath(path === 'keep' ? null : 'keep')} />
-          <PathCard label={t('context.design.start.pathB')} title={t('context.design.start.newTitle')} body={t('context.design.setup.new.card')} selected={path === 'new'} current={currentPath === 'new'} onSelect={() => setPath(path === 'new' ? null : 'new')} />
-          <PathCard label={t('context.design.start.pathC')} title={t('context.design.package.title')} body={t('context.design.package.card')} selected={path === 'package'} current={currentPath === 'package'} onSelect={() => setPath(path === 'package' ? null : 'package')} />
+          <PathCard label={t('context.design.start.pathA')} title={t('context.design.start.keepTitle')} body={t('context.design.setup.keep.card')} selected={path === 'keep'} current={currentPath === 'keep'} onSelect={() => setPath(path === 'keep' ? null : 'keep')} disabled={importing} />
+          <PathCard label={t('context.design.start.pathB')} title={t('context.design.start.newTitle')} body={t('context.design.setup.new.card')} selected={path === 'new'} current={currentPath === 'new'} onSelect={() => setPath(path === 'new' ? null : 'new')} disabled={importing} />
+          <PathCard label={t('context.design.start.pathC')} title={t('context.design.package.title')} body={t('context.design.package.card')} selected={path === 'package'} current={currentPath === 'package'} onSelect={() => setPath(path === 'package' ? null : 'package')} disabled={importing} />
         </div>
         {path === 'keep' && keepPanel}
         {path === 'new' && newPanel}
@@ -639,7 +645,7 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
         <section className="space-y-3" aria-labelledby="ds-themes">
           <SectionHeader id="ds-themes" title={t('context.design.package.themes.title')} meta={info.package.name} />
           <p className="max-w-prose text-sm text-muted-foreground">{t('context.design.package.themes.body')}</p>
-          <ThemesChoice value={info.package.themes} disabled={working} onChange={setThemes} />
+          <ThemesChoice value={info.package.themes} disabled={working} onChange={setThemes} labelledBy="ds-themes" />
         </section>
       )}
       {/* How far the code is from this system, and the redesign that closes the gap */}
@@ -695,9 +701,10 @@ export function DesignSystemTab({ projectId }: { projectId: string }) {
                 key={p}
                 type="button"
                 role="tab"
+                disabled={importing}
                 aria-selected={shown === p}
                 onClick={() => setPart(p)}
-                className={cn('-mb-px min-h-11 border-b-2 px-4 text-sm font-medium', shown === p ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                className={cn('-mb-px min-h-11 border-b-2 px-4 text-sm font-medium disabled:cursor-not-allowed', shown === p ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
               >
                 {t(`context.design.tabs.${p}`)}
               </button>
