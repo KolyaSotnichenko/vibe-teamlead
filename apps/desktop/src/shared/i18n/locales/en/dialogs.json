@@ -311,7 +311,7 @@
   },
   "githubSignIn": {
     "title": "Sign in to GitHub",
-    "body": "Vibe Teamlead signs in with its own GitHub App. You choose which repositories it can use, and the access expires on its own; nothing to install.",
+    "body": "Vibe Teamlead signs in with its own GitHub App. After signing in you choose which repositories it can use, and the access expires on its own.",
     "start": "Sign in with GitHub",
     "retry": "Try again",
     "cancel": "Cancel",
@@ -325,6 +325,23 @@
     "openGitHub": "Open GitHub",
     "waiting": "Waiting for you to approve on GitHub…",
     "failed": "GitHub sign-in failed"
+  },
+  "githubAppAccess": {
+    "title": "Give Vibe Teamlead access to your repositories",
+    "body": "You’re signed in. Now install the Vibe Teamlead app on GitHub and choose the repositories it may use: all of them, or only the ones you pick. Without this it can’t see your private repositories.",
+    "install": "Install the app on GitHub",
+    "checkAgain": "I’ve done it — check again",
+    "checking": "Checking access to your repositories…",
+    "stillMissing": "The app isn’t installed yet. Finish installing it on GitHub, then check again.",
+    "error": "Couldn’t check the app’s access on GitHub. Check your connection and try again.",
+    "repoTitle": "Vibe Teamlead can’t see {{repo}}",
+    "repoSelected": "The app is installed only on selected repositories: add this one on GitHub.",
+    "repoNotInstalled": "The app isn’t installed on {{owner}}. Install it there and choose this repository.",
+    "repoUnknown": "GitHub can’t find this repository, or the app has no access to it. Check the name, or give the app access on GitHub.",
+    "addRepo": "Add it on GitHub",
+    "installApp": "Install the app",
+    "manageAccess": "Manage access on GitHub",
+    "checkAgainShort": "Check again"
   },
   "addWorkspace": {
     "roles": {

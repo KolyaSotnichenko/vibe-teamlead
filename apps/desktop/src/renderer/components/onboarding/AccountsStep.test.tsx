@@ -19,6 +19,8 @@ const api = {
   cancelGitHubAuth: vi.fn(),
   getGitHubUser: vi.fn(),
   getGitHubToken: vi.fn(),
+  getGitHubAppAccess: vi.fn(),
+  openExternal: vi.fn(async () => undefined),
   onGitHubAuthDeviceCode: vi.fn(() => () => {})
 };
 Object.defineProperty(window, 'electronAPI', { value: api, writable: true });
@@ -31,6 +33,7 @@ describe('AccountsStep', () => {
     vi.clearAllMocks();
     api.checkGitHubAuth.mockResolvedValue({ success: true, data: { authenticated: false } });
     api.getGitHubToken.mockResolvedValue({ success: true, data: { token: 'tok' } });
+    api.getGitHubAppAccess.mockResolvedValue({ success: true, data: { installed: true, repositorySelection: 'all' } });
   });
 
   it('says what GitHub is for and where to connect later', async () => {
@@ -59,6 +62,18 @@ describe('AccountsStep', () => {
     api.getGitHubUser.mockResolvedValue({ success: true, data: { username: 'octocat' } });
     render(<AccountsStep onNext={onNext} onBack={onBack} />);
     fireEvent.click(await screen.findByRole('button', { name: 'dialogs:githubSignIn.start' }));
+    await waitFor(() => expect(screen.getByText('onboarding:accounts.connectedAs:octocat')).toBeInTheDocument());
+  });
+
+  it('after signing in, asks to install the app before it counts as connected', async () => {
+    api.checkGitHubAuth.mockResolvedValue({ success: true, data: { authenticated: true, username: 'octocat' } });
+    api.getGitHubAppAccess.mockResolvedValueOnce({ success: true, data: { installed: false } });
+    render(<AccountsStep onNext={onNext} onBack={onBack} />);
+    expect(await screen.findByText('dialogs:githubAppAccess.title')).toBeInTheDocument();
+    expect(screen.queryByText('onboarding:accounts.connectedAs:octocat')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'dialogs:githubAppAccess.install' }));
+    expect(api.openExternal).toHaveBeenCalledWith('https://github.com/apps/vibe-teamlead-app/installations/new');
+    fireEvent.click(screen.getByRole('button', { name: 'dialogs:githubAppAccess.checkAgain' }));
     await waitFor(() => expect(screen.getByText('onboarding:accounts.connectedAs:octocat')).toBeInTheDocument());
   });
 

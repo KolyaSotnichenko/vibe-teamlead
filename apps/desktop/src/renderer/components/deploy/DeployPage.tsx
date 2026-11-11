@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeployRunsState, GitHubError } from '../../../shared/types/deploy';
+import { GITHUB_APP_INSTALL_URL, GITHUB_INSTALLATIONS_SETTINGS_URL } from '../../../shared/constants/github';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { GitHubOAuthFlow } from '../project-settings/GitHubOAuthFlow';
@@ -16,13 +17,31 @@ import { RunGraph } from './RunGraph';
 import { JobPanel } from './JobPanel';
 import { displayUrl, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
-export const GITHUB_INSTALLATIONS_URL = 'https://github.com/settings/installations';
-
 const ATTENTION: ReadonlySet<GitHubError['kind']> = new Set(['no-connection', 'permissions', 'not-found']);
 
-function ErrorNotice({ error, onConnect }: { error: GitHubError; onConnect: () => void }) {
+/** On not-found: true once GitHub confirms the app is not installed on the repository's owner (false while unknown or on error). */
+function useAppNotInstalled(repo: string | undefined, kind: GitHubError['kind']): boolean {
+  const [notInstalled, setNotInstalled] = useState(false);
+  useEffect(() => {
+    setNotInstalled(false);
+    if (kind !== 'not-found' || !repo) return;
+    let cancelled = false;
+    Promise.resolve(window.electronAPI.getGitHubAppAccess(repo))
+      .then((result) => {
+        if (!cancelled && result.success && result.data && !result.data.installed) setNotInstalled(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [repo, kind]);
+  return notInstalled;
+}
+
+function ErrorNotice({ error, repo, onConnect }: { error: GitHubError; repo?: string; onConnect: () => void }) {
   const { t } = useTranslation(['deploy']);
   const errorText = useGitHubErrorText();
+  const notInstalled = useAppNotInstalled(repo, error.kind);
   return (
     <div
       role="status"
@@ -37,9 +56,13 @@ function ErrorNotice({ error, onConnect }: { error: GitHubError; onConnect: () =
           {t('deploy:errors.connect')}
         </Button>
       )}
-      {/* A private repository the app cannot reach arrives as 404 */}
-      {(error.kind === 'permissions' || error.kind === 'not-found') && (
-        <Button size="sm" variant="outline" onClick={() => openWebUrl(GITHUB_INSTALLATIONS_URL)}>
+      {/* A private repository the app cannot reach arrives as 404: install the app when it is not on the owner */}
+      {error.kind === 'not-found' && notInstalled ? (
+        <Button size="sm" variant="outline" onClick={() => openWebUrl(GITHUB_APP_INSTALL_URL)}>
+          {t('deploy:errors.installApp')}
+        </Button>
+      ) : (error.kind === 'permissions' || error.kind === 'not-found') && (
+        <Button size="sm" variant="outline" onClick={() => openWebUrl(GITHUB_INSTALLATIONS_SETTINGS_URL)}>
           {t('deploy:errors.manageAccess')}
         </Button>
       )}
@@ -175,7 +198,13 @@ export function DeployPage({ projectId }: { projectId: string }) {
         </button>
       </div>
       <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-        {state?.repo && state.error && <ErrorNotice error={state.error} onConnect={() => setSigningIn(true)} />}
+        {state?.repo && state.error && (
+          <ErrorNotice
+            error={state.error}
+            repo={`${state.repo.owner}/${state.repo.repo}`}
+            onConnect={() => setSigningIn(true)}
+          />
+        )}
         {body}
       </div>
 

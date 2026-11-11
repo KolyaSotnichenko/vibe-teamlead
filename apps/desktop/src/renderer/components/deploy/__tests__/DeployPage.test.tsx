@@ -72,10 +72,14 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     onRunsUpdate: vi.fn((cb: (s: DeployRunsState) => void) => { push = cb; return unsubscribe; }),
   };
   const openExternal = vi.fn(async () => undefined);
-  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal };
+  const getGitHubAppAccess = vi.fn(async (_repo?: string) => ({
+    success: true,
+    data: { installed: true, repositorySelection: 'all', repoReachable: true } as Record<string, unknown>,
+  }));
+  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal, getGitHubAppAccess };
   const view = render(<DeployPage projectId="p1" />);
   const emit = (s: DeployRunsState) => act(() => push?.(s));
-  return { deploy, emit, view, unsubscribe, openExternal };
+  return { deploy, emit, view, unsubscribe, openExternal, getGitHubAppAccess };
 }
 
 describe('DeployPage', () => {
@@ -282,6 +286,24 @@ describe('DeployPage', () => {
     expect(screen.getByText('deploy:errors.not-found')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'deploy:errors.manageAccess' }));
     expect(openExternal).toHaveBeenCalledWith('https://github.com/settings/installations');
+  });
+
+  it('links to the install page when the repository is not found and the app is not installed on its owner', async () => {
+    const { emit, openExternal, getGitHubAppAccess } = setup();
+    getGitHubAppAccess.mockResolvedValue({ success: true, data: { installed: false, repoReachable: false } });
+    emit(base({ runs: [], selected: undefined, error: { kind: 'not-found', message: '' } }));
+    fireEvent.click(await screen.findByRole('button', { name: 'deploy:errors.installApp' }));
+    expect(getGitHubAppAccess).toHaveBeenCalledWith('acme/app');
+    expect(openExternal).toHaveBeenCalledWith('https://github.com/apps/vibe-teamlead-app/installations/new');
+    expect(screen.queryByRole('button', { name: 'deploy:errors.manageAccess' })).not.toBeInTheDocument();
+  });
+
+  it('keeps "manage access" on not-found when the installation cannot be checked', async () => {
+    const { emit, getGitHubAppAccess } = setup();
+    getGitHubAppAccess.mockResolvedValue({ success: false, error: 'offline' } as never);
+    emit(base({ runs: [], selected: undefined, error: { kind: 'not-found', message: '' } }));
+    await waitFor(() => expect(getGitHubAppAccess).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'deploy:errors.manageAccess' })).toBeInTheDocument();
   });
 
   it('shows no link for a URL that is not http(s), and survives a failed openExternal', async () => {

@@ -4,19 +4,23 @@
  * The main process requests a device code, opens github.com/login/device and
  * polls until the user approves; this component shows the code and reports
  * the result. Closing it cancels the sign-in in the main process.
+ *
+ * Signing in only authorizes the app: before reporting success it makes sure
+ * the app is installed (GitHubAppInstallStep), or it could reach no private repository.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Copy, ExternalLink, Github, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { GitHubAppInstallStep } from './GitHubAppInstallStep';
 
 interface GitHubOAuthFlowProps {
   onSuccess: (token: string, username?: string) => void;
   onCancel?: () => void;
 }
 
-type Status = 'checking' | 'need-auth' | 'authenticating' | 'success' | 'error';
+type Status = 'checking' | 'need-auth' | 'authenticating' | 'install' | 'success' | 'error';
 
 export function GitHubOAuthFlow({ onSuccess, onCancel }: GitHubOAuthFlowProps) {
   const { t } = useTranslation(['dialogs']);
@@ -24,6 +28,7 @@ export function GitHubOAuthFlow({ onSuccess, onCancel }: GitHubOAuthFlowProps) {
   const [error, setError] = useState<string | null>(null);
   const [device, setDevice] = useState<{ code: string; url: string; browserOpened: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [signedIn, setSignedIn] = useState<{ token: string; username?: string } | null>(null);
   const statusRef = useRef<Status>('checking');
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
@@ -37,8 +42,8 @@ export function GitHubOAuthFlow({ onSuccess, onCancel }: GitHubOAuthFlowProps) {
     async (username?: string) => {
       const result = await window.electronAPI.getGitHubToken();
       if (result.success && result.data?.token) {
-        update('success');
-        onSuccessRef.current(result.data.token, username);
+        setSignedIn({ token: result.data.token, username });
+        update('install');
       } else {
         setError(result.error ?? t('dialogs:githubSignIn.failed'));
         update('error');
@@ -116,6 +121,18 @@ export function GitHubOAuthFlow({ onSuccess, onCancel }: GitHubOAuthFlowProps) {
       setCopied(false);
     }
   };
+
+  if (status === 'install' && signedIn) {
+    return (
+      <GitHubAppInstallStep
+        onInstalled={() => {
+          update('success');
+          onSuccessRef.current(signedIn.token, signedIn.username);
+        }}
+        onCancel={onCancel}
+      />
+    );
+  }
 
   if (status === 'checking' || status === 'success') {
     return (

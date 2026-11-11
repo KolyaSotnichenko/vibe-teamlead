@@ -34,9 +34,11 @@ import {
   SelectValue
 } from './ui/select';
 import { GitHubOAuthFlow } from './project-settings/GitHubOAuthFlow';
+import { GitHubRepoAccessNotice } from './project-settings/GitHubAppInstallStep';
 import { ClaudeCredentialPanel } from './settings/ClaudeCredentialPanel';
 import { useClaudeCredential } from '../hooks/useClaudeCredential';
-import type { Project } from '../../shared/types';
+import { GITHUB_REPO_NOT_FOUND_ERROR } from '../../shared/constants/github';
+import type { GitHubAppAccess, Project } from '../../shared/types';
 
 interface GitHubSetupModalProps {
   open: boolean;
@@ -76,6 +78,8 @@ export function GitHubSetupModal({
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [isLoadingRepo, setIsLoadingRepo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // GitHub answered 404 for the repository: the app's access to it (access null = could not be checked)
+  const [repoAccess, setRepoAccess] = useState<{ repo: string; access: GitHubAppAccess | null } | null>(null);
 
   // Repo setup state (for when no remote is detected)
   const [repoAction, setRepoAction] = useState<'create' | 'link' | null>(null);
@@ -101,6 +105,7 @@ export function GitHubSetupModal({
       setSelectedBranch(null);
       setRecommendedBranch(null);
       setError(null);
+      setRepoAccess(null);
       // Reset repo setup state
       setRepoAction(null);
       setNewRepoName(project.name.replace(/[^A-Za-z0-9_.-]/g, '-'));
@@ -118,7 +123,13 @@ export function GitHubSetupModal({
         try {
           // Check for existing GitHub token
           const ghTokenResult = await window.electronAPI.getGitHubToken();
-          const hasGitHubAuth = ghTokenResult.success && ghTokenResult.data?.token;
+          let hasGitHubAuth = ghTokenResult.success && ghTokenResult.data?.token;
+
+          // Signed in but the app is not installed anywhere: the sign-in step asks to install it
+          if (hasGitHubAuth) {
+            const access = await window.electronAPI.getGitHubAppAccess();
+            if (access.success && access.data && !access.data.installed) hasGitHubAuth = false;
+          }
 
           // Check for the Claude credential
           const credential = await window.electronAPI.getClaudeCredentialStatus();
@@ -207,6 +218,13 @@ export function GitHubSetupModal({
     try {
       // Get branches from GitHub API
       const result = await window.electronAPI.getGitHubBranches(repo);
+      if (!result.success && result.error === GITHUB_REPO_NOT_FOUND_ERROR) {
+        // Usually the app is not installed on the repository: say what to do, not "HTTP 404"
+        const access = await window.electronAPI.getGitHubAppAccess(repo).catch(() => null);
+        setRepoAccess({ repo, access: access?.success && access.data ? access.data : null });
+        return;
+      }
+      setRepoAccess(null);
       if (result.success && result.data) {
         setBranches(result.data);
 
@@ -218,6 +236,7 @@ export function GitHubSetupModal({
         setError(result.error || t('githubSetup.errors.loadBranchesFailed'));
       }
     } catch (err) {
+      setRepoAccess(null);
       setError(err instanceof Error ? err.message : t('githubSetup.errors.loadBranchesFailed'));
     } finally {
       setIsLoadingBranches(false);
@@ -803,6 +822,15 @@ export function GitHubSetupModal({
                   </div>
                 </div>
               </div>
+
+              {repoAccess && (
+                <GitHubRepoAccessNotice
+                  repo={repoAccess.repo}
+                  access={repoAccess.access}
+                  checking={isLoadingBranches}
+                  onCheckAgain={() => void loadBranches(repoAccess.repo)}
+                />
+              )}
 
               {error && (
                 <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">

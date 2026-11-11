@@ -15,6 +15,7 @@
     "connect": "Connect GitHub",
     "permissions": "The Vibe Teamlead GitHub App can’t read this repository’s Actions. Give it access to the repository.",
     "manageAccess": "Manage access on GitHub",
+    "installApp": "Install the app on GitHub",
     "not-found": "GitHub can’t find this repository, or the app has no access to it.",
     "rate-limit": "GitHub’s rate limit is reached. Paused until {{time}}",
     "rateLimitNoTime": "GitHub’s rate limit is reached. Paused for now",
