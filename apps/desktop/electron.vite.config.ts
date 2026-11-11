@@ -68,6 +68,9 @@ export default defineConfig({
         '@ai-sdk/mcp',
         '@modelcontextprotocol/sdk',
         '@tavily/core',
+        // GitHub Actions secret sealing (crypto_box_seal)
+        'libsodium-wrappers',
+        'libsodium',
       ]
     })],
     build: {
