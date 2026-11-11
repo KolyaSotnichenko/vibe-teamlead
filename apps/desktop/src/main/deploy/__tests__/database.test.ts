@@ -251,11 +251,11 @@ describe('addDatabase', () => {
     const { cli, saved, deps, project } = setup(
       {
         'integration installations': [INSTALLED],
-        'integration add': [{ code: 0, out: '{}', delay: 5000 }],
+        'integration add': [{ code: 0, out: '{}', delay: 6000 }],
         'integration list': [{ code: 0, out: '{"resources":[{"name":"my-cool-app-db"}]}' }],
       },
       undefined,
-      { timeoutMs: 400 },
+      { timeoutMs: 1500 },
     );
     const r1: any = await addDatabase(project, deps);
     expect(r1.error.kind).toBe('timeout');
