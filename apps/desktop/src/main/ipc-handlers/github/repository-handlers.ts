@@ -6,7 +6,7 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult, GitHubRepository, GitHubSyncStatus } from '../../../shared/types';
 import { projectStore } from '../../project-store';
-import { getGitHubConfig, githubFetch, normalizeRepoReference } from './utils';
+import { getGitHubConfigAsync, githubFetch, normalizeRepoReference } from './utils';
 import type { GitHubAPIRepository } from './types';
 
 /**
@@ -21,7 +21,7 @@ export function registerCheckConnection(): void {
         return { success: false, error: 'Project not found' };
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         return {
           success: true,
@@ -94,7 +94,7 @@ export function registerGetRepositories(): void {
         return { success: false, error: 'Project not found' };
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         return { success: false, error: 'No GitHub token configured' };
       }

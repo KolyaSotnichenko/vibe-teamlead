@@ -151,6 +151,10 @@ vi.mock('../utils', () => ({
     token: 'mock-github-token',
     repo: 'owner/repo',
   })),
+  getGitHubConfigAsync: vi.fn(async () => ({
+    token: 'mock-github-token',
+    repo: 'owner/repo',
+  })),
   githubFetch: vi.fn(),
   normalizeRepoReference: vi.fn((r: string) => r),
 }));

@@ -6,7 +6,7 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult, GitHubIssue, PaginatedIssuesResult } from '../../../shared/types';
 import { projectStore } from '../../project-store';
-import { getGitHubConfig, githubFetch, normalizeRepoReference } from './utils';
+import { getGitHubConfigAsync, githubFetch, normalizeRepoReference } from './utils';
 import type { GitHubAPIIssue, GitHubAPIComment } from './types';
 import { debugLog } from '../../../shared/utils/debug-logger';
 
@@ -73,7 +73,7 @@ export function registerGetIssues(): void {
         return { success: false, error: 'Project not found' };
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         debugLog('[GitHub Issues] No GitHub config found for project');
         return { success: false, error: 'No GitHub token or repository configured' };
@@ -216,7 +216,7 @@ export function registerGetIssue(): void {
         return { success: false, error: 'Project not found' };
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         return { success: false, error: 'No GitHub token or repository configured' };
       }
@@ -260,7 +260,7 @@ export function registerGetIssueComments(): void {
         return { success: false, error: 'Project not found' };
       }
 
-      const config = getGitHubConfig(project);
+      const config = await getGitHubConfigAsync(project);
       if (!config) {
         return { success: false, error: 'No GitHub token or repository configured' };
       }

@@ -232,24 +232,9 @@ export function useGitHubPRs(
     [projectId, getPRReviewState, t]
   );
 
-  // Initial load
-  useEffect(() => {
-    if (projectId && !hasLoadedRef.current) {
-      hasLoadedRef.current = true;
-      fetchPRs();
-    }
-  }, [projectId, fetchPRs]);
-
-  // Auto-refresh when tab becomes active (navigating to GitHub PRs tab)
-  useEffect(() => {
-    // Only refresh if transitioning from inactive to active AND we've loaded before
-    if (isActive && !wasActiveRef.current && hasLoadedRef.current) {
-      fetchPRs();
-    }
-    wasActiveRef.current = isActive;
-  }, [isActive, fetchPRs]);
-
-  // Reset state and selected PR when project changes
+  // Reset state and selected PR when project changes.
+  // Declared before the initial load: effects run in order, and a reset after the load would clear
+  // hasLoadedRef, so opening the (always mounted) page would never check the connection again.
   useEffect(() => {
     currentProjectIdRef.current = projectId;
     fetchGenerationRef.current += 1;
@@ -267,6 +252,23 @@ export function useGitHubPRs(
       checkNewCommitsAbortRef.current = null;
     }
   }, [projectId]);
+
+  // Initial load
+  useEffect(() => {
+    if (projectId && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      fetchPRs();
+    }
+  }, [projectId, fetchPRs]);
+
+  // Auto-refresh when tab becomes active (navigating to GitHub PRs tab)
+  useEffect(() => {
+    // Only refresh if transitioning from inactive to active AND we've loaded before
+    if (isActive && !wasActiveRef.current && hasLoadedRef.current) {
+      fetchPRs();
+    }
+    wasActiveRef.current = isActive;
+  }, [isActive, fetchPRs]);
 
   // Cleanup abort controller on unmount to prevent memory leaks
   // and avoid state updates on unmounted components

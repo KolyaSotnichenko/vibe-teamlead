@@ -198,37 +198,45 @@ export async function getGitHubTokenForSubprocess(): Promise<string | null> {
   return getTokenFromGhCliAsync();
 }
 
-/**
- * Get GitHub configuration from project environment file
- * Falls back to gh CLI token if GITHUB_TOKEN not in .env
- */
-export function getGitHubConfig(project: Project): GitHubConfig | null {
+/** GITHUB_REPO and a personal access token from the project's .env (an App token there is never trusted). */
+function readProjectGitHubEnv(project: Project): { repo?: string; pat?: string } | null {
   if (!project.autoBuildPath) return null;
   const envPath = path.join(project.path, project.autoBuildPath, '.env');
   if (!existsSync(envPath)) return null;
-
   try {
-    const content = readFileSync(envPath, 'utf-8');
-    const vars = parseEnvFile(content);
-    const repo = vars['GITHUB_REPO'];
+    const vars = parseEnvFile(readFileSync(envPath, 'utf-8'));
     // A personal access token in .env wins; GitHub App tokens (ghu_…) expire and are
     // never trusted from .env — the live one comes from the app's token store.
     const envToken = vars['GITHUB_TOKEN'];
     const usesApp = vars['GITHUB_AUTH_METHOD'] === 'oauth' || envToken?.startsWith('ghu_');
-    let token: string | undefined = usesApp ? undefined : envToken;
-
-    if (!token) {
-      const ghToken = getTokenFromGhCliSync();
-      if (ghToken) {
-        token = ghToken;
-      }
-    }
-
-    if (!token || !repo) return null;
-    return { token, repo };
+    return { repo: vars['GITHUB_REPO'] || undefined, pat: usesApp ? undefined : envToken || undefined };
   } catch {
     return null;
   }
+}
+
+/**
+ * Get GitHub configuration from project environment file
+ * Falls back to gh CLI token if GITHUB_TOKEN not in .env.
+ * Synchronous: an App token that has just expired counts as missing until it is refreshed —
+ * prefer getGitHubConfigAsync() wherever the caller can await.
+ */
+export function getGitHubConfig(project: Project): GitHubConfig | null {
+  const env = readProjectGitHubEnv(project);
+  if (!env?.repo) return null;
+  const token = env.pat ?? getTokenFromGhCliSync() ?? undefined;
+  return token ? { token, repo: env.repo } : null;
+}
+
+/**
+ * GitHub configuration with the same sign-in as Deploy: a personal access token from .env, else the
+ * GitHub App user token from getValidAccessToken() (refreshed when it has expired), else gh CLI.
+ */
+export async function getGitHubConfigAsync(project: Project): Promise<GitHubConfig | null> {
+  const env = readProjectGitHubEnv(project);
+  if (!env?.repo) return null;
+  const token = env.pat ?? (await getTokenFromGhCliAsync()) ?? undefined;
+  return token ? { token, repo: env.repo } : null;
 }
 
 /**

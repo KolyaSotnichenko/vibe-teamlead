@@ -17,7 +17,7 @@ import {
   DEFAULT_FEATURE_MODELS,
   DEFAULT_FEATURE_THINKING,
 } from "../../../shared/constants";
-import { getGitHubConfig, githubFetch, normalizeRepoReference } from "./utils";
+import { getGitHubConfigAsync, githubFetch, normalizeRepoReference } from "./utils";
 import { readSettingsFile } from "../../settings-utils";
 import { getAugmentedEnv } from "../../env-utils";
 import { getMemoryService } from "../context/memory-service-factory";
@@ -1667,7 +1667,7 @@ async function runPRReview(
     project.id
   );
 
-  const config = getGitHubConfig(project);
+  const config = await getGitHubConfigAsync(project);
   if (!config) {
     throw new Error("No GitHub configuration found for project");
   }
@@ -1873,7 +1873,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     async (_, projectId: string): Promise<PRListResult> => {
       debugLog("listPRs handler called", { projectId });
       const result = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found for project");
           return { prs: [], hasNextPage: false, endCursor: null };
@@ -1890,7 +1890,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     async (_, projectId: string, cursor: string): Promise<PRListResult> => {
       debugLog("listMorePRs handler called", { projectId, cursor });
       const result = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found for project");
           return { prs: [], hasNextPage: false, endCursor: null };
@@ -1907,7 +1907,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     async (_, projectId: string, prNumber: number): Promise<PRData | null> => {
       debugLog("getPR handler called", { projectId, prNumber });
       return withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) return null;
 
         try {
@@ -1975,7 +1975,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     IPC_CHANNELS.GITHUB_PR_GET_DIFF,
     async (_, projectId: string, prNumber: number): Promise<string | null> => {
       return withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) return null;
 
         try {
@@ -2121,7 +2121,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
           stateManager.handleProgress(projectId, prNumber, startProgress);
 
           // Auto-assign current user to PR
-          const config = getGitHubConfig(project);
+          const config = await getGitHubConfigAsync(project);
           if (config) {
             try {
               // Get current user
@@ -2251,7 +2251,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
           return false;
         }
 
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found");
           return false;
@@ -2551,7 +2551,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
           return false;
         }
 
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found");
           return false;
@@ -2652,7 +2652,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     async (_, projectId: string, prNumber: number, username: string): Promise<boolean> => {
       debugLog("assignPR handler called", { projectId, prNumber, username });
       const assignResult = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) return false;
 
         try {
@@ -2753,7 +2753,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
         }
 
         // Get current PR HEAD
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           return { hasNewCommits: false, newCommitCount: 0 };
         }
@@ -2910,7 +2910,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
       };
 
       const result = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found for checkMergeReadiness");
           return defaultResult;
@@ -3122,7 +3122,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
             projectId
           );
 
-          const config = getGitHubConfig(project);
+          const config = await getGitHubConfigAsync(project);
           if (!config) {
             sendError({ prNumber, error: "No GitHub configuration found for project" });
             return;
@@ -3393,7 +3393,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     }> => {
       debugLog("getWorkflowsAwaitingApproval handler called", { projectId, prNumber });
       const result = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           return {
             awaiting_approval: 0,
@@ -3472,7 +3472,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     async (_, projectId: string, runId: number): Promise<boolean> => {
       debugLog("approveWorkflow handler called", { projectId, runId });
       const result = await withProjectOrNull(projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found");
           return false;
@@ -3651,7 +3651,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
       });
 
       const result = await withProjectOrNull(request.projectId, async (project) => {
-        const config = getGitHubConfig(project);
+        const config = await getGitHubConfigAsync(project);
         if (!config) {
           debugLog("No GitHub config found for project, cannot start polling");
           return { success: false, error: "No GitHub configuration found" };
