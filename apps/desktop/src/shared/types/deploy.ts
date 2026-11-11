@@ -174,6 +174,8 @@ export interface DeployProjectSettings {
   repo?: { owner: string; repo: string; createdByApp: boolean; public?: boolean };
   vercel?: { projectId: string; projectName: string; teamId?: string };
   database?: { provider: 'neon'; addedAt: string };
+  /** Recorded just before the database is added, so a retry after a crash or timeout finds the resource instead of adding a second one. */
+  pendingDatabase?: { name: string; at: string };
   /** ISO time setup finished. */
   setUpAt?: string;
   /** Recorded just before the app asks GitHub to create the repo, so a re-run can adopt it instead of creating a second one. */
@@ -207,7 +209,7 @@ export interface NeededFromYou {
   projects?: Array<{ id: string; name: string }>;
   /** database-terms: the integration the terms are for, and the policy links to show (https only). */
   integration?: string;
-  policyLinks?: Array<{ name: string; url: string }>;
+  policyLinks?: Array<{ name: string; url: string; host: string }>;
 }
 
 export type DeploySetupStep = 'repo' | 'push' | 'vercel' | 'done';

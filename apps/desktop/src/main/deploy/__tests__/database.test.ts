@@ -26,7 +26,7 @@ const TERMS = {
 };
 
 /** Fake CLI: answers per scenario, one JSON-ish response per call, recording argv/cwd/env/link file. */
-function fakeCli(responses: Record<string, Array<{ code: number; out: string }>>): { bin: string; calls: () => Array<any> } {
+function fakeCli(responses: Record<string, Array<{ code: number; out: string; delay?: number }>>): { bin: string; calls: () => Array<any> } {
   const bin = path.join(work, 'fake-vercel');
   const log = path.join(work, 'calls.jsonl');
   const script = `#!/usr/bin/env node
@@ -41,7 +41,8 @@ let mode = null; try { mode = fs.statSync(process.cwd()).mode & 0o777; } catch {
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), token: process.env.VERCEL_TOKEN, link, mode }) + '\\n');
 const list = responses[sub] || [{ code: 0, out: '{}' }];
 const r = list[Math.min(i, list.length - 1)];
-process.stdout.write(r.out); process.exit(r.code);
+const done = () => { process.stdout.write(r.out); process.exit(r.code); };
+if (r.delay) setTimeout(done, r.delay); else done();
 `;
   writeFileSync(bin, script);
   chmodSync(bin, 0o755);
@@ -51,26 +52,35 @@ process.stdout.write(r.out); process.exit(r.code);
   };
 }
 
-function setup(responses: Record<string, Array<{ code: number; out: string }>>, deploy?: Partial<DeployProjectSettings>, extra: Partial<DatabaseDeps> = {}) {
+function setup(responses: Record<string, Array<{ code: number; out: string; delay?: number }>>, deploy?: Partial<DeployProjectSettings>, extra: Partial<DatabaseDeps> = {}) {
   const cli = fakeCli(responses);
   const saved: Array<Partial<DeployProjectSettings>> = [];
+  let current: DeployProjectSettings = { enabled: true, vercel: { projectId: 'prj_1', projectName: 'my-cool-app', teamId: 'team_1' }, ...deploy } as DeployProjectSettings;
+  const mk = () => ({ id: 'p1', name: 'My Cool App!', path: '/x/my-cool-app', settings: { deploy: structuredClone(current) } }) as unknown as Project;
   const tmpRoot = mkdtempSync(path.join(work, 'tmp-'));
   const deps: DatabaseDeps = {
     binary: cli.bin,
     configDir: path.join(work, 'config'),
     getToken: async () => TOKEN,
-    saveSettings: (p) => void saved.push(p),
+    saveSettings: (p) => {
+      if (extra.saveSettings) return extra.saveSettings(p);
+      saved.push(p);
+      current = { ...current, ...p };
+    },
+    loadProject: () => mk(),
     userId: 'user_1',
     tmpRoot,
     now: () => new Date('2026-11-11T10:00:00Z'),
     ...extra,
   };
-  const project = {
-    id: 'p1',
-    name: 'My Cool App!',
-    path: '/x/my-cool-app',
-    settings: { deploy: { enabled: true, vercel: { projectId: 'prj_1', projectName: 'my-cool-app', teamId: 'team_1' }, ...deploy } },
-  } as unknown as Project;
+  if (extra.saveSettings) {
+    const inner = extra.saveSettings;
+    deps.saveSettings = (p) => {
+      const r = inner(p);
+      return r;
+    };
+  }
+  const project = mk();
   return { cli, saved, deps, project, tmpRoot };
 }
 
@@ -83,7 +93,10 @@ describe('addDatabase', () => {
     const { cli, saved, deps, project, tmpRoot } = setup({ 'integration installations': [INSTALLED], 'integration add': [OK] });
     const r = await addDatabase(project, deps);
     expect(r).toEqual({ ok: true });
-    expect(saved).toEqual([{ database: { provider: 'neon', addedAt: '2026-11-11T10:00:00.000Z' } }]);
+    expect(saved).toEqual([
+      { pendingDatabase: { name: 'my-cool-app-db', at: '2026-11-11T10:00:00.000Z' } },
+      { database: { provider: 'neon', addedAt: '2026-11-11T10:00:00.000Z' }, pendingDatabase: undefined },
+    ]);
     const calls = cli.calls();
     const add = calls.find((c) => c.argv[0] === 'integration' && c.argv[1] === 'add')!;
     expect(add.argv).toEqual(expect.arrayContaining(['neon', '--billing-plan', 'free_v3', '--no-env-pull', '--json']));
@@ -111,10 +124,10 @@ describe('addDatabase', () => {
     const needed = (r as any).needed;
     expect(needed.kind).toBe('database-terms');
     expect(needed.integration).toBe('neon');
-    expect(needed.policyLinks).toEqual([{ name: 'Marketplace End User Addendum', url: 'https://vercel.com/legal/integration-marketplace-end-users-addendum' }]);
+    expect(needed.policyLinks).toEqual([{ name: 'Marketplace End User Addendum', url: 'https://vercel.com/legal/integration-marketplace-end-users-addendum', host: 'vercel.com' }]);
     expect(JSON.stringify(needed)).not.toContain('token=abc');
     expect(cli.calls().some((c) => c.argv[1] === 'accept-terms')).toBe(false);
-    expect(saved).toEqual([]);
+    expect(saved.some((p) => p.database)).toBe(false);
     expect(readdirSync(tmpRoot)).toEqual([]);
   });
 
@@ -130,7 +143,7 @@ describe('addDatabase', () => {
     expect(subs).toEqual(['integration installations', 'integration add', 'integration accept-terms', 'integration add']);
     const acc = cli.calls()[2];
     expect(acc.argv).toEqual(expect.arrayContaining(['neon', '--yes', '--json']));
-    expect(saved).toHaveLength(1);
+    expect(saved.filter((p) => p.database)).toHaveLength(1);
   });
 
   it('already installed: terms are not asked for', async () => {
@@ -159,7 +172,7 @@ describe('addDatabase', () => {
     const adds = cli.calls().filter((c) => c.argv[1] === 'add');
     expect(adds).toHaveLength(2);
     expect(adds[1].argv[adds[1].argv.indexOf('--billing-plan') + 1]).toBe('neon_free');
-    expect(saved).toHaveLength(1);
+    expect(saved.filter((p) => p.database)).toHaveLength(1);
   });
 
   it('plan fallback happens once, then errors without echoing CLI output', async () => {
@@ -196,5 +209,108 @@ describe('addDatabase', () => {
     expect(((await addDatabase(a.project, a.deps)) as any).error.kind).toBe('not-set-up');
     const b = setup({}, undefined, { getToken: async () => null });
     expect(((await addDatabase(b.project, b.deps)) as any).error.kind).toBe('auth');
+  });
+
+  it('terms without readable links fall back to the dashboard', async () => {
+    const noLinks = { ...TERMS, policy_links: { Evil: 'javascript:alert(1)' } };
+    for (const body of [noLinks, { ...TERMS, policy_links: undefined }]) {
+      const { deps, project } = setup({ 'integration installations': [NOT_INSTALLED], 'integration add': [{ code: 1, out: JSON.stringify(body) }] });
+      const r: any = await addDatabase(project, deps);
+      expect(r.needed.kind).toBe('database-dashboard');
+      expect(r.needed.actionUrl).toBe(TERMS.verification_uri);
+    }
+  });
+
+  it('save failing after a successful add is a distinct error, and a retry does not add again', async () => {
+    let failDb = true;
+    const { cli, deps, project } = setup(
+      { 'integration installations': [INSTALLED], 'integration add': [OK], 'integration list': [{ code: 0, out: '{"resources":[{"name":"my-cool-app-db"}]}' }] },
+      undefined,
+      {
+        saveSettings: (p) => {
+          if (p.database && failDb) throw new Error('disk');
+          lastSaved.push(p);
+          return undefined;
+        },
+      },
+    );
+    const lastSaved: Array<Partial<DeployProjectSettings>> = [];
+    const r: any = await addDatabase(project, deps);
+    expect(r.error.kind).toBe('saved-failed');
+    expect(r.error.message).toBe("The database was added, but the app couldn't save that");
+    expect(cli.calls().filter((c) => c.argv[1] === 'add')).toHaveLength(1);
+    // retry: the pending record (kept by the fake store) makes it look for the resource
+    failDb = false;
+    const retryDeps = { ...deps, loadProject: () => ({ ...project, settings: { deploy: { ...project.settings.deploy, pendingDatabase: lastSaved[0]?.pendingDatabase ?? { name: 'my-cool-app-db', at: 'x' } } } }) as Project };
+    expect(await addDatabase(project, retryDeps)).toEqual({ ok: true });
+    expect(cli.calls().filter((c) => c.argv[1] === 'add')).toHaveLength(1);
+    expect(lastSaved.some((p) => p.database)).toBe(true);
+  });
+
+  it('timeout mid-add: the retry finds the existing resource', async () => {
+    const { cli, saved, deps, project } = setup(
+      {
+        'integration installations': [INSTALLED],
+        'integration add': [{ code: 0, out: '{}', delay: 5000 }],
+        'integration list': [{ code: 0, out: '{"resources":[{"name":"my-cool-app-db"}]}' }],
+      },
+      undefined,
+      { timeoutMs: 400 },
+    );
+    const r1: any = await addDatabase(project, deps);
+    expect(r1.error.kind).toBe('timeout');
+    expect(saved.some((p) => p.pendingDatabase)).toBe(true);
+    expect(await addDatabase(project, deps)).toEqual({ ok: true });
+    expect(cli.calls().filter((c) => c.argv[1] === 'add')).toHaveLength(1);
+    expect(saved.some((p) => p.database)).toBe(true);
+  });
+
+  it('an "already exists" error on add counts as success', async () => {
+    const { saved, deps, project } = setup({ 'integration installations': [INSTALLED], 'integration add': [{ code: 1, out: 'Error: A resource named x already exists' }] });
+    expect(await addDatabase(project, deps)).toEqual({ ok: true });
+    expect(saved.some((p) => p.database)).toBe(true);
+  });
+
+  it('two concurrent calls run add once', async () => {
+    const { cli, deps, project } = setup({ 'integration installations': [INSTALLED], 'integration add': [{ code: 0, out: '{}', delay: 300 }] });
+    const [a, b] = await Promise.all([addDatabase(project, deps), addDatabase(project, deps)]);
+    expect(a).toEqual({ ok: true });
+    expect(b).toEqual({ ok: true });
+    expect(cli.calls().filter((c) => c.argv[1] === 'add')).toHaveLength(1);
+  });
+
+  it('uses a fresh project (loadProject) for the already-recorded check', async () => {
+    const { cli, deps, project } = setup({}, undefined, { loadProject: () => ({ ...project, settings: { deploy: { ...project.settings.deploy, database: { provider: 'neon', addedAt: 'x' } } } }) as Project });
+    expect(await addDatabase(project, deps)).toEqual({ ok: true });
+    expect(cli.calls()).toEqual([]);
+  });
+
+  it('accept-terms failing is a cli error, not another terms item', async () => {
+    const { deps, project } = setup({
+      'integration installations': [NOT_INSTALLED],
+      'integration add': [{ code: 1, out: JSON.stringify(TERMS) }],
+      'integration accept-terms': [{ code: 1, out: 'nope' }],
+    });
+    const r: any = await addDatabase(project, deps, { acceptTerms: true });
+    expect(r.error.kind).toBe('cli');
+  });
+
+  it('terms demanded again after accept: no loop, dashboard fallback', async () => {
+    const { cli, deps, project } = setup({
+      'integration installations': [NOT_INSTALLED],
+      'integration add': [{ code: 1, out: JSON.stringify(TERMS) }],
+      'integration accept-terms': [{ code: 0, out: '{}' }],
+    });
+    const r: any = await addDatabase(project, deps, { acceptTerms: true });
+    expect(r.needed.kind).toBe('database-dashboard');
+    expect(cli.calls().filter((c) => c.argv[1] === 'accept-terms')).toHaveLength(1);
+    expect(cli.calls().filter((c) => c.argv[1] === 'add')).toHaveLength(2);
+  });
+
+  it('already installed + terms demanded + acceptTerms: no accept call', async () => {
+    const { cli, deps, project } = setup({ 'integration installations': [INSTALLED], 'integration add': [{ code: 1, out: JSON.stringify(TERMS) }] });
+    const r: any = await addDatabase(project, deps, { acceptTerms: true });
+    expect(r.needed.kind).toBe('database-terms');
+    expect(cli.calls().some((c) => c.argv[1] === 'accept-terms')).toBe(false);
   });
 });

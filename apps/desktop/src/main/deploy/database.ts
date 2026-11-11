@@ -22,6 +22,8 @@ export interface DatabaseDeps {
   configDir: string;
   getToken: () => Promise<string | null>;
   /** Merges `patch` into the stored `project.settings.deploy`. Throws when it can't save. */
+  /** The project's current stored settings (re-read after a lock wait so "already recorded" is fresh). */
+  loadProject?: () => Promise<Project | undefined> | Project | undefined;
   saveSettings: (patch: Partial<DeployProjectSettings>) => Promise<void> | void;
   /** The signed-in Vercel user's id: the org of a project in the personal account. */
   userId?: string;
@@ -31,7 +33,7 @@ export interface DatabaseDeps {
   timeoutMs?: number;
 }
 
-export type DatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' | 'unknown';
+export type DatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' | 'saved-failed' | 'unknown';
 
 export type AddDatabaseResult =
   | { ok: true }
@@ -70,13 +72,13 @@ function parseCliJson(text: string): unknown {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Does any slug/name-like field of the installations output say Neon? */
-function mentionsNeon(v: unknown, depth = 0): boolean {
+function mentionsName(v: unknown, name: string, depth = 0): boolean {
   if (depth > 6) return false;
-  if (Array.isArray(v)) return v.some((x) => mentionsNeon(x, depth + 1));
+  if (Array.isArray(v)) return v.some((x) => mentionsName(x, name, depth + 1));
   if (!isRecord(v)) return false;
   for (const [k, val] of Object.entries(v)) {
-    if (typeof val === 'string' && /^(slug|name|integration|integrationSlug|integrationId)$/i.test(k) && val.trim().toLowerCase() === 'neon') return true;
-    if (mentionsNeon(val, depth + 1)) return true;
+    if (typeof val === 'string' && /^(slug|name|integration|integrationSlug|integrationId)$/i.test(k) && val.trim().toLowerCase() === name) return true;
+    if (mentionsName(val, name, depth + 1)) return true;
   }
   return false;
 }
@@ -99,11 +101,13 @@ function vercelUrl(value: unknown): string | undefined {
   return host === 'vercel.com' || host.endsWith('.vercel.com') ? url : undefined;
 }
 
-function policyLinks(raw: unknown): Array<{ name: string; url: string }> {
-  const out: Array<{ name: string; url: string }> = [];
+type PolicyLink = { name: string; url: string; host: string };
+
+function policyLinks(raw: unknown): PolicyLink[] {
+  const out: PolicyLink[] = [];
   const add = (name: unknown, url: unknown) => {
     const ok = httpsUrl(url);
-    if (ok) out.push({ name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 100) : ok, url: ok });
+    if (ok) out.push({ name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 100) : ok, url: ok, host: new URL(ok).hostname });
   };
   if (Array.isArray(raw)) {
     for (const item of raw) {
@@ -118,7 +122,8 @@ function policyLinks(raw: unknown): Array<{ name: string; url: string }> {
 
 type Outcome =
   | { kind: 'ok' }
-  | { kind: 'terms'; links: Array<{ name: string; url: string }> }
+  | { kind: 'terms'; links: PolicyLink[]; url?: string }
+  | { kind: 'exists' }
   | { kind: 'action'; url?: string }
   | { kind: 'plan-rejected'; plans: string[] }
   | { kind: 'failed' };
@@ -137,10 +142,11 @@ function classify(r: RunVercelCliResult): Outcome {
   const text = `${r.stdout}\n${r.stderr}`;
   const json = parseCliJson(r.stdout) ?? parseCliJson(r.stderr);
   if (isRecord(json) && json.status === 'action_required') {
-    if (json.reason === 'INTEGRATION_TERMS_ACCEPTANCE_REQUIRED') return { kind: 'terms', links: policyLinks(json.policy_links ?? json.policyLinks) };
+    if (json.reason === 'INTEGRATION_TERMS_ACCEPTANCE_REQUIRED') return { kind: 'terms', links: policyLinks(json.policy_links ?? json.policyLinks), url: vercelUrl(json.verification_uri) };
     return { kind: 'action', url: vercelUrl(json.verification_uri) };
   }
   if (r.code === 0) return { kind: 'ok' };
+  if (/already exists/i.test(text)) return { kind: 'exists' };
   const plans = plansFrom(text);
   if (plans) return { kind: 'plan-rejected', plans };
   return { kind: 'failed' };
@@ -157,10 +163,30 @@ function databaseNameFor(project: Project): string {
   return `${base || 'app'}-db`;
 }
 
-export async function addDatabase(project: Project, deps: DatabaseDeps, opts: { acceptTerms?: boolean } = {}): Promise<AddDatabaseResult> {
+const inflight = new Map<string, Promise<AddDatabaseResult>>();
+
+/** One run per project at a time: a second caller joins the running one. */
+export function addDatabase(project: Project, deps: DatabaseDeps, opts: { acceptTerms?: boolean } = {}): Promise<AddDatabaseResult> {
+  const running = inflight.get(project.id);
+  if (running) return running;
+  const p = run(project, deps, opts).finally(() => {
+    inflight.delete(project.id);
+  });
+  inflight.set(project.id, p);
+  return p;
+}
+
+async function run(given: Project, deps: DatabaseDeps, opts: { acceptTerms?: boolean }): Promise<AddDatabaseResult> {
+  let project = given;
+  try {
+    project = (await deps.loadProject?.()) ?? given;
+  } catch {
+    return fail('unknown', 'Adding the database failed.');
+  }
   const deploy = project.settings.deploy;
   if (deploy?.database) return { ok: true };
   const vercel = deploy?.vercel;
+  const vercelDeploy = deploy ?? ({} as DeployProjectSettings);
   if (!vercel?.projectId) return fail('not-set-up', 'This project is not set up on Vercel yet.');
   const orgId = vercel.teamId ?? deps.userId;
   if (!orgId) return fail('not-set-up', 'The Vercel account is not known yet.');
@@ -175,35 +201,53 @@ export async function addDatabase(project: Project, deps: DatabaseDeps, opts: { 
     await writeFile(path.join(dir, '.vercel', 'project.json'), JSON.stringify({ projectId: vercel.projectId, orgId }), { mode: 0o600 });
 
     const scope = vercel.teamId ? ['--scope', vercel.teamId] : [];
-    const run = (args: string[]) =>
+    const cli = (args: string[]) =>
       runVercelCli([...args, ...scope], { binary: deps.binary, configDir: deps.configDir, token, cwd: dir, timeoutMs: deps.timeoutMs ?? DEFAULT_TIMEOUT_MS });
-    const dbName = databaseNameFor(project);
+    const dbName = vercelDeploy.pendingDatabase?.name ?? databaseNameFor(project);
     const addArgs = (plan: string) => ['integration', 'add', 'neon', '--name', dbName, '--billing-plan', plan, '-e', 'production', '-e', 'preview', '--no-env-pull', '--json'];
 
     // Neon already installed on the team: the terms were accepted before.
-    const inst = await run(['integration', 'installations', '--json']);
-    const installed = inst.code === 0 && mentionsNeon(parseCliJson(inst.stdout));
+    const inst = await cli(['integration', 'installations', '--json']);
+    const installed = inst.code === 0 && mentionsName(parseCliJson(inst.stdout), 'neon');
+
+    const record = async (): Promise<AddDatabaseResult> => {
+      try {
+        await deps.saveSettings({ database: { provider: 'neon', addedAt: (deps.now?.() ?? new Date()).toISOString() }, pendingDatabase: undefined });
+      } catch {
+        return fail('saved-failed', "The database was added, but the app couldn't save that");
+      }
+      return { ok: true };
+    };
+
+    if (vercelDeploy.pendingDatabase) {
+      // A previous attempt may have created it (crash, timeout, failed save).
+      const list = await cli(['integration', 'list', '--json']);
+      if (list.code === 0 && mentionsName(parseCliJson(list.stdout), dbName.toLowerCase())) return record();
+    } else {
+      try {
+        await deps.saveSettings({ pendingDatabase: { name: dbName, at: (deps.now?.() ?? new Date()).toISOString() } });
+      } catch {
+        return fail('unknown', 'Adding the database failed.');
+      }
+    }
 
     let plan = DEFAULT_PLAN;
     let planRetried = false;
     let accepted = false;
     for (let attempt = 0; attempt < 4; attempt++) {
-      const out = classify(await run(addArgs(plan)));
-      if (out.kind === 'ok') {
-        await deps.saveSettings({ database: { provider: 'neon', addedAt: (deps.now?.() ?? new Date()).toISOString() } });
-        return { ok: true };
-      }
+      const out = classify(await cli(addArgs(plan)));
+      if (out.kind === 'ok' || out.kind === 'exists') return record();
       if (out.kind === 'terms') {
         if (opts.acceptTerms && !accepted && !installed) {
           accepted = true;
-          const acc = classify(await run(['integration', 'accept-terms', 'neon', '--yes', '--json']));
-          if (acc.kind === 'ok') continue;
+          const acc = classify(await cli(['integration', 'accept-terms', 'neon', '--yes', '--json']));
+          if (acc.kind !== 'ok') return fail('cli', 'The Vercel CLI could not accept the terms.');
+          continue;
         }
+        if (accepted || out.links.length === 0) return dashboard(out.url);
         return { ok: false, needed: { id: 'database-terms', kind: 'database-terms', message: 'Vercel needs you to accept the Neon Marketplace terms.', integration: 'neon', policyLinks: out.links } };
       }
-      if (out.kind === 'action') {
-        return { ok: false, needed: { id: 'database-dashboard', kind: 'database-dashboard', message: 'Finish adding the database in the Vercel dashboard.', ...(out.url ? { actionUrl: out.url } : {}) } };
-      }
+      if (out.kind === 'action') return dashboard(out.url);
       if (out.kind === 'plan-rejected' && !planRetried) {
         planRetried = true;
         const free = out.plans.find((p) => /free/i.test(p) && p !== plan);
@@ -221,4 +265,8 @@ export async function addDatabase(project: Project, deps: DatabaseDeps, opts: { 
   } finally {
     if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+function dashboard(url?: string): AddDatabaseResult {
+  return { ok: false, needed: { id: 'database-dashboard', kind: 'database-dashboard', message: 'Finish adding the database in the Vercel dashboard.', ...(url ? { actionUrl: url } : {}) } };
 }
