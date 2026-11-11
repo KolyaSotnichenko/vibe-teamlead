@@ -197,16 +197,18 @@ describe('push and origin (real local bare remote)', () => {
     writeFileSync(path.join(work, 'a.txt'), 'a');
     git(work, 'add', '.');
     git(work, 'commit', '-m', 'init');
-    return { bare, work };
+    return { bare, work, root };
   }
-  type Rec = { args: string[]; env: Record<string, string | undefined>; hooksDirExisted?: boolean };
-  /** Records the call, redirects https://github.com/me/app.git to the local bare repo via one extra env config pair, runs real git. */
+  type Rec = { args: string[]; cwd: string; env: Record<string, string | undefined>; hooksDirExisted?: boolean; tempConfig?: string };
+  /** Records the call, redirects the github URL to the local bare repo via one extra env config pair (test only), runs real git. */
   function recordingRunner(calls: Rec[], redirectTo?: string): GitRunner {
     return (_file, args, opts) =>
       new Promise((resolve, reject) => {
-        const rec: Rec = { args, env: opts.env };
+        const rec: Rec = { args, cwd: opts.cwd, env: opts.env };
         const hp = envPairs(opts.env)['core.hooksPath'];
         rec.hooksDirExisted = hp ? existsSync(hp) : undefined;
+        const gd = args.find((a) => a.startsWith('--git-dir='))?.slice('--git-dir='.length);
+        if (gd) rec.tempConfig = readFileSync(path.join(gd, 'config'), 'utf-8');
         calls.push(rec);
         const env = { ...opts.env } as Record<string, string | undefined>;
         if (redirectTo) {
@@ -220,65 +222,144 @@ describe('push and origin (real local bare remote)', () => {
         );
       });
   }
+  const head = (d: string, ref = 'HEAD') => git(d, 'rev-parse', ref).trim();
 
-  it('pushes to an explicit github URL; token only in env config, scoped, hooks disabled, config untouched', async () => {
+  it('pushes the resolved sha from a private temp repo; token only in env config; project untouched', async () => {
     const { bare, work } = setup();
     const before = readFileSync(path.join(work, '.git', 'config'), 'utf-8');
+    const sha = head(work);
     const calls: Rec[] = [];
     await pushWithAppToken(work, URL_OK, 'main:refs/heads/main', { getToken, runner: recordingRunner(calls, bare) });
-    expect(git(bare, 'rev-parse', 'refs/heads/main').trim()).toBe(git(work, 'rev-parse', 'HEAD').trim());
-    const { args, env, hooksDirExisted } = calls[0];
-    expect(args).toEqual(['push', '--no-verify', '--', URL_OK, 'main:refs/heads/main']);
+    expect(head(bare, 'refs/heads/main')).toBe(sha);
+    expect(calls).toHaveLength(1);
+    const { args, env, hooksDirExisted, cwd } = calls[0];
+    const gitDirArg = args[0];
+    expect(gitDirArg).toMatch(/^--git-dir=.*vt-push-/);
+    expect(args.slice(1)).toEqual(['push', '--no-verify', '--', URL_OK, `${sha}:refs/heads/main`]);
+    expect(cwd).not.toBe(work);
     expect(args.join(' ')).not.toContain('tok_SECRET');
     expect(args.join(' ')).not.toContain(BASIC);
     const pairs = envPairs(env);
     expect(pairs['credential.helper']).toBe('');
     expect(pairs['http.https://github.com/.extraheader']).toBe(`AUTHORIZATION: basic ${BASIC}`);
     expect(pairs['http.followRedirects']).toBe('false');
-    const hooks = pairs['core.hooksPath'];
-    expect(hooks).toBeTruthy();
-    expect(hooksDirExisted).toBe(true);
-    expect(existsSync(hooks)).toBe(false); // removed after the push
     expect(pairs['http.sslVerify']).toBe('true');
-    expect(Object.keys(pairs)).toHaveLength(5);
+    expect(pairs['push.gpgSign']).toBe('false');
+    const hooks = pairs['core.hooksPath'];
+    expect(hooksDirExisted).toBe(true);
+    expect(Object.keys(pairs)).toHaveLength(6);
     expect(env.GIT_CONFIG_NOSYSTEM).toBe('1');
     expect(env.GIT_CONFIG_GLOBAL).toBe('/dev/null');
-    // the token appears in no other variable
+    expect(env.GIT_TRACE_REDACT).toBe('1');
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0');
     for (const [k, v] of Object.entries(env)) {
       if (k.startsWith('GIT_CONFIG_VALUE_') && v === `AUTHORIZATION: basic ${BASIC}`) continue;
       expect(String(v)).not.toContain('tok_SECRET');
       expect(String(v)).not.toContain(BASIC);
     }
-    expect(env.GIT_TRACE_REDACT).toBe('1');
-    expect(env.GIT_TERMINAL_PROMPT).toBe('0');
+    // the temp repo's own config is git's bare-init default only, and it is gone afterwards
+    expect(calls[0].tempConfig).not.toMatch(/http|url|credential|include|gpg|fsmonitor/i);
+    expect(existsSync(hooks)).toBe(false);
+    expect(existsSync(gitDirArg.slice('--git-dir='.length))).toBe(false);
     expect(readFileSync(path.join(work, '.git', 'config'), 'utf-8')).toBe(before);
     expect(readFileSync(path.join(bare, 'config'), 'utf-8')).not.toContain('tok_SECRET');
   });
 
-  it('never runs project hooks (pre-push, reference-transaction) so they cannot read the token', async () => {
-    const { bare, work } = setup();
-    const dump = path.join(work, 'hook-env.txt');
-    for (const hook of ['pre-push', 'reference-transaction']) {
+  it('never reads the project config or hooks: risky settings and scripts have no effect', async () => {
+    const { bare, work, root } = setup();
+    const marker = path.join(root, 'ran.txt');
+    const script = path.join(root, 'evil.sh');
+    writeFileSync(script, `#!/bin/sh\necho "$0 $@" >> "${marker}"\nenv >> "${marker}"\ncat >/dev/null\nexit 1\n`);
+    chmodSync(script, 0o755);
+    const inc = path.join(root, 'inc.cfg');
+    writeFileSync(inc, `[core]\n\tfsmonitor = ${script}\n`);
+    const set = (...a: string[]) => git(work, 'config', '--local', ...a);
+    set('http.proxy', 'http://127.0.0.1:9');
+    set('http.sslVerify', 'false');
+    set('url.https://evil.invalid/.insteadOf', 'https://github.com/');
+    set('url.https://evil.invalid/.pushInsteadOf', 'https://github.com/');
+    set('include.path', inc);
+    set('includeIf.gitdir:/**.path', inc);
+    set('core.fsmonitor', script);
+    set('core.sshCommand', script);
+    set('gpg.program', script);
+    set('push.gpgSign', 'true');
+    set('credential.helper', `!${script}`);
+    set('remote.origin.vcs', 'evil');
+    set('remote.origin.url', 'https://evil.invalid/x.git');
+    set('extensions.worktreeConfig', 'true');
+    git(work, 'config', '--worktree', 'http.proxy', 'http://127.0.0.1:9');
+    for (const hook of ['pre-push', 'reference-transaction', 'post-commit']) {
       const f = path.join(work, '.git', 'hooks', hook);
-      writeFileSync(f, `#!/bin/sh\nenv >> "${dump}"\ncat >/dev/null\n`);
+      writeFileSync(f, `#!/bin/sh\nenv >> "${marker}"\ncat >/dev/null\n`);
       chmodSync(f, 0o755);
     }
+    const sha = head(work);
     await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
-    expect(git(bare, 'rev-parse', 'refs/heads/main').trim()).toBe(git(work, 'rev-parse', 'HEAD').trim());
-    expect(existsSync(dump)).toBe(false);
+    expect(head(bare, 'refs/heads/main')).toBe(sha);
+    expect(existsSync(marker)).toBe(false);
   });
 
-  it('control: without the protections the same hook does run (test is meaningful)', async () => {
-    const { bare, work } = setup();
-    const dump = path.join(work, 'hook-env.txt');
+  it('control: the same project does run its hook under a plain push (the isolation test is meaningful)', () => {
+    const { bare, work, root } = setup();
+    const marker = path.join(root, 'ran.txt');
     const f = path.join(work, '.git', 'hooks', 'pre-push');
-    writeFileSync(f, `#!/bin/sh\nenv >> "${dump}"\ncat >/dev/null\n`);
+    writeFileSync(f, `#!/bin/sh\nenv >> "${marker}"\ncat >/dev/null\n`);
     chmodSync(f, 0o755);
     execFileSync('git', ['push', bare, 'main'], { cwd: work });
-    expect(existsSync(dump)).toBe(true);
+    expect(existsSync(marker)).toBe(true);
   });
 
-  it('scrubs the environment: tracing, inherited config and verbose variables', async () => {
+  it('resolves a branch from packed-refs', async () => {
+    const { bare, work } = setup();
+    git(work, 'pack-refs', '--all');
+    expect(existsSync(path.join(work, '.git', 'refs', 'heads', 'main'))).toBe(false);
+    const sha = head(work);
+    await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
+    expect(head(bare, 'refs/heads/main')).toBe(sha);
+  });
+
+  it('resolves HEAD and a src:dst refspec', async () => {
+    const { bare, work } = setup();
+    const sha = head(work);
+    await pushWithAppToken(work, URL_OK, 'HEAD:refs/heads/deploy', { getToken, runner: recordingRunner([], bare) });
+    expect(head(bare, 'refs/heads/deploy')).toBe(sha);
+  });
+
+  it('works for a linked-worktree project path (common dir, own HEAD)', async () => {
+    const { bare, work } = setup();
+    const linked = path.join(path.dirname(work), 'linked');
+    git(work, 'worktree', 'add', '-b', 'feat', linked);
+    writeFileSync(path.join(linked, 'b.txt'), 'b');
+    git(linked, 'add', '.');
+    git(linked, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'feat');
+    const sha = head(linked);
+    expect(sha).not.toBe(head(work));
+    await pushWithAppToken(linked, URL_OK, 'HEAD:refs/heads/feat', { getToken, runner: recordingRunner([], bare) });
+    expect(head(bare, 'refs/heads/feat')).toBe(sha);
+    await pushWithAppToken(linked, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
+    expect(head(bare, 'refs/heads/main')).toBe(head(work));
+  });
+
+  it('fails clearly when the ref does not exist, without running git', async () => {
+    const { work } = setup();
+    const runner = vi.fn(async () => '');
+    const err = await pushWithAppToken(work, URL_OK, 'nope', { getToken, runner }).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.kind).toBe('invalid');
+    expect(err.message).toContain('nope');
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it('fails clearly when the project is not a git repository', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'gw-nogit-'));
+    const runner = vi.fn(async () => '');
+    const err = await pushWithAppToken(dir, URL_OK, 'main', { getToken, runner }).catch((e) => e);
+    expect(err.kind).toBe('invalid');
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it('scrubs the environment: tracing, inherited config, TLS overrides', async () => {
     const { work } = setup();
     const saved = { ...process.env };
     Object.assign(process.env, {
@@ -304,7 +385,13 @@ describe('push and origin (real local bare remote)', () => {
     });
     const calls: Rec[] = [];
     try {
-      await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: async (_f, a, o) => { calls.push({ args: a, env: o.env }); return ''; } });
+      await pushWithAppToken(work, URL_OK, 'main', {
+        getToken,
+        runner: async (_f, a, o) => {
+          calls.push({ args: a, cwd: o.cwd, env: o.env });
+          return '';
+        },
+      });
     } finally {
       for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
       Object.assign(process.env, saved);
@@ -315,7 +402,7 @@ describe('push and origin (real local bare remote)', () => {
     }
     expect(envPairs(env)['http.proxy']).toBeUndefined();
     expect(env.HTTPS_PROXY).toBe('http://corp-proxy:3128');
-    expect(env.GIT_CONFIG_COUNT).toBe('5');
+    expect(env.GIT_CONFIG_COUNT).toBe('6');
     expect(env.GIT_TRACE_REDACT).toBe('1');
   });
 
@@ -336,42 +423,6 @@ describe('push and origin (real local bare remote)', () => {
     const err = await pushWithAppToken('/tmp', url, 'main', { getToken, runner }).catch((e) => e);
     expect(err.kind).toBe('invalid');
     expect(runner).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['http.proxy', 'http://evil:1'],
-    ['http.sslVerify', 'false'],
-    ['http.sslCAInfo', '/evil.pem'],
-    ['http.https://github.com/.extraHeader', 'X: y'],
-    ['url.https://evil/.insteadOf', 'https://github.com/'],
-    ['url.https://evil/.pushInsteadOf', 'https://github.com/'],
-    ['include.path', INCLUDE_FILE],
-    ['includeIf.gitdir:/a/.path', INCLUDE_FILE],
-    ['core.sshCommand', 'evil'],
-    ['core.gitProxy', 'evil'],
-    ['remote.origin.proxy', 'http://evil:1'],
-  ])('refuses a project whose local config sets %s (no values in the message)', async (key, value) => {
-    const { work } = setup();
-    git(work, 'config', '--local', key, value);
-    const runner = recordingRunner([]);
-    const calls: unknown[] = [];
-    const spy: GitRunner = (f, a, o) => {
-      calls.push(a);
-      return runner(f, a, o);
-    };
-    const err = await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: spy }).catch((e) => e);
-    expect(err.kind).toBe('unsafe-config');
-    expect(err.message.toLowerCase()).toContain(key.split('.')[0].toLowerCase());
-    expect(err.message).not.toContain(value);
-    expect(calls.some((a) => (a as string[])[0] === 'push')).toBe(false);
-  });
-
-  it('pushes when the local config is clean (user, branch, core settings)', async () => {
-    const { bare, work } = setup();
-    git(work, 'config', '--local', 'core.autocrlf', 'false');
-    git(work, 'config', '--local', 'branch.main.remote', 'origin');
-    await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
-    expect(git(bare, 'rev-parse', 'refs/heads/main').trim()).toBe(git(work, 'rev-parse', 'HEAD').trim());
   });
 
   it('accepts a URL without .git', async () => {
@@ -395,7 +446,7 @@ describe('push and origin (real local bare remote)', () => {
   });
 
   it('refuses without a token', async () => {
-    const err = await pushWithAppToken('/tmp', URL_OK, 'main', { getToken: async () => null, runner: vi.fn() }).catch((e) => e);
+    const err = await pushWithAppToken(setup().work, URL_OK, 'main', { getToken: async () => null, runner: vi.fn() }).catch((e) => e);
     expect(err.kind).toBe('no-connection');
   });
 

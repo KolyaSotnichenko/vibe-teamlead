@@ -7,7 +7,7 @@
  * a remote URL or git config, and never appears in errors or logs.
  */
 import { execFile } from 'child_process';
-import { mkdtemp, rm } from 'fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import sodium from 'libsodium-wrappers';
@@ -42,7 +42,7 @@ export interface PushOptions {
 
 /** Error carrying a classified GitHub error kind. */
 export class GitHubWriteError extends Error {
-  readonly kind: GitHubError['kind'] | 'conflict' | 'invalid' | 'unsafe-config';
+  readonly kind: GitHubError['kind'] | 'conflict' | 'invalid';
   readonly status?: number;
   constructor(kind: GitHubWriteError['kind'], message: string, status?: number) {
     super(message);
@@ -195,19 +195,6 @@ function isUnsafeGitVar(key: string): boolean {
   );
 }
 
-/** Local config keys that can reroute or inspect the request (the project's .git/config is agent-writable). */
-function isRiskyConfigKey(key: string): boolean {
-  return (
-    key.startsWith('http.') ||
-    key.startsWith('url.') ||
-    key.startsWith('include.') ||
-    key.startsWith('includeif.') ||
-    key === 'core.sshcommand' ||
-    key === 'core.gitproxy' ||
-    /^remote\..*\.proxy$/.test(key)
-  );
-}
-
 function scrubbedGitEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(getIsolatedGitEnv())) if (!isUnsafeGitVar(k)) env[k] = v;
@@ -216,33 +203,99 @@ function scrubbedGitEnv(): Record<string, string | undefined> {
   return env;
 }
 
-/** Refuses a project whose local git config could route the push elsewhere or expose the header. */
-async function assertSafeLocalConfig(projectPath: string): Promise<void> {
-  let out: string;
+const HEX_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const BRANCH_NAME = /^[A-Za-z0-9._/-]{1,200}$/;
+
+const invalid = (message: string): GitHubWriteError => new GitHubWriteError('invalid', message);
+
+async function readText(file: string): Promise<string | null> {
   try {
-    out = await defaultRunner(
-      getToolPath('git'),
-      ['config', '--local', '--no-includes', '--list', '--show-origin', '--null'],
-      { cwd: projectPath, env: scrubbedGitEnv(), timeout: 10_000 },
-    );
+    return await readFile(file, 'utf-8');
   } catch {
-    throw new GitHubWriteError('unsafe-config', 'Could not read the project git config; not pushing.');
-  }
-  const parts = out.split('\0');
-  // --null with --show-origin: <origin>\0<key>\n<value>\0 ...
-  for (let i = 1; i < parts.length; i += 2) {
-    const key = parts[i].split('\n')[0].toLowerCase();
-    if (isRiskyConfigKey(key)) {
-      throw new GitHubWriteError('unsafe-config', `The project's git config sets "${key}", which could redirect or expose the push credentials. Remove it and try again.`);
-    }
+    return null;
   }
 }
 
+/** The project's git dir (own HEAD) and common dir (refs, objects); for a linked worktree they differ. Reads files only. */
+async function locateGitDirs(projectPath: string): Promise<{ gitDir: string; commonDir: string }> {
+  const dotGit = path.join(projectPath, '.git');
+  let st;
+  try {
+    st = await stat(dotGit);
+  } catch {
+    throw invalid('The project is not a git repository');
+  }
+  let gitDir = dotGit;
+  if (st.isFile()) {
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec((await readText(dotGit)) ?? '');
+    if (!m) throw invalid('The project is not a git repository');
+    gitDir = path.resolve(projectPath, m[1]);
+  }
+  const common = (await readText(path.join(gitDir, 'commondir')))?.trim();
+  const commonDir = common ? path.resolve(gitDir, common) : gitDir;
+  if (!(await readText(path.join(commonDir, 'HEAD'))) && !(await readText(path.join(gitDir, 'HEAD')))) {
+    throw invalid('The project is not a git repository');
+  }
+  return { gitDir, commonDir };
+}
+
+async function readRef(gitDir: string, commonDir: string, ref: string, depth = 0): Promise<string | null> {
+  if (depth > 5 || ref.includes('..') || ref.startsWith('/')) return null;
+  const perWorktree = ref === 'HEAD' || ref.startsWith('refs/bisect/') || ref.startsWith('refs/worktree/');
+  const loose = (await readText(path.join(perWorktree ? gitDir : commonDir, ref)))?.trim();
+  if (loose) {
+    const sym = /^ref:\s*(\S+)$/.exec(loose);
+    if (sym) return readRef(gitDir, commonDir, sym[1], depth + 1);
+    return HEX_SHA.test(loose) ? loose : null;
+  }
+  const packed = (await readText(path.join(commonDir, 'packed-refs'))) ?? '';
+  for (const line of packed.split('\n')) {
+    if (line.startsWith('#') || line.startsWith('^')) continue;
+    const [sha, name] = line.trim().split(' ');
+    if (name === ref && HEX_SHA.test(sha ?? '')) return sha;
+  }
+  return null;
+}
+
+/** `src[:dst]` → the commit to push and its destination branch ref, resolved from files (no git process, no project config). */
+async function resolvePushSource(
+  projectPath: string,
+  refspec: string,
+): Promise<{ sha: string; dst: string; commonDir: string }> {
+  if (refspec.startsWith('-') || refspec.startsWith('+')) throw invalid('Invalid refspec');
+  const [src, dstRaw, ...extra] = refspec.split(':');
+  if (extra.length || !src || !BRANCH_NAME.test(src) || (dstRaw !== undefined && !BRANCH_NAME.test(dstRaw))) {
+    throw invalid('Invalid refspec');
+  }
+  const { gitDir, commonDir } = await locateGitDirs(projectPath);
+  const candidates = src === 'HEAD' || src.startsWith('refs/') ? [src] : [`refs/heads/${src}`];
+  let sha: string | null = null;
+  for (const c of candidates) {
+    sha = await readRef(gitDir, commonDir, c);
+    if (sha) break;
+  }
+  if (!sha) throw invalid(`Branch "${src}" was not found in the project`);
+  let dst = dstRaw;
+  if (!dst) {
+    dst = src.startsWith('refs/heads/') ? src : src === 'HEAD' ? '' : `refs/heads/${src}`;
+    if (!dst) throw invalid('Give a destination branch when pushing HEAD');
+  } else if (!dst.startsWith('refs/')) {
+    dst = `refs/heads/${dst}`;
+  }
+  if (!dst.startsWith('refs/heads/') || dst.includes('..') || dst.endsWith('/') || dst.endsWith('.lock')) {
+    throw invalid('Invalid destination branch');
+  }
+  return { sha, dst, commonDir };
+}
+
 /**
- * Pushes `refspec` to the GitHub repo at `url` (exactly https://github.com/<owner>/<repo>[.git])
- * authenticating with the App user token for this one command only. The token travels in
- * the child's env as scoped git config (not argv), project hooks are disabled, and
- * redirects are refused.
+ * Pushes `refspec` (`branch[:dst]`, or `HEAD:dst`) to the GitHub repo at `url`
+ * (exactly https://github.com/<owner>/<repo>[.git]) authenticating with the App user token.
+ *
+ * The project's git config, hooks and worktree config are never loaded: the commit is
+ * resolved by reading ref files, then pushed from a private temporary bare repo that
+ * borrows the project's objects through `objects/info/alternates`. The token travels in
+ * the child's env as scoped git config (not argv); redirects are refused.
  */
 export async function pushWithAppToken(
   projectPath: string,
@@ -252,22 +305,34 @@ export async function pushWithAppToken(
 ): Promise<void> {
   const { getToken = getValidAccessToken, runner = defaultRunner } = options;
   const m = GITHUB_URL.exec(url);
-  if (!m || m[2] === '.' || m[2] === '..' || refspec.startsWith('-')) {
-    throw new GitHubWriteError('invalid', 'Push target must be https://github.com/<owner>/<repo>');
+  if (!m || m[2] === '.' || m[2] === '..') {
+    throw invalid('Push target must be https://github.com/<owner>/<repo>');
   }
+  const { sha, dst, commonDir } = await resolvePushSource(projectPath, refspec);
   const token = await getToken();
   if (!token) throw new GitHubWriteError('no-connection', 'Not signed in to GitHub. Please sign in first.');
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
-  await assertSafeLocalConfig(projectPath);
-  const hooksDir = await mkdtemp(path.join(tmpdir(), 'vt-nohooks-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'vt-push-'));
   try {
+    await chmod(root, 0o700);
+    const gitDir = path.join(root, 'repo.git');
+    const hooksDir = path.join(root, 'hooks');
+    await mkdir(hooksDir, { mode: 0o700 });
     const env = scrubbedGitEnv();
+    await defaultRunner(getToolPath('git'), ['init', '--bare', '--quiet', '--template=', gitDir], {
+      cwd: root,
+      env,
+      timeout: 10_000,
+    });
+    await mkdir(path.join(gitDir, 'objects', 'info'), { recursive: true });
+    await writeFile(path.join(gitDir, 'objects', 'info', 'alternates'), `${path.join(commonDir, 'objects')}\n`);
     const config: Array<[string, string]> = [
       ['credential.helper', ''],
       ['http.https://github.com/.extraheader', `AUTHORIZATION: basic ${basic}`],
       ['http.followRedirects', 'false'],
       ['http.sslVerify', 'true'],
       ['core.hooksPath', hooksDir],
+      ['push.gpgSign', 'false'],
     ];
     env.GIT_CONFIG_COUNT = String(config.length);
     config.forEach(([k, v], i) => {
@@ -276,8 +341,8 @@ export async function pushWithAppToken(
     });
     env.GIT_TRACE_REDACT = '1';
     env.GIT_TERMINAL_PROMPT = '0';
-    await runner(getToolPath('git'), ['push', '--no-verify', '--', url, refspec], {
-      cwd: projectPath,
+    await runner(getToolPath('git'), [`--git-dir=${gitDir}`, 'push', '--no-verify', '--', url, `${sha}:${dst}`], {
+      cwd: root,
       env,
       timeout: PUSH_TIMEOUT_MS,
     });
@@ -286,7 +351,7 @@ export async function pushWithAppToken(
     const clean = raw.split(token).join('***').split(basic).join('***').slice(0, 500);
     throw new GitHubWriteError('unavailable', `git push failed: ${clean}`);
   } finally {
-    await rm(hooksDir, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
   }
 }
 
