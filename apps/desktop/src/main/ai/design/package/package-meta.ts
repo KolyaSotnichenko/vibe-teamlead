@@ -12,7 +12,10 @@ import { writeFileReplacingSync } from '../../safe-write';
 
 export const PACKAGE_DIR = '.vibe-teamlead/design/package';
 
-const metaFile = (projectPath: string) => path.join(projectPath, '.vibe-teamlead', 'design', 'package-meta.json');
+/** The package meta file, relative to the project. */
+export const PACKAGE_META_FILE = '.vibe-teamlead/design/package-meta.json';
+
+const metaFile = (projectPath: string) => path.join(projectPath, ...PACKAGE_META_FILE.split('/'));
 
 const COMPONENT_ROOTS = ['apps/web/src/components', 'src/components', 'components', 'app/components'];
 
@@ -35,6 +38,26 @@ export function writePackageMeta(projectPath: string, info: DesignPackageInfo): 
 }
 
 const COMPONENT_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
+const NAMESPACE = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
+const TEXT_MAX = 200;
+
+/** A package namespace safe to put in paths and prompts; 'ds' when it is not a plain identifier. */
+export function safeNamespace(value: unknown): string {
+  return typeof value === 'string' && NAMESPACE.test(value) ? value : 'ds';
+}
+
+/** Package text (name, licence line) as one clean line: no control characters, no tags, capped. */
+export function cleanPackageText(value: string): string {
+  return value
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: removing control characters is the point
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/</g, '\u2039')
+    .replace(/>/g, '\u203a')
+    .slice(0, TEXT_MAX)
+    .trim();
+}
 
 /** A relative path that stays inside the project: no absolute path, no `..` segment. */
 function safeRelative(value: unknown): value is string {
@@ -70,8 +93,8 @@ export function readPackageMeta(projectPath: string): DesignPackageInfo | undefi
   const tokensCss = packageFile(raw.tokensCss);
   const built = Array.isArray(raw.built) ? raw.built.filter((v): v is string => typeof v === 'string' && COMPONENT_NAME.test(v)) : undefined;
   return {
-    name,
-    namespace,
+    name: cleanPackageText(name),
+    namespace: safeNamespace(namespace),
     importedAt,
     dir,
     componentsDir,
@@ -81,7 +104,7 @@ export function readPackageMeta(projectPath: string): DesignPackageInfo | undefi
     ...(tokensCss ? { tokensCss } : {}),
     logos: files(raw.logos),
     fonts: files(raw.fonts),
-    ...(typeof raw.licenceLine === 'string' ? { licenceLine: raw.licenceLine } : {}),
+    ...(typeof raw.licenceLine === 'string' && cleanPackageText(raw.licenceLine) ? { licenceLine: cleanPackageText(raw.licenceLine) } : {}),
     themes: raw.themes === 'light-dark' ? 'light-dark' : 'light',
     ...(built ? { built } : {}),
   };

@@ -109,6 +109,20 @@ describe('designPromptSection', () => {
       expect(designPromptSection(withPkg({ themes: 'light-dark' }), { role: 'qa', storybookEnabled: false })).toContain('both themes');
     });
 
+    it('gives the package name only inside a data block, and no licence line', () => {
+      for (const role of ['builder', 'qa'] as const) {
+        const text = designPromptSection(withPkg({ name: 'Zeta Kit', licenceLine: 'Fonts licence: secret' }), { role, storybookEnabled: false });
+        const open = text.indexOf('<package_details>');
+        const close = text.indexOf('</package_details>');
+        expect(open).toBeGreaterThan(-1);
+        expect(close).toBeGreaterThan(open);
+        const outside = text.slice(0, open) + text.slice(close);
+        expect(text.slice(open, close)).toContain('Zeta Kit');
+        expect(outside).not.toContain('Zeta Kit');
+        expect(text).not.toContain('Fonts licence: secret');
+      }
+    });
+
     it('has no package heading without a package', () => {
       expect(designPromptSection(loadDesignSystem(project(), undefined), { role: 'builder', storybookEnabled: false })).not.toContain('Design package components');
     });
