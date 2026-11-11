@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.34 - 2026-11-11
+
+- GitHub: signing in is now followed by installing the Vibe Teamlead app on GitHub. Signing in only authorized the app, so it could reach no private repository and project setup failed with "GitHub API … returned HTTP 404". After sign-in (project setup, the first-run wizard, Deploy) Vibe Teamlead asks you to install the app and choose its repositories, and checks again when you come back. A repository the app can't see now says why (installed only on selected repositories, or not installed on the owner) with a button to fix it and **Check again**, in project setup and in Deploy.
+
 ## 2.0.0-beta.33 - 2026-11-11
 
 - First-run wizard: an optional Accounts step between Memory and Done signs you in to GitHub in the browser (for pushing branches, pull requests and, later, deploy). Skip it and connect later in the project's settings, under GitHub.
