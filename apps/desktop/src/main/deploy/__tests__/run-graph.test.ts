@@ -166,4 +166,16 @@ describe('buildRunGraph', () => {
     const g = buildRunGraph('jobs:\n  a:\n    name: ${{ matrix.x }}\n', [job('whatever')], []);
     expect(g.columns[0].stage).toBe('other');
   });
+
+  it('stays linear on names with many unclosed expression openers', () => {
+    const long = '${{ a'.repeat(20_000);
+    const yaml = `jobs:\n  a:\n    name: ${JSON.stringify(long)}\n`;
+    const t = Date.now();
+    const g = buildRunGraph(yaml, [job('x'.repeat(200))], []);
+    expect(Date.now() - t).toBeLessThan(100);
+    expect(g.columns[0].stage).toBe('other');
+    const t2 = Date.now();
+    buildRunGraph(`jobs:\n  a:\n    name: ${JSON.stringify('${{'.repeat(10_000))}\n`, [job('a')], []);
+    expect(Date.now() - t2).toBeLessThan(100);
+  });
 });

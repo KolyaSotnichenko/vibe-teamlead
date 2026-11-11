@@ -86,10 +86,30 @@ function matchesSegments(name: string, segments: string[]): boolean {
   return name.length - last.length >= pos && name.endsWith(last);
 }
 
+const MAX_MATCH_NAME = 256;
+
+/** Splits on `${{ … }}` in linear time; an unclosed `${{` stays literal text. */
+function splitExpressions(text: string): string[] {
+  const segments: string[] = [];
+  let pos = 0;
+  for (;;) {
+    const open = text.indexOf('${{', pos);
+    const close = open < 0 ? -1 : text.indexOf('}}', open + 3);
+    if (close < 0) {
+      segments.push(text.slice(pos));
+      return segments;
+    }
+    segments.push(text.slice(pos, open));
+    pos = close + 2;
+  }
+}
+
 /** Matches the API name against a workflow name: exact, matrix suffix " (…)", or reusable prefix "name / ". */
 function nameMatcher(workflowName: string): (name: string) => boolean {
+  // Very long names match only exactly; keeps matching cheap on hostile input.
+  if (workflowName.length > MAX_MATCH_NAME) return (name) => name === workflowName;
   if (workflowName.includes('${{')) {
-    const segments = workflowName.split(/\$\{\{.*?\}\}/);
+    const segments = splitExpressions(workflowName);
     if (segments.length < 2 || segments.every((x) => x === '')) return () => false;
     return (name) => matchesSegments(name, segments);
   }
