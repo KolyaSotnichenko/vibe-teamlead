@@ -42,7 +42,7 @@ export interface PushOptions {
 
 /** Error carrying a classified GitHub error kind. */
 export class GitHubWriteError extends Error {
-  readonly kind: GitHubError['kind'] | 'conflict' | 'invalid';
+  readonly kind: GitHubError['kind'] | 'conflict' | 'invalid' | 'unsafe-config';
   readonly status?: number;
   constructor(kind: GitHubWriteError['kind'], message: string, status?: number) {
     super(message);
@@ -78,7 +78,7 @@ async function api(
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      });
+    });
   } catch {
     throw new GitHubWriteError('unavailable', 'Could not reach GitHub. Check your connection and try again.');
   }
@@ -182,11 +182,60 @@ function isUnsafeGitVar(key: string): boolean {
     key === 'GIT_TRACE_PACKET' ||
     key === 'GIT_TRACE_SETUP' ||
     key === 'GIT_CURL_VERBOSE' ||
+    key === 'GIT_TRACE_PERFORMANCE' ||
+    key === 'GIT_TRACE_PACK_ACCESS' ||
+    key === 'GIT_SSL_NO_VERIFY' ||
+    key === 'GIT_SSL_CAINFO' ||
+    key === 'GIT_SSL_CAPATH' ||
+    key === 'CURL_CA_BUNDLE' ||
     key.startsWith('GIT_TRACE2') ||
     key === 'GIT_CONFIG_PARAMETERS' ||
     key === 'GIT_CONFIG_COUNT' ||
     /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(key)
   );
+}
+
+/** Local config keys that can reroute or inspect the request (the project's .git/config is agent-writable). */
+function isRiskyConfigKey(key: string): boolean {
+  return (
+    key.startsWith('http.') ||
+    key.startsWith('url.') ||
+    key.startsWith('include.') ||
+    key.startsWith('includeif.') ||
+    key === 'core.sshcommand' ||
+    key === 'core.gitproxy' ||
+    /^remote\..*\.proxy$/.test(key)
+  );
+}
+
+function scrubbedGitEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(getIsolatedGitEnv())) if (!isUnsafeGitVar(k)) env[k] = v;
+  env.GIT_CONFIG_NOSYSTEM = '1';
+  env.GIT_CONFIG_GLOBAL = '/dev/null';
+  return env;
+}
+
+/** Refuses a project whose local git config could route the push elsewhere or expose the header. */
+async function assertSafeLocalConfig(projectPath: string): Promise<void> {
+  let out: string;
+  try {
+    out = await defaultRunner(
+      getToolPath('git'),
+      ['config', '--local', '--no-includes', '--list', '--show-origin', '--null'],
+      { cwd: projectPath, env: scrubbedGitEnv(), timeout: 10_000 },
+    );
+  } catch {
+    throw new GitHubWriteError('unsafe-config', 'Could not read the project git config; not pushing.');
+  }
+  const parts = out.split('\0');
+  // --null with --show-origin: <origin>\0<key>\n<value>\0 ...
+  for (let i = 1; i < parts.length; i += 2) {
+    const key = parts[i].split('\n')[0].toLowerCase();
+    if (isRiskyConfigKey(key)) {
+      throw new GitHubWriteError('unsafe-config', `The project's git config sets "${key}", which could redirect or expose the push credentials. Remove it and try again.`);
+    }
+  }
 }
 
 /**
@@ -209,14 +258,15 @@ export async function pushWithAppToken(
   const token = await getToken();
   if (!token) throw new GitHubWriteError('no-connection', 'Not signed in to GitHub. Please sign in first.');
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  await assertSafeLocalConfig(projectPath);
   const hooksDir = await mkdtemp(path.join(tmpdir(), 'vt-nohooks-'));
   try {
-    const env: Record<string, string | undefined> = {};
-    for (const [k, v] of Object.entries(getIsolatedGitEnv())) if (!isUnsafeGitVar(k)) env[k] = v;
+    const env = scrubbedGitEnv();
     const config: Array<[string, string]> = [
       ['credential.helper', ''],
       ['http.https://github.com/.extraheader', `AUTHORIZATION: basic ${basic}`],
       ['http.followRedirects', 'false'],
+      ['http.sslVerify', 'true'],
       ['core.hooksPath', hooksDir],
     ];
     env.GIT_CONFIG_COUNT = String(config.length);

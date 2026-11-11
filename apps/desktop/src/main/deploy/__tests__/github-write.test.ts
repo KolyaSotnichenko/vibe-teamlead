@@ -173,6 +173,8 @@ function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8' });
 }
 
+const INCLUDE_FILE = path.join(mkdtempSync(path.join(tmpdir(), 'gw-inc-')), 'extra.cfg');
+writeFileSync(INCLUDE_FILE, '[x]\n\ty = 1\n');
 const URL_OK = 'https://github.com/me/app.git';
 const BASIC = Buffer.from('x-access-token:tok_SECRET').toString('base64');
 
@@ -237,7 +239,10 @@ describe('push and origin (real local bare remote)', () => {
     expect(hooks).toBeTruthy();
     expect(hooksDirExisted).toBe(true);
     expect(existsSync(hooks)).toBe(false); // removed after the push
-    expect(Object.keys(pairs)).toHaveLength(4);
+    expect(pairs['http.sslVerify']).toBe('true');
+    expect(Object.keys(pairs)).toHaveLength(5);
+    expect(env.GIT_CONFIG_NOSYSTEM).toBe('1');
+    expect(env.GIT_CONFIG_GLOBAL).toBe('/dev/null');
     // the token appears in no other variable
     for (const [k, v] of Object.entries(env)) {
       if (k.startsWith('GIT_CONFIG_VALUE_') && v === `AUTHORIZATION: basic ${BASIC}`) continue;
@@ -289,6 +294,13 @@ describe('push and origin (real local bare remote)', () => {
       GIT_CONFIG_KEY_0: 'http.proxy',
       GIT_CONFIG_VALUE_0: 'http://evil',
       GIT_TRACE_REDACT: '0',
+      GIT_SSL_NO_VERIFY: '1',
+      GIT_SSL_CAINFO: '/evil.pem',
+      GIT_SSL_CAPATH: '/evil',
+      CURL_CA_BUNDLE: '/evil.pem',
+      GIT_TRACE_PERFORMANCE: '1',
+      GIT_TRACE_PACK_ACCESS: '1',
+      HTTPS_PROXY: 'http://corp-proxy:3128',
     });
     const calls: Rec[] = [];
     try {
@@ -298,11 +310,12 @@ describe('push and origin (real local bare remote)', () => {
       Object.assign(process.env, saved);
     }
     const env = calls[0].env;
-    for (const k of ['GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_TRACE_PACKET', 'GIT_TRACE_SETUP', 'GIT_CURL_VERBOSE', 'GIT_TRACE2', 'GIT_TRACE2_EVENT', 'GIT_CONFIG_PARAMETERS']) {
+    for (const k of ['GIT_TRACE', 'GIT_TRACE_CURL', 'GIT_TRACE_PACKET', 'GIT_TRACE_SETUP', 'GIT_CURL_VERBOSE', 'GIT_TRACE2', 'GIT_TRACE2_EVENT', 'GIT_CONFIG_PARAMETERS', 'GIT_SSL_NO_VERIFY', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH', 'CURL_CA_BUNDLE', 'GIT_TRACE_PERFORMANCE', 'GIT_TRACE_PACK_ACCESS']) {
       expect(env[k]).toBeUndefined();
     }
     expect(envPairs(env)['http.proxy']).toBeUndefined();
-    expect(env.GIT_CONFIG_COUNT).toBe('4');
+    expect(env.HTTPS_PROXY).toBe('http://corp-proxy:3128');
+    expect(env.GIT_CONFIG_COUNT).toBe('5');
     expect(env.GIT_TRACE_REDACT).toBe('1');
   });
 
@@ -325,9 +338,45 @@ describe('push and origin (real local bare remote)', () => {
     expect(runner).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['http.proxy', 'http://evil:1'],
+    ['http.sslVerify', 'false'],
+    ['http.sslCAInfo', '/evil.pem'],
+    ['http.https://github.com/.extraHeader', 'X: y'],
+    ['url.https://evil/.insteadOf', 'https://github.com/'],
+    ['url.https://evil/.pushInsteadOf', 'https://github.com/'],
+    ['include.path', INCLUDE_FILE],
+    ['includeIf.gitdir:/a/.path', INCLUDE_FILE],
+    ['core.sshCommand', 'evil'],
+    ['core.gitProxy', 'evil'],
+    ['remote.origin.proxy', 'http://evil:1'],
+  ])('refuses a project whose local config sets %s (no values in the message)', async (key, value) => {
+    const { work } = setup();
+    git(work, 'config', '--local', key, value);
+    const runner = recordingRunner([]);
+    const calls: unknown[] = [];
+    const spy: GitRunner = (f, a, o) => {
+      calls.push(a);
+      return runner(f, a, o);
+    };
+    const err = await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: spy }).catch((e) => e);
+    expect(err.kind).toBe('unsafe-config');
+    expect(err.message.toLowerCase()).toContain(key.split('.')[0].toLowerCase());
+    expect(err.message).not.toContain(value);
+    expect(calls.some((a) => (a as string[])[0] === 'push')).toBe(false);
+  });
+
+  it('pushes when the local config is clean (user, branch, core settings)', async () => {
+    const { bare, work } = setup();
+    git(work, 'config', '--local', 'core.autocrlf', 'false');
+    git(work, 'config', '--local', 'branch.main.remote', 'origin');
+    await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
+    expect(git(bare, 'rev-parse', 'refs/heads/main').trim()).toBe(git(work, 'rev-parse', 'HEAD').trim());
+  });
+
   it('accepts a URL without .git', async () => {
     const runner = vi.fn(async () => '');
-    await pushWithAppToken('/tmp', 'https://github.com/me/app', 'main', { getToken, runner });
+    await pushWithAppToken(setup().work, 'https://github.com/me/app', 'main', { getToken, runner });
     expect(runner).toHaveBeenCalledTimes(1);
   });
 
@@ -337,7 +386,7 @@ describe('push and origin (real local bare remote)', () => {
         stderr: `fatal: header AUTHORIZATION: basic ${BASIC} rejected for tok_SECRET`,
       });
     };
-    const err = await pushWithAppToken('/tmp', URL_OK, 'main', { getToken, runner }).catch((e) => e);
+    const err = await pushWithAppToken(setup().work, URL_OK, 'main', { getToken, runner }).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     const text = `${err.message}\n${err.stack ?? ''}\n${JSON.stringify(err)}`;
     expect(text).not.toContain('tok_SECRET');
