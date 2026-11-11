@@ -24,8 +24,8 @@ export function toNodeStatus(status: DeployStatus, conclusion?: string): GraphNo
   }
 }
 
-/** Square mark: outline (queued), turning outline (running), ink ✓, vermilion ✕, muted – (skipped, cancelled). */
-export function StatusMark({ status, className }: { status: GraphNodeStatus; className?: string }) {
+/** Square mark: outline (queued), turning outline (running), ink ✓, vermilion ✕, muted – (skipped, cancelled), vermilion-outlined ! (attention: waiting for the owner). */
+export function StatusMark({ status, className }: { status: GraphNodeStatus | 'attention'; className?: string }) {
   const { t } = useTranslation(['deploy']);
   return (
     <span data-marker={status} className={cn('inline-flex h-4 w-4 shrink-0 items-center justify-center', className)}>
@@ -37,10 +37,11 @@ export function StatusMark({ status, className }: { status: GraphNodeStatus; cla
           status === 'running' && 'h-3 w-3 animate-spin border-2 border-foreground border-t-transparent motion-reduce:animate-none',
           status === 'success' && 'h-4 w-4 bg-foreground text-background',
           status === 'failure' && 'h-4 w-4 bg-destructive text-destructive-foreground',
-          (status === 'skipped' || status === 'cancelled') && 'h-4 w-4 border border-border text-muted-foreground'
+          (status === 'skipped' || status === 'cancelled') && 'h-4 w-4 border border-border text-muted-foreground',
+          status === 'attention' && 'h-4 w-4 border border-destructive text-destructive'
         )}
       >
-        {status === 'success' ? '✓' : status === 'failure' ? '✕' : status === 'skipped' || status === 'cancelled' ? '–' : ''}
+        {status === 'success' ? '✓' : status === 'failure' ? '✕' : status === 'skipped' || status === 'cancelled' ? '–' : status === 'attention' ? '!' : ''}
       </span>
       <span className="sr-only">{t(`deploy:status.${status}`)}</span>
     </span>
@@ -133,6 +134,33 @@ export function isWebUrl(url: string | null | undefined): url is string {
 export function openWebUrl(url: string): void {
   if (!isWebUrl(url)) return;
   void Promise.resolve(window.electronAPI.openExternal(url)).catch(() => undefined);
+}
+
+/** https only (no credentials): for links whose source is a third party, such as Marketplace policy links. */
+export function isHttpsUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
+/** A text link that opens a web URL in the browser (underlined, focus ring). */
+export function LinkButton({ url, children, mono }: { url: string; children: React.ReactNode; mono?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => openWebUrl(url)}
+      className={cn(
+        'text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        mono && 'font-mono text-[13px]'
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 /** Host and path of a URL, without the scheme, for display. */

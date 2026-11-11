@@ -236,7 +236,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-          <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} />
+          <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
         </div>
       )}
 
@@ -251,6 +251,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
               onSuccess={() => {
                 setSigningIn(false);
                 void window.electronAPI.deploy.startRuns(projectId, selectedRef.current);
+                void env.refresh();
               }}
               onCancel={() => setSigningIn(false)}
             />

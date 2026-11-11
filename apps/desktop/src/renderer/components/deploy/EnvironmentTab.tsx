@@ -19,15 +19,15 @@ import { cn } from '../../lib/utils';
 import { NeededFromYou } from './NeededFromYou';
 import { VariableDialog } from './VariableDialog';
 import type { DeployEnv } from './useDeployEnv';
-import { displayUrl, formatRelative, isWebUrl, openWebUrl, StatusMark, useDeployErrorText } from './status';
+import { displayUrl, formatRelative, isWebUrl, LinkButton, StatusMark, useDeployErrorText } from './status';
 
 const STEPS: DeploySetupStep[] = ['repo', 'push', 'vercel', 'done'];
 const TARGETS: ReadonlySet<string> = new Set(['production', 'preview', 'development']);
 
 function stepStatus(
   step: DeploySetupStep,
-  at: { current?: DeploySetupStep; running: boolean; failed: boolean; settings: DeployProjectSettings | null }
-): GraphNodeStatus {
+  at: { current?: DeploySetupStep; running: boolean; failed: boolean; waiting: boolean; settings: DeployProjectSettings | null }
+): GraphNodeStatus | 'attention' {
   if (step === 'push' && at.settings?.repo && !at.settings.repo.createdByApp) return 'skipped';
   if (at.current === 'done' || (!at.running && at.settings?.enabled)) return 'success';
   // Before 'repo' setup checks the accounts: shown as the first step
@@ -36,7 +36,9 @@ function stepStatus(
   if (index < current) return 'success';
   if (index > current) return 'queued';
   if (at.running) return 'running';
-  return at.failed ? 'failure' : 'queued';
+  if (at.failed) return 'failure';
+  // Stopped for something only the owner can do
+  return at.waiting ? 'attention' : 'queued';
 }
 
 function Section({ title, children, id }: { title: string; children: React.ReactNode; id: string }) {
@@ -64,21 +66,6 @@ function Notice({ tone, children }: { tone: 'attention' | 'info'; children: Reac
   );
 }
 
-function LinkButton({ url, children, mono }: { url: string; children: React.ReactNode; mono?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={() => openWebUrl(url)}
-      className={cn(
-        'text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        mono && 'font-mono text-[13px]'
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[140px_minmax(0,1fr)] items-baseline gap-3 border-b border-border px-3 py-2 last:border-b-0">
@@ -90,11 +77,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export interface EnvironmentTabProps {
   projectId: string;
+  /** Opens the GitHub sign-in dialog the Deploy page owns. */
+  onConnectGitHub: () => void;
   env: DeployEnv;
   productionUrl?: string | null;
 }
 
-export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTabProps) {
+export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub }: EnvironmentTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
   const errorText = useDeployErrorText();
   const { state } = env;
@@ -151,6 +140,7 @@ export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTab
 
   const setupDone = !!settings?.enabled;
   const setupFailed = !!lastSetup?.error;
+  const setupWaiting = (lastSetup?.needed ?? []).some((n) => n.kind !== 'public-repo-warning' && !acknowledged.has(n.id));
   const showSetup = !setupDone || setupRunning || (lastSetup && lastSetup.step !== 'done');
   const current = setupRunning ? (env.progress ?? undefined) : lastSetup?.step;
 
@@ -186,7 +176,7 @@ export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTab
             <fieldset className="flex flex-col gap-1.5">
               <legend className="mb-1.5 text-sm text-foreground">{t('deploy:setup.team')}</legend>
               <div className="flex flex-wrap">
-                {[{ id: null as string | null, label: t('deploy:setup.personal', { name: vercel?.user?.username ?? '' }) }, ...teams.map((x) => ({ id: x.id as string | null, label: x.name || x.slug }))].map((opt) => (
+                {[{ id: null as string | null, label: vercel?.user?.username ? t('deploy:setup.personal', { name: vercel.user.username }) : t('deploy:setup.personalNoName') }, ...teams.map((x) => ({ id: x.id as string | null, label: x.name || x.slug }))].map((opt) => (
                   <button
                     key={opt.id ?? '__personal'}
                     type="button"
@@ -216,7 +206,7 @@ export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTab
             <ol aria-label={t('deploy:setup.steps')} className="flex flex-col border border-foreground">
               {STEPS.map((step) => (
                 <li key={step} className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0">
-                  <StatusMark status={stepStatus(step, { current, running: setupRunning, failed: setupFailed, settings })} />
+                  <StatusMark status={stepStatus(step, { current, running: setupRunning, failed: setupFailed, waiting: setupWaiting, settings })} />
                   <span>{t(`deploy:setup.step.${step}`)}</span>
                 </li>
               ))}
@@ -234,6 +224,7 @@ export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTab
         onChooseProject={(choice) => void env.chooseVercelProject(choice)}
         onAcknowledge={(id) => setAcknowledged((s) => new Set([...s, id]))}
         onAddValue={(name) => setDialog({ name })}
+        onConnectGitHub={onConnectGitHub}
         onAcceptTerms={() => {
           if (!databaseRunning) void env.addDatabase(true);
         }}
@@ -337,6 +328,9 @@ export function EnvironmentTab({ projectId, env, productionUrl }: EnvironmentTab
         onSave={saveVariable}
         onSaved={(name, result) => {
           setDialog(null);
+          // The value is there now: its "needed" item goes without running setup again
+          const done = needed.filter((n) => n.kind === 'variable' && n.variable === name).map((n) => n.id);
+          if (done.length > 0) setAcknowledged((s) => new Set([...s, ...done]));
           setSavedNote(result.github === 'ok' ? t('deploy:variables.savedBoth', { name }) : t('deploy:variables.saved', { name }));
           void loadVariables();
         }}

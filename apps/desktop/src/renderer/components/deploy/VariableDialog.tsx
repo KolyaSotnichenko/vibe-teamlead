@@ -37,6 +37,12 @@ export function VariableDialog({ open, initialName, onClose, onSave, onSaved }: 
   const [sides, setSides] = useState<{ vercel: SideResult; github: SideResult } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
+  // Closed (cancel, Escape, outside click) or unmounted: the typed value is dropped
+  useEffect(() => {
+    if (!open) setValue('');
+    return () => setValue('');
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     setName(initialName ?? '');

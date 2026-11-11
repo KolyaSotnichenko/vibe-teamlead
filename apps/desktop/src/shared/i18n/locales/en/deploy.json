@@ -48,7 +48,8 @@
     "success": "Passed",
     "failure": "Failed",
     "skipped": "Skipped",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "attention": "Needs you"
   },
   "job": {
     "pick": "Click a job to see its steps and log.",
@@ -73,6 +74,7 @@
     "cta": "Set up deploy",
     "team": "Vercel account",
     "personal": "Personal ({{name}})",
+    "personalNoName": "Personal",
     "start": "Set up deploy",
     "running": "Setting up…",
     "retry": "Try again",

@@ -96,6 +96,9 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'debug', icon: Bug }
 ];
 
+/** The app-level sections `open-app-settings` can open. */
+export const APP_SECTIONS: readonly AppSection[] = appNavItemsConfig.map((item) => item.id);
+
 const projectNavItemsConfig: NavItemConfig<ProjectSettingsSection>[] = [
   { id: 'general', icon: Settings2 },
   { id: 'linear', icon: Zap },

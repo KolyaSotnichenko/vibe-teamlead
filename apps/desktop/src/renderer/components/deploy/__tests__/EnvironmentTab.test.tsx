@@ -22,9 +22,10 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../project-settings/GitHubOAuthFlow', () => ({ GitHubOAuthFlow: () => null }));
+vi.mock('../../project-settings/GitHubOAuthFlow', () => ({ GitHubOAuthFlow: () => <p>github-oauth-flow</p> }));
 
 import { DeployPage } from '../DeployPage';
+import { APP_SECTIONS } from '../../settings/AppSettings';
 
 // Radix (checkbox) measures itself; jsdom has no ResizeObserver
 const noop = () => undefined;
@@ -159,20 +160,46 @@ describe('Set up deploy', () => {
 });
 
 describe('Needed from you', () => {
-  it('Connect Vercel and Connect GitHub open their Settings sections', async () => {
-    setup({ env: needed([
-      { id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'm' },
-      { id: 'github-sign-in', kind: 'github-sign-in', message: 'm' },
-    ]) });
+  it('Connect Vercel opens the Vercel section of Settings (a real section)', async () => {
+    setup({ env: needed([{ id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'm' }]) });
     const sections: unknown[] = [];
     const listener = (e: Event) => sections.push((e as CustomEvent).detail);
     window.addEventListener('open-app-settings', listener);
     const panel = await openEnvironment();
     expect(await within(panel).findByText('deploy:needed.vercel-sign-in')).toBeInTheDocument();
     fireEvent.click(within(panel).getByRole('button', { name: 'deploy:needed.actions.connectVercel' }));
-    fireEvent.click(within(panel).getByRole('button', { name: 'deploy:needed.actions.connectGitHub' }));
     window.removeEventListener('open-app-settings', listener);
-    expect(sections).toEqual(['vercel', 'github']);
+    expect(sections).toEqual(['vercel']);
+    expect(APP_SECTIONS).toContain(sections[0]);
+  });
+
+  it('Connect GitHub opens the GitHub sign-in dialog, not Settings', async () => {
+    setup({ env: needed([{ id: 'github-sign-in', kind: 'github-sign-in', message: 'm' }]) });
+    const listener = vi.fn();
+    window.addEventListener('open-app-settings', listener);
+    const panel = await openEnvironment();
+    fireEvent.click(await within(panel).findByRole('button', { name: 'deploy:needed.actions.connectGitHub' }));
+    window.removeEventListener('open-app-settings', listener);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('deploy:signIn.title')).toBeInTheDocument();
+    expect(within(dialog).getByText('github-oauth-flow')).toBeInTheDocument();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('a step stopped for something needed from you shows an attention mark', async () => {
+    setup({ env: needed([{ id: 'vercel-git-access', kind: 'vercel-git-access', message: 'm' }]) });
+    const panel = await openEnvironment();
+    const steps = await within(panel).findByRole('list', { name: 'deploy:setup.steps' });
+    const mark = (name: string) => within(steps).getByText(name).closest('li')?.querySelector('[data-marker]')?.getAttribute('data-marker');
+    expect(mark('deploy:setup.step.repo')).toBe('success');
+    expect(mark('deploy:setup.step.vercel')).toBe('attention');
+    expect(within(steps).getByText('deploy:status.attention')).toBeInTheDocument();
+  });
+
+  it('Personal has no empty parentheses when the username is unknown', async () => {
+    setup({ vercel: { connected: true, user: { username: '' }, teams: [{ id: 'team_1', slug: 'acme', name: 'Acme' }] } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByRole('button', { name: 'deploy:setup.personalNoName' })).toBeInTheDocument();
   });
 
   it('Install app, Grant Vercel access and the dashboard open their links', async () => {
@@ -229,6 +256,11 @@ describe('Needed from you', () => {
     fireEvent.click(await within(panel).findByRole('button', { name: 'deploy:needed.actions.addValue' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('deploy:variableDialog.name')).toHaveValue('DATABASE_URL');
+    fireEvent.change(within(dialog).getByLabelText('deploy:variableDialog.value'), { target: { value: 'postgres://x' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'deploy:variableDialog.save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // saved: no longer needed, without running setup again
+    expect(within(panel).queryByText('deploy:needed.variable {"name":"DATABASE_URL"}')).not.toBeInTheDocument();
   });
 
   it('database terms: the integration, each policy link with its host, and Accept and add database', async () => {
@@ -240,6 +272,7 @@ describe('Needed from you', () => {
         policyLinks: [
           { name: 'Privacy Policy', url: 'https://neon.tech/privacy', host: 'neon.tech' },
           { name: 'Terms', url: 'https://evil.example/terms', host: 'evil.example' },
+          { name: 'Plain', url: 'http://neon.tech/plain', host: 'neon.tech' },
         ],
       } },
     } });
@@ -247,9 +280,11 @@ describe('Needed from you', () => {
     const panel = await openEnvironment();
     expect(await within(panel).findByText('deploy:needed.database-terms {"integration":"Neon"}')).toBeInTheDocument();
     expect(within(panel).getByText('evil.example')).toBeInTheDocument();
-    expect(within(panel).getByText('neon.tech')).toBeInTheDocument();
+    expect(within(panel).getAllByText('neon.tech').length).toBeGreaterThan(0);
     fireEvent.click(within(panel).getByRole('button', { name: 'Terms' }));
     expect(h.openExternal).toHaveBeenCalledWith('https://evil.example/terms');
+    // not https: shown, never a link
+    expect(within(panel).queryByRole('button', { name: 'Plain' })).not.toBeInTheDocument();
     const accept = within(panel).getByRole('button', { name: 'deploy:needed.actions.acceptTerms' });
     fireEvent.click(accept);
     expect(h.deploy.addDatabase).toHaveBeenCalledWith('p1', { acceptTerms: true });
@@ -327,6 +362,20 @@ describe('Variables', () => {
     expect(within(dialog).getByText('deploy:variableDialog.result.github.failed {"reason":"deploy:env.errors.permissions"}')).toBeInTheDocument();
     expect(within(dialog).queryByText('RAW')).not.toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain('v4lue');
+  });
+
+  it('cancel drops the typed value: reopening shows an empty field and the DOM never keeps it', async () => {
+    setup({ env: { settings: setUpSettings } });
+    const panel = await openEnvironment();
+    fireEvent.click(await within(panel).findByRole('button', { name: 'deploy:variables.add' }));
+    let dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('deploy:variableDialog.value'), { target: { value: 'typed_SECRET' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'deploy:variableDialog.cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(document.body.innerHTML).not.toContain('typed_SECRET');
+    fireEvent.click(within(panel).getByRole('button', { name: 'deploy:variables.add' }));
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('deploy:variableDialog.value')).toHaveValue('');
   });
 
   it('a list failure shows its kind', async () => {

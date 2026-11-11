@@ -4,8 +4,9 @@
  */
 import { useTranslation } from 'react-i18next';
 import type { NeededFromYou as NeededItem } from '../../../shared/types/deploy';
+import type { AppSection } from '../settings/AppSettings';
 import { Button } from '../ui/button';
-import { isWebUrl, openWebUrl } from './status';
+import { isHttpsUrl, isWebUrl, LinkButton, openWebUrl } from './status';
 
 const VERCEL_GITHUB_APP_URL = 'https://github.com/apps/vercel/installations/new';
 
@@ -19,10 +20,11 @@ export interface NeededFromYouProps {
   onAcknowledge: (id: string) => void;
   onAddValue: (name: string) => void;
   onAcceptTerms: () => void;
+  onConnectGitHub: () => void;
 }
 
-const openSettings = (section: 'vercel' | 'github') =>
-  window.dispatchEvent(new CustomEvent('open-app-settings', { detail: section }));
+const openSettings = (section: AppSection) =>
+  window.dispatchEvent(new CustomEvent<AppSection>('open-app-settings', { detail: section }));
 
 /** `neon` → `Neon`. */
 const integrationName = (slug?: string) => (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : '');
@@ -46,7 +48,7 @@ export function NeededFromYou(props: NeededFromYouProps) {
   );
 }
 
-function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAcknowledge, onAddValue, onAcceptTerms }: NeededFromYouProps & { item: NeededItem }) {
+function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAcknowledge, onAddValue, onAcceptTerms, onConnectGitHub }: NeededFromYouProps & { item: NeededItem }) {
   const { t } = useTranslation(['deploy']);
   const link = (label: string, url: string | undefined) =>
     isWebUrl(url) ? (
@@ -65,7 +67,7 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
       break;
     case 'github-sign-in':
       message = t('deploy:needed.github-sign-in');
-      actions = <Button size="sm" onClick={() => openSettings('github')}>{t('deploy:needed.actions.connectGitHub')}</Button>;
+      actions = <Button size="sm" onClick={onConnectGitHub}>{t('deploy:needed.actions.connectGitHub')}</Button>;
       break;
     case 'github-app-install':
       message = t('deploy:needed.github-app-install');
@@ -114,13 +116,8 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
         <ul aria-label={t('deploy:needed.policyLinks')} className="flex flex-col gap-1">
           {(item.policyLinks ?? []).map((l) => (
             <li key={l.url} className="flex flex-wrap items-baseline gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => openWebUrl(l.url)}
-                className="text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {l.name}
-              </button>
+              {/* Policy links come from the CLI's output: only https becomes a link */}
+              {isHttpsUrl(l.url) ? <LinkButton url={l.url}>{l.name}</LinkButton> : <span className="text-foreground">{l.name}</span>}
               {/* The host, so the owner sees where a link really goes */}
               <span className="font-mono text-xs text-muted-foreground">{l.host}</span>
             </li>

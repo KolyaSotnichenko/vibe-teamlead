@@ -41,7 +41,7 @@ Setup, on the Environment tab, goes step by step and shows each one: the GitHub 
 
 **Needed from you** lists what only you can do, each with its button: connect Vercel or GitHub (opens Settings), install the Vibe Teamlead app or give Vercel's GitHub app access to the repository (opens GitHub), choose an existing Vercel project for the repository or create a new one, or note that the repository is public.
 
-Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, every merge into the project's main branch is pushed to GitHub, and Vercel deploys it; the last push and whether it worked show at the top of the tab.
+Once set up, the tab shows what exists: the repository and whether it is public, the Vercel project, the production address and the database. From then on, every merge into the project's main branch is pushed to GitHub, and Vercel deploys it; the last push and whether it worked show at the top of the tab (for pushes since the app was opened).
 
 ## Variables and database
 
