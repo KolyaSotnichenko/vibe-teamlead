@@ -203,9 +203,9 @@ export function packageJobPrompt(
   return lines.join('\n');
 }
 
-/** Package-derived text must not be able to close the data block. */
+/** Package-derived text must not be able to form a tag, so it cannot close the data block. */
 function cleanDetail(text: string): string {
-  return text.replace(/<\/?package_details>/gi, '');
+  return text.replace(/</g, '\u2039').replace(/>/g, '\u203a');
 }
 
 /** PACKAGE: condense the designer's package into the project's design system. */
