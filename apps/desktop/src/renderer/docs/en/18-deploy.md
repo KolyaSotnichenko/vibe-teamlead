@@ -29,6 +29,10 @@ The **Deploy** stage and the **Production** link come from GitHub Deployments, n
 - **GitHub's rate limit is reached:** the view pauses until the time it shows and continues by itself.
 - **GitHub isn't responding:** the view says so and tries again. A log that didn't load is asked for again too.
 
+## Vercel account
+
+Settings → Vercel connects the Vercel account later versions of Deploy will use. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
+
 ## What comes next
 
 Setting up hosting, the readiness check and previews come in later versions of Deploy. Today it only reads from GitHub and changes nothing.
