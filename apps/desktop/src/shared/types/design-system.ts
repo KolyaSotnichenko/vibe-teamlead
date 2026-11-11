@@ -120,7 +120,9 @@ export interface StorybookInfo {
 /** When and how the design system was last written, and the references it took in */
 export interface DesignSystemMeta {
   writtenAt: string;
-  how: 'extract' | 'direction' | 'edited';
+  how: 'extract' | 'direction' | 'edited' | 'package';
+  /** For how: 'package', the imported package's name */
+  packageName?: string;
   /** The direction it was written from */
   direction?: string;
   referenceIds: string[];
@@ -135,7 +137,31 @@ export interface DesignAudit {
   top: Array<{ file: string; count: number; rules: string[] }>;
 }
 
+/** A designer's design-system package imported into the project */
+export interface DesignPackageInfo {
+  name: string;
+  namespace: string;
+  importedAt: string;
+  /** '.vibe-teamlead/design/package/<root>', relative to the project */
+  dir: string;
+  /** Where the project keeps rebuilt components, relative to the project */
+  componentsDir: string;
+  /** readme is relative to the project */
+  components: Array<{ name: string; readme?: string }>;
+  componentCss?: string;
+  componentTypes?: string;
+  tokensCss?: string;
+  logos: string[];
+  fonts: string[];
+  licenceLine?: string;
+  themes: DesignThemes;
+  /** Components already built in the project, filled per task by the worker */
+  built?: string[];
+}
+
 export interface DesignSystemInfo {
+  /** The imported design package, when there is one */
+  package?: DesignPackageInfo;
   /** Absent for a system written before the app kept this */
   meta?: DesignSystemMeta;
   exists: boolean;

@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { readPackageMeta } from './package/package-meta';
 import { readSystemMeta } from './system-meta';
 import path from 'node:path';
 
@@ -172,8 +173,10 @@ export function loadDesignSystem(projectPath: string, settings: DesignSettings):
   const { tokens, error } = tokensRaw !== undefined ? parseTokens(tokensRaw) : {};
   const exists = markdown !== undefined;
   const meta = exists ? readSystemMeta(projectPath) : undefined;
+  const pkg = readPackageMeta(projectPath);
   return {
     ...(meta ? { meta } : {}),
+    ...(pkg ? { package: pkg } : {}),
     exists,
     source: exists ? paths.source : 'none',
     markdownPath: exists ? paths.markdownPath : undefined,

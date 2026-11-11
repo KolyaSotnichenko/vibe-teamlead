@@ -15,11 +15,12 @@ const metaFile = (projectPath: string) => path.join(projectPath, '.vibe-teamlead
 export function readSystemMeta(projectPath: string): DesignSystemMeta | undefined {
   try {
     const raw = JSON.parse(readFileSync(metaFile(projectPath), 'utf-8')) as Partial<DesignSystemMeta>;
-    if (typeof raw.writtenAt !== 'string' || !['extract', 'direction', 'edited'].includes(String(raw.how))) return undefined;
+    if (typeof raw.writtenAt !== 'string' || !['extract', 'direction', 'edited', 'package'].includes(String(raw.how))) return undefined;
     return {
       writtenAt: raw.writtenAt,
       how: raw.how as DesignSystemMeta['how'],
       ...(typeof raw.direction === 'string' ? { direction: raw.direction } : {}),
+      ...(typeof raw.packageName === 'string' ? { packageName: raw.packageName } : {}),
       referenceIds: Array.isArray(raw.referenceIds) ? raw.referenceIds.filter((id): id is string => typeof id === 'string') : [],
     };
   } catch {
@@ -30,11 +31,11 @@ export function readSystemMeta(projectPath: string): DesignSystemMeta | undefine
 /** After the system was written. An edit keeps the references the system already took in. */
 export function recordSystemMeta(
   projectPath: string,
-  written: { how: DesignSystemMeta['how']; direction?: string; referenceIds?: string[] },
+  written: { how: DesignSystemMeta['how']; direction?: string; packageName?: string; referenceIds?: string[] },
   now = new Date().toISOString(),
 ): void {
   const referenceIds = written.referenceIds ?? readSystemMeta(projectPath)?.referenceIds ?? [];
-  const meta: DesignSystemMeta = { writtenAt: now, how: written.how, ...(written.direction ? { direction: written.direction } : {}), referenceIds };
+  const meta: DesignSystemMeta = { writtenAt: now, how: written.how, ...(written.direction ? { direction: written.direction } : {}), ...(written.packageName ? { packageName: written.packageName } : {}), referenceIds };
   mkdirSync(path.dirname(metaFile(projectPath)), { recursive: true });
   writeFileReplacingSync(metaFile(projectPath), `${JSON.stringify(meta, null, 2)}\n`, 'utf-8');
 }
