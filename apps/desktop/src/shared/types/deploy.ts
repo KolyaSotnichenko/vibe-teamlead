@@ -144,3 +144,24 @@ export interface VercelAPI {
   disconnect: () => Promise<import('./common').IPCResult<VercelStatus>>;
   onConnectState: (callback: (state: VercelConnectState) => void) => () => void;
 }
+
+export type VercelErrorKind =
+  | 'no-connection'
+  | 'forbidden'
+  | 'not-found'
+  | 'git-not-connected'
+  | 'conflict'
+  | 'rate-limit'
+  | 'unavailable';
+
+export interface VercelError {
+  kind: VercelErrorKind;
+  /** Never contains the token or an env value. */
+  message: string;
+  /** ISO time when the rate limit resets (rate-limit only). */
+  resetAt?: string;
+  /** Where the user grants the Vercel GitHub App access (git-not-connected only). */
+  actionUrl?: string;
+}
+
+export type VercelEnvTarget = 'production' | 'preview' | 'development';
