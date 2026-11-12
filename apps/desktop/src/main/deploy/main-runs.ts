@@ -150,17 +150,19 @@ const newer = (a: DeployRun, b: DeployRun): boolean => a.startedAt > b.startedAt
 /**
  * Runs on main: per workflow only the newest completed own push run is acted on; the older ones
  * (already followed by a newer run) are marked handled without a task. A workflow with a newer
- * own push run still going waits for it. Never throws.
+ * own push run still going waits for it. `pending`: a failed run could not be processed (a GitHub
+ * error) and is retried on the next call. Never throws.
  */
-export async function handleMainRuns(project: Project, runs: DeployRun[], deps: MainRunDeps): Promise<void> {
-  if (!active(project)) return;
+export async function handleMainRuns(project: Project, runs: DeployRun[], deps: MainRunDeps): Promise<{ pending: boolean }> {
+  if (!active(project)) return { pending: false };
+  const failedCompleted = runs.some((r) => r.status === 'completed' && !!r.conclusion && FAILED.has(r.conclusion));
   let repo: { owner: string; repo: string } | null = null;
   try {
     repo = await deps.resolveRepo(project);
   } catch {
-    return;
+    return { pending: failedCompleted };
   }
-  if (!repo) return;
+  if (!repo) return { pending: failedCompleted };
   const main = await resolveMainBranch(project, deps.branches);
   const newest = new Map<string, DeployRun>();
   const rest: DeployRun[] = [];
@@ -188,46 +190,66 @@ export async function handleMainRuns(project: Project, runs: DeployRun[], deps: 
     const pending = unfinished.get(r.workflowPath);
     return !pending || !newer(pending, r);
   });
+  let pending = false;
   for (const r of [...rest, ...settled]) {
     try {
       await handleMainRun(project, r, deps);
     } catch {
       // retried on the next poll
+      if (r.conclusion && FAILED.has(r.conclusion)) pending = true;
     }
   }
+  return { pending };
 }
 
-const watching = new Set<string>();
+interface Watch {
+  sha: string;
+  timer?: Timer;
+}
 
-/** Follows the runs of a pushed commit on main: every 60 s, at most 60 min, until all are completed. Never throws. */
+/** One watcher per project, following the latest pushed sha */
+const watching = new Map<string, Watch>();
+
+/**
+ * Follows the runs of a pushed commit on main: every 60 s, at most 60 min, until all are completed
+ * and every failure among main's runs is processed. A push of another sha replaces the watcher of
+ * the project. Never throws.
+ */
 export function watchMainRuns(project: Project, sha: string, deps: MainRunDeps): void {
-  const id = `${project.id}|${sha}`;
-  if (watching.has(id) || !active(project)) return;
-  watching.add(id);
+  const current = watching.get(project.id);
+  if (current?.sha === sha || !active(project)) return;
+  const clearTimer = deps.clearTimer ?? ((t) => clearTimeout(t as ReturnType<typeof setTimeout>));
+  if (current?.timer !== undefined) clearTimer(current.timer);
+  const watch: Watch = { sha };
+  watching.set(project.id, watch);
+  const live = () => watching.get(project.id) === watch;
   const now = deps.now ?? Date.now;
   const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const started = now();
 
   const tick = async (): Promise<void> => {
+    watch.timer = undefined;
     let done = false;
     try {
       const repo = await deps.resolveRepo(project);
       const main = await resolveMainBranch(project, deps.branches);
-      if (repo) {
+      if (repo && live()) {
         const onMain = (await deps.client.runs(repo.owner, repo.repo, RUNS_PER_POLL, main)).filter((r) => !main || r.branch === main);
+        if (!live()) return;
         // All of main's recent runs: a failure of this sha is acted on only when it is the newest of its workflow
-        await handleMainRuns(project, onMain, deps);
+        const { pending } = await handleMainRuns(project, onMain, deps);
         const runs = onMain.filter((r) => r.sha === sha);
-        done = runs.length > 0 && runs.every((r) => r.status === 'completed');
+        done = !pending && runs.length > 0 && runs.every((r) => r.status === 'completed');
       }
     } catch {
       // GitHub unreachable: try again on the next poll
     }
+    if (!live()) return;
     if (done || now() - started >= WATCH_LIMIT_MS) {
-      watching.delete(id);
+      watching.delete(project.id);
       return;
     }
-    setTimer(() => void tick(), WATCH_INTERVAL_MS);
+    watch.timer = setTimer(() => void tick(), WATCH_INTERVAL_MS);
   };
   void tick();
 }

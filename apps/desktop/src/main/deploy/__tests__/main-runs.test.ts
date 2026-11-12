@@ -283,7 +283,7 @@ describe('watchMainRuns', () => {
     return {
       now: () => now,
       setTimer: ((fn: () => void, ms: number) => { const t = { fn, ms }; pending.push(t); return t; }) as never,
-      clearTimer: (() => undefined) as never,
+      clearTimer: ((t: { fn: () => void; ms: number }) => { const i = pending.indexOf(t); if (i >= 0) pending.splice(i, 1); }) as never,
       pending,
       async fire() {
         const t = pending.shift();
@@ -343,6 +343,66 @@ describe('watchMainRuns', () => {
     watchMainRuns(project(), 'abc', deps);
     await flush();
     expect(deps.client.runs).toHaveBeenCalledTimes(1);
+    expect(t.pending).toHaveLength(1);
+  });
+
+  it('keeps watching while a failed run of the sha could not be processed (GitHub error), then makes its task', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs.mockResolvedValue([run(10)]);
+    deps.client.jobs.mockRejectedValueOnce(new Error('GitHub down'));
+    watchMainRuns(project(), 'abc', deps);
+    await flush();
+    expect(created).toHaveLength(0);
+    expect(t.pending).toHaveLength(1);
+    await t.fire();
+    expect(created).toHaveLength(1);
+    expect(t.pending).toHaveLength(0);
+  });
+
+  it('handleMainRuns reports a failed run it could not process', async () => {
+    const deps = makeDeps();
+    deps.client.jobs.mockRejectedValueOnce(new Error('GitHub down'));
+    expect(await handleMainRuns(project(), [run(10)], deps)).toEqual({ pending: true });
+    expect(await handleMainRuns(project(), [run(10)], deps)).toEqual({ pending: false });
+  });
+
+  it('one watcher per project: a new push replaces the old watcher and follows the new sha', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs.mockResolvedValue([
+      run(10, { sha: 'abc', status: 'in_progress', conclusion: undefined }),
+      run(11, { sha: 'def', status: 'in_progress', conclusion: undefined }),
+    ]);
+    const p = project();
+    watchMainRuns(p, 'abc', deps);
+    await flush();
+    watchMainRuns(p, 'def', deps);
+    await flush();
+    expect(deps.client.runs).toHaveBeenCalledTimes(2);
+    expect(t.pending).toHaveLength(1);
+    // abc completes, def still runs: the (replaced) abc watcher is gone, def keeps going
+    deps.client.runs.mockResolvedValue([run(10, { sha: 'abc', conclusion: 'success' }), run(11, { sha: 'def', status: 'in_progress', conclusion: undefined })]);
+    await t.fire();
+    expect(t.pending).toHaveLength(1);
+    deps.client.runs.mockResolvedValue([run(11, { sha: 'def', conclusion: 'success' })]);
+    await t.fire();
+    expect(t.pending).toHaveLength(0);
+  });
+
+  it('a replaced watcher whose tick is in flight does not schedule again', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    let release!: (v: DeployRun[]) => void;
+    deps.client.runs.mockImplementationOnce(() => new Promise<DeployRun[]>((r) => { release = r; }));
+    deps.client.runs.mockResolvedValue([run(11, { sha: 'def', status: 'in_progress', conclusion: undefined })]);
+    const p = project();
+    watchMainRuns(p, 'abc', deps);
+    await flush();
+    watchMainRuns(p, 'def', deps);
+    await flush();
+    release([run(10, { sha: 'abc', status: 'in_progress', conclusion: undefined })]);
+    await flush();
     expect(t.pending).toHaveLength(1);
   });
 
