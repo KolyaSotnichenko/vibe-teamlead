@@ -37,9 +37,13 @@ Settings → Vercel connects the Vercel account Deploy uses to set up hosting. *
 
 **Services.** When the readiness check finds that the project needs Redis or Blob, the **Services** section lists them, each with **Add**. Redis comes from the Vercel Marketplace (Upstash) and Blob is Vercel's own file storage; both go through the same steps as the database: Marketplace terms (for Redis) are shown first and accepted only when you click Accept, the CLI download shows progress with **Cancel**, and their variables go to Production and Preview. Services Vercel can't provide are listed with the reason.
 
+## Readiness
+
+The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy. It scans the project when you first open it and again on **Check again**. Each blocker (code or workflow) has its own task; the title opens the task, and the blocker turns done when the task is. Parts Vibe Teamlead can't deploy to Vercel are listed without a task. **Needed from you** lists what only you can do, such as adding a variable's value. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers are still open.
+
 ## Environment: set up deploy
 
-Deploy has two tabs: **Runs** and **Environment**. Until deploy is set up for the project, both offer **Set up deploy**.
+Deploy has three tabs: **Runs**, **Readiness** and **Environment**. Until deploy is set up for the project, Runs and Environment offer **Set up deploy**.
 
 Setup, on the Environment tab, goes step by step and shows each one: the GitHub repository (a private one is created when the project has none, and the main branch is pushed to it), the Vercel project linked to that repository, then deploy is on: Vercel deploys to production on every push to main. When a Vercel project is already linked to this repository, choose it or create a new one. If your Vercel account has teams, choose first whether the project goes to your personal account or to a team. A step that stopped can be run again with **Try again**; nothing is created twice.
 

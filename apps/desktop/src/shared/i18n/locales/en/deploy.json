@@ -2,6 +2,7 @@
   "title": "Deploy",
   "tabs": {
     "runs": "Runs",
+    "readiness": "Readiness",
     "environment": "Environment"
   },
   "loading": "Loading GitHub Actions runs…",
@@ -230,5 +231,35 @@
       "app": "Install",
       "vercel": "Connect"
     }
+  },
+  "readiness": {
+    "loading": "Loading…",
+    "checked": "Checked {{ago}}",
+    "checkAgain": "Check again",
+    "scanning": "Checking the project…",
+    "error": "The check failed. Try again. The list below is from the last successful check.",
+    "blockers": "Blocking deploy",
+    "unsupported": "Vibe Teamlead can't deploy this part to Vercel",
+    "taskStatus": {
+      "backlog": "Task: backlog",
+      "queue": "Task: queued",
+      "in_progress": "Task: in progress",
+      "ai_review": "Task: in AI review",
+      "human_review": "Task: waiting for you",
+      "done": "Task: done",
+      "pr_created": "Task: PR created",
+      "error": "Task: failed",
+      "pending": "Task: not started"
+    },
+    "owner": "Needed from you",
+    "addValue": "Add value",
+    "ci": "CI",
+    "workflow": "Workflow",
+    "noWorkflow": "None yet",
+    "lastRun": "Last run on main",
+    "conclusion": "{{conclusion}}",
+    "openRuns": "Open Runs",
+    "noRun": "No run on main yet",
+    "clear": "Nothing blocks deploy"
   }
 }

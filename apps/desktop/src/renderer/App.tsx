@@ -915,7 +915,7 @@ export function App() {
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'preview' && selectedProject && <PreviewPage key={selectedProject.id} project={selectedProject} />}
-                {activeView === 'deploy' && selectedProject && <DeployPage key={selectedProject.id} projectId={selectedProject.id} />}
+                {activeView === 'deploy' && selectedProject && <DeployPage key={selectedProject.id} projectId={selectedProject.id} onGoToTask={handleGoToTask} />}
               </>
             ) : (
               <WelcomeScreen

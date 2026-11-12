@@ -18,6 +18,7 @@ import { RunsList } from './RunsList';
 import { RunGraph } from './RunGraph';
 import { JobPanel } from './JobPanel';
 import { EnvironmentTab } from './EnvironmentTab';
+import { ReadinessTab } from './ReadinessTab';
 import { DeployChecklist } from './DeployChecklist';
 import { useDeployEnv } from './useDeployEnv';
 import { useReadiness } from './useReadiness';
@@ -76,19 +77,21 @@ function ErrorNotice({ error, repo, onConnect }: { error: GitHubError; repo?: st
   );
 }
 
-export function DeployPage({ projectId }: { projectId: string }) {
+export function DeployPage({ projectId, onGoToTask }: { projectId: string; onGoToTask?: (specId: string) => void }) {
   const { t } = useTranslation(['deploy']);
   const [state, setState] = useState<DeployRunsState | null>(null);
   const [pickedRunId, setPickedRunId] = useState<number | undefined>();
   const [nodeKey, setNodeKey] = useState<string | undefined>();
   const [signingIn, setSigningIn] = useState(false);
-  const [tab, setTab] = useState<'runs' | 'environment'>('runs');
+  const [tab, setTab] = useState<'runs' | 'readiness' | 'environment'>('runs');
   // Bumped after a GitHub sign-in so the checklist reads the accounts again
   const [accountsKey, setAccountsKey] = useState(0);
   // Setup may have created the repository: the poller looks again
   const restartRuns = useCallback(() => void window.electronAPI.deploy.startRuns(projectId, selectedRef.current), [projectId]);
   const env = useDeployEnv(projectId, restartRuns);
   const readiness = useReadiness(projectId);
+  // Unsupported blockers have no task and are not counted
+  const blockerCount = readiness?.result?.blockers.filter((b) => b.kind !== 'unsupported').length ?? 0;
   const notSetUp = !!env.state && !env.state.settings?.enabled;
 
   const runs = state?.runs ?? [];
@@ -213,7 +216,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-full flex-col">
       <div role="tablist" aria-label={t('deploy:title')} className="flex border-b border-border px-6">
-        {(['runs', 'environment'] as const).map((id) => (
+        {(['runs', 'readiness', 'environment'] as const).map((id) => (
           <button
             key={id}
             type="button"
@@ -228,10 +231,13 @@ export function DeployPage({ projectId }: { projectId: string }) {
             )}
           >
             {t(`deploy:tabs.${id}`)}
+            {id === 'readiness' && blockerCount > 0 && (
+              <span className="ml-2 font-mono text-[11px] text-destructive">{blockerCount}</span>
+            )}
           </button>
         ))}
       </div>
-      {tab === 'runs' ? (
+      {tab === 'runs' && (
         <div role="tabpanel" id="deploy-panel-runs" aria-labelledby="deploy-tab-runs" className="flex min-h-0 flex-1 flex-col gap-4 p-6">
           {checklist}
           {state?.repo && state.error && (
@@ -243,7 +249,14 @@ export function DeployPage({ projectId }: { projectId: string }) {
           )}
           {body}
         </div>
-      ) : (
+      )}
+      {tab === 'readiness' && (
+        <div role="tabpanel" id="deploy-panel-readiness" aria-labelledby="deploy-tab-readiness" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+          {checklist && <div className="mb-6">{checklist}</div>}
+          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
+        </div>
+      )}
+      {tab === 'environment' && (
         <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
           <EnvironmentTab projectId={projectId} env={env} services={readiness?.result?.services ?? []} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
