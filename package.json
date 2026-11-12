@@ -1,6 +1,6 @@
 {
   "name": "vibe-teamlead",
-  "version": "2.0.0-beta.36",
+  "version": "2.0.0-beta.37",
   "description": "Vibe Teamlead — a team of Claude Code agents that builds software from a spec",
   "license": "AGPL-3.0",
   "author": "Mykola Sotnichenko",

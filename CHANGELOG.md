@@ -2,6 +2,16 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.37 - 2026-11-12
+
+- Deploy → Readiness: a new tab checks what stops the project from going live. It runs the first time you open Deploy, after merges into main and on **Check again**; its model is "Deploy readiness" in Settings → Agents (Sonnet by default). The tab's number counts the blockers it found.
+- Blockers in the code or the GitHub Actions workflow become tasks that start by themselves and merge by themselves after QA, even with auto-merge off. The workflow is written for the project and installs what its checks need (browsers for Playwright and browser-mode unit tests, services, the package manager).
+- A failed run on main becomes one urgent fix task with the failed jobs' logs (only your own pushes; runs from forks and pull requests are ignored). After two fixes that didn't hold, the app stops and asks you to look instead.
+- When nothing blocks any more, deploy is set up by itself (not for a public repository, and not before you pick a Vercel team if your account has teams).
+- Deploy → Environment: Redis (Upstash) and Blob storage can be added from Vercel; Kafka and always-running workers are listed as parts Vercel can't run.
+- The readiness check never reads .env files, keys or anything outside the project.
+- Setup signs the project's commits with your GitHub noreply address when git has no email, so Vercel accepts the deploys.
+
 ## 2.0.0-beta.36 - 2026-11-11
 
 - Deploy: a numbered list on top says what is still missing (sign in to GitHub, install the GitHub App, connect Vercel, set up deploy), each with its button; it disappears once everything is done.
