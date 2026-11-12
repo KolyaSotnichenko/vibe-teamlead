@@ -137,8 +137,8 @@ async function stillPrivate(project: Project, deps: BranchPushDeps, now: number)
     try {
       visibility = await deps.visibility(repo.owner, repo.repo);
     } catch {
-      // Not known now: setup found it private; asked again before the next push
-      return true;
+      // Unknown visibility fails closed (never push to a public repo); asked again on the next push
+      return false;
     }
     visibilityChecks.set(project.id, { at: now, visibility });
   }

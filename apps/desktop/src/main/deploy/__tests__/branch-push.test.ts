@@ -325,7 +325,7 @@ describe('visibility re-check before a preview push', () => {
     expect(push).toHaveBeenCalledTimes(3);
   });
 
-  it('a failed check does not block the push and is asked again next time', async () => {
+  it('a failed check fails closed: no push, nothing marked public, asked again next time', async () => {
     const push = vi.fn(async () => {});
     let head = 0;
     const { deps } = makeDeps(push);
@@ -336,7 +336,8 @@ describe('visibility re-check before a preview push', () => {
     const p = { ...(project() as object), id: 'pv3' } as never;
     await pushTaskBranch(p, task('v3'), deps);
     await pushTaskBranch(p, task('v3'), deps);
-    expect(push).toHaveBeenCalledTimes(2);
+    expect(push).not.toHaveBeenCalled();
+    expect(deps.markPublic).not.toHaveBeenCalled();
     expect(visibility).toHaveBeenCalledTimes(2);
   });
 });
