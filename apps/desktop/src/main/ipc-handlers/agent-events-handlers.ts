@@ -20,6 +20,9 @@ import { persistPlanLastEventSync, getPlanPath, persistPlanPhaseSync, persistPla
 import { findTaskWorktree } from "../worktree-paths";
 import { findTaskAndProject } from "./task/shared";
 import { safeSendToRenderer } from "./utils";
+import { onSubtasksProgress, setBranchPushDeps } from "../deploy/branch-push";
+import { pushWithAppToken } from "../deploy/github-write";
+import { branchHead } from "../deploy/push-after-merge";
 import { taskStateManager } from "../task-state-manager";
 import { answerPendingQuestion, listPendingQuestions } from "../agent/agent-questions";
 import { isMacOS } from "../platform";
@@ -39,6 +42,15 @@ export function registerAgenteventsHandlers(
   getMainWindow: () => BrowserWindow | null
 ): void {
   taskStateManager.configure(getMainWindow);
+  setBranchPushDeps(
+    {
+      push: pushWithAppToken,
+      head: branchHead,
+      emit: (projectId, taskId) =>
+        safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, { projectId, taskId }),
+    },
+    (taskId) => findTaskAndProject(taskId),
+  );
 
   // ============================================
   // Agent Manager Events → Renderer
@@ -439,6 +451,17 @@ export function registerAgenteventsHandlers(
     }
 
     safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_PROGRESS, taskId, plan, project?.id);
+
+    // Preview: push the task branch when a subtask finished (never throws)
+    try {
+      let completed = 0;
+      for (const phase of plan.phases ?? []) {
+        for (const st of phase.subtasks ?? []) if (st.status === 'completed') completed++;
+      }
+      onSubtasksProgress(taskId, completed);
+    } catch {
+      // informational
+    }
 
     // Re-stamp XState status fields if the backend overwrote the plan file without them.
     // The planner agent writes implementation_plan.json via the Write tool, which replaces

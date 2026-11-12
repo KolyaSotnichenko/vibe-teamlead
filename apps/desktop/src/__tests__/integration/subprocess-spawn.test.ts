@@ -184,6 +184,23 @@ describe('WorkerBridge Spawn Integration', () => {
       expect(config.session.agentType).toBe('build_orchestrator');
     }, 15000);
 
+    it("passes the task's own pushNewBranches to createOrGetWorktree, over the project's", async () => {
+      const { AgentManager } = await import('../../main/agent');
+      const { projectStore } = await import('../../main/project-store');
+      const { createOrGetWorktree } = await import('../../main/ai/worktree');
+      vi.mocked(projectStore.getProjects).mockReturnValue([
+        { id: 'p1', path: '/project', settings: { pushNewBranches: true } },
+      ] as never);
+      const manager = new AgentManager();
+
+      await manager.startTaskExecution('task-1', '/project', 'spec-001', { pushNewBranches: false }, 'p1');
+      expect(vi.mocked(createOrGetWorktree).mock.calls.at(-1)?.[4]).toBe(false);
+
+      await manager.startTaskExecution('task-1', '/project', 'spec-001', {}, 'p1');
+      expect(vi.mocked(createOrGetWorktree).mock.calls.at(-1)?.[4]).toBe(true);
+      vi.mocked(projectStore.getProjects).mockReturnValue([]);
+    }, 15000);
+
     it('should create a WorkerBridge for QA process', async () => {
       const { AgentManager } = await import('../../main/agent');
 
