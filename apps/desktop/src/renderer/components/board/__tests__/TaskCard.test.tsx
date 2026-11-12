@@ -174,13 +174,54 @@ describe('TaskCard', () => {
       expect(strip.querySelector('time')).toBeNull();
     });
 
-    it.each([
-      ['high', 'bg-destructive'],
-      ['medium', 'border-foreground'],
-      ['low', 'bg-accent'],
-    ])('styles %s priority as a chip', (priority, cls) => {
+    it.each(['urgent', 'high'])('styles %s priority as a signal chip', (priority) => {
       render(<TaskCard task={task({ metadata: { priority: priority as 'high' } })} onClick={vi.fn()} />);
-      expect(screen.getByTestId('priority-chip')).toHaveClass(cls);
+      expect(screen.getByTestId('priority-chip')).toHaveClass('bg-destructive');
+    });
+
+    it.each(['medium', 'low'])('shows %s priority as plain muted text', (priority) => {
+      render(<TaskCard task={task({ metadata: { priority: priority as 'low' } })} onClick={vi.fn()} />);
+      expect(screen.queryByTestId('priority-chip')).toBeNull();
+      expect(screen.getByTestId('priority-plain')).toHaveClass('text-muted-foreground');
+    });
+
+    it('puts the status chip first in the meta row, truncating, with the full text in title', () => {
+      render(<TaskCard task={task({ status: 'human_review', reviewReason: 'qa_rejected', metadata: { priority: 'urgent' } })} onClick={vi.fn()} />);
+      const meta = screen.getByTestId('task-meta-row');
+      const chip = screen.getByTestId('status-chip');
+      expect(meta.firstElementChild).toBe(chip);
+      expect(chip).toHaveClass('max-w-full', 'min-w-0');
+      expect(chip.querySelector('.truncate')).toBeInTheDocument();
+      expect(chip).toHaveAttribute('title', 'reviewReason.qaIssues');
+    });
+
+    it('right-aligns a lone menu without a left border', () => {
+      render(<TaskCard task={task({ status: 'queue' })} onClick={vi.fn()} onStatusChange={vi.fn()} />);
+      const menu = screen.getByRole('button', { name: 'actions.taskActions' });
+      expect(screen.getByTestId('task-action-strip').children).toHaveLength(1);
+      expect(menu).toHaveClass('ml-auto');
+      expect(menu).not.toHaveClass('border-l');
+    });
+
+    it('done task with a PR: icon button plus a labelled Archive', () => {
+      render(<TaskCard task={task({ status: 'done', metadata: { prUrl: 'https://github.com/a/b/pull/1' } })} onClick={vi.fn()} />);
+      const strip = screen.getByTestId('task-action-strip');
+      expect(screen.getByRole('button', { name: 'tooltips.viewPR' })).toBeInTheDocument();
+      const archive = screen.getByRole('button', { name: 'actions.archive' });
+      expect(strip.contains(archive)).toBe(true);
+      expect(archive.querySelector('span.truncate')).toHaveTextContent('actions.archive');
+    });
+
+    it('gives the primary action a title with its full label', () => {
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      expect(screen.getByRole('button', { name: 'actions.stop' })).toHaveAttribute('title', 'actions.stop');
+    });
+
+    it('clamps the title to three lines and keeps it in title', () => {
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      const h = screen.getByRole('heading', { name: 'Build dashboard' });
+      expect(h).toHaveClass('line-clamp-3');
+      expect(h).toHaveAttribute('title', 'Build dashboard');
     });
 
     it('keeps only buttons in the strip, with a truncating primary label and a 44px menu', () => {
@@ -209,7 +250,7 @@ describe('TaskCard', () => {
       expect(row.nextElementSibling).toBe(strip);
       expect(row).toHaveClass('min-h-11', 'w-full');
       expect(row.querySelector('span.truncate')).toHaveTextContent('taskPreview.ready');
-      expect(row.querySelector('.font-mono')).toBeInTheDocument();
+      expect(row.querySelector('.font-mono')?.textContent).toContain('taskPreview.built');
     });
 
     it('breathes while building', async () => {
@@ -219,6 +260,9 @@ describe('TaskCard', () => {
       };
       render(<TaskCard task={task()} onClick={vi.fn()} />);
       expect(await screen.findByTestId('task-preview-mark')).toHaveClass('vt-breathe');
+      const row = screen.getByTestId('task-preview-row');
+      expect(row).toHaveAttribute('aria-busy', 'true');
+      expect(row.querySelector('.sr-only')).toHaveTextContent('taskPreview.building');
     });
   });
 

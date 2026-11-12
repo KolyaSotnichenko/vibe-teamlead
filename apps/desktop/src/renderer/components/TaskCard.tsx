@@ -129,9 +129,7 @@ function PriorityChip({ priority, label }: { priority: string; label: string }) 
       data-testid="priority-chip"
       className={cn(
         'inline-flex shrink-0 items-center px-[7px] py-[3px] text-[11px] font-semibold uppercase leading-none tracking-[0.06em]',
-        (priority === 'urgent' || priority === 'high') && 'bg-destructive text-destructive-foreground',
-        priority === 'medium' && 'border border-foreground text-foreground',
-        priority === 'low' && 'bg-accent text-[#4C4F46]'
+        'bg-destructive text-destructive-foreground'
       )}
     >
       {label}
@@ -142,17 +140,19 @@ function PriorityChip({ priority, label }: { priority: string; label: string }) 
 type ChipTone = 'attention' | 'outline' | 'low';
 
 /** Status chip per the design system: attention = signal fill, outline = ink frame, low = quiet fill. */
-function Chip({ tone, children }: { tone: ChipTone; children: React.ReactNode }) {
+function Chip({ tone, title, children }: { tone: ChipTone; title?: string; children: React.ReactNode }) {
   return (
     <span
+      data-testid="status-chip"
+      title={title}
       className={cn(
-        'inline-flex h-5 shrink-0 items-center px-1.5 text-[11px] font-medium leading-none',
+        'inline-flex h-5 max-w-full min-w-0 items-center px-1.5 text-[11px] font-medium leading-none',
         tone === 'attention' && 'bg-destructive text-destructive-foreground',
         tone === 'outline' && 'border border-foreground text-foreground',
         tone === 'low' && 'bg-accent text-muted-foreground'
       )}
     >
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
@@ -390,6 +390,7 @@ export const TaskCard = memo(function TaskCard({
   const dependencyList = dependencies.map(shortDependency).join(', ');
 
   const priority = task.metadata?.priority;
+  const showPriority = priority === 'urgent' || priority === 'high';
   const showDescription = !stage.current && !stage.finished && counts.total === 0 && !!sanitizedDescription;
 
   const showPreview =
@@ -405,7 +406,7 @@ export const TaskCard = memo(function TaskCard({
     if (isStuck) {
       const text = isRecovering ? t('labels.recovering') : t('actions.recover');
       return (
-        <button type="button" aria-label={text} className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleRecover} disabled={isRecovering}>
+        <button type="button" aria-label={text} title={text} className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleRecover} disabled={isRecovering}>
           {isRecovering ? <Loader2 aria-hidden className="h-3.5 w-3.5 shrink-0 animate-spin" /> : <RotateCcw aria-hidden className="h-3.5 w-3.5 shrink-0" />}
           {label(text)}
         </button>
@@ -413,7 +414,7 @@ export const TaskCard = memo(function TaskCard({
     }
     if (isIncomplete) {
       return (
-        <button type="button" aria-label={t('actions.resume')} className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleStartStop}>
+        <button type="button" aria-label={t('actions.resume')} title={t('actions.resume')} className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleStartStop}>
           <Play aria-hidden className="h-3.5 w-3.5 shrink-0" />
           {label(t('actions.resume'))}
         </button>
@@ -437,10 +438,10 @@ export const TaskCard = memo(function TaskCard({
               type="button"
               className={cn(actionClass, 'text-foreground hover:bg-accent')}
               onClick={handleArchive}
-              aria-label={t('tooltips.archiveTask')}
+              title={t('actions.archive')}
             >
               <Archive aria-hidden className="h-3.5 w-3.5 shrink-0" />
-              {!task.metadata?.prUrl && label(t('actions.archive'))}
+              {label(t('actions.archive'))}
             </button>
           )}
         </>
@@ -448,12 +449,12 @@ export const TaskCard = memo(function TaskCard({
     }
     if (task.status === 'backlog' || task.status === 'in_progress') {
       return isRunning ? (
-        <button type="button" aria-label={t('actions.stop')} className={cn(actionClass, 'text-foreground hover:bg-accent')} onClick={handleStartStop}>
+        <button type="button" aria-label={t('actions.stop')} title={t('actions.stop')} className={cn(actionClass, 'text-foreground hover:bg-accent')} onClick={handleStartStop}>
           <Square aria-hidden className="h-3 w-3 shrink-0" />
           {label(t('actions.stop'))}
         </button>
       ) : (
-        <button type="button" aria-label={t('actions.start')} className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleStartStop}>
+        <button type="button" aria-label={t('actions.start')} title={t('actions.start')} className={cn(actionClass, 'bg-primary text-primary-foreground hover:bg-primary/90')} onClick={handleStartStop}>
           <Play aria-hidden className="h-3.5 w-3.5 shrink-0" />
           {label(t('actions.start'))}
         </button>
@@ -497,11 +498,10 @@ export const TaskCard = memo(function TaskCard({
           {stage.running && (task.executionProgress?.activeSubagents?.length ?? 0) > 0 && (
             <SubagentsBadge names={task.executionProgress?.activeSubagents ?? []} />
           )}
-          {chip && <Chip tone={chip.tone}>{chip.label}</Chip>}
         </div>
 
         {/* Title */}
-        <h3 className="mt-2 line-clamp-2 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
+        <h3 title={displayTitle} className="mt-2 line-clamp-3 text-[17px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
           {displayTitle}
         </h3>
 
@@ -523,7 +523,11 @@ export const TaskCard = memo(function TaskCard({
 
         {/* Meta row: priority, time, and what the task is running on or waiting for */}
         <div data-testid="task-meta-row" className="mt-3 flex flex-wrap items-center gap-2">
-          {priority && <PriorityChip priority={priority} label={t(`overview.values.priority.${priority}`)} />}
+          {chip && <Chip tone={chip.tone} title={chip.label}>{chip.label}</Chip>}
+          {showPriority && priority && <PriorityChip priority={priority} label={t(`overview.values.priority.${priority}`)} />}
+          {priority && !showPriority && (
+            <span data-testid="priority-plain" className="text-xs text-muted-foreground">{t(`overview.values.priority.${priority}`)}</span>
+          )}
           {since && (
             <time className="font-mono text-xs tabular-nums text-muted-foreground" dateTime={new Date(task.updatedAt).toISOString()}>
               {since}
@@ -550,11 +554,12 @@ export const TaskCard = memo(function TaskCard({
             e.stopPropagation();
             openQuestion(pendingQuestion.questionId);
           }}
-          className="flex h-11 w-full items-center gap-2 bg-destructive px-3 text-left text-xs font-medium text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-destructive-foreground"
+          aria-label={`${t('agentQuestions.waiting')} ${t('agentQuestions.openQuestion')}`}
+          className="flex h-auto min-h-11 w-full items-center gap-2 border-t border-border bg-destructive px-3 py-1 text-left text-xs font-medium text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-destructive-foreground"
         >
-          <span aria-hidden className="vt-breathe h-2 w-2 bg-destructive-foreground" />
-          <span className="flex-1">{t('agentQuestions.waiting')}</span>
-          <span className="font-semibold underline underline-offset-2">{t('agentQuestions.openQuestion')}</span>
+          <span aria-hidden className="vt-breathe h-2 w-2 shrink-0 bg-destructive-foreground" />
+          <span className="min-w-0 flex-1 line-clamp-2">{t('agentQuestions.waiting')}</span>
+          <span className="shrink-0 font-semibold underline underline-offset-2">{t('agentQuestions.openQuestion')}</span>
         </button>
       )}
 
@@ -568,6 +573,7 @@ export const TaskCard = memo(function TaskCard({
             preview.state === 'failed' ? 'text-destructive' : 'text-foreground'
           )}
           onClick={handlePreview}
+          aria-busy={preview.state === 'building' || undefined}
           aria-disabled={preview.state === 'building' && !isHttpsUrl(preview.previousUrl) ? true : undefined}
           title={preview.state === 'ready' ? t('taskPreview.readyTitle', { url: preview.url, when: formatRelative(preview.builtAt, i18n.language) }) : undefined}
         >
@@ -578,8 +584,11 @@ export const TaskCard = memo(function TaskCard({
             className={cn('h-2 w-2 shrink-0', preview.state === 'failed' ? 'bg-destructive' : 'bg-foreground', preview.state === 'building' && 'vt-breathe')}
           />
           <span className="min-w-0 flex-1 truncate">{t(`taskPreview.${preview.state === 'building' ? 'button' : preview.state}`)}</span>
-          {preview.state === 'ready' && (
-            <span className="shrink-0 font-mono text-xs text-muted-foreground">{formatRelative(preview.builtAt, i18n.language)}</span>
+          {preview.state === 'building' && <span className="sr-only">{t('taskPreview.building')}</span>}
+          {preview.state === 'ready' && formatSince(preview.builtAt, i18n.language) && (
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">
+              {t('taskPreview.built', { when: formatSince(preview.builtAt, i18n.language) })}
+            </span>
           )}
         </button>
       )}
@@ -593,7 +602,7 @@ export const TaskCard = memo(function TaskCard({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className={cn(actionClass, 'w-11 flex-none justify-center border-l border-border px-0 text-muted-foreground hover:text-foreground')}
+                  className={cn(actionClass, 'ml-auto w-11 flex-none justify-center px-0 text-muted-foreground hover:text-foreground', action && 'border-l border-border')}
                   onClick={(e) => e.stopPropagation()}
                   aria-label={t('actions.taskActions')}
                 >
