@@ -1,11 +1,17 @@
 /**
- * Push a task's branch to GitHub after each finished subtask, so Vercel builds a preview.
+ * Push a task's branch to GitHub after each finished subtask, after each coder and QA fixer
+ * session, and when the task goes to review, so Vercel builds a preview.
  *
  * Per task, one push runs at a time; requests made meanwhile share ONE follow-up push
- * (which carries the newest commit). Nothing here throws into the caller: the outcome is
- * recorded per task and announced through `emit`.
+ * (which carries the newest commit). A branch whose head is already pushed is not pushed
+ * again. Nothing here throws into the caller: the outcome is recorded per task (kept in a
+ * small JSON file, so previews survive a restart) and announced through `emit`.
  */
+import { mkdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Project, Task } from '../../shared/types';
+import type { DeployProjectSettings } from '../../shared/types/deploy';
+import { writeFileReplacingSync } from '../ai/safe-write';
 import { TASK_BRANCH_PREFIX } from '../../shared/constants/config';
 import { GitHubWriteError, pushWithAppToken } from './github-write';
 import { branchHead } from './push-after-merge';
@@ -21,7 +27,14 @@ export interface BranchPushDeps {
   head: typeof branchHead;
   emit(projectId: string, taskId: string): void;
   now?(): Date;
+  /** The repository's visibility now (GitHub). Checked at most once an hour per project. */
+  visibility?(owner: string, repo: string): Promise<'private' | 'public'>;
+  /** Records that the repository is no longer private. */
+  markPublic?(projectId: string, repo: NonNullable<DeployProjectSettings['repo']>): void;
 }
+
+const VISIBILITY_TTL_MS = 60 * 60_000;
+const visibilityChecks = new Map<string, { at: number; visibility: 'private' | 'public' }>();
 
 export type PreviewPushAllowed =
   | { allowed: true }
@@ -44,34 +57,121 @@ interface TaskState {
 }
 
 const states = new Map<string, TaskState>();
-const records = new Map<string, BranchPushRecord>();
+let records: Map<string, BranchPushRecord> | undefined;
+let storeFile: string | undefined;
 
-/** The last push of a task's branch in this app session. */
+/** Where push records are kept (`<userData>/deploy/branch-pushes.json`); read lazily. Undefined: memory only. */
+export function setBranchPushStore(file: string | undefined): void {
+  storeFile = file;
+  records = undefined;
+}
+
+function isRecord(v: unknown): v is BranchPushRecord {
+  if (!v || typeof v !== 'object') return false;
+  const r = v as Record<string, unknown>;
+  if (r.sha !== undefined && typeof r.sha !== 'string') return false;
+  if (r.at !== undefined && typeof r.at !== 'string') return false;
+  if (r.error !== undefined && (typeof r.error !== 'object' || typeof (r.error as { kind?: unknown })?.kind !== 'string')) return false;
+  return true;
+}
+
+function loadRecords(): Map<string, BranchPushRecord> {
+  if (records) return records;
+  records = new Map();
+  if (!storeFile) return records;
+  try {
+    const raw = JSON.parse(readFileSync(storeFile, 'utf-8')) as unknown;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      for (const [taskId, v] of Object.entries(raw)) {
+        if (!isRecord(v)) continue;
+        records.set(taskId, {
+          ...(v.sha ? { sha: v.sha } : {}),
+          ...(v.at ? { at: v.at } : {}),
+          ...(v.error ? { error: { kind: v.error.kind } } : {}),
+        });
+      }
+    }
+  } catch {
+    // missing or unreadable: no pushes known
+  }
+  return records;
+}
+
+function saveRecord(taskId: string, record: BranchPushRecord): void {
+  const all = loadRecords();
+  all.set(taskId, record);
+  if (!storeFile) return;
+  try {
+    mkdirSync(path.dirname(storeFile), { recursive: true });
+    writeFileReplacingSync(storeFile, JSON.stringify(Object.fromEntries(all)));
+  } catch {
+    // kept in memory; the file catches up on the next push
+  }
+}
+
+/** The last push of a task's branch (kept across restarts when a store file is set). */
 export function lastBranchPush(taskId: string): BranchPushRecord | undefined {
-  return records.get(taskId);
+  return loadRecords().get(taskId);
+}
+
+/** False when GitHub says the repository is no longer private (then recorded as public). */
+async function stillPrivate(project: Project, deps: BranchPushDeps, now: number): Promise<boolean> {
+  const repo = project.settings?.deploy?.repo;
+  if (!repo || !deps.visibility) return true;
+  const hit = visibilityChecks.get(project.id);
+  let visibility = hit && now - hit.at < VISIBILITY_TTL_MS ? hit.visibility : undefined;
+  if (!visibility) {
+    try {
+      visibility = await deps.visibility(repo.owner, repo.repo);
+    } catch {
+      // Not known now: setup found it private; asked again before the next push
+      return true;
+    }
+    visibilityChecks.set(project.id, { at: now, visibility });
+  }
+  if (visibility === 'private') return true;
+  try {
+    deps.markPublic?.(project.id, { ...repo, public: true });
+  } catch {
+    // the cached answer still stops pushes for an hour
+  }
+  return false;
 }
 
 async function pushOnce(project: Project, task: Task, deps: BranchPushDeps): Promise<BranchPushRecord> {
   const branch = `${TASK_BRANCH_PREFIX}${task.specId}`;
   const deploy = project.settings?.deploy;
+  const prev = loadRecords().get(task.id);
   let at = '';
   let record: BranchPushRecord;
   try {
-    at = (deps.now?.() ?? new Date()).toISOString();
+    const nowDate = deps.now?.() ?? new Date();
+    at = nowDate.toISOString();
     if (!deploy?.repo) throw new GitHubWriteError('unavailable', 'No repository');
+    if (!(await stillPrivate(project, deps, nowDate.getTime()))) {
+      try {
+        deps.emit(project.id, task.id);
+      } catch {
+        // informational
+      }
+      return prev ?? {};
+    }
     // Read before the push: the recorded sha is what was pushed
     const sha = await deps.head(project.path, branch).catch(() => undefined);
+    // Already on GitHub: nothing to push
+    if (sha && prev?.sha === sha && !prev.error) return prev;
     await deps.push(project.path, `https://github.com/${deploy.repo.owner}/${deploy.repo.repo}.git`, `${branch}:${branch}`);
-    record = sha ? { sha, at } : { at };
+    // A failed read before the push: what the branch points at now is at least what was pushed
+    const pushed = sha ?? (await deps.head(project.path, branch).catch(() => undefined));
+    record = pushed ? { sha: pushed, at } : { at };
   } catch (e) {
     // The last successful push stays: its preview is still valid
-    const prev = records.get(task.id);
     record = {
       ...(prev?.sha ? { sha: prev.sha, ...(prev.at ? { at: prev.at } : {}) } : at ? { at } : {}),
       error: { kind: e instanceof GitHubWriteError ? e.kind : 'unavailable' },
     };
   }
-  records.set(task.id, record);
+  saveRecord(task.id, record);
   try {
     deps.emit(project.id, task.id);
   } catch {
@@ -108,7 +208,7 @@ export async function pushTaskBranch(project: Project, task: Task, deps: BranchP
       q.resolve(
         previewPushAllowed(q.project, q.task).allowed
           ? await pushOnce(q.project, q.task, deps)
-          : (records.get(task.id) ?? {}),
+          : (loadRecords().get(task.id) ?? {}),
       );
     }
     return first;
@@ -129,6 +229,23 @@ const completedSeen = new Map<string, number>();
 export function setBranchPushDeps(deps: BranchPushDeps, lookup: Lookup): void {
   wiring = { deps, lookup };
   completedSeen.clear();
+  visibilityChecks.clear();
+}
+
+/**
+ * Pushes the task's branch when allowed (a coder or QA fixer session ended, or the task went
+ * to review). The commit of a subtask comes after it is marked completed, so the push on
+ * `onSubtasksProgress` alone would miss it. Never throws.
+ */
+export function requestPreviewPush(taskId: string): void {
+  try {
+    if (!wiring) return;
+    const { project, task } = wiring.lookup(taskId);
+    if (!project || !task || !previewPushAllowed(project, task).allowed) return;
+    void pushTaskBranch(project, task, wiring.deps).catch(() => undefined);
+  } catch {
+    // never into the caller
+  }
 }
 
 /** Pushes when `completed` grew since the last call for that task. Never throws. */

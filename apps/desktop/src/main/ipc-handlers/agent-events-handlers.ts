@@ -20,9 +20,11 @@ import { persistPlanLastEventSync, getPlanPath, persistPlanPhaseSync, persistPla
 import { findTaskWorktree } from "../worktree-paths";
 import { findTaskAndProject } from "./task/shared";
 import { safeSendToRenderer } from "./utils";
-import { onSubtasksProgress, setBranchPushDeps } from "../deploy/branch-push";
+import { onSubtasksProgress, requestPreviewPush, setBranchPushDeps, setBranchPushStore } from "../deploy/branch-push";
 import { invalidatePreview } from "../deploy/preview-state";
-import { pushWithAppToken } from "../deploy/github-write";
+import { pushWithAppToken, repoVisibility } from "../deploy/github-write";
+import { saveDeployPatch } from "../deploy/setup";
+import { projectStore } from "../project-store";
 import { branchHead } from "../deploy/push-after-merge";
 import { taskStateManager } from "../task-state-manager";
 import { answerPendingQuestion, listPendingQuestions } from "../agent/agent-questions";
@@ -43,6 +45,8 @@ export function registerAgenteventsHandlers(
   getMainWindow: () => BrowserWindow | null
 ): void {
   taskStateManager.configure(getMainWindow);
+  // Pushes are remembered across restarts, so a task in review keeps its preview
+  setBranchPushStore(path.join(app.getPath("userData"), "deploy", "branch-pushes.json"));
   setBranchPushDeps(
     {
       push: pushWithAppToken,
@@ -52,9 +56,16 @@ export function registerAgenteventsHandlers(
         invalidatePreview(taskId);
         safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, { projectId, taskId });
       },
+      visibility: (owner, repo) => repoVisibility(owner, repo),
+      markPublic: (projectId, repo) => saveDeployPatch(projectStore, projectId, { repo }),
     },
     (taskId) => findTaskAndProject(taskId),
   );
+  // The last commits of a task (the final subtask's, the QA fixes) reach its preview here
+  taskStateManager.onStatusChange((taskId, status) => {
+    if (status === "ai_review" || status === "human_review") requestPreviewPush(taskId);
+  });
+  agentManager.on("session-ended", (taskId: string) => requestPreviewPush(taskId));
 
   // ============================================
   // Agent Manager Events → Renderer

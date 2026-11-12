@@ -4,9 +4,14 @@ import {
   onSubtasksProgress,
   previewPushAllowed,
   pushTaskBranch,
+  requestPreviewPush,
   setBranchPushDeps,
+  setBranchPushStore,
   type BranchPushDeps,
 } from '../branch-push';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { GitHubWriteError } from '../github-write';
 
 const repo = { owner: 'me', repo: 'app', createdByApp: true, public: false };
@@ -73,6 +78,8 @@ describe('pushTaskBranch', () => {
     const gate = deferred();
     const push = vi.fn(async () => { if (push.mock.calls.length === 1) await gate.promise; });
     const { deps } = makeDeps(push);
+    let n = 0;
+    deps.head = vi.fn(async () => `b${++n}`) as never; // a commit lands meanwhile
     const first = pushTaskBranch(project(), task('b'), deps);
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     const second = pushTaskBranch(project(), task('b'), deps);
@@ -104,6 +111,8 @@ describe('pushTaskBranch', () => {
       .mockRejectedValueOnce(new GitHubWriteError('conflict', 'rejected'))
       .mockResolvedValueOnce(undefined);
     const { deps } = makeDeps(push);
+    let n = 0;
+    deps.head = vi.fn(async () => `k${++n}`) as never;
     const ok = await pushTaskBranch(project(), task('k'), deps);
     const bad = await pushTaskBranch(project(), task('k'), deps);
     expect(bad.sha).toBe(ok.sha);
@@ -134,6 +143,8 @@ describe('onSubtasksProgress', () => {
   beforeEach(() => {
     push.mockClear();
     const { deps } = makeDeps(push);
+    let n = 0;
+    deps.head = vi.fn(async () => `e${++n}`) as never; // each finished subtask is a new commit
     setBranchPushDeps(deps, () => ({ project: project(), task: task('e') }));
   });
 
@@ -178,5 +189,153 @@ describe('onSubtasksProgress', () => {
     expect(() => onSubtasksProgress('g', 3)).not.toThrow();
     await new Promise((r) => setTimeout(r, 5));
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('requestPreviewPush (session end, QA fixes, review)', () => {
+  it('subtask completed, then commit, then session end: the newest sha is pushed', async () => {
+    let head = 'sha-1';
+    const push = vi.fn(async () => {});
+    const { deps } = makeDeps(push);
+    deps.head = vi.fn(async () => head) as never;
+    setBranchPushDeps(deps, () => ({ project: project(), task: task('r1') }));
+    // The coder marks the subtask completed before it commits
+    onSubtasksProgress('r1', 1);
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(lastBranchPush('r1')?.sha).toBe('sha-1'));
+    head = 'sha-2'; // the commit
+    requestPreviewPush('r1'); // the coder session ended
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(lastBranchPush('r1')?.sha).toBe('sha-2'));
+  });
+
+  it('a QA fix commit gets pushed', async () => {
+    let head = 'sha-a';
+    const push = vi.fn(async () => {});
+    const { deps } = makeDeps(push);
+    deps.head = vi.fn(async () => head) as never;
+    setBranchPushDeps(deps, () => ({ project: project(), task: task('r2') }));
+    requestPreviewPush('r2');
+    await vi.waitFor(() => expect(lastBranchPush('r2')?.sha).toBe('sha-a'));
+    head = 'sha-fix';
+    requestPreviewPush('r2'); // the QA fixer session ended
+    await vi.waitFor(() => expect(lastBranchPush('r2')?.sha).toBe('sha-fix'));
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips the push when the branch head is the last pushed sha', async () => {
+    const push = vi.fn(async () => {});
+    const { deps } = makeDeps(push);
+    setBranchPushDeps(deps, () => ({ project: project(), task: task('r3') }));
+    await pushTaskBranch(project(), task('r3'), deps);
+    expect(push).toHaveBeenCalledTimes(1);
+    const again = await pushTaskBranch(project(), task('r3'), deps);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(again.sha).toBe('sha-of-vibe-teamlead/spec-r3');
+  });
+
+  it('does nothing when not allowed, and never throws', async () => {
+    const push = vi.fn(async () => {});
+    const { deps } = makeDeps(push);
+    setBranchPushDeps(deps, () => ({ project: project({}, undefined), task: task('r4') }));
+    expect(() => requestPreviewPush('r4')).not.toThrow();
+    setBranchPushDeps(deps, () => { throw new Error('x'); });
+    expect(() => requestPreviewPush('r4')).not.toThrow();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('a successful push whose head read failed', () => {
+  it('reads the head again after the push', async () => {
+    const push = vi.fn(async () => {});
+    const { deps } = makeDeps(push);
+    deps.head = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce('sha-late') as never;
+    expect((await pushTaskBranch(project(), task('hr'), deps)).sha).toBe('sha-late');
+  });
+});
+
+describe('persisted push records', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'branch-pushes-'));
+  });
+
+  it('a push survives a restart (records are read back from the file)', async () => {
+    const file = path.join(dir, 'deploy', 'branch-pushes.json');
+    setBranchPushStore(file);
+    const { deps } = makeDeps(vi.fn(async () => {}));
+    await pushTaskBranch(project(), task('ps'), deps);
+    expect(JSON.parse(readFileSync(file, 'utf-8')).ps).toEqual({ sha: 'sha-of-vibe-teamlead/spec-ps', at: '2026-01-01T00:00:00.000Z' });
+    // "Restart": the in-memory records are dropped and loaded lazily from the file
+    setBranchPushStore(file);
+    expect(lastBranchPush('ps')).toEqual({ sha: 'sha-of-vibe-teamlead/spec-ps', at: '2026-01-01T00:00:00.000Z' });
+  });
+
+  it('keeps the error kind; a missing or broken file reads as empty', async () => {
+    const file = path.join(dir, 'branch-pushes.json');
+    setBranchPushStore(file);
+    expect(lastBranchPush('nope')).toBeUndefined();
+    const { deps } = makeDeps(vi.fn(async () => { throw new GitHubWriteError('permissions', 'x'); }));
+    await pushTaskBranch(project(), task('pe'), deps);
+    setBranchPushStore(file);
+    expect(lastBranchPush('pe')?.error).toEqual({ kind: 'permissions' });
+    writeFileSync(file, '{oops');
+    setBranchPushStore(file);
+    expect(lastBranchPush('pe')).toBeUndefined();
+  });
+});
+
+describe('visibility re-check before a preview push', () => {
+  it('a repo that became public is recorded as public and not pushed', async () => {
+    const push = vi.fn(async () => {});
+    const { deps, emit } = makeDeps(push);
+    const visibility = vi.fn(async () => 'public' as const);
+    const markPublic = vi.fn();
+    deps.visibility = visibility;
+    deps.markPublic = markPublic;
+    const p = { ...(project() as object), id: 'pv1' } as never;
+    const rec = await pushTaskBranch(p, task('v1'), deps);
+    expect(push).not.toHaveBeenCalled();
+    expect(visibility).toHaveBeenCalledWith('me', 'app');
+    expect(markPublic).toHaveBeenCalledWith('pv1', { ...repo, public: true });
+    expect(rec.sha).toBeUndefined();
+    expect(emit).toHaveBeenCalledWith('pv1', 'v1');
+  });
+
+  it('checks at most once per hour per project', async () => {
+    let t = Date.parse('2026-01-01T00:00:00.000Z');
+    const push = vi.fn(async () => {});
+    let head = 0;
+    const { deps } = makeDeps(push);
+    deps.head = vi.fn(async () => `h${++head}`) as never;
+    deps.now = () => new Date(t);
+    const visibility = vi.fn(async () => 'private' as const);
+    deps.visibility = visibility;
+    deps.markPublic = vi.fn();
+    const p = { ...(project() as object), id: 'pv2' } as never;
+    await pushTaskBranch(p, task('v2'), deps);
+    t += 59 * 60_000;
+    await pushTaskBranch(p, task('v2'), deps);
+    expect(visibility).toHaveBeenCalledTimes(1);
+    t += 2 * 60_000;
+    await pushTaskBranch(p, task('v2'), deps);
+    expect(visibility).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledTimes(3);
+  });
+
+  it('a failed check does not block the push and is asked again next time', async () => {
+    const push = vi.fn(async () => {});
+    let head = 0;
+    const { deps } = makeDeps(push);
+    deps.head = vi.fn(async () => `h${++head}`) as never;
+    const visibility = vi.fn(async (): Promise<'private' | 'public'> => { throw new Error('offline'); });
+    deps.visibility = visibility;
+    deps.markPublic = vi.fn();
+    const p = { ...(project() as object), id: 'pv3' } as never;
+    await pushTaskBranch(p, task('v3'), deps);
+    await pushTaskBranch(p, task('v3'), deps);
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(visibility).toHaveBeenCalledTimes(2);
   });
 });
