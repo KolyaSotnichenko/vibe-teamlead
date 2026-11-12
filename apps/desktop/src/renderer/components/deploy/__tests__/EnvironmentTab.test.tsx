@@ -200,10 +200,12 @@ describe('Needed from you', () => {
     expect(within(panel).queryByText('deploy:needed.public-repo-warning {"repo":"acme/shop"}')).not.toBeInTheDocument();
   });
 
-  it('a missing secret is shown as text, with no action yet', async () => {
-    setup({ env: { settings: setUpSettings, lastSetup: { settings: setUpSettings, needed: [{ id: 's', kind: 'secret', message: 'm', variable: 'API_KEY' }], step: 'done' } } });
+  it('setup never asks for secrets (they are CI readiness items): an unknown kind shows the generic text, no action', async () => {
+    const stale = { id: 's', kind: 'secret', message: 'm', variable: 'API_KEY' } as unknown as NeededFromYou;
+    setup({ env: { settings: setUpSettings, lastSetup: { settings: setUpSettings, needed: [stale], step: 'done' } } });
     const panel = await openEnvironment();
-    const item = (await within(panel).findByText('deploy:needed.variable {"name":"API_KEY"}')).closest('li') as HTMLElement;
+    const item = (await within(panel).findByText('deploy:env.errors.unknown')).closest('li') as HTMLElement;
+    expect(within(item).queryByText(/API_KEY/)).not.toBeInTheDocument();
     expect(within(item).queryByRole('button')).not.toBeInTheDocument();
   });
 });

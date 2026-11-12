@@ -83,7 +83,6 @@
     "github-app-install": "Дайте застосунку Vibe Teamlead на GitHub доступ до цього репозиторію, потім спробуйте ще раз.",
     "non-github-remote": "Origin проєкту не на GitHub. CI працює лише з репозиторіями GitHub.",
     "public-repo-warning": "{{repo}} публічний: його код може прочитати будь-хто.",
-    "variable": "{{name}} потребує значення.",
     "actions": {
       "connectGitHub": "Підключити GitHub",
       "installApp": "Встановити застосунок",

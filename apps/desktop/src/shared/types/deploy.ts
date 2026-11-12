@@ -160,9 +160,7 @@ export type NeededFromYouKind =
   | 'github-sign-in'
   | 'github-app-install'
   | 'non-github-remote'
-  | 'public-repo-warning'
-  /** A GitHub Actions secret the workflow reads that the repository lacks. */
-  | 'secret';
+  | 'public-repo-warning';
 
 /** Something only the owner can do (or should know) before setup can go on. `message` is English; the UI maps `kind` to i18n. */
 export interface NeededFromYou {
@@ -170,8 +168,6 @@ export interface NeededFromYou {
   kind: NeededFromYouKind;
   message: string;
   actionUrl?: string;
-  /** secret: its name (never its value). */
-  variable?: string;
 }
 
 export type DeploySetupStep = 'repo' | 'push' | 'done';

@@ -68,10 +68,6 @@ function Item({ item, repo, onAcknowledge, onConnectGitHub }: NeededFromYouProps
         </>
       );
       break;
-    case 'secret':
-      // Plain text until secrets can be saved from here
-      message = t('deploy:needed.variable', { name: item.variable ?? '' });
-      break;
     default:
       message = t('deploy:env.errors.unknown');
   }
