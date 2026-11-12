@@ -205,10 +205,17 @@ const STALE_LINK_DIR_MS = 10 * 60_000;
 const liveDirs = new Set<string>();
 
 /**
- * Removes `vt-db-*` link dirs older than 10 minutes under the temp root (a crashed or killed run
- * leaves one, with `.vercel/project.json`). Runs at the start of each add and on app start; never throws.
+ * Removes `vt-db-*` link dirs older than 10 minutes under the link root (a crashed or killed run
+ * leaves one, with `.vercel/project.json`): only real folders owned by this user that no one else
+ * can write to. Production passes the app-private root (`<userData>/vercel-link`, 0700). Runs at
+ * the start of each add and on app start; never throws.
  */
-export async function sweepStaleLinkDirs(root: string = tmpdir(), now: number = Date.now()): Promise<void> {
+export async function sweepStaleLinkDirs(
+  root: string = tmpdir(),
+  now: number = Date.now(),
+  opts: { uid?: number } = {},
+): Promise<void> {
+  const uid = opts.uid ?? process.getuid?.();
   let names: string[];
   try {
     names = await readdir(root);
@@ -221,7 +228,9 @@ export async function sweepStaleLinkDirs(root: string = tmpdir(), now: number = 
     if (liveDirs.has(dir)) continue;
     try {
       const info = await lstat(dir);
-      if (!info.isDirectory() || now - info.mtimeMs < STALE_LINK_DIR_MS) continue;
+      // A real folder (never a symlink), this user's, writable by no one else, and old
+      if (!info.isDirectory() || (uid !== undefined && info.uid !== uid) || (info.mode & 0o022) !== 0) continue;
+      if (now - info.mtimeMs < STALE_LINK_DIR_MS) continue;
       await rm(dir, { recursive: true, force: true });
     } catch {
       // gone already, or not ours to remove

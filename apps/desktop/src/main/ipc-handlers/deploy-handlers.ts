@@ -6,7 +6,10 @@
  */
 import { execFile } from 'node:child_process';
 
-import { type BrowserWindow, ipcMain } from 'electron';
+import { chmod, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+
+import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult, Project } from '../../shared/types';
@@ -85,10 +88,22 @@ function headCommit(projectPath: string): Promise<string | undefined> {
   });
 }
 
+/** The app-private parent of the Vercel link dirs (0700), so their sweep never touches a shared temp dir; undefined when it can't be made. */
+async function linkRoot(): Promise<string | undefined> {
+  try {
+    const root = path.join(app.getPath('userData'), 'vercel-link');
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    await chmod(root, 0o700);
+    return root;
+  } catch {
+    return undefined;
+  }
+}
+
 export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null, agentManager?: AgentManager): void {
   const client = createActionsClient(githubFetcher);
-  // Vercel link dirs a crashed run left in the temp dir (app start)
-  void sweepStaleLinkDirs();
+  // Vercel link dirs a crashed run left behind (app start), in the app-private link root
+  void linkRoot().then((root) => (root ? sweepStaleLinkDirs(root) : undefined)).catch(() => undefined);
 
   // Tasks the readiness scan and failing runs create
   const taskDeps: DeployTaskDeps = {
@@ -315,6 +330,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     if (!vercel?.projectId) return { ok: false, error: { kind: 'not-set-up', message: 'This project is not set up on Vercel yet.' } };
     const paths = await databaseCli(project.id);
     if ('ok' in paths) return paths;
+    const linkDir = await linkRoot();
     // A personal-account project's org is the user: only then is the account asked for.
     const userId = vercel.teamId ? undefined : (await vercelStatus()).user?.id;
     return addDatabase(
@@ -323,6 +339,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
         binary: paths.binary,
         configDir: paths.configDir,
         getToken: () => getVercelToken(),
+        ...(linkDir ? { tmpRoot: linkDir } : {}),
         loadProject: () => projectStore.getProject(project.id),
         saveSettings: (patch) => saveDeployPatch(projectStore, project.id, patch),
         ...(userId ? { userId } : {}),
@@ -356,6 +373,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     if (!vercel?.projectId) return { ok: false, error: { kind: 'not-set-up', message: 'This project is not set up on Vercel yet.' } };
     const paths = await databaseCli(project.id, service);
     if ('ok' in paths) return paths;
+    const linkDir = await linkRoot();
     const userId = vercel.teamId ? undefined : (await vercelStatus()).user?.id;
     return addIntegration(
       project,
@@ -363,6 +381,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
         binary: paths.binary,
         configDir: paths.configDir,
         getToken: () => getVercelToken(),
+        ...(linkDir ? { tmpRoot: linkDir } : {}),
         loadProject: () => projectStore.getProject(project.id),
         saveSettings: (patch) => saveDeployPatch(projectStore, project.id, patch),
         ...(userId ? { userId } : {}),

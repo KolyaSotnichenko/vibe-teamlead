@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, readdirSync } from 'node:fs';
+import { chmodSync, existsSync, lutimesSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -471,6 +471,38 @@ describe('sweepStaleLinkDirs', () => {
     utimesSync(stale, past, past);
     await addIntegration(project, deps, { integration: 'blob' });
     expect(readdirSync(tmpRoot)).toEqual([]);
+  });
+
+  it('never follows or removes a symlink named vt-db-*', async () => {
+    const root = mkdtempSync(path.join(work, 'sweep-'));
+    const elsewhere = mkdtempSync(path.join(work, 'elsewhere-'));
+    writeFileSync(path.join(elsewhere, 'keep.txt'), 'x');
+    const link = path.join(root, 'vt-db-x');
+    symlinkSync(elsewhere, link);
+    const past = new Date(Date.now() - 60 * 60_000);
+    lutimesSync(link, past, past);
+    await sweepStaleLinkDirs(root, Date.now());
+    expect(readdirSync(root)).toEqual(['vt-db-x']);
+    expect(existsSync(path.join(elsewhere, 'keep.txt'))).toBe(true);
+  });
+
+  it('skips a folder of another user, or one others can write to', async () => {
+    const root = mkdtempSync(path.join(work, 'sweep-'));
+    const dir = path.join(root, 'vt-db-old');
+    mkdirSync(dir, { mode: 0o700 });
+    const past = new Date(Date.now() - 60 * 60_000);
+    utimesSync(dir, past, past);
+    const me = process.getuid?.() ?? 0;
+    await sweepStaleLinkDirs(root, Date.now(), { uid: me + 1 });
+    expect(readdirSync(root)).toEqual(['vt-db-old']);
+    chmodSync(dir, 0o777);
+    utimesSync(dir, past, past);
+    await sweepStaleLinkDirs(root, Date.now(), { uid: me });
+    expect(readdirSync(root)).toEqual(['vt-db-old']);
+    chmodSync(dir, 0o700);
+    utimesSync(dir, past, past);
+    await sweepStaleLinkDirs(root, Date.now(), { uid: me });
+    expect(readdirSync(root)).toEqual([]);
   });
 
   it('never throws for a missing root', async () => {

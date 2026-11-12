@@ -208,6 +208,8 @@ describe('deploy environment IPC', () => {
       expect(project.id).toBe('p1');
       expect(opts).toEqual({ integration: 'redis', acceptTerms: true });
       expect(deps).toMatchObject({ binary: '/fake/vercel', configDir: '/fake/config', userId: 'u1' });
+      // Link dirs live in an app-private folder, never the shared temp dir
+      expect(deps.tmpRoot).toBe('/tmp/test-app-data/vercel-link');
       await deps.saveSettings({ services: { redis: { addedAt: 'a' } } });
       expect((store.projects.get('p1')?.settings.deploy as DeployProjectSettings | undefined)?.services).toEqual({ redis: { addedAt: 'a' } });
     });
