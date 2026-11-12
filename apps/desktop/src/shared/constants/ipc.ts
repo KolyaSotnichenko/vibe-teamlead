@@ -622,14 +622,6 @@ export const IPC_CHANNELS = {
   DEPLOY_PUSH_RESULT: 'deploy:pushResult',  // Event: push of main after a merge finished (main -> renderer)
   DEPLOY_SETUP: 'deploy:setUp',
   DEPLOY_STATE: 'deploy:state',
-  DEPLOY_CHOOSE_VERCEL_PROJECT: 'deploy:chooseVercelProject',
-  DEPLOY_SET_VARIABLE: 'deploy:setVariable',
-  DEPLOY_LIST_VARIABLES: 'deploy:listVariables',
-  DEPLOY_ADD_DATABASE: 'deploy:addDatabase',
-  DEPLOY_CANCEL_DATABASE: 'deploy:cancelDatabase',
-  DEPLOY_ADD_SERVICE: 'deploy:addService',
-  DEPLOY_CANCEL_SERVICE: 'deploy:cancelService',
-  DEPLOY_DATABASE_PROGRESS: 'deploy:databaseProgress',  // Event: Add database downloads the Vercel CLI (main -> renderer)
   DEPLOY_SETUP_PROGRESS: 'deploy:setupProgress',  // Event: the step setup reached (main -> renderer)
   DEPLOY_READINESS_STATE: 'deploy:readinessState',
   DEPLOY_READINESS_SCAN: 'deploy:readinessScan',
@@ -637,14 +629,6 @@ export const IPC_CHANNELS = {
   DEPLOY_PREVIEW_UPDATE: 'deploy:previewUpdate',  // Event: a task branch was pushed for a preview (main -> renderer)
   DEPLOY_IS_DEPLOY_TASK: 'deploy:isDeployTask',  // Whether the readiness scan created a task (ledger lookup)
   DEPLOY_READINESS_UPDATE: 'deploy:readinessUpdate',  // Event: readiness state changed (main -> renderer)
-
-  // Vercel account (Settings → Vercel)
-  VERCEL_STATUS: 'vercel:status',
-  VERCEL_CONNECT: 'vercel:connect',
-  VERCEL_CANCEL_CONNECT: 'vercel:cancelConnect',
-  VERCEL_SET_TOKEN: 'vercel:setToken',
-  VERCEL_DISCONNECT: 'vercel:disconnect',
-  VERCEL_CONNECT_STATE: 'vercel:connectState',  // Event: sign-in progress (main -> renderer)
 
   // Screenshot capture
   SCREENSHOT_GET_SOURCES: 'screenshot:getSources',  // Get available screens/windows

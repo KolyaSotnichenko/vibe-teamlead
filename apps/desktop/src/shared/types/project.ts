@@ -52,7 +52,7 @@ export interface ProjectSettings {
   previewEnv?: Record<string, string>;
   /** Placeholders the owner said to leave, as `file\ntext` (loose-ends.ts) */
   ignoredLooseEnds?: string[];
-  /** Deploy tab: what has been set up (repository, Vercel project, database) */
+  /** CI setup: what has been set up (the GitHub repository) */
   deploy?: import('./deploy').DeployProjectSettings;
 }
 

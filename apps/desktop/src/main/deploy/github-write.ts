@@ -141,16 +141,6 @@ export async function getAuthenticatedLogin(options: GitHubWriteOptions = {}): P
   return res.body.login;
 }
 
-/** id, login and display name of the GitHub user the App token acts for (GET /user). */
-export async function getAuthenticatedUser(options: GitHubWriteOptions = {}): Promise<{ id: number; login: string; name: string | null }> {
-  const res = await api(options, 'GET', '/user');
-  if (res.status < 200 || res.status >= 300) throw fromClassified(res.status, res.headers, res.body);
-  if (!isObj(res.body) || typeof res.body.login !== 'string' || typeof res.body.id !== 'number') {
-    throw new GitHubWriteError('unavailable', 'GitHub returned an unexpected response for the signed-in user');
-  }
-  return { id: res.body.id, login: res.body.login, name: typeof res.body.name === 'string' ? res.body.name : null };
-}
-
 /** Visibility, creation time and whether the repo has no branches; null when it doesn't exist (or isn't visible). */
 export async function inspectRepo(
   owner: string,

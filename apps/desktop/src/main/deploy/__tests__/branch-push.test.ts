@@ -37,10 +37,14 @@ const deferred = () => {
 };
 
 describe('previewPushAllowed', () => {
-  it('not-set-up when deploy is off or has no repo', () => {
+  it('not-set-up when no repository is recorded', () => {
     expect(previewPushAllowed(project({}, undefined), task())).toEqual({ allowed: false, reason: 'not-set-up' });
-    expect(previewPushAllowed(project({}, { enabled: false, repo }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
+    expect(previewPushAllowed(project({}, { enabled: false }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
     expect(previewPushAllowed(project({}, { enabled: true }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
+  });
+  it('a recorded private repository is enough (no Vercel step)', () => {
+    expect(previewPushAllowed(project({}, { repo }), task())).toEqual({ allowed: true });
+    expect(previewPushAllowed(project({}, { enabled: false, repo }), task())).toEqual({ allowed: true });
   });
   it('public-repo when the repo is public', () => {
     expect(previewPushAllowed(project({}, { enabled: true, repo: { ...repo, public: true } }), task())).toEqual({
@@ -349,11 +353,15 @@ describe('worktreePushNewBranches (the task branch push when its worktree is mad
     const { public: _p, ...unknown } = repo;
     expect(worktreePushNewBranches(settings({ enabled: true, repo: unknown }), undefined)).toBe(false);
     expect(worktreePushNewBranches(settings({ enabled: true, repo: { ...repo, public: true } }), true)).toBe(false);
+    // set up means the repository step is done
+    expect(worktreePushNewBranches(settings({ repo: { ...repo, public: true } }), undefined)).toBe(false);
+    expect(worktreePushNewBranches(settings({ enabled: false, repo: { ...repo, public: true } }), undefined)).toBe(false);
   });
   it('otherwise the task option, then the project setting (default on)', () => {
     expect(worktreePushNewBranches(settings({ enabled: true, repo }), undefined)).toBe(true);
     expect(worktreePushNewBranches(settings(undefined), undefined)).toBe(true);
-    expect(worktreePushNewBranches(settings({ enabled: false, repo: { ...repo, public: true } }), undefined)).toBe(true);
+    expect(worktreePushNewBranches(settings({ repo }), undefined)).toBe(true);
+    expect(worktreePushNewBranches(settings({ enabled: true }), undefined)).toBe(true);
     expect(worktreePushNewBranches(settings(undefined, false), undefined)).toBe(false);
     expect(worktreePushNewBranches(settings(undefined, false), true)).toBe(true);
     expect(worktreePushNewBranches(undefined, undefined)).toBe(true);

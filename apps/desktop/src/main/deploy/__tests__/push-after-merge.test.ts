@@ -11,14 +11,21 @@ function deps(push: PushAfterMergeDeps['push']) {
 }
 
 describe('pushMainAfterMerge', () => {
-  it('does nothing when deploy is not enabled or has no repo', async () => {
+  it('does nothing when CI is not set up (no repository recorded)', async () => {
     const push = vi.fn(async () => {});
     const { d, emitted } = deps(push);
     expect(await pushMainAfterMerge(project(undefined), d, 'main')).toEqual({ pushed: false });
-    expect(await pushMainAfterMerge(project({ enabled: false, repo: enabled.repo }), d, 'main')).toEqual({ pushed: false });
+    expect(await pushMainAfterMerge(project({ enabled: false }), d, 'main')).toEqual({ pushed: false });
     expect(await pushMainAfterMerge(project({ enabled: true }), d, 'main')).toEqual({ pushed: false });
     expect(push).not.toHaveBeenCalled();
     expect(emitted).toEqual([]);
+  });
+
+  it('pushes main when only the repository step is recorded (no Vercel step, enabled not yet set)', async () => {
+    const push = vi.fn(async () => {});
+    const { d } = deps(push);
+    expect(await pushMainAfterMerge({ id: 'p-repo', path: '/proj', settings: { mainBranch: 'main', deploy: { repo: enabled.repo } } } as never, d, 'main')).toEqual({ pushed: true });
+    expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'main');
   });
 
   it('pushes the main branch once and emits ok', async () => {

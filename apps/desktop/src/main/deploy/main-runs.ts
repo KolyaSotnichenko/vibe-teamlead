@@ -6,6 +6,7 @@
  */
 import type { Project, Task } from '../../shared/types';
 import type { DeployRun } from '../../shared/types/deploy';
+import { isCiSetUp } from './ci-setup';
 import { clipLine } from './clip';
 import { createRunFixTask, type DeployTaskDeps, markRunHandled, resetFixCount, wasRunHandled } from './deploy-tasks';
 import type { ActionsClient } from './github-actions';
@@ -71,8 +72,8 @@ function coveredByOpenTask(run: DeployRun, tasks: Task[], checksWorkflow: string
 /** Handled-in-flight run ids: the poller and a watcher can see the same run in the same moment */
 const inFlight = new Set<string>();
 
-/** Only projects with Deploy on and a saved readiness result take part. */
-const active = (project: Project): boolean => !!project.settings?.deploy?.enabled && readReadiness(project.path) !== null;
+/** Only projects set up for CI (the repository step is done) with a saved readiness result take part. */
+const active = (project: Project): boolean => isCiSetUp(project) && readReadiness(project.path) !== null;
 
 /** A log tail that cannot close the Markdown fence it is put in. */
 const defuse = (text: string): string => text.replace(/`{3,}/g, "'''");

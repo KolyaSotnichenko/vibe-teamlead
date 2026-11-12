@@ -36,31 +36,24 @@ const result = (over: Partial<ReadinessResult> = {}): ReadinessResult => ({
   ...over,
 });
 
-function setup(state: ReadinessState, opts: { onGoToTask?: (id: string) => void; enabled?: boolean; variables?: string[] } = {}) {
+function setup(state: ReadinessState, opts: { onGoToTask?: (id: string) => void; enabled?: boolean } = {}) {
   let push: ((u: { projectId: string; state: ReadinessState }) => void) | undefined;
   const deploy = {
     startRuns: vi.fn(async () => ({ success: true })),
     stopRuns: vi.fn(async () => ({ success: true })),
     selectRun: vi.fn(async () => ({ success: true })),
     onRunsUpdate: vi.fn(() => () => undefined),
-    state: vi.fn(async () => ({ success: true, data: { settings: { enabled: opts.enabled ?? true }, setupRunning: false, databaseRunning: false } })),
+    state: vi.fn(async () => ({ success: true, data: { settings: { enabled: opts.enabled ?? true }, setupRunning: false } })),
     onSetupProgress: vi.fn(() => () => undefined),
     onPushResult: vi.fn(() => () => undefined),
-    onDatabaseProgress: vi.fn(() => () => undefined),
     readinessState: vi.fn(async () => ({ success: true, data: state })),
     scanReadiness: vi.fn(async () => ({ success: true })),
     onReadinessUpdate: vi.fn((cb: typeof push) => { push = cb; return () => undefined; }),
-    setVariable: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true, vercel: 'ok', github: 'skipped' } })),
-    listVariables: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({
-      success: true,
-      data: { ok: true, variables: (opts.variables ?? []).map((name) => ({ name, targets: ['production'], inGitHub: false })) },
-    })),
   };
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     deploy,
     openExternal: vi.fn(),
     getGitHubAppAccess: vi.fn(async () => ({ success: true, data: { installed: true } })),
-    vercel: { status: vi.fn(async () => ({ success: true, data: { connected: false } })) },
   };
   render(<DeployPage projectId="p1" onGoToTask={opts.onGoToTask} />);
   const emit = (s: ReadinessState) => act(() => push?.({ projectId: 'p1', state: s }));
@@ -135,61 +128,19 @@ describe('Readiness tab', () => {
     expect(screen.getByText('Fix the build')).toBeInTheDocument();
   });
 
-  it('opens the variable dialog with the name prefilled', async () => {
-    setup({
-      result: result({ owner: [{ kind: 'variable', variable: 'STRIPE_KEY', message: 'Add it' }] }),
-      scanning: false,
-      tasks: {},
-    });
-    await openTab();
-    fireEvent.click(await screen.findByRole('button', { name: 'deploy:readiness.addValue' }));
-    expect(await screen.findByDisplayValue('STRIPE_KEY')).toBeInTheDocument();
-  });
-
-  it('before setup, a variable item says to set up deploy first instead of offering Add value', async () => {
-    const { deploy } = setup(
-      { result: result({ owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] }), scanning: false, tasks: {} },
-      { enabled: false },
+  it.each([true, false])('a variable item is plain text, set up or not (set up: %s): no Add value, no dialog, no count', async (enabled) => {
+    setup(
+      { result: result({ owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }, { kind: 'other', message: 'Turn on billing' }] }), scanning: false, tasks: {} },
+      { enabled },
     );
     await openTab();
-    expect(await screen.findByText('CSRF_SECRET')).toBeInTheDocument();
-    expect(await screen.findByText('deploy:readiness.setUpFirst')).toBeInTheDocument();
+    const name = await screen.findByText('CSRF_SECRET');
+    expect(within(name.closest('li') as HTMLElement).queryByRole('button')).toBeNull();
+    expect(screen.getByText('Turn on billing')).toBeInTheDocument();
+    expect(screen.queryByText('deploy:readiness.setUpFirst')).toBeNull();
     expect(screen.queryByRole('button', { name: 'deploy:readiness.addValue' })).toBeNull();
     expect(screen.queryByText(/deploy:readiness\.variablesLeft/)).toBeNull();
-    expect(deploy.listVariables).not.toHaveBeenCalled();
-  });
-
-  it('after setup, hides variables Vercel already has and says how many are left', async () => {
-    setup(
-      {
-        result: result({
-          blockers: [],
-          owner: [
-            { kind: 'variable', variable: 'STRIPE_KEY', message: 'x' },
-            { kind: 'variable', variable: 'CSRF_SECRET', message: 'x' },
-          ],
-        }),
-        scanning: false,
-        tasks: {},
-      },
-      { variables: ['STRIPE_KEY'] },
-    );
-    await openTab();
-    expect(await screen.findByText('deploy:readiness.variablesLeft {"count":1}')).toBeInTheDocument();
-    expect(screen.getByText('CSRF_SECRET')).toBeInTheDocument();
-    expect(screen.queryByText('STRIPE_KEY')).toBeNull();
-  });
-
-  it('after setup, a value added from the tab removes its item and the notice', async () => {
-    setup({ result: result({ owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] }), scanning: false, tasks: {} });
-    await openTab();
-    expect(await screen.findByText('deploy:readiness.variablesLeft {"count":1}')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'deploy:readiness.addValue' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('deploy:variableDialog.value'), { target: { value: 'v' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'deploy:variableDialog.save' }));
-    await waitFor(() => expect(screen.queryByText('CSRF_SECRET')).toBeNull());
-    expect(screen.queryByText(/deploy:readiness\.variablesLeft/)).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('says nothing blocks deploy', async () => {

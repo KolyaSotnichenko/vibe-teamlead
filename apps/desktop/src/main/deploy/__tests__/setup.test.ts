@@ -3,8 +3,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../../../shared/types';
-import type { DeployProjectSettings, VercelError } from '../../../shared/types/deploy';
-import type { VercelClient } from '../vercel-api';
+import type { DeployProjectSettings } from '../../../shared/types/deploy';
 import { GitHubWriteError } from '../github-write';
 import { classifyRemote, readGitInfo, saveDeployPatch, setUpDeploy, type GitInfo, type SetupDeps } from '../setup';
 
@@ -29,9 +28,7 @@ function project(settings: Partial<Project['settings']> = {}): Project {
   };
 }
 
-type FakeProject = { id: string; name: string; createdAt: number; link?: { repo: string } };
-
-/** A fake GitHub + Vercel + local git: records what was created so re-runs can be checked. */
+/** A fake GitHub + local git: records what was created so re-runs can be checked. */
 function world(opts: { origin?: string | null; git?: GitInfo | null; visibility?: 'private' | 'public' } = {}) {
   const state = {
     now: NOW,
@@ -41,53 +38,16 @@ function world(opts: { origin?: string | null; git?: GitInfo | null; visibility?
     /** Every repo on the fake GitHub, by `owner/name`. */
     github: new Map<string, { private: boolean; createdAt: string; empty: boolean }>(),
     pushes: [] as Array<{ url: string; refspec: string }>,
-    projects: new Map<string, FakeProject>(),
     saved: undefined as DeployProjectSettings | undefined,
     crash: new Set<string>(),
-    identitySet: false,
   };
   const crash = (point: string) => {
     if (state.crash.has(point)) throw new Error(`crash at ${point}`);
   };
-  let projectSeq = 0;
   let saves = 0;
-  const client: VercelClient = {
-    findProject: vi.fn(async (idOrName: string) => {
-      crash('findProject');
-      for (const p of state.projects.values()) if (p.id === idOrName || p.name === idOrName) return structuredClone(p);
-      return null;
-    }),
-    listProjectsForRepo: vi.fn(async (repo: string) =>
-      [...state.projects.values()]
-        .filter((p) => p.link?.repo.toLowerCase() === repo.toLowerCase())
-        .map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt })),
-    ),
-    createProject: vi.fn(async ({ name, repo }: { name: string; repo: string }) => {
-      crash('createProject:before');
-      if (state.crash.has('git-not-connected')) {
-        throw { kind: 'git-not-connected', message: 'Install the GitHub integration', actionUrl: 'https://github.com/apps/vercel/installations/new' } satisfies VercelError;
-      }
-      if ([...state.projects.values()].some((p) => p.name === name)) {
-        throw { kind: 'conflict', message: `The project name ${name} already exists` } satisfies VercelError;
-      }
-      const p = { id: `prj_${++projectSeq}`, name, createdAt: state.now.getTime(), link: { repo } };
-      state.projects.set(p.id, p);
-      crash('createProject:after');
-      return { id: p.id, name: p.name };
-    }),
-    upsertEnv: vi.fn(),
-    listEnvNames: vi.fn(),
-    latestProductionUrl: vi.fn(),
-  };
   const deps: SetupDeps = {
-    vercelStatus: vi.fn(async () => ({ connected: true, source: 'browser' as const, user: { username: 'nick' } })),
-    vercelClient: vi.fn(() => client),
     isGitHubSignedIn: vi.fn(async () => true),
     githubLogin: vi.fn(async () => 'nick'),
-    commitIdentity: vi.fn(async () => {
-      crash('identity');
-      state.identitySet = true;
-    }),
     appAccess: vi.fn(async (repo?: { owner: string; repo: string }) =>
       repo ? { installed: true, repositorySelection: 'all' as const, repoReachable: true } : { installed: true, repositorySelection: 'all' as const },
     ),
@@ -128,33 +88,12 @@ function world(opts: { origin?: string | null; git?: GitInfo | null; visibility?
     onProgress: vi.fn(),
     now: () => state.now,
   };
-  return { state, deps, client };
+  return { state, deps };
 }
 
 describe('setUpDeploy', () => {
-  it('sets the commit author in the project before pushing, so Vercel can tie commits to the owner', async () => {
+  it('with no remote: creates a private repo, adds origin, pushes main, enables (no Vercel step)', async () => {
     const { state, deps } = world();
-    let setBeforePush = false;
-    (deps.pushWithAppToken as ReturnType<typeof vi.fn>).mockImplementation(async (_p: string, url: string, refspec: string) => {
-      setBeforePush = state.identitySet === true;
-      state.pushes.push({ url, refspec });
-    });
-    const result = await setUpDeploy(project(), deps);
-    expect(deps.commitIdentity).toHaveBeenCalledWith('/projects/my-app');
-    expect(setBeforePush).toBe(true);
-    expect(result.step).toBe('done');
-  });
-
-  it("can't set the commit author: setup still goes on", async () => {
-    const { state, deps } = world();
-    state.crash.add('identity');
-    const result = await setUpDeploy(project(), deps);
-    expect(result.error).toBeUndefined();
-    expect(result.step).toBe('done');
-  });
-
-  it('with no remote: creates a private repo, adds origin, pushes main, creates the Vercel project, enables', async () => {
-    const { state, deps, client } = world();
     const result = await setUpDeploy(project(), deps);
 
     expect(result.error).toBeUndefined();
@@ -163,17 +102,14 @@ describe('setUpDeploy', () => {
     expect(state.repos).toEqual(['my-app']);
     expect(deps.addOriginIfMissing).toHaveBeenCalledWith('/projects/my-app', 'https://github.com/nick/my-app.git');
     expect(state.pushes).toEqual([{ url: 'https://github.com/nick/my-app.git', refspec: 'main' }]);
-    expect(client.createProject).toHaveBeenCalledWith({ name: 'my-app', repo: 'nick/my-app' });
     expect(result.settings).toEqual({
       enabled: true,
       repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
-      vercel: { projectId: 'prj_1', projectName: 'my-app' },
       setUpAt: NOW.toISOString(),
     });
     expect(state.saved).toEqual(result.settings);
     expect(state.saved?.pendingRepo).toBeUndefined();
-    expect(state.saved?.pendingVercel).toBeUndefined();
-    for (const s of ['repo', 'push', 'vercel', 'done']) expect(deps.onProgress).toHaveBeenCalledWith(s);
+    expect((deps.onProgress as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual(['repo', 'push', 'done']);
   });
 
   it('records the pending repo (owner = token user) before creating it, and the repo before the push', async () => {
@@ -192,38 +128,39 @@ describe('setUpDeploy', () => {
     expect(b.state.saved?.enabled).toBe(false);
   });
 
-  it.each([
-    'createRepo:before',
-    'createRepo:after',
-    'save#1',
-    'save#2',
-    'addOrigin',
-    'push',
-    'findProject',
-    'createProject:before',
-    'createProject:after',
-    'save#3',
-    'save#4',
-    'save#5',
-  ])('re-running after a crash at %s creates nothing twice', async (point) => {
-    const { state, deps } = world();
-    state.crash.add(point);
-    const first = await setUpDeploy(project(), deps);
-    expect(first.error).toBeDefined();
-    expect(first.settings.enabled).toBe(false);
-    state.crash.clear();
-    state.now = new Date(NOW.getTime() + 60_000);
+  it.each(['createRepo:before', 'createRepo:after', 'save#1', 'save#2', 'addOrigin', 'push', 'save#3'])(
+    're-running after a crash at %s creates nothing twice',
+    async (point) => {
+      const { state, deps } = world();
+      state.crash.add(point);
+      const first = await setUpDeploy(project(), deps);
+      expect(first.error).toBeDefined();
+      expect(first.settings.enabled).toBe(false);
+      state.crash.clear();
+      state.now = new Date(NOW.getTime() + 60_000);
 
-    const second = await setUpDeploy(project({ deploy: state.saved }), deps);
-    expect(second.error).toBeUndefined();
-    expect(second.needed).toEqual([]);
-    expect(second.step).toBe('done');
-    expect(second.settings.enabled).toBe(true);
-    expect(state.repos).toEqual(['my-app']);
-    expect(state.projects.size).toBe(1);
-    expect(second.settings.vercel?.projectId).toBe([...state.projects.values()][0].id);
-    expect(state.origin).toBe('https://github.com/nick/my-app.git');
-    expect(state.pushes.at(-1)).toEqual({ url: 'https://github.com/nick/my-app.git', refspec: 'main' });
+      const second = await setUpDeploy(project({ deploy: state.saved }), deps);
+      expect(second.error).toBeUndefined();
+      expect(second.needed).toEqual([]);
+      expect(second.step).toBe('done');
+      expect(second.settings.enabled).toBe(true);
+      expect(state.repos).toEqual(['my-app']);
+      expect(state.origin).toBe('https://github.com/nick/my-app.git');
+      expect(state.pushes.at(-1)).toEqual({ url: 'https://github.com/nick/my-app.git', refspec: 'main' });
+    },
+  );
+
+  it('recovery: a repo created by a run that stopped before recording it is adopted', async () => {
+    const { state, deps } = world();
+    state.crash.add('createRepo:after');
+    await setUpDeploy(project(), deps);
+    expect(state.saved?.repo).toBeUndefined();
+    state.crash.clear();
+
+    const result = await setUpDeploy(project({ deploy: state.saved }), deps);
+    expect(deps.createPrivateRepo).toHaveBeenCalledTimes(1);
+    expect(result.settings.repo).toEqual({ owner: 'nick', repo: 'my-app', createdByApp: true, public: false });
+    expect(result.step).toBe('done');
   });
 
   it('an older empty private repo with the same name is not adopted: a new one is created', async () => {
@@ -254,27 +191,43 @@ describe('setUpDeploy', () => {
     }
   });
 
-  it('a full re-run after success creates and pushes nothing', async () => {
-    const { state, deps, client } = world();
+  it('a full re-run after success creates and pushes nothing, and keeps setUpAt', async () => {
+    const { state, deps } = world();
     const first = await setUpDeploy(project(), deps);
     const pushes = state.pushes.length;
+    state.now = new Date(NOW.getTime() + DAY);
     const second = await setUpDeploy(project({ deploy: first.settings }), deps);
     expect(second.step).toBe('done');
-    expect(second.settings.vercel).toEqual(first.settings.vercel);
+    expect(second.settings.setUpAt).toBe(NOW.toISOString());
     expect(deps.createPrivateRepo).toHaveBeenCalledTimes(1);
-    expect(client.createProject).toHaveBeenCalledTimes(1);
     expect(state.pushes.length).toBe(pushes);
   });
 
+  it('a project set up under the old Deploy (with a Vercel project) re-runs without Vercel and keeps working', async () => {
+    const { state, deps } = world();
+    const old = {
+      enabled: true,
+      repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
+      vercel: { projectId: 'prj_1', projectName: 'my-app' },
+      setUpAt: '2026-11-01T00:00:00.000Z',
+    };
+    const result = await setUpDeploy(project({ deploy: old as never }), deps);
+    expect(result.error).toBeUndefined();
+    expect(result.step).toBe('done');
+    expect(result.settings.enabled).toBe(true);
+    expect(result.settings.setUpAt).toBe('2026-11-01T00:00:00.000Z');
+    expect(deps.createPrivateRepo).not.toHaveBeenCalled();
+    expect(state.pushes).toEqual([]);
+  });
+
   it('GitLab origin: non-github-remote, nothing created, nothing saved', async () => {
-    const { state, deps, client } = world({ origin: 'git@gitlab.com:nick/my-app.git' });
+    const { state, deps } = world({ origin: 'git@gitlab.com:nick/my-app.git' });
     const result = await setUpDeploy(project(), deps);
     expect(result.needed.map((n) => n.kind)).toEqual(['non-github-remote']);
     expect(result.settings.enabled).toBe(false);
     expect(result.step).toBe('repo');
     expect(deps.createPrivateRepo).not.toHaveBeenCalled();
     expect(deps.pushWithAppToken).not.toHaveBeenCalled();
-    expect(client.createProject).not.toHaveBeenCalled();
     expect(state.saved).toBeUndefined();
   });
 
@@ -292,16 +245,20 @@ describe('setUpDeploy', () => {
     expect(deps.createPrivateRepo).not.toHaveBeenCalled();
   });
 
-  it('existing GitHub origin: uses it, no repo created, no push', async () => {
-    const { state, deps, client } = world({ origin: 'git@github.com:acme/shop.git' });
+  it('existing GitHub origin: adopts it, no repo created, no push, enabled', async () => {
+    const { state, deps } = world({ origin: 'git@github.com:acme/shop.git' });
     const result = await setUpDeploy(project(), deps);
     expect(result.step).toBe('done');
     expect(result.needed).toEqual([]);
     expect(deps.createPrivateRepo).not.toHaveBeenCalled();
     expect(state.pushes).toEqual([]);
     expect(deps.appAccess).toHaveBeenCalledWith({ owner: 'acme', repo: 'shop' });
-    expect(client.createProject).toHaveBeenCalledWith({ name: 'shop', repo: 'acme/shop' });
-    expect(result.settings.repo).toEqual({ owner: 'acme', repo: 'shop', createdByApp: false, public: false });
+    expect(result.settings).toEqual({
+      enabled: true,
+      repo: { owner: 'acme', repo: 'shop', createdByApp: false, public: false },
+      setUpAt: NOW.toISOString(),
+    });
+    expect((deps.onProgress as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual(['repo', 'done']);
   });
 
   it('public repo: a warning item, and setup continues', async () => {
@@ -317,53 +274,23 @@ describe('setUpDeploy', () => {
     expect(again.needed).toEqual([]);
   });
 
-  it('Vercel git access missing: item with actionUrl, enabled stays false, repo kept', async () => {
-    const { state, deps } = world();
-    state.crash.add('git-not-connected');
-    const result = await setUpDeploy(project(), deps);
-    expect(result.error).toBeUndefined();
-    expect(result.step).toBe('vercel');
-    expect(result.needed).toEqual([
-      expect.objectContaining({ kind: 'vercel-git-access', actionUrl: 'https://github.com/apps/vercel/installations/new' }),
-    ]);
-    expect(result.settings.enabled).toBe(false);
-    expect(result.settings.vercel).toBeUndefined();
-    expect(state.saved?.repo?.repo).toBe('my-app');
-  });
-
-  it('Vercel signed out: only the sign-in item, nothing else touched', async () => {
+  it('GitHub signed out: github-sign-in, nothing touched', async () => {
     const { deps } = world();
-    deps.vercelStatus = vi.fn(async () => ({ connected: false }));
+    deps.isGitHubSignedIn = vi.fn(async () => false);
     const result = await setUpDeploy(project(), deps);
-    expect(result.needed.map((n) => n.kind)).toEqual(['vercel-sign-in']);
+    expect(result.needed.map((n) => n.kind)).toEqual(['github-sign-in']);
     expect(result.settings.enabled).toBe(false);
     expect(deps.readGit).not.toHaveBeenCalled();
     expect(deps.createPrivateRepo).not.toHaveBeenCalled();
     expect(deps.saveSettings).not.toHaveBeenCalled();
   });
 
-  it('Vercel unreachable: an error, not a sign-in item', async () => {
-    const { deps } = world();
-    deps.vercelStatus = vi.fn(async () => ({ connected: false, error: 'unavailable' as const }));
-    const result = await setUpDeploy(project(), deps);
-    expect(result.needed).toEqual([]);
-    expect(result.error?.kind).toBe('unavailable');
-  });
-
-  it('GitHub signed out: github-sign-in', async () => {
-    const { deps } = world();
-    deps.isGitHubSignedIn = vi.fn(async () => false);
-    const result = await setUpDeploy(project(), deps);
-    expect(result.needed.map((n) => n.kind)).toEqual(['github-sign-in']);
-    expect(deps.createPrivateRepo).not.toHaveBeenCalled();
-  });
-
   it('GitHub App not reaching the existing repo: github-app-install with the install link', async () => {
-    const { deps, client } = world({ origin: 'https://github.com/acme/shop' });
+    const { deps } = world({ origin: 'https://github.com/acme/shop' });
     deps.appAccess = vi.fn(async () => ({ installed: true, repositorySelection: 'selected' as const, repoReachable: false }));
     const result = await setUpDeploy(project(), deps);
     expect(result.needed).toEqual([expect.objectContaining({ kind: 'github-app-install', actionUrl: expect.stringContaining('https://github.com/apps/') })]);
-    expect(client.createProject).not.toHaveBeenCalled();
+    expect(result.settings.enabled).toBe(false);
   });
 
   it('GitHub App not installed and no remote: github-app-install, no repo created', async () => {
@@ -388,6 +315,7 @@ describe('setUpDeploy', () => {
     const again = await setUpDeploy(project({ deploy: state.saved }), deps);
     expect(again.step).toBe('done');
     expect(state.repos).toEqual(['my-app']);
+    expect(state.pushes).toEqual([{ url: 'https://github.com/nick/my-app.git', refspec: 'main' }]);
   });
 
   it('App access check failing: an error, never a guessed install item', async () => {
@@ -432,194 +360,16 @@ describe('setUpDeploy', () => {
     const result = await setUpDeploy(project({ mainBranch: 'trunk' }), deps);
     expect(result.error).toEqual({ kind: 'invalid', message: expect.stringContaining('trunk') });
     expect(state.pushes).toEqual([]);
-  });
-
-  it('uses the picked Vercel team and records it', async () => {
-    const { deps } = world();
-    const result = await setUpDeploy(project(), { ...deps, vercelTeamId: 'team_9' });
-    expect(deps.vercelClient).toHaveBeenCalledWith({ teamId: 'team_9' });
-    expect(result.settings.vercel?.teamId).toBe('team_9');
-  });
-
-  it('uses the recorded Vercel team over the picked one', async () => {
-    const { deps } = world();
-    const first = await setUpDeploy(project(), { ...deps, vercelTeamId: 'team_9' });
-    await setUpDeploy(project({ deploy: first.settings }), { ...deps, vercelTeamId: 'team_other' });
-    expect(deps.vercelClient).toHaveBeenLastCalledWith({ teamId: 'team_9' });
-  });
-
-  it('personal scope when no team is picked', async () => {
-    const { deps } = world();
-    const result = await setUpDeploy(project(), deps);
-    expect(deps.vercelClient).toHaveBeenCalledWith({});
-    expect(result.settings.vercel).not.toHaveProperty('teamId');
-  });
-
-  it('a pre-existing Vercel project linked to the same repo: vercel-existing-project with its names, setup stops', async () => {
-    const { state, deps, client } = world({ origin: 'https://github.com/acme/shop.git' });
-    state.projects.set('prj_x', { id: 'prj_x', name: 'shop-web', createdAt: NOW.getTime() - DAY, link: { repo: 'acme/shop' } });
-    const result = await setUpDeploy(project(), deps);
-    expect(client.createProject).not.toHaveBeenCalled();
-    expect(result.step).toBe('vercel');
     expect(result.settings.enabled).toBe(false);
-    expect(result.needed).toEqual([
-      expect.objectContaining({ kind: 'vercel-existing-project', projects: [{ id: 'prj_x', name: 'shop-web' }] }),
-    ]);
-    expect(result.needed[0].message).toContain('shop-web');
   });
 
-  it('a recent project with the same name linked to the same repo but not recorded as pending is not adopted', async () => {
-    const { state, deps, client } = world({ origin: 'https://github.com/acme/shop.git' });
-    state.projects.set('prj_x', { id: 'prj_x', name: 'shop', createdAt: NOW.getTime(), link: { repo: 'acme/shop' } });
-    const result = await setUpDeploy(project(), deps);
-    expect(client.createProject).not.toHaveBeenCalled();
-    expect(result.needed.map((n) => n.kind)).toEqual(['vercel-existing-project']);
-    expect(result.settings.vercel).toBeUndefined();
-  });
-
-  it("vercelChoice.useProjectId: adopts the owner's project", async () => {
-    const { state, deps, client } = world({ origin: 'https://github.com/acme/shop.git' });
-    state.projects.set('prj_x', { id: 'prj_x', name: 'shop-web', createdAt: NOW.getTime() - DAY, link: { repo: 'acme/shop' } });
-    const result = await setUpDeploy(project({ deploy: { enabled: false, vercelChoice: { useProjectId: 'prj_x' } } }), deps);
-    expect(client.createProject).not.toHaveBeenCalled();
-    expect(result.step).toBe('done');
-    expect(result.settings.vercel).toEqual({ projectId: 'prj_x', projectName: 'shop-web' });
-    expect(state.saved?.vercelChoice).toBeUndefined();
-  });
-
-  it('vercelChoice.createNew: skips the existing-project check and creates a new one', async () => {
-    const { state, deps, client } = world({ origin: 'https://github.com/acme/shop.git' });
-    state.projects.set('prj_x', { id: 'prj_x', name: 'shop', createdAt: NOW.getTime() - DAY, link: { repo: 'acme/shop' } });
-    const result = await setUpDeploy(project({ deploy: { enabled: false, vercelChoice: { createNew: true } } }), deps);
-    expect(client.createProject).toHaveBeenLastCalledWith({ name: 'shop-2', repo: 'acme/shop' });
-    expect(result.settings.vercel?.projectName).toBe('shop-2');
-    expect(result.step).toBe('done');
-  });
-
-  it('a project name taken by another repo: picks the next free name', async () => {
-    const { state, deps, client } = world({ origin: 'https://github.com/acme/shop.git' });
-    state.projects.set('prj_x', { id: 'prj_x', name: 'shop', createdAt: NOW.getTime() - DAY, link: { repo: 'someone/else' } });
-    const result = await setUpDeploy(project(), deps);
-    expect(client.createProject).toHaveBeenCalledWith({ name: 'shop-2', repo: 'acme/shop' });
-    expect(result.settings.vercel?.projectName).toBe('shop-2');
-  });
-
-  it('409 on create: re-finds by name and adopts only our own just-created project', async () => {
-    // The name check misses (race), create says 409, the project is ours (created just now, same repo).
-    const a = world({ origin: 'https://github.com/acme/shop.git' });
-    a.client.createProject = vi.fn(async ({ name, repo }: { name: string; repo: string }) => {
-      a.state.projects.set('prj_r', { id: 'prj_r', name, createdAt: a.state.now.getTime(), link: { repo } });
-      throw { kind: 'conflict', message: 'exists' } satisfies VercelError;
-    });
-    const ra = await setUpDeploy(project(), a.deps);
-    expect(ra.settings.vercel).toEqual({ projectId: 'prj_r', projectName: 'shop' });
-
-    // 409 for an old project of the same repo: not adopted, next name.
-    const b = world({ origin: 'https://github.com/acme/shop.git' });
-    const create = b.client.createProject;
-    let first = true;
-    b.client.createProject = vi.fn(async (input: { name: string; repo: string }) => {
-      if (first) {
-        first = false;
-        b.state.projects.set('prj_old', { id: 'prj_old', name: input.name, createdAt: NOW.getTime() - DAY, link: { repo: 'other/repo' } });
-        throw { kind: 'conflict', message: 'exists' } satisfies VercelError;
-      }
-      return create(input);
-    });
-    const rb = await setUpDeploy(project(), b.deps);
-    expect(rb.settings.vercel?.projectName).toBe('shop-2');
-  });
-
-  it('a recorded Vercel project that is gone (or its team): a clear not-found error, nothing created', async () => {
-    const { state, deps, client } = world();
-    const result = await setUpDeploy(
-      project({
-        deploy: {
-          enabled: true,
-          repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
-          vercel: { projectId: 'prj_gone', projectName: 'my-app', teamId: 'team_gone' },
-        },
-      }),
-      deps,
-    );
-    expect(result.error?.kind).toBe('not-found');
-    expect(result.error?.message).toContain('my-app');
-    expect(client.createProject).not.toHaveBeenCalled();
-    expect(state.pushes).toEqual([]);
-    expect(deps.vercelClient).toHaveBeenCalledWith({ teamId: 'team_gone' });
-  });
-
-  it('a recorded Vercel project that is gone + vercelChoice.createNew: creates a new one', async () => {
-    const { deps, client } = world();
-    const result = await setUpDeploy(
-      project({
-        deploy: {
-          enabled: false,
-          repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
-          vercel: { projectId: 'prj_gone', projectName: 'my-app', teamId: 'team_gone' },
-          vercelChoice: { createNew: true },
-        },
-      }),
-      deps,
-    );
-    expect(client.createProject).toHaveBeenCalledTimes(1);
-    expect(result.step).toBe('done');
-    expect(result.settings.vercel).toEqual({ projectId: 'prj_1', projectName: 'my-app' });
-  });
-
-  it('a different Vercel project recorded: the database of the old one is cleared', async () => {
-    const { deps } = world();
-    const result = await setUpDeploy(
-      project({
-        deploy: {
-          enabled: false,
-          repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
-          vercel: { projectId: 'prj_gone', projectName: 'my-app', teamId: 'team_gone' },
-          vercelChoice: { createNew: true },
-          database: { provider: 'neon', addedAt: '2026-11-10T10:00:00Z' },
-          pendingDatabase: { name: 'my-app-db', at: '2026-11-10T10:00:00Z' },
-        },
-      }),
-      deps,
-    );
-    expect(result.settings.vercel?.projectId).toBe('prj_1');
-    expect(result.settings.database).toBeUndefined();
-    expect(result.settings.pendingDatabase).toBeUndefined();
-  });
-
-  it('the same Vercel project: the database stays', async () => {
-    const { deps, state } = world();
-    state.projects.set('prj_9', { id: 'prj_9', name: 'my-app', createdAt: NOW.getTime(), link: { repo: 'nick/my-app' } });
-    const database = { provider: 'neon' as const, addedAt: '2026-11-10T10:00:00Z' };
-    const result = await setUpDeploy(
-      project({
-        deploy: {
-          enabled: false,
-          repo: { owner: 'nick', repo: 'my-app', createdByApp: true, public: false },
-          vercel: { projectId: 'prj_9', projectName: 'my-app' },
-          database,
-        },
-      }),
-      deps,
-    );
-    expect(result.settings.vercel?.projectId).toBe('prj_9');
-    expect(result.settings.database).toEqual(database);
-  });
-
-  it('never throws: GitHub and Vercel errors become state.error with their kind', async () => {
+  it('never throws: GitHub errors become state.error with their kind; unknown errors hide their text', async () => {
     const a = world();
     a.deps.createPrivateRepo = vi.fn(async () => {
       throw new GitHubWriteError('permissions', 'Resource not accessible by integration');
     });
     const ra = await setUpDeploy(project(), a.deps);
     expect(ra.error).toEqual({ kind: 'permissions', message: 'Resource not accessible by integration' });
-
-    const b = world();
-    b.client.listProjectsForRepo = vi.fn(async () => {
-      throw { kind: 'rate-limit', message: 'Too many requests' } satisfies VercelError;
-    });
-    const rb = await setUpDeploy(project(), b.deps);
-    expect(rb.error).toEqual({ kind: 'rate-limit', message: 'Too many requests' });
 
     const c = world();
     c.deps.readGit = vi.fn(async () => {
@@ -633,7 +383,7 @@ describe('setUpDeploy', () => {
 
 describe('saveDeployPatch', () => {
   it('merges the patch into the latest stored deploy, clears undefined fields', () => {
-    const p = project({ deploy: { enabled: false, database: { provider: 'neon', addedAt: 'x' }, pendingRepo: { base: 'a', owner: 'o', at: 't' } } });
+    const p = project({ deploy: { enabled: false, setUpAt: 'x', pendingRepo: { base: 'a', owner: 'o', at: 't' } } });
     const store = {
       getProject: vi.fn(() => p),
       updateProjectSettings: vi.fn((_id: string, s: Partial<Project['settings']>) => {
@@ -642,19 +392,13 @@ describe('saveDeployPatch', () => {
       }),
     };
     saveDeployPatch(store, 'p1', { repo: { owner: 'o', repo: 'a', createdByApp: true }, pendingRepo: undefined });
-    expect(p.settings.deploy).toEqual({ enabled: false, database: { provider: 'neon', addedAt: 'x' }, repo: { owner: 'o', repo: 'a', createdByApp: true } });
+    expect(p.settings.deploy).toEqual({ enabled: false, setUpAt: 'x', repo: { owner: 'o', repo: 'a', createdByApp: true } });
     expect(p.settings.deploy).not.toHaveProperty('pendingRepo');
+    expect(Object.keys(p.settings.deploy ?? {})).not.toContain('pendingRepo');
   });
 
-  it('clears pendingDatabase, vercelChoice and vercelTeamId set to undefined (database and setup patches)', () => {
-    const p = project({
-      deploy: {
-        enabled: true,
-        pendingDatabase: { name: 'app-db', at: 't' },
-        vercelChoice: { useProjectId: 'prj_1' },
-        vercelTeamId: 'team_1',
-      },
-    });
+  it('keeps stale fields of old data it does not know (they are ignored, not rewritten)', () => {
+    const p = project({ deploy: { enabled: true, vercel: { projectId: 'prj', projectName: 'app' } } as never });
     const store = {
       getProject: vi.fn(() => p),
       updateProjectSettings: vi.fn((_id: string, s: Partial<Project['settings']>) => {
@@ -662,11 +406,8 @@ describe('saveDeployPatch', () => {
         return p;
       }),
     };
-    saveDeployPatch(store, 'p1', { database: { provider: 'neon', addedAt: 'x' }, pendingDatabase: undefined });
-    saveDeployPatch(store, 'p1', { vercelChoice: undefined, vercelTeamId: undefined });
-    expect(p.settings.deploy).toEqual({ enabled: true, database: { provider: 'neon', addedAt: 'x' } });
-    expect(Object.keys(p.settings.deploy ?? {})).not.toContain('pendingDatabase');
-    expect(JSON.parse(JSON.stringify(p.settings.deploy))).toEqual({ enabled: true, database: { provider: 'neon', addedAt: 'x' } });
+    saveDeployPatch(store, 'p1', { setUpAt: 'y' });
+    expect(p.settings.deploy).toEqual({ enabled: true, vercel: { projectId: 'prj', projectName: 'app' }, setUpAt: 'y' });
   });
 
   it('throws when the project is gone', () => {

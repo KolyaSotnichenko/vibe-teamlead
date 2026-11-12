@@ -11,6 +11,7 @@ import type { Project } from '../../shared/types';
 import type { DeployPushResult } from '../../shared/types/deploy';
 import { getToolPath } from '../cli-tool-manager';
 import { getIsolatedGitEnv } from '../utils/git-isolation';
+import { isCiSetUp } from './ci-setup';
 import { readGitInfo } from './setup';
 
 export type { DeployPushResult };
@@ -120,7 +121,7 @@ export async function pushMainAfterMerge(
   mergedInto: string,
 ): Promise<PushAfterMergeOutcome> {
   const deploy = project.settings?.deploy;
-  if (!deploy?.enabled || !deploy.repo) return { pushed: false };
+  if (!isCiSetUp(project) || !deploy?.repo) return { pushed: false };
   const main = await resolveMainBranch(project, deps.branches);
   // Only the project's main branch goes to GitHub, never a merge into some other branch
   if (!main || mergedInto !== main) return { pushed: false };

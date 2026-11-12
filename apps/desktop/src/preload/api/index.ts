@@ -17,7 +17,7 @@ import { type AgentQuestionsAPI, createAgentQuestionsAPI } from './agent-questio
 import { type BriefAPI, createBriefAPI } from './brief-api';
 import { type DesignAPI, createDesignAPI } from './design-api';
 import { type PreviewAPI, createPreviewAPI } from './preview-api';
-import { type DeployAPI, type VercelAPI, createDeployAPI, createVercelAPI } from './deploy-api';
+import { type DeployAPI, createDeployAPI } from './deploy-api';
 import { type UsageAPI, createUsageAPI } from './usage-api';
 import { createToolsCheckAPI } from './tools-check-api';
 import type { ToolsCheckAPI } from '../../shared/types/tools-check';
@@ -50,8 +50,6 @@ export interface ElectronAPI extends
   preview: PreviewAPI;
   /** GitHub Actions runs for the Deploy view */
   deploy: DeployAPI;
-  /** The Vercel account (Settings → Vercel) */
-  vercel: VercelAPI;
   /** Token usage per project */
   usage: UsageAPI;
 }
@@ -75,7 +73,6 @@ export const createElectronAPI = (): ElectronAPI => ({
   design: createDesignAPI(),
   preview: createPreviewAPI(),
   deploy: createDeployAPI(),
-  vercel: createVercelAPI(),
   usage: createUsageAPI()
 });
 

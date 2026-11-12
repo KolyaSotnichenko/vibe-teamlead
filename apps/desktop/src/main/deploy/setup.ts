@@ -1,8 +1,7 @@
 /**
- * Deploy setup for a project: accounts → GitHub repository (+ push) → Vercel project → enabled.
- *
- * Before the repository step, the project's commit author is set to an address GitHub ties to the
- * owner when git would otherwise sign as `user@machine.local` (commit-identity.ts).
+ * CI setup for a project: GitHub account → GitHub repository (adopted or created, + push of main
+ * into a repository the app created) → enabled. Set up means the repository step is done
+ * (`isCiSetUp`, ci-setup.ts); `enabled` and `setUpAt` are recorded once it is.
  *
  * Every step records its result in `settings.deploy` (through `saveSettings`) before the
  * next one starts, so a re-run after a crash at any point picks up where it stopped and
@@ -10,11 +9,9 @@
  * - before asking GitHub for a repo, `pendingRepo` {base, owner, at} is recorded; a re-run
  *   adopts a repo of that owner named base[-2..5] only if it is private, has no branches and
  *   was created after `at` (minus 2 min skew), and never an older one;
- * - the created repo is recorded before the origin is added and the branch pushed (both repeatable);
- * - before asking Vercel for a project, `pendingVercel` {name, at} is recorded; a re-run (or a
- *   409) adopts a project of that name only if linked to the same repo and created after `at`.
- *   A project already linked to the repo that the app didn't create stops setup with
- *   `vercel-existing-project`; the owner answers through `settings.deploy.vercelChoice`.
+ * - the created repo is recorded before the origin is added and the branch pushed (both repeatable).
+ *
+ * Fields old data may still carry (the Vercel project, database, services) are kept and ignored.
  *
  * `setUpDeploy` never throws: what the owner must do becomes `needed`, failures become
  * `error` (a kind + a message without secrets). All dependencies are injected.
@@ -29,12 +26,10 @@ import type {
   DeploySetupState,
   DeploySetupStep,
   NeededFromYou,
-  VercelStatus,
 } from '../../shared/types/deploy';
 import type { GitHubAppAccess } from '../../shared/types/integrations';
 import { GITHUB_APP_INSTALL_URL } from '../../shared/constants/github';
 import { GitHubWriteError } from './github-write';
-import { isVercelError, type VercelClient } from './vercel-api';
 
 type Repo = { owner: string; repo: string };
 
@@ -52,14 +47,9 @@ export interface GitInfo {
 }
 
 export interface SetupDeps {
-  vercelStatus: () => Promise<VercelStatus>;
-  /** A Vercel client for a scope (`{}` = personal account). */
-  vercelClient: (scope: { teamId?: string }) => VercelClient;
   isGitHubSignedIn: () => Promise<boolean>;
   /** Login of the GitHub user the App token acts for (GET /user). */
   githubLogin: () => Promise<string>;
-  /** Makes the project's commits signed by an address GitHub ties to the owner (commit-identity.ts). */
-  commitIdentity: (projectPath: string) => Promise<unknown>;
   /** `getGitHubAppAccess` (github-auth/app-access.ts). */
   appAccess: (repo?: Repo) => Promise<GitHubAppAccess | { error: string }>;
   /** null when the project is not a git repository. */
@@ -74,11 +64,8 @@ export interface SetupDeps {
   saveSettings: (patch: Partial<DeployProjectSettings>) => Promise<void> | void;
   onProgress?: (step: DeploySetupStep) => void;
   now?: () => Date;
-  /** The Vercel team the owner picked; personal scope when absent. A team already recorded for the project wins. */
-  vercelTeamId?: string;
 }
 
-const MAX_PROJECT_NAME_TRIES = 5;
 const NAME_PART = '[A-Za-z0-9_.-]+';
 const HTTPS_REMOTE = new RegExp(`^https?://(?:[^@/\\s]+@)?github\\.com(?::443)?/(${NAME_PART})/(${NAME_PART}?)(?:\\.git)?/?$`, 'i');
 const SSH_REMOTE = new RegExp(`^ssh://(?:[^@/\\s]+@)?github\\.com(?::\\d+)?/(${NAME_PART})/(${NAME_PART}?)(?:\\.git)?/?$`, 'i');
@@ -106,17 +93,6 @@ function repoNameFor(projectPath: string): string {
   return base || 'project';
 }
 
-/** Vercel project names: lowercase, letters, digits, '.', '_', '-', no '---', at most 100. */
-function vercelNameFor(repo: string): string {
-  const name = repo
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-{3,}/g, '--')
-    .replace(/^[-._]+|[-._]+$/g, '')
-    .slice(0, 100);
-  return name || 'project';
-}
-
 const BRANCH_OK = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
 
 function mainBranchFor(project: Project, git: GitInfo): string {
@@ -128,7 +104,6 @@ function mainBranchFor(project: Project, git: GitInfo): string {
 
 function toError(e: unknown): DeploySetupError {
   if (e instanceof GitHubWriteError) return { kind: e.kind, message: e.message };
-  if (isVercelError(e)) return { kind: e.kind, message: e.message };
   // Unknown errors may carry anything (paths, command output): never shown.
   return { kind: 'unknown', message: 'Setup stopped unexpectedly. Try again.' };
 }
@@ -204,18 +179,10 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
   };
 
   try {
-    // 1. Accounts.
-    const status = await deps.vercelStatus();
-    if (!status.connected) {
-      if (status.error) throw new Stop({ kind: 'unavailable', message: 'Could not reach Vercel. Try again.' });
-      need({ id: 'vercel-sign-in', kind: 'vercel-sign-in', message: 'Sign in to Vercel in Settings → Vercel.' });
-    }
+    // 1. Account.
     if (!(await deps.isGitHubSignedIn())) {
       need({ id: 'github-sign-in', kind: 'github-sign-in', message: 'Sign in to GitHub in Settings → GitHub.' });
     }
-    // Vercel refuses to deploy commits whose author it can't tie to the owner's GitHub account.
-    // Best effort: a project the app can't configure still gets set up.
-    await deps.commitIdentity(project.path).catch(() => undefined);
 
     // 2. Repository.
     enter('repo');
@@ -234,7 +201,7 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
           need({
             id: 'non-github-remote',
             kind: 'non-github-remote',
-            message: "The project's origin is not on GitHub. Deploy works with GitHub repositories only.",
+            message: "The project's origin is not on GitHub. CI works with GitHub repositories only.",
           });
         await checkAccess(gh);
         const visibility = await deps.repoVisibility(gh.owner, gh.repo);
@@ -269,8 +236,8 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
       await checkAccess(repo);
     }
 
-    // Push: only into a repo the app created, until the Vercel project exists (it builds from it).
-    if (repo.createdByApp && !settings.vercel) {
+    // Push: only into a repo the app created, until setup has finished once (merges push main after that).
+    if (repo.createdByApp && !settings.enabled) {
       enter('push');
       const url = githubUrl(repo);
       const info = await readGit();
@@ -288,92 +255,7 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
       await deps.pushWithAppToken(project.path, url, branch);
     }
 
-    // 3. Vercel project.
-    enter('vercel');
-    const fullRepo = `${repo.owner}/${repo.repo}`;
-    const choice = settings.vercelChoice;
-    // the database belongs to this Vercel project: a different one must not inherit the record
-    const previousProjectId = settings.vercel?.projectId;
-    if (settings.vercel) {
-      const { projectId, projectName, teamId } = settings.vercel;
-      const recorded = await deps.vercelClient(teamId ? { teamId } : {}).findProject(projectId);
-      if (!recorded) {
-        if (!choice?.createNew) {
-          throw new Stop({
-            kind: 'not-found',
-            message: `The Vercel project "${projectName}" can't be found${teamId ? ' (its team may be gone, or your account has no access to it)' : ''}. Create a new one, or check Vercel.`,
-          });
-        }
-        await record({ vercel: undefined });
-      }
-    }
-    if (!settings.vercel) {
-      const pending = settings.pendingVercel;
-      const teamId = pending?.teamId ?? deps.vercelTeamId;
-      const client = deps.vercelClient(teamId ? { teamId } : {});
-      /** Linked to this repo and created after the app asked for it. */
-      const ours = (p: { createdAt?: number; link?: { repo: string } } | null, req: { at: string }) =>
-        !!p &&
-        p.link?.repo?.toLowerCase() === fullRepo.toLowerCase() &&
-        typeof p.createdAt === 'number' &&
-        p.createdAt >= Date.parse(req.at) - ADOPT_SKEW_MS;
-
-      let found: { id: string; name: string } | null = null;
-      if (choice?.useProjectId) {
-        found = await client.findProject(choice.useProjectId);
-        if (!found) throw new Stop({ kind: 'not-found', message: "The Vercel project you chose can't be found." });
-      } else {
-        if (pending) {
-          const p = await client.findProject(pending.name);
-          if (p && ours(p, pending)) found = p;
-        }
-        if (!found && !choice?.createNew) {
-          const existing = await client.listProjectsForRepo(fullRepo);
-          if (existing.length > 0) {
-            need({
-              id: 'vercel-existing-project',
-              kind: 'vercel-existing-project',
-              message: `Vercel already has a project for ${fullRepo}: ${existing.map((p) => p.name).join(', ')}. Use it, or create a new one.`,
-              projects: existing.map((p) => ({ id: p.id, name: p.name })),
-            });
-          }
-        }
-        const base = vercelNameFor(repo.repo);
-        for (let attempt = 1; attempt <= MAX_PROJECT_NAME_TRIES && !found; attempt++) {
-          const name = attempt === 1 ? base : `${base.slice(0, 97)}-${attempt}`;
-          if (await client.findProject(name)) continue;
-          const req = { name, at: now().toISOString(), ...(teamId ? { teamId } : {}) };
-          await record({ pendingVercel: req });
-          try {
-            found = await client.createProject({ name, repo: fullRepo });
-          } catch (e) {
-            if (isVercelError(e) && e.kind === 'conflict') {
-              const p = await client.findProject(name);
-              if (p && ours(p, req)) found = p;
-              continue;
-            }
-            if (isVercelError(e) && e.kind === 'git-not-connected') {
-              need({
-                id: 'vercel-git-access',
-                kind: 'vercel-git-access',
-                message: `Let Vercel's GitHub App access ${fullRepo}, then try again.`,
-                ...(e.actionUrl ? { actionUrl: e.actionUrl } : {}),
-              });
-            }
-            throw e;
-          }
-        }
-        if (!found) throw new Stop({ kind: 'conflict', message: `Vercel project names for ${repo.repo} are all taken.` });
-      }
-      await record({
-        vercel: { projectId: found.id, projectName: found.name, ...(teamId ? { teamId } : {}) },
-        pendingVercel: undefined,
-        vercelChoice: undefined,
-        ...(found.id !== previousProjectId ? { database: undefined, pendingDatabase: undefined } : {}),
-      });
-    }
-
-    // 4. Enabled.
+    // 3. Enabled: the repository step is done.
     await record({ enabled: true, setUpAt: settings.setUpAt ?? now().toISOString() });
     enter('done');
     return { settings: clean(settings), needed, step };
@@ -523,23 +405,15 @@ export function saveDeployPatch(store: DeploySettingsStore, projectId: string, p
   }
 }
 
-/** Production wiring: the real GitHub/Vercel functions and the project store. Imported lazily (Electron). */
-export async function createSetupDeps(
-  project: Project,
-  extra: Pick<SetupDeps, 'onProgress' | 'vercelTeamId'> = {},
-): Promise<SetupDeps> {
-  const [credential, vercelApi, githubWrite, appAccess, tokenStore, store, identity] = await Promise.all([
-    import('./vercel-credential'),
-    import('./vercel-api'),
+/** Production wiring: the real GitHub functions and the project store. Imported lazily (Electron). */
+export async function createSetupDeps(project: Project, extra: Pick<SetupDeps, 'onProgress'> = {}): Promise<SetupDeps> {
+  const [githubWrite, appAccess, tokenStore, store] = await Promise.all([
     import('./github-write'),
     import('../github-auth/app-access'),
     import('../github-auth/token-store'),
     import('../project-store'),
-    import('./commit-identity'),
   ]);
   return {
-    vercelStatus: () => credential.vercelStatus(),
-    vercelClient: (scope) => vercelApi.createVercelClient(vercelApi.defaultVercelFetcher, scope, () => credential.getVercelToken()),
     isGitHubSignedIn: async () => !!(await tokenStore.getValidAccessToken()),
     appAccess: (repo) => appAccess.getGitHubAppAccess(repo),
     readGit: readGitInfo,
@@ -548,7 +422,6 @@ export async function createSetupDeps(
     addOriginIfMissing: (p, url) => githubWrite.addOriginIfMissing(p, url),
     pushWithAppToken: (p, url, refspec) => githubWrite.pushWithAppToken(p, url, refspec),
     githubLogin: () => githubWrite.getAuthenticatedLogin(),
-    commitIdentity: (p) => identity.ensureCommitIdentity(identity.gitCommitIdentityDeps(p, () => githubWrite.getAuthenticatedUser())),
     inspectRepo: (owner, repo) => githubWrite.inspectRepo(owner, repo),
     saveSettings: (patch) => saveDeployPatch(store.projectStore, project.id, patch),
     ...extra,

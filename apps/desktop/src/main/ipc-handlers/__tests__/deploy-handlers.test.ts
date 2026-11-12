@@ -21,6 +21,7 @@ vi.mock('../../deploy/readiness', () => ({
   createReadiness: () => ({ state: () => ({ scanning: false, tasks: {} }), scan: scanReadiness }),
 }));
 vi.mock('../../deploy/github-fetcher', () => ({ githubFetcher: vi.fn() }));
+vi.mock('../../deploy/ci-setup', async (orig) => ({ ...(await orig<typeof import('../../deploy/ci-setup')>()), cleanupVercelLeftovers: vi.fn(async () => undefined) }));
 vi.mock('../../deploy/deploy-tasks', () => ({
   isDeployTask: vi.fn((projectPath: string, specId: string) => projectPath === '/p1' && specId === 'deploy-spec'),
 }));

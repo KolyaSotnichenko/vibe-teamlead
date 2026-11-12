@@ -1,37 +1,19 @@
 /**
- * Environment → Needed from you: what only the owner can do before deploy goes on, each with
+ * Environment → Needed from you: what only the owner can do before CI setup goes on, each with
  * its action. Messages come from i18n by kind (main's English `message` is not shown).
  */
 import { useTranslation } from 'react-i18next';
 import type { NeededFromYou as NeededItem } from '../../../shared/types/deploy';
-import type { AppSection } from '../settings/AppSettings';
 import { Button } from '../ui/button';
-import { isHttpsUrl, isWebUrl, LinkButton, openWebUrl } from './status';
-
-const VERCEL_GITHUB_APP_URL = 'https://github.com/apps/vercel/installations/new';
+import { isWebUrl, openWebUrl } from './status';
 
 export interface NeededFromYouProps {
   items: NeededItem[];
   /** `owner/repo`, when known. */
   repo?: string;
-  setupRunning: boolean;
-  databaseRunning: boolean;
-  onChooseProject: (choice: { useProjectId: string } | { createNew: true }) => void;
   onAcknowledge: (id: string) => void;
-  onAddValue: (name: string) => void;
-  /** `integration`: the item's integration (neon, redis, blob). */
-  onAcceptTerms: (integration?: string) => void;
   onConnectGitHub: () => void;
 }
-
-const openSettings = (section: AppSection) =>
-  window.dispatchEvent(new CustomEvent<AppSection>('open-app-settings', { detail: section }));
-
-/** `neon` → `Neon`. */
-const INTEGRATION_NAMES: Record<string, string> = { neon: 'Neon', redis: 'Redis', blob: 'Blob' };
-/** Redis and Blob (the Neon database keeps its own texts). */
-const isService = (item: NeededItem) => item.integration === 'redis' || item.integration === 'blob';
-const integrationName = (slug?: string) => (slug ? (INTEGRATION_NAMES[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1)) : '');
 
 export function NeededFromYou(props: NeededFromYouProps) {
   const { t } = useTranslation(['deploy']);
@@ -52,7 +34,7 @@ export function NeededFromYou(props: NeededFromYouProps) {
   );
 }
 
-function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAcknowledge, onAddValue, onAcceptTerms, onConnectGitHub }: NeededFromYouProps & { item: NeededItem }) {
+function Item({ item, repo, onAcknowledge, onConnectGitHub }: NeededFromYouProps & { item: NeededItem }) {
   const { t } = useTranslation(['deploy']);
   const link = (label: string, url: string | undefined) =>
     isWebUrl(url) ? (
@@ -63,12 +45,7 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
 
   let message: string;
   let actions: React.ReactNode = null;
-  let extra: React.ReactNode = null;
   switch (item.kind) {
-    case 'vercel-sign-in':
-      message = t('deploy:needed.vercel-sign-in');
-      actions = <Button size="sm" onClick={() => openSettings('vercel')}>{t('deploy:needed.actions.connectVercel')}</Button>;
-      break;
     case 'github-sign-in':
       message = t('deploy:needed.github-sign-in');
       actions = <Button size="sm" onClick={onConnectGitHub}>{t('deploy:needed.actions.connectGitHub')}</Button>;
@@ -76,25 +53,6 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
     case 'github-app-install':
       message = t('deploy:needed.github-app-install');
       actions = link(t('deploy:needed.actions.installApp'), item.actionUrl);
-      break;
-    case 'vercel-git-access':
-      message = t('deploy:needed.vercel-git-access');
-      actions = link(t('deploy:needed.actions.grantVercel'), item.actionUrl ?? VERCEL_GITHUB_APP_URL);
-      break;
-    case 'vercel-existing-project':
-      message = t('deploy:needed.vercel-existing-project');
-      actions = (
-        <>
-          {(item.projects ?? []).map((p) => (
-            <Button key={p.id} size="sm" disabled={setupRunning} onClick={() => onChooseProject({ useProjectId: p.id })}>
-              {t('deploy:needed.actions.useProject', { name: p.name })}
-            </Button>
-          ))}
-          <Button size="sm" variant="outline" disabled={setupRunning} onClick={() => onChooseProject({ createNew: true })}>
-            {t('deploy:needed.actions.createNew')}
-          </Button>
-        </>
-      );
       break;
     case 'non-github-remote':
       message = t('deploy:needed.non-github-remote');
@@ -110,33 +68,9 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
         </>
       );
       break;
-    case 'variable':
+    case 'secret':
+      // Plain text until secrets can be saved from here
       message = t('deploy:needed.variable', { name: item.variable ?? '' });
-      actions = <Button size="sm" onClick={() => onAddValue(item.variable ?? '')}>{t('deploy:needed.actions.addValue')}</Button>;
-      break;
-    case 'database-terms':
-      message = t(isService(item) ? 'deploy:needed.service-terms' : 'deploy:needed.database-terms', { integration: integrationName(item.integration) });
-      extra = (item.policyLinks ?? []).length > 0 && (
-        <ul aria-label={t('deploy:needed.policyLinks')} className="flex flex-col gap-1">
-          {(item.policyLinks ?? []).map((l) => (
-            <li key={l.url} className="flex flex-wrap items-baseline gap-2 text-sm">
-              {/* Policy links come from the CLI's output: only https becomes a link */}
-              {isHttpsUrl(l.url) ? <LinkButton url={l.url}>{l.name}</LinkButton> : <span className="text-foreground">{l.name}</span>}
-              {/* The host, so the owner sees where a link really goes */}
-              <span className="font-mono text-xs text-muted-foreground">{l.host}</span>
-            </li>
-          ))}
-        </ul>
-      );
-      actions = (
-        <Button size="sm" disabled={databaseRunning} onClick={() => onAcceptTerms(item.integration)}>
-          {t('deploy:needed.actions.acceptTerms')}
-        </Button>
-      );
-      break;
-    case 'database-dashboard':
-      message = t(isService(item) ? 'deploy:needed.service-dashboard' : 'deploy:needed.database-dashboard');
-      actions = link(t('deploy:needed.actions.openDashboard'), item.actionUrl);
       break;
     default:
       message = t('deploy:env.errors.unknown');
@@ -145,7 +79,6 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
   return (
     <>
       <p className="text-sm text-foreground">{message}</p>
-      {extra}
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </>
   );

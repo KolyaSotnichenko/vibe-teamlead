@@ -11,7 +11,6 @@ import {
   setRepoSecret,
   repoVisibility,
   getAuthenticatedLogin,
-  getAuthenticatedUser,
   inspectRepo,
   isValidSecretName,
   listRepoSecretNames,
@@ -140,20 +139,6 @@ describe('getAuthenticatedLogin', () => {
   it('classified error on failure', async () => {
     const a = fakeFetch(() => ({ status: 500 }));
     await expect(getAuthenticatedLogin({ fetchImpl: a.impl, getToken })).rejects.toMatchObject({ kind: 'unavailable' });
-  });
-});
-
-describe('getAuthenticatedUser', () => {
-  it('returns id, login and name of the token user', async () => {
-    const a = fakeFetch(() => ({ status: 200, body: { id: 7, login: 'nick', name: 'Nick' } }));
-    expect(await getAuthenticatedUser({ fetchImpl: a.impl, getToken })).toEqual({ id: 7, login: 'nick', name: 'Nick' });
-    expect(a.calls[0].url).toBe('https://api.github.com/user');
-  });
-  it('no name: null; no numeric id: unavailable', async () => {
-    const a = fakeFetch(() => ({ status: 200, body: { id: 7, login: 'nick', name: null } }));
-    expect((await getAuthenticatedUser({ fetchImpl: a.impl, getToken })).name).toBeNull();
-    const b = fakeFetch(() => ({ status: 200, body: { login: 'nick' } }));
-    await expect(getAuthenticatedUser({ fetchImpl: b.impl, getToken })).rejects.toMatchObject({ kind: 'unavailable' });
   });
 });
 

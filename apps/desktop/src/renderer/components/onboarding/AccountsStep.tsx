@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Github } from 'lucide-react';
 import { Button } from '../ui/button';
-import { VercelPanel } from '../settings/VercelPanel';
 import { GitHubOAuthFlow } from '../project-settings/GitHubOAuthFlow';
 
 interface AccountsStepProps {
@@ -13,7 +12,7 @@ interface AccountsStepProps {
 /**
  * Optional Accounts step of the onboarding wizard.
  *
- * Signs in to GitHub (and optionally Vercel) with the same device flow the setup modal uses
+ * Signs in to GitHub with the same device flow the setup modal uses
  * (GitHubOAuthFlow). It only signs in; anything skipped can be connected
  * later in Settings or from the Deploy tab.
  */
@@ -21,7 +20,6 @@ export function AccountsStep({ onNext, onBack }: AccountsStepProps) {
   const { t } = useTranslation(['onboarding', 'dialogs']);
   const [connected, setConnected] = useState(false);
   const [login, setLogin] = useState<string | undefined>();
-  const [vercelConnected, setVercelConnected] = useState(false);
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-8 py-6">
@@ -54,19 +52,13 @@ export function AccountsStep({ onNext, onBack }: AccountsStepProps) {
           />
         )}
 
-        <section className="mt-8 space-y-3 border-t border-border pt-6">
-          <h2 className="text-lg font-semibold text-foreground">{t('onboarding:accounts.vercelTitle')}</h2>
-          <p className="text-sm text-muted-foreground">{t('onboarding:accounts.vercelPurpose')}</p>
-          <VercelPanel onStatusChange={setVercelConnected} />
-        </section>
-
         <p className="mt-6 text-center text-sm text-muted-foreground">{t('onboarding:accounts.later')}</p>
 
         <div className="sticky bottom-0 z-10 mt-10 flex justify-between items-center border-t border-border bg-card py-4">
           <Button variant="ghost" onClick={onBack} className="text-muted-foreground hover:text-foreground">
             {t('onboarding:accounts.back')}
           </Button>
-          {connected || vercelConnected ? (
+          {connected ? (
             <Button onClick={onNext}>{t('onboarding:accounts.continue')}</Button>
           ) : (
             <Button variant="outline" onClick={onNext}>

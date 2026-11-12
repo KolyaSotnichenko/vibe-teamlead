@@ -286,7 +286,7 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
       {tab === 'environment' && (
         <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
-          <EnvironmentTab projectId={projectId} env={env} services={readiness?.result?.services ?? []} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
+          <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
         </div>
       )}
 

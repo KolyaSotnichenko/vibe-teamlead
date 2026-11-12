@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Project, Task } from '../../../shared/types';
 import type { ReadinessBlocker, ReadinessResult, ReadinessState } from '../../../shared/types/deploy';
-import { autoSetUpAllowed, createReadiness, type ReadinessDeps } from '../readiness';
+import { createReadiness, type ReadinessDeps } from '../readiness';
 import { runReadinessScan, type ScanInput } from '../../ai/runners/deploy-readiness';
 import { readReadiness, writeReadiness } from '../readiness-store';
 
@@ -26,7 +26,6 @@ let created: string[];
 let emitted: ReadinessState[];
 let setUp: ReturnType<typeof vi.fn>;
 let scan: ReturnType<typeof vi.fn>;
-let canAutoSetUp: ReturnType<typeof vi.fn>;
 
 function make(over: Partial<ReadinessDeps> = {}) {
   const deps: ReadinessDeps = {
@@ -46,8 +45,8 @@ function make(over: Partial<ReadinessDeps> = {}) {
       startTask: async () => {},
       queueTask: async () => {},
     },
-    setUp: setUp as never,
-    canAutoSetUp: canAutoSetUp as never,
+    // Not a ReadinessDeps member any more: passed to prove nothing calls it
+    ...({ setUp, canAutoSetUp: setUp } as object),
     emit: (_id, state) => { emitted.push(JSON.parse(JSON.stringify(state))); },
     ...over,
   };
@@ -61,7 +60,6 @@ beforeEach(() => {
   created = [];
   emitted = [];
   setUp = vi.fn(async () => ({}));
-  canAutoSetUp = vi.fn(async () => true);
   scan = vi.fn(async () => result([]));
 });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
@@ -116,10 +114,10 @@ describe('triggers', () => {
     expect(scan.mock.calls[2][0]).not.toHaveProperty('lastMainRun');
   });
 
-  it('passes the recorded services so the scan knows what is added', async () => {
-    const p = { ...project(), settings: { deploy: { enabled: true, services: { redis: { addedAt: 't' } } } } } as unknown as Project;
+  it('old Vercel data (database, services) is ignored', async () => {
+    const p = { ...project(), settings: { deploy: { enabled: true, database: { provider: 'neon', addedAt: 't' }, services: { redis: { addedAt: 't' } } } } } as unknown as Project;
     await make().scan(p, 'check-again');
-    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ servicesAdded: ['redis'] }));
+    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ databaseAdded: false, servicesAdded: [] }));
   });
 });
 
@@ -247,98 +245,22 @@ describe('outcome', () => {
   });
 });
 
-describe('automatic setup', () => {
-  it('blockers 1 -> 0 with deploy off sets up once', async () => {
-    writeReadiness(dir, result([blocker('x')]));
-    await make().scan(project(), 'check-again');
-    expect(setUp).toHaveBeenCalledTimes(1);
-  });
-
-  it('blockers -> none with variable owner items still sets up (values can only be added once it is)', async () => {
-    writeReadiness(dir, result([blocker('x')]));
-    scan.mockResolvedValue({ ...result([]), owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] });
-    await make().scan(project(), 'check-again');
-    expect(setUp).toHaveBeenCalledTimes(1);
-    expect(created).toEqual([]);
-  });
-
-  it('a workflow-only change counts: unsupported blockers do not', async () => {
-    writeReadiness(dir, result([blocker('x')]));
-    scan.mockResolvedValueOnce(result([{ key: 'unsupported:go', kind: 'unsupported', subject: 'go', title: 'Go', detail: 'x' }]));
-    await make().scan(project(), 'check-again');
-    expect(setUp).toHaveBeenCalledTimes(1);
-  });
-
-  it('0 -> 0 does not set up', async () => {
-    writeReadiness(dir, result([]));
-    await make().scan(project(), 'check-again');
-    expect(setUp).not.toHaveBeenCalled();
-  });
-
-  it('no previous result does not set up', async () => {
-    await make().scan(project(), 'check-again');
-    expect(setUp).not.toHaveBeenCalled();
-  });
-
-  it('blockers remaining does not set up', async () => {
-    writeReadiness(dir, result([blocker('x')]));
-    scan.mockResolvedValueOnce(result([blocker('y')]));
-    await make().scan(project(), 'check-again');
-    expect(setUp).not.toHaveBeenCalled();
-  });
-
-  it('deploy already enabled does not set up', async () => {
-    deploy = { enabled: true };
-    writeReadiness(dir, result([blocker('x')]));
-    await make().scan(project(), 'check-again');
-    expect(setUp).not.toHaveBeenCalled();
-  });
-
-  it('R3: does not set up when the project has no team choice and the account has teams', async () => {
-    canAutoSetUp.mockResolvedValue(false);
-    writeReadiness(dir, result([blocker('x')]));
-    await make().scan(project(), 'check-again');
-    expect(setUp).not.toHaveBeenCalled();
-  });
-
-  it('a setUp that throws does not fail the scan', async () => {
-    setUp.mockRejectedValue(new Error('boom'));
+describe('no automatic setup (the owner starts CI setup)', () => {
+  it('blockers 1 -> 0 with CI not set up: the result is saved, setup is not started', async () => {
     writeReadiness(dir, result([blocker('x')]));
     const r = make();
     await r.scan(project(), 'check-again');
-    expect(r.state(project()).error).toBeUndefined();
-  });
-});
-
-describe('autoSetUpAllowed', () => {
-  const p = (deploy: Record<string, unknown> = {}) => ({ id: 'p1', path: '/x', settings: { deploy: { enabled: false, ...deploy } } }) as unknown as Project;
-  const deps = (over: Partial<Parameters<typeof autoSetUpAllowed>[1]> = {}) => ({
-    vercelTeamCount: vi.fn(async () => 0),
-    resolveRepo: vi.fn(async () => ({ owner: 'o', repo: 'r' })),
-    repoVisibility: vi.fn(async () => 'private' as const),
-    ...over,
+    expect(setUp).not.toHaveBeenCalled();
+    expect(r.state(project()).result?.blockers).toEqual([]);
+    expect(r.state(project()).scanning).toBe(false);
   });
 
-  it('allows a private GitHub origin, or no GitHub origin at all (setup makes a private one)', async () => {
-    expect(await autoSetUpAllowed(p(), deps())).toBe(true);
-    expect(await autoSetUpAllowed(p(), deps({ resolveRepo: vi.fn(async () => null) }))).toBe(true);
-  });
-
-  it('refuses a repo recorded as public, without asking GitHub', async () => {
-    const d = deps();
-    expect(await autoSetUpAllowed(p({ repo: { owner: 'o', repo: 'r', createdByApp: false, public: true } }), d)).toBe(false);
-    expect(d.repoVisibility).not.toHaveBeenCalled();
-  });
-
-  it('refuses a public origin, or one whose visibility cannot be read', async () => {
-    expect(await autoSetUpAllowed(p(), deps({ repoVisibility: vi.fn(async () => 'public' as const) }))).toBe(false);
-    expect(await autoSetUpAllowed(p(), deps({ repoVisibility: vi.fn(async () => { throw new Error('403'); }) }))).toBe(false);
-    expect(await autoSetUpAllowed(p(), deps({ resolveRepo: vi.fn(async () => { throw new Error('git'); }) }))).toBe(false);
-  });
-
-  it('R3: waits for a team choice when the account has teams and none is recorded', async () => {
-    expect(await autoSetUpAllowed(p(), deps({ vercelTeamCount: vi.fn(async () => 2) }))).toBe(false);
-    expect(await autoSetUpAllowed(p({ vercelTeamId: 'team_1' }), deps({ vercelTeamCount: vi.fn(async () => 2) }))).toBe(true);
+  it('a workflow-only change to none does not set up either', async () => {
+    writeReadiness(dir, result([blocker('x')]));
+    scan.mockResolvedValueOnce({ ...result([]), owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] });
+    await make().scan(project(), 'check-again');
+    expect(setUp).not.toHaveBeenCalled();
+    expect(created).toEqual([]);
   });
 });
 

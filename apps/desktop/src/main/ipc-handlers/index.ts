@@ -9,7 +9,6 @@ import { registerBriefHandlers } from './brief-handlers';
 import { registerDesignHandlers } from './design-handlers';
 import { registerPreviewHandlers } from './preview-handlers';
 import { registerDeployHandlers } from './deploy-handlers';
-import { registerVercelHandlers } from './vercel-handlers';
 import { registerTaskDesignHandlers } from './task-design-handlers';
 import { registerLooseEndsHandlers } from './loose-ends-handlers';
 import { registerUsageHandlers } from './usage-handlers';
@@ -125,7 +124,6 @@ export function setupIpcHandlers(
   registerDesignHandlers(getMainWindow);
   registerPreviewHandlers(getMainWindow);
   registerDeployHandlers(getMainWindow, agentManager);
-  registerVercelHandlers(getMainWindow);
   registerTaskDesignHandlers(agentManager, getMainWindow);
   registerLooseEndsHandlers();
   registerUsageHandlers();

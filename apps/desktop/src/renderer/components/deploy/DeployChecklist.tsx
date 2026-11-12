@@ -1,12 +1,11 @@
 /**
  * Top of Deploy: what is still missing before the project deploys, numbered, one action each
- * (sign in to GitHub, install the GitHub App, connect Vercel, set up deploy). Hidden once all is done.
+ * (sign in to GitHub, install the GitHub App, set up). Hidden once all is done.
  * Accounts are read again whenever the window regains focus (sign-ins finish in the browser).
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GITHUB_APP_INSTALL_URL } from '../../../shared/constants/github';
-import type { AppSection } from '../settings/AppSettings';
 import { Button } from '../ui/button';
 import { openWebUrl, StatusMark } from './status';
 
@@ -15,7 +14,6 @@ interface Accounts {
   loaded: boolean;
   github?: boolean;
   app?: boolean;
-  vercel?: boolean;
 }
 
 function useAccounts(refreshKey: unknown): Accounts {
@@ -32,12 +30,11 @@ function useAccounts(refreshKey: unknown): Accounts {
           return undefined;
         }
       };
-      const [github, app, vercel] = await Promise.all([
+      const [github, app] = await Promise.all([
         read(() => api.checkGitHubAuth(), (d) => d.authenticated),
         read(() => api.getGitHubAppAccess(), (d) => d.installed),
-        read(() => api.vercel.status(), (d) => d.connected),
       ]);
-      if (!cancelled) setAccounts({ loaded: true, github, app, vercel });
+      if (!cancelled) setAccounts({ loaded: true, github, app });
     };
     void load();
     const onFocus = () => void load();
@@ -49,9 +46,6 @@ function useAccounts(refreshKey: unknown): Accounts {
   }, [refreshKey]);
   return accounts;
 }
-
-const openSettings = (section: AppSection) =>
-  window.dispatchEvent(new CustomEvent<AppSection>('open-app-settings', { detail: section }));
 
 export interface DeployChecklistProps {
   /** Deploy is set up for the project. */
@@ -80,11 +74,6 @@ export function DeployChecklist({ setUp, onConnectGitHub, onSetUp, refreshKey }:
       action: accounts.github ? (
         <Button size="sm" variant="outline" onClick={() => openWebUrl(GITHUB_APP_INSTALL_URL)}>{t('deploy:checklist.actions.app')}</Button>
       ) : undefined,
-    },
-    {
-      key: 'vercel',
-      done: accounts.vercel === true,
-      action: <Button size="sm" onClick={() => openSettings('vercel')}>{t('deploy:checklist.actions.vercel')}</Button>,
     },
     {
       key: 'setUp',

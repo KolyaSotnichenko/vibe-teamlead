@@ -3,12 +3,10 @@
  * tasks, what only the owner can do, and the state of CI. The scan itself runs in main; this
  * tab shows its last result and asks for a new one.
  */
-import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DeployVariableInput, ReadinessBlocker, ReadinessState } from '../../../shared/types/deploy';
+import type { ReadinessBlocker, ReadinessState } from '../../../shared/types/deploy';
 import { Button } from '../ui/button';
 import { Notice, Row, Section } from './parts';
-import { VariableDialog } from './VariableDialog';
 import { formatRelative, isWebUrl, openWebUrl, StatusMark } from './status';
 
 const CONCLUSIONS: Record<string, 'success' | 'attention' | 'skipped'> = {
@@ -31,7 +29,7 @@ export interface ReadinessTabProps {
   readiness?: ReadinessState;
   /** Deploy is not set up yet: offer Set up deploy when nothing blocks. */
   notSetUp: boolean;
-  /** Deploy is set up (known, not still loading): variable values can be added and are listed. */
+  /** Deploy is set up (known, not still loading). */
   isSetUp?: boolean;
   onSetUp: () => void;
   onOpenRuns: () => void;
@@ -39,33 +37,10 @@ export interface ReadinessTabProps {
   onGoToTask?: (specId: string) => void;
 }
 
-export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, onSetUp, onOpenRuns, onGoToTask }: ReadinessTabProps) {
+export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRuns, onGoToTask }: ReadinessTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
-  const [dialog, setDialog] = useState<{ name: string } | null>(null);
-  const [savedNote, setSavedNote] = useState<string | null>(null);
-  /** The variable names the Vercel project has (set up only); a scan's variable items that have one are done */
-  const [present, setPresent] = useState<ReadonlySet<string>>(new Set());
-
-  const loadVariables = useCallback(async () => {
-    try {
-      const r = await window.electronAPI.deploy.listVariables(projectId);
-      if (r.success && r.data?.ok) setPresent(new Set(r.data.variables.map((v) => v.name)));
-    } catch {
-      // the scan's list stands
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    if (isSetUp) void loadVariables();
-  }, [isSetUp, loadVariables]);
-
   if (!readiness) return <p className="text-sm text-muted-foreground">{t('deploy:readiness.loading')}</p>;
   const { result, scanning, error, tasks } = readiness;
-
-  const saveVariable = async (input: DeployVariableInput) => {
-    const r = await window.electronAPI.deploy.setVariable(projectId, input);
-    return r.success && r.data ? r.data : null;
-  };
 
   const blocker = (b: ReadinessBlocker) => {
     const task = tasks[b.key];
@@ -101,9 +76,8 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
   };
 
   const blockers = result?.blockers ?? [];
-  // Before setup there is no Vercel project to hold values; after it, the ones added are done
-  const owner = (result?.owner ?? []).filter((item) => !(isSetUp && item.kind === 'variable' && item.variable && present.has(item.variable)));
-  const variablesLeft = isSetUp ? owner.filter((item) => item.kind === 'variable' && item.variable).length : 0;
+  // Shown as plain text: values are not added from here (yet)
+  const owner = result?.owner ?? [];
   const run = result?.workflow.lastMainRun;
   const conclusion = run && Object.hasOwn(CONCLUSIONS, run.conclusion) ? run.conclusion : undefined;
   const gaveUp = readiness.gaveUp ?? [];
@@ -132,9 +106,7 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
         </Button>
       </div>
 
-      {variablesLeft > 0 && <Notice tone="attention">{t('deploy:readiness.variablesLeft', { count: variablesLeft })}</Notice>}
       {error && <Notice tone="attention">{t('deploy:readiness.error')}</Notice>}
-      {savedNote && <Notice tone="info">{savedNote}</Notice>}
 
       {result && blockers.length === 0 && (
         <div className="flex flex-col items-start gap-3">
@@ -178,14 +150,6 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
                 <span className="min-w-0 flex-1 text-sm text-foreground">
                   {item.kind === 'variable' && item.variable ? <span className="font-mono">{item.variable}</span> : item.message}
                 </span>
-                {item.kind === 'variable' && item.variable &&
-                  (isSetUp ? (
-                    <Button size="sm" variant="outline" onClick={() => setDialog({ name: item.variable as string })}>
-                      {t('deploy:readiness.addValue')}
-                    </Button>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">{t('deploy:readiness.setUpFirst')}</span>
-                  ))}
               </li>
             ))}
           </ul>
@@ -220,18 +184,6 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
           </dl>
         </Section>
       )}
-
-      <VariableDialog
-        open={dialog !== null}
-        initialName={dialog?.name}
-        onClose={() => setDialog(null)}
-        onSave={saveVariable}
-        onSaved={(name) => {
-          setDialog(null);
-          setSavedNote(t('deploy:variables.saved', { name }));
-          setPresent((names) => new Set([...names, name]));
-        }}
-      />
     </div>
   );
 }

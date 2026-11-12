@@ -20,8 +20,7 @@ import {
   Bug,
   Terminal,
   KeyRound,
-  Wrench,
-  Triangle
+  Wrench
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -57,7 +56,6 @@ import { TerminalFontSettings } from './terminal-font-settings/TerminalFontSetti
 import { MemorySettings } from './MemorySettings';
 import { ClaudeSettings } from './ClaudeSettings';
 import { ToolsSettings } from './ToolsSettings';
-import { VercelSettings } from './VercelSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -72,7 +70,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'vercel' | 'tools' | 'agent' | 'memory' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'tools' | 'agent' | 'memory' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -86,7 +84,6 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'devtools', icon: Code },
   { id: 'terminal-fonts', icon: Terminal },
   { id: 'claude', icon: KeyRound },
-  { id: 'vercel', icon: Triangle },
   { id: 'tools', icon: Wrench },
   { id: 'agent', icon: Bot },
   { id: 'memory', icon: Database },
@@ -208,8 +205,6 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="paths" />;
       case 'claude':
         return <ClaudeSettings settings={settings} onSettingsChange={setSettings} />;
-      case 'vercel':
-        return <VercelSettings />;
       case 'tools':
         return <ToolsSettings />;
       case 'updates':

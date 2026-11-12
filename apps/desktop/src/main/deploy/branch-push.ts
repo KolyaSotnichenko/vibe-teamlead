@@ -1,6 +1,6 @@
 /**
  * Push a task's branch to GitHub after each finished subtask, after each coder and QA fixer
- * session, and when the task goes to review, so Vercel builds a preview.
+ * session, and when the task goes to review, so CI runs on it.
  *
  * Per task, one push runs at a time; requests made meanwhile share ONE follow-up push
  * (which carries the newest commit). A branch whose head is already pushed is not pushed
@@ -14,6 +14,7 @@ import type { DeployProjectSettings } from '../../shared/types/deploy';
 import { writeFileReplacingSync } from '../ai/safe-write';
 import { TASK_BRANCH_PREFIX } from '../../shared/constants/config';
 import { GitHubWriteError, pushWithAppToken } from './github-write';
+import { isCiSetUp } from './ci-setup';
 import { branchHead } from './push-after-merge';
 
 export interface BranchPushRecord {
@@ -42,7 +43,7 @@ export type PreviewPushAllowed =
 
 export function previewPushAllowed(project: Project, task: Task): PreviewPushAllowed {
   const deploy = project.settings?.deploy;
-  if (!deploy?.enabled || !deploy.repo) return { allowed: false, reason: 'not-set-up' };
+  if (!isCiSetUp(project) || !deploy?.repo) return { allowed: false, reason: 'not-set-up' };
   // Only a repository known to be private gets pushes; unknown visibility fails closed
   if (deploy.repo.public !== false) return { allowed: false, reason: 'public-repo' };
   if (project.settings?.pushNewBranches === false || task.metadata?.pushNewBranches === false) {
@@ -52,15 +53,15 @@ export function previewPushAllowed(project: Project, task: Task): PreviewPushAll
 }
 
 /**
- * Whether a task's new branch is pushed when its worktree is made. A deploy repository that
- * is not known to be private gets no task branch at all (its previews are off too).
+ * Whether a task's new branch is pushed when its worktree is made. A CI repository that
+ * is not known to be private gets no task branch at all.
  */
 export function worktreePushNewBranches(
   settings: Project['settings'] | undefined,
   optionValue: boolean | undefined,
 ): boolean {
-  const deploy = settings?.deploy;
-  if (deploy?.enabled && deploy.repo && deploy.repo.public !== false) return false;
+  const repo = settings?.deploy?.repo;
+  if (isCiSetUp({ settings }) && repo && repo.public !== false) return false;
   return optionValue ?? settings?.pushNewBranches !== false;
 }
 

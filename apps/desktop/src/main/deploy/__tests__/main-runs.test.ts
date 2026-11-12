@@ -15,7 +15,7 @@ let started: string[];
 let seq = 0;
 
 const project = (over: Record<string, unknown> = {}) =>
-  ({ id: `p${seq}`, path: dir, settings: { mainBranch: 'main', deploy: { enabled: true } }, ...over }) as unknown as Project;
+  ({ id: `p${seq}`, path: dir, settings: { mainBranch: 'main', deploy: { repo: { owner: 'o', repo: 'r', createdByApp: true } } }, ...over }) as unknown as Project;
 
 const run = (id: number, over: Partial<DeployRun> = {}): DeployRun => ({
   id, number: id, name: 'CI', title: 't', branch: 'main', sha: 'abc', event: 'push', headRepo: 'o/r', status: 'completed', conclusion: 'failure',
@@ -127,13 +127,21 @@ describe('handleMainRun', () => {
     expect(deps.client.jobs).not.toHaveBeenCalled();
   });
 
-  it('does nothing without deploy enabled or a saved readiness result', async () => {
+  it('does nothing without CI set up (no repository recorded) or a saved readiness result', async () => {
     const deps = makeDeps();
     expect(await handleMainRun(project({ settings: { deploy: { enabled: false } } }), run(10), deps)).toBe('seen');
+    expect(await handleMainRun(project({ settings: { deploy: { enabled: true } } }), run(12), deps)).toBe('seen');
     rmSync(path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'));
     expect(await handleMainRun(project(), run(11), deps)).toBe('seen');
     expect(created).toHaveLength(0);
     expect(deps.client.jobs).not.toHaveBeenCalled();
+  });
+
+  it('a project set up under the old Deploy (enabled, repo and a Vercel project) still gets fix tasks', async () => {
+    const deps = makeDeps();
+    const old = project({ settings: { mainBranch: 'main', deploy: { enabled: true, repo: { owner: 'o', repo: 'r', createdByApp: true }, vercel: { projectId: 'prj', projectName: 'app' } } } });
+    expect(await handleMainRun(old, run(20), deps)).not.toBe('seen');
+    expect(created).toHaveLength(1);
   });
 
   it('keeps the created task entries when marking runs handled', async () => {
