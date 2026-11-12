@@ -73,6 +73,21 @@ describe('runs', () => {
   });
 });
 
+describe('run', () => {
+  it('reads one run by id', async () => {
+    const one = fx('runs.json').workflow_runs[0];
+    const { c, calls } = client({ '/repos/acme/app/actions/runs/101': ok(one) });
+    const r = await c.run('acme', 'app', 101);
+    expect(calls).toEqual(['/repos/acme/app/actions/runs/101']);
+    expect(r).toMatchObject({ id: 101, name: 'CI', branch: 'main', status: 'completed', conclusion: 'success' });
+  });
+
+  it('throws a GitHubError on failure', async () => {
+    const { c } = client({});
+    await expect(c.run('acme', 'app', 5)).rejects.toMatchObject({ kind: 'not-found' });
+  });
+});
+
 describe('jobs', () => {
   it('maps jobs with steps', async () => {
     const { c } = client({ '/repos/acme/app/actions/runs/101/jobs?per_page=100': ok(fx('jobs.json')) });
@@ -136,9 +151,9 @@ describe('jobLog', () => {
 });
 
 describe('no deployment or Vercel reads', () => {
-  it('the client only reads runs, jobs, workflow files and logs', () => {
+  it('the client only reads runs (a list or one), jobs, workflow files and logs', () => {
     const { c } = client({});
-    expect(Object.keys(c).sort()).toEqual(['jobLog', 'jobs', 'runs', 'workflowFile']);
+    expect(Object.keys(c).sort()).toEqual(['jobLog', 'jobs', 'run', 'runs', 'workflowFile']);
   });
 });
 

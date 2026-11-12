@@ -131,6 +131,11 @@ export function createActionsClient(fetcher: GitHubFetcher) {
       return arr(body?.workflow_runs).map(mapRun);
     },
 
+    /** One run by id (a run older than the newest listed ones) */
+    async run(owner: string, repo: string, runId: number): Promise<DeployRun> {
+      return mapRun((await get(`/repos/${owner}/${repo}/actions/runs/${runId}`)) as Obj);
+    },
+
     async jobs(owner: string, repo: string, runId: number): Promise<DeployJob[]> {
       const body = (await get(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs?per_page=100`)) as Obj;
       return arr(body?.jobs).map(mapJob);

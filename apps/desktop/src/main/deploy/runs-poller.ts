@@ -18,7 +18,7 @@ type Repo = { owner: string; repo: string };
 type Timer = unknown;
 
 export interface RunsPollerDeps {
-  client: Pick<ActionsClient, 'runs' | 'jobs' | 'workflowFile'>;
+  client: Pick<ActionsClient, 'runs' | 'run' | 'jobs' | 'workflowFile'>;
   resolveRepo: (project: Project) => Promise<Repo | null>;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => Timer;
@@ -161,7 +161,14 @@ export function createRunsPoller(deps: RunsPollerDeps) {
       runs = await deps.client.runs(repo.owner, repo.repo);
       if (!current()) return;
       void handleMainRuns(s.project, repo, runs);
-      const run = runs.find((r) => r.id === s.selectedRunId) ?? runs[0];
+      let run = s.selectedRunId === undefined ? runs[0] : runs.find((r) => r.id === s.selectedRunId);
+      if (!run && s.selectedRunId !== undefined) {
+        // Older than the newest listed (a "CI failed" link to an old run): fetched by id, never another run instead
+        selected = undefined;
+        run = await deps.client.run(repo.owner, repo.repo, s.selectedRunId);
+        if (!current()) return;
+        runs = [run, ...runs];
+      }
       s.selectedRunId = run?.id;
       if (!run) selected = undefined;
       else {

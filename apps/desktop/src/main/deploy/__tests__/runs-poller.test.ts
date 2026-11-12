@@ -12,6 +12,7 @@ const project = (id = 'p1') => ({ id, path: '/x' }) as unknown as Project;
 function setup(over: Record<string, unknown> = {}) {
   const client = {
     runs: vi.fn(async () => [run(3), run(2)]),
+    run: vi.fn(async (_o: string, _r: string, id: number): Promise<DeployRun> => run(id)),
     jobs: vi.fn(async () => []),
     workflowFile: vi.fn(async () => 'jobs:\n  build:\n    runs-on: x\n'),
     jobLog: vi.fn(async () => 'log'),
@@ -87,6 +88,33 @@ describe('createRunsPoller', () => {
     t.poller.start(project(), 2);
     await t.flush();
     expect(t.emitted.at(-1)!.selected?.runId).toBe(2);
+  });
+
+  it('a selected run older than the newest 20 is fetched by id and shown selected, never another run', async () => {
+    const t = setup({ run: vi.fn(async (_o: string, _r: string, id: number) => run(id)) });
+    t.poller.start(project(), 1);
+    await t.flush();
+    const s = t.emitted.at(-1)!;
+    expect(t.client.run).toHaveBeenCalledWith('o', 'r', 1);
+    expect(s.selected?.runId).toBe(1);
+    expect(s.runs.map((r) => r.id)).toEqual([1, 3, 2]);
+    expect(t.client.jobs).toHaveBeenLastCalledWith('o', 'r', 1);
+    expect(s.error).toBeUndefined();
+  });
+
+  it('a selected run that cannot be fetched shows the error, never another run', async () => {
+    const t = setup({ run: vi.fn(async () => { throw { kind: 'not-found', message: 'Not Found' }; }) });
+    t.poller.start(project());
+    await t.flush();
+    expect(t.emitted.at(-1)!.selected?.runId).toBe(3);
+    const jobCalls = t.client.jobs.mock.calls.length;
+    t.poller.select('p1', 1);
+    await t.flush();
+    const s = t.emitted.at(-1)!;
+    expect(s.error?.kind).toBe('not-found');
+    expect(s.selected).toBeUndefined();
+    expect(t.client.jobs.mock.calls.length).toBe(jobCalls);
+    expect(s.runs.map((r) => r.id)).toEqual([3, 2]);
   });
 
   it('stop clears the timer and a tick in flight emits nothing', async () => {
