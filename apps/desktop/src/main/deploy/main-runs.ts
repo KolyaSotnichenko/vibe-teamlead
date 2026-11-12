@@ -39,7 +39,7 @@ const FAILED_JOB = new Set(['failure', 'timed_out']);
 /** Done or handed over as a PR: no longer working on anything */
 const CLOSED_TASK = new Set(['done', 'pr_created']);
 
-const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Whether an open task already works on this run's failure: a base-fix task (it repairs main), or
@@ -51,10 +51,10 @@ function coveredByOpenTask(run: DeployRun, tasks: Task[]): boolean {
   const file = run.workflowPath.split('/').pop() ?? '';
   const name = run.name.trim();
   const patterns: RegExp[] = [];
-  if (run.workflowPath) patterns.push(new RegExp(escape(run.workflowPath), 'i'));
-  if (file) patterns.push(new RegExp(`(?:^|[^\\w.-])${escape(file)}(?![\\w-])`, 'i'));
+  if (run.workflowPath) patterns.push(new RegExp(escapeRegExp(run.workflowPath), 'i'));
+  if (file) patterns.push(new RegExp(`(?:^|[^\\w.-])${escapeRegExp(file)}(?![\\w-])`, 'i'));
   if (name.length >= 2) {
-    const n = escape(name);
+    const n = escapeRegExp(name);
     patterns.push(new RegExp(`(?:^|\\W)${n}\\s+(?:runs?|workflows?|checks?|jobs?|pipelines?|builds?|failures?)\\b`, 'i'));
     patterns.push(new RegExp(`\\b(?:failed|failing|broken|red)\\s+${n}(?:$|\\W)`, 'i'));
   }
