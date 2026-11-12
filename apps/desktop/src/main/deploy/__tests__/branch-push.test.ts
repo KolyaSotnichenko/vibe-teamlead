@@ -9,7 +9,7 @@ import {
 } from '../branch-push';
 import { GitHubWriteError } from '../github-write';
 
-const repo = { owner: 'me', repo: 'app', createdByApp: true };
+const repo = { owner: 'me', repo: 'app', createdByApp: true, public: false };
 const project = (over: Record<string, unknown> = {}, ...d: unknown[]) =>
   ({ id: 'p1', path: '/proj', settings: { deploy: d.length ? d[0] : { enabled: true, repo }, ...over } }) as never;
 const task = (id = 't1', metadata?: Record<string, unknown>) => ({ id, specId: `spec-${id}`, metadata }) as never;
@@ -38,6 +38,13 @@ describe('previewPushAllowed', () => {
   });
   it('public-repo when the repo is public', () => {
     expect(previewPushAllowed(project({}, { enabled: true, repo: { ...repo, public: true } }), task())).toEqual({
+      allowed: false,
+      reason: 'public-repo',
+    });
+  });
+  it('unknown visibility fails closed', () => {
+    const { public: _p, ...unknown } = repo;
+    expect(previewPushAllowed(project({}, { enabled: true, repo: unknown }), task())).toEqual({
       allowed: false,
       reason: 'public-repo',
     });
@@ -90,6 +97,18 @@ describe('pushTaskBranch', () => {
     expect(push).toHaveBeenCalledTimes(2);
   });
 
+  it('a queued follow-up is re-checked with fresh settings', async () => {
+    const gate = deferred();
+    const push = vi.fn(async () => { if (push.mock.calls.length === 1) await gate.promise; });
+    const { deps } = makeDeps(push);
+    const first = pushTaskBranch(project(), task('h'), deps);
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    const second = pushTaskBranch(project({}, { enabled: true, repo: { ...repo, public: true } }), task('h'), deps);
+    gate.resolve();
+    await Promise.all([first, second]);
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
   it('an unknown failure records unavailable', async () => {
     const { deps } = makeDeps(vi.fn(async () => { throw new Error('boom'); }));
     expect((await pushTaskBranch(project(), task('d'), deps)).error).toEqual({ kind: 'unavailable' });
@@ -114,6 +133,26 @@ describe('onSubtasksProgress', () => {
     await new Promise((r) => setTimeout(r, 5));
     expect(push).toHaveBeenCalledTimes(1);
     onSubtasksProgress('e', 2);
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
+  });
+
+  it('a task not allowed at its first completion pushes once allowed, at the same count', async () => {
+    const { deps } = makeDeps(push);
+    let p = project({}, undefined);
+    setBranchPushDeps(deps, () => ({ project: p, task: task('i') }));
+    onSubtasksProgress('i', 1);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(push).not.toHaveBeenCalled();
+    p = project();
+    onSubtasksProgress('i', 1);
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+  });
+
+  it('a count that drops (plan rewritten) and regrows pushes again', async () => {
+    onSubtasksProgress('e', 2);
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    onSubtasksProgress('e', 0);
+    onSubtasksProgress('e', 1);
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
   });
 

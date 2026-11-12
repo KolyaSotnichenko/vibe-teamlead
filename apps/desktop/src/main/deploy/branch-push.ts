@@ -30,7 +30,8 @@ export type PreviewPushAllowed =
 export function previewPushAllowed(project: Project, task: Task): PreviewPushAllowed {
   const deploy = project.settings?.deploy;
   if (!deploy?.enabled || !deploy.repo) return { allowed: false, reason: 'not-set-up' };
-  if (deploy.repo.public) return { allowed: false, reason: 'public-repo' };
+  // Only a repository known to be private gets pushes; unknown visibility fails closed
+  if (deploy.repo.public !== false) return { allowed: false, reason: 'public-repo' };
   if (project.settings?.pushNewBranches === false || task.metadata?.pushNewBranches === false) {
     return { allowed: false, reason: 'push-off' };
   }
@@ -53,16 +54,17 @@ export function lastBranchPush(taskId: string): BranchPushRecord | undefined {
 async function pushOnce(project: Project, task: Task, deps: BranchPushDeps): Promise<BranchPushRecord> {
   const branch = `${TASK_BRANCH_PREFIX}${task.specId}`;
   const deploy = project.settings?.deploy;
-  const at = (deps.now?.() ?? new Date()).toISOString();
+  let at = '';
   let record: BranchPushRecord;
   try {
+    at = (deps.now?.() ?? new Date()).toISOString();
     if (!deploy?.repo) throw new GitHubWriteError('unavailable', 'No repository');
     // Read before the push: the recorded sha is what was pushed
     const sha = await deps.head(project.path, branch).catch(() => undefined);
     await deps.push(project.path, `https://github.com/${deploy.repo.owner}/${deploy.repo.repo}.git`, `${branch}:${branch}`);
     record = sha ? { sha, at } : { at };
   } catch (e) {
-    record = { at, error: { kind: e instanceof GitHubWriteError ? e.kind : 'unavailable' } };
+    record = { ...(at ? { at } : {}), error: { kind: e instanceof GitHubWriteError ? e.kind : 'unavailable' } };
   }
   records.set(task.id, record);
   try {
@@ -81,7 +83,12 @@ export async function pushTaskBranch(project: Project, task: Task, deps: BranchP
     states.set(task.id, state);
   }
   if (state.running) {
-    if (state.queued) return state.queued.promise;
+    if (state.queued) {
+      // Newest settings win: they are re-checked before the follow-up push
+      state.queued.project = project;
+      state.queued.task = task;
+      return state.queued.promise;
+    }
     let resolve!: (r: BranchPushRecord) => void;
     const promise = new Promise<BranchPushRecord>((r) => { resolve = r; });
     state.queued = { project, task, promise, resolve };
@@ -93,7 +100,11 @@ export async function pushTaskBranch(project: Project, task: Task, deps: BranchP
     while (state.queued) {
       const q = state.queued;
       state.queued = undefined;
-      q.resolve(await pushOnce(q.project, q.task, deps));
+      q.resolve(
+        previewPushAllowed(q.project, q.task).allowed
+          ? await pushOnce(q.project, q.task, deps)
+          : (records.get(task.id) ?? {}),
+      );
     }
     return first;
   } finally {
@@ -119,11 +130,14 @@ export function setBranchPushDeps(deps: BranchPushDeps, lookup: Lookup): void {
 export function onSubtasksProgress(taskId: string, completed: number): void {
   try {
     const prev = completedSeen.get(taskId) ?? 0;
+    // The plan was rewritten with fewer finished subtasks: count again from there
+    if (completed < prev) completedSeen.set(taskId, completed);
     if (completed <= prev) return;
-    completedSeen.set(taskId, completed);
     if (!wiring) return;
     const { project, task } = wiring.lookup(taskId);
     if (!project || !task || !previewPushAllowed(project, task).allowed) return;
+    // Remembered only once a push starts, so a task that becomes allowed later still pushes
+    completedSeen.set(taskId, completed);
     void pushTaskBranch(project, task, wiring.deps).catch(() => undefined);
   } catch {
     // never into the file-watcher handler
