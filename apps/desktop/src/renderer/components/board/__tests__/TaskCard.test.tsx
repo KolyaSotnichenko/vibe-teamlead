@@ -188,10 +188,19 @@ describe('TaskCard', () => {
       expect(onClick).not.toHaveBeenCalled();
     });
 
+    it('renders no button for a ready preview whose URL is not https', async () => {
+      withPreview({ state: 'ready', url: 'http://x.vercel.app', builtAt: new Date().toISOString() });
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
+      expect(screen.queryByRole('button', { name: /taskPreview\.ready/ })).not.toBeInTheDocument();
+    });
+
     it('does nothing on click while building without a previous link', async () => {
       const open = withPreview({ state: 'building' });
       render(<TaskCard task={task()} onClick={vi.fn()} />);
-      fireEvent.click(await screen.findByRole('button', { name: /taskPreview\.button/ }));
+      const idle = await screen.findByRole('button', { name: /taskPreview\.button/ });
+      expect(idle).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(idle);
       expect(open).not.toHaveBeenCalled();
     });
 

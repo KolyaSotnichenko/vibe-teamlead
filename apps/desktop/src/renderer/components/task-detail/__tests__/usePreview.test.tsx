@@ -91,4 +91,36 @@ describe('usePreview', () => {
     b.unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
+
+  it('asks once for two hooks on one building task, and once per 30 s', async () => {
+    renderHook(() => usePreview(task));
+    renderHook(() => usePreview(task));
+    await act(async () => {});
+    expect(previewState).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(previewState).toHaveBeenCalledTimes(2);
+    await act(async () => push({ projectId: 'p1', taskId: 't1' }));
+    expect(previewState).toHaveBeenCalledTimes(3);
+  });
+
+  it('a later mount reuses a recent answer and stops polling when both leave', async () => {
+    const a = renderHook(() => usePreview(task));
+    await act(async () => {});
+    const b = renderHook(() => usePreview(task));
+    expect(b.result.current).toEqual({ state: 'building' });
+    await act(async () => {});
+    expect(previewState).toHaveBeenCalledTimes(1);
+    a.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(previewState).toHaveBeenCalledTimes(2);
+    b.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(previewState).toHaveBeenCalledTimes(2);
+  });
 });

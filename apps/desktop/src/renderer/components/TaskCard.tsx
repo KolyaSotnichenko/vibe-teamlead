@@ -525,11 +525,12 @@ export const TaskCard = memo(function TaskCard({
           )}
         </div>
         {renderAction()}
-        {(preview?.state === 'building' || preview?.state === 'ready' || preview?.state === 'failed') && (
+        {(preview?.state === 'building' || (preview?.state === 'ready' && isHttpsUrl(preview.url)) || preview?.state === 'failed') && (
           <button
             type="button"
             className={cn(actionClass, preview.state === 'failed' ? 'text-destructive hover:bg-accent' : 'text-foreground hover:bg-accent')}
             onClick={handlePreview}
+            aria-disabled={preview.state === 'building' && !isHttpsUrl(preview.previousUrl) ? true : undefined}
             title={preview.state === 'ready' ? t('taskPreview.readyTitle', { url: preview.url, when: formatRelative(preview.builtAt, i18n.language) }) : undefined}
           >
             {preview.state === 'building' && <StatusMark status="running" />}

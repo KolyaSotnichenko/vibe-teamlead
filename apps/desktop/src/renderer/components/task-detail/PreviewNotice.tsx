@@ -3,6 +3,7 @@
  * why there is no preview, why the last push failed, or the link itself.
  */
 
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '../../../shared/types';
 import type { DeployTarget } from '../../../shared/types/deploy';
@@ -14,6 +15,7 @@ const PUSH_ERRORS = ['conflict', 'permissions', 'no-connection', 'unavailable'];
 export function PreviewNotice({ task, onGoToDeploy }: { task: Task; onGoToDeploy?: (target: DeployTarget) => void }) {
   const { t, i18n } = useTranslation('tasks');
   const preview = usePreview(task);
+  const headingId = useId();
   if (!preview) return null;
 
   const pushError = 'pushError' in preview ? preview.pushError : undefined;
@@ -65,8 +67,8 @@ export function PreviewNotice({ task, onGoToDeploy }: { task: Task; onGoToDeploy
   const failedPush = !!pushError;
 
   return (
-    <section aria-labelledby="preview" className={`border-l-2 py-1 pl-4 ${failedPush ? 'border-l-[var(--vt-signal)]' : 'border-l-border'}`}>
-      <h3 id="preview" className="text-sm font-semibold text-foreground">{title ?? t('taskPreview.title')}</h3>
+    <section aria-labelledby={headingId} className={`border-l-2 py-1 pl-4 ${failedPush ? 'border-l-[var(--vt-signal)]' : 'border-l-border'}`}>
+      <h3 id={headingId} className="text-sm font-semibold text-foreground">{title ?? t('taskPreview.title')}</h3>
       {lines}
     </section>
   );
