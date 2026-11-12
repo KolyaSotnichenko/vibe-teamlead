@@ -88,10 +88,12 @@ function headCommit(projectPath: string): Promise<string | undefined> {
   });
 }
 
+const LINK_DIR = 'vercel-link';
+
 /** The app-private parent of the Vercel link dirs (0700), so their sweep never touches a shared temp dir; undefined when it can't be made. */
 async function linkRoot(): Promise<string | undefined> {
   try {
-    const root = path.join(app.getPath('userData'), 'vercel-link');
+    const root = path.join(app.getPath('userData'), LINK_DIR);
     await mkdir(root, { recursive: true, mode: 0o700 });
     await chmod(root, 0o700);
     return root;
@@ -103,7 +105,12 @@ async function linkRoot(): Promise<string | undefined> {
 export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null, agentManager?: AgentManager): void {
   const client = createActionsClient(githubFetcher);
   // Vercel link dirs a crashed run left behind (app start), in the app-private link root
-  void linkRoot().then((root) => (root ? sweepStaleLinkDirs(root) : undefined)).catch(() => undefined);
+  // (Only swept, never created here: the folder is made when an add first needs it.)
+  try {
+    void sweepStaleLinkDirs(path.join(app.getPath('userData'), LINK_DIR)).catch(() => undefined);
+  } catch {
+    // no user data path: nothing to sweep
+  }
 
   // Tasks the readiness scan and failing runs create
   const taskDeps: DeployTaskDeps = {
