@@ -133,6 +133,9 @@ export interface DeployAPI {
   /** Cancels Add database while it downloads the Vercel CLI. */
   cancelDatabase: (projectId: string) => Promise<import('./common').IPCResult>;
   onDatabaseProgress: (callback: (progress: DeployDatabaseProgress) => void) => () => void;
+  /** Adds Redis or Blob (same terms, progress and cancel flow as the database). */
+  addService: (projectId: string, service: DeployServiceKind, opts?: { acceptTerms?: boolean }) => Promise<import('./common').IPCResult<DeployAddDatabaseResult>>;
+  cancelService: (projectId: string, service: DeployServiceKind) => Promise<import('./common').IPCResult>;
   onSetupProgress: (callback: (progress: DeploySetupProgress) => void) => () => void;
   onPushResult: (callback: (result: DeployPushResult) => void) => () => void;
   /** Whether the readiness scan created this task: its spec is in the app's deploy ledger. False for unknown projects. */
@@ -218,6 +221,10 @@ export interface DeployProjectSettings {
   database?: { provider: 'neon'; addedAt: string };
   /** Recorded just before the database is added, so a retry after a crash or timeout finds the resource instead of adding a second one. */
   pendingDatabase?: { name: string; at: string };
+  /** Redis and Blob added from Vercel (Neon keeps `database`). */
+  services?: Partial<Record<DeployServiceKind, { addedAt: string }>>;
+  /** Like `pendingDatabase`, per service. */
+  pendingServices?: Partial<Record<DeployServiceKind, { name: string; at: string }>>;
   /** ISO time setup finished. */
   setUpAt?: string;
   /** Recorded just before the app asks GitHub to create the repo, so a re-run can adopt it instead of creating a second one. */
@@ -229,6 +236,9 @@ export interface DeployProjectSettings {
   /** The Vercel team the owner picked before setup (absent: the personal account). A team already recorded in `vercel` wins. */
   vercelTeamId?: string;
 }
+
+/** Marketplace/Vercel services other than the Neon database. */
+export type DeployServiceKind = 'redis' | 'blob';
 
 export type NeededFromYouKind =
   | 'vercel-sign-in'
@@ -323,6 +333,8 @@ export type DeployDatabaseErrorKind = 'not-set-up' | 'auth' | 'cli' | 'timeout' 
 export interface DeployDatabaseProgress {
   projectId: string;
   download?: { percent: number };
+  /** Set when the progress is for Redis or Blob. */
+  service?: DeployServiceKind;
 }
 
 export type DeployAddDatabaseResult =
@@ -340,6 +352,10 @@ export interface DeployEnvState {
   /** Add database is downloading the Vercel CLI first. */
   databaseDownload?: { percent: number };
   lastDatabase?: DeployAddDatabaseResult;
+  /** Redis/Blob adds running now, their CLI download progress and last results. */
+  servicesRunning?: DeployServiceKind[];
+  serviceDownload?: Partial<Record<DeployServiceKind, { percent: number }>>;
+  lastServices?: Partial<Record<DeployServiceKind, DeployAddDatabaseResult>>;
   lastPush?: DeployPushResult;
 }
 

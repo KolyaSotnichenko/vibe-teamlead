@@ -35,6 +35,8 @@ The **Deploy** stage and the **Production** link come from GitHub Deployments, n
 
 Settings → Vercel connects the Vercel account Deploy uses to set up hosting. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use; a download that gets no data for a minute is stopped), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. If this Mac can't encrypt it, the token is not saved (never as plain text): sign in in the browser instead. With a pasted token nothing is downloaded until you first click **Add database**, which then downloads the Vercel CLI with its progress and a **Cancel** button. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
 
+**Services.** When the readiness check finds that the project needs Redis or Blob, the **Services** section lists them, each with **Add**. Redis comes from the Vercel Marketplace (Upstash) and Blob is Vercel's own file storage; both go through the same steps as the database: Marketplace terms (for Redis) are shown first and accepted only when you click Accept, the CLI download shows progress with **Cancel**, and their variables go to Production and Preview. Services Vercel can't provide are listed with the reason.
+
 ## Environment: set up deploy
 
 Deploy has two tabs: **Runs** and **Environment**. Until deploy is set up for the project, both offer **Set up deploy**.

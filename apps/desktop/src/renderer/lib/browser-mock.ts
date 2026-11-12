@@ -246,6 +246,8 @@ const browserMockAPI: ElectronAPI = {
     setVariable: async () => ({ success: false, error: 'Not available in the browser' }),
     listVariables: async () => ({ success: true, data: { ok: true as const, variables: [] } }),
     addDatabase: async () => ({ success: false, error: 'Not available in the browser' }),
+    addService: async () => ({ success: false, error: 'Not available in the browser' }),
+    cancelService: async () => ({ success: true }),
     onSetupProgress: () => () => {},
     onPushResult: () => () => {},
     isDeployTask: async () => false,

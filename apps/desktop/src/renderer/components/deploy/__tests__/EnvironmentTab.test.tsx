@@ -13,6 +13,7 @@ import type {
   DeploySetupProgress,
   DeploySetupState,
   NeededFromYou,
+  ReadinessService,
   VercelStatus,
 } from '../../../../shared/types/deploy';
 
@@ -53,6 +54,7 @@ interface Opts {
   vercel?: VercelStatus;
   setUp?: (projectId: string, opts?: unknown) => Promise<unknown>;
   variables?: unknown;
+  services?: ReadinessService[];
 }
 
 function setup(opts: Opts = {}) {
@@ -73,6 +75,10 @@ function setup(opts: Opts = {}) {
     setVariable: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true, vercel: 'ok', github: 'skipped' } })),
     listVariables: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: opts.variables ?? { ok: true, variables: [] } })),
     addDatabase: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true } })),
+    addService: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true } })),
+    cancelService: vi.fn(async () => ({ success: true })),
+    readinessState: vi.fn(async () => ({ success: true, data: { scanning: false, tasks: {}, ...(opts.services ? { result: { scannedAt: 't', blockers: [], services: opts.services, owner: [], workflow: {} } } : {}) } })),
+    onReadinessUpdate: vi.fn(() => () => undefined),
     onSetupProgress: vi.fn((cb: (p: DeploySetupProgress) => void) => { progress = cb; return () => undefined; }),
     onPushResult: vi.fn((cb: (r: DeployPushResult) => void) => { pushResult = cb; return () => undefined; }),
     cancelDatabase: vi.fn(async () => ({ success: true })),
@@ -495,5 +501,70 @@ describe('Push after merge', () => {
     const notice = await within(panel).findByText(/^deploy:push\.failed/);
     expect(notice).toHaveTextContent(text);
     expect(notice).not.toHaveTextContent('RAW');
+  });
+});
+
+describe('Services', () => {
+  const services: ReadinessService[] = [
+    { kind: 'postgres', name: 'Postgres', managed: true },
+    { kind: 'redis', name: 'Redis', managed: true },
+    { kind: 'blob', name: 'Blob', managed: true },
+    { kind: 'other', name: 'Kafka', managed: false, reason: 'Needs your own Kafka cluster' },
+  ];
+
+  it('lists managed services other than Postgres with Add, and the reason for unmanaged ones', async () => {
+    setup({ env: { settings: setUpSettings }, services });
+    const panel = await openEnvironment();
+    const section = await within(panel).findByRole('region', { name: 'deploy:services.title' });
+    expect(within(section).getAllByRole('button', { name: 'deploy:services.add' })).toHaveLength(2);
+    expect(within(section).queryByText('Postgres')).not.toBeInTheDocument();
+    expect(within(section).getByText('Kafka')).toBeInTheDocument();
+    expect(within(section).getByText('Needs your own Kafka cluster')).toBeInTheDocument();
+  });
+
+  it('a service already added has no Add', async () => {
+    setup({ env: { settings: { ...setUpSettings, services: { redis: { addedAt: 'a' } } } }, services });
+    const panel = await openEnvironment();
+    const section = await within(panel).findByRole('region', { name: 'deploy:services.title' });
+    expect(within(section).getAllByRole('button', { name: 'deploy:services.add' })).toHaveLength(1);
+    expect(within(section).getByText('deploy:services.added')).toBeInTheDocument();
+  });
+
+  it('no section without services to show or without a Vercel project', async () => {
+    setup({ env: { settings: setUpSettings }, services: [{ kind: 'postgres', name: 'Postgres', managed: true }] });
+    const panel = await openEnvironment();
+    await waitFor(() => expect(within(panel).getByRole('region', { name: 'deploy:exists.title' })).toBeInTheDocument());
+    expect(within(panel).queryByRole('region', { name: 'deploy:services.title' })).not.toBeInTheDocument();
+  });
+
+  it('Add calls addService with the kind and shows its terms; Accept calls it with acceptTerms', async () => {
+    const needed = { id: 'redis-terms', kind: 'database-terms', message: 'm', integration: 'redis', policyLinks: [] };
+    const h = setup({ env: { settings: setUpSettings }, services });
+    h.deploy.addService.mockResolvedValueOnce({ success: true, data: { ok: false, needed } });
+    h.deploy.state.mockResolvedValue({ success: true, data: { settings: setUpSettings, setupRunning: false, databaseRunning: false, lastServices: { redis: { ok: false, needed } } } });
+    const panel = await openEnvironment();
+    const section = await within(panel).findByRole('region', { name: 'deploy:services.title' });
+    fireEvent.click(within(section).getAllByRole('button', { name: 'deploy:services.add' })[0]);
+    expect(h.deploy.addService).toHaveBeenCalledWith('p1', 'redis', undefined);
+    expect(await within(panel).findByText('deploy:needed.service-terms {"integration":"Redis"}')).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'deploy:needed.actions.acceptTerms' }));
+    await waitFor(() => expect(h.deploy.addService).toHaveBeenLastCalledWith('p1', 'redis', { acceptTerms: true }));
+    expect(h.deploy.addDatabase).not.toHaveBeenCalled();
+  });
+
+  it('while running: Adding, the download with Cancel that calls cancelService', async () => {
+    const h = setup({ env: { settings: setUpSettings, servicesRunning: ['blob'], serviceDownload: { blob: { percent: 40 } } }, services });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByText('deploy:services.downloading {"percent":40}')).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'deploy:services.cancel' }));
+    expect(h.deploy.cancelService).toHaveBeenCalledWith('p1', 'blob');
+  });
+
+  it('a failed add shows its error text', async () => {
+    setup({ env: { settings: setUpSettings, lastServices: { blob: { ok: false, error: { kind: 'cli', message: 'RAW' } } } }, services });
+    const panel = await openEnvironment();
+    const section = await within(panel).findByRole('region', { name: 'deploy:services.title' });
+    expect(within(section).getByText('deploy:env.errors.cli')).toBeInTheDocument();
+    expect(section).not.toHaveTextContent('RAW');
   });
 });

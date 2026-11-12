@@ -13,6 +13,7 @@ import type { IPCResult, Project } from '../../shared/types';
 import { resolveDefaultTaskModels } from '../../shared/utils/task-models';
 import type {
   DeployAddDatabaseResult,
+  DeployServiceKind,
   DeployEnvState,
   DeployJobLog,
   DeployListVariablesResult,
@@ -24,7 +25,7 @@ import type {
 } from '../../shared/types/deploy';
 import type { AgentManager } from '../agent';
 import { runReadinessScan, type ScanInput } from '../ai/runners/deploy-readiness';
-import { addDatabase } from '../deploy/database';
+import { addDatabase, addIntegration } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
@@ -288,20 +289,26 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
   const lastDatabase = new Map<string, DeployAddDatabaseResult>();
   const databaseCancel = new Map<string, AbortController>();
   const databaseDownload = new Map<string, number>();
+  const serviceKey = (projectId: string, service: DeployServiceKind) => `${projectId}\0${service}`;
+  const SERVICE_KINDS: DeployServiceKind[] = ['redis', 'blob'];
+  const serviceRuns = new Map<string, Promise<DeployAddDatabaseResult>>();
+  const lastService = new Map<string, DeployAddDatabaseResult>();
 
   /** The CLI (downloaded here, with progress and Cancel, when a pasted-token account has none yet). */
-  const databaseCli = async (projectId: string): Promise<{ binary: string; configDir: string } | DeployAddDatabaseResult> => {
+  const databaseCli = async (projectId: string, service?: DeployServiceKind): Promise<{ binary: string; configDir: string } | DeployAddDatabaseResult> => {
     const controller = new AbortController();
-    databaseCancel.set(projectId, controller);
+    // Redis/Blob use their own entries, so a database and a service never cancel each other.
+    const key = service ? serviceKey(projectId, service) : projectId;
+    databaseCancel.set(key, controller);
     const send = (percent?: number) =>
-      safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, { projectId, ...(percent === undefined ? {} : { download: { percent } }) });
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, { projectId, ...(service ? { service } : {}), ...(percent === undefined ? {} : { download: { percent } }) });
     try {
       return await vercelCliPaths({
         signal: controller.signal,
         onProgress: (received, total) => {
           const percent = total > 0 ? Math.min(100, Math.floor((received / total) * 100)) : 0;
-          if (databaseDownload.get(projectId) === percent) return;
-          databaseDownload.set(projectId, percent);
+          if (databaseDownload.get(key) === percent) return;
+          databaseDownload.set(key, percent);
           send(percent);
         },
       });
@@ -311,8 +318,8 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       if (kind === 'timeout') return { ok: false, error: { kind: 'timeout', message: 'The Vercel CLI download took too long.' } };
       return { ok: false, error: { kind: 'cli', message: 'The Vercel CLI could not be prepared.' } };
     } finally {
-      if (databaseCancel.get(projectId) === controller) databaseCancel.delete(projectId);
-      if (databaseDownload.delete(projectId)) send();
+      if (databaseCancel.get(key) === controller) databaseCancel.delete(key);
+      if (databaseDownload.delete(key)) send();
     }
   };
 
@@ -357,6 +364,53 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     }
   );
 
+  const runService = async (project: Project, service: DeployServiceKind, acceptTerms: boolean): Promise<DeployAddDatabaseResult> => {
+    const vercel = project.settings.deploy?.vercel;
+    if (!vercel?.projectId) return { ok: false, error: { kind: 'not-set-up', message: 'This project is not set up on Vercel yet.' } };
+    const paths = await databaseCli(project.id, service);
+    if ('ok' in paths) return paths;
+    const userId = vercel.teamId ? undefined : (await vercelStatus()).user?.id;
+    return addIntegration(
+      project,
+      {
+        binary: paths.binary,
+        configDir: paths.configDir,
+        getToken: () => getVercelToken(),
+        loadProject: () => projectStore.getProject(project.id),
+        saveSettings: (patch) => saveDeployPatch(projectStore, project.id, patch),
+        ...(userId ? { userId } : {}),
+      },
+      { integration: service, acceptTerms }
+    );
+  };
+
+  ipcMain.handle(
+    IPC_CHANNELS.DEPLOY_ADD_SERVICE,
+    async (_event, projectId: string, service: unknown, opts?: { acceptTerms?: unknown }): Promise<IPCResult<DeployAddDatabaseResult>> => {
+      if (service !== 'redis' && service !== 'blob') return { success: false, error: 'Unknown service' };
+      const project = projectStore.getProject(projectId);
+      if (!project) return { success: false, error: 'Project not found' };
+      const key = serviceKey(projectId, service);
+      let run = serviceRuns.get(key);
+      if (!run) {
+        run = runService(project, service, opts?.acceptTerms === true)
+          .catch((): DeployAddDatabaseResult => ({ ok: false, error: { kind: 'unknown', message: 'Adding the service failed.' } }))
+          .then((result) => {
+            lastService.set(key, result);
+            return result;
+          })
+          .finally(() => serviceRuns.delete(key));
+        serviceRuns.set(key, run);
+      }
+      return { success: true, data: await run };
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.DEPLOY_CANCEL_SERVICE, async (_event, projectId: string, service: unknown): Promise<IPCResult> => {
+    if (service === 'redis' || service === 'blob') databaseCancel.get(serviceKey(projectId, service))?.abort();
+    return { success: true };
+  });
+
   ipcMain.handle(IPC_CHANNELS.DEPLOY_CANCEL_DATABASE, async (_event, projectId: string): Promise<IPCResult> => {
     databaseCancel.get(projectId)?.abort();
     return { success: true };
@@ -400,12 +454,24 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     const setup = lastSetup.get(projectId);
     const database = lastDatabase.get(projectId);
     const push = lastPushResult(projectId);
+    const servicesRunning = SERVICE_KINDS.filter((k) => serviceRuns.has(serviceKey(projectId, k)));
+    const serviceDownloads: Partial<Record<DeployServiceKind, { percent: number }>> = {};
+    const lastServices: Partial<Record<DeployServiceKind, DeployAddDatabaseResult>> = {};
+    for (const k of SERVICE_KINDS) {
+      const pct = databaseDownload.get(serviceKey(projectId, k));
+      if (pct !== undefined) serviceDownloads[k] = { percent: pct };
+      const last = lastService.get(serviceKey(projectId, k));
+      if (last) lastServices[k] = last;
+    }
     return {
       success: true,
       data: {
         settings: project.settings.deploy ?? null,
         setupRunning: setupRuns.has(projectId),
         databaseRunning: databaseRuns.has(projectId),
+        ...(servicesRunning.length ? { servicesRunning } : {}),
+        ...(Object.keys(serviceDownloads).length ? { serviceDownload: serviceDownloads } : {}),
+        ...(Object.keys(lastServices).length ? { lastServices } : {}),
         ...(databaseDownload.has(projectId) ? { databaseDownload: { percent: databaseDownload.get(projectId) as number } } : {}),
         ...(setup ? { lastSetup: setup } : {}),
         ...(database ? { lastDatabase: database } : {}),

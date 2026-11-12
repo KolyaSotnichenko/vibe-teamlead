@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../../shared/constants';
-import type { DeploySetupState } from '../../../shared/types/deploy';
+import type { DeployProjectSettings, DeploySetupState } from '../../../shared/types/deploy';
 
 // Fakes only: no GitHub, no Vercel API, no Vercel CLI.
 
@@ -32,7 +32,7 @@ vi.mock('../../deploy/setup', async (orig) => ({ ...(await orig<typeof import('.
 const vars = vi.hoisted(() => ({ setDeployVariable: vi.fn(), listDeployVariables: vi.fn() }));
 vi.mock('../../deploy/variables', () => vars);
 
-const db = vi.hoisted(() => ({ addDatabase: vi.fn() }));
+const db = vi.hoisted(() => ({ addDatabase: vi.fn(), addIntegration: vi.fn() }));
 vi.mock('../../deploy/database', () => db);
 
 const cred = vi.hoisted(() => ({
@@ -192,6 +192,58 @@ describe('deploy environment IPC', () => {
       gate.resolve(done());
       await running;
       expect(store.projects.get('p1')?.settings.deploy).toBeUndefined();
+    });
+  });
+
+  describe('addService', () => {
+    beforeEach(() => {
+      p1().settings.deploy = { enabled: true, vercel: { projectId: 'prj', projectName: 'app' } };
+      db.addIntegration.mockReset();
+    });
+
+    it('runs addIntegration for redis with the same wiring and saves services', async () => {
+      db.addIntegration.mockResolvedValue({ ok: true });
+      expect(await invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, 'p1', 'redis', { acceptTerms: true })).toEqual({ success: true, data: { ok: true } });
+      const [project, deps, opts] = db.addIntegration.mock.calls[0];
+      expect(project.id).toBe('p1');
+      expect(opts).toEqual({ integration: 'redis', acceptTerms: true });
+      expect(deps).toMatchObject({ binary: '/fake/vercel', configDir: '/fake/config', userId: 'u1' });
+      await deps.saveSettings({ services: { redis: { addedAt: 'a' } } });
+      expect((store.projects.get('p1')?.settings.deploy as DeployProjectSettings | undefined)?.services).toEqual({ redis: { addedAt: 'a' } });
+    });
+
+    it('rejects an unknown service and a missing project', async () => {
+      expect((await invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, 'p1', 'neon')) as { success: boolean }).toMatchObject({ success: false });
+      expect((await invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, 'nope', 'redis')) as { success: boolean }).toMatchObject({ success: false });
+      expect(db.addIntegration).not.toHaveBeenCalled();
+    });
+
+    it('one run per project and service; state reports it running and the last result', async () => {
+      const gate = deferred<unknown>();
+      db.addIntegration.mockReturnValueOnce(gate.promise);
+      const a = invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, 'p1', 'blob');
+      const b = invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, 'p1', 'blob');
+      await vi.waitFor(() => expect(db.addIntegration).toHaveBeenCalledTimes(1));
+      expect(await invoke(IPC_CHANNELS.DEPLOY_STATE, 'p1')).toMatchObject({ data: { servicesRunning: ['blob'], databaseRunning: false } });
+      const needed = { ok: false, needed: { id: 'blob-dashboard', kind: 'database-dashboard', message: 'm' } };
+      gate.resolve(needed);
+      expect(await a).toEqual({ success: true, data: needed });
+      expect(await b).toEqual({ success: true, data: needed });
+      expect(db.addIntegration).toHaveBeenCalledTimes(1);
+      expect(await invoke(IPC_CHANNELS.DEPLOY_STATE, 'p1')).toMatchObject({ data: { lastServices: { blob: needed } } });
+    });
+
+    it('cancelService aborts the CLI download of that service', async () => {
+      let signal: AbortSignal | undefined;
+      cred.vercelCliPaths.mockImplementationOnce(async (opts?: { signal?: AbortSignal }) => {
+        signal = opts?.signal;
+        return new Promise((_r, rej) => opts?.signal?.addEventListener('abort', () => rej(Object.assign(new Error('x'), { kind: 'cancelled' }))));
+      });
+      const run = invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, 'p1', 'redis');
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      await invoke(IPC_CHANNELS.DEPLOY_CANCEL_SERVICE, 'p1', 'redis');
+      expect(await run).toMatchObject({ data: { ok: false, error: { kind: 'cancelled' } } });
+      expect(db.addIntegration).not.toHaveBeenCalled();
     });
   });
 

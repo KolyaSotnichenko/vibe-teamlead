@@ -627,6 +627,8 @@ export const IPC_CHANNELS = {
   DEPLOY_LIST_VARIABLES: 'deploy:listVariables',
   DEPLOY_ADD_DATABASE: 'deploy:addDatabase',
   DEPLOY_CANCEL_DATABASE: 'deploy:cancelDatabase',
+  DEPLOY_ADD_SERVICE: 'deploy:addService',
+  DEPLOY_CANCEL_SERVICE: 'deploy:cancelService',
   DEPLOY_DATABASE_PROGRESS: 'deploy:databaseProgress',  // Event: Add database downloads the Vercel CLI (main -> renderer)
   DEPLOY_SETUP_PROGRESS: 'deploy:setupProgress',  // Event: the step setup reached (main -> renderer)
   DEPLOY_READINESS_STATE: 'deploy:readinessState',

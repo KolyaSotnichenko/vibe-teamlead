@@ -97,7 +97,9 @@
     "public-repo-warning": "{{repo}} is public: anyone can read its code.",
     "variable": "{{name}} needs a value.",
     "database-terms": "Vercel needs you to accept the {{integration}} Marketplace terms before it adds the database. Read them first:",
+    "service-terms": "Vercel needs you to accept the {{integration}} Marketplace terms before it adds it. Read them first:",
     "database-dashboard": "Finish adding the database in the Vercel dashboard, then come back.",
+    "service-dashboard": "Finish adding it in the Vercel dashboard, then come back.",
     "actions": {
       "connectVercel": "Connect Vercel",
       "connectGitHub": "Connect GitHub",
@@ -131,6 +133,19 @@
     "downloading": "Downloading the Vercel CLI first… {{percent}}%",
     "cancel": "Cancel",
     "previewNote": "Preview deployments may use this same database unless Neon’s preview branching is on. Documentation → Deploy says how to check."
+  },
+  "services": {
+    "title": "Services",
+    "description": "What the project needs from Vercel besides the database. Add puts the connection variables in Production and Preview.",
+    "add": "Add",
+    "adding": "Adding…",
+    "added": "Added",
+    "downloading": "Downloading the Vercel CLI first… {{percent}}%",
+    "cancel": "Cancel",
+    "kind": {
+      "redis": "Redis (Upstash)",
+      "blob": "Blob (file storage)"
+    }
   },
   "variables": {
     "title": "Variables",

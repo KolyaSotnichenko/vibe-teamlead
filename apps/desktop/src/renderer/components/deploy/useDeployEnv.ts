@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type {
   DeployAddDatabaseResult,
   DeployEnvState,
+  DeployServiceKind,
   DeploySetupState,
   DeploySetupStep,
 } from '../../../shared/types/deploy';
@@ -24,6 +25,9 @@ export interface DeployEnv {
   addDatabase: (acceptTerms?: boolean) => Promise<void>;
   /** Cancels Add database while it downloads the Vercel CLI. */
   cancelDatabase: () => void;
+  /** Adds Redis or Blob; same terms and download flow as the database. */
+  addService: (service: DeployServiceKind, acceptTerms?: boolean) => Promise<void>;
+  cancelService: (service: DeployServiceKind) => void;
 }
 
 const EMPTY: DeployEnvState = { settings: null, setupRunning: false, databaseRunning: false };
@@ -62,7 +66,13 @@ export function useDeployEnv(projectId: string, onSetUpDone?: () => void): Deplo
       if (p.projectId !== projectId) return;
       setState((s) => {
         const next: DeployEnvState = { ...(s ?? EMPTY) };
-        if (p.download) next.databaseDownload = p.download;
+        const service = p.service;
+        if (service) {
+          const downloads = { ...next.serviceDownload };
+          if (p.download) downloads[service] = p.download;
+          else delete downloads[service];
+          next.serviceDownload = downloads;
+        } else if (p.download) next.databaseDownload = p.download;
         else delete next.databaseDownload;
         return next;
       });
@@ -146,5 +156,39 @@ export function useDeployEnv(projectId: string, onSetUpDone?: () => void): Deplo
     void Promise.resolve(window.electronAPI.deploy.cancelDatabase(projectId)).catch(() => undefined);
   }, [projectId]);
 
-  return { state, progress, requestFailed, refresh, setUp, chooseVercelProject, addDatabase, cancelDatabase };
+  const addService = useCallback(
+    async (service: DeployServiceKind, acceptTerms?: boolean) => {
+      setState((s) => ({ ...(s ?? EMPTY), servicesRunning: [...new Set([...(s?.servicesRunning ?? []), service])] }));
+      let last: DeployAddDatabaseResult | undefined;
+      try {
+        const result = await window.electronAPI.deploy.addService(projectId, service, acceptTerms ? { acceptTerms: true } : undefined);
+        if (result.success && result.data) last = result.data;
+        else setRequestFailed(true);
+      } catch {
+        setRequestFailed(true);
+      }
+      setState((s) => {
+        const next: DeployEnvState = {
+          ...(s ?? EMPTY),
+          servicesRunning: (s?.servicesRunning ?? []).filter((k) => k !== service),
+          ...(last ? { lastServices: { ...s?.lastServices, [service]: last } } : {}),
+        };
+        const downloads = { ...next.serviceDownload };
+        delete downloads[service];
+        next.serviceDownload = downloads;
+        return next;
+      });
+      await refresh();
+    },
+    [projectId, refresh]
+  );
+
+  const cancelService = useCallback(
+    (service: DeployServiceKind) => {
+      void Promise.resolve(window.electronAPI.deploy.cancelService(projectId, service)).catch(() => undefined);
+    },
+    [projectId]
+  );
+
+  return { state, progress, requestFailed, refresh, setUp, chooseVercelProject, addDatabase, cancelDatabase, addService, cancelService };
 }

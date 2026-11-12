@@ -20,6 +20,7 @@ import { JobPanel } from './JobPanel';
 import { EnvironmentTab } from './EnvironmentTab';
 import { DeployChecklist } from './DeployChecklist';
 import { useDeployEnv } from './useDeployEnv';
+import { useReadiness } from './useReadiness';
 import { displayUrl, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
 const ATTENTION: ReadonlySet<GitHubError['kind']> = new Set(['no-connection', 'permissions', 'not-found']);
@@ -87,6 +88,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
   // Setup may have created the repository: the poller looks again
   const restartRuns = useCallback(() => void window.electronAPI.deploy.startRuns(projectId, selectedRef.current), [projectId]);
   const env = useDeployEnv(projectId, restartRuns);
+  const readiness = useReadiness(projectId);
   const notSetUp = !!env.state && !env.state.settings?.enabled;
 
   const runs = state?.runs ?? [];
@@ -244,7 +246,7 @@ export function DeployPage({ projectId }: { projectId: string }) {
       ) : (
         <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
-          <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
+          <EnvironmentTab projectId={projectId} env={env} services={readiness?.result?.services ?? []} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
         </div>
       )}
 

@@ -8,9 +8,11 @@ import { useTranslation } from 'react-i18next';
 import type {
   DeployListVariablesResult,
   DeployProjectSettings,
+  DeployServiceKind,
   DeploySetupStep,
   DeployVariableInput,
   GraphNodeStatus,
+  ReadinessService,
   NeededFromYou as NeededItem,
   VercelStatus,
 } from '../../../shared/types/deploy';
@@ -23,6 +25,9 @@ import { displayUrl, formatRelative, isWebUrl, LinkButton, StatusMark, useDeploy
 
 /** Push failures with their own text; any other kind uses the shared deploy error text. */
 const PUSH_ERROR_KINDS: ReadonlySet<string> = new Set(['conflict', 'permissions', 'no-connection', 'unavailable']);
+
+const SERVICE_KINDS: DeployServiceKind[] = ['redis', 'blob'];
+const isServiceKind = (k: string): k is DeployServiceKind => k === 'redis' || k === 'blob';
 
 const STEPS: DeploySetupStep[] = ['repo', 'push', 'vercel', 'done'];
 const TARGETS: ReadonlySet<string> = new Set(['production', 'preview', 'development']);
@@ -84,9 +89,11 @@ export interface EnvironmentTabProps {
   onConnectGitHub: () => void;
   env: DeployEnv;
   productionUrl?: string | null;
+  /** What the readiness scan found the project needs from Vercel. */
+  services?: ReadinessService[];
 }
 
-export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub }: EnvironmentTabProps) {
+export function EnvironmentTab({ projectId, env, productionUrl, services = [], onConnectGitHub }: EnvironmentTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
   const errorText = useDeployErrorText();
   const pushErrorText = (kind: string | undefined): string =>
@@ -94,6 +101,7 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
   const { state } = env;
   const settings = state?.settings ?? null;
   const setupRunning = !!state?.setupRunning;
+  const servicesRunning = state?.servicesRunning ?? [];
   const databaseRunning = !!state?.databaseRunning;
   const lastSetup = state?.lastSetup;
 
@@ -133,9 +141,10 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
   }, [projectId]);
   // Re-read once a database is added: it brings its own variables (DATABASE_URL, …)
   const databaseAddedAt = settings?.database?.addedAt;
+  const servicesAdded = Object.keys(settings?.services ?? {}).sort().join(',');
   useEffect(() => {
     if (hasVariables) void loadVariables();
-  }, [hasVariables, databaseAddedAt, loadVariables]);
+  }, [hasVariables, databaseAddedAt, servicesAdded, loadVariables]);
 
   if (!state) {
     return <p className="text-sm text-muted-foreground">{t('deploy:env.loading')}</p>;
@@ -151,6 +160,10 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
   const needed: NeededItem[] = [
     ...(lastSetup?.needed ?? []),
     ...(state.lastDatabase && !state.lastDatabase.ok && 'needed' in state.lastDatabase && !settings?.database ? [state.lastDatabase.needed] : []),
+    ...SERVICE_KINDS.flatMap((k) => {
+      const last = state.lastServices?.[k];
+      return last && !last.ok && 'needed' in last && !settings?.services?.[k] ? [last.needed] : [];
+    }),
   ].filter(open);
 
   const setupDone = !!settings?.enabled;
@@ -235,13 +248,15 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
         items={needed}
         repo={repoName}
         setupRunning={setupRunning}
-        databaseRunning={databaseRunning}
+        databaseRunning={databaseRunning || servicesRunning.length > 0}
         onChooseProject={(choice) => void env.chooseVercelProject(choice)}
         onAcknowledge={(id) => setAcknowledged((s) => new Set([...s, id]))}
         onAddValue={(name) => setDialog({ name })}
         onConnectGitHub={onConnectGitHub}
-        onAcceptTerms={() => {
-          if (!databaseRunning) void env.addDatabase(true);
+        onAcceptTerms={(integration) => {
+          if (integration && isServiceKind(integration)) {
+            if (!servicesRunning.includes(integration)) void env.addService(integration, true);
+          } else if (!databaseRunning) void env.addDatabase(true);
         }}
       />
 
@@ -311,6 +326,49 @@ export function EnvironmentTab({ projectId, env, productionUrl, onConnectGitHub 
           {databaseError && databaseError.kind !== 'cancelled' && !databaseRunning && (
             <Notice tone="attention">{errorText(databaseError.kind)}</Notice>
           )}
+        </Section>
+      )}
+
+      {settings?.vercel && services.some((s) => s.kind !== 'postgres') && (
+        <Section id="deploy-services-title" title={t('deploy:services.title')}>
+          <p className="text-sm text-muted-foreground">{t('deploy:services.description')}</p>
+          <ul aria-label={t('deploy:services.title')} className="flex flex-col border border-foreground">
+            {services
+              .filter((s) => s.kind !== 'postgres')
+              .map((s) => {
+                const kind = s.managed && isServiceKind(s.kind) ? s.kind : undefined;
+                const added = kind ? !!settings.services?.[kind] : false;
+                const running = kind ? servicesRunning.includes(kind) : false;
+                const download = kind ? state.serviceDownload?.[kind] : undefined;
+                const last = kind ? state.lastServices?.[kind] : undefined;
+                const error = !added && !running && last && !last.ok && 'error' in last && last.error.kind !== 'cancelled' ? last.error : undefined;
+                return (
+                  <li key={`${s.kind}:${s.name}`} className="flex flex-col gap-1.5 border-b border-border px-3 py-2 last:border-b-0">
+                    <div className="flex flex-wrap items-baseline gap-3">
+                      <span className="min-w-0 flex-1 text-sm text-foreground">{s.name}</span>
+                      {kind && added && <span className="bg-muted px-1.5 font-mono text-[11px] text-foreground">{t('deploy:services.added')}</span>}
+                      {kind && !added && (
+                        <Button size="sm" disabled={running} onClick={() => void env.addService(kind)}>
+                          {running ? t('deploy:services.adding') : t('deploy:services.add')}
+                        </Button>
+                      )}
+                    </div>
+                    {!s.managed && s.reason && <p className="text-xs text-muted-foreground">{s.reason}</p>}
+                    {kind && running && download && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="text-sm text-foreground" role="status">
+                          {t('deploy:services.downloading', { percent: download.percent })}
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => env.cancelService(kind)}>
+                          {t('deploy:services.cancel')}
+                        </Button>
+                      </div>
+                    )}
+                    {error && <Notice tone="attention">{errorText(error.kind)}</Notice>}
+                  </li>
+                );
+              })}
+          </ul>
         </Section>
       )}
 

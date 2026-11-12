@@ -5,7 +5,7 @@
  * blocker is gone. Nothing here throws into a caller; a failed scan keeps the saved result.
  */
 import type { Project } from '../../shared/types';
-import type { ReadinessResult, ReadinessState } from '../../shared/types/deploy';
+import type { ReadinessResult, ReadinessState, ServiceKind } from '../../shared/types/deploy';
 import type { ScanInput } from '../ai/runners/deploy-readiness';
 import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus } from './deploy-tasks';
 import { resolveMainBranch } from './push-after-merge';
@@ -77,7 +77,7 @@ export function createReadiness(deps: ReadinessDeps) {
         ...(commit ? { commit } : {}),
         variableNames,
         databaseAdded: !!deploy?.database,
-        servicesAdded: [],
+        servicesAdded: Object.keys(deploy?.services ?? {}) as ServiceKind[],
         ...(lastMainRun ? { lastMainRun } : {}),
       });
       writeReadiness(project.path, result);

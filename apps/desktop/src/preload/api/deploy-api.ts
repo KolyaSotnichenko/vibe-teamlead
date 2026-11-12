@@ -32,6 +32,8 @@ export const createDeployAPI = (): DeployAPI => ({
   listVariables: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_LIST_VARIABLES, projectId),
   addDatabase: (projectId, opts) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_ADD_DATABASE, projectId, opts),
   cancelDatabase: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_CANCEL_DATABASE, projectId),
+  addService: (projectId, service, opts) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_ADD_SERVICE, projectId, service, opts),
+  cancelService: (projectId, service) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_CANCEL_SERVICE, projectId, service),
   onDatabaseProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: DeployDatabaseProgress) => callback(progress);
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_DATABASE_PROGRESS, handler);

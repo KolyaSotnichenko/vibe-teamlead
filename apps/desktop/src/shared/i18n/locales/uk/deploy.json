@@ -97,7 +97,9 @@
     "public-repo-warning": "{{repo}} публічний: його код може прочитати будь-хто.",
     "variable": "{{name}} потребує значення.",
     "database-terms": "Перш ніж додати базу даних, Vercel просить прийняти умови Marketplace для {{integration}}. Спершу прочитайте їх:",
+    "service-terms": "Перш ніж це додати, Vercel просить прийняти умови Marketplace для {{integration}}. Спершу прочитайте їх:",
     "database-dashboard": "Завершіть додавання бази даних у панелі Vercel і поверніться сюди.",
+    "service-dashboard": "Завершіть додавання в панелі Vercel і поверніться сюди.",
     "actions": {
       "connectVercel": "Підключити Vercel",
       "connectGitHub": "Підключити GitHub",
@@ -131,6 +133,19 @@
     "downloading": "Спершу завантажуємо Vercel CLI… {{percent}}%",
     "cancel": "Скасувати",
     "previewNote": "Preview-деплої можуть працювати з цією ж базою, якщо в Neon не ввімкнено гілки для preview. Як перевірити — у Документації → Деплой."
+  },
+  "services": {
+    "title": "Сервіси",
+    "description": "Що проєкту потрібно від Vercel, крім бази даних. «Додати» кладе змінні підключення в Production і Preview.",
+    "add": "Додати",
+    "adding": "Додаємо…",
+    "added": "Додано",
+    "downloading": "Спершу завантажуємо Vercel CLI… {{percent}}%",
+    "cancel": "Скасувати",
+    "kind": {
+      "redis": "Redis (Upstash)",
+      "blob": "Blob (сховище файлів)"
+    }
   },
   "variables": {
     "title": "Змінні",

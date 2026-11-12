@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Project } from '../../../shared/types';
 import type { DeployProjectSettings } from '../../../shared/types/deploy';
-import { addDatabase, type DatabaseDeps } from '../database';
+import { addDatabase, addIntegration, type DatabaseDeps } from '../database';
 
 let work: string;
 beforeEach(() => {
@@ -341,5 +341,83 @@ describe('addDatabase', () => {
     const r: any = await addDatabase(project, deps, { acceptTerms: true });
     expect(r.needed.kind).toBe('database-terms');
     expect(cli.calls().some((c) => c.argv[1] === 'accept-terms')).toBe(false);
+  });
+});
+
+const UPSTASH_INSTALLED = { code: 0, out: '{"installations":[{"integration":{"slug":"upstash"}}]}' };
+
+describe('addIntegration', () => {
+  it('redis: integration add upstash/upstash-kv with the -redis name, recorded under services', async () => {
+    const { cli, saved, deps, project } = setup({ 'integration installations': [UPSTASH_INSTALLED], 'integration add': [OK] });
+    expect(await addIntegration(project, deps, { integration: 'redis' })).toEqual({ ok: true });
+    const add = cli.calls().find((c) => c.argv[0] === 'integration' && c.argv[1] === 'add')!;
+    expect(add.argv.slice(0, 3)).toEqual(['integration', 'add', 'upstash/upstash-kv']);
+    expect(add.argv[add.argv.indexOf('--name') + 1]).toBe('my-cool-app-redis');
+    expect(add.argv).toEqual(expect.arrayContaining(['--billing-plan', 'free_v3', '--no-env-pull', '--json']));
+    expect(add.argv.join(' ')).toContain('-e production -e preview');
+    expect(saved).toEqual([
+      { pendingServices: { redis: { name: 'my-cool-app-redis', at: '2026-11-11T10:00:00.000Z' } } },
+      { services: { redis: { addedAt: '2026-11-11T10:00:00.000Z' } }, pendingServices: undefined },
+    ]);
+  });
+
+  it('redis keeps the other recorded service when saving', async () => {
+    const { saved, deps, project } = setup({ 'integration installations': [UPSTASH_INSTALLED], 'integration add': [OK] }, { services: { blob: { addedAt: 'b' } } });
+    await addIntegration(project, deps, { integration: 'redis' });
+    expect(saved[1]).toEqual({ services: { blob: { addedAt: 'b' }, redis: { addedAt: '2026-11-11T10:00:00.000Z' } }, pendingServices: undefined });
+  });
+
+  it('redis terms flow: database-terms with integration redis, then accept-terms upstash', async () => {
+    const { cli, deps, project } = setup({
+      'integration installations': [NOT_INSTALLED],
+      'integration add': [{ code: 1, out: JSON.stringify(TERMS) }, { code: 1, out: JSON.stringify(TERMS) }, OK],
+    });
+    const r = await addIntegration(project, deps, { integration: 'redis' });
+    expect((r as any).needed).toMatchObject({ kind: 'database-terms', integration: 'redis' });
+    expect((r as any).needed.id).toBe('redis-terms');
+    expect(cli.calls().some((c) => c.argv[1] === 'accept-terms')).toBe(false);
+    const r2 = await addIntegration(project, deps, { integration: 'redis', acceptTerms: true });
+    expect(r2).toEqual({ ok: true });
+    const acc = cli.calls().find((c) => c.argv[1] === 'accept-terms')!;
+    expect(acc.argv.slice(0, 3)).toEqual(['integration', 'accept-terms', 'upstash']);
+  });
+
+  it('neon needed ids stay database-terms / database-dashboard', async () => {
+    const { deps, project } = setup({ 'integration installations': [NOT_INSTALLED], 'integration add': [{ code: 1, out: JSON.stringify(TERMS) }] });
+    const r = await addDatabase(project, deps);
+    expect((r as any).needed.id).toBe('database-terms');
+  });
+
+  it('two adds of the same service at once run one CLI', async () => {
+    const { cli, deps, project } = setup({ 'integration installations': [UPSTASH_INSTALLED], 'integration add': [{ code: 0, out: '{}', delay: 300 }] });
+    const [a, b] = await Promise.all([addIntegration(project, deps, { integration: 'redis' }), addIntegration(project, deps, { integration: 'redis' })]);
+    expect(a).toEqual({ ok: true });
+    expect(b).toEqual({ ok: true });
+    expect(cli.calls().filter((c) => c.argv[1] === 'add')).toHaveLength(1);
+  });
+
+  it('already recorded: does nothing', async () => {
+    const { cli, deps, project } = setup({}, { services: { redis: { addedAt: 'x' } } });
+    expect(await addIntegration(project, deps, { integration: 'redis' })).toEqual({ ok: true });
+    expect(cli.calls()).toEqual([]);
+  });
+
+  it('blob: blob create-store <name>-blob --access private --yes -e production -e preview, in the link dir', async () => {
+    const { cli, saved, deps, project, tmpRoot } = setup({ 'blob create-store': [{ code: 0, out: 'Blob store created' }] });
+    expect(await addIntegration(project, deps, { integration: 'blob' })).toEqual({ ok: true });
+    const call = cli.calls().find((c) => c.argv[0] === 'blob')!;
+    expect(call.argv.slice(0, 3)).toEqual(['blob', 'create-store', 'my-cool-app-blob']);
+    expect(call.argv).toEqual(expect.arrayContaining(['--access', 'private', '--yes']));
+    expect(call.argv.join(' ')).toContain('-e production -e preview');
+    expect(call.link).toEqual({ projectId: 'prj_1', orgId: 'team_1' });
+    expect(saved[1]).toEqual({ services: { blob: { addedAt: '2026-11-11T10:00:00.000Z' } }, pendingServices: undefined });
+    expect(readdirSync(tmpRoot)).toEqual([]);
+  });
+
+  it('blob failing: a cli error without echoing output', async () => {
+    const { deps, project } = setup({ 'blob create-store': [{ code: 1, out: 'boom token=abc' }] });
+    const r = await addIntegration(project, deps, { integration: 'blob' });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r)).not.toContain('token=abc');
   });
 });

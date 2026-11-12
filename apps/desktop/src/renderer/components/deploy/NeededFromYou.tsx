@@ -19,7 +19,8 @@ export interface NeededFromYouProps {
   onChooseProject: (choice: { useProjectId: string } | { createNew: true }) => void;
   onAcknowledge: (id: string) => void;
   onAddValue: (name: string) => void;
-  onAcceptTerms: () => void;
+  /** `integration`: the item's integration (neon, redis, blob). */
+  onAcceptTerms: (integration?: string) => void;
   onConnectGitHub: () => void;
 }
 
@@ -27,7 +28,10 @@ const openSettings = (section: AppSection) =>
   window.dispatchEvent(new CustomEvent<AppSection>('open-app-settings', { detail: section }));
 
 /** `neon` → `Neon`. */
-const integrationName = (slug?: string) => (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : '');
+const INTEGRATION_NAMES: Record<string, string> = { neon: 'Neon', redis: 'Redis', blob: 'Blob' };
+/** Redis and Blob (the Neon database keeps its own texts). */
+const isService = (item: NeededItem) => item.integration === 'redis' || item.integration === 'blob';
+const integrationName = (slug?: string) => (slug ? (INTEGRATION_NAMES[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1)) : '');
 
 export function NeededFromYou(props: NeededFromYouProps) {
   const { t } = useTranslation(['deploy']);
@@ -111,7 +115,7 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
       actions = <Button size="sm" onClick={() => onAddValue(item.variable ?? '')}>{t('deploy:needed.actions.addValue')}</Button>;
       break;
     case 'database-terms':
-      message = t('deploy:needed.database-terms', { integration: integrationName(item.integration) });
+      message = t(isService(item) ? 'deploy:needed.service-terms' : 'deploy:needed.database-terms', { integration: integrationName(item.integration) });
       extra = (item.policyLinks ?? []).length > 0 && (
         <ul aria-label={t('deploy:needed.policyLinks')} className="flex flex-col gap-1">
           {(item.policyLinks ?? []).map((l) => (
@@ -125,13 +129,13 @@ function Item({ item, repo, setupRunning, databaseRunning, onChooseProject, onAc
         </ul>
       );
       actions = (
-        <Button size="sm" disabled={databaseRunning} onClick={onAcceptTerms}>
+        <Button size="sm" disabled={databaseRunning} onClick={() => onAcceptTerms(item.integration)}>
           {t('deploy:needed.actions.acceptTerms')}
         </Button>
       );
       break;
     case 'database-dashboard':
-      message = t('deploy:needed.database-dashboard');
+      message = t(isService(item) ? 'deploy:needed.service-dashboard' : 'deploy:needed.database-dashboard');
       actions = link(t('deploy:needed.actions.openDashboard'), item.actionUrl);
       break;
     default:

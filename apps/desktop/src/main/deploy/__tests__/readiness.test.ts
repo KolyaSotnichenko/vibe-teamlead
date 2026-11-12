@@ -101,6 +101,12 @@ describe('triggers', () => {
     await make().scan(project(), 'check-again');
     expect(scan).toHaveBeenCalledWith(expect.objectContaining({ projectPath: dir, commit: 'abc', variableNames: ['A'], databaseAdded: false, servicesAdded: [] }));
   });
+
+  it('passes the recorded services so the scan knows what is added', async () => {
+    const p = { ...project(), settings: { deploy: { enabled: true, services: { redis: { addedAt: 't' } } } } } as unknown as Project;
+    await make().scan(p, 'check-again');
+    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ servicesAdded: ['redis'] }));
+  });
 });
 
 describe('single flight', () => {
