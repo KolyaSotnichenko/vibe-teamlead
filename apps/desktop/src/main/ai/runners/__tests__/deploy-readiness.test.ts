@@ -252,6 +252,76 @@ describe('known blockers keep their keys (roadmaply: the same problems came back
     expect(result.blockers.map((b) => b.key)).toEqual([blockerKey('code', 'database migrations'), 'code-api-migrations']);
   });
 
+  it('the prompt names each known blocker by its key and a subject in words, also when only the key is known', async () => {
+    const run = fakeRun();
+    await runReadinessScan({ ...input, knownBlockers: known }, { run, feature, now });
+    const prompt = (run.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain('code-transactional-email');
+    expect(prompt).toMatch(/subject "transactional email"/);
+    expect(prompt).toContain('sameAs');
+  });
+
+  it('a model that copies the prompt\'s own words back keeps every known key', async () => {
+    const run = fakeRun();
+    await runReadinessScan({ ...input, knownBlockers: known }, { run, feature, now });
+    const prompt = (run.mock.calls[0][0] as { prompt: string }).prompt;
+    const echoed = known.map((k) => {
+      const line = prompt.split('\n').find((l) => l.includes(k.key)) as string;
+      return { kind: 'code', subject: /subject "([^"]+)"/.exec(line)?.[1] ?? '', title: k.title, detail: 'd' };
+    });
+    // and a model that puts the key itself in the subject
+    const keyed = [{ kind: 'code', subject: 'code-transactional-email', title: 'x', detail: 'd' }];
+    expect((await scan(echoed)).blockers.map((b) => b.key)).toEqual(known.map((k) => k.key));
+    expect((await scan(keyed)).blockers.map((b) => b.key)).toEqual(['code-transactional-email']);
+  });
+
+  it('sameAs merges what words cannot (roadmaply: email, logo)', async () => {
+    const logoKnown = { key: 'code-logo-upload-storage', kind: 'code' as const, subject: 'logo upload storage', title: 'Logo uploads write to local disk' };
+    const result = await runReadinessScan(
+      { ...input, knownBlockers: [...known, logoKnown] },
+      {
+        run: fakeRun({
+          ...output,
+          blockers: [
+            { kind: 'code', subject: 'email provider', title: 'No real email transport', detail: 'd', sameAs: 'code-transactional-email' },
+            { kind: 'code', subject: 'logo storage adapter', title: 'Uploads use the local filesystem', detail: 'd', sameAs: 'code-logo-upload-storage' },
+          ],
+        }),
+        feature,
+        now,
+      },
+    );
+    expect(result.blockers.map((b) => b.key)).toEqual(['code-transactional-email', 'code-logo-upload-storage']);
+  });
+
+  it('a sameAs that is not a known key of that kind is ignored', async () => {
+    const result = await scan([{ kind: 'workflow', subject: 'ci browser install', title: 'No browsers', detail: 'd', sameAs: 'code-api-migrations' }]);
+    expect(result.blockers.map((b) => b.key)).toEqual([blockerKey('workflow', 'ci browser install')]);
+  });
+
+  it('without sameAs, different things with alike words stay apart', async () => {
+    const wfKnown = [
+      { key: 'workflow-ci-playwright-browser-install', kind: 'workflow' as const, subject: 'ci playwright browser install', title: 'Browsers are not installed for Playwright' },
+      { key: 'workflow-ci-postgres-service-container', kind: 'workflow' as const, subject: 'ci postgres service container', title: 'CI has no Postgres service container' },
+      { key: 'code-api-localhost-url', kind: 'code' as const, subject: 'api localhost url', title: 'The web app calls a localhost API' },
+    ];
+    const blockers = [
+      { kind: 'workflow', subject: 'ci vitest browser install', title: 'Browsers are not installed for Vitest', detail: 'd' },
+      { kind: 'workflow', subject: 'ci redis service container', title: 'CI has no Redis service container', detail: 'd' },
+      { kind: 'code', subject: 'websocket localhost url', title: 'The web app opens a localhost websocket', detail: 'd' },
+    ];
+    const result = await runReadinessScan({ ...input, knownBlockers: wfKnown }, { run: fakeRun({ ...output, blockers }), feature, now });
+    expect(result.blockers.map((b) => b.key)).toEqual(blockers.map((b) => blockerKey(b.kind as 'code', b.subject)));
+  });
+
+  it('keys do not depend on the order the model lists blockers in', async () => {
+    const a = { kind: 'code', subject: 'migrations', title: 'Prisma migrations run on deploy too late', detail: 'd' };
+    const b = { kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' };
+    const keys = async (list: unknown[]) => Object.fromEntries((await scan(list)).blockers.map((x) => [x.subject, x.key]));
+    expect(await keys([a, b])).toEqual(await keys([b, a]));
+    expect((await keys([a, b]))['database migrations']).toBe('code-api-migrations');
+  });
+
   it('one known key goes to one blocker only', async () => {
     const result = await scan([
       { kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' },

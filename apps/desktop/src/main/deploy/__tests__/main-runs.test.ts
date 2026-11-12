@@ -418,21 +418,54 @@ describe('watchMainRuns', () => {
 
 describe('no run-fix task while open tasks already work on the failure', () => {
   const open = (over: Record<string, unknown>) => tasks.push({ id: `o${tasks.length}`, specId: `9${tasks.length}-o`, status: 'in_progress', title: 'Other', description: '', ...over } as unknown as Task);
+  /** The readiness scan names the workflow that runs the project's checks */
+  const checksWorkflow = (workflowPath: string) =>
+    writeFileSync(
+      path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'),
+      JSON.stringify({ scannedAt: 'x', blockers: [], services: [], owner: [], workflow: { path: workflowPath } }),
+    );
 
   it.each([
     ['its title names the workflow run', { title: 'Fix the failing CI run on main' }],
     ['its title names the workflow', { title: 'CI workflow misses the Postgres service' }],
     ['its description names the workflow file', { description: 'The job in .github/workflows/ci.yml needs a browser.' }],
     ['its description names the file by its name', { description: 'Add a Playwright install step to ci.yml' }],
-    ['it is a base-fix task', { title: 'Fix the base branch', metadata: { sourceType: 'base-fix' } }],
-  ])('none while an open task covers it (%s); the run is handled', async (_name, over) => {
+  ])('none while an open task covers it (%s); the run is asked about again later', async (_name, over) => {
     open(over);
     expect(await handleMainRun(project(), run(10), makeDeps())).toBe('open');
     expect(created).toHaveLength(0);
+    expect(wasRunHandled(dir, 10)).toBe(false);
+  });
+
+  it('once the covering task is done, the next poll creates the fix task', async () => {
+    open({ title: 'Fix the failing CI run on main' });
+    const deps = makeDeps();
+    expect(await handleMainRun(project(), run(10), deps)).toBe('open');
+    tasks[0].status = 'done' as never;
+    expect(await handleMainRuns(project(), [run(10)], deps)).toEqual({ pending: false });
+    expect(created).toHaveLength(1);
     expect(wasRunHandled(dir, 10)).toBe(true);
   });
 
+  it('a backlog task that names the workflow does not cover it', async () => {
+    open({ description: 'Add a Playwright install step to ci.yml', status: 'backlog' });
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('created');
+  });
+
+  it('an open base-fix task covers the workflow that runs the project\'s checks only', async () => {
+    checksWorkflow('.github/workflows/ci.yml');
+    open({ title: 'Fix the base branch', metadata: { sourceType: 'base-fix' } });
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('open');
+    expect(await handleMainRun(project(), run(11, { name: 'Release', workflowPath: '.github/workflows/release.yml' }), makeDeps())).toBe('created');
+  });
+
+  it('an open base-fix task covers nothing while the checks workflow is unknown', async () => {
+    open({ title: 'Fix the base branch', metadata: { sourceType: 'base-fix' } });
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('created');
+  });
+
   it('a closed task that names the workflow does not count', async () => {
+    checksWorkflow('.github/workflows/ci.yml');
     open({ title: 'Fix the failing CI run on main', status: 'done' });
     open({ title: 'Fix the base branch', metadata: { sourceType: 'base-fix' }, status: 'pr_created' });
     expect(await handleMainRun(project(), run(10), makeDeps())).toBe('created');

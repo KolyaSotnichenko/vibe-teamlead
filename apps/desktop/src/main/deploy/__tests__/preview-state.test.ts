@@ -275,10 +275,32 @@ describe('previewState from Vercel commit statuses (no GitHub Deployments for th
     environment: 'Vercel', state: 'in_progress', createdAt: '2026-11-12T10:00:00Z', logUrl: 'https://vercel.com/acme/app/AbC', ...over,
   });
 
-  it('pending is building, asked for by the branch', async () => {
+  it('pending is building, asked for by the pushed commit', async () => {
     const { d, commitStatuses } = deps({ statuses: [vercel({})] });
     expect(await previewState(project, task(), d)).toEqual({ state: 'building' });
-    expect(commitStatuses).toHaveBeenCalledWith('acme', 'app', 'vibe-teamlead/001-x');
+    expect(commitStatuses).toHaveBeenCalledWith('acme', 'app', 'h1');
+  });
+
+  it('several Vercel contexts: failure wins, then pending, then success', async () => {
+    const ok = vercel({ environment: 'Vercel – web', state: 'success' });
+    const failed = vercel({ environment: 'Vercel – api', state: 'failure', logUrl: 'https://vercel.com/acme/api/X' });
+    const running = vercel({ environment: 'Vercel – docs', state: 'in_progress' });
+    expect((await previewState(project, task(), deps({ statuses: [ok, running, failed] }).d)).state).toBe('failed');
+    invalidatePreview('t1');
+    expect((await previewState(project, task(), deps({ statuses: [ok, running] }).d)).state).toBe('building');
+    invalidatePreview('t1');
+    expect((await previewState(project, task(), deps({ statuses: [ok] }).d)).state).toBe('built');
+  });
+
+  it('links only to vercel.com for the Vercel page and *.vercel.app for the preview', async () => {
+    const other = deps({ statuses: [vercel({ state: 'success', logUrl: 'https://evil.example/x' })] });
+    expect(await previewState(project, task(), other.d)).toEqual({ state: 'building' });
+    invalidatePreview('t1');
+    const badUrl = deps({ statuses: [vercel({ state: 'success', url: 'https://evil.example' })] });
+    expect((await previewState(project, task(), badUrl.d)).state).toBe('built');
+    invalidatePreview('t1');
+    const failed = deps({ statuses: [vercel({ state: 'failure', logUrl: 'https://evil.example/x' })] });
+    expect(await previewState(project, task(), failed.d)).toEqual({ state: 'failed' });
   });
 
   it('failure is failed with the Vercel page as the log', async () => {

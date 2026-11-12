@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ReadinessResult } from '../../../shared/types/deploy';
-import { blockerKey, matchKnownBlocker, readReadiness, sameBlocker, writeReadiness } from '../readiness-store';
+import { assignKnownKeys, blockerKey, readReadiness, sameBlocker, writeReadiness } from '../readiness-store';
 
 const result: ReadinessResult = {
   scannedAt: '2026-11-12T10:00:00.000Z',
@@ -78,10 +78,65 @@ describe('sameBlocker (threshold: half the words of subject and title together)'
     expect(sameBlocker({ kind: 'code', subject: 'api migrations', title: 'Something else entirely' }, { key: 'code-api-migrations', kind: 'code', title: 'Old' })).toBe(true);
   });
 
-  it('matchKnownBlocker picks the best match, skipping the keys already taken', () => {
-    const other = { key: 'code-db-migrations-lock', kind: 'code' as const, subject: 'migration lock', title: 'Migrations race on deploy' };
-    const blocker = { kind: 'code' as const, subject: 'database migrations', title: 'Prisma migrations never run on deploy' };
-    expect(matchKnownBlocker(blocker, [other, migrations], new Set())?.key).toBe('code-api-migrations');
-    expect(matchKnownBlocker(blocker, [other, migrations], new Set(['code-api-migrations']))?.key).not.toBe('code-api-migrations');
+  it('keeps apart blockers whose subjects differ by the thing they name, even with alike titles', () => {
+    const pairs: Array<[string, string, string, string]> = [
+      ['ci playwright browser install', 'Browsers are not installed for Playwright', 'ci vitest browser install', 'Browsers are not installed for Vitest'],
+      ['ci postgres service container', 'CI has no Postgres service container', 'ci redis service container', 'CI has no Redis service container'],
+      ['api localhost url', 'The web app calls a localhost API', 'websocket localhost url', 'The web app opens a localhost websocket'],
+    ];
+    for (const [s1, t1, s2, t2] of pairs) {
+      const kind = s1.startsWith('ci') ? ('workflow' as const) : ('code' as const);
+      expect(sameBlocker({ kind, subject: s1, title: t1 }, { key: blockerKey(kind, s2), kind, subject: s2, title: t2 })).toBe(false);
+    }
+  });
+
+  it('needs a shared word in the subjects beyond the kind word and "ci"', () => {
+    expect(
+      sameBlocker(
+        { kind: 'workflow', subject: 'ci browsers', title: 'Workflow lacks a step on the runner' },
+        { key: 'workflow-ci-database', kind: 'workflow', subject: 'ci database', title: 'Workflow lacks a step on the runner' },
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('assignKnownKeys', () => {
+  const known = [
+    { key: 'code-api-migrations', kind: 'code' as const, subject: 'api migrations', title: 'Prisma migrations never run on deploy' },
+    { key: 'code-transactional-email', kind: 'code' as const, title: 'Only a console email provider exists' },
+    { key: 'code-logo-upload-storage', kind: 'code' as const, subject: 'logo upload storage', title: 'Logo uploads write to local disk' },
+  ];
+
+  it('takes a sameAs that is a known key of the same kind; ignores one that is not', () => {
+    expect(
+      assignKnownKeys(
+        [
+          { kind: 'code', subject: 'email provider', title: 'No real email transport', sameAs: 'code-transactional-email' },
+          { kind: 'code', subject: 'logo storage adapter', title: 'Uploads use the local filesystem', sameAs: 'code-logo-upload-storage' },
+          { kind: 'workflow', subject: 'x', title: 'y', sameAs: 'code-api-migrations' },
+          { kind: 'code', subject: 'z', title: 'w', sameAs: 'code-made-up' },
+        ],
+        known,
+      ),
+    ).toEqual(['code-transactional-email', 'code-logo-upload-storage', undefined, undefined]);
+  });
+
+  it('a subject equal to the key, or to the kind and the key, takes the key', () => {
+    expect(
+      assignKnownKeys(
+        [
+          { kind: 'code', subject: 'code-transactional-email', title: 'x' },
+          { kind: 'code', subject: 'api migrations', title: 'y' },
+        ],
+        known,
+      ),
+    ).toEqual(['code-transactional-email', 'code-api-migrations']);
+  });
+
+  it('gives each known key to the best match whatever the order', () => {
+    const close = { kind: 'code' as const, subject: 'database migrations', title: 'Prisma migrations never run on deploy' };
+    const looser = { kind: 'code' as const, subject: 'migrations', title: 'Prisma migrations run on deploy too late' };
+    expect(assignKnownKeys([looser, close], known)).toEqual([undefined, 'code-api-migrations']);
+    expect(assignKnownKeys([close, looser], known)).toEqual(['code-api-migrations', undefined]);
   });
 });

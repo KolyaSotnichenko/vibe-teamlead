@@ -48,9 +48,12 @@ interface Session {
   workflowFailures: Map<string, { at: number; error: GitHubError }>;
   productionUrl?: string | null;
   productionUrlAt?: number;
-  /** Finished Vercel commit statuses by sha: they don't change, so they are read once */
-  statusCache: Map<string, DeployDeployment[]>;
+  /** Vercel commit statuses by sha: finished ones for good, none at all (a completed run) for a while */
+  statusCache: Map<string, { list: DeployDeployment[]; until: number }>;
 }
+
+/** A completed run's sha without any Vercel status: asked again after this long */
+const NO_STATUS_TTL_MS = 5 * 60_000;
 
 const FINISHED_STATES = new Set(['success', 'failure', 'error']);
 
@@ -145,14 +148,16 @@ export function createRunsPoller(deps: RunsPollerDeps) {
    * integration may report only those). A failed status read leaves the stage out; never throws
    * for it.
    */
-  async function deploymentsOf(s: Session, repo: Repo, sha: string): Promise<DeployDeployment[]> {
+  async function deploymentsOf(s: Session, repo: Repo, run: DeployRun): Promise<DeployDeployment[]> {
+    const sha = run.sha;
     const deployments = await deps.client.deployments(repo.owner, repo.repo, sha);
     if (deployments.length) return deployments;
     const cached = s.statusCache.get(sha);
-    if (cached) return cached;
+    if (cached && now() < cached.until) return cached.list;
     try {
       const statuses = await deps.client.commitStatuses(repo.owner, repo.repo, sha);
-      if (statuses.length && statuses.every((d) => FINISHED_STATES.has(d.state))) s.statusCache.set(sha, statuses);
+      if (statuses.length && statuses.every((d) => FINISHED_STATES.has(d.state))) s.statusCache.set(sha, { list: statuses, until: Infinity });
+      else if (!statuses.length && run.status === 'completed') s.statusCache.set(sha, { list: [], until: now() + NO_STATUS_TTL_MS });
       return statuses;
     } catch {
       return [];
@@ -205,7 +210,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
         const jobs: DeployJob[] = await deps.client.jobs(repo.owner, repo.repo, run.id);
         const wf = await workflowYaml(s, repo, run);
         workflowError = wf.error;
-        const deployments = await deploymentsOf(s, repo, run.sha);
+        const deployments = await deploymentsOf(s, repo, run);
         selected = { runId: run.id, jobs, graph: buildRunGraph(wf.yaml, jobs, deployments) };
       }
       await refreshProductionUrl(s, repo);

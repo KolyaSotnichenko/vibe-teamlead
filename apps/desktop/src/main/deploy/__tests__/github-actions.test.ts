@@ -313,8 +313,8 @@ describe('commitStatuses (Vercel reports through commit statuses when it makes n
     }
   });
 
-  it('keeps only https links: no logUrl for an http or odd target', async () => {
-    for (const target of ['http://vercel.com/x', 'javascript:alert(1)', 'https://user:pw@vercel.com/x', null]) {
+  it('keeps only https links to vercel.com: no logUrl for an http, odd or foreign target', async () => {
+    for (const target of ['http://vercel.com/x', 'javascript:alert(1)', 'https://user:pw@vercel.com/x', 'https://evil.example/x', null]) {
       const { c } = client({ [route]: ok([status({ target_url: target })]) });
       expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].logUrl).toBeUndefined();
     }

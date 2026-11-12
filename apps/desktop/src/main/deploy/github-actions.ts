@@ -154,8 +154,9 @@ function mapCommitStatus(s: Obj): DeployDeployment | null {
   const out: DeployDeployment = { environment: context, state, createdAt: str(s.created_at) || str(s.updated_at) };
   const url = vercelAppUrl(str(s.description));
   if (url) out.url = url;
+  // Vercel's own page for the deployment, nowhere else
   const logUrl = httpsUrl(s.target_url);
-  if (logUrl) out.logUrl = logUrl;
+  if (logUrl && new URL(logUrl).hostname.toLowerCase() === 'vercel.com') out.logUrl = logUrl;
   return out;
 }
 

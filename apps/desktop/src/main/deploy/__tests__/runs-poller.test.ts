@@ -415,6 +415,17 @@ describe('deploy stage from Vercel commit statuses (no GitHub Deployments for th
     expect(deployNodes(pending.emitted.at(-1)!)[0].status).toBe('running');
   });
 
+  it('an empty answer for a completed run is kept for a while; for a running one it is asked again', async () => {
+    const done = setup({ runs: vi.fn(async () => [run(3, 'completed'), run(4, 'in_progress')]), commitStatuses: vi.fn(async () => []) });
+    done.poller.start(project());
+    await done.flush();
+    await done.fire();
+    await done.fire();
+    expect(done.client.commitStatuses).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 70; i++) await done.fire();
+    expect(done.client.commitStatuses).toHaveBeenCalledTimes(2);
+  });
+
   it('a failed status read leaves the graph without a deploy column and is no error', async () => {
     const t = setup({ commitStatuses: vi.fn(async () => { throw { kind: 'unavailable', message: 'x' }; }) });
     t.poller.start(project());

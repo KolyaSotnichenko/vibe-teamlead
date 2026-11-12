@@ -28,7 +28,11 @@ export interface KnownBlocker {
   title: string;
 }
 
-const STOP_WORDS = new Set(['a', 'an', 'the', 'to', 'on', 'of', 'in', 'for', 'is', 'are', 'be', 'and', 'or', 'by', 'with', 'at', 'from', 'it', 'its']);
+/** Filler, negations and the words every blocker of a kind shares: they say nothing about which thing it is */
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'to', 'on', 'of', 'in', 'for', 'is', 'are', 'be', 'and', 'or', 'by', 'with', 'at', 'from', 'it', 'its',
+  'no', 'not', 'never', 'does', 'do', 'has', 'have', 'ci', 'code', 'workflow',
+]);
 
 /** Lower-case words without filler, a plural `s` dropped ("migrations" = "migration"). */
 function words(text: string): Set<string> {
@@ -51,45 +55,90 @@ function overlap(a: Set<string>, b: Set<string>): number {
 }
 
 /**
- * Half the words of subject and title together shared: the same problem reworded ("database
- * migrations" / "api migrations" with the same title share 5 of 7). Two problems sharing one word
- * ("api base url" and "api migrations") stay far below.
+ * The word fallback (the model's `sameAs` comes first): half the words of subject and title
+ * together shared, e.g. "database migrations" / "api migrations" with the same title.
  */
 export const SAME_BLOCKER = 0.5;
 
-const subjectWords = (known: KnownBlocker): Set<string> =>
-  words(known.subject ?? known.key.slice(known.key.startsWith(`${known.kind}-`) ? known.kind.length + 1 : 0));
-
-function similarity(blocker: { kind: BlockerKind; subject: string; title: string }, known: KnownBlocker): number {
-  if (blocker.kind !== known.kind) return 0;
-  const subject = words(blocker.subject);
-  const knownSubject = subjectWords(known);
-  if (sameSet(subject, knownSubject) || blockerKey(blocker.kind, blocker.subject) === known.key) return 1;
-  return overlap(new Set([...subject, ...words(blocker.title)]), new Set([...knownSubject, ...words(known.title)]));
+/** A known blocker's subject: its own, else its key without the kind, in words ("code-transactional-email" → "transactional email") */
+export function knownSubject(known: KnownBlocker): string {
+  if (known.subject) return known.subject;
+  const prefix = `${known.kind}-`;
+  return (known.key.startsWith(prefix) ? known.key.slice(prefix.length) : known.key).replace(/[-_:]+/g, ' ').trim();
 }
 
-/** Whether a blocker of a new scan is a known one under other words (same kind, same subject, or SAME_BLOCKER of the words). Pure. */
-export function sameBlocker(blocker: { kind: BlockerKind; subject: string; title: string }, known: KnownBlocker): boolean {
+interface NewBlocker {
+  kind: BlockerKind;
+  subject: string;
+  title: string;
+}
+
+/** The model named the known blocker itself: its subject, its key, or the kind and its key */
+function namesKnown(blocker: NewBlocker, known: KnownBlocker): boolean {
+  if (blocker.kind !== known.kind) return false;
+  const key = blockerKey(blocker.kind, blocker.subject);
+  return key === known.key || key === blockerKey(known.kind, `${known.kind}-${known.key}`) || sameSet(words(blocker.subject), words(knownSubject(known)));
+}
+
+/** Words one subject has that the other blocker never mentions: the thing that tells them apart (postgres / redis) */
+const differs = (subject: Set<string>, other: Set<string>): boolean => [...subject].some((w) => !other.has(w));
+
+/** Word score of a new blocker against a known one, 0 when the fallback must not merge them. Pure. */
+function similarity(blocker: NewBlocker, known: KnownBlocker): number {
+  if (blocker.kind !== known.kind) return 0;
+  if (namesKnown(blocker, known)) return 1;
+  const subject = words(blocker.subject);
+  const other = words(knownSubject(known));
+  // At least one meaningful word in both subjects
+  if (![...subject].some((w) => other.has(w))) return 0;
+  const title = words(blocker.title);
+  const otherTitle = words(known.title);
+  if (sameSet(title, otherTitle)) return 0.99;
+  const all = new Set([...subject, ...title]);
+  const otherAll = new Set([...other, ...otherTitle]);
+  // Each names something the other never mentions: two things, not one reworded
+  if (differs(subject, otherAll) && differs(other, all)) return 0;
+  return overlap(all, otherAll);
+}
+
+/** Whether a blocker of a new scan is a known one under other words (the fallback when the model gives no sameAs). Pure. */
+export function sameBlocker(blocker: NewBlocker, known: KnownBlocker): boolean {
   return similarity(blocker, known) >= SAME_BLOCKER;
 }
 
-/** The known blocker this one is, the closest when several are; keys in `taken` are already another blocker's. Pure. */
-export function matchKnownBlocker(
-  blocker: { kind: BlockerKind; subject: string; title: string },
-  known: KnownBlocker[],
-  taken: Set<string>,
-): KnownBlocker | undefined {
-  let best: KnownBlocker | undefined;
-  let bestScore = SAME_BLOCKER;
-  for (const candidate of known) {
-    if (taken.has(candidate.key)) continue;
-    const score = similarity(blocker, candidate);
-    if (score >= bestScore && (!best || score > bestScore)) {
-      best = candidate;
-      bestScore = score;
+/**
+ * The known key each new blocker keeps (undefined: a new blocker). In this order: the model's
+ * `sameAs` when it is a known key of the same kind; a subject naming a known blocker; then the
+ * word fallback, best score first over all pairs, so the order of the list doesn't matter. Each
+ * known key goes to one blocker. Pure.
+ */
+export function assignKnownKeys(blockers: Array<NewBlocker & { sameAs?: string }>, known: KnownBlocker[]): Array<string | undefined> {
+  const out: Array<string | undefined> = blockers.map(() => undefined);
+  const taken = new Set<string>();
+  blockers.forEach((b, i) => {
+    const hit = b.sameAs ? known.find((k) => k.key === b.sameAs && k.kind === b.kind) : undefined;
+    if (hit && !taken.has(hit.key)) {
+      out[i] = hit.key;
+      taken.add(hit.key);
     }
+  });
+  const pairs: Array<{ i: number; key: string; score: number }> = [];
+  blockers.forEach((b, i) => {
+    if (out[i]) return;
+    for (const k of known) {
+      if (taken.has(k.key)) continue;
+      const score = similarity(b, k);
+      if (score >= SAME_BLOCKER) pairs.push({ i, key: k.key, score });
+    }
+  });
+  // Best first; ties go to the earlier blocker
+  pairs.sort((a, b) => b.score - a.score || a.i - b.i);
+  for (const p of pairs) {
+    if (out[p.i] || taken.has(p.key)) continue;
+    out[p.i] = p.key;
+    taken.add(p.key);
   }
-  return best;
+  return out;
 }
 
 const isArray = (value: unknown): boolean => Array.isArray(value);

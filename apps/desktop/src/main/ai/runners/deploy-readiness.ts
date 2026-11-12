@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
 import type { ReadinessBlocker, ReadinessOwnerItem, ReadinessResult, ServiceKind } from '../../../shared/types/deploy';
 import { clip, clipLine } from '../../deploy/clip';
-import { blockerKey, type KnownBlocker, matchKnownBlocker } from '../../deploy/readiness-store';
+import { assignKnownKeys, blockerKey, type KnownBlocker, knownSubject } from '../../deploy/readiness-store';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ThinkingLevel } from '../config/types';
 import { loadPrompt } from '../prompts/prompt-loader';
@@ -38,6 +38,8 @@ export const ReadinessScanSchema = z.object({
       subject: z.string(),
       title: z.string(),
       detail: z.string(),
+      /** The key of the known blocker this one is, when it is one */
+      sameAs: z.string().optional(),
     }),
   ),
   services: z.array(
@@ -124,9 +126,9 @@ export function readinessPrompt(input: ScanInput): string {
   const known = (input.knownBlockers ?? []).filter((b) => b.kind !== 'unsupported').slice(0, KNOWN_IN_PROMPT);
   if (known.length) {
     lines.push(
-      'Known blockers (subject: title):',
-      ...known.map((b) => `- ${b.kind} ${clipLine(b.subject ?? b.key, SUBJECT_CHARS)}: ${clipLine(b.title, TITLE_CHARS)}`),
-      'If a problem you find is one of these, reuse its subject exactly.',
+      'Known blockers (key, kind, subject: title):',
+      ...known.map((b) => `- ${b.key} (${b.kind}) subject "${clipLine(knownSubject(b), SUBJECT_CHARS)}": ${clipLine(b.title, TITLE_CHARS)}`),
+      'If a problem you find is one of these, put its key in sameAs and reuse its subject exactly.',
     );
   }
   lines.push('Report what blocks a first deploy, as described in your instructions.');
@@ -153,12 +155,7 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
 
   const owner: ReadinessOwnerItem[] = result.output.owner.map((item) => ({ ...item, message: clip(item.message, OWNER_MESSAGE_CHARS) }));
   const configured = new Set(input.variableNames);
-  const seen = new Set<string>();
-  const known = input.knownBlockers ?? [];
-  // Known keys some blocker names exactly: not for another blocker's looser match
-  const knownKeys = new Set(known.map((b) => b.key));
-  const exact = new Set(result.output.blockers.map((b) => blockerKey(b.kind, clipLine(b.subject, SUBJECT_CHARS))).filter((k) => knownKeys.has(k)));
-  const blockers: ReadinessBlocker[] = [];
+  const candidates: Array<{ kind: ReadinessBlocker['kind']; subject: string; title: string; detail: string; sameAs?: string }> = [];
   for (const raw of result.output.blockers) {
     // Only the owner can set a variable: an owner item with a value field, not a task
     const variables = unconfiguredVariables(raw);
@@ -174,20 +171,24 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
       if (added > 0 || listed) continue;
     }
     // Clipped after parsing: a long answer is cut, it doesn't fail the scan
-    const blocker = {
+    candidates.push({
       kind: raw.kind,
       subject: clipLine(raw.subject, SUBJECT_CHARS),
       title: clipLine(raw.title, TITLE_CHARS),
       detail: clip(raw.detail, DETAIL_CHARS),
-    };
-    // The same problem in other words keeps the key it has (and its task): one known key per blocker
-    const own = blockerKey(blocker.kind, blocker.subject);
-    const taken = new Set([...seen, ...[...exact].filter((k) => k !== own)]);
-    const key = seen.has(own) || exact.has(own) ? own : (matchKnownBlocker(blocker, known, taken)?.key ?? own);
-    if (seen.has(key)) continue;
+      ...(raw.sameAs ? { sameAs: raw.sameAs } : {}),
+    });
+  }
+  // The same problem found again keeps the key it has (and its task)
+  const knownKeys = assignKnownKeys(candidates, input.knownBlockers ?? []);
+  const seen = new Set<string>();
+  const blockers: ReadinessBlocker[] = [];
+  candidates.forEach(({ sameAs: _sameAs, ...blocker }, i) => {
+    const key = knownKeys[i] ?? blockerKey(blocker.kind, blocker.subject);
+    if (seen.has(key)) return;
     seen.add(key);
     blockers.push({ ...blocker, key });
-  }
+  });
 
   return {
     scannedAt: now().toISOString(),

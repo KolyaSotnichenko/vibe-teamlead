@@ -81,16 +81,29 @@ async function failedLink(
  * Vercel's page for the deployment (no URL is guessed).
  */
 async function fromCommitStatus(deps: PreviewDeps, owner: string, repo: string, branch: string, sha: string | undefined): Promise<Core> {
-  const status = (await deps.actions.commitStatuses(owner, repo, branch))[0];
+  // The pushed commit's statuses (the branch head may have moved on); one per Vercel context
+  const statuses = await deps.actions.commitStatuses(owner, repo, sha ?? branch);
+  // Several Vercel projects on one repository: a failure wins, then one still building
+  const status =
+    statuses.find((s) => s.state === 'failure' || s.state === 'error') ??
+    statuses.find((s) => s.state !== 'success') ??
+    statuses[0];
   if (!status) return { state: 'building' };
+  const logUrl = onHost(status.logUrl, (host) => host === 'vercel.com');
   if (status.state === 'failure' || status.state === 'error') {
-    return { state: 'failed', ...(await failedLink(deps, owner, repo, branch, sha, status.logUrl)) };
+    return { state: 'failed', ...(await failedLink(deps, owner, repo, branch, sha, logUrl)) };
   }
   if (status.state === 'success') {
-    if (isHttps(status.url)) return { state: 'ready', url: status.url, builtAt: status.createdAt };
-    if (isHttps(status.logUrl)) return { state: 'built', logUrl: status.logUrl, builtAt: status.createdAt };
+    const url = onHost(status.url, (host) => host.endsWith('.vercel.app'));
+    if (url) return { state: 'ready', url, builtAt: status.createdAt };
+    if (logUrl) return { state: 'built', logUrl, builtAt: status.createdAt };
   }
   return { state: 'building' };
+}
+
+/** An https link on an expected host (Vercel's own pages and preview addresses only), else undefined */
+function onHost(url: string | undefined, allowed: (host: string) => boolean): string | undefined {
+  return isHttps(url) && allowed(new URL(url).hostname.toLowerCase()) ? url : undefined;
 }
 
 async function compute(project: Project, branch: string, deps: PreviewDeps, pushedSha?: string): Promise<Core | null> {

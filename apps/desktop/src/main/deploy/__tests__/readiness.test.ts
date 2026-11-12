@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,9 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Task } from '../../../shared/types';
 import type { ReadinessBlocker, ReadinessResult, ReadinessState } from '../../../shared/types/deploy';
 import { autoSetUpAllowed, createReadiness, type ReadinessDeps } from '../readiness';
-import { readReadiness, writeReadiness } from '../readiness-store';
 import { runReadinessScan, type ScanInput } from '../../ai/runners/deploy-readiness';
-import { readFileSync } from 'node:fs';
+import { readReadiness, writeReadiness } from '../readiness-store';
 
 let dir: string;
 let deploy: Record<string, unknown> | undefined;

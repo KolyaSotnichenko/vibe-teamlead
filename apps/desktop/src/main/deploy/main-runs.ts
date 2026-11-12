@@ -36,18 +36,20 @@ const LAST_RUN_LOOKBACK = 20;
 const FAILED = new Set(['failure', 'timed_out', 'startup_failure']);
 const FAILED_JOB = new Set(['failure', 'timed_out']);
 
-/** Done or handed over as a PR: no longer working on anything */
-const CLOSED_TASK = new Set(['done', 'pr_created']);
+/** Not working on anything: done, handed over as a PR, or still in Planning (nobody has started it) */
+const NOT_WORKING = new Set(['done', 'pr_created', 'backlog']);
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * Whether an open task already works on this run's failure: a base-fix task (it repairs main), or
- * a task whose title or description names the workflow file (path or file name), or the workflow
- * as a workflow ("CI run", "CI workflow", "failing CI"; the bare name is too common a word, as in
- * a workflow named Build). Deterministic, from the task list only.
+ * Whether a started, unfinished task already works on this run's failure: a base-fix task (it
+ * repairs the project's own checks) when this is the workflow that runs those checks (the
+ * readiness scan's workflow path; unknown: no), or a task whose title or description names the
+ * workflow file (path or file name), or the workflow as a workflow ("CI run", "CI workflow",
+ * "failing CI"; the bare name is too common a word, as in a workflow named Build). Backlog tasks
+ * don't count: nobody is on them. Deterministic, from the task list only.
  */
-function coveredByOpenTask(run: DeployRun, tasks: Task[]): boolean {
+function coveredByOpenTask(run: DeployRun, tasks: Task[], checksWorkflow: string | undefined): boolean {
   const file = run.workflowPath.split('/').pop() ?? '';
   const name = run.name.trim();
   const patterns: RegExp[] = [];
@@ -59,8 +61,8 @@ function coveredByOpenTask(run: DeployRun, tasks: Task[]): boolean {
     patterns.push(new RegExp(`\\b(?:failed|failing|broken|red)\\s+${n}(?:$|\\W)`, 'i'));
   }
   return tasks.some((task) => {
-    if (CLOSED_TASK.has(task.status)) return false;
-    if (task.metadata?.sourceType === 'base-fix') return true;
+    if (NOT_WORKING.has(task.status)) return false;
+    if (task.metadata?.sourceType === 'base-fix') return !!checksWorkflow && checksWorkflow === run.workflowPath;
     const text = `${typeof task.title === 'string' ? task.title : ''}\n${typeof task.description === 'string' ? task.description : ''}`;
     return patterns.some((pattern) => pattern.test(text));
   });
@@ -141,11 +143,9 @@ export async function handleMainRun(
       markRunHandled(project.path, run.id);
       return 'seen';
     }
-    // Another open task is on it already (a base fix, or a task about this workflow): no second one
-    if (coveredByOpenTask(run, deps.tasks.getTasks(project.id))) {
-      markRunHandled(project.path, run.id);
-      return 'open';
-    }
+    // Another task is on it already (a base fix, or a task about this workflow): no second one. The
+    // run stays unhandled, so it is asked about again and gets its task once that one closes.
+    if (coveredByOpenTask(run, deps.tasks.getTasks(project.id), readReadiness(project.path)?.workflow?.path)) return 'open';
     const jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
     const sections: string[] = [];
     for (const job of jobs) {
