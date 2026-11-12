@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { previewPushAllowed, worktreePushNewBranches } from '../branch-push';
 import { lastPushResult, pushMainAfterMerge, type PushAfterMergeDeps, type DeployPushResult } from '../push-after-merge';
 
 const project = (deploy?: unknown, mainBranch: string | null = 'main') =>
@@ -26,6 +27,17 @@ describe('pushMainAfterMerge', () => {
     const { d } = deps(push);
     expect(await pushMainAfterMerge({ id: 'p-repo', path: '/proj', settings: { mainBranch: 'main', deploy: { repo: enabled.repo } } } as never, d, 'main')).toEqual({ pushed: true });
     expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'main');
+  });
+
+  it('owner decision 2026-11-12: main IS pushed to the project\'s own public repository; task branches never are', async () => {
+    const push = vi.fn(async () => {});
+    const { d } = deps(push);
+    const publicRepo = { enabled: true, repo: { owner: 'me', repo: 'app', createdByApp: true, public: true } };
+    expect(await pushMainAfterMerge(project(publicRepo), d, 'main')).toEqual({ pushed: true });
+    expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'main');
+    const p = project(publicRepo);
+    expect(previewPushAllowed(p, { metadata: {} } as never)).toEqual({ allowed: false, reason: 'public-repo' });
+    expect(worktreePushNewBranches(p.settings, true)).toBe(false);
   });
 
   it('pushes the main branch once and emits ok', async () => {
