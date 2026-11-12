@@ -24,7 +24,7 @@ import type {
   ReadinessState,
 } from '../../shared/types/deploy';
 import type { AgentManager } from '../agent';
-import { runReadinessScan, type ScanInput } from '../ai/runners/deploy-readiness';
+import { runReadinessScan } from '../ai/runners/deploy-readiness';
 import { addDatabase, addIntegration } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
@@ -32,7 +32,7 @@ import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
 import { type DeployTaskDeps, isDeployTask } from '../deploy/deploy-tasks';
 import { createReadiness } from '../deploy/readiness';
 import { setMainRunDeps, setReadiness } from '../deploy/readiness-instance';
-import { handleMainRuns, type MainRunDeps } from '../deploy/main-runs';
+import { findLastMainRun, handleMainRuns, type MainRunDeps } from '../deploy/main-runs';
 import { lastPushResult, resolveMainBranch } from '../deploy/push-after-merge';
 import { createRunsPoller, fetchJobLog } from '../deploy/runs-poller';
 import { createSetupDeps, saveDeployPatch, setUpDeploy } from '../deploy/setup';
@@ -69,8 +69,6 @@ function variablesDeps(): VariablesDeps {
     listRepoSecretNames: (owner, repo) => listRepoSecretNames(owner, repo),
   };
 }
-
-const READINESS_FAILED_RUNS = 20;
 
 /** HEAD of the project's checkout; undefined on any failure. */
 function headCommit(projectPath: string): Promise<string | undefined> {
@@ -224,27 +222,8 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
 
   const readiness = createReadiness({
     scan: (input) => runReadinessScan(input),
-    lastMainRun: async (project): Promise<ScanInput['lastMainRun']> => {
-      try {
-        const repo = await resolveRepo(project);
-        const main = await resolveMainBranch(project);
-        if (!repo || !main) return undefined;
-        const runs = await client.runs(repo.owner, repo.repo, READINESS_FAILED_RUNS);
-        const run = runs
-          .filter((r) => r.branch === main && r.status === 'completed' && r.conclusion)
-          .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
-        if (!run?.conclusion) return undefined;
-        const jobs = run.conclusion === 'success' ? [] : await client.jobs(repo.owner, repo.repo, run.id);
-        return {
-          conclusion: run.conclusion,
-          runId: run.id,
-          failedJobs: jobs.filter((j) => j.conclusion === 'failure').map((j) => j.name),
-          ...(run.workflowPath ? { workflowPath: run.workflowPath } : {}),
-        };
-      } catch {
-        return undefined;
-      }
-    },
+    // Own pushes to main only (a fork's pull request can carry a branch named main)
+    lastMainRun: (project) => findLastMainRun(project, mainRunDeps),
     variableNames: async (project) => {
       const listed = await listDeployVariables(deploySettings(project), variablesDeps());
       return listed.ok ? listed.variables.map((v) => v.name) : [];

@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
 import type { ReadinessBlocker, ReadinessResult, ServiceKind } from '../../../shared/types/deploy';
+import { clip, clipLine } from '../../deploy/clip';
 import { blockerKey } from '../../deploy/readiness-store';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ThinkingLevel } from '../config/types';
@@ -20,7 +21,8 @@ export interface ScanInput {
   variableNames: string[];
   databaseAdded: boolean;
   servicesAdded: ServiceKind[];
-  lastMainRun?: { conclusion: string; runId: number; failedJobs: string[]; workflowPath?: string };
+  /** `sha`: the commit the run was of (the scan gets the run only when it is the commit scanned) */
+  lastMainRun?: { conclusion: string; runId: number; failedJobs: string[]; workflowPath?: string; sha?: string };
 }
 
 /** The agent's part of a ReadinessResult. Plain objects and enums only (the SDK enforces its JSON Schema). */
@@ -50,6 +52,11 @@ export const ReadinessScanSchema = z.object({
   ),
   workflowPath: z.string().optional(),
 });
+
+const TITLE_CHARS = 120;
+const SUBJECT_CHARS = 120;
+const DETAIL_CHARS = 2000;
+const OWNER_MESSAGE_CHARS = 500;
 
 export interface ReadinessScanDeps {
   run?: typeof runClaudeTask;
@@ -100,7 +107,14 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
 
   const seen = new Set<string>();
   const blockers: ReadinessBlocker[] = [];
-  for (const blocker of result.output.blockers) {
+  for (const raw of result.output.blockers) {
+    // Clipped after parsing: a long answer is cut, it doesn't fail the scan
+    const blocker = {
+      kind: raw.kind,
+      subject: clipLine(raw.subject, SUBJECT_CHARS),
+      title: clipLine(raw.title, TITLE_CHARS),
+      detail: clip(raw.detail, DETAIL_CHARS),
+    };
     const key = blockerKey(blocker.kind, blocker.subject);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -112,7 +126,7 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
     commit: input.commit,
     blockers,
     services: result.output.services,
-    owner: result.output.owner,
+    owner: result.output.owner.map((item) => ({ ...item, message: clip(item.message, OWNER_MESSAGE_CHARS) })),
     workflow: {
       path: result.output.workflowPath,
       lastMainRun: input.lastMainRun ? { conclusion: input.lastMainRun.conclusion, runId: input.lastMainRun.runId } : undefined,

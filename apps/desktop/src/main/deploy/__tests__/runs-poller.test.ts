@@ -346,8 +346,15 @@ describe('fetchJobLog', () => {
 });
 
 describe('createRunsPoller main runs', () => {
-  it('passes completed runs on main to handleMainRuns and survives its errors', async () => {
-    const runs = [run(4, 'in_progress'), { ...run(3), branch: 'feat' }, run(2), run(1)];
+  it('passes own push runs on main (also unfinished ones) to handleMainRuns and survives its errors', async () => {
+    const own = (r: DeployRun): DeployRun => ({ ...r, headRepo: 'o/r' });
+    const runs = [
+      own(run(4, 'in_progress')),
+      { ...own(run(3)), branch: 'feat' },
+      { ...own(run(5)), event: 'pull_request', headRepo: 'evil/r' },
+      own(run(2)),
+      own(run(1)),
+    ];
     const client = { runs: vi.fn(async () => runs), jobs: vi.fn(async () => []), workflowFile: vi.fn(async () => null), deployments: vi.fn(async () => []), productionUrl: vi.fn(async () => null) };
     const seen: number[][] = [];
     const poller = createRunsPoller({
@@ -361,6 +368,6 @@ describe('createRunsPoller main runs', () => {
     });
     poller.start(project());
     for (let i = 0; i < 40; i++) await Promise.resolve();
-    expect(seen).toEqual([[2, 1]]);
+    expect(seen).toEqual([[4, 2, 1]]);
   });
 });

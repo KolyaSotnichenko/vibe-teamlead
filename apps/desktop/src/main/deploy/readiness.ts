@@ -78,7 +78,8 @@ export function createReadiness(deps: ReadinessDeps) {
         variableNames,
         databaseAdded: !!deploy?.database,
         servicesAdded: Object.keys(deploy?.services ?? {}) as ServiceKind[],
-        ...(lastMainRun ? { lastMainRun } : {}),
+        // Only a run of the commit being scanned says something about it (after a merge, the last run is of the commit before)
+        ...(lastMainRun && commit && lastMainRun.sha === commit ? { lastMainRun } : {}),
       });
       writeReadiness(project.path, result);
     } catch {

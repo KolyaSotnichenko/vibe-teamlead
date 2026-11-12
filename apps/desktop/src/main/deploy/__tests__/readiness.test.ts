@@ -102,6 +102,18 @@ describe('triggers', () => {
     expect(scan).toHaveBeenCalledWith(expect.objectContaining({ projectPath: dir, commit: 'abc', variableNames: ['A'], databaseAdded: false, servicesAdded: [] }));
   });
 
+  it('passes the last run on main only when it ran on the commit being scanned', async () => {
+    const last = { conclusion: 'failure', runId: 7, failedJobs: ['test'], sha: 'abc' };
+    await make({ lastMainRun: async () => last }).scan(project(), 'check-again');
+    expect(scan.mock.calls[0][0].lastMainRun).toEqual(last);
+    // After a merge HEAD moved on: the run is of the commit before it
+    await make({ lastMainRun: async () => ({ ...last, sha: 'old' }) }).scan(project(), 'check-again');
+    expect(scan.mock.calls[1][0]).not.toHaveProperty('lastMainRun');
+    // HEAD unknown: the run can't be matched
+    await make({ lastMainRun: async () => last, headCommit: async () => undefined }).scan(project(), 'check-again');
+    expect(scan.mock.calls[2][0]).not.toHaveProperty('lastMainRun');
+  });
+
   it('passes the recorded services so the scan knows what is added', async () => {
     const p = { ...project(), settings: { deploy: { enabled: true, services: { redis: { addedAt: 't' } } } } } as unknown as Project;
     await make().scan(p, 'check-again');

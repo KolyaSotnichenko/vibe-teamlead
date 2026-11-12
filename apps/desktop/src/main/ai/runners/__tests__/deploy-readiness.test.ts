@@ -70,6 +70,22 @@ describe('runReadinessScan', () => {
     expect(result.owner[0].variable).toBe('SENDGRID_KEY');
   });
 
+  it('clips long answers instead of failing: title 120, detail 2000, subject 120 before keying, owner message 500', async () => {
+    const long = {
+      ...output,
+      blockers: [{ kind: 'code', subject: `s${'u'.repeat(300)}`, title: `t\n${'x'.repeat(300)}`, detail: 'd'.repeat(5000) }],
+      owner: [{ kind: 'other', message: 'm'.repeat(2000) }],
+    };
+    const result = await runReadinessScan(input, { run: fakeRun(long), feature, now });
+    const [b] = result.blockers;
+    expect(b.title.length).toBeLessThanOrEqual(120);
+    expect(b.title).not.toContain('\n');
+    expect(b.detail.length).toBeLessThanOrEqual(2000);
+    expect(b.subject.length).toBeLessThanOrEqual(120);
+    expect(b.key).toBe(blockerKey('code', b.subject));
+    expect(result.owner[0].message.length).toBeLessThanOrEqual(500);
+  });
+
   it('throws when the model returns no output', async () => {
     await expect(runReadinessScan(input, { run: fakeRun(null), feature, now })).rejects.toThrow();
   });

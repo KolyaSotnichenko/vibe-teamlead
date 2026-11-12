@@ -6,6 +6,7 @@
  */
 import type { Project } from '../../shared/types';
 import type { DeployRun } from '../../shared/types/deploy';
+import { clipLine } from './clip';
 import { createRunFixTask, type DeployTaskDeps, markRunHandled, wasRunHandled } from './deploy-tasks';
 import type { ActionsClient } from './github-actions';
 import { resolveMainBranch } from './push-after-merge';
@@ -28,7 +29,10 @@ export interface MainRunDeps {
 export const WATCH_INTERVAL_MS = 60_000;
 export const WATCH_LIMIT_MS = 60 * 60_000;
 const LOG_TAIL_LINES = 200;
+/** Job and run names in headings and the title: one line, capped */
+const NAME_CHARS = 100;
 const RUNS_PER_POLL = 30;
+const LAST_RUN_LOOKBACK = 20;
 const FAILED = new Set(['failure', 'timed_out', 'startup_failure']);
 const FAILED_JOB = new Set(['failure', 'timed_out']);
 
@@ -44,8 +48,40 @@ const defuse = (text: string): string => text.replace(/`{3,}/g, "'''");
 const sameRepo = (a: string | undefined, repo: { owner: string; repo: string }): boolean =>
   !!a && a.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase();
 
-/** Only a push of the project's own repository counts: a fork's pull request can carry a head branch named main. */
-const isOwnPush = (run: DeployRun, repo: { owner: string; repo: string }): boolean => run.event === 'push' && sameRepo(run.headRepo, repo);
+/**
+ * Only a push of the project's own repository to main counts: a fork's pull request can carry a
+ * head branch named main. Used by the main-run handler, the poller and the readiness scan.
+ */
+export function isOwnPushOnMain(run: DeployRun, repo: { owner: string; repo: string }, main: string | undefined): boolean {
+  return !!main && run.branch === main && run.event === 'push' && sameRepo(run.headRepo, repo);
+}
+
+/** The newest completed own push run on main, for the readiness scan; undefined when none or on any failure. */
+export async function findLastMainRun(
+  project: Project,
+  deps: Pick<MainRunDeps, 'client' | 'resolveRepo' | 'branches'>,
+): Promise<{ conclusion: string; runId: number; sha: string; failedJobs: string[]; workflowPath?: string } | undefined> {
+  try {
+    const repo = await deps.resolveRepo(project);
+    const main = await resolveMainBranch(project, deps.branches);
+    if (!repo || !main) return undefined;
+    const runs = await deps.client.runs(repo.owner, repo.repo, LAST_RUN_LOOKBACK, main);
+    const run = runs
+      .filter((r) => isOwnPushOnMain(r, repo, main) && r.status === 'completed' && r.conclusion)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id - a.id)[0];
+    if (!run?.conclusion) return undefined;
+    const jobs = run.conclusion === 'success' ? [] : await deps.client.jobs(repo.owner, repo.repo, run.id);
+    return {
+      conclusion: run.conclusion,
+      runId: run.id,
+      sha: run.sha,
+      failedJobs: jobs.filter((j) => j.conclusion === 'failure').map((j) => clipLine(j.name, NAME_CHARS)),
+      ...(run.workflowPath ? { workflowPath: run.workflowPath } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 export async function handleMainRun(
   project: Project,
@@ -63,7 +99,7 @@ export async function handleMainRun(
     }
     const repo = await deps.resolveRepo(project);
     if (!repo) return 'seen';
-    if (!isOwnPush(run, repo)) {
+    if (!isOwnPushOnMain(run, repo, await resolveMainBranch(project, deps.branches))) {
       markRunHandled(project.path, run.id);
       return 'seen';
     }
@@ -77,12 +113,12 @@ export async function handleMainRun(
       } catch {
         // keep the placeholder
       }
-      sections.push(`### ${job.name}\n\n\`\`\`\n${defuse(tail)}\n\`\`\``);
+      sections.push(`### ${clipLine(job.name, NAME_CHARS)}\n\n\`\`\`\n${defuse(tail)}\n\`\`\``);
     }
-    const name = run.name || run.workflowPath;
+    const name = clipLine(run.name || run.workflowPath, NAME_CHARS);
     const description = [
       `The ${name} run on main failed.`,
-      jobs.length ? `Failed jobs: ${jobs.map((j) => j.name).join(', ')}` : 'GitHub reports no failed job; open the run for details.',
+      jobs.length ? `Failed jobs: ${jobs.map((j) => clipLine(j.name, NAME_CHARS)).join(', ')}` : 'GitHub reports no failed job; open the run for details.',
       ...sections,
       `Run: ${run.htmlUrl}`,
       "Fix whichever is wrong, the project or the workflow; don't skip or weaken checks.",
@@ -99,9 +135,12 @@ export async function handleMainRun(
   }
 }
 
+const newer = (a: DeployRun, b: DeployRun): boolean => a.startedAt > b.startedAt || (a.startedAt === b.startedAt && a.id > b.id);
+
 /**
- * Completed runs on main: per workflow only the newest own push run is acted on; the older ones
- * (already followed by a newer run) are marked handled without a task. Never throws.
+ * Runs on main: per workflow only the newest completed own push run is acted on; the older ones
+ * (already followed by a newer run) are marked handled without a task. A workflow with a newer
+ * own push run still going waits for it. Never throws.
  */
 export async function handleMainRuns(project: Project, runs: DeployRun[], deps: MainRunDeps): Promise<void> {
   if (!active(project)) return;
@@ -112,22 +151,34 @@ export async function handleMainRuns(project: Project, runs: DeployRun[], deps: 
     return;
   }
   if (!repo) return;
+  const main = await resolveMainBranch(project, deps.branches);
   const newest = new Map<string, DeployRun>();
   const rest: DeployRun[] = [];
+  // Per workflow, the newest own push run that is not completed yet: an older failure waits for it
+  const unfinished = new Map<string, DeployRun>();
+  for (const r of runs) {
+    if (r.status === 'completed' || !isOwnPushOnMain(r, repo, main)) continue;
+    const best = unfinished.get(r.workflowPath);
+    if (!best || newer(r, best)) unfinished.set(r.workflowPath, r);
+  }
   for (const r of runs.filter((x) => x.status === 'completed')) {
-    if (!isOwnPush(r, repo)) {
+    if (!isOwnPushOnMain(r, repo, main)) {
       rest.push(r); // handleMainRun marks it handled
       continue;
     }
     const best = newest.get(r.workflowPath);
-    if (!best || r.startedAt > best.startedAt || (r.startedAt === best.startedAt && r.id > best.id)) {
+    if (!best || newer(r, best)) {
       if (best) markRunHandled(project.path, best.id);
       newest.set(r.workflowPath, r);
     } else {
       markRunHandled(project.path, r.id);
     }
   }
-  for (const r of [...rest, ...newest.values()]) {
+  const settled = [...newest.values()].filter((r) => {
+    const pending = unfinished.get(r.workflowPath);
+    return !pending || !newer(pending, r);
+  });
+  for (const r of [...rest, ...settled]) {
     try {
       await handleMainRun(project, r, deps);
     } catch {

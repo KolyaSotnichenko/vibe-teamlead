@@ -12,6 +12,7 @@ import type {
   GitHubError,
 } from '../../shared/types/deploy';
 import type { ActionsClient } from './github-actions';
+import { isOwnPushOnMain } from './main-runs';
 import { buildRunGraph } from './run-graph';
 
 type Repo = { owner: string; repo: string };
@@ -24,7 +25,7 @@ export interface RunsPollerDeps {
   setTimer?: (fn: () => void, ms: number) => Timer;
   clearTimer?: (timer: Timer) => void;
   emit: (state: DeployRunsState) => void;
-  /** Gets the completed runs on the project's main branch (it picks the newest per workflow); may see the same runs again. Errors are swallowed. */
+  /** Gets the own push runs on the project's main branch, unfinished ones too (it picks the newest per workflow); may see the same runs again. Errors are swallowed. */
   handleMainRuns?: (project: Project, runs: DeployRun[]) => Promise<unknown>;
   /** The branch whose runs go to handleMainRun */
   mainBranch?: (project: Project) => Promise<string | undefined>;
@@ -146,13 +147,14 @@ export function createRunsPoller(deps: RunsPollerDeps) {
   }
 
   /** Completed runs on main to the main-run handler; never throws. */
-  async function handleMainRuns(project: Project, runs: DeployRun[]): Promise<void> {
+  async function handleMainRuns(project: Project, repo: Repo, runs: DeployRun[]): Promise<void> {
     if (!deps.handleMainRuns) return;
     try {
       const main = await deps.mainBranch?.(project);
       if (!main) return;
-      const completed = runs.filter((r) => r.branch === main && r.status === 'completed');
-      if (completed.length) await deps.handleMainRuns(project, completed);
+      // Unfinished runs too: a failure waits while a newer run of its workflow is going
+      const own = runs.filter((r) => isOwnPushOnMain(r, repo, main));
+      if (own.some((r) => r.status === 'completed')) await deps.handleMainRuns(project, own);
     } catch {
       // informational
     }
@@ -172,7 +174,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
       const repo = s.repo as Repo;
       runs = await deps.client.runs(repo.owner, repo.repo);
       if (!current()) return;
-      void handleMainRuns(s.project, runs);
+      void handleMainRuns(s.project, repo, runs);
       const run = runs.find((r) => r.id === s.selectedRunId) ?? runs[0];
       s.selectedRunId = run?.id;
       if (!run) selected = undefined;

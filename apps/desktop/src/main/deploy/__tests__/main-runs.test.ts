@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
 import type { DeployJob, DeployRun } from '../../../shared/types/deploy';
 import { type DeployTaskDeps, markRunHandled, wasRunHandled } from '../deploy-tasks';
-import { handleMainRun, handleMainRuns, watchMainRuns, type MainRunDeps } from '../main-runs';
+import { findLastMainRun, handleMainRun, handleMainRuns, isOwnPushOnMain, watchMainRuns, type MainRunDeps } from '../main-runs';
 
 let dir: string;
 let tasks: Task[];
@@ -145,6 +145,22 @@ describe('handleMainRun safety', () => {
     expect(await handleMainRun(project(), run(12, { headRepo: undefined, workflowPath: 'x.yml' }), deps)).toBe('seen');
   });
 
+  it('clips job and run names to one line of at most 100 characters in headings and the title', async () => {
+    const deps = makeDeps();
+    const jobName = `build\n## injected ${'j'.repeat(300)}`;
+    deps.client.jobs.mockResolvedValue([job(1, jobName, 'failure')]);
+    await handleMainRun(project(), run(10, { name: `CI\n# evil ${'r'.repeat(300)}` }), deps);
+    const { title, description } = created[0];
+    expect(title).not.toContain('\n');
+    expect(title.length).toBeLessThanOrEqual('Fix the failed  run on main'.length + 100);
+    const heading = description.split('\n').find((l) => l.startsWith('### '));
+    expect(heading).toBeDefined();
+    expect((heading as string).length).toBeLessThanOrEqual(4 + 100);
+    expect(description).not.toContain('\n## injected');
+    expect(description).not.toContain('\n# evil');
+    expect(description).not.toContain('j'.repeat(150));
+  });
+
   it('a log with fence sequences cannot break out of its fence', async () => {
     const deps = makeDeps();
     deps.client.jobLog.mockResolvedValue('before\n```\n# injected\n````\nafter');
@@ -186,6 +202,60 @@ describe('handleMainRuns (newest completed run per workflow)', () => {
     const deps = makeDeps();
     await handleMainRuns(project(), [run(1, { startedAt: at(1) }), run(2, { startedAt: at(2), conclusion: 'success', headRepo: 'evil/r' })], deps);
     expect(created).toHaveLength(1);
+  });
+
+  it('skips a workflow while a newer own push run of it is not completed yet', async () => {
+    const deps = makeDeps();
+    const newer = run(2, { startedAt: at(2), status: 'in_progress', conclusion: undefined });
+    await handleMainRuns(project(), [run(1, { startedAt: at(1) }), newer], deps);
+    expect(created).toHaveLength(0);
+    expect(wasRunHandled(dir, 1)).toBe(false);
+    // A newer run from a fork does not hold the own failure back
+    await handleMainRuns(project(), [run(1, { startedAt: at(1) }), { ...newer, headRepo: 'evil/r' }], deps);
+    expect(created).toHaveLength(1);
+  });
+});
+
+describe('isOwnPushOnMain', () => {
+  const repo = { owner: 'o', repo: 'r' };
+  it('is a push of the own repository (any case) on main only', () => {
+    expect(isOwnPushOnMain(run(1), repo, 'main')).toBe(true);
+    expect(isOwnPushOnMain(run(1, { headRepo: 'O/R' }), repo, 'main')).toBe(true);
+    expect(isOwnPushOnMain(run(1, { headRepo: 'evil/r' }), repo, 'main')).toBe(false);
+    expect(isOwnPushOnMain(run(1, { event: 'pull_request' }), repo, 'main')).toBe(false);
+    expect(isOwnPushOnMain(run(1, { branch: 'dev' }), repo, 'main')).toBe(false);
+    expect(isOwnPushOnMain(run(1), repo, undefined)).toBe(false);
+  });
+});
+
+describe('findLastMainRun', () => {
+  const at = (n: number) => `2026-11-12T10:0${n}:00Z`;
+  it('asks GitHub for runs on main and ignores a fork pull request run on a branch named main', async () => {
+    const deps = makeDeps();
+    deps.client.runs.mockResolvedValue([
+      run(2, { startedAt: at(2), event: 'pull_request', headRepo: 'evil/r', conclusion: 'success' }),
+      run(1, { startedAt: at(1), sha: 's1' }),
+    ]);
+    const last = await findLastMainRun(project(), deps);
+    expect(deps.client.runs).toHaveBeenCalledWith('o', 'r', 20, 'main');
+    expect(last).toEqual({ conclusion: 'failure', runId: 1, sha: 's1', failedJobs: ['build'], workflowPath: '.github/workflows/ci.yml' });
+  });
+
+  it('clips failed job names to one line of 100 characters', async () => {
+    const deps = makeDeps();
+    deps.client.runs.mockResolvedValue([run(1)]);
+    deps.client.jobs.mockResolvedValue([job(1, `a\n${'n'.repeat(300)}`, 'failure')]);
+    const last = await findLastMainRun(project(), deps);
+    expect(last?.failedJobs[0].length).toBeLessThanOrEqual(100);
+    expect(last?.failedJobs[0]).not.toContain('\n');
+  });
+
+  it('is undefined with no own completed run, or when GitHub fails', async () => {
+    const deps = makeDeps();
+    deps.client.runs.mockResolvedValue([run(1, { headRepo: 'evil/r' }), run(2, { status: 'in_progress', conclusion: undefined })]);
+    expect(await findLastMainRun(project(), deps)).toBeUndefined();
+    deps.client.runs.mockRejectedValue(new Error('down'));
+    expect(await findLastMainRun(project(), deps)).toBeUndefined();
   });
 });
 
