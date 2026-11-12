@@ -83,6 +83,8 @@ function mapRun(r: Obj): DeployRun {
   };
   const conclusion = optStr(r.conclusion);
   if (conclusion) run.conclusion = conclusion;
+  const headRepo = optStr((r.head_repository as Obj | null | undefined)?.full_name);
+  if (headRepo) run.headRepo = headRepo;
   return run;
 }
 

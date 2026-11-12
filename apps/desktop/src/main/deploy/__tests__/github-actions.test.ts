@@ -37,6 +37,14 @@ function client(routes: Record<string, unknown>) {
 }
 
 describe('runs', () => {
+  it('maps the head repository of a run', async () => {
+    const body = { workflow_runs: [{ id: 1, head_repository: { full_name: 'fork/app' } }, { id: 2 }] };
+    const { c } = client({ '/repos/acme/app/actions/runs?per_page=20': ok(body) });
+    const runs = await c.runs('acme', 'app');
+    expect(runs[0].headRepo).toBe('fork/app');
+    expect(runs[1].headRepo).toBeUndefined();
+  });
+
   it('can filter by branch', async () => {
     const { c, calls } = client({ '/repos/acme/app/actions/runs?per_page=30&branch=feat%2Fx': ok({ workflow_runs: [] }) });
     await c.runs('acme', 'app', 30, 'feat/x');

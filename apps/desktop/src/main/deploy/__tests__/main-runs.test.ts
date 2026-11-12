@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
 import type { DeployJob, DeployRun } from '../../../shared/types/deploy';
 import { type DeployTaskDeps, markRunHandled, wasRunHandled } from '../deploy-tasks';
-import { handleMainRun, watchMainRuns, type MainRunDeps } from '../main-runs';
+import { handleMainRun, handleMainRuns, watchMainRuns, type MainRunDeps } from '../main-runs';
 
 let dir: string;
 let tasks: Task[];
@@ -18,7 +18,7 @@ const project = (over: Record<string, unknown> = {}) =>
   ({ id: `p${seq}`, path: dir, settings: { mainBranch: 'main', deploy: { enabled: true } }, ...over }) as unknown as Project;
 
 const run = (id: number, over: Partial<DeployRun> = {}): DeployRun => ({
-  id, number: id, name: 'CI', title: 't', branch: 'main', sha: 'abc', event: 'push', status: 'completed', conclusion: 'failure',
+  id, number: id, name: 'CI', title: 't', branch: 'main', sha: 'abc', event: 'push', headRepo: 'o/r', status: 'completed', conclusion: 'failure',
   startedAt: '', updatedAt: '', htmlUrl: `https://github.com/o/r/actions/runs/${id}`, workflowPath: '.github/workflows/ci.yml', ...over,
 });
 const job = (id: number, name: string, conclusion: string): DeployJob => ({ id, name, status: 'completed', conclusion, steps: [] });
@@ -128,6 +128,67 @@ describe('handleMainRun', () => {
   });
 });
 
+describe('handleMainRun safety', () => {
+  it('ignores a pull request run on a branch named main, and marks it handled', async () => {
+    const deps = makeDeps();
+    expect(await handleMainRun(project(), run(10, { event: 'pull_request' }), deps)).toBe('seen');
+    expect(created).toHaveLength(0);
+    expect(wasRunHandled(dir, 10)).toBe(true);
+    expect(deps.client.jobLog).not.toHaveBeenCalled();
+  });
+
+  it('ignores a push from another head repository (case-insensitive match for the own one)', async () => {
+    const deps = makeDeps();
+    expect(await handleMainRun(project(), run(10, { headRepo: 'evil/r' }), deps)).toBe('seen');
+    expect(created).toHaveLength(0);
+    expect(await handleMainRun(project(), run(11, { headRepo: 'O/R' }), deps)).toBe('created');
+    expect(await handleMainRun(project(), run(12, { headRepo: undefined, workflowPath: 'x.yml' }), deps)).toBe('seen');
+  });
+
+  it('a log with fence sequences cannot break out of its fence', async () => {
+    const deps = makeDeps();
+    deps.client.jobLog.mockResolvedValue('before\n```\n# injected\n````\nafter');
+    await handleMainRun(project(), run(10), deps);
+    const fences = created[0].description.split('\n').filter((l) => l.startsWith('```'));
+    expect(fences).toHaveLength(2);
+    expect(created[0].description).toContain('injected');
+  });
+});
+
+describe('handleMainRuns (newest completed run per workflow)', () => {
+  const at = (n: number) => `2026-11-12T10:0${n}:00Z`;
+  it('an old failure already followed by a success makes no task; both are marked handled', async () => {
+    const deps = makeDeps();
+    await handleMainRuns(project(), [run(1, { startedAt: at(1) }), run(2, { startedAt: at(2), conclusion: 'success' })], deps);
+    expect(created).toHaveLength(0);
+    expect(wasRunHandled(dir, 1)).toBe(true);
+    expect(wasRunHandled(dir, 2)).toBe(true);
+  });
+
+  it('a failure that is the newest makes one task, whatever the order of the list', async () => {
+    const deps = makeDeps();
+    await handleMainRuns(project(), [run(2, { startedAt: at(2) }), run(1, { startedAt: at(1), conclusion: 'success' })], deps);
+    expect(created).toHaveLength(1);
+    expect(wasRunHandled(dir, 1)).toBe(true);
+  });
+
+  it('two workflows each newest-failed make two tasks', async () => {
+    const deps = makeDeps();
+    await handleMainRuns(
+      project(),
+      [run(1, { startedAt: at(1) }), run(2, { name: 'Lint', workflowPath: 'l.yml', startedAt: at(2) })],
+      deps,
+    );
+    expect(created).toHaveLength(2);
+  });
+
+  it('a fork run does not shadow the own newest run', async () => {
+    const deps = makeDeps();
+    await handleMainRuns(project(), [run(1, { startedAt: at(1) }), run(2, { startedAt: at(2), conclusion: 'success', headRepo: 'evil/r' })], deps);
+    expect(created).toHaveLength(1);
+  });
+});
+
 describe('watchMainRuns', () => {
   function timers() {
     let now = 0;
@@ -165,13 +226,13 @@ describe('watchMainRuns', () => {
     expect(t.pending).toHaveLength(0);
   });
 
-  it('only follows runs of the pushed sha', async () => {
+  it('only waits for runs of the pushed sha (a newest failure of another sha is still handled)', async () => {
     const t = timers();
     const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
     deps.client.runs.mockResolvedValue([run(10, { sha: 'other' })]);
     watchMainRuns(project(), 'abc', deps);
     await flush();
-    expect(created).toHaveLength(0);
+    expect(created).toHaveLength(1);
     expect(t.pending).toHaveLength(1);
   });
 

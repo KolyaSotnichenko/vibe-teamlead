@@ -346,10 +346,10 @@ describe('fetchJobLog', () => {
 });
 
 describe('createRunsPoller main runs', () => {
-  it('passes completed runs on main to handleMainRun, oldest first, and survives its errors', async () => {
+  it('passes completed runs on main to handleMainRuns and survives its errors', async () => {
     const runs = [run(4, 'in_progress'), { ...run(3), branch: 'feat' }, run(2), run(1)];
     const client = { runs: vi.fn(async () => runs), jobs: vi.fn(async () => []), workflowFile: vi.fn(async () => null), deployments: vi.fn(async () => []), productionUrl: vi.fn(async () => null) };
-    const seen: number[] = [];
+    const seen: number[][] = [];
     const poller = createRunsPoller({
       client: client as never,
       resolveRepo: async () => ({ owner: 'o', repo: 'r' }),
@@ -357,10 +357,10 @@ describe('createRunsPoller main runs', () => {
       clearTimer: (() => undefined) as never,
       emit: () => undefined,
       mainBranch: async () => 'main',
-      handleMainRun: async (_p, r) => { seen.push(r.id); if (r.id === 1) throw new Error('boom'); },
+      handleMainRuns: async (_p, rs) => { seen.push(rs.map((r) => r.id)); throw new Error('boom'); },
     });
     poller.start(project());
     for (let i = 0; i < 40; i++) await Promise.resolve();
-    expect(seen).toEqual([1, 2]);
+    expect(seen).toEqual([[2, 1]]);
   });
 });

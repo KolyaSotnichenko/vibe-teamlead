@@ -24,8 +24,8 @@ export interface RunsPollerDeps {
   setTimer?: (fn: () => void, ms: number) => Timer;
   clearTimer?: (timer: Timer) => void;
   emit: (state: DeployRunsState) => void;
-  /** Gets every completed run on the project's main branch; may be called again with a run it has seen. Errors are swallowed. */
-  handleMainRun?: (project: Project, run: DeployRun) => Promise<unknown>;
+  /** Gets the completed runs on the project's main branch (it picks the newest per workflow); may see the same runs again. Errors are swallowed. */
+  handleMainRuns?: (project: Project, runs: DeployRun[]) => Promise<unknown>;
   /** The branch whose runs go to handleMainRun */
   mainBranch?: (project: Project) => Promise<string | undefined>;
 }
@@ -145,20 +145,14 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     }
   }
 
-  /** Completed runs on main, oldest first, to the main-run handler; never throws. */
+  /** Completed runs on main to the main-run handler; never throws. */
   async function handleMainRuns(project: Project, runs: DeployRun[]): Promise<void> {
-    if (!deps.handleMainRun) return;
+    if (!deps.handleMainRuns) return;
     try {
       const main = await deps.mainBranch?.(project);
       if (!main) return;
-      const completed = runs.filter((r) => r.branch === main && r.status === 'completed').reverse();
-      for (const r of completed) {
-        try {
-          await deps.handleMainRun(project, r);
-        } catch {
-          // retried on the next poll
-        }
-      }
+      const completed = runs.filter((r) => r.branch === main && r.status === 'completed');
+      if (completed.length) await deps.handleMainRuns(project, completed);
     } catch {
       // informational
     }

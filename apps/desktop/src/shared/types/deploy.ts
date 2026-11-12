@@ -31,6 +31,8 @@ export interface DeployRun {
   updatedAt: string;
   htmlUrl: string;
   workflowPath: string;
+  /** `owner/repo` the run's commit came from; differs from the repository for a fork's pull request */
+  headRepo?: string;
 }
 
 export interface DeployStep {

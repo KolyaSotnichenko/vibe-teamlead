@@ -31,7 +31,7 @@ import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
 import { type DeployTaskDeps, isDeployTask } from '../deploy/deploy-tasks';
 import { createReadiness } from '../deploy/readiness';
 import { setMainRunDeps, setReadiness } from '../deploy/readiness-instance';
-import { handleMainRun, type MainRunDeps } from '../deploy/main-runs';
+import { handleMainRuns, type MainRunDeps } from '../deploy/main-runs';
 import { lastPushResult, resolveMainBranch } from '../deploy/push-after-merge';
 import { createRunsPoller, fetchJobLog } from '../deploy/runs-poller';
 import { createSetupDeps, saveDeployPatch, setUpDeploy } from '../deploy/setup';
@@ -108,7 +108,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     resolveRepo,
     emit: (state) => safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_RUNS_UPDATE, state),
     mainBranch: (project) => resolveMainBranch(project),
-    handleMainRun: (project, run) => handleMainRun(projectStore.getProject(project.id) ?? project, run, mainRunDeps),
+    handleMainRuns: (project, runs) => handleMainRuns(projectStore.getProject(project.id) ?? project, runs, mainRunDeps),
   });
 
   // The renderer cannot stop polling when it reloads or goes away, so main does.

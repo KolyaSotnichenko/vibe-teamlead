@@ -38,6 +38,15 @@ const inFlight = new Set<string>();
 /** Only projects with Deploy on and a saved readiness result take part. */
 const active = (project: Project): boolean => !!project.settings?.deploy?.enabled && readReadiness(project.path) !== null;
 
+/** A log tail that cannot close the Markdown fence it is put in. */
+const defuse = (text: string): string => text.replace(/`{3,}/g, "'''");
+
+const sameRepo = (a: string | undefined, repo: { owner: string; repo: string }): boolean =>
+  !!a && a.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase();
+
+/** Only a push of the project's own repository counts: a fork's pull request can carry a head branch named main. */
+const isOwnPush = (run: DeployRun, repo: { owner: string; repo: string }): boolean => run.event === 'push' && sameRepo(run.headRepo, repo);
+
 export async function handleMainRun(
   project: Project,
   run: DeployRun,
@@ -54,6 +63,10 @@ export async function handleMainRun(
     }
     const repo = await deps.resolveRepo(project);
     if (!repo) return 'seen';
+    if (!isOwnPush(run, repo)) {
+      markRunHandled(project.path, run.id);
+      return 'seen';
+    }
     const jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
     const sections: string[] = [];
     for (const job of jobs) {
@@ -64,7 +77,7 @@ export async function handleMainRun(
       } catch {
         // keep the placeholder
       }
-      sections.push(`### ${job.name}\n\n\`\`\`\n${tail}\n\`\`\``);
+      sections.push(`### ${job.name}\n\n\`\`\`\n${defuse(tail)}\n\`\`\``);
     }
     const name = run.name || run.workflowPath;
     const description = [
@@ -86,6 +99,43 @@ export async function handleMainRun(
   }
 }
 
+/**
+ * Completed runs on main: per workflow only the newest own push run is acted on; the older ones
+ * (already followed by a newer run) are marked handled without a task. Never throws.
+ */
+export async function handleMainRuns(project: Project, runs: DeployRun[], deps: MainRunDeps): Promise<void> {
+  if (!active(project)) return;
+  let repo: { owner: string; repo: string } | null = null;
+  try {
+    repo = await deps.resolveRepo(project);
+  } catch {
+    return;
+  }
+  if (!repo) return;
+  const newest = new Map<string, DeployRun>();
+  const rest: DeployRun[] = [];
+  for (const r of runs.filter((x) => x.status === 'completed')) {
+    if (!isOwnPush(r, repo)) {
+      rest.push(r); // handleMainRun marks it handled
+      continue;
+    }
+    const best = newest.get(r.workflowPath);
+    if (!best || r.startedAt > best.startedAt || (r.startedAt === best.startedAt && r.id > best.id)) {
+      if (best) markRunHandled(project.path, best.id);
+      newest.set(r.workflowPath, r);
+    } else {
+      markRunHandled(project.path, r.id);
+    }
+  }
+  for (const r of [...rest, ...newest.values()]) {
+    try {
+      await handleMainRun(project, r, deps);
+    } catch {
+      // retried on the next poll
+    }
+  }
+}
+
 const watching = new Set<string>();
 
 /** Follows the runs of a pushed commit on main: every 60 s, at most 60 min, until all are completed. Never throws. */
@@ -103,15 +153,10 @@ export function watchMainRuns(project: Project, sha: string, deps: MainRunDeps):
       const repo = await deps.resolveRepo(project);
       const main = await resolveMainBranch(project, deps.branches);
       if (repo) {
-        const runs = (await deps.client.runs(repo.owner, repo.repo, RUNS_PER_POLL, main)).filter((r) => r.sha === sha && (!main || r.branch === main));
-        for (const r of runs) {
-          if (r.status !== 'completed') continue;
-          try {
-            await handleMainRun(project, r, deps);
-          } catch {
-            // retried on the next poll
-          }
-        }
+        const onMain = (await deps.client.runs(repo.owner, repo.repo, RUNS_PER_POLL, main)).filter((r) => !main || r.branch === main);
+        // All of main's recent runs: a failure of this sha is acted on only when it is the newest of its workflow
+        await handleMainRuns(project, onMain, deps);
+        const runs = onMain.filter((r) => r.sha === sha);
         done = runs.length > 0 && runs.every((r) => r.status === 'completed');
       }
     } catch {
