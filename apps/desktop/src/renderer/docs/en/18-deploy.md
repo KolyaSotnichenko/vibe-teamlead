@@ -39,13 +39,15 @@ Settings → Vercel connects the Vercel account Deploy uses to set up hosting. *
 
 The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy.
 
-**When it scans.** The scan runs the first time Deploy opens for a project with no saved result, after a merge into main for a project that has one, and on **Check again**. It is a model call, so it costs tokens. Its model is **Deploy readiness** in Settings → Agent Settings → feature models (default Sonnet, low thinking).
+**When it scans.** The scan runs the first time Deploy opens for a project with no saved result, after a merge into main for a project that has one, and on **Check again**. It is a model call, so it costs tokens. The scan reads code and example env files, never the values in `.env` files or keys. Its model is **Deploy readiness** in Settings → Agent Settings → feature models (default Sonnet, low thinking).
 
-**Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The task starts by itself and, after QA, merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is.
+**Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The task starts by itself and, after QA, merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is. A workflow blocker and a failed run on main never get a task at the same time.
 
 **The workflow.** The GitHub Actions workflow is written for this project. It installs on a clean runner what the checks need: browsers for Playwright and for unit tests in browser mode, services, the package manager. Task branches run typecheck and unit tests; main runs everything; Vercel deploys. After the workflow lands on main, the app follows its first run like any run on main, and a failure becomes a fix task.
 
 **After a push to main.** The app follows that commit's runs for up to an hour. The newest failed run of a workflow on main becomes one urgent fix task, with the logs of the failed jobs. While that task is open there is no second one. Runs from forks and pull requests are ignored.
+
+**Giving up.** When a blocker or a failing workflow has been fixed twice and comes back, there is no third task: it moves to **Needed from you** (with a link to the run), and you look at it yourself. Once the workflow passes or the scan no longer finds the blocker, the count starts again.
 
 **What Vercel can't run.** Redis (Upstash) and Blob are added from Environment → Services. Kafka, queue consumers and always-running workers are listed as parts Vercel can't run, without a task.
 
