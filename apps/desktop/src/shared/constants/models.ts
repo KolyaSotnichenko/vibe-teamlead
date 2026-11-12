@@ -154,7 +154,8 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
   briefImport: 'opus',    // Reads the whole spec document and the project
   designSystem: 'opus',   // Visual direction and a coherent token system
   uxReview: 'sonnet',     // Goes through the running app in a browser
-  designer: 'sonnet'      // Wireframes and screens in the design system, as HTML
+  designer: 'sonnet',     // Wireframes and screens in the design system, as HTML
+  deployReadiness: 'sonnet' // Reads the project for what blocks a first deploy
 };
 
 // Default feature thinking configuration
@@ -169,7 +170,8 @@ export const DEFAULT_FEATURE_THINKING: FeatureThinkingConfig = {
   briefImport: 'high',    // Splitting a spec into tasks needs deep thinking
   designSystem: 'high',   // Distinctive, consistent design choices
   uxReview: 'medium',     // Many pages and states, judged against checklists
-  designer: 'medium'      // Layout and states from the spec, then the design system
+  designer: 'medium',     // Layout and states from the spec, then the design system
+  deployReadiness: 'low'  // A read-only scan with a fixed checklist
 };
 
 // Feature labels for UI display
@@ -185,6 +187,7 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
   designSystem: { label: 'Design system', description: 'Extracts or designs the project design system' },
   uxReview: { label: 'UX review', description: "Reviews the running app in Preview as a person would use it" },
   designer: { label: 'Designer', description: 'Draws wireframes and screens before the code of tasks that change UI' },
+  deployReadiness: { label: 'Deploy readiness', description: 'Scans the project for what blocks a first deploy' },
 };
 
 // Default agent profiles for preset model/thinking configurations

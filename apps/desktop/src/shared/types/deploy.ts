@@ -333,3 +333,53 @@ export interface DeployEnvState {
   lastDatabase?: DeployAddDatabaseResult;
   lastPush?: DeployPushResult;
 }
+
+// ============================================
+// Readiness (what stands between the project and a first deploy)
+// ============================================
+
+export type BlockerKind = 'code' | 'workflow' | 'unsupported';
+
+export interface ReadinessBlocker {
+  /** Stable across scans: `blockerKey(kind, subject)` */
+  key: string;
+  kind: BlockerKind;
+  subject: string;
+  title: string;
+  detail: string;
+}
+
+export type ServiceKind = 'postgres' | 'redis' | 'blob' | 'other';
+
+export interface ReadinessService {
+  kind: ServiceKind;
+  name: string;
+  /** Vercel can provide it (a Marketplace database, Blob) */
+  managed: boolean;
+  reason?: string;
+}
+
+/** Something only the owner can do (names only, never values). */
+export interface ReadinessOwnerItem {
+  kind: 'variable' | 'other';
+  variable?: string;
+  message: string;
+}
+
+export interface ReadinessResult {
+  scannedAt: string;
+  commit?: string;
+  blockers: ReadinessBlocker[];
+  services: ReadinessService[];
+  owner: ReadinessOwnerItem[];
+  workflow: { path?: string; lastMainRun?: { conclusion: string; runId: number } };
+}
+
+/** What the Environment tab shows for readiness. */
+export interface ReadinessState {
+  result?: ReadinessResult;
+  scanning: boolean;
+  error?: string;
+  /** Deploy tasks by blocker key */
+  tasks: Record<string, { specId: string; status?: string }>;
+}

@@ -1045,6 +1045,10 @@
     "designer": {
       "label": "Designer",
       "description": "Draws wireframes and screens before the code of tasks that change UI"
+    },
+    "deployReadiness": {
+      "label": "Deploy readiness",
+      "description": "Scans the project for what blocks a first deploy"
     }
   },
   "agentCategories": {
