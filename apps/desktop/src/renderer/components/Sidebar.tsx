@@ -23,7 +23,7 @@ import {
   PanelLeftClose,
   FileInput,
   ChevronDown,
-  Rocket
+  Workflow
 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
@@ -75,7 +75,7 @@ const baseNavItems: NavItem[] = [
   { id: 'preview', labelKey: 'navigation:items.preview', icon: MonitorPlay, shortcut: 'V', group: 'build' },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A', group: 'build' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W', group: 'build' },
-  { id: 'deploy', labelKey: 'navigation:items.deploy', icon: Rocket, shortcut: 'Y', group: 'build' },
+  { id: 'deploy', labelKey: 'navigation:items.deploy', icon: Workflow, shortcut: 'Y', group: 'build' },
   { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D', group: 'plan' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I', group: 'plan' },
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' },

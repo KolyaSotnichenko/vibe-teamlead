@@ -22,7 +22,7 @@
     "agentTools": "MCP Overview",
     "docs": "Documentation",
     "preview": "Preview",
-    "deploy": "Deploy"
+    "deploy": "CI"
   },
   "actions": {
     "settings": "Settings",

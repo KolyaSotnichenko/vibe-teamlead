@@ -9,7 +9,7 @@
 | **Kanban Board** | Tasks by column: *Planning → Queue → In Progress → AI Review → Human Review → Done* (plus *PR Created* and *Error*). The board updates live. Queued tasks start on their own, within the limit on parallel tasks. |
 | **Agent Terminals** | Claude Code terminals, each in its own worktree, for manual work alongside the agents. New terminal: ⌘T. |
 | **Preview** | The project's app from the main branch, running inside the window: see what the agents built without starting anything. It runs only while Preview is open (see "Preview"). |
-| **Deploy** | The GitHub Actions runs of the project's repository, live: each run's job graph, the steps and log of a job, deployments and the production link (see "Deploy"). |
+| **CI** | The GitHub Actions runs of the project's repository, live: each run's job graph, the steps and log of a job, what keeps CI from passing and the secrets it needs (see "CI"). |
 | **Worktrees** | An isolated copy of the repository for each task: how many commits ahead, how many files changed. This is also where you find Merge, Create PR, Copy Path and Delete. Folders left behind after a failed cleanup are marked as orphaned. |
 | **GitHub Issues / PRs**, **GitLab Issues / MRs** | Appear when GitHub or GitLab is connected: turn an issue into a task, AI review of pull requests. |
 
@@ -35,7 +35,7 @@
 
 | Tab | What's there |
 |---|---|
-| **Overview** | Description, status, subtask progress, the Start, Stop, Merge and PR buttons. A preview notice: the task's Vercel link, why there is none (deploy not set up, public repository), or why the last push of its branch failed (see "Deploy" → Previews). |
+| **Overview** | Description, status, subtask progress, the Start, Stop, Merge and PR buttons. A CI notice: the CI status of the task's branch, why there is none (CI not set up, public repository), or why the last push of its branch failed (see "CI" → CI on task cards). |
 | **Workspace → Spec** | Acceptance criteria with QA results (✓ / ✗ / not verified) and what covers them; `spec.md` with checked checkboxes. |
 | **Workspace → Plan** | The subtask dependency graph (left to right or top to bottom, toggle in the corner) and a timeline of what happened. |
 | **Workspace → Architecture** | Diagrams (draw.io diagrams open in draw.io), `architecture.md` with embedded diagrams, ADRs. |

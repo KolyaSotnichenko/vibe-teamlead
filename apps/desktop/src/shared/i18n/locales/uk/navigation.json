@@ -22,7 +22,7 @@
     "agentTools": "Огляд MCP",
     "docs": "Документація",
     "preview": "Перегляд",
-    "deploy": "Деплой"
+    "deploy": "CI"
   },
   "actions": {
     "settings": "Налаштування",

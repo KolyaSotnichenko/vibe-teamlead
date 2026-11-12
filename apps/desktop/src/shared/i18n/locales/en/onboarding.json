@@ -255,12 +255,10 @@
   },
   "accounts": {
     "title": "Connect your accounts (optional)",
-    "vercelTitle": "Vercel",
-    "vercelPurpose": "Connecting Vercel lets agents deploy your projects to a live link.",
-    "purpose": "Signing in with GitHub lets agents push branches and open pull requests, and later deploy.",
+    "purpose": "Signing in with GitHub lets agents push branches and open pull requests, and lets Vibe Teamlead show each branch’s CI.",
     "connectedAs": "Signed in to GitHub as {{login}}",
     "connected": "Signed in to GitHub",
-    "later": "You can skip this and connect both accounts later in Settings, or from the Deploy tab.",
+    "later": "You can skip this and connect your GitHub account later in Settings, or from the CI tab.",
     "back": "Back",
     "skip": "Skip for now",
     "continue": "Continue"

@@ -155,7 +155,7 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
   designSystem: 'opus',   // Visual direction and a coherent token system
   uxReview: 'sonnet',     // Goes through the running app in a browser
   designer: 'sonnet',     // Wireframes and screens in the design system, as HTML
-  deployReadiness: 'sonnet' // Reads the project for what blocks a first deploy
+  deployReadiness: 'sonnet' // Reads the project for what keeps its CI from passing
 };
 
 // Default feature thinking configuration
@@ -187,7 +187,7 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
   designSystem: { label: 'Design system', description: 'Extracts or designs the project design system' },
   uxReview: { label: 'UX review', description: "Reviews the running app in Preview as a person would use it" },
   designer: { label: 'Designer', description: 'Draws wireframes and screens before the code of tasks that change UI' },
-  deployReadiness: { label: 'Deploy readiness', description: 'Scans the project for what blocks a first deploy' },
+  deployReadiness: { label: 'CI readiness', description: 'Scans the project for what keeps its CI from passing' },
 };
 
 // Default agent profiles for preset model/thinking configurations

@@ -1,8 +1,8 @@
 {
-  "title": "Deploy",
+  "title": "CI",
   "tabs": {
     "runs": "Runs",
-    "readiness": "Readiness",
+    "readiness": "CI readiness",
     "environment": "Setup"
   },
   "loading": "Loading GitHub Actions runs…",
@@ -79,40 +79,23 @@
   },
   "needed": {
     "title": "Needed from you",
-    "policyLinks": "Policies",
-    "vercel-sign-in": "Sign in to Vercel first.",
     "github-sign-in": "Sign in to GitHub first.",
     "github-app-install": "Give the Vibe Teamlead GitHub App access to this repository on GitHub, then try again.",
-    "vercel-git-access": "Let Vercel’s GitHub App access this repository, then try again.",
-    "vercel-existing-project": "Vercel already has a project for this repository. Use it, or create a new one.",
-    "non-github-remote": "The project’s origin is not on GitHub. Deploy works with GitHub repositories only.",
+    "non-github-remote": "The project’s origin is not on GitHub. CI works with GitHub repositories only.",
     "public-repo-warning": "{{repo}} is public: anyone can read its code.",
     "variable": "{{name}} needs a value.",
-    "database-terms": "Vercel needs you to accept the {{integration}} Marketplace terms before it adds the database. Read them first:",
-    "service-terms": "Vercel needs you to accept the {{integration}} Marketplace terms before it adds it. Read them first:",
-    "database-dashboard": "Finish adding the database in the Vercel dashboard, then come back.",
-    "service-dashboard": "Finish adding it in the Vercel dashboard, then come back.",
     "actions": {
-      "connectVercel": "Connect Vercel",
       "connectGitHub": "Connect GitHub",
       "installApp": "Install the app",
-      "grantVercel": "Grant Vercel access",
-      "useProject": "Use {{name}}",
-      "createNew": "Create a new project",
       "repoSettings": "Repository settings",
-      "acknowledge": "Got it",
-      "addValue": "Add value",
-      "acceptTerms": "Accept and add database",
-      "openDashboard": "Open the Vercel dashboard"
+      "acknowledge": "Got it"
     }
   },
   "exists": {
     "title": "What exists",
     "repo": "Repository",
     "public": "Public",
-    "private": "Private",
-    "vercel": "Vercel project",
-    "database": "Database"
+    "private": "Private"
   },
   "secrets": {
     "title": "Secrets",
@@ -121,70 +104,6 @@
     "add": "Add a secret",
     "replace": "Replace {{name}}",
     "replaceShort": "Replace"
-  },
-  "database": {
-    "title": "Database",
-    "description": "Add a free Postgres database (Neon) to the Vercel project. Its connection variables go to Production and Preview.",
-    "add": "Add database",
-    "adding": "Adding the database…",
-    "neon": "Postgres (Neon)",
-    "none": "None yet",
-    "downloading": "Downloading the Vercel CLI first… {{percent}}%",
-    "cancel": "Cancel",
-    "previewNote": "Preview deployments may use this same database unless Neon’s preview branching is on. Documentation → Deploy says how to check."
-  },
-  "services": {
-    "title": "Services",
-    "description": "What the project needs from Vercel besides the database. Add puts the connection variables in Production and Preview.",
-    "add": "Add",
-    "adding": "Adding…",
-    "added": "Added",
-    "downloading": "Downloading the Vercel CLI first… {{percent}}%",
-    "cancel": "Cancel",
-    "kind": {
-      "redis": "Redis (Upstash)",
-      "blob": "Blob (file storage)"
-    }
-  },
-  "variables": {
-    "title": "Variables",
-    "loading": "Loading variables…",
-    "empty": "No variables yet.",
-    "add": "Add variable",
-    "inGitHub": "In GitHub",
-    "githubUnavailable": "GitHub secrets couldn’t be read, so the “In GitHub” marks may be missing.",
-    "saved": "{{name}} saved to Vercel.",
-    "savedBoth": "{{name}} saved to Vercel and as a GitHub secret.",
-    "target": {
-      "production": "Production",
-      "preview": "Preview",
-      "development": "Development"
-    }
-  },
-  "variableDialog": {
-    "title": "Add variable",
-    "description": "Saved to the Vercel project as a sensitive variable. The value is never shown again.",
-    "name": "Name",
-    "value": "Value",
-    "valueHint": "Capital letters, digits and underscores in the name. The value can’t be read back after saving.",
-    "production": "Production",
-    "preview": "Preview",
-    "alsoGitHub": "Also as a GitHub secret",
-    "cancel": "Cancel",
-    "save": "Save",
-    "saving": "Saving…",
-    "result": {
-      "vercel": {
-        "ok": "Vercel: saved",
-        "skipped": "Vercel: not saved",
-        "failed": "Vercel: failed. {{reason}}"
-      },
-      "github": {
-        "ok": "GitHub: saved",
-        "skipped": "GitHub: not saved",
-        "failed": "GitHub: failed. {{reason}}"
-      }
-    }
   },
   "secretDialog": {
     "title": "Add a CI secret",
@@ -211,19 +130,14 @@
     "loading": "Loading…",
     "errors": {
       "request": "The app couldn’t answer. Try again.",
-      "no-connection": "Not connected: sign in to GitHub or Vercel in Settings.",
+      "no-connection": "Not connected: sign in to GitHub in Settings.",
       "permissions": "The Vibe Teamlead GitHub App doesn’t have the permission this needs. Give it access on GitHub.",
-      "forbidden": "Vercel refused: your account has no access to this project or team.",
-      "not-found": "Something the app needs is gone on GitHub or Vercel, or the app has no access to it.",
-      "rate-limit": "GitHub or Vercel rate limit reached. Try again in a few minutes.",
-      "unavailable": "GitHub or Vercel isn’t responding. Try again.",
-      "git-not-connected": "Vercel can’t reach the repository: grant Vercel’s GitHub App access to it.",
-      "conflict": "That name is already taken on GitHub or Vercel.",
-      "bad-request": "Vercel rejected the request. Check the name and the values, then try again.",
+      "not-found": "Something the app needs is gone on GitHub, or the app has no access to it.",
+      "rate-limit": "GitHub’s rate limit is reached. Try again in a few minutes.",
+      "unavailable": "GitHub isn’t responding. Try again.",
+      "conflict": "That name is already taken on GitHub.",
       "invalid": "The project isn’t ready: it must be a git repository with a commit on its main branch, and the input must be valid.",
-      "not-set-up": "Set up deploy for this project first.",
-      "auth": "Sign in to Vercel first.",
-      "cli": "The Vercel CLI couldn’t finish. Try again.",
+      "not-set-up": "Set up CI for this project first.",
       "timeout": "It took too long. Try again.",
       "saved-failed": "It was done, but the app couldn’t save that. Try again to record it.",
       "unknown": "Something went wrong. Try again."
@@ -245,7 +159,7 @@
     "checkAgain": "Check again",
     "scanning": "Checking the project…",
     "error": "The check failed. Try again. The list below is from the last successful check.",
-    "blockers": "Blocking deploy",
+    "blockers": "Blocking CI",
     "taskStatus": {
       "backlog": "Task: backlog",
       "queue": "Task: queued",
@@ -271,7 +185,7 @@
     "noRun": "No run on main yet",
     "gaveUp": "Vibe Teamlead tried to fix this twice and it still fails. Look at it yourself.",
     "openRun": "Open the run on GitHub",
-    "clear": "Nothing blocks deploy",
+    "clear": "Nothing blocks CI",
     "conclusions": {
       "success": "Succeeded",
       "failure": "Failed",
