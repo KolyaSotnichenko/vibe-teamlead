@@ -49,7 +49,7 @@ import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
 import { DesignTab } from './design/DesignTab';
-import { PreviewNotice } from './PreviewNotice';
+import { CiNotice } from './CiNotice';
 import type { DeployTarget } from '../../../shared/types/deploy';
 import type { FailedSubtaskDecision, Task, WorktreeCreatePROptions } from '../../../shared/types';
 
@@ -517,7 +517,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 <SecurityFollowupNotice task={task} />
                 <SecurityQaNotice task={task} />
                 <TurnLimitNotice task={task} />
-                <PreviewNotice task={task} onGoToDeploy={onGoToDeploy} />
+                <CiNotice task={task} onGoToDeploy={onGoToDeploy} />
               </div>
               {(state.isStuck || state.isIncomplete) && (
                 <div className="mt-3">

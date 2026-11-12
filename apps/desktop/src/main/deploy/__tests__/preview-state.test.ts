@@ -34,7 +34,10 @@ beforeEach(() => {
   vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: 'x' });
 });
 
-describe('previewState (no deployments: Task 5 rebuilds it on CI runs)', () => {
+const run = (id: number, sha: string, status: DeployRun['status'] = 'completed', conclusion?: string): DeployRun =>
+  ({ id, sha, status, conclusion }) as DeployRun;
+
+describe('previewState (CI status of the pushed sha)', () => {
   it('not-set-up and unavailable come from the push check, without GitHub', async () => {
     const { d, runs } = deps();
     vi.mocked(previewPushAllowed).mockReturnValue({ allowed: false, reason: 'not-set-up' });
@@ -55,36 +58,66 @@ describe('previewState (no deployments: Task 5 rebuilds it on CI runs)', () => {
     expect(runs).not.toHaveBeenCalled();
   });
 
-  it('a pushed branch with no failed run is building', async () => {
-    expect(await previewState(project, task(), deps().d)).toEqual({ state: 'building' });
+  it('no run of the pushed sha is waiting; one runs() call on the task branch', async () => {
+    const { d, runs, jobs } = deps();
+    expect(await previewState(project, task(), d)).toEqual({ state: 'waiting' });
+    expect(runs).toHaveBeenCalledTimes(1);
+    expect(runs).toHaveBeenCalledWith('acme', 'app', 10, 'vibe-teamlead/001-x');
+    expect(jobs).not.toHaveBeenCalled();
   });
 
-  it('failed links the run of the pushed sha and its first failed job', async () => {
-    const run = (id: number, sha: string): DeployRun => ({ id, sha } as DeployRun);
+  it('runs of an older sha do not count: failed or passed old runs leave it waiting', async () => {
+    const { d, jobs } = deps({ runs: [run(30, 'old', 'completed', 'failure'), run(20, 'older', 'completed', 'success')] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'waiting' });
+    expect(jobs).not.toHaveBeenCalled();
+  });
+
+  it('a queued or in-progress run of the sha is running (even beside an older failure)', async () => {
+    for (const status of ['queued', 'in_progress'] as const) {
+      invalidatePreview('t1');
+      const { d } = deps({ runs: [run(2, 'h1', status), run(1, 'old', 'completed', 'failure')] });
+      expect(await previewState(project, task(), d)).toEqual({ state: 'running' });
+    }
+  });
+
+  it('all runs of the sha succeeded: passed (skipped and neutral count as fine)', async () => {
+    const { d, jobs } = deps({ runs: [run(3, 'h1', 'completed', 'success'), run(2, 'h1', 'completed', 'skipped'), run(1, 'old', 'completed', 'failure')] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'passed' });
+    expect(jobs).not.toHaveBeenCalled();
+  });
+
+  it('failed links the newest failed run of the sha and its first failed job; jobs is read once', async () => {
     const { d, runs, jobs } = deps({
-      runs: [run(30, 'other'), run(20, 'h1'), run(10, 'h1')],
+      runs: [run(30, 'other', 'completed', 'failure'), run(20, 'h1', 'completed', 'failure'), run(10, 'h1', 'completed', 'failure'), run(9, 'h1', 'completed', 'success')],
       jobs: [
         { id: 1, name: 'a', conclusion: 'success' } as DeployJob,
         { id: 2, name: 'b', conclusion: 'failure' } as DeployJob,
       ],
     });
     expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 20, jobId: 2 });
-    expect(runs).toHaveBeenCalledWith('acme', 'app', 20, 'vibe-teamlead/001-x');
+    expect(runs).toHaveBeenCalledWith('acme', 'app', 10, 'vibe-teamlead/001-x');
+    expect(jobs).toHaveBeenCalledTimes(1);
     expect(jobs).toHaveBeenCalledWith('acme', 'app', 20);
   });
 
-  it('a run of the sha whose jobs all passed is not failed', async () => {
-    const { d } = deps({ runs: [{ id: 5, sha: 'h1' } as DeployRun], jobs: [{ id: 7, name: 'b', conclusion: 'success' } as DeployJob] });
-    expect(await previewState(project, task(), d)).toEqual({ state: 'building' });
+  it('a timed-out or cancelled run is a failure; with no failed job the run alone is linked', async () => {
+    const { d } = deps({ runs: [run(5, 'h1', 'completed', 'timed_out')], jobs: [{ id: 7, name: 'b', conclusion: 'success' } as DeployJob] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 5 });
+  });
+
+  it('failed survives a jobs error (run only)', async () => {
+    const { d, jobs } = deps({ runs: [run(5, 'h1', 'completed', 'failure')] });
+    jobs.mockRejectedValueOnce(new Error('boom'));
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 5 });
   });
 
   it('a refused push keeps the state with pushError', async () => {
     vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: 'x', error: { kind: 'conflict' } });
-    expect(await previewState(project, task(), deps().d)).toEqual({ state: 'building', pushError: 'conflict' });
+    expect(await previewState(project, task(), deps().d)).toEqual({ state: 'waiting', pushError: 'conflict' });
   });
 
-  it('GitHub errors give building and are not cached', async () => {
-    expect(await previewState(project, task(), deps({ fail: true }).d)).toEqual({ state: 'building' });
+  it('GitHub errors give waiting and are not cached', async () => {
+    expect(await previewState(project, task(), deps({ fail: true }).d)).toEqual({ state: 'waiting' });
     const good = deps();
     await previewState(project, task(), good.d);
     expect(good.runs).toHaveBeenCalledTimes(1);
@@ -92,15 +125,35 @@ describe('previewState (no deployments: Task 5 rebuilds it on CI runs)', () => {
 });
 
 describe('cache', () => {
-  it('building: two calls within 30 s make one GitHub call; after 30 s a second', async () => {
+  it('running: two calls within 30 s make one GitHub call; after 30 s a second', async () => {
     let t = 1000;
-    const { d, runs } = deps();
+    const { d, runs } = deps({ runs: [run(1, 'h1', 'in_progress')] });
     d.now = () => t;
     await previewState(project, task(), d);
     t += 29_000;
     await previewState(project, task(), d);
     expect(runs).toHaveBeenCalledTimes(1);
     t += 2_000;
+    await previewState(project, task(), d);
+    expect(runs).toHaveBeenCalledTimes(2);
+  });
+
+  it('passed and failed stay cached until the next push, however long', async () => {
+    let t = 1000;
+    const { d, runs } = deps({ runs: [run(1, 'h1', 'completed', 'success')] });
+    d.now = () => t;
+    await previewState(project, task(), d);
+    t += 3_600_000;
+    expect(await previewState(project, task(), d)).toEqual({ state: 'passed' });
+    expect(runs).toHaveBeenCalledTimes(1);
+  });
+
+  it('waiting is re-read after 30 s', async () => {
+    let t = 1000;
+    const { d, runs } = deps();
+    d.now = () => t;
+    await previewState(project, task(), d);
+    t += 31_000;
     await previewState(project, task(), d);
     expect(runs).toHaveBeenCalledTimes(2);
   });

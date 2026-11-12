@@ -1265,31 +1265,23 @@
     "back": "← Back",
     "prototypeHint": "Click through the screens; clicking beside a link shows what is clickable"
   },
-  "taskPreview": {
-    "title": "Preview",
-    "button": "Preview",
-    "ready": "Preview ↗",
-    "failed": "Preview failed",
-    "readyTitle": "{{url}} · built {{when}}",
-    "notSetUp": "A link for every task appears once you set up deploy",
-    "setUp": "Set up deploy",
-    "publicRepo": "Previews need a private repository",
-    "built": "built {{when}}",
-    "building": "Building the preview…",
-    "previous": "Previous preview:",
-    "previewFailed": "The preview failed",
-    "openLog": "Open the build log",
+  "taskCi": {
+    "title": "CI",
+    "running": "CI running",
+    "passed": "CI passed ✓",
+    "failed": "CI failed",
+    "notSetUp": "CI status for every task appears once CI is set up",
+    "setUp": "Set up CI",
+    "publicRepo": "CI status needs a private repository",
+    "runningTitle": "CI is running",
+    "failedTitle": "CI failed",
     "openRun": "Open the failed run",
-    "openDeploy": "Open Deploy",
     "pushFailed": "The last push to GitHub failed: {{reason}}",
     "pushError": {
       "conflict": "the branch changed on GitHub",
       "permissions": "the app has no permission to push",
       "no-connection": "no connection",
       "unavailable": "GitHub is not available"
-    },
-    "builtInVercel": "Preview built — open in Vercel",
-    "builtTitle": "Preview built",
-    "openInVercel": "Open in Vercel"
+    }
   }
 }

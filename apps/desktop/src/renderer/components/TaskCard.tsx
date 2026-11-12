@@ -8,7 +8,7 @@
  *   │ ■ Waiting for you          Answer   │  only when an agent asks (vermilion)
  *   ├────────────────────────────────────┤
  *   │ HIGH  4 min ago  worktree           │  meta row
- *   │ ■ Preview ↗               built 2m  │  preview row (when there is one)
+ *   │ ■ CI running                         │  CI row (running, passed or failed)
  *   ├────────────────────────────────────┤
  *   │ ▶ Start                         │ ⋮ │  44px action strip, buttons only
  *   └────────────────────────────────────┘
@@ -45,8 +45,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { useMergeState } from './task-detail/useMergeState';
 import { useVerification } from './task-detail/useVerification';
 import { useSecurityQaError } from './task-detail/useSecurityQaError';
-import { usePreview } from './task-detail/usePreview';
-import { formatRelative, isHttpsUrl, openWebUrl } from './deploy/status';
+import { useCiState } from './task-detail/useCiState';
 import type { DeployTarget } from '../../shared/types/deploy';
 
 // Catastrophic stuck detection interval (ms).
@@ -337,19 +336,12 @@ export const TaskCard = memo(function TaskCard({
     }
   };
 
-  const preview = usePreview(task);
-  const handlePreview = (e: React.MouseEvent) => {
+  const ci = useCiState(task);
+  const handleCi = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (preview?.state === 'ready') openWebUrl(preview.url);
-    else if (preview?.state === 'built' && isHttpsUrl(preview.logUrl)) openWebUrl(preview.logUrl);
-    else if (preview?.state === 'building' && isHttpsUrl(preview.previousUrl)) openWebUrl(preview.previousUrl);
-    else if (preview?.state === 'failed' && preview.runId === undefined && isHttpsUrl(preview.logUrl)) {
-      // Vercel built it (no Actions run): its build log says why
-      openWebUrl(preview.logUrl);
-    } else if (preview?.state === 'failed') {
-      const detail: DeployTarget = { tab: 'runs' };
-      if (preview.runId !== undefined) detail.runId = preview.runId;
-      if (preview.jobId !== undefined) detail.jobId = preview.jobId;
+    if (ci?.state === 'failed') {
+      const detail: DeployTarget = { tab: 'runs', runId: ci.runId };
+      if (ci.jobId !== undefined) detail.jobId = ci.jobId;
       window.dispatchEvent(new CustomEvent<DeployTarget>('open-deploy', { detail }));
     }
   };
@@ -394,11 +386,7 @@ export const TaskCard = memo(function TaskCard({
   const showPriority = priority === 'urgent' || priority === 'high';
   const showDescription = !stage.current && !stage.finished && counts.total === 0 && !!sanitizedDescription;
 
-  const showPreview =
-    preview?.state === 'building' ||
-    (preview?.state === 'ready' && isHttpsUrl(preview.url)) ||
-    (preview?.state === 'built' && isHttpsUrl(preview.logUrl)) ||
-    preview?.state === 'failed';
+  const showCi = ci?.state === 'running' || ci?.state === 'passed' || ci?.state === 'failed';
 
   const actionClass =
     'flex min-h-11 min-w-0 flex-1 items-center justify-start gap-2 px-4 text-sm font-medium ' +
@@ -567,33 +555,26 @@ export const TaskCard = memo(function TaskCard({
         </button>
       )}
 
-      {/* Preview row: its own full-width row, never squeezed into the strip */}
-      {showPreview && preview && (
+      {/* CI row: its own full-width row, never squeezed into the strip */}
+      {showCi && ci && (
         <button
           type="button"
           data-testid="task-preview-row"
           className={cn(
             'flex min-h-11 w-full items-center gap-2.5 border-t border-border px-3 text-left text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2',
-            preview.state === 'failed' ? 'text-destructive' : 'text-foreground'
+            ci.state === 'failed' ? 'text-destructive' : 'text-foreground'
           )}
-          onClick={handlePreview}
-          aria-busy={preview.state === 'building' || undefined}
-          aria-disabled={preview.state === 'building' && !isHttpsUrl(preview.previousUrl) ? true : undefined}
-          title={preview.state === 'ready' ? t('taskPreview.readyTitle', { url: preview.url, when: formatRelative(preview.builtAt, i18n.language) }) : undefined}
+          onClick={handleCi}
+          aria-busy={ci.state === 'running' || undefined}
+          aria-disabled={ci.state !== 'failed' ? true : undefined}
         >
           <span
             aria-hidden
             data-testid="task-preview-mark"
-            data-marker={preview.state === 'building' ? 'running' : undefined}
-            className={cn('h-2 w-2 shrink-0', preview.state === 'failed' ? 'bg-destructive' : 'bg-foreground', preview.state === 'building' && 'vt-breathe')}
+            data-marker={ci.state === 'running' ? 'running' : undefined}
+            className={cn('h-2 w-2 shrink-0', ci.state === 'failed' ? 'bg-destructive' : 'bg-foreground', ci.state === 'running' && 'vt-breathe')}
           />
-          <span className="min-w-0 flex-1 truncate">{t(`taskPreview.${preview.state === 'building' ? 'button' : preview.state === 'built' ? 'builtInVercel' : preview.state}`)}</span>
-          {preview.state === 'building' && <span className="sr-only">{t('taskPreview.building')}</span>}
-          {preview.state === 'ready' && formatSince(preview.builtAt, i18n.language) && (
-            <span className="shrink-0 font-mono text-xs text-muted-foreground">
-              {t('taskPreview.built', { when: formatSince(preview.builtAt, i18n.language) })}
-            </span>
-          )}
+          <span className="min-w-0 flex-1 truncate">{t(`taskCi.${ci.state}`)}</span>
         </button>
       )}
 

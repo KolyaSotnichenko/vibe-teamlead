@@ -30,7 +30,7 @@ vi.mock('../../../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }
 
 import { useAgentQuestionsStore } from '../../../stores/agent-questions-store';
 import { shortDependency, TaskCard } from '../../TaskCard';
-import { resetPreviewSubscription } from '../../task-detail/usePreview';
+import { resetPreviewSubscription } from '../../task-detail/useCiState';
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -235,13 +235,10 @@ describe('TaskCard', () => {
       expect(screen.getByRole('button', { name: 'actions.taskActions' })).toHaveClass('w-11', 'border-l');
     });
 
-    it('shows a ready preview as its own row between body and strip', async () => {
+    it('shows a CI result as its own row between body and strip', async () => {
       (window as unknown as { electronAPI: unknown }).electronAPI = {
         openExternal: vi.fn(),
-        deploy: {
-          previewState: vi.fn(async () => ({ state: 'ready', url: 'https://x.vercel.app', builtAt: new Date().toISOString() })),
-          onPreviewUpdate: vi.fn(() => () => undefined),
-        },
+        deploy: { previewState: vi.fn(async () => ({ state: 'passed' })), onPreviewUpdate: vi.fn(() => () => undefined) },
       };
       render(<TaskCard task={task()} onClick={vi.fn()} onStatusChange={vi.fn()} />);
       const row = await screen.findByTestId('task-preview-row');
@@ -249,25 +246,24 @@ describe('TaskCard', () => {
       expect(strip.contains(row)).toBe(false);
       expect(row.nextElementSibling).toBe(strip);
       expect(row).toHaveClass('min-h-11', 'w-full');
-      expect(row.querySelector('span.truncate')).toHaveTextContent('taskPreview.ready');
-      expect(row.querySelector('.font-mono')?.textContent).toContain('taskPreview.built');
+      expect(row.querySelector('span.truncate')).toHaveTextContent('taskCi.passed');
     });
 
-    it('breathes while building', async () => {
+    it('breathes while CI runs', async () => {
       (window as unknown as { electronAPI: unknown }).electronAPI = {
         openExternal: vi.fn(),
-        deploy: { previewState: vi.fn(async () => ({ state: 'building' })), onPreviewUpdate: vi.fn(() => () => undefined) },
+        deploy: { previewState: vi.fn(async () => ({ state: 'running' })), onPreviewUpdate: vi.fn(() => () => undefined) },
       };
       render(<TaskCard task={task()} onClick={vi.fn()} />);
       expect(await screen.findByTestId('task-preview-mark')).toHaveClass('vt-breathe');
       const row = screen.getByTestId('task-preview-row');
       expect(row).toHaveAttribute('aria-busy', 'true');
-      expect(row.querySelector('.sr-only')).toHaveTextContent('taskPreview.building');
+      expect(row.querySelector('span.truncate')).toHaveTextContent('taskCi.running');
     });
   });
 
-  describe('the preview button', () => {
-    const withPreview = (data: unknown) => {
+  describe('the CI row', () => {
+    const withCi = (data: unknown) => {
       const openExternal = vi.fn();
       (window as unknown as { electronAPI: unknown }).electronAPI = {
         openExternal,
@@ -280,95 +276,56 @@ describe('TaskCard', () => {
       resetPreviewSubscription();
     });
 
-    it.each([{ state: 'not-set-up' }, { state: 'not-pushed' }, { state: 'unavailable', reason: 'push-off' }])('is absent for %o', async (data) => {
-      withPreview(data);
+    it.each([
+      { state: 'not-set-up' },
+      { state: 'not-pushed' },
+      { state: 'waiting' },
+      { state: 'unavailable', reason: 'push-off' },
+      { state: 'unavailable', reason: 'public-repo' },
+    ])('is absent for %o', async (data) => {
+      withCi(data);
       render(<TaskCard task={task()} onClick={vi.fn()} />);
       await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
-      expect(screen.queryByText(/taskPreview\./)).not.toBeInTheDocument();
+      expect(screen.queryByText(/taskCi\./)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-preview-row')).not.toBeInTheDocument();
     });
 
-    it('spins while building and opens the previous link', async () => {
-      const open = withPreview({ state: 'building', previousUrl: 'https://old.vercel.app' });
+    it('running says so, and a click does nothing but stay off the card', async () => {
+      const open = withCi({ state: 'running' });
       const onClick = vi.fn();
-      const { container } = render(<TaskCard task={task()} onClick={onClick} />);
-      const button = await screen.findByRole('button', { name: /taskPreview\.button/ });
-      expect(container.querySelector('[data-marker="running"]')).toBeInTheDocument();
-      fireEvent.click(button);
-      expect(open).toHaveBeenCalledWith('https://old.vercel.app');
-      expect(onClick).not.toHaveBeenCalled();
-    });
-
-    it('built (Vercel gave no preview address) says so and opens the Vercel page', async () => {
-      const open = withPreview({ state: 'built', logUrl: 'https://vercel.com/acme/app/AbC', builtAt: new Date().toISOString() });
-      const onClick = vi.fn();
+      const heard = vi.fn();
+      window.addEventListener('open-deploy', heard);
       render(<TaskCard task={task()} onClick={onClick} />);
-      const button = await screen.findByRole('button', { name: /taskPreview\.builtInVercel/ });
+      const button = await screen.findByRole('button', { name: /taskCi\.running/ });
+      expect(button).toHaveAttribute('aria-disabled', 'true');
       fireEvent.click(button);
-      expect(open).toHaveBeenCalledWith('https://vercel.com/acme/app/AbC');
-      expect(onClick).not.toHaveBeenCalled();
-    });
-
-    it('renders no button for a built preview whose Vercel link is not https', async () => {
-      withPreview({ state: 'built', logUrl: 'http://vercel.com/x', builtAt: new Date().toISOString() });
-      render(<TaskCard task={task()} onClick={vi.fn()} />);
-      await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
-      expect(screen.queryByText(/taskPreview\./)).not.toBeInTheDocument();
-    });
-
-    it('renders no button for a ready preview whose URL is not https', async () => {
-      withPreview({ state: 'ready', url: 'http://x.vercel.app', builtAt: new Date().toISOString() });
-      render(<TaskCard task={task()} onClick={vi.fn()} />);
-      await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
-      expect(screen.queryByRole('button', { name: /taskPreview\.ready/ })).not.toBeInTheDocument();
-    });
-
-    it('does nothing on click while building without a previous link', async () => {
-      const open = withPreview({ state: 'building' });
-      render(<TaskCard task={task()} onClick={vi.fn()} />);
-      const idle = await screen.findByRole('button', { name: /taskPreview\.button/ });
-      expect(idle).toHaveAttribute('aria-disabled', 'true');
-      fireEvent.click(idle);
+      window.removeEventListener('open-deploy', heard);
       expect(open).not.toHaveBeenCalled();
+      expect(heard).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
     });
 
-    it('opens the link when ready, with the URL in the title', async () => {
-      const open = withPreview({ state: 'ready', url: 'https://x.vercel.app', builtAt: new Date().toISOString() });
+    it('passed says so', async () => {
+      withCi({ state: 'passed' });
       const onClick = vi.fn();
       render(<TaskCard task={task()} onClick={onClick} />);
-      const button = await screen.findByRole('button', { name: /taskPreview\.ready/ });
-      expect(button.getAttribute('title')).toContain('https://x.vercel.app');
-      fireEvent.click(button);
-      expect(open).toHaveBeenCalledWith('https://x.vercel.app');
+      fireEvent.click(await screen.findByRole('button', { name: /taskCi\.passed/ }));
       expect(onClick).not.toHaveBeenCalled();
     });
 
     it.each([
       [{ state: 'failed', runId: 5, jobId: 9 }, { tab: 'runs', runId: 5, jobId: 9 }],
       [{ state: 'failed', runId: 5 }, { tab: 'runs', runId: 5 }],
-      [{ state: 'failed' }, { tab: 'runs' }],
-      [{ state: 'failed', runId: 5, logUrl: 'https://vercel.com/log' }, { tab: 'runs', runId: 5 }],
-      [{ state: 'failed', logUrl: 'http://vercel.com/log' }, { tab: 'runs' }],
-    ])('goes to the failed run: %o', async (data, detail) => {
-      withPreview(data);
+    ])('failed goes to the failed run: %o', async (data, detail) => {
+      withCi(data);
       const heard = vi.fn();
       window.addEventListener('open-deploy', heard);
       const onClick = vi.fn();
       render(<TaskCard task={task()} onClick={onClick} />);
-      fireEvent.click(await screen.findByRole('button', { name: /taskPreview\.failed/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /taskCi\.failed/ }));
       window.removeEventListener('open-deploy', heard);
       expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual(detail);
       expect(onClick).not.toHaveBeenCalled();
-    });
-
-    it('opens Vercel\'s build log when no Actions run failed', async () => {
-      const open = withPreview({ state: 'failed', logUrl: 'https://vercel.com/acme/app/build' });
-      const heard = vi.fn();
-      window.addEventListener('open-deploy', heard);
-      render(<TaskCard task={task()} onClick={vi.fn()} />);
-      fireEvent.click(await screen.findByRole('button', { name: /taskPreview\.failed/ }));
-      window.removeEventListener('open-deploy', heard);
-      expect(open).toHaveBeenCalledWith('https://vercel.com/acme/app/build');
-      expect(heard).not.toHaveBeenCalled();
     });
   });
 });

@@ -54,20 +54,19 @@ export interface DeployJob {
   steps: DeployStep[];
 }
 
-/** A task's preview, from the GitHub Deployments of its branch (else Vercel's commit status of its head). */
-export type TaskPreview =
+/**
+ * A task's CI status: the GitHub Actions runs of its branch (`vibe-teamlead/<specId>`) for the last
+ * pushed commit; a run of an older commit does not count. `waiting`: no run of that commit yet.
+ * `failed` carries the failed run (and its failed job) for the Deploy page's Runs tab.
+ */
+export type TaskCiState =
   | { state: 'not-set-up' }
   | { state: 'unavailable'; reason: 'public-repo' | 'push-off' }
   | { state: 'not-pushed'; pushError?: string }
-  | { state: 'building'; previousUrl?: string; pushError?: string }
-  | { state: 'ready'; url: string; builtAt: string; pushError?: string }
-  /**
-   * Vercel built it but reported only a commit status, which carries no preview address:
-   * `logUrl` is the deployment's page on Vercel (https), where the preview opens from.
-   */
-  | { state: 'built'; logUrl: string; builtAt: string; pushError?: string }
-  /** `runId`: the failed Actions run of that commit; else `logUrl`: Vercel's build log (https). */
-  | { state: 'failed'; runId?: number; jobId?: number; logUrl?: string; pushError?: string };
+  | { state: 'waiting'; pushError?: string }
+  | { state: 'running'; pushError?: string }
+  | { state: 'passed'; pushError?: string }
+  | { state: 'failed'; runId: number; jobId?: number; pushError?: string };
 
 /** Where the Deploy page should open (the `open-deploy` window event's detail). */
 export interface DeployTarget {
@@ -135,8 +134,8 @@ export interface DeployAPI {
   setSecret: (projectId: string, name: string, value: string) => Promise<import('./common').IPCResult<DeploySetSecretResult>>;
   /** The project's GitHub Actions secret names. */
   listSecrets: (projectId: string) => Promise<import('./common').IPCResult<DeployListSecretsResult>>;
-  /** The task's preview state (raw value, never rejects in practice; unknown task or project: not-pushed). */
-  previewState: (projectId: string, taskId: string) => Promise<TaskPreview>;
+  /** The task's CI state (raw value, never rejects in practice; unknown task or project: not-pushed). */
+  previewState: (projectId: string, taskId: string) => Promise<TaskCiState>;
   /** A task's branch was pushed (success or failure): ask for `previewState` again. */
   onPreviewUpdate: (callback: (update: { projectId: string; taskId: string }) => void) => () => void;
 }

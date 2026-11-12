@@ -1,14 +1,14 @@
 /**
- * A task's preview: the link to its branch's Vercel build. The main process answers
- * from GitHub (and does not cache errors), so the renderer asks at most every 30 s
+ * A task's CI status (GitHub Actions runs of its branch for the last push). The main process
+ * answers from GitHub (and does not cache errors), so the renderer asks at most every 30 s
  * per task however many cards and windows show it: one shared entry per task holds the
- * state, the timer and the ask in flight. It polls only while a build is running, and
- * asks again whenever the task's branch is pushed.
+ * state, the timer and the ask in flight. It polls only while CI is running or a run is still
+ * awaited (`waiting`: the run may not exist yet), and asks again whenever the branch is pushed.
  */
 
 import { useEffect, useState } from 'react';
 import type { Task } from '../../../shared/types';
-import type { TaskPreview } from '../../../shared/types/deploy';
+import type { TaskCiState } from '../../../shared/types/deploy';
 
 type Listener = () => void;
 
@@ -16,7 +16,7 @@ export const PREVIEW_REFRESH_MS = 30_000;
 
 interface Entry {
   projectId: string;
-  preview: TaskPreview | undefined;
+  ci: TaskCiState | undefined;
   subscribers: Set<Listener>;
   timer: ReturnType<typeof setInterval> | undefined;
   lastAskAt: number;
@@ -28,7 +28,7 @@ const entries = new Map<string, Entry>();
 let unsubscribe: (() => void) | undefined;
 
 function syncTimer(entry: Entry, taskId: string): void {
-  const poll = entry.preview?.state === 'building' && entry.subscribers.size > 0;
+  const poll = (entry.ci?.state === 'running' || entry.ci?.state === 'waiting') && entry.subscribers.size > 0;
   if (poll && !entry.timer) entry.timer = setInterval(() => ask(taskId, true), PREVIEW_REFRESH_MS);
   if (!poll && entry.timer) {
     clearInterval(entry.timer);
@@ -51,7 +51,7 @@ function ask(taskId: string, force: boolean): void {
   void Promise.resolve(query)
     .then((next) => {
       if (next && entries.get(taskId) === entry) {
-        entry.preview = next;
+        entry.ci = next;
         for (const each of entry.subscribers) each();
       }
     })
@@ -71,7 +71,7 @@ function subscribe(task: Pick<Task, 'id' | 'projectId'>, listener: Listener): ()
   unsubscribe ??= window.electronAPI?.deploy?.onPreviewUpdate?.(({ taskId }) => ask(taskId, true));
   let entry = entries.get(task.id);
   if (!entry) {
-    entry = { projectId: task.projectId, preview: undefined, subscribers: new Set(), timer: undefined, lastAskAt: 0, inFlight: false, askAgain: false };
+    entry = { projectId: task.projectId, ci: undefined, subscribers: new Set(), timer: undefined, lastAskAt: 0, inFlight: false, askAgain: false };
     entries.set(task.id, entry);
   }
   entry.subscribers.add(listener);
@@ -95,14 +95,14 @@ export function resetPreviewSubscription(): void {
   entries.clear();
 }
 
-export function usePreview(task: Pick<Task, 'id' | 'projectId'>): TaskPreview | undefined {
-  const [preview, setPreview] = useState<TaskPreview | undefined>(() => entries.get(task.id)?.preview);
+export function useCiState(task: Pick<Task, 'id' | 'projectId'>): TaskCiState | undefined {
+  const [ci, setCi] = useState<TaskCiState | undefined>(() => entries.get(task.id)?.ci);
 
   useEffect(() => {
-    setPreview(entries.get(task.id)?.preview);
-    return subscribe(task, () => setPreview(entries.get(task.id)?.preview));
+    setCi(entries.get(task.id)?.ci);
+    return subscribe(task, () => setCi(entries.get(task.id)?.ci));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id, task.projectId]);
 
-  return preview;
+  return ci;
 }

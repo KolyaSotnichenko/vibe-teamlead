@@ -21,7 +21,7 @@ import type {
   DeploySetSecretResult,
   DeploySetupState,
   ReadinessState,
-  TaskPreview,
+  TaskCiState,
 } from '../../shared/types/deploy';
 import type { AgentManager } from '../agent';
 import { runReadinessScan } from '../ai/runners/deploy-readiness';
@@ -267,7 +267,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
 
   ipcMain.handle(
     IPC_CHANNELS.DEPLOY_PREVIEW_STATE,
-    async (_event, projectId: string, taskId: string): Promise<TaskPreview> => {
+    async (_event, projectId: string, taskId: string): Promise<TaskCiState> => {
       const project = projectStore.getProject(projectId);
       const task = project ? projectStore.getTasks(projectId).find((t) => t.id === taskId || t.specId === taskId) : undefined;
       if (!project || !task) return { state: 'not-pushed' };
