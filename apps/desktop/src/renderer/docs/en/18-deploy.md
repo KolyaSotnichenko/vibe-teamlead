@@ -55,6 +55,28 @@ The **Readiness** tab (between Runs and Environment) shows what stands between t
 
 **Nothing blocks.** When the last blocker is fixed, deploy is set up by itself. The exception is a Vercel account with teams where none was chosen for the project yet: choose one on the Environment tab first.
 
+## Previews
+
+A task's preview is the Vercel build of its own branch, shown on the task's card and in its window.
+
+**When branches are pushed.** After each finished subtask, the app pushes the task's branch to GitHub with the Vibe Teamlead GitHub App's token, so Vercel builds it. It does this only when deploy is set up for the project, the repository is private (a repository whose visibility is unknown counts as not private), and **Automatically Push New Branches** is on for both the project and the task. The push is never forced. A refused push doesn't stop the agent: the task window says why, and the last preview stays.
+
+**What the card shows.** Only while the task is in progress, in AI review, in human review or in error:
+
+- **Deploy not set up:** nothing on the card. The task window has a line saying so, with **Set up deploy**.
+- **Branch not pushed yet:** nothing.
+- **Building:** **Preview** with a spinner. It opens the previous link, if there is one.
+- **Ready:** **Preview ↗**, opening the link (https only). Hover to see the address and when it was built.
+- **Failed:** **Preview failed**. It opens Deploy → Runs on that run, at the log of the job that failed.
+
+For a public repository the task window says previews need a private repository, and nothing is pushed.
+
+**Where the state comes from.** From GitHub Deployments for the task branch, the same source as the Deploy tab. While a build is running it refreshes every 30 seconds, and again whenever the branch is pushed.
+
+**Sign-in.** Vercel protects previews by default: open the link while signed in to Vercel.
+
+**Previews and secrets.** Vercel builds previews from the agents' code with the Preview environment's variables. Keep sensitive keys (for example live payment keys) in Production only, or use separate test values for Preview.
+
 ## Environment: set up deploy
 
 Deploy has three tabs: **Runs**, **Readiness** and **Environment**. Until deploy is set up for the project, Runs and Environment offer **Set up deploy**.
@@ -78,7 +100,3 @@ A project whose git configuration is unusual (for example, `origin` defined thro
 **Services.** When the readiness check finds that the project needs Redis or Blob, the **Services** section of the Environment tab lists them, each with **Add**. Redis comes from the Vercel Marketplace (Upstash) and Blob is Vercel's own file storage; both go through the same steps as the database: Marketplace terms (for Redis) are shown first and accepted only when you click Accept, the CLI download shows progress with **Cancel**, and their variables go to Production and Preview. Services Vercel can't provide are listed with the reason.
 
 **Preview deployments and the database.** The database's variables go to Production and Preview, so preview deployments may use the same database as production, and what a preview writes lands in your production data. That is not the case when the Neon integration's preview branching is on: then each preview gets its own copy (a database branch). To check, open Vercel → **Storage** → the database → its settings, and see whether preview deployments get their own database branch; turn it on there if you want previews kept apart.
-
-## What comes next
-
-Coming in later versions of Deploy: previews on task cards, and Vercel in onboarding.

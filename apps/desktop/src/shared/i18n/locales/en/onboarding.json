@@ -260,7 +260,7 @@
     "purpose": "Signing in with GitHub lets agents push branches and open pull requests, and later deploy.",
     "connectedAs": "Signed in to GitHub as {{login}}",
     "connected": "Signed in to GitHub",
-    "later": "You can skip this and connect later in the project's settings, under GitHub.",
+    "later": "You can skip this and connect both accounts later in Settings, or from the Deploy tab.",
     "back": "Back",
     "skip": "Skip for now",
     "continue": "Continue"

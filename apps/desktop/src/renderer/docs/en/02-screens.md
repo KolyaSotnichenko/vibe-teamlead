@@ -35,7 +35,7 @@
 
 | Tab | What's there |
 |---|---|
-| **Overview** | Description, status, subtask progress, the Start, Stop, Merge and PR buttons. |
+| **Overview** | Description, status, subtask progress, the Start, Stop, Merge and PR buttons. A preview notice: the task's Vercel link, why there is none (deploy not set up, public repository), or why the last push of its branch failed (see "Deploy" → Previews). |
 | **Workspace → Spec** | Acceptance criteria with QA results (✓ / ✗ / not verified) and what covers them; `spec.md` with checked checkboxes. |
 | **Workspace → Plan** | The subtask dependency graph (left to right or top to bottom, toggle in the corner) and a timeline of what happened. |
 | **Workspace → Architecture** | Diagrams (draw.io diagrams open in draw.io), `architecture.md` with embedded diagrams, ADRs. |
