@@ -42,9 +42,15 @@ describe('previewPushAllowed', () => {
     expect(previewPushAllowed(project({}, { enabled: false }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
     expect(previewPushAllowed(project({}, { enabled: true }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
   });
-  it('a recorded private repository is enough (no Vercel step)', () => {
-    expect(previewPushAllowed(project({}, { repo }), task())).toEqual({ allowed: true });
-    expect(previewPushAllowed(project({}, { enabled: false, repo }), task())).toEqual({ allowed: true });
+  it('a recorded private repository is enough (no Vercel step) once setup finished, or for a repository the app did not create', () => {
+    expect(previewPushAllowed(project({}, { enabled: true, repo }), task())).toEqual({ allowed: true });
+    const adopted = { ...repo, createdByApp: false };
+    expect(previewPushAllowed(project({}, { repo: adopted }), task())).toEqual({ allowed: true });
+    expect(previewPushAllowed(project({}, { enabled: false, repo: adopted }), task())).toEqual({ allowed: true });
+  });
+  it('an app-created repository main never reached (setup stopped after recording it) gets no task branch', () => {
+    expect(previewPushAllowed(project({}, { repo }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
+    expect(previewPushAllowed(project({}, { enabled: false, repo }), task())).toEqual({ allowed: false, reason: 'not-set-up' });
   });
   it('public-repo when the repo is public', () => {
     expect(previewPushAllowed(project({}, { enabled: true, repo: { ...repo, public: true } }), task())).toEqual({
@@ -357,10 +363,14 @@ describe('worktreePushNewBranches (the task branch push when its worktree is mad
     expect(worktreePushNewBranches(settings({ repo: { ...repo, public: true } }), undefined)).toBe(false);
     expect(worktreePushNewBranches(settings({ enabled: false, repo: { ...repo, public: true } }), undefined)).toBe(false);
   });
+  it('an app-created repository main never reached gets no task branch, whatever the options', () => {
+    expect(worktreePushNewBranches(settings({ repo }), undefined)).toBe(false);
+    expect(worktreePushNewBranches(settings({ enabled: false, repo }, true), true)).toBe(false);
+  });
   it('otherwise the task option, then the project setting (default on)', () => {
     expect(worktreePushNewBranches(settings({ enabled: true, repo }), undefined)).toBe(true);
     expect(worktreePushNewBranches(settings(undefined), undefined)).toBe(true);
-    expect(worktreePushNewBranches(settings({ repo }), undefined)).toBe(true);
+    expect(worktreePushNewBranches(settings({ repo: { ...repo, createdByApp: false } }), undefined)).toBe(true);
     expect(worktreePushNewBranches(settings({ enabled: true }), undefined)).toBe(true);
     expect(worktreePushNewBranches(settings(undefined, false), undefined)).toBe(false);
     expect(worktreePushNewBranches(settings(undefined, false), true)).toBe(true);

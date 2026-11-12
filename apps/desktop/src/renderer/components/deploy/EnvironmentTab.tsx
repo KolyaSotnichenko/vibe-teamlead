@@ -27,10 +27,11 @@ function stepStatus(
   at: { current?: DeploySetupStep; running: boolean; failed: boolean; waiting: boolean; settings: DeployProjectSettings | null }
 ): GraphNodeStatus | 'attention' {
   if (step === 'push' && at.settings?.repo && !at.settings.repo.createdByApp) return 'skipped';
-  // A repository is recorded but the last run stopped before 'done': that run's step decides
-  if (at.current === 'done' || (!at.running && !at.current && isCiSetUp(at.settings))) return 'success';
-  // Before 'repo' setup checks the accounts: shown as the first step
-  const current = STEPS.indexOf(at.current ?? 'repo');
+  // Setup finished once (main reached the repository): every step is done
+  if (at.current === 'done' || (!at.running && !at.current && at.settings?.enabled === true)) return 'success';
+  // Before 'repo' setup checks the accounts: shown as the first step. A repository recorded by a
+  // setup that never finished (after a restart there is no last run): the push is what is left
+  const current = STEPS.indexOf(at.current ?? (at.settings?.repo ? 'push' : 'repo'));
   const index = STEPS.indexOf(step);
   if (index < current) return 'success';
   if (index > current) return 'queued';
@@ -68,10 +69,13 @@ export function EnvironmentTab({ projectId, env, onConnectGitHub }: EnvironmentT
   const open = (n: NeededItem) => !acknowledged.has(n.id);
   const needed: NeededItem[] = (lastSetup?.needed ?? []).filter(open);
 
+  /** A repository is recorded: secrets can be listed and added */
   const setupDone = isCiSetUp(settings);
+  /** Setup finished once: main reached the repository. Until then Setup stays, with Try again */
+  const setupFinished = settings?.enabled === true && setupDone;
   const setupFailed = !!lastSetup?.error;
   const setupWaiting = (lastSetup?.needed ?? []).some((n) => n.kind !== 'public-repo-warning' && open(n));
-  const showSetup = !setupDone || setupRunning || (lastSetup && lastSetup.step !== 'done');
+  const showSetup = !setupFinished || setupRunning || (lastSetup && lastSetup.step !== 'done');
   const current = setupRunning ? (env.progress ?? undefined) : lastSetup?.step;
 
   const push = state.lastPush;
@@ -93,10 +97,10 @@ export function EnvironmentTab({ projectId, env, onConnectGitHub }: EnvironmentT
           <p className="text-sm text-muted-foreground">{t('deploy:setup.description')}</p>
           <div>
             <Button disabled={setupRunning} onClick={() => void env.setUp()}>
-              {setupRunning ? t('deploy:setup.running') : lastSetup ? t('deploy:setup.retry') : t('deploy:setup.start')}
+              {setupRunning ? t('deploy:setup.running') : lastSetup || settings?.repo ? t('deploy:setup.retry') : t('deploy:setup.start')}
             </Button>
           </div>
-          {(setupRunning || lastSetup) && (
+          {(setupRunning || lastSetup || settings?.repo) && (
             <ol aria-label={t('deploy:setup.steps')} className="flex flex-col border border-foreground">
               {STEPS.map((step) => (
                 <li key={step} className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0">

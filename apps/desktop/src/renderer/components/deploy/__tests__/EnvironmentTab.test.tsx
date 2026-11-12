@@ -254,11 +254,30 @@ describe('Push after merge', () => {
 });
 
 describe('Setup rule: a recorded repository means set up', () => {
-  it('a repository without the old enabled flag counts as set up (no steps, secrets shown)', async () => {
+  it('a repository recorded but setup not finished (main never reached it): Setup stays with Try again; secrets shown', async () => {
     setup({ env: { settings: { enabled: false, repo: { owner: 'acme', repo: 'shop', createdByApp: true, public: false } } } });
     const panel = await openEnvironment();
-    expect(within(panel).queryByRole('button', { name: 'deploy:setup.start' })).not.toBeInTheDocument();
+    expect(await within(panel).findByRole('button', { name: 'deploy:setup.retry' })).toBeInTheDocument();
+    const steps = within(panel).getByRole('list', { name: 'deploy:setup.steps' });
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(3);
+    const mark = (step: string) => within(steps).getByText(`deploy:setup.step.${step}`).closest('li')?.querySelector('[data-marker]')?.getAttribute('data-marker');
+    expect(mark('repo')).toBe('success');
+    expect(mark('push')).not.toBe('success');
+    expect(mark('done')).not.toBe('success');
     expect(await within(panel).findByText('deploy:secrets.title')).toBeInTheDocument();
+  });
+
+  it('old data with a repository and no enabled flag (adopted repository) also offers setup again', async () => {
+    setup({ env: { settings: { repo: { owner: 'acme', repo: 'shop', createdByApp: false, public: false } } as DeployProjectSettings } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByRole('button', { name: 'deploy:setup.retry' })).toBeInTheDocument();
+  });
+
+  it('enabled with a repository: no setup section', async () => {
+    setup({ env: { settings: setUpSettings } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByText('deploy:secrets.title')).toBeInTheDocument();
+    expect(within(panel).queryByText('deploy:setup.title')).not.toBeInTheDocument();
   });
 
   it('enabled without a repository is not set up', async () => {

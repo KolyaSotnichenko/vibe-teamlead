@@ -41,9 +41,19 @@ export type PreviewPushAllowed =
   | { allowed: true }
   | { allowed: false; reason: 'not-set-up' | 'public-repo' | 'push-off' };
 
+/**
+ * Whether the main branch has reached the CI repository: setup finished once, or the repository
+ * is one the app didn't create (it already has the project's code). An app-created repository
+ * recorded by a setup that stopped before its push is empty: a task branch pushed there could
+ * become GitHub's default branch.
+ */
+export function mainReachedRepo(deploy: DeployProjectSettings | undefined): boolean {
+  return !!deploy?.repo && (deploy.enabled === true || deploy.repo.createdByApp !== true);
+}
+
 export function previewPushAllowed(project: Project, task: Task): PreviewPushAllowed {
   const deploy = project.settings?.deploy;
-  if (!isCiSetUp(project) || !deploy?.repo) return { allowed: false, reason: 'not-set-up' };
+  if (!isCiSetUp(project) || !deploy?.repo || !mainReachedRepo(deploy)) return { allowed: false, reason: 'not-set-up' };
   // Only a repository known to be private gets pushes; unknown visibility fails closed
   if (deploy.repo.public !== false) return { allowed: false, reason: 'public-repo' };
   if (project.settings?.pushNewBranches === false || task.metadata?.pushNewBranches === false) {
@@ -54,14 +64,14 @@ export function previewPushAllowed(project: Project, task: Task): PreviewPushAll
 
 /**
  * Whether a task's new branch is pushed when its worktree is made. A CI repository that
- * is not known to be private gets no task branch at all.
+ * is not known to be private, or that main hasn't reached yet, gets no task branch at all.
  */
 export function worktreePushNewBranches(
   settings: Project['settings'] | undefined,
   optionValue: boolean | undefined,
 ): boolean {
   const repo = settings?.deploy?.repo;
-  if (isCiSetUp({ settings }) && repo && repo.public !== false) return false;
+  if (isCiSetUp({ settings }) && repo && (repo.public !== false || !mainReachedRepo(settings?.deploy))) return false;
   return optionValue ?? settings?.pushNewBranches !== false;
 }
 
