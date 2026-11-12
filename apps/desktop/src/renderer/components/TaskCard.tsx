@@ -557,25 +557,38 @@ export const TaskCard = memo(function TaskCard({
 
       {/* CI row: its own full-width row, never squeezed into the strip */}
       {showCi && ci && (
-        <button
-          type="button"
-          data-testid="task-preview-row"
-          className={cn(
-            'flex min-h-11 w-full items-center gap-2.5 border-t border-border px-3 text-left text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2',
+        (() => {
+          const rowClass = cn(
+            'flex min-h-11 w-full items-center gap-2.5 border-t border-border px-3 text-left text-sm font-medium',
             ci.state === 'failed' ? 'text-destructive' : 'text-foreground'
-          )}
-          onClick={handleCi}
-          aria-busy={ci.state === 'running' || undefined}
-          aria-disabled={ci.state !== 'failed' ? true : undefined}
-        >
-          <span
-            aria-hidden
-            data-testid="task-preview-mark"
-            data-marker={ci.state === 'running' ? 'running' : undefined}
-            className={cn('h-2 w-2 shrink-0', ci.state === 'failed' ? 'bg-destructive' : 'bg-foreground', ci.state === 'running' && 'vt-breathe')}
-          />
-          <span className="min-w-0 flex-1 truncate">{t(`taskCi.${ci.state}`)}</span>
-        </button>
+          );
+          const content = (
+            <>
+              <span
+                aria-hidden
+                data-testid="task-preview-mark"
+                data-marker={ci.state === 'running' ? 'running' : undefined}
+                className={cn('h-2 w-2 shrink-0', ci.state === 'failed' ? 'bg-destructive' : 'bg-foreground', ci.state === 'running' && 'vt-breathe')}
+              />
+              <span className="min-w-0 flex-1 truncate">{t(`taskCi.${ci.state}`)}</span>
+            </>
+          );
+          // Only a failed run leads somewhere; running and passed are plain text, not buttons
+          return ci.state === 'failed' ? (
+            <button
+              type="button"
+              data-testid="task-preview-row"
+              className={cn(rowClass, 'hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2')}
+              onClick={handleCi}
+            >
+              {content}
+            </button>
+          ) : (
+            <div data-testid="task-preview-row" className={rowClass} aria-busy={ci.state === 'running' || undefined}>
+              {content}
+            </div>
+          );
+        })()
       )}
 
       {/* Action strip: buttons only */}

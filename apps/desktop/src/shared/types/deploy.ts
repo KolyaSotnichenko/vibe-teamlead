@@ -56,14 +56,14 @@ export interface DeployJob {
 
 /**
  * A task's CI status: the GitHub Actions runs of its branch (`vibe-teamlead/<specId>`) for the last
- * pushed commit; a run of an older commit does not count. `waiting`: no run of that commit yet.
+ * pushed commit; a run of an older commit does not count. `waiting`: no run of that commit yet; `settled`: none came within 10 minutes of the push, none is expected.
  * `failed` carries the failed run (and its failed job) for the Deploy page's Runs tab.
  */
 export type TaskCiState =
   | { state: 'not-set-up' }
   | { state: 'unavailable'; reason: 'public-repo' | 'push-off' }
   | { state: 'not-pushed'; pushError?: string }
-  | { state: 'waiting'; pushError?: string }
+  | { state: 'waiting'; settled?: boolean; pushError?: string }
   | { state: 'running'; pushError?: string }
   | { state: 'passed'; pushError?: string }
   | { state: 'failed'; runId: number; jobId?: number; pushError?: string };

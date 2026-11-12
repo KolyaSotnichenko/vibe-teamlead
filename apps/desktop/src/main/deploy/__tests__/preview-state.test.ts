@@ -62,7 +62,7 @@ describe('previewState (CI status of the pushed sha)', () => {
     const { d, runs, jobs } = deps();
     expect(await previewState(project, task(), d)).toEqual({ state: 'waiting' });
     expect(runs).toHaveBeenCalledTimes(1);
-    expect(runs).toHaveBeenCalledWith('acme', 'app', 10, 'vibe-teamlead/001-x');
+    expect(runs).toHaveBeenCalledWith('acme', 'app', 20, 'vibe-teamlead/001-x');
     expect(jobs).not.toHaveBeenCalled();
   });
 
@@ -95,9 +95,17 @@ describe('previewState (CI status of the pushed sha)', () => {
       ],
     });
     expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 20, jobId: 2 });
-    expect(runs).toHaveBeenCalledWith('acme', 'app', 10, 'vibe-teamlead/001-x');
+    expect(runs).toHaveBeenCalledWith('acme', 'app', 20, 'vibe-teamlead/001-x');
     expect(jobs).toHaveBeenCalledTimes(1);
     expect(jobs).toHaveBeenCalledWith('acme', 'app', 20);
+  });
+
+  it('the first job that did not succeed is linked (timed out or cancelled too)', async () => {
+    const { d } = deps({
+      runs: [run(5, 'h1', 'completed', 'cancelled')],
+      jobs: [{ id: 1, name: 'a', conclusion: 'success' } as DeployJob, { id: 2, name: 'b', conclusion: 'skipped' } as DeployJob, { id: 3, name: 'c', conclusion: 'timed_out' } as DeployJob],
+    });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 5, jobId: 3 });
   });
 
   it('a timed-out or cancelled run is a failure; with no failed job the run alone is linked', async () => {
@@ -175,5 +183,47 @@ describe('cache', () => {
     const { d, runs } = deps();
     await Promise.all([previewState(project, task(), d), previewState(project, task(), d), previewState(project, task(), d)]);
     expect(runs).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('settling when no run comes', () => {
+  const MIN = 60_000;
+  const pushedAt = '2026-01-01T00:00:00.000Z';
+  const at = Date.parse(pushedAt);
+  beforeEach(() => {
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: pushedAt });
+  });
+
+  it('within 10 minutes of the push: waiting, re-read after 30 s', async () => {
+    let t = at + 9 * MIN;
+    const { d, runs } = deps();
+    d.now = () => t;
+    expect(await previewState(project, task(), d)).toEqual({ state: 'waiting' });
+    t += 31_000;
+    await previewState(project, task(), d);
+    expect(runs).toHaveBeenCalledTimes(2);
+  });
+
+  it('after 10 minutes: settled, cached until the next push', async () => {
+    let t = at + 11 * MIN;
+    const { d, runs } = deps();
+    d.now = () => t;
+    expect(await previewState(project, task(), d)).toEqual({ state: 'waiting', settled: true });
+    t += 60 * MIN;
+    expect(await previewState(project, task(), d)).toEqual({ state: 'waiting', settled: true });
+    expect(runs).toHaveBeenCalledTimes(1);
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h2', at: new Date(t).toISOString() });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'waiting' });
+    expect(runs).toHaveBeenCalledTimes(2);
+  });
+
+  it('a GitHub error: waiting within 10 minutes, settled after', async () => {
+    const young = deps({ fail: true });
+    young.d.now = () => at + 5 * MIN;
+    expect(await previewState(project, task(), young.d)).toEqual({ state: 'waiting' });
+    invalidatePreview('t1');
+    const old = deps({ fail: true });
+    old.d.now = () => at + 11 * MIN;
+    expect(await previewState(project, task(), old.d)).toEqual({ state: 'waiting', settled: true });
   });
 });

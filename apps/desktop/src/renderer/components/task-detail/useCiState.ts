@@ -3,7 +3,7 @@
  * answers from GitHub (and does not cache errors), so the renderer asks at most every 30 s
  * per task however many cards and windows show it: one shared entry per task holds the
  * state, the timer and the ask in flight. It polls only while CI is running or a run is still
- * awaited (`waiting`: the run may not exist yet), and asks again whenever the branch is pushed.
+ * awaited (`waiting` and not `settled`: the run may not exist yet), and asks again whenever the branch is pushed.
  */
 
 import { useEffect, useState } from 'react';
@@ -28,7 +28,7 @@ const entries = new Map<string, Entry>();
 let unsubscribe: (() => void) | undefined;
 
 function syncTimer(entry: Entry, taskId: string): void {
-  const poll = (entry.ci?.state === 'running' || entry.ci?.state === 'waiting') && entry.subscribers.size > 0;
+  const poll = (entry.ci?.state === 'running' || (entry.ci?.state === 'waiting' && !entry.ci.settled)) && entry.subscribers.size > 0;
   if (poll && !entry.timer) entry.timer = setInterval(() => ask(taskId, true), PREVIEW_REFRESH_MS);
   if (!poll && entry.timer) {
     clearInterval(entry.timer);

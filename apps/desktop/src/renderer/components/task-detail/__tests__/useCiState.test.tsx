@@ -85,6 +85,15 @@ describe('useCiState', () => {
     expect(previewState).toHaveBeenCalledTimes(3);
   });
 
+  it('stops asking once waiting is settled', async () => {
+    state = { state: 'waiting', settled: true };
+    renderHook(() => useCiState(task));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(previewState).toHaveBeenCalledTimes(1);
+  });
+
   it('asks again when this task is pushed, not another', async () => {
     state = { state: 'not-pushed' };
     const { result } = renderHook(() => useCiState(task));

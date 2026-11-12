@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Task } from '../../../../shared/types';
 import type { DeployTarget } from "../../../../shared/types/deploy";
 
@@ -45,8 +45,8 @@ describe('CiNotice', () => {
 
   it.each([{ state: 'unavailable', reason: 'push-off' }, { state: 'not-pushed' }, { state: 'waiting' }, { state: 'passed' }])('says nothing for %o', async (data) => {
     setup(data);
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
+    await act(async () => {});
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });
 

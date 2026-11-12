@@ -290,27 +290,20 @@ describe('TaskCard', () => {
       expect(screen.queryByTestId('task-preview-row')).not.toBeInTheDocument();
     });
 
-    it('running says so, and a click does nothing but stay off the card', async () => {
-      const open = withCi({ state: 'running' });
+    it.each(['running', 'passed'])('%s is plain text, not a button, and a click opens nothing', async (state) => {
+      const open = withCi({ state });
       const onClick = vi.fn();
       const heard = vi.fn();
       window.addEventListener('open-deploy', heard);
       render(<TaskCard task={task()} onClick={onClick} />);
-      const button = await screen.findByRole('button', { name: /taskCi\.running/ });
-      expect(button).toHaveAttribute('aria-disabled', 'true');
-      fireEvent.click(button);
+      const row = await screen.findByTestId('task-preview-row');
+      expect(row.tagName).not.toBe('BUTTON');
+      expect(screen.queryByRole('button', { name: new RegExp(`taskCi\\.${state}`) })).not.toBeInTheDocument();
+      expect(row).toHaveTextContent(`taskCi.${state}`);
+      fireEvent.click(row);
       window.removeEventListener('open-deploy', heard);
       expect(open).not.toHaveBeenCalled();
       expect(heard).not.toHaveBeenCalled();
-      expect(onClick).not.toHaveBeenCalled();
-    });
-
-    it('passed says so', async () => {
-      withCi({ state: 'passed' });
-      const onClick = vi.fn();
-      render(<TaskCard task={task()} onClick={onClick} />);
-      fireEvent.click(await screen.findByRole('button', { name: /taskCi\.passed/ }));
-      expect(onClick).not.toHaveBeenCalled();
     });
 
     it.each([
