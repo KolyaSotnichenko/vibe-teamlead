@@ -32,7 +32,7 @@ vi.mock('../../deploy/setup', async (orig) => ({ ...(await orig<typeof import('.
 const vars = vi.hoisted(() => ({ setDeployVariable: vi.fn(), listDeployVariables: vi.fn() }));
 vi.mock('../../deploy/variables', () => vars);
 
-const db = vi.hoisted(() => ({ addDatabase: vi.fn(), addIntegration: vi.fn() }));
+const db = vi.hoisted(() => ({ addDatabase: vi.fn(), addIntegration: vi.fn(), sweepStaleLinkDirs: vi.fn(async () => undefined) }));
 vi.mock('../../deploy/database', () => db);
 
 const cred = vi.hoisted(() => ({

@@ -25,7 +25,7 @@
  * `acceptTerms: true` (the owner clicked Accept in the app). CLI output is parsed, never
  * copied into messages (it can carry URLs with codes or tokens).
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import type { Project } from '../../shared/types';
@@ -63,12 +63,14 @@ interface IntegrationSpec {
   installSlug?: string;
   suffix: string;
   label: string;
+  /** What is added, in messages ("the database", "the Redis store") */
+  thing: string;
 }
 
 const INTEGRATIONS: Record<IntegrationKind, IntegrationSpec> = {
-  neon: { slug: 'neon', installSlug: 'neon', suffix: '-db', label: 'Neon' },
-  redis: { slug: 'upstash/upstash-kv', installSlug: 'upstash', suffix: '-redis', label: 'Upstash' },
-  blob: { suffix: '-blob', label: 'Blob' },
+  neon: { slug: 'neon', installSlug: 'neon', suffix: '-db', label: 'Neon', thing: 'database' },
+  redis: { slug: 'upstash/upstash-kv', installSlug: 'upstash', suffix: '-redis', label: 'Upstash', thing: 'Redis store' },
+  blob: { suffix: '-blob', label: 'Blob', thing: 'Blob store' },
 };
 
 export type DatabaseErrorKind = DeployDatabaseErrorKind;
@@ -197,6 +199,36 @@ function resourceNameFor(project: Project, suffix: string): string {
   return `${base || 'app'}${suffix}`;
 }
 
+const LINK_DIR_PREFIX = 'vt-db-';
+const STALE_LINK_DIR_MS = 10 * 60_000;
+/** Link dirs of runs going on now: never swept, however long a run takes */
+const liveDirs = new Set<string>();
+
+/**
+ * Removes `vt-db-*` link dirs older than 10 minutes under the temp root (a crashed or killed run
+ * leaves one, with `.vercel/project.json`). Runs at the start of each add and on app start; never throws.
+ */
+export async function sweepStaleLinkDirs(root: string = tmpdir(), now: number = Date.now()): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.startsWith(LINK_DIR_PREFIX)) continue;
+    const dir = path.join(root, name);
+    if (liveDirs.has(dir)) continue;
+    try {
+      const info = await lstat(dir);
+      if (!info.isDirectory() || now - info.mtimeMs < STALE_LINK_DIR_MS) continue;
+      await rm(dir, { recursive: true, force: true });
+    } catch {
+      // gone already, or not ours to remove
+    }
+  }
+}
+
 const inflight = new Map<string, Promise<AddDatabaseResult>>();
 /** Per project, so two services of one project never save settings at the same time. */
 const projectTail = new Map<string, Promise<unknown>>();
@@ -230,7 +262,7 @@ async function run(given: Project, deps: DatabaseDeps, opts: { integration: Inte
   try {
     project = (await deps.loadProject?.()) ?? given;
   } catch {
-    return fail('unknown', 'Adding the database failed.');
+    return fail('unknown', `Adding the ${spec.thing} failed.`);
   }
   const deploy = project.settings.deploy;
   if (kind === 'neon' ? deploy?.database : deploy?.services?.[kind]) return { ok: true };
@@ -243,9 +275,12 @@ async function run(given: Project, deps: DatabaseDeps, opts: { integration: Inte
   if (!token) return fail('auth', 'Sign in to Vercel first.');
 
   const root = deps.tmpRoot ?? tmpdir();
+  // Link dirs a crash or a kill left behind
+  await sweepStaleLinkDirs(root);
   let dir: string | undefined;
   try {
-    dir = await mkdtemp(path.join(root, 'vt-db-'));
+    dir = await mkdtemp(path.join(root, LINK_DIR_PREFIX));
+    liveDirs.add(dir);
     await mkdir(path.join(dir, '.vercel'), { mode: 0o700 });
     await writeFile(path.join(dir, '.vercel', 'project.json'), JSON.stringify({ projectId: vercel.projectId, orgId }), { mode: 0o600 });
 
@@ -272,7 +307,7 @@ async function run(given: Project, deps: DatabaseDeps, opts: { integration: Inte
         if (kind === 'neon') await deps.saveSettings({ database: { provider: 'neon', addedAt }, pendingDatabase: undefined });
         else await deps.saveSettings({ services: { ...vercelDeploy.services, [kind]: { addedAt } }, pendingServices: withoutKey(vercelDeploy.pendingServices, kind) });
       } catch {
-        return fail('saved-failed', "The database was added, but the app couldn't save that");
+        return fail('saved-failed', `The ${spec.thing} was added, but the app couldn't save that`);
       }
       return { ok: true };
     };
@@ -295,7 +330,7 @@ async function run(given: Project, deps: DatabaseDeps, opts: { integration: Inte
         const mark = { name: dbName, at: (deps.now?.() ?? new Date()).toISOString() };
         await deps.saveSettings(kind === 'neon' ? { pendingDatabase: mark } : { pendingServices: { ...vercelDeploy.pendingServices, [kind]: mark } });
       } catch {
-        return fail('unknown', 'Adding the database failed.');
+        return fail('unknown', `Adding the ${spec.thing} failed.`);
       }
     }
 
@@ -308,9 +343,11 @@ async function run(given: Project, deps: DatabaseDeps, opts: { integration: Inte
       if (out.kind === 'exists') {
         // the name may be taken by another project or team: only this project's resource counts
         if (await listedHere()) return record();
-        return fail('conflict', 'A database with this name already exists elsewhere on Vercel.');
+        return fail('conflict', `A ${spec.thing} with this name already exists elsewhere on Vercel.`);
       }
       if (out.kind === 'terms') {
+        // No terms slug (Blob is no Marketplace integration): the CLI can't accept them, the dashboard can
+        if (!spec.installSlug) return dashboard(kind, out.url);
         if (opts.acceptTerms && !accepted && !installed) {
           accepted = true;
           const acc = classify(await cli(['integration', 'accept-terms', spec.installSlug as string, '--yes', '--json']));
@@ -334,9 +371,12 @@ async function run(given: Project, deps: DatabaseDeps, opts: { integration: Inte
     return fail('cli', 'The Vercel CLI could not add it.');
   } catch (e) {
     const timedOut = e instanceof Error && /timed out/i.test(e.message);
-    return timedOut ? fail('timeout', 'Adding the database took too long.') : fail('unknown', 'Adding the database failed.');
+    return timedOut ? fail('timeout', `Adding the ${spec.thing} took too long.`) : fail('unknown', `Adding the ${spec.thing} failed.`);
   } finally {
-    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    if (dir) {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      liveDirs.delete(dir);
+    }
   }
 }
 

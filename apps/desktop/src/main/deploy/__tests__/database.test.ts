@@ -1,10 +1,10 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Project } from '../../../shared/types';
 import type { DeployProjectSettings } from '../../../shared/types/deploy';
-import { addDatabase, addIntegration, type DatabaseDeps } from '../database';
+import { addDatabase, addIntegration, sweepStaleLinkDirs, type DatabaseDeps } from '../database';
 
 let work: string;
 beforeEach(() => {
@@ -419,5 +419,61 @@ describe('addIntegration', () => {
     const r = await addIntegration(project, deps, { integration: 'blob' });
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r)).not.toContain('token=abc');
+  });
+});
+
+describe('service wording and Blob terms', () => {
+  it('Redis and Blob errors name the service, not a database', async () => {
+    const redis = setup(
+      { 'integration installations': [NOT_INSTALLED], 'integration add': [{ code: 1, out: 'Error: already exists' }], 'integration list': [{ code: 0, out: '{"resources":[]}' }] },
+    );
+    const r = await addIntegration(redis.project, redis.deps, { integration: 'redis' });
+    expect(r.ok).toBe(false);
+    const error = 'error' in r ? r.error : undefined;
+    expect(error?.kind).toBe('conflict');
+    expect(error?.message).not.toMatch(/database/i);
+    expect(error?.message).toContain('Redis');
+    const blob = setup({}, {}, { saveSettings: () => { throw new Error('disk'); } });
+    const b = await addIntegration(blob.project, blob.deps, { integration: 'blob' });
+    expect('error' in b ? b.error.message : undefined).toBe('Adding the Blob store failed.');
+  });
+
+  it('Blob asking for terms with acceptTerms: the dashboard, no accept-terms call', async () => {
+    const { cli, deps, project } = setup({ 'blob create-store': [{ code: 0, out: JSON.stringify(TERMS) }] });
+    const r = await addIntegration(project, deps, { integration: 'blob', acceptTerms: true });
+    expect(r).toMatchObject({ ok: false, needed: { kind: 'database-dashboard', integration: 'blob' } });
+    expect(cli.calls().some((c) => c.argv.includes('accept-terms'))).toBe(false);
+  });
+});
+
+describe('sweepStaleLinkDirs', () => {
+  it('removes vt-db-* folders older than 10 minutes, keeps young ones and anything else', async () => {
+    const root = mkdtempSync(path.join(work, 'sweep-'));
+    const old = path.join(root, 'vt-db-old');
+    const young = path.join(root, 'vt-db-young');
+    const other = path.join(root, 'other-old');
+    for (const d of [old, young, other]) mkdirSync(path.join(d, '.vercel'), { recursive: true });
+    const now = Date.parse('2026-11-11T10:00:00Z');
+    const past = new Date(now - 11 * 60_000);
+    utimesSync(old, past, past);
+    utimesSync(other, past, past);
+    const recent = new Date(now - 60_000);
+    utimesSync(young, recent, recent);
+    await sweepStaleLinkDirs(root, now);
+    expect(readdirSync(root).sort()).toEqual(['other-old', 'vt-db-young']);
+  });
+
+  it('runs at the start of each add', async () => {
+    const { deps, project, tmpRoot } = setup({ 'blob create-store': [{ code: 0, out: 'ok' }] });
+    const stale = path.join(tmpRoot, 'vt-db-stale');
+    mkdirSync(stale);
+    const past = new Date(Date.now() - 60 * 60_000);
+    utimesSync(stale, past, past);
+    await addIntegration(project, deps, { integration: 'blob' });
+    expect(readdirSync(tmpRoot)).toEqual([]);
+  });
+
+  it('never throws for a missing root', async () => {
+    await expect(sweepStaleLinkDirs(path.join(work, 'missing'))).resolves.toBeUndefined();
   });
 });

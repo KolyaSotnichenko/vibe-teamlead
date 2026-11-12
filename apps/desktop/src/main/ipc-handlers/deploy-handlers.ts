@@ -25,7 +25,7 @@ import type {
 } from '../../shared/types/deploy';
 import type { AgentManager } from '../agent';
 import { runReadinessScan } from '../ai/runners/deploy-readiness';
-import { addDatabase, addIntegration } from '../deploy/database';
+import { addDatabase, addIntegration, sweepStaleLinkDirs } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, repoVisibility, setRepoSecret } from '../deploy/github-write';
@@ -87,6 +87,8 @@ function headCommit(projectPath: string): Promise<string | undefined> {
 
 export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null, agentManager?: AgentManager): void {
   const client = createActionsClient(githubFetcher);
+  // Vercel link dirs a crashed run left in the temp dir (app start)
+  void sweepStaleLinkDirs();
 
   // Tasks the readiness scan and failing runs create
   const taskDeps: DeployTaskDeps = {
