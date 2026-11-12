@@ -257,9 +257,20 @@
     "workflow": "Workflow",
     "noWorkflow": "Ще немає",
     "lastRun": "Останній запуск у main",
-    "conclusion": "{{conclusion}}",
     "openRuns": "Відкрити Запуски",
     "noRun": "У main ще не було запусків",
-    "clear": "Деплою ніщо не заважає"
+    "clear": "Деплою ніщо не заважає",
+    "conclusions": {
+      "success": "Успішно",
+      "failure": "Збій",
+      "cancelled": "Скасовано",
+      "timed_out": "Перевищено час",
+      "skipped": "Пропущено",
+      "neutral": "Нейтрально",
+      "action_required": "Потрібна дія",
+      "startup_failure": "Не вдалося запустити",
+      "stale": "Застаріло",
+      "unknown": "Невідомий результат"
+    }
   }
 }

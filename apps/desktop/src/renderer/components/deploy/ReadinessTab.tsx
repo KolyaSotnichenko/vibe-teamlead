@@ -11,6 +11,18 @@ import { Notice, Row, Section } from './parts';
 import { VariableDialog } from './VariableDialog';
 import { formatRelative, StatusMark } from './status';
 
+const CONCLUSIONS: Record<string, 'success' | 'attention' | 'skipped'> = {
+  success: 'success',
+  failure: 'attention',
+  timed_out: 'attention',
+  startup_failure: 'attention',
+  cancelled: 'skipped',
+  skipped: 'skipped',
+  neutral: 'skipped',
+  action_required: 'skipped',
+  stale: 'skipped',
+};
+
 const TASK_STATUSES: ReadonlySet<string> = new Set(['backlog', 'queue', 'in_progress', 'ai_review', 'human_review', 'done', 'pr_created', 'error']);
 
 export interface ReadinessTabProps {
@@ -140,7 +152,10 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
             <Row label={t('deploy:readiness.lastRun')}>
               {run ? (
                 <>
-                  <span>{t('deploy:readiness.conclusion', { conclusion: run.conclusion })}</span>
+                  <span className="inline-flex items-center gap-2">
+                    <StatusMark status={CONCLUSIONS[run.conclusion] ?? 'skipped'} />
+                    <span>{t(`deploy:readiness.conclusions.${run.conclusion in CONCLUSIONS ? run.conclusion : 'unknown'}`)}</span>
+                  </span>
                   <button
                     type="button"
                     onClick={onOpenRuns}

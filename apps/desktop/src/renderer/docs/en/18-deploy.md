@@ -39,7 +39,7 @@ Settings → Vercel connects the Vercel account Deploy uses to set up hosting. *
 
 ## Readiness
 
-The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy. It scans the project when you first open it and again on **Check again**. Each blocker (code or workflow) has its own task; the title opens the task, and the blocker turns done when the task is. Parts Vibe Teamlead can't deploy to Vercel are listed without a task. **Needed from you** lists what only you can do, such as adding a variable's value. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers are still open.
+The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy. It scans the project when you first open it and again on **Check again**. Each blocker (code or workflow) has its own task; the title opens the task, and the blocker turns done when the task is. Parts Vibe Teamlead can't deploy to Vercel are listed without a task. **Needed from you** lists what only you can do, such as adding a variable's value. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers the last check found (parts Vibe Teamlead can't deploy are not counted); it updates when the check runs again, for example after merges.
 
 ## Environment: set up deploy
 

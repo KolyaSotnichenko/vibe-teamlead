@@ -257,9 +257,20 @@
     "workflow": "Workflow",
     "noWorkflow": "None yet",
     "lastRun": "Last run on main",
-    "conclusion": "{{conclusion}}",
     "openRuns": "Open Runs",
     "noRun": "No run on main yet",
-    "clear": "Nothing blocks deploy"
+    "clear": "Nothing blocks deploy",
+    "conclusions": {
+      "success": "Succeeded",
+      "failure": "Failed",
+      "cancelled": "Cancelled",
+      "timed_out": "Timed out",
+      "skipped": "Skipped",
+      "neutral": "Neutral",
+      "action_required": "Needs action",
+      "startup_failure": "Failed to start",
+      "stale": "Out of date",
+      "unknown": "Unknown result"
+    }
   }
 }

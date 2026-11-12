@@ -147,4 +147,17 @@ describe('Readiness tab', () => {
     await openTab();
     expect(await screen.findByText('deploy:readiness.clear')).toBeInTheDocument();
   });
+
+  it('shows the last run result by a mapped key with a mark', async () => {
+    setup({ result: result({ workflow: { path: 'ci.yml', lastMainRun: { conclusion: 'failure', runId: 7 } } }), scanning: false, tasks: {} });
+    await openTab();
+    const text = await screen.findByText('deploy:readiness.conclusions.failure');
+    expect(text.parentElement?.querySelector('[data-marker="attention"]')).not.toBeNull();
+  });
+
+  it('falls back for an unknown conclusion', async () => {
+    setup({ result: result({ workflow: { path: 'ci.yml', lastMainRun: { conclusion: 'weird', runId: 7 } } }), scanning: false, tasks: {} });
+    await openTab();
+    expect(await screen.findByText('deploy:readiness.conclusions.unknown')).toBeInTheDocument();
+  });
 });
