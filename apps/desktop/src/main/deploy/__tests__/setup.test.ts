@@ -44,6 +44,7 @@ function world(opts: { origin?: string | null; git?: GitInfo | null; visibility?
     projects: new Map<string, FakeProject>(),
     saved: undefined as DeployProjectSettings | undefined,
     crash: new Set<string>(),
+    identitySet: false,
   };
   const crash = (point: string) => {
     if (state.crash.has(point)) throw new Error(`crash at ${point}`);
@@ -83,6 +84,10 @@ function world(opts: { origin?: string | null; git?: GitInfo | null; visibility?
     vercelClient: vi.fn(() => client),
     isGitHubSignedIn: vi.fn(async () => true),
     githubLogin: vi.fn(async () => 'nick'),
+    commitIdentity: vi.fn(async () => {
+      crash('identity');
+      state.identitySet = true;
+    }),
     appAccess: vi.fn(async (repo?: { owner: string; repo: string }) =>
       repo ? { installed: true, repositorySelection: 'all' as const, repoReachable: true } : { installed: true, repositorySelection: 'all' as const },
     ),
@@ -127,6 +132,27 @@ function world(opts: { origin?: string | null; git?: GitInfo | null; visibility?
 }
 
 describe('setUpDeploy', () => {
+  it('sets the commit author in the project before pushing, so Vercel can tie commits to the owner', async () => {
+    const { state, deps } = world();
+    let setBeforePush = false;
+    (deps.pushWithAppToken as ReturnType<typeof vi.fn>).mockImplementation(async (_p: string, url: string, refspec: string) => {
+      setBeforePush = state.identitySet === true;
+      state.pushes.push({ url, refspec });
+    });
+    const result = await setUpDeploy(project(), deps);
+    expect(deps.commitIdentity).toHaveBeenCalledWith('/projects/my-app');
+    expect(setBeforePush).toBe(true);
+    expect(result.step).toBe('done');
+  });
+
+  it("can't set the commit author: setup still goes on", async () => {
+    const { state, deps } = world();
+    state.crash.add('identity');
+    const result = await setUpDeploy(project(), deps);
+    expect(result.error).toBeUndefined();
+    expect(result.step).toBe('done');
+  });
+
   it('with no remote: creates a private repo, adds origin, pushes main, creates the Vercel project, enables', async () => {
     const { state, deps, client } = world();
     const result = await setUpDeploy(project(), deps);

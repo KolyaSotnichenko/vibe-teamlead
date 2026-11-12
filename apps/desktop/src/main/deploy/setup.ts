@@ -1,6 +1,9 @@
 /**
  * Deploy setup for a project: accounts → GitHub repository (+ push) → Vercel project → enabled.
  *
+ * Before the repository step, the project's commit author is set to an address GitHub ties to the
+ * owner when git would otherwise sign as `user@machine.local` (commit-identity.ts).
+ *
  * Every step records its result in `settings.deploy` (through `saveSettings`) before the
  * next one starts, so a re-run after a crash at any point picks up where it stopped and
  * creates nothing twice:
@@ -55,6 +58,8 @@ export interface SetupDeps {
   isGitHubSignedIn: () => Promise<boolean>;
   /** Login of the GitHub user the App token acts for (GET /user). */
   githubLogin: () => Promise<string>;
+  /** Makes the project's commits signed by an address GitHub ties to the owner (commit-identity.ts). */
+  commitIdentity: (projectPath: string) => Promise<unknown>;
   /** `getGitHubAppAccess` (github-auth/app-access.ts). */
   appAccess: (repo?: Repo) => Promise<GitHubAppAccess | { error: string }>;
   /** null when the project is not a git repository. */
@@ -208,6 +213,9 @@ export async function setUpDeploy(project: Project, deps: SetupDeps): Promise<De
     if (!(await deps.isGitHubSignedIn())) {
       need({ id: 'github-sign-in', kind: 'github-sign-in', message: 'Sign in to GitHub in Settings → GitHub.' });
     }
+    // Vercel refuses to deploy commits whose author it can't tie to the owner's GitHub account.
+    // Best effort: a project the app can't configure still gets set up.
+    await deps.commitIdentity(project.path).catch(() => undefined);
 
     // 2. Repository.
     enter('repo');
@@ -520,13 +528,14 @@ export async function createSetupDeps(
   project: Project,
   extra: Pick<SetupDeps, 'onProgress' | 'vercelTeamId'> = {},
 ): Promise<SetupDeps> {
-  const [credential, vercelApi, githubWrite, appAccess, tokenStore, store] = await Promise.all([
+  const [credential, vercelApi, githubWrite, appAccess, tokenStore, store, identity] = await Promise.all([
     import('./vercel-credential'),
     import('./vercel-api'),
     import('./github-write'),
     import('../github-auth/app-access'),
     import('../github-auth/token-store'),
     import('../project-store'),
+    import('./commit-identity'),
   ]);
   return {
     vercelStatus: () => credential.vercelStatus(),
@@ -539,6 +548,7 @@ export async function createSetupDeps(
     addOriginIfMissing: (p, url) => githubWrite.addOriginIfMissing(p, url),
     pushWithAppToken: (p, url, refspec) => githubWrite.pushWithAppToken(p, url, refspec),
     githubLogin: () => githubWrite.getAuthenticatedLogin(),
+    commitIdentity: (p) => identity.ensureCommitIdentity(identity.gitCommitIdentityDeps(p, () => githubWrite.getAuthenticatedUser())),
     inspectRepo: (owner, repo) => githubWrite.inspectRepo(owner, repo),
     saveSettings: (patch) => saveDeployPatch(store.projectStore, project.id, patch),
     ...extra,
