@@ -28,6 +28,7 @@ import { addDatabase } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
+import { isDeployTask } from '../deploy/deploy-tasks';
 import { createReadiness } from '../deploy/readiness';
 import { setReadiness } from '../deploy/readiness-instance';
 import { lastPushResult, resolveMainBranch } from '../deploy/push-after-merge';
@@ -196,6 +197,11 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
   );
 
   // --- Readiness -------------------------------------------------------------------------------
+
+  ipcMain.handle(IPC_CHANNELS.DEPLOY_IS_DEPLOY_TASK, (_event, projectId: string, specId: string): boolean => {
+    const project = projectStore.getProject(projectId);
+    return !!project && isDeployTask(project.path, specId);
+  });
 
   const readiness = createReadiness({
     scan: (input) => runReadinessScan(input),

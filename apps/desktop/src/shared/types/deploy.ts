@@ -133,6 +133,8 @@ export interface DeployAPI {
   onDatabaseProgress: (callback: (progress: DeployDatabaseProgress) => void) => () => void;
   onSetupProgress: (callback: (progress: DeploySetupProgress) => void) => () => void;
   onPushResult: (callback: (result: DeployPushResult) => void) => () => void;
+  /** Whether the readiness scan created this task: its spec is in the app's deploy ledger. False for unknown projects. */
+  isDeployTask: (projectId: string, specId: string) => Promise<boolean>;
   /** Saved readiness result, whether a scan runs, the last scan error and the tasks by blocker key. */
   readinessState: (projectId: string) => Promise<import('./common').IPCResult<ReadinessState>>;
   /** Starts a scan (or joins the one running). `reason`: 'open' scans only when nothing is saved; default 'check-again'. */

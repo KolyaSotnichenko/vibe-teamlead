@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
 import type { ReadinessBlocker } from '../../../shared/types/deploy';
 import { tryLoadPrompt } from '../../ai/prompts/prompt-loader';
-import { createBlockerTasks, createRunFixTask, deployTaskStatus, type DeployTaskDeps } from '../deploy-tasks';
+import { createBlockerTasks, createRunFixTask, deployTaskStatus, isDeployTask, type DeployTaskDeps } from '../deploy-tasks';
 
 let dir: string;
 let tasks: Task[];
@@ -113,5 +113,31 @@ describe('deployTaskStatus', () => {
   it('maps keys to spec and status', async () => {
     await createBlockerTasks(project(), [code], deps());
     expect(deployTaskStatus(project(), () => tasks)).toEqual({ 'code:localhost': { specId: '001-x', status: 'backlog' } });
+  });
+});
+
+describe('isDeployTask', () => {
+  it('is true for a spec the ledger recorded', async () => {
+    await createBlockerTasks(project(), [code], deps());
+    expect(isDeployTask(dir, '001-x')).toBe(true);
+  });
+
+  it('is false for a spec the ledger does not hold, even one marked deploy in its metadata', async () => {
+    await createBlockerTasks(project(), [code], deps());
+    expect(isDeployTask(dir, '999-other')).toBe(false);
+  });
+
+  it('is false when there is no ledger', () => {
+    expect(isDeployTask(dir, '001-x')).toBe(false);
+  });
+
+  it.each([
+    ['garbage JSON', 'not json{'],
+    ['tasks that is not a list', JSON.stringify({ tasks: 'x', handledRuns: [] })],
+    ['entries that are not objects', JSON.stringify({ tasks: [null, 5, 'x'], handledRuns: [] })],
+  ])('is false for a ledger with %s', (_name, content) => {
+    mkdirSync(path.dirname(ledger()), { recursive: true });
+    writeFileSync(ledger(), content);
+    expect(isDeployTask(dir, '001-x')).toBe(false);
   });
 });

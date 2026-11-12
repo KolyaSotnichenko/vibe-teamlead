@@ -248,6 +248,7 @@ const browserMockAPI: ElectronAPI = {
     addDatabase: async () => ({ success: false, error: 'Not available in the browser' }),
     onSetupProgress: () => () => {},
     onPushResult: () => () => {},
+    isDeployTask: async () => false,
     readinessState: async () => ({ success: true, data: { scanning: false, tasks: {} } }),
     scanReadiness: async () => ({ success: true }),
     onReadinessUpdate: () => () => {},

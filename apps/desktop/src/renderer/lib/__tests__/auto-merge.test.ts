@@ -111,9 +111,10 @@ describe('a UI task held for the preview', () => {
 
 describe('deploy tasks with the project switch off', () => {
   const projectOff = { id: 'p', settings: { autoMerge: false } } as never;
-  const reviewed = (sourceType: string) => ({ id: 't', projectId: 'p', status: 'human_review', reviewReason: 'completed', metadata: { sourceType } }) as never;
+  const reviewed = (sourceType: string, specId = 's-1') =>
+    ({ id: 't', projectId: 'p', specId, status: 'human_review', reviewReason: 'completed', metadata: { sourceType } }) as never;
 
-  function merger(task: unknown) {
+  function merger(task: unknown, isDeployTask: (projectId: string, specId: string) => Promise<boolean>) {
     const mergeWorktree = vi.fn(async () => ({ success: true, data: { success: true, message: 'ok' } }));
     const api = {
       getTaskMergeState: vi.fn(async () => ({ success: true, data: null })),
@@ -124,21 +125,36 @@ describe('deploy tasks with the project switch off', () => {
     const auto = createAutoMerge({
       api,
       getTask: () => task as never,
-      isEnabled: (t) => autoMergeEnabled(projectOff, t),
+      isEnabled: (t) => autoMergeEnabled(projectOff, t, isDeployTask),
       onProblem: vi.fn(),
     });
     return { auto, mergeWorktree };
   }
 
-  it('merges a deploy task that QA approved, by itself', async () => {
-    const { auto, mergeWorktree } = merger(reviewed('deploy'));
+  it('merges a deploy task the ledger created, once QA approved it', async () => {
+    const { auto, mergeWorktree } = merger(reviewed('deploy'), async () => true);
     await auto.statusChanged('t', 'ai_review', 'human_review');
     expect(mergeWorktree).toHaveBeenCalledWith('t', { auto: true, projectId: 'p' });
   });
 
-  it('leaves a manual task to you while the project switch is off', async () => {
-    const { auto, mergeWorktree } = merger(reviewed('manual'));
+  it('does not merge a deploy-marked task the ledger does not hold', async () => {
+    const { auto, mergeWorktree } = merger(reviewed('deploy'), async () => false);
     await auto.statusChanged('t', 'ai_review', 'human_review');
     expect(mergeWorktree).not.toHaveBeenCalled();
+  });
+
+  it('leaves a manual task to you while the project switch is off', async () => {
+    const { auto, mergeWorktree } = merger(reviewed('manual'), async () => true);
+    await auto.statusChanged('t', 'ai_review', 'human_review');
+    expect(mergeWorktree).not.toHaveBeenCalled();
+  });
+
+  it('merges once when two arrivals race the ledger check', async () => {
+    const { auto, mergeWorktree } = merger(reviewed('deploy'), async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return true;
+    });
+    await Promise.all([auto.statusChanged('t', 'ai_review', 'human_review'), auto.statusChanged('t', 'ai_review', 'human_review')]);
+    expect(mergeWorktree).toHaveBeenCalledTimes(1);
   });
 });

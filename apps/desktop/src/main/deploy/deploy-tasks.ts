@@ -119,6 +119,14 @@ export function createRunFixTask(project: Project, fix: { key: string; title: st
   return createKeyed(project, fix.key, fix.title, fix.description, { category: 'bug_fix', priority: 'urgent' }, deps);
 }
 
+/**
+ * Whether the readiness scan created this task (its spec is in the ledger). Task metadata is
+ * written by the pipeline agents, so it can't say this; the ledger is written only by the app.
+ */
+export function isDeployTask(projectPath: string, specId: string): boolean {
+  return readLedger(projectPath).tasks.some((entry) => typeof specId === 'string' && entry?.specId === specId);
+}
+
 /** Each ledger key's latest task: its spec and current status (undefined when the task is gone). */
 export function deployTaskStatus(project: Project, getTasks: DeployTaskDeps['getTasks']): Record<string, { specId: string; status?: string }> {
   const tasks = getTasks(project.id);

@@ -47,6 +47,7 @@ export const createDeployAPI = (): DeployAPI => ({
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_PUSH_RESULT, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_PUSH_RESULT, handler);
   },
+  isDeployTask: (projectId, specId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_IS_DEPLOY_TASK, projectId, specId),
   readinessState: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_READINESS_STATE, projectId),
   scanReadiness: (projectId, reason) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_READINESS_SCAN, projectId, reason),
   onReadinessUpdate: (callback) => {

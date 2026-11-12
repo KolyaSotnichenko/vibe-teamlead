@@ -17,7 +17,8 @@ export interface AutoMergeApi {
 interface AutoMergeOptions {
   api: AutoMergeApi;
   getTask: (taskId: string) => Task | undefined;
-  isEnabled: (task: Task) => boolean;
+  /** May be async (the deploy ledger is asked): it is awaited before any merge */
+  isEnabled: (task: Task) => boolean | Promise<boolean>;
   onProblem: (taskId: string, message: string) => void;
   /** Held for the owner's preview ("UI tasks wait for my preview"): it waits, nothing failed */
   onHeld?: (taskId: string) => void;
@@ -46,9 +47,11 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, on
       }
       if (oldStatus === 'human_review' || tried.has(taskId)) return;
       const task = getTask(taskId);
-      if (!task || task.reviewReason !== 'completed' || !isEnabled(task)) return;
+      if (!task || task.reviewReason !== 'completed') return;
+      // Marked before the first await, so a second arrival in the meantime does not try again
       tried.add(taskId);
       try {
+        if (!(await isEnabled(task))) return;
         if (!(await clean(task))) return;
         const result = await api.mergeWorktree(taskId, { auto: true, projectId: task.projectId });
         if (result.data?.heldForPreview) onHeld?.(taskId);

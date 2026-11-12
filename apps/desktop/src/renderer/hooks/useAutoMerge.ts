@@ -8,11 +8,18 @@ import { useTaskStore } from '../stores/task-store';
 import { toast } from './use-toast';
 
 /**
- * Whether QA's approval merges this task by itself. Deploy tasks (blocker and fix
- * tasks from the readiness scan) always do; everything else follows the project switch.
+ * Whether QA's approval merges this task by itself: the project switch, or a task the deploy
+ * ledger created (blocker and fix tasks). The metadata alone is not enough: pipeline agents write
+ * it, so the app's own ledger must hold the spec too.
  */
-export function autoMergeEnabled(project: Pick<Project, 'settings'> | undefined, task: Pick<Task, 'metadata'>): boolean {
-  return project?.settings?.autoMerge === true || task.metadata?.sourceType === 'deploy';
+export async function autoMergeEnabled(
+  project: Pick<Project, 'id' | 'settings'> | undefined,
+  task: Pick<Task, 'specId' | 'metadata'>,
+  isDeployTask: (projectId: string, specId: string) => Promise<boolean>,
+): Promise<boolean> {
+  if (project?.settings?.autoMerge === true) return true;
+  if (!project || task.metadata?.sourceType !== 'deploy') return false;
+  return isDeployTask(project.id, task.specId);
 }
 
 /** At the app's level: a task finishes QA whatever screen is open. */
@@ -23,7 +30,12 @@ export function useAutoMerge(): void {
     const auto = createAutoMerge({
       api: window.electronAPI as unknown as AutoMergeApi,
       getTask: (taskId) => useTaskStore.getState().tasks.find((task) => task.id === taskId || task.specId === taskId),
-      isEnabled: (task) => autoMergeEnabled(useProjectStore.getState().projects.find((project) => project.id === task.projectId), task),
+      isEnabled: (task) =>
+        autoMergeEnabled(
+          useProjectStore.getState().projects.find((project) => project.id === task.projectId),
+          task,
+          (projectId, specId) => window.electronAPI.deploy.isDeployTask(projectId, specId),
+        ),
       onHeld: (taskId) => useTaskStore.getState().updateTask(taskId, { waitingForPreview: true }),
       onLeft: (taskId) => useTaskStore.getState().updateTask(taskId, { waitingForPreview: false }),
       onProblem: (taskId, message) => {

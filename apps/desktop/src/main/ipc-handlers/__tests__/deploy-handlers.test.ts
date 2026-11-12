@@ -21,6 +21,9 @@ vi.mock('../../deploy/readiness', () => ({
   createReadiness: () => ({ state: () => ({ scanning: false, tasks: {} }), scan: scanReadiness }),
 }));
 vi.mock('../../deploy/github-fetcher', () => ({ githubFetcher: vi.fn() }));
+vi.mock('../../deploy/deploy-tasks', () => ({
+  isDeployTask: vi.fn((projectPath: string, specId: string) => projectPath === '/p1' && specId === 'deploy-spec'),
+}));
 vi.mock('../../project-store', () => ({
   projectStore: { getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: '/p1', settings: {} } : undefined)) },
 }));
@@ -63,6 +66,12 @@ describe('deploy IPC', () => {
   it('readiness state comes from the orchestrator; unknown project fails', async () => {
     expect(await invoke(IPC_CHANNELS.DEPLOY_READINESS_STATE, 'p1')).toEqual({ success: true, data: { scanning: false, tasks: {} } });
     expect(await invoke(IPC_CHANNELS.DEPLOY_READINESS_STATE, 'nope')).toMatchObject({ success: false });
+  });
+
+  it('isDeployTask answers from the project ledger; an unknown project is false', async () => {
+    expect(await invoke(IPC_CHANNELS.DEPLOY_IS_DEPLOY_TASK, 'p1', 'deploy-spec')).toBe(true);
+    expect(await invoke(IPC_CHANNELS.DEPLOY_IS_DEPLOY_TASK, 'p1', 'manual-spec')).toBe(false);
+    expect(await invoke(IPC_CHANNELS.DEPLOY_IS_DEPLOY_TASK, 'nope', 'deploy-spec')).toBe(false);
   });
 
   it('scanReadiness defaults to check-again and accepts open only', async () => {
