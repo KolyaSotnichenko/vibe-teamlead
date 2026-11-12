@@ -1275,6 +1275,12 @@
     "setUp": "Set up deploy",
     "publicRepo": "Previews need a private repository",
     "built": "built {{when}}",
+    "building": "Building the preview…",
+    "previous": "Previous preview:",
+    "previewFailed": "The preview failed",
+    "openLog": "Open the build log",
+    "openRun": "Open the failed run",
+    "openDeploy": "Open Deploy",
     "pushFailed": "The last push to GitHub failed: {{reason}}",
     "pushError": {
       "conflict": "the branch changed on GitHub",

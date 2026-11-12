@@ -322,7 +322,10 @@ export const TaskCard = memo(function TaskCard({
     e.stopPropagation();
     if (preview?.state === 'ready') openWebUrl(preview.url);
     else if (preview?.state === 'building' && isHttpsUrl(preview.previousUrl)) openWebUrl(preview.previousUrl);
-    else if (preview?.state === 'failed') {
+    else if (preview?.state === 'failed' && preview.runId === undefined && isHttpsUrl(preview.logUrl)) {
+      // Vercel built it (no Actions run): its build log says why
+      openWebUrl(preview.logUrl);
+    } else if (preview?.state === 'failed') {
       const detail: DeployTarget = { tab: 'runs' };
       if (preview.runId !== undefined) detail.runId = preview.runId;
       if (preview.jobId !== undefined) detail.jobId = preview.jobId;

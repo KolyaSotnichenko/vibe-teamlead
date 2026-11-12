@@ -219,6 +219,8 @@ describe('TaskCard', () => {
       [{ state: 'failed', runId: 5, jobId: 9 }, { tab: 'runs', runId: 5, jobId: 9 }],
       [{ state: 'failed', runId: 5 }, { tab: 'runs', runId: 5 }],
       [{ state: 'failed' }, { tab: 'runs' }],
+      [{ state: 'failed', runId: 5, logUrl: 'https://vercel.com/log' }, { tab: 'runs', runId: 5 }],
+      [{ state: 'failed', logUrl: 'http://vercel.com/log' }, { tab: 'runs' }],
     ])('goes to the failed run: %o', async (data, detail) => {
       withPreview(data);
       const heard = vi.fn();
@@ -229,6 +231,17 @@ describe('TaskCard', () => {
       window.removeEventListener('open-deploy', heard);
       expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual(detail);
       expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('opens Vercel\'s build log when no Actions run failed', async () => {
+      const open = withPreview({ state: 'failed', logUrl: 'https://vercel.com/acme/app/build' });
+      const heard = vi.fn();
+      window.addEventListener('open-deploy', heard);
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      fireEvent.click(await screen.findByRole('button', { name: /taskPreview\.failed/ }));
+      window.removeEventListener('open-deploy', heard);
+      expect(open).toHaveBeenCalledWith('https://vercel.com/acme/app/build');
+      expect(heard).not.toHaveBeenCalled();
     });
   });
 });
