@@ -77,13 +77,24 @@ function ErrorNotice({ error, repo, onConnect }: { error: GitHubError; repo?: st
   );
 }
 
-export function DeployPage({ projectId, onGoToTask }: { projectId: string; onGoToTask?: (specId: string) => void }) {
+export interface DeployPageProps {
+  projectId: string;
+  onGoToTask?: (specId: string) => void;
+  /** Where to open: read once, at mount */
+  initialTab?: 'runs' | 'readiness' | 'environment';
+  initialRunId?: number;
+  initialJobId?: number;
+  /** Called once after mount, so the caller can drop the target */
+  onTargetConsumed?: () => void;
+}
+
+export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, initialJobId, onTargetConsumed }: DeployPageProps) {
   const { t } = useTranslation(['deploy']);
   const [state, setState] = useState<DeployRunsState | null>(null);
-  const [pickedRunId, setPickedRunId] = useState<number | undefined>();
+  const [pickedRunId, setPickedRunId] = useState<number | undefined>(initialRunId);
   const [nodeKey, setNodeKey] = useState<string | undefined>();
   const [signingIn, setSigningIn] = useState(false);
-  const [tab, setTab] = useState<'runs' | 'readiness' | 'environment'>('runs');
+  const [tab, setTab] = useState<'runs' | 'readiness' | 'environment'>(initialTab ?? 'runs');
   // Bumped after a GitHub sign-in so the checklist reads the accounts again
   const [accountsKey, setAccountsKey] = useState(0);
   // Setup may have created the repository: the poller looks again
@@ -97,8 +108,10 @@ export function DeployPage({ projectId, onGoToTask }: { projectId: string; onGoT
   const runs = state?.runs ?? [];
   // A picked run that dropped off the list falls back to the poller's choice, as in the main process
   const picked = runs.some((r) => r.id === pickedRunId) ? pickedRunId : undefined;
-  const selectedId = picked ?? state?.selected?.runId ?? runs[0]?.id;
+  // Before the first state arrives, the run asked for at mount is the one to poll
+  const selectedId = picked ?? (state ? undefined : pickedRunId) ?? state?.selected?.runId ?? runs[0]?.id;
   const selectedRef = useRef<number | undefined>(selectedId);
+  const pendingJobRef = useRef<number | undefined>(initialJobId);
   selectedRef.current = selectedId;
 
   useEffect(() => {
@@ -118,6 +131,11 @@ export function DeployPage({ projectId, onGoToTask }: { projectId: string; onGoT
     };
   }, [projectId]);
 
+  useEffect(() => {
+    onTargetConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at mount
+  }, []);
+
   const selectRun = (runId: number) => {
     if (runId === selectedId) return;
     setPickedRunId(runId);
@@ -128,6 +146,15 @@ export function DeployPage({ projectId, onGoToTask }: { projectId: string; onGoT
   const run = runs.find((r) => r.id === selectedId);
   // Only the graph of the run on screen: while a switch is under way, the old run's graph stays hidden
   const selected = state?.selected && state.selected.runId === selectedId ? state.selected : undefined;
+  // The job asked for opens once, when its run's jobs have loaded; a later manual pick never reopens it
+  useEffect(() => {
+    const jobId = pendingJobRef.current;
+    if (jobId === undefined || !selected || selected.runId !== initialRunId) return;
+    const target = selected.graph.columns.flatMap((c) => c.nodes).find((n) => n.jobIds.includes(jobId));
+    if (!target) return;
+    pendingJobRef.current = undefined;
+    setNodeKey(target.key);
+  }, [selected, initialRunId]);
   const node = selected?.graph.columns.flatMap((c) => c.nodes).find((n) => n.key === nodeKey);
 
   let body: React.ReactNode;

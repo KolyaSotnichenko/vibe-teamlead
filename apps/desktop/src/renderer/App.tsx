@@ -51,6 +51,8 @@ import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
 import { PreviewPage } from './components/preview/PreviewPage';
 import { DeployPage } from './components/deploy/DeployPage';
+import { listenOpenDeploy } from './lib/open-deploy';
+import type { DeployTarget } from '../shared/types/deploy';
 import { AgentTools } from './components/AgentTools';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -133,6 +135,9 @@ export function App() {
 
   // UI State
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
+  // Bumped per open-deploy, so a new target remounts the Deploy page
+  const [deployNonce, setDeployNonce] = useState(0);
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<AppSection | undefined>(undefined);
@@ -305,6 +310,18 @@ export function App() {
       window.removeEventListener('open-app-settings', handleOpenAppSettings);
     };
   }, []);
+
+  // Open the Deploy page at a tab, a run and its job (from task cards and the task window)
+  useEffect(
+    () =>
+      listenOpenDeploy((target) => {
+        setDeployTarget(target);
+        setDeployNonce((n) => n + 1);
+        setSelectedTask(null);
+        setActiveView('deploy');
+      }),
+    []
+  );
 
   // Reset init success flag when selected project changes
   // This allows the init dialog to show for new/different projects
@@ -915,7 +932,15 @@ export function App() {
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'preview' && selectedProject && <PreviewPage key={selectedProject.id} project={selectedProject} />}
-                {activeView === 'deploy' && selectedProject && <DeployPage key={selectedProject.id} projectId={selectedProject.id} onGoToTask={handleGoToTask} />}
+                {activeView === 'deploy' && selectedProject && <DeployPage
+                    key={`${selectedProject.id}:${deployNonce}`}
+                    projectId={selectedProject.id}
+                    onGoToTask={handleGoToTask}
+                    initialTab={deployTarget?.tab}
+                    initialRunId={deployTarget?.runId}
+                    initialJobId={deployTarget?.jobId}
+                    onTargetConsumed={() => setDeployTarget(null)}
+                  />}
               </>
             ) : (
               <WelcomeScreen
@@ -937,6 +962,7 @@ export function App() {
           onOpenChange={(open) => !open && handleCloseTaskDetail()}
           onSwitchToTerminals={() => setActiveView('terminals')}
           onOpenInbuiltTerminal={handleOpenInbuiltTerminal}
+          onGoToDeploy={(target) => window.dispatchEvent(new CustomEvent<DeployTarget>('open-deploy', { detail: target }))}
         />
 
         {/* Dialogs */}

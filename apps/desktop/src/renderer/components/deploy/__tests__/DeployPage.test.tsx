@@ -61,7 +61,7 @@ const base = (over: Partial<DeployRunsState> = {}): DeployRunsState => ({
   ...over,
 });
 
-function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' }) {
+function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' }, props: Partial<React.ComponentProps<typeof DeployPage>> = {}) {
   let push: ((s: DeployRunsState) => void) | undefined;
   const unsubscribe = vi.fn();
   const deploy = {
@@ -83,7 +83,7 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     data: { installed: true, repositorySelection: 'all', repoReachable: true } as Record<string, unknown>,
   }));
   (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal, getGitHubAppAccess, vercel: { status: vi.fn(async () => ({ success: true, data: { connected: false } })) } };
-  const view = render(<DeployPage projectId="p1" />);
+  const view = render(<DeployPage projectId="p1" {...props} />);
   const emit = (s: DeployRunsState) => act(() => push?.(s));
   return { deploy, emit, view, unsubscribe, openExternal, getGitHubAppAccess };
 }
@@ -442,5 +442,31 @@ describe('DeployPage', () => {
     view.unmount();
     expect(deploy.stopRuns).toHaveBeenCalledWith('p1');
     expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  describe('opening at a target', () => {
+    it('initialTab opens that tab', () => {
+      setup(undefined, { initialTab: 'environment' });
+      expect(screen.getByRole('tab', { name: /deploy:tabs.environment/ })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('initialRunId goes to the first startRuns and is selected', async () => {
+      const { deploy, emit } = setup(undefined, { initialRunId: 16 });
+      await waitFor(() => expect(deploy.startRuns).toHaveBeenCalledWith('p1', 16));
+      emit(base({ selected: { runId: 16, jobs, graph } }));
+      expect(screen.getByText('#16 Merge task 16')).toBeInTheDocument();
+    });
+
+    it('initialJobId opens that job log once; a later run pick does not reopen it', async () => {
+      const { deploy, emit } = setup(undefined, { initialRunId: 16, initialJobId: 13 });
+      emit(base({ selected: { runId: 16, jobs, graph } }));
+      await waitFor(() => expect(deploy.jobLog).toHaveBeenCalledWith('p1', 13));
+      deploy.jobLog.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: /Merge task 17/ }));
+      emit(base({ selected: { runId: 17, jobs, graph } }));
+      await act(async () => { await Promise.resolve(); });
+      expect(deploy.jobLog).not.toHaveBeenCalled();
+      expect(screen.getByText('deploy:job.pick')).toBeInTheDocument();
+    });
   });
 });
