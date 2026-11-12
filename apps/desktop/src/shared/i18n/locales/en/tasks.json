@@ -1264,5 +1264,23 @@
     "hideFlows": "Only the frame under the pointer",
     "back": "← Back",
     "prototypeHint": "Click through the screens; clicking beside a link shows what is clickable"
+  },
+  "taskPreview": {
+    "title": "Preview",
+    "button": "Preview",
+    "ready": "Preview ↗",
+    "failed": "Preview failed",
+    "readyTitle": "{{url}} · built {{when}}",
+    "notSetUp": "A link for every task appears once you set up deploy",
+    "setUp": "Set up deploy",
+    "publicRepo": "Previews need a private repository",
+    "built": "built {{when}}",
+    "pushFailed": "The last push to GitHub failed: {{reason}}",
+    "pushError": {
+      "conflict": "the branch changed on GitHub",
+      "permissions": "the app has no permission to push",
+      "no-connection": "no connection",
+      "unavailable": "GitHub is not available"
+    }
   }
 }

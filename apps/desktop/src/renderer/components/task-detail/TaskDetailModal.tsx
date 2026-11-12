@@ -49,6 +49,8 @@ import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
 import { DesignTab } from './design/DesignTab';
+import { PreviewNotice } from './PreviewNotice';
+import type { DeployTarget } from '../../../shared/types/deploy';
 import type { FailedSubtaskDecision, Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -57,9 +59,10 @@ interface TaskDetailModalProps {
   onOpenChange: (open: boolean) => void;
   onSwitchToTerminals?: () => void;
   onOpenInbuiltTerminal?: (id: string, cwd: string) => void;
+  onGoToDeploy?: (target: DeployTarget) => void;
 }
 
-export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: TaskDetailModalProps) {
+export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal, onGoToDeploy }: TaskDetailModalProps) {
   // Don't render anything if no task
   if (!task) {
     return null;
@@ -72,6 +75,7 @@ export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals,
       onOpenChange={onOpenChange}
       onSwitchToTerminals={onSwitchToTerminals}
       onOpenInbuiltTerminal={onOpenInbuiltTerminal}
+      onGoToDeploy={onGoToDeploy}
     />
   );
 }
@@ -83,7 +87,7 @@ const isFilesTabEnabled = () => {
 };
 
 // Separate component to use hooks only when task exists
-function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void }) {
+function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal, onGoToDeploy }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void; onGoToDeploy?: (target: DeployTarget) => void }) {
   const { t } = useTranslation(['tasks']);
   const { toast } = useToast();
   const state = useTaskDetail({ task });
@@ -513,6 +517,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 <SecurityFollowupNotice task={task} />
                 <SecurityQaNotice task={task} />
                 <TurnLimitNotice task={task} />
+                <PreviewNotice task={task} onGoToDeploy={onGoToDeploy} />
               </div>
               {(state.isStuck || state.isIncomplete) && (
                 <div className="mt-3">

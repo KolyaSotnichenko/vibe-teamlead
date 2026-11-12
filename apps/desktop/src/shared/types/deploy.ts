@@ -82,6 +82,13 @@ export type TaskPreview =
   | { state: 'ready'; url: string; builtAt: string; pushError?: string }
   | { state: 'failed'; runId?: number; jobId?: number; pushError?: string };
 
+/** Where the Deploy page should open (the `open-deploy` window event's detail). */
+export interface DeployTarget {
+  tab?: 'runs' | 'readiness' | 'environment';
+  runId?: number;
+  jobId?: number;
+}
+
 export type GraphNodeStatus = 'queued' | 'running' | 'success' | 'failure' | 'skipped' | 'cancelled';
 
 export interface GraphNode {

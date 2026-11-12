@@ -42,6 +42,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { useMergeState } from './task-detail/useMergeState';
 import { useVerification } from './task-detail/useVerification';
 import { useSecurityQaError } from './task-detail/useSecurityQaError';
+import { usePreview } from './task-detail/usePreview';
+import { StatusMark, formatRelative, isHttpsUrl, openWebUrl } from './deploy/status';
+import type { DeployTarget } from '../../shared/types/deploy';
 
 // Catastrophic stuck detection interval (ms).
 // XState handles all normal process-exit transitions via PROCESS_EXITED events.
@@ -314,6 +317,19 @@ export const TaskCard = memo(function TaskCard({
     }
   };
 
+  const preview = usePreview(task);
+  const handlePreview = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (preview?.state === 'ready') openWebUrl(preview.url);
+    else if (preview?.state === 'building' && isHttpsUrl(preview.previousUrl)) openWebUrl(preview.previousUrl);
+    else if (preview?.state === 'failed') {
+      const detail: DeployTarget = { tab: 'runs' };
+      if (preview.runId !== undefined) detail.runId = preview.runId;
+      if (preview.jobId !== undefined) detail.jobId = preview.jobId;
+      window.dispatchEvent(new CustomEvent<DeployTarget>('open-deploy', { detail }));
+    }
+  };
+
   const securityQaError = useSecurityQaError(task);
   const mergeState = useMergeState(task);
   const verification = useVerification(task);
@@ -509,6 +525,17 @@ export const TaskCard = memo(function TaskCard({
           )}
         </div>
         {renderAction()}
+        {(preview?.state === 'building' || preview?.state === 'ready' || preview?.state === 'failed') && (
+          <button
+            type="button"
+            className={cn(actionClass, preview.state === 'failed' ? 'text-destructive hover:bg-accent' : 'text-foreground hover:bg-accent')}
+            onClick={handlePreview}
+            title={preview.state === 'ready' ? t('taskPreview.readyTitle', { url: preview.url, when: formatRelative(preview.builtAt, i18n.language) }) : undefined}
+          >
+            {preview.state === 'building' && <StatusMark status="running" />}
+            {t(`taskPreview.${preview.state === 'building' ? 'button' : preview.state}`)}
+          </button>
+        )}
         {statusMenuItems && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

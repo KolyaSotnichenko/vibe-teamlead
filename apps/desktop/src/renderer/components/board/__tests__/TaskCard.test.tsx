@@ -1,9 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { Task } from '../../../../shared/types';
 
@@ -30,6 +30,7 @@ vi.mock('../../../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }
 
 import { useAgentQuestionsStore } from '../../../stores/agent-questions-store';
 import { shortDependency, TaskCard } from '../../TaskCard';
+import { resetPreviewSubscription } from '../../task-detail/usePreview';
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -153,5 +154,72 @@ describe('TaskCard', () => {
     expect(shortDependency('012-invoice-api')).toBe('012');
     expect(shortDependency('7')).toBe('7');
     expect(shortDependency('custom-id')).toBe('custom-id');
+  });
+
+  describe('the preview button', () => {
+    const withPreview = (data: unknown) => {
+      const openExternal = vi.fn();
+      (window as unknown as { electronAPI: unknown }).electronAPI = {
+        openExternal,
+        deploy: { previewState: vi.fn(async () => data), onPreviewUpdate: vi.fn(() => () => undefined) },
+      };
+      return openExternal;
+    };
+    afterEach(() => {
+      cleanup();
+      resetPreviewSubscription();
+    });
+
+    it.each([{ state: 'not-set-up' }, { state: 'not-pushed' }, { state: 'unavailable', reason: 'push-off' }])('is absent for %o', async (data) => {
+      withPreview(data);
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
+      expect(screen.queryByText(/taskPreview\./)).not.toBeInTheDocument();
+    });
+
+    it('spins while building and opens the previous link', async () => {
+      const open = withPreview({ state: 'building', previousUrl: 'https://old.vercel.app' });
+      const onClick = vi.fn();
+      const { container } = render(<TaskCard task={task()} onClick={onClick} />);
+      const button = await screen.findByRole('button', { name: /taskPreview\.button/ });
+      expect(container.querySelector('[data-marker="running"]')).toBeInTheDocument();
+      fireEvent.click(button);
+      expect(open).toHaveBeenCalledWith('https://old.vercel.app');
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('does nothing on click while building without a previous link', async () => {
+      const open = withPreview({ state: 'building' });
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      fireEvent.click(await screen.findByRole('button', { name: /taskPreview\.button/ }));
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it('opens the link when ready, with the URL in the title', async () => {
+      const open = withPreview({ state: 'ready', url: 'https://x.vercel.app', builtAt: new Date().toISOString() });
+      const onClick = vi.fn();
+      render(<TaskCard task={task()} onClick={onClick} />);
+      const button = await screen.findByRole('button', { name: /taskPreview\.ready/ });
+      expect(button.getAttribute('title')).toContain('https://x.vercel.app');
+      fireEvent.click(button);
+      expect(open).toHaveBeenCalledWith('https://x.vercel.app');
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ state: 'failed', runId: 5, jobId: 9 }, { tab: 'runs', runId: 5, jobId: 9 }],
+      [{ state: 'failed', runId: 5 }, { tab: 'runs', runId: 5 }],
+      [{ state: 'failed' }, { tab: 'runs' }],
+    ])('goes to the failed run: %o', async (data, detail) => {
+      withPreview(data);
+      const heard = vi.fn();
+      window.addEventListener('open-deploy', heard);
+      const onClick = vi.fn();
+      render(<TaskCard task={task()} onClick={onClick} />);
+      fireEvent.click(await screen.findByRole('button', { name: /taskPreview\.failed/ }));
+      window.removeEventListener('open-deploy', heard);
+      expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual(detail);
+      expect(onClick).not.toHaveBeenCalled();
+    });
   });
 });
