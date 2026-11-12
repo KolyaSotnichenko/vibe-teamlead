@@ -6,6 +6,7 @@ import type {
   DeployDatabaseProgress,
   DeployPushResult,
   DeployRunsState,
+  ReadinessState,
   DeploySetupProgress,
   VercelAPI,
   VercelConnectState,
@@ -45,6 +46,13 @@ export const createDeployAPI = (): DeployAPI => ({
     const handler = (_event: Electron.IpcRendererEvent, result: DeployPushResult) => callback(result);
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_PUSH_RESULT, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_PUSH_RESULT, handler);
+  },
+  readinessState: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_READINESS_STATE, projectId),
+  scanReadiness: (projectId, reason) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_READINESS_SCAN, projectId, reason),
+  onReadinessUpdate: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, update: { projectId: string; state: ReadinessState }) => callback(update);
+    ipcRenderer.on(IPC_CHANNELS.DEPLOY_READINESS_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_READINESS_UPDATE, handler);
   },
 });
 

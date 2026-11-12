@@ -4,10 +4,13 @@
  * the state the Environment tab shows. Errors travel as data; values and tokens never
  * reach the renderer or a message.
  */
+import { execFile } from 'node:child_process';
+
 import { type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult, Project } from '../../shared/types';
+import { resolveDefaultTaskModels } from '../../shared/utils/task-models';
 import type {
   DeployAddDatabaseResult,
   DeployEnvState,
@@ -17,18 +20,26 @@ import type {
   DeploySetupState,
   DeploySetVariableResult,
   DeployVariableInput,
+  ReadinessState,
 } from '../../shared/types/deploy';
+import type { AgentManager } from '../agent';
+import { runReadinessScan, type ScanInput } from '../ai/runners/deploy-readiness';
 import { addDatabase } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
+import { createReadiness } from '../deploy/readiness';
+import { setReadiness } from '../deploy/readiness-instance';
 import { lastPushResult } from '../deploy/push-after-merge';
 import { createRunsPoller, fetchJobLog } from '../deploy/runs-poller';
-import { createSetupDeps, saveDeployPatch, setUpDeploy } from '../deploy/setup';
+import { createSetupDeps, readGitInfo, saveDeployPatch, setUpDeploy } from '../deploy/setup';
 import { listDeployVariables, setDeployVariable, type VariablesDeps } from '../deploy/variables';
 import { createVercelClient, defaultVercelFetcher } from '../deploy/vercel-api';
 import { getVercelToken, vercelCliPaths, vercelStatus } from '../deploy/vercel-credential';
+import { getToolPath } from '../cli-tool-manager';
 import { projectStore } from '../project-store';
+import { readSettingsFile } from '../settings-utils';
+import { getIsolatedGitEnv } from '../utils/git-isolation';
 import { safeSendToRenderer } from './utils';
 
 const TEAM_ID = /^[A-Za-z0-9_-]{1,100}$/;
@@ -56,7 +67,24 @@ function variablesDeps(): VariablesDeps {
   };
 }
 
-export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null): void {
+const READINESS_FAILED_RUNS = 20;
+
+/** HEAD of the project's checkout; undefined on any failure. */
+function headCommit(projectPath: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      getToolPath('git'),
+      ['rev-parse', 'HEAD'],
+      { cwd: projectPath, env: getIsolatedGitEnv() as NodeJS.ProcessEnv, timeout: 10_000, encoding: 'utf-8' },
+      (err, stdout) => {
+        const sha = String(stdout ?? '').trim();
+        resolve(!err && /^[0-9a-f]{40,64}$/.test(sha) ? sha : undefined);
+      },
+    );
+  });
+}
+
+export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null, agentManager?: AgentManager): void {
   const client = createActionsClient(githubFetcher);
   const poller = createRunsPoller({
     client,
@@ -164,6 +192,85 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
         success: true,
         data: await runSetup(project, () => saveDeployPatch(projectStore, projectId, { vercelChoice })),
       };
+    }
+  );
+
+  // --- Readiness -------------------------------------------------------------------------------
+
+  const mainBranchOf = async (project: Project): Promise<string | undefined> => {
+    if (project.settings.mainBranch) return project.settings.mainBranch;
+    const names = (await readGitInfo(project.path))?.branches ?? [];
+    return names.includes('main') ? 'main' : names.includes('master') ? 'master' : undefined;
+  };
+
+  const readiness = createReadiness({
+    scan: (input) => runReadinessScan(input),
+    lastMainRun: async (project): Promise<ScanInput['lastMainRun']> => {
+      try {
+        const repo = await resolveRepo(project);
+        const main = await mainBranchOf(project);
+        if (!repo || !main) return undefined;
+        const runs = await client.runs(repo.owner, repo.repo, READINESS_FAILED_RUNS);
+        const run = runs
+          .filter((r) => r.branch === main && r.status === 'completed' && r.conclusion)
+          .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+        if (!run?.conclusion) return undefined;
+        const jobs = run.conclusion === 'success' ? [] : await client.jobs(repo.owner, repo.repo, run.id);
+        return {
+          conclusion: run.conclusion,
+          runId: run.id,
+          failedJobs: jobs.filter((j) => j.conclusion === 'failure').map((j) => j.name),
+          ...(run.workflowPath ? { workflowPath: run.workflowPath } : {}),
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    variableNames: async (project) => {
+      const listed = await listDeployVariables(deploySettings(project), variablesDeps());
+      return listed.ok ? listed.variables.map((v) => v.name) : [];
+    },
+    headCommit,
+    tasks: {
+      getTasks: (projectId) => projectStore.getTasks(projectId),
+      // Lazy: the task handlers are heavy and import much of the app
+      createTask: async (project, title, description, metadata) =>
+        (await import('./task/crud-handlers')).createTaskInProject(project, title, description, metadata),
+      startTask: async (id) => {
+        if (!agentManager) return;
+        await (await import('./task/execution-handlers')).startTask(agentManager, getMainWindow, id);
+      },
+      defaultModels: () => resolveDefaultTaskModels(readSettingsFile() as never),
+    },
+    // The team recorded for the project is used by setup itself (runSetup reads settings.deploy.vercelTeamId)
+    setUp: (project) => runSetup(project),
+    canAutoSetUp: async (project) => {
+      const fresh = projectStore.getProject(project.id) ?? project;
+      if (fresh.settings.deploy?.vercelTeamId) return true;
+      // An account with teams and no recorded choice: the owner picks the team, setup waits for them
+      return !((await vercelStatus()).teams?.length);
+    },
+    emit: (projectId, state) => safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_READINESS_UPDATE, { projectId, state }),
+  });
+  setReadiness(readiness);
+
+  ipcMain.handle(
+    IPC_CHANNELS.DEPLOY_READINESS_STATE,
+    async (_event, projectId: string): Promise<IPCResult<ReadinessState>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) return { success: false, error: 'Project not found' };
+      return { success: true, data: readiness.state(project) };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DEPLOY_READINESS_SCAN,
+    async (_event, projectId: string, reason?: unknown): Promise<IPCResult> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) return { success: false, error: 'Project not found' };
+      // Not awaited: the renderer follows progress through the update event
+      void readiness.scan(project, reason === 'open' ? 'open' : 'check-again');
+      return { success: true };
     }
   );
 

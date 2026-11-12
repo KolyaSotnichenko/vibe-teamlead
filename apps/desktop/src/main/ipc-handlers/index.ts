@@ -124,7 +124,7 @@ export function setupIpcHandlers(
   registerBriefHandlers(getMainWindow);
   registerDesignHandlers(getMainWindow);
   registerPreviewHandlers(getMainWindow);
-  registerDeployHandlers(getMainWindow);
+  registerDeployHandlers(getMainWindow, agentManager);
   registerVercelHandlers(getMainWindow);
   registerTaskDesignHandlers(agentManager, getMainWindow);
   registerLooseEndsHandlers();

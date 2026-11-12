@@ -16,6 +16,10 @@ vi.mock('../../deploy/github-actions', () => ({
   createActionsClient: () => client,
   resolveRepo: vi.fn(async () => ({ owner: 'o', repo: 'r' })),
 }));
+const scanReadiness = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('../../deploy/readiness', () => ({
+  createReadiness: () => ({ state: () => ({ scanning: false, tasks: {} }), scan: scanReadiness }),
+}));
 vi.mock('../../deploy/github-fetcher', () => ({ githubFetcher: vi.fn() }));
 vi.mock('../../project-store', () => ({
   projectStore: { getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: '/p1', settings: {} } : undefined)) },
@@ -54,5 +58,18 @@ describe('deploy IPC', () => {
     expect(result).toMatchObject({ success: false });
     expect(resolveRepo).not.toHaveBeenCalled();
     expect(client.jobLog).not.toHaveBeenCalled();
+  });
+
+  it('readiness state comes from the orchestrator; unknown project fails', async () => {
+    expect(await invoke(IPC_CHANNELS.DEPLOY_READINESS_STATE, 'p1')).toEqual({ success: true, data: { scanning: false, tasks: {} } });
+    expect(await invoke(IPC_CHANNELS.DEPLOY_READINESS_STATE, 'nope')).toMatchObject({ success: false });
+  });
+
+  it('scanReadiness defaults to check-again and accepts open only', async () => {
+    await invoke(IPC_CHANNELS.DEPLOY_READINESS_SCAN, 'p1');
+    await invoke(IPC_CHANNELS.DEPLOY_READINESS_SCAN, 'p1', 'open');
+    await invoke(IPC_CHANNELS.DEPLOY_READINESS_SCAN, 'p1', 'merge');
+    expect(scanReadiness.mock.calls.map((c) => c[1])).toEqual(['check-again', 'open', 'check-again']);
+    expect(await invoke(IPC_CHANNELS.DEPLOY_READINESS_SCAN, 'nope')).toMatchObject({ success: false });
   });
 });

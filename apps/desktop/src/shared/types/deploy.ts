@@ -133,6 +133,11 @@ export interface DeployAPI {
   onDatabaseProgress: (callback: (progress: DeployDatabaseProgress) => void) => () => void;
   onSetupProgress: (callback: (progress: DeploySetupProgress) => void) => () => void;
   onPushResult: (callback: (result: DeployPushResult) => void) => () => void;
+  /** Saved readiness result, whether a scan runs, the last scan error and the tasks by blocker key. */
+  readinessState: (projectId: string) => Promise<import('./common').IPCResult<ReadinessState>>;
+  /** Starts a scan (or joins the one running). `reason`: 'open' scans only when nothing is saved; default 'check-again'. */
+  scanReadiness: (projectId: string, reason?: 'open' | 'check-again') => Promise<import('./common').IPCResult>;
+  onReadinessUpdate: (callback: (update: { projectId: string; state: ReadinessState }) => void) => () => void;
 }
 
 /** The Vercel account the app is signed in to (Settings → Vercel). Never carries a token. */

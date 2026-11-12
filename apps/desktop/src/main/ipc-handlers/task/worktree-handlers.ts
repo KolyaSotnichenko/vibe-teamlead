@@ -36,6 +36,7 @@ import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
 import { safeSendToRenderer } from '../utils';
+import { getReadiness } from '../../deploy/readiness-instance';
 import { pushMainAfterMerge } from '../../deploy/push-after-merge';
 import { pushWithAppToken } from '../../deploy/github-write';
 import type { MergeWorktreeOptions } from '../../../shared/types/task';
@@ -2265,6 +2266,14 @@ export function registerWorktreeHandlers(
                   },
                   effectiveBaseBranch,
                 ).catch(() => undefined);
+
+                // Deploy: rescan readiness after a merge into main (never blocks or fails the merge)
+                try {
+                  const fresh = projectStore.getProject(project.id) ?? project;
+                  void getReadiness()?.scan(fresh, 'merge', effectiveBaseBranch).catch(() => undefined);
+                } catch {
+                  // informational
+                }
 
                 // Clean up worktree after successful full merge (fixes #243)
                 // This allows drag-to-Done workflow since TASK_UPDATE_STATUS blocks 'done' when worktree exists
