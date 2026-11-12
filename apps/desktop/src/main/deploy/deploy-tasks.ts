@@ -63,7 +63,7 @@ const CLOSED = new Set(['done', 'pr_created']);
 /** project|key being created right now: two callers can report it in the same moment */
 const creating = new Set<string>();
 
-const FIXED_TEXT = "Found by the Deploy readiness scan; fix what blocks deploying to Vercel. Don't delete, skip or weaken tests.";
+const FIXED_TEXT = "Found by the CI check; fix what keeps CI from passing. Don't delete, skip or weaken tests.";
 
 const ledgerPath = (projectPath: string) => path.join(projectPath, '.vibe-teamlead', 'deploy', 'tasks.json');
 
@@ -233,7 +233,8 @@ export function openDeployBlockers(
 export async function createBlockerTasks(project: Project, blockers: ReadinessBlocker[], deps: DeployTaskDeps): Promise<string[]> {
   const keys: string[] = [];
   for (const blocker of blockers) {
-    if (blocker.kind === 'unsupported') continue;
+    // Old saved results can hold other kinds (the removed Vercel deploy's `unsupported`): never a task
+    if (blocker.kind !== 'code' && blocker.kind !== 'workflow') continue;
     const workflow = blocker.kind === 'workflow';
     let description = `${blocker.detail}\n\n${FIXED_TEXT}`;
     if (workflow) {

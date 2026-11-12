@@ -1,14 +1,15 @@
 /**
- * Deploy readiness scan: a read-only agent reads the project and names what stands between it
- * and a first Vercel deploy. The only model call of the readiness feature; everything around it
- * (store, tasks, UI) is plain code.
+ * CI readiness scan: a read-only agent reads the project and names what keeps its GitHub Actions
+ * CI from passing, and the CI secrets GitHub lacks. The only model call of the readiness feature;
+ * everything around it (store, tasks, UI) is plain code.
  */
 
 import { z } from 'zod';
 
 import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
-import type { ReadinessBlocker, ReadinessOwnerItem, ReadinessResult, ServiceKind } from '../../../shared/types/deploy';
+import type { ReadinessBlocker, ReadinessOwnerItem, ReadinessResult } from '../../../shared/types/deploy';
 import { clip, clipLine } from '../../deploy/clip';
+import { isValidSecretName } from '../../../shared/utils/github-secret-name';
 import { assignKnownKeys, blockerKey, type KnownBlocker, knownSubject } from '../../deploy/readiness-store';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ThinkingLevel } from '../config/types';
@@ -17,10 +18,8 @@ import { loadPrompt } from '../prompts/prompt-loader';
 export interface ScanInput {
   projectPath: string;
   commit?: string;
-  /** Names only, never values */
-  variableNames: string[];
-  databaseAdded: boolean;
-  servicesAdded: ServiceKind[];
+  /** The repository's GitHub Actions secret names; never values */
+  secretNames: string[];
   /** `sha`: the commit the run was of (the scan gets the run only when it is the commit scanned) */
   lastMainRun?: { conclusion: string; runId: number; failedJobs: string[]; workflowPath?: string; sha?: string };
   /** Blockers already known (the saved scan's, open tasks'): a problem found again keeps its key */
@@ -34,7 +33,7 @@ export const KNOWN_IN_PROMPT = 30;
 export const ReadinessScanSchema = z.object({
   blockers: z.array(
     z.object({
-      kind: z.enum(['code', 'workflow', 'unsupported']),
+      kind: z.enum(['code', 'workflow']),
       subject: z.string(),
       title: z.string(),
       detail: z.string(),
@@ -42,17 +41,9 @@ export const ReadinessScanSchema = z.object({
       sameAs: z.string().optional(),
     }),
   ),
-  services: z.array(
-    z.object({
-      kind: z.enum(['postgres', 'redis', 'blob', 'other']),
-      name: z.string(),
-      managed: z.boolean(),
-      reason: z.string().optional(),
-    }),
-  ),
   owner: z.array(
     z.object({
-      kind: z.enum(['variable', 'other']),
+      kind: z.enum(['secret', 'other']),
       variable: z.string().optional(),
       message: z.string(),
     }),
@@ -67,8 +58,8 @@ const OWNER_MESSAGE_CHARS = 500;
 
 /**
  * A code blocker that only says variables aren't configured (for example "Required API env vars
- * are not configured"): the prompt makes those owner items, this catches the ones that slip
- * through. Matched on the title only, where the missing wording must apply to env vars, secrets
+ * are not configured"): only the owner can supply a value, as a GitHub Actions secret. The prompt
+ * makes those owner `secret` items; this catches the ones that slip through. Matched on the title only, where the missing wording must apply to env vars, secrets
  * or a named UPPER_SNAKE variable: "Env var validation is missing" and "Undefined variable breaks
  * the build" don't match. Workflow blockers are left alone (a CI gap is often an agent's fix).
  */
@@ -86,8 +77,8 @@ const UNCONFIGURED_VARIABLES = [
 ];
 /** Variable names as code reads them: upper case with at least one underscore */
 const VARIABLE_NAME = new RegExp(`\\b${SNAKE}\\b`, 'g');
-/** Set by the platform (Vercel, GitHub Actions), never by the owner */
-const PLATFORM_VARIABLE = (name: string) => name.startsWith('VERCEL_') || name.startsWith('GITHUB_') || name === 'NODE_ENV' || name === 'CI';
+/** Set by GitHub Actions itself (GITHUB_TOKEN and the like), never by the owner; GitHub refuses such secret names */
+const PLATFORM_VARIABLE = (name: string) => name.startsWith('GITHUB_');
 
 /** The variables an "unconfigured variables" code blocker names (the title's, else the detail's), or undefined when it isn't one or names none. */
 function unconfiguredVariables(blocker: { kind: string; title: string; detail: string }): string[] | undefined {
@@ -96,6 +87,26 @@ function unconfiguredVariables(blocker: { kind: string; title: string; detail: s
   const fromTitle = blocker.title.match(VARIABLE_NAME) ?? [];
   const names = [...new Set(fromTitle.length ? fromTitle : (blocker.detail.match(VARIABLE_NAME) ?? []))];
   return names.length ? names : undefined;
+}
+
+/**
+ * The model's owner items, cleaned: a secret by its name as GitHub stores it (upper case), once;
+ * none GitHub has already or sets itself; a secret without a name GitHub accepts is an `other`
+ * item (its message still says what is needed). Messages clipped. Pure.
+ */
+function ownerItems(items: Array<{ kind: 'secret' | 'other'; variable?: string; message: string }>, configured: ReadonlySet<string>): ReadinessOwnerItem[] {
+  const out: ReadinessOwnerItem[] = [];
+  for (const item of items) {
+    const message = clip(item.message, OWNER_MESSAGE_CHARS);
+    if (item.kind !== 'secret') {
+      out.push({ kind: 'other', message });
+      continue;
+    }
+    const name = (item.variable ?? '').trim().toUpperCase();
+    if (PLATFORM_VARIABLE(name) || configured.has(name) || out.some((o) => o.kind === 'secret' && o.variable === name)) continue;
+    out.push(isValidSecretName(name) ? { kind: 'secret', variable: name, message } : { kind: 'other', message });
+  }
+  return out;
 }
 
 export interface ReadinessScanDeps {
@@ -109,9 +120,7 @@ export function readinessPrompt(input: ScanInput): string {
   const lines = [
     `The project root is ${input.projectPath}.`,
     input.commit ? `Scan the code at commit ${input.commit}.` : 'Scan the code as it is checked out.',
-    `Environment variable names already configured on Vercel: ${input.variableNames.length ? input.variableNames.join(', ') : 'none'}.`,
-    `Database added on Vercel: ${input.databaseAdded ? 'yes' : 'no'}.`,
-    `Services already added: ${input.servicesAdded.length ? input.servicesAdded.join(', ') : 'none'}.`,
+    `GitHub Actions secret names the repository already has: ${input.secretNames.length ? input.secretNames.join(', ') : 'none'}.`,
   ];
   const run = input.lastMainRun;
   if (run) {
@@ -123,7 +132,7 @@ export function readinessPrompt(input: ScanInput): string {
   } else {
     lines.push('There is no CI run on main yet.');
   }
-  const known = (input.knownBlockers ?? []).filter((b) => b.kind !== 'unsupported').slice(0, KNOWN_IN_PROMPT);
+  const known = (input.knownBlockers ?? []).filter((b) => b.kind === 'code' || b.kind === 'workflow').slice(0, KNOWN_IN_PROMPT);
   if (known.length) {
     lines.push(
       'Known blockers (key, kind, subject: title):',
@@ -131,7 +140,7 @@ export function readinessPrompt(input: ScanInput): string {
       'If a problem you find is one of these, put its key in sameAs and reuse its subject exactly.',
     );
   }
-  lines.push('Report what blocks a first deploy, as described in your instructions.');
+  lines.push('Report what keeps CI from passing, as described in your instructions.');
   return lines.join('\n');
 }
 
@@ -153,17 +162,17 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
   });
   if (!result.output) throw new Error('The readiness scan returned no result. Try again.');
 
-  const owner: ReadinessOwnerItem[] = result.output.owner.map((item) => ({ ...item, message: clip(item.message, OWNER_MESSAGE_CHARS) }));
-  const configured = new Set(input.variableNames);
+  const configured = new Set(input.secretNames.map((name) => name.toUpperCase()));
+  const owner = ownerItems(result.output.owner, configured);
   const candidates: Array<{ kind: ReadinessBlocker['kind']; subject: string; title: string; detail: string; sameAs?: string }> = [];
   for (const raw of result.output.blockers) {
-    // Only the owner can set a variable: an owner item with a value field, not a task
+    // Only the owner can supply a value: a secret item they save to GitHub, not a task
     const variables = unconfiguredVariables(raw);
     if (variables) {
       let added = 0;
       for (const name of variables) {
         if (configured.has(name) || PLATFORM_VARIABLE(name) || owner.some((item) => item.variable === name)) continue;
-        owner.push({ kind: 'variable', variable: name, message: clip(`The deployed app needs ${name}.`, OWNER_MESSAGE_CHARS) });
+        owner.push({ kind: 'secret', variable: name, message: clip(`CI needs the secret ${name}.`, OWNER_MESSAGE_CHARS) });
         added++;
       }
       // Dropped only when the owner now has every variable it names; otherwise it stays a blocker
@@ -194,7 +203,6 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
     scannedAt: now().toISOString(),
     commit: input.commit,
     blockers,
-    services: result.output.services,
     owner,
     workflow: {
       path: result.output.workflowPath,

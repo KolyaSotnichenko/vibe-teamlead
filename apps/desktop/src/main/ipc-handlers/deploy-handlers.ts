@@ -1,8 +1,9 @@
 /**
  * Deploy (CI) IPC: start, select and stop the runs poller, read a job's log; set up CI
- * (one run per project at a time, a second call joins it), readiness and the state the
- * Environment tab shows. Errors travel as data; values and tokens never reach the renderer
- * or a message. At start, the old Vercel deploy's userData leftovers are removed once.
+ * (one run per project at a time, a second call joins it), readiness, GitHub Actions secrets
+ * and the state the Environment tab shows. Errors travel as data; values and tokens never
+ * reach the renderer or a message. At start, the old Vercel deploy's userData leftovers are
+ * removed once.
  */
 import { execFile } from 'node:child_process';
 
@@ -14,17 +15,20 @@ import { resolveDefaultTaskModels } from '../../shared/utils/task-models';
 import type {
   DeployEnvState,
   DeployJobLog,
+  DeployListSecretsResult,
   DeployProjectSettings,
+  DeploySecretErrorKind,
+  DeploySetSecretResult,
   DeploySetupState,
   ReadinessState,
   TaskPreview,
 } from '../../shared/types/deploy';
 import type { AgentManager } from '../agent';
 import { runReadinessScan } from '../ai/runners/deploy-readiness';
-import { cleanupVercelLeftovers } from '../deploy/ci-setup';
+import { cleanupVercelLeftovers, isCiSetUp } from '../deploy/ci-setup';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
-import { listRepoSecretNames } from '../deploy/github-write';
+import { isValidSecretName, listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
 import { type DeployTaskDeps, isDeployTask } from '../deploy/deploy-tasks';
 import { previewState } from '../deploy/preview-state';
 import { createReadiness } from '../deploy/readiness';
@@ -40,6 +44,21 @@ import { getIsolatedGitEnv } from '../utils/git-isolation';
 import { safeSendToRenderer } from './utils';
 
 const deploySettings = (project: Project): DeployProjectSettings => project.settings.deploy ?? { enabled: false };
+
+/** GitHub's limit for a secret value */
+const MAX_SECRET_VALUE = 48 * 1024;
+
+/** The kinds a GitHub write error carries; anything else (or a free-text message) becomes `unavailable`. */
+const SECRET_ERROR_KINDS: ReadonlySet<string> = new Set(['no-connection', 'permissions', 'not-found', 'rate-limit', 'unavailable', 'conflict', 'invalid']);
+
+/** A GitHub failure as its kind only: the message never crosses IPC (it could echo a URL or the value). */
+function secretErrorKind(e: unknown): DeploySecretErrorKind {
+  const kind = e instanceof Error && e.name === 'GitHubWriteError' ? (e as { kind?: unknown }).kind : undefined;
+  return typeof kind === 'string' && SECRET_ERROR_KINDS.has(kind) ? (kind as DeploySecretErrorKind) : 'unavailable';
+}
+
+/** The repository CI secrets go to: the recorded one, once CI is set up. */
+const secretsRepo = (project: Project) => (isCiSetUp(project) ? deploySettings(project).repo : undefined);
 
 /** HEAD of the project's checkout; undefined on any failure. */
 function headCommit(projectPath: string): Promise<string | undefined> {
@@ -179,7 +198,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     // Own pushes to main only (a fork's pull request can carry a branch named main)
     lastMainRun: (project) => findLastMainRun(project, mainRunDeps),
     // Names only: the GitHub Actions secrets of the recorded repository (none before setup)
-    variableNames: async (project) => {
+    secretNames: async (project) => {
       const repo = deploySettings(project).repo;
       return repo ? listRepoSecretNames(repo.owner, repo.repo) : [];
     },
@@ -207,6 +226,42 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       // Not awaited: the renderer follows progress through the update event
       void readiness.scan(project, reason === 'open' ? 'open' : 'check-again');
       return { success: true };
+    }
+  );
+
+  // --- Secrets (GitHub Actions) ----------------------------------------------------------------
+
+  ipcMain.handle(
+    IPC_CHANNELS.DEPLOY_SET_SECRET,
+    async (_event, projectId: string, name: unknown, value: unknown): Promise<IPCResult<DeploySetSecretResult>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) return { success: false, error: 'Project not found' };
+      // The value goes only into the sealed GitHub call: never logged, stored or returned
+      if (typeof name !== 'string' || !isValidSecretName(name)) return { success: true, data: { ok: false, kind: 'invalid' } };
+      if (typeof value !== 'string' || value === '' || value.length > MAX_SECRET_VALUE) return { success: true, data: { ok: false, kind: 'invalid' } };
+      const repo = secretsRepo(project);
+      if (!repo) return { success: true, data: { ok: false, kind: 'not-set-up' } };
+      try {
+        await setRepoSecret(repo.owner, repo.repo, name, value);
+        return { success: true, data: { ok: true } };
+      } catch (e) {
+        return { success: true, data: { ok: false, kind: secretErrorKind(e) } };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DEPLOY_LIST_SECRETS,
+    async (_event, projectId: string): Promise<IPCResult<DeployListSecretsResult>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) return { success: false, error: 'Project not found' };
+      const repo = secretsRepo(project);
+      if (!repo) return { success: true, data: { ok: false, kind: 'not-set-up' } };
+      try {
+        return { success: true, data: { ok: true, names: await listRepoSecretNames(repo.owner, repo.repo) } };
+      } catch (e) {
+        return { success: true, data: { ok: false, kind: secretErrorKind(e) } };
+      }
     }
   );
 

@@ -28,27 +28,28 @@ const result = (over: Partial<ReadinessResult> = {}): ReadinessResult => ({
   blockers: [
     { key: 'code:a', kind: 'code', subject: 'a', title: 'Fix the build', detail: 'Build fails' },
     { key: 'workflow:b', kind: 'workflow', subject: 'b', title: 'Add a workflow', detail: 'No CI' },
-    { key: 'unsupported:c', kind: 'unsupported', subject: 'c', title: 'Cron on a VPS', detail: 'Runs on a server' },
   ],
-  services: [],
   owner: [],
   workflow: { path: '.github/workflows/ci.yml', lastMainRun: { conclusion: 'success', runId: 7 } },
   ...over,
 });
 
-function setup(state: ReadinessState, opts: { onGoToTask?: (id: string) => void; enabled?: boolean } = {}) {
+function setup(state: ReadinessState, opts: { onGoToTask?: (id: string) => void; setUp?: boolean; secrets?: string[] } = {}) {
+  const settings = opts.setUp === false ? { enabled: false } : { enabled: true, repo: { owner: 'o', repo: 'r', createdByApp: true } };
   let push: ((u: { projectId: string; state: ReadinessState }) => void) | undefined;
   const deploy = {
     startRuns: vi.fn(async () => ({ success: true })),
     stopRuns: vi.fn(async () => ({ success: true })),
     selectRun: vi.fn(async () => ({ success: true })),
     onRunsUpdate: vi.fn(() => () => undefined),
-    state: vi.fn(async () => ({ success: true, data: { settings: { enabled: opts.enabled ?? true }, setupRunning: false } })),
+    state: vi.fn(async () => ({ success: true, data: { settings, setupRunning: false } })),
     onSetupProgress: vi.fn(() => () => undefined),
     onPushResult: vi.fn(() => () => undefined),
     readinessState: vi.fn(async () => ({ success: true, data: state })),
     scanReadiness: vi.fn(async () => ({ success: true })),
     onReadinessUpdate: vi.fn((cb: typeof push) => { push = cb; return () => undefined; }),
+    listSecrets: vi.fn(async () => ({ success: true, data: { ok: true, names: opts.secrets ?? [] } })),
+    setSecret: vi.fn(async () => ({ success: true, data: { ok: true } })),
   };
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     deploy,
@@ -86,11 +87,23 @@ describe('Readiness tab', () => {
     expect(b.deploy.scanReadiness).not.toHaveBeenCalled();
   });
 
-  it('counts code and workflow blockers in the tab label, not unsupported', async () => {
-    setup({ result: result(), scanning: false, tasks: {} });
+  /** An old Deploy result as it may still reach the renderer */
+  const oldUnsupported = { key: 'unsupported:c', kind: 'unsupported', subject: 'c', title: 'Cron on a VPS', detail: 'Runs on a server' } as unknown as ReadinessResult['blockers'][number];
+
+  it('counts code and workflow blockers in the tab label, never an old unsupported one', async () => {
+    setup({ result: result({ blockers: [...result().blockers, oldUnsupported] }), scanning: false, tasks: {} });
     const tab = await screen.findByRole('tab', { name: /deploy:tabs\.readiness/ });
     await waitFor(() => expect(tab).toHaveTextContent('2'));
     expect(tab).not.toHaveTextContent('3');
+  });
+
+  it('shows no old unsupported blocker and no services', async () => {
+    setup({ result: { ...result({ blockers: [...result().blockers, oldUnsupported] }), services: [{ kind: 'postgres' }] }, scanning: false, tasks: {} });
+    await openTab();
+    expect(await screen.findByText('Fix the build')).toBeInTheDocument();
+    expect(screen.queryByText('Cron on a VPS')).toBeNull();
+    expect(screen.queryByText(/unsupported/)).toBeNull();
+    expect(screen.queryByText(/postgres/i)).toBeNull();
   });
 
   it('shows the task link and its status, and opens the task', async () => {
@@ -100,13 +113,6 @@ describe('Readiness tab', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Fix the build' }));
     expect(onGoToTask).toHaveBeenCalledWith('012-fix');
     expect(screen.getByText('deploy:readiness.taskStatus.in_progress')).toBeInTheDocument();
-  });
-
-  it('shows the unsupported reason and no task', async () => {
-    setup({ result: result(), scanning: false, tasks: {} });
-    await openTab();
-    expect(await screen.findByText('deploy:readiness.unsupported')).toBeInTheDocument();
-    expect(screen.getByText('Runs on a server')).toBeInTheDocument();
   });
 
   it('disables Check again while scanning and runs a check when clicked', async () => {
@@ -128,19 +134,62 @@ describe('Readiness tab', () => {
     expect(screen.getByText('Fix the build')).toBeInTheDocument();
   });
 
-  it.each([true, false])('a variable item is plain text, set up or not (set up: %s): no Add value, no dialog, no count', async (enabled) => {
-    setup(
-      { result: result({ owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }, { kind: 'other', message: 'Turn on billing' }] }), scanning: false, tasks: {} },
-      { enabled },
-    );
+  const secrets = (over: Partial<ReadinessResult> = {}) =>
+    result({
+      owner: [
+        { kind: 'secret', variable: 'CSRF_SECRET', message: 'x' },
+        { kind: 'secret', variable: 'NPM_TOKEN', message: 'y' },
+        { kind: 'other', message: 'Turn on billing' },
+      ],
+      ...over,
+    });
+  const ownerSection = () => document.getElementById('deploy-readiness-owner')?.closest('section') as HTMLElement;
+
+  it('before CI is set up: a secret item says Set up CI first; no button, no listing, no count', async () => {
+    const { deploy } = setup({ result: secrets(), scanning: false, tasks: {} }, { setUp: false });
     await openTab();
     const name = await screen.findByText('CSRF_SECRET');
-    expect(within(name.closest('li') as HTMLElement).queryByRole('button')).toBeNull();
+    expect(within(name.closest('li') as HTMLElement).getByText('deploy:readiness.setUpCiFirst')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'deploy:readiness.addSecret' })).toBeNull();
     expect(screen.getByText('Turn on billing')).toBeInTheDocument();
-    expect(screen.queryByText('deploy:readiness.setUpFirst')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'deploy:readiness.addValue' })).toBeNull();
-    expect(screen.queryByText(/deploy:readiness\.variablesLeft/)).toBeNull();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText(/deploy:readiness\.secretsLeft/)).toBeNull();
+    expect(deploy.listSecrets).not.toHaveBeenCalled();
+  });
+
+  it('after setup: secrets GitHub has are not listed, and the notice counts the rest', async () => {
+    const { deploy } = setup({ result: secrets(), scanning: false, tasks: {} }, { secrets: ['NPM_TOKEN'] });
+    await openTab();
+    await waitFor(() => expect(deploy.listSecrets).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(screen.queryByText('NPM_TOKEN')).toBeNull());
+    expect(screen.getByText('CSRF_SECRET')).toBeInTheDocument();
+    expect(screen.getByText('deploy:readiness.secretsLeft {"count":1}')).toBeInTheDocument();
+    expect(screen.queryByText('deploy:readiness.setUpCiFirst')).toBeNull();
+  });
+
+  it('an old variable item is a secret', async () => {
+    const old = result({ owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] as unknown as ReadinessResult['owner'] });
+    setup({ result: old, scanning: false, tasks: {} });
+    await openTab();
+    expect(await screen.findByRole('button', { name: 'deploy:readiness.addSecret' })).toBeInTheDocument();
+  });
+
+  it('a secret saved from the item goes to GitHub and the item is gone without a new check', async () => {
+    const { deploy } = setup({ result: secrets(), scanning: false, tasks: {} });
+    await openTab();
+    await waitFor(() => expect(deploy.listSecrets).toHaveBeenCalled());
+    const item = (await screen.findByText('CSRF_SECRET')).closest('li') as HTMLElement;
+    fireEvent.click(within(item).getByRole('button', { name: 'deploy:readiness.addSecret' }));
+    const dialog = await screen.findByRole('dialog');
+    expect((within(dialog).getByLabelText('deploy:secretDialog.name') as HTMLInputElement).value).toBe('CSRF_SECRET');
+    fireEvent.change(within(dialog).getByLabelText('deploy:secretDialog.value'), { target: { value: 'v4lue' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'deploy:secretDialog.save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(deploy.setSecret).toHaveBeenCalledWith('p1', 'CSRF_SECRET', 'v4lue');
+    expect(within(ownerSection()).queryByText('CSRF_SECRET')).toBeNull();
+    expect(screen.getByText('deploy:readiness.secretSaved {"name":"CSRF_SECRET"}')).toBeInTheDocument();
+    expect(screen.getByText('deploy:readiness.secretsLeft {"count":1}')).toBeInTheDocument();
+    expect(deploy.scanReadiness).not.toHaveBeenCalled();
+    expect(document.body.innerHTML).not.toContain('v4lue');
   });
 
   it('says nothing blocks deploy', async () => {

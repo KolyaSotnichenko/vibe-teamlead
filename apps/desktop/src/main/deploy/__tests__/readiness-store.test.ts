@@ -10,8 +10,7 @@ const result: ReadinessResult = {
   scannedAt: '2026-11-12T10:00:00.000Z',
   commit: 'abc1234',
   blockers: [{ key: 'code:localhost', kind: 'code', subject: 'localhost', title: 'Hardcoded localhost', detail: 'api.ts uses it' }],
-  services: [{ kind: 'postgres', name: 'db', managed: true }],
-  owner: [{ kind: 'variable', variable: 'API_KEY', message: 'Set API_KEY' }],
+  owner: [{ kind: 'secret', variable: 'API_KEY', message: 'Set API_KEY' }],
   workflow: { path: '.github/workflows/ci.yml', lastMainRun: { conclusion: 'success', runId: 7 } },
 };
 
@@ -39,6 +38,26 @@ describe('readiness store', () => {
     expect(readReadiness(dir)).toBeNull();
   });
 
+  it('reads an old Deploy result: variable items as secrets, unsupported blockers and services dropped', () => {
+    mkdirSync(path.dirname(file()), { recursive: true });
+    writeFileSync(
+      file(),
+      JSON.stringify({
+        ...result,
+        blockers: [...result.blockers, { key: 'unsupported-kafka', kind: 'unsupported', subject: 'kafka', title: 'Kafka', detail: 'x' }],
+        services: [{ kind: 'postgres', name: 'db', managed: true }],
+        owner: [{ kind: 'variable', variable: 'API_KEY', message: 'Set API_KEY' }, { kind: 'other', message: 'Buy a domain' }],
+      }),
+    );
+    expect(readReadiness(dir)).toEqual({ ...result, owner: [result.owner[0], { kind: 'other', message: 'Buy a domain' }] });
+  });
+
+  it('reads a result without services, and skips malformed owner items and blockers', () => {
+    mkdirSync(path.dirname(file()), { recursive: true });
+    writeFileSync(file(), JSON.stringify({ ...result, owner: [null, 'x', { kind: 'weird', message: 'm' }, ...result.owner], blockers: [null, ...result.blockers] }));
+    expect(readReadiness(dir)).toEqual(result);
+  });
+
   it('reads null when the file is a symlink', () => {
     const target = path.join(dir, 'real.json');
     writeFileSync(target, JSON.stringify(result));
@@ -58,7 +77,7 @@ describe('blockerKey', () => {
   });
 
   it('never exceeds 80 characters', () => {
-    expect(blockerKey('unsupported', 'x'.repeat(500)).length).toBeLessThanOrEqual(80);
+    expect(blockerKey('code', 'x'.repeat(500)).length).toBeLessThanOrEqual(80);
   });
 });
 

@@ -2,14 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { blockerKey } from '../../../deploy/readiness-store';
 import { READ_TOOLS } from '../../claude-code/task';
-import { type ScanInput, runReadinessScan } from '../deploy-readiness';
+import { ReadinessScanSchema, type ScanInput, runReadinessScan } from '../deploy-readiness';
 
 const input: ScanInput = {
   projectPath: '/tmp/proj',
   commit: 'abc123',
-  variableNames: ['DATABASE_URL', 'STRIPE_SECRET_KEY'],
-  databaseAdded: true,
-  servicesAdded: ['postgres'],
+  secretNames: ['DATABASE_URL', 'STRIPE_SECRET_KEY'],
   lastMainRun: { conclusion: 'failure', runId: 42, failedJobs: ['test'], workflowPath: '.github/workflows/ci.yml' },
 };
 
@@ -19,8 +17,7 @@ const output = {
     { kind: 'code', subject: 'api client base url', title: 'Duplicate', detail: 'again' },
     { kind: 'workflow', subject: 'ci browser install', title: 'No browser', detail: 'Playwright needs it' },
   ],
-  services: [{ kind: 'postgres', name: 'db', managed: true }],
-  owner: [{ kind: 'variable', variable: 'SENDGRID_KEY', message: 'Add it' }],
+  owner: [{ kind: 'secret', variable: 'SENDGRID_KEY', message: 'Add it' }],
   workflowPath: '.github/workflows/ci.yml',
 };
 
@@ -42,9 +39,9 @@ describe('runReadinessScan', () => {
     expect(options.outputSchema).toBeDefined();
   });
 
-  it('puts every variable name in the prompt and no value', async () => {
+  it('puts every secret name in the prompt and no value', async () => {
     const run = fakeRun();
-    await runReadinessScan({ ...input, variableNames: ['DATABASE_URL', 'STRIPE_SECRET_KEY'] }, { run, feature, now });
+    await runReadinessScan({ ...input, secretNames: ['DATABASE_URL', 'STRIPE_SECRET_KEY'] }, { run, feature, now });
     const prompt = (run.mock.calls[0][0] as { prompt: string }).prompt;
     expect(prompt).toContain('DATABASE_URL');
     expect(prompt).toContain('STRIPE_SECRET_KEY');
@@ -61,13 +58,63 @@ describe('runReadinessScan', () => {
     expect(result.blockers[0].title).toBe('Hardcoded localhost');
   });
 
-  it('copies lastMainRun, commit, scannedAt, services, owner and the workflow path', async () => {
+  it('copies lastMainRun, commit, scannedAt, owner and the workflow path; no services', async () => {
     const result = await runReadinessScan(input, { run: fakeRun(), feature, now });
     expect(result.workflow).toEqual({ path: '.github/workflows/ci.yml', lastMainRun: { conclusion: 'failure', runId: 42 } });
     expect(result.commit).toBe('abc123');
     expect(result.scannedAt).toBe('2026-11-12T10:00:00.000Z');
-    expect(result.services).toHaveLength(1);
-    expect(result.owner[0].variable).toBe('SENDGRID_KEY');
+    expect(result).not.toHaveProperty('services');
+    expect(result.owner[0]).toEqual({ kind: 'secret', variable: 'SENDGRID_KEY', message: 'Add it' });
+  });
+
+  it('the prompt is about CI and GitHub secrets: no Vercel, no database, no services', async () => {
+    const run = fakeRun();
+    await runReadinessScan(input, { run, feature, now });
+    const { prompt, systemPrompt } = run.mock.calls[0][0] as { prompt: string; systemPrompt: string };
+    expect(prompt).toContain('GitHub Actions secret names');
+    expect(prompt).toMatch(/CI/);
+    for (const text of [prompt, systemPrompt]) {
+      expect(text).not.toMatch(/vercel/i);
+      expect(text).not.toMatch(/deploy/i);
+      expect(text).not.toMatch(/unsupported/i);
+      expect(text).not.toMatch(/database added|services already/i);
+    }
+    expect(systemPrompt).toContain('GitHub Actions');
+    expect(systemPrompt).toContain('${{ secrets.NAME }}');
+    expect(systemPrompt).toContain('GITHUB_TOKEN');
+    expect(systemPrompt).toMatch(/never ask for/i);
+    expect(systemPrompt).not.toMatch(/### `services`/);
+  });
+
+  it('the schema has no unsupported blockers, no services and secret / other owner items', () => {
+    const base = { blockers: [], owner: [] };
+    expect(ReadinessScanSchema.safeParse(base).success).toBe(true);
+    expect(ReadinessScanSchema.safeParse({ ...base, blockers: [{ kind: 'unsupported', subject: 's', title: 't', detail: 'd' }] }).success).toBe(false);
+    expect(ReadinessScanSchema.safeParse({ ...base, owner: [{ kind: 'variable', variable: 'A_B', message: 'm' }] }).success).toBe(false);
+    expect(ReadinessScanSchema.safeParse({ ...base, owner: [{ kind: 'secret', variable: 'A_B', message: 'm' }] }).success).toBe(true);
+    expect(Object.keys(ReadinessScanSchema.shape)).not.toContain('services');
+  });
+
+  it('drops secret items GitHub has already, GitHub\'s own and repeats; a secret without a usable name becomes other', async () => {
+    const out = {
+      ...output,
+      owner: [
+        { kind: 'secret', variable: 'SENDGRID_KEY', message: 'a' },
+        { kind: 'secret', variable: 'STRIPE_SECRET_KEY', message: 'configured already' },
+        { kind: 'secret', variable: 'GITHUB_TOKEN', message: 'GitHub sets it' },
+        { kind: 'secret', variable: 'sendgrid_key', message: 'repeat, other case' },
+        { kind: 'secret', variable: 'npm_token', message: 'lower case in the workflow' },
+        { kind: 'secret', message: 'no name' },
+        { kind: 'other', message: 'Turn on billing' },
+      ],
+    };
+    const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
+    expect(result.owner).toEqual([
+      { kind: 'secret', variable: 'SENDGRID_KEY', message: 'a' },
+      { kind: 'secret', variable: 'NPM_TOKEN', message: 'lower case in the workflow' },
+      { kind: 'other', message: 'no name' },
+      { kind: 'other', message: 'Turn on billing' },
+    ]);
   });
 
   it('clips long answers instead of failing: title 120, detail 2000, subject 120 before keying, owner message 500', async () => {
@@ -94,17 +141,16 @@ describe('runReadinessScan', () => {
     expect(system).toContain('example env files');
   });
 
-  it('tells the agent that unconfigured variables are owner items, one per variable, never blockers', async () => {
+  it('tells the agent that missing secrets are owner items, one per secret, never blockers', async () => {
     const run = fakeRun();
     await runReadinessScan(input, { run, feature, now });
     const system = (run.mock.calls[0][0] as { systemPrompt: string }).systemPrompt;
-    expect(system).toContain('one item per variable');
-    expect(system).toContain("the app's own settings and secrets");
+    expect(system).toContain('one item per secret');
     expect(system).toMatch(/never a blocker/i);
     expect(system).not.toContain('an env var that is read but never configured');
   });
 
-  it('turns a blocker that only says variables are not configured into owner variable items', async () => {
+  it('turns a blocker that only says variables are not configured into owner secret items', async () => {
     const out = {
       ...output,
       blockers: [
@@ -117,20 +163,23 @@ describe('runReadinessScan', () => {
     const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
     // Workflow blockers are left alone: a CI gap is often a fix an agent can make
     expect(result.blockers.map((b) => b.title)).toEqual(['Missing secrets for the deploy job', 'Hardcoded localhost', 'Missing env validation crashes the build']);
-    // Configured (DATABASE_URL), already listed (SENDGRID_KEY) and Vercel's own (NODE_ENV, VERCEL_URL) are not added
+    // In GitHub already (DATABASE_URL) and already listed (SENDGRID_KEY) are not added; only GITHUB_ names are the platform's
     expect(result.owner.map((o) => [o.kind, o.variable])).toEqual([
-      ['variable', 'SENDGRID_KEY'],
-      ['variable', 'CSRF_SECRET'],
-      ['variable', 'WEB_ORIGIN'],
-      ['variable', 'SESSION_COOKIE_SECURE'],
+      ['secret', 'SENDGRID_KEY'],
+      ['secret', 'CSRF_SECRET'],
+      ['secret', 'WEB_ORIGIN'],
+      ['secret', 'SESSION_COOKIE_SECURE'],
+      ['secret', 'NODE_ENV'],
+      ['secret', 'VERCEL_URL'],
     ]);
+    expect(result.owner[1].message).toBe('CI needs the secret CSRF_SECRET.');
   });
 
   const scanBlockers = async (blockers: Array<{ title: string; detail: string }>) => {
     const out = { ...output, blockers: blockers.map((b, i) => ({ kind: 'code', subject: `s${i}`, ...b })) };
     return runReadinessScan(input, { run: fakeRun(out), feature, now });
   };
-  const variables = (r: Awaited<ReturnType<typeof scanBlockers>>) => r.owner.filter((o) => o.kind === 'variable').map((o) => o.variable);
+  const variables = (r: Awaited<ReturnType<typeof scanBlockers>>) => r.owner.filter((o) => o.kind === 'secret').map((o) => o.variable);
 
   it('keeps blockers that are about variables but not about values missing', async () => {
     const r = await scanBlockers([

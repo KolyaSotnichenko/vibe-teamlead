@@ -1,13 +1,16 @@
 /**
- * Deploy → Readiness: what stands between the project and a first deploy. Blockers with their
- * tasks, what only the owner can do, and the state of CI. The scan itself runs in main; this
- * tab shows its last result and asks for a new one.
+ * CI → Readiness: what keeps the project's GitHub Actions CI from passing. Blockers with their
+ * tasks, what only the owner can do (CI secrets GitHub lacks, saved here as GitHub Actions
+ * secrets), and the state of CI. The check itself runs in main; this tab shows its last result
+ * and asks for a new one.
  */
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ReadinessBlocker, ReadinessState } from '../../../shared/types/deploy';
+import type { ReadinessBlocker, ReadinessOwnerItem, ReadinessState } from '../../../shared/types/deploy';
 import { Button } from '../ui/button';
 import { Notice, Row, Section } from './parts';
-import { formatRelative, isWebUrl, openWebUrl, StatusMark } from './status';
+import { SecretDialog } from './SecretDialog';
+import { formatRelative, isCiBlocker, isWebUrl, openWebUrl, StatusMark } from './status';
 
 const CONCLUSIONS: Record<string, 'success' | 'attention' | 'skipped'> = {
   success: 'success',
@@ -23,13 +26,17 @@ const CONCLUSIONS: Record<string, 'success' | 'attention' | 'skipped'> = {
 
 const TASK_STATUSES: ReadonlySet<string> = new Set(['backlog', 'queue', 'in_progress', 'ai_review', 'human_review', 'done', 'pr_created', 'error']);
 
+/** The secret an owner item names (an old result says `variable` for it), or undefined. */
+const secretOf = (item: ReadinessOwnerItem): string | undefined =>
+  (item.kind === 'secret' || (item.kind as string) === 'variable') && item.variable ? item.variable : undefined;
+
 export interface ReadinessTabProps {
   projectId: string;
   /** Undefined until the first read. */
   readiness?: ReadinessState;
   /** Deploy is not set up yet: offer Set up deploy when nothing blocks. */
   notSetUp: boolean;
-  /** Deploy is set up (known, not still loading). */
+  /** CI is set up (the repository is recorded; known, not still loading): secrets can be added and are listed. */
   isSetUp?: boolean;
   onSetUp: () => void;
   onOpenRuns: () => void;
@@ -37,8 +44,26 @@ export interface ReadinessTabProps {
   onGoToTask?: (specId: string) => void;
 }
 
-export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRuns, onGoToTask }: ReadinessTabProps) {
+export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, onSetUp, onOpenRuns, onGoToTask }: ReadinessTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
+  const [dialog, setDialog] = useState<{ name: string } | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  /** The repository's GitHub Actions secret names (set up only): a scan's secret items that have one are done */
+  const [present, setPresent] = useState<ReadonlySet<string>>(new Set());
+
+  const loadSecrets = useCallback(async () => {
+    try {
+      const r = await window.electronAPI.deploy.listSecrets(projectId);
+      if (r.success && r.data?.ok) setPresent(new Set(r.data.names));
+    } catch {
+      // the check's list stands
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (isSetUp) void loadSecrets();
+  }, [isSetUp, loadSecrets]);
+
   if (!readiness) return <p className="text-sm text-muted-foreground">{t('deploy:readiness.loading')}</p>;
   const { result, scanning, error, tasks } = readiness;
 
@@ -49,7 +74,7 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
       <li key={b.key} className="flex flex-col gap-1 border-b border-border px-3 py-3 last:border-b-0">
         <div className="flex items-baseline gap-2">
           <StatusMark status={done ? 'success' : 'attention'} />
-          {b.kind !== 'unsupported' && task ? (
+          {task ? (
             <button
               type="button"
               onClick={() => onGoToTask?.(task.specId)}
@@ -62,22 +87,22 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
           )}
         </div>
         <p className="pl-6 text-sm text-muted-foreground">{b.detail}</p>
-        {b.kind === 'unsupported' ? (
-          <p className="pl-6 text-sm text-foreground">{t('deploy:readiness.unsupported')}</p>
-        ) : (
-          task && (
-            <p className="pl-6 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-              {TASK_STATUSES.has(task.status ?? '') ? t(`deploy:readiness.taskStatus.${task.status}`) : t('deploy:readiness.taskStatus.pending')}
-            </p>
-          )
+        {task && (
+          <p className="pl-6 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+            {TASK_STATUSES.has(task.status ?? '') ? t(`deploy:readiness.taskStatus.${task.status}`) : t('deploy:readiness.taskStatus.pending')}
+          </p>
         )}
       </li>
     );
   };
 
-  const blockers = result?.blockers ?? [];
-  // Shown as plain text: values are not added from here (yet)
-  const owner = result?.owner ?? [];
+  const blockers = (result?.blockers ?? []).filter(isCiBlocker);
+  // Before setup there is no repository to hold secrets; after it, the ones GitHub has are done
+  const owner = (result?.owner ?? []).filter((item) => {
+    const secret = secretOf(item);
+    return !(isSetUp && secret && present.has(secret));
+  });
+  const secretsLeft = isSetUp ? owner.filter((item) => secretOf(item)).length : 0;
   const run = result?.workflow.lastMainRun;
   const conclusion = run && Object.hasOwn(CONCLUSIONS, run.conclusion) ? run.conclusion : undefined;
   const gaveUp = readiness.gaveUp ?? [];
@@ -106,7 +131,9 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
         </Button>
       </div>
 
+      {secretsLeft > 0 && <Notice tone="attention">{t('deploy:readiness.secretsLeft', { count: secretsLeft })}</Notice>}
       {error && <Notice tone="attention">{t('deploy:readiness.error')}</Notice>}
+      {savedNote && <Notice tone="info">{savedNote}</Notice>}
 
       {result && blockers.length === 0 && (
         <div className="flex flex-col items-start gap-3">
@@ -145,13 +172,24 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
                 </li>
               );
             })}
-            {owner.map((item, i) => (
-              <li key={`${item.variable ?? 'other'}-${i}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3 last:border-b-0">
-                <span className="min-w-0 flex-1 text-sm text-foreground">
-                  {item.kind === 'variable' && item.variable ? <span className="font-mono">{item.variable}</span> : item.message}
-                </span>
-              </li>
-            ))}
+            {owner.map((item, i) => {
+              const secret = secretOf(item);
+              return (
+                <li key={`${secret ?? 'other'}-${i}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3 last:border-b-0">
+                  <span className="min-w-0 flex-1 text-sm text-foreground">
+                    {secret ? <span className="font-mono">{secret}</span> : item.message}
+                  </span>
+                  {secret &&
+                    (isSetUp ? (
+                      <Button size="sm" variant="outline" onClick={() => setDialog({ name: secret })}>
+                        {t('deploy:readiness.addSecret')}
+                      </Button>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{t('deploy:readiness.setUpCiFirst')}</span>
+                    ))}
+                </li>
+              );
+            })}
           </ul>
         </Section>
       )}
@@ -184,6 +222,18 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
           </dl>
         </Section>
       )}
+
+      <SecretDialog
+        open={dialog !== null}
+        projectId={projectId}
+        initialName={dialog?.name}
+        onClose={() => setDialog(null)}
+        onSaved={(name) => {
+          setDialog(null);
+          setSavedNote(t('deploy:readiness.secretSaved', { name }));
+          setPresent((names) => new Set([...names, name]));
+        }}
+      />
     </div>
   );
 }

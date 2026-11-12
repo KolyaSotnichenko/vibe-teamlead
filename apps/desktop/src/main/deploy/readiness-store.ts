@@ -6,7 +6,7 @@
 import { lstatSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { BlockerKind, ReadinessResult } from '../../shared/types/deploy';
+import type { BlockerKind, ReadinessBlocker, ReadinessOwnerItem, ReadinessResult } from '../../shared/types/deploy';
 import { writeFileReplacingSync } from '../ai/safe-write';
 
 const KEY_CHARS = 80;
@@ -141,18 +141,38 @@ export function assignKnownKeys(blockers: Array<NewBlocker & { sameAs?: string }
   return out;
 }
 
-const isArray = (value: unknown): boolean => Array.isArray(value);
+const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
-/** The stored scan; null when missing, malformed or a symlink. */
+/** A saved blocker of a kind CI readiness has; the old Deploy's `unsupported` ones are dropped. */
+const isBlocker = (b: unknown): b is ReadinessBlocker => isObject(b) && (b.kind === 'code' || b.kind === 'workflow');
+
+/** A saved owner item; the old Deploy's `variable` kind is a secret now. */
+function ownerItem(item: unknown): ReadinessOwnerItem | null {
+  if (!isObject(item)) return null;
+  const kind = item.kind === 'variable' ? 'secret' : item.kind;
+  if (kind !== 'secret' && kind !== 'other') return null;
+  return { ...(item as unknown as ReadinessOwnerItem), kind };
+}
+
+/**
+ * The stored scan; null when missing, malformed or a symlink. A result the old Vercel Deploy saved
+ * still reads: its services are dropped, `unsupported` blockers too, `variable` items are secrets.
+ */
 export function readReadiness(projectPath: string): ReadinessResult | null {
   try {
     const target = file(projectPath);
     if (!lstatSync(target).isFile()) return null;
-    const parsed = JSON.parse(readFileSync(target, 'utf-8')) as Partial<ReadinessResult> | null;
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.scannedAt !== 'string') return null;
-    if (!isArray(parsed.blockers) || !isArray(parsed.services) || !isArray(parsed.owner)) return null;
-    if (!parsed.workflow || typeof parsed.workflow !== 'object') return null;
-    return parsed as ReadinessResult;
+    const parsed = JSON.parse(readFileSync(target, 'utf-8')) as Record<string, unknown> | null;
+    if (!isObject(parsed) || typeof parsed.scannedAt !== 'string') return null;
+    if (!isArray(parsed.blockers) || !isArray(parsed.owner)) return null;
+    if (!isObject(parsed.workflow)) return null;
+    const { services: _services, ...rest } = parsed;
+    return {
+      ...(rest as unknown as ReadinessResult),
+      blockers: parsed.blockers.filter(isBlocker),
+      owner: parsed.owner.map(ownerItem).filter((item): item is ReadinessOwnerItem => item !== null),
+    };
   } catch {
     return null;
   }

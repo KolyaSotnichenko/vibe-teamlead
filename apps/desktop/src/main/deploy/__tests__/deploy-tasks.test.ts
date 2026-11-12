@@ -44,8 +44,9 @@ function deps(): DeployTaskDeps {
 
 const code: ReadinessBlocker = { key: 'code:localhost', kind: 'code', subject: 'localhost', title: 'Hardcoded localhost', detail: 'api.ts uses localhost:3000' };
 const wf: ReadinessBlocker = { key: 'workflow:ci', kind: 'workflow', subject: 'ci', title: 'Add CI workflow', detail: 'No workflow found.' };
-const unsupported: ReadinessBlocker = { key: 'unsupported:go', kind: 'unsupported', subject: 'go', title: 'Go', detail: 'x' };
-const FIXED = 'Found by the Deploy readiness scan; fix what blocks deploying to Vercel. Don\'t delete, skip or weaken tests.';
+/** Old Deploy data: no task is ever made for it */
+const unsupported = { key: 'unsupported:go', kind: 'unsupported', subject: 'go', title: 'Go', detail: 'x' } as unknown as ReadinessBlocker;
+const FIXED = 'Found by the CI check; fix what keeps CI from passing. Don\'t delete, skip or weaken tests.';
 
 beforeEach(() => { dir = mkdtempSync(path.join(tmpdir(), 'dtasks-')); tasks = []; started = []; queued = []; created = []; });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
@@ -82,6 +83,7 @@ describe('createBlockerTasks', () => {
     await createBlockerTasks(project(), [code, wf], deps());
     const rules = tryLoadPrompt('deploy_workflow_rules');
     expect(rules).toContain('browser-mode unit tests');
+    expect(rules).not.toMatch(/vercel/i);
     expect(created[0].title).toBe('Hardcoded localhost');
     expect(created[0].description).toBe(`api.ts uses localhost:3000\n\n${FIXED}`);
     expect(created[1].description).toBe(`No workflow found.\n\n${FIXED}\n\n${rules}`);

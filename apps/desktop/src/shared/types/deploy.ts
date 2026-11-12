@@ -131,6 +131,10 @@ export interface DeployAPI {
   /** Starts a scan (or joins the one running). `reason`: 'open' scans only when nothing is saved; default 'check-again'. */
   scanReadiness: (projectId: string, reason?: 'open' | 'check-again') => Promise<import('./common').IPCResult>;
   onReadinessUpdate: (callback: (update: { projectId: string; state: ReadinessState }) => void) => () => void;
+  /** Saves a GitHub Actions secret on the project's repository. The value goes only to GitHub, sealed; it never comes back. */
+  setSecret: (projectId: string, name: string, value: string) => Promise<import('./common').IPCResult<DeploySetSecretResult>>;
+  /** The project's GitHub Actions secret names. */
+  listSecrets: (projectId: string) => Promise<import('./common').IPCResult<DeployListSecretsResult>>;
   /** The task's preview state (raw value, never rejects in practice; unknown task or project: not-pushed). */
   previewState: (projectId: string, taskId: string) => Promise<TaskPreview>;
   /** A task's branch was pushed (success or failure): ask for `previewState` again. */
@@ -212,10 +216,11 @@ export interface DeployEnvState {
 }
 
 // ============================================
-// Readiness (what stands between the project and a first deploy)
+// Readiness (what keeps the project's GitHub Actions CI from passing)
 // ============================================
 
-export type BlockerKind = 'code' | 'workflow' | 'unsupported';
+/** Old saved results may also hold `unsupported` blockers (the removed Vercel deploy): they are dropped on read. */
+export type BlockerKind = 'code' | 'workflow';
 
 export interface ReadinessBlocker {
   /** Stable across scans: `blockerKey(kind, subject)` */
@@ -226,19 +231,13 @@ export interface ReadinessBlocker {
   detail: string;
 }
 
-export type ServiceKind = 'postgres' | 'redis' | 'blob' | 'other';
-
-export interface ReadinessService {
-  kind: ServiceKind;
-  name: string;
-  /** Vercel can provide it (a Marketplace database, Blob) */
-  managed: boolean;
-  reason?: string;
-}
-
-/** Something only the owner can do (names only, never values). */
+/**
+ * Something only the owner can do (names only, never values). `secret`: a GitHub Actions secret
+ * the workflow reads that the repository lacks, named in `variable`. Old saved results say
+ * `variable` for it: read as `secret`.
+ */
 export interface ReadinessOwnerItem {
-  kind: 'variable' | 'other';
+  kind: 'secret' | 'other';
   variable?: string;
   message: string;
 }
@@ -247,10 +246,20 @@ export interface ReadinessResult {
   scannedAt: string;
   commit?: string;
   blockers: ReadinessBlocker[];
-  services: ReadinessService[];
+  /** Old saved results only (the removed Vercel deploy's services): dropped on read, never shown. */
+  services?: unknown[];
   owner: ReadinessOwnerItem[];
   workflow: { path?: string; lastMainRun?: { conclusion: string; runId: number } };
 }
+
+/** Why a secret couldn't be saved or listed: a short kind, never a message (it could echo the value). */
+export type DeploySecretErrorKind = GitHubErrorKind | 'conflict' | 'invalid' | 'not-set-up';
+
+/** The result of saving a GitHub Actions secret. Never carries the value. */
+export type DeploySetSecretResult = { ok: true } | { ok: false; kind: DeploySecretErrorKind };
+
+/** The repository's GitHub Actions secret names (GitHub never returns values). */
+export type DeployListSecretsResult = { ok: true; names: string[] } | { ok: false; kind: DeploySecretErrorKind };
 
 /** What the Environment tab shows for readiness. */
 export interface ReadinessState {

@@ -13,6 +13,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import sodium from 'libsodium-wrappers';
 import type { GitHubError } from '../../shared/types/deploy';
+import { isValidSecretName } from '../../shared/utils/github-secret-name';
 import { getValidAccessToken } from '../github-auth/token-store';
 import { getToolPath } from '../cli-tool-manager';
 import { getIsolatedGitEnv } from '../utils/git-isolation';
@@ -158,9 +159,7 @@ export async function inspectRepo(
   return { private: body.private === true, createdAt: typeof body.created_at === 'string' ? body.created_at : '', empty };
 }
 
-export function isValidSecretName(name: string): boolean {
-  return /^[A-Z_][A-Z0-9_]*$/.test(name) && !name.startsWith('GITHUB_');
-}
+export { isValidSecretName };
 
 export async function setRepoSecret(
   owner: string,

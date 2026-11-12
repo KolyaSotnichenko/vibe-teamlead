@@ -370,7 +370,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     thinkingDefault: 'high',
   },
   deploy_readiness: {
-    // Reads the project for what blocks a first Vercel deploy; writes nothing (structured output).
+    // Reads the project for what keeps its GitHub Actions CI from passing; writes nothing (structured output).
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
     appTools: [],

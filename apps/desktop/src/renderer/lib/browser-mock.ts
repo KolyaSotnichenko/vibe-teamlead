@@ -249,6 +249,8 @@ const browserMockAPI: ElectronAPI = {
     onPreviewUpdate: () => () => undefined,
     readinessState: async () => ({ success: true, data: { scanning: false, tasks: {} } }),
     scanReadiness: async () => ({ success: true }),
+    setSecret: async () => ({ success: true, data: { ok: false as const, kind: 'not-set-up' as const } }),
+    listSecrets: async () => ({ success: true, data: { ok: true as const, names: [] } }),
     onReadinessUpdate: () => () => {},
   },
   usage: usageMock,

@@ -42,6 +42,8 @@ export const createDeployAPI = (): DeployAPI => ({
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_READINESS_UPDATE, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_READINESS_UPDATE, handler);
   },
+  setSecret: (projectId, name, value) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, projectId, name, value),
+  listSecrets: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_LIST_SECRETS, projectId),
   previewState: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_PREVIEW_STATE, projectId, taskId),
   onPreviewUpdate: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, update: { projectId: string; taskId: string }) => callback(update);

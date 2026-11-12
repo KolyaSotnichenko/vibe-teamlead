@@ -182,6 +182,17 @@
       }
     }
   },
+  "secretDialog": {
+    "title": "Add a CI secret",
+    "description": "Saved as a GitHub Actions secret of the project’s repository. The value goes to GitHub encrypted and can’t be read back.",
+    "name": "Name",
+    "nameRule": "Capital letters, digits and underscores; it can’t start with a digit or GITHUB_.",
+    "value": "Value",
+    "valueHint": "Entered once: it isn’t shown again or kept in the app.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…"
+  },
   "push": {
     "ok": "Main was pushed to GitHub {{ago}}.",
     "failed": "Pushing main to GitHub failed {{ago}}. {{reason}}",
@@ -233,7 +244,6 @@
     "scanning": "Checking the project…",
     "error": "The check failed. Try again. The list below is from the last successful check.",
     "blockers": "Blocking deploy",
-    "unsupported": "Vibe Teamlead can't deploy this part to Vercel",
     "taskStatus": {
       "backlog": "Task: backlog",
       "queue": "Task: queued",
@@ -246,10 +256,11 @@
       "pending": "Task: not started"
     },
     "owner": "Needed from you",
-    "addValue": "Add value",
-    "setUpFirst": "Set up deploy first, then add the values here",
-    "variablesLeft_one": "The deployed app needs these values before it works: {{count}} left",
-    "variablesLeft_other": "The deployed app needs these values before it works: {{count}} left",
+    "addSecret": "Add secret",
+    "setUpCiFirst": "Set up CI first, then add the secret here",
+    "secretsLeft_one": "CI needs these secrets: {{count}} left",
+    "secretsLeft_other": "CI needs these secrets: {{count}} left",
+    "secretSaved": "{{name}} saved as a GitHub Actions secret.",
     "ci": "CI",
     "workflow": "Workflow",
     "noWorkflow": "None yet",

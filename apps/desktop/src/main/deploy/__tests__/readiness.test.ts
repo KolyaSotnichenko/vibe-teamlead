@@ -31,7 +31,7 @@ function make(over: Partial<ReadinessDeps> = {}) {
   const deps: ReadinessDeps = {
     scan: scan as never,
     lastMainRun: async () => undefined,
-    variableNames: async () => ['A'],
+    secretNames: async () => ['A'],
     headCommit: async () => 'abc',
     branches: async () => ['main', 'dev'],
     tasks: {
@@ -99,7 +99,8 @@ describe('triggers', () => {
   it('check-again always scans and passes names and commit, never values', async () => {
     writeReadiness(dir, result([]));
     await make().scan(project(), 'check-again');
-    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ projectPath: dir, commit: 'abc', variableNames: ['A'], databaseAdded: false, servicesAdded: [] }));
+    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ projectPath: dir, commit: 'abc', secretNames: ['A'] }));
+    expect(scan.mock.calls[0][0]).not.toHaveProperty('variableNames');
   });
 
   it('passes the last run on main only when it ran on the commit being scanned', async () => {
@@ -117,7 +118,8 @@ describe('triggers', () => {
   it('old Vercel data (database, services) is ignored', async () => {
     const p = { ...project(), settings: { deploy: { enabled: true, database: { provider: 'neon', addedAt: 't' }, services: { redis: { addedAt: 't' } } } } } as unknown as Project;
     await make().scan(p, 'check-again');
-    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ databaseAdded: false, servicesAdded: [] }));
+    expect(Object.keys(scan.mock.calls[0][0])).not.toContain('databaseAdded');
+    expect(Object.keys(scan.mock.calls[0][0])).not.toContain('servicesAdded');
   });
 });
 
@@ -257,7 +259,7 @@ describe('no automatic setup (the owner starts CI setup)', () => {
 
   it('a workflow-only change to none does not set up either', async () => {
     writeReadiness(dir, result([blocker('x')]));
-    scan.mockResolvedValueOnce({ ...result([]), owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] });
+    scan.mockResolvedValueOnce({ ...result([]), owner: [{ kind: 'secret', variable: 'CSRF_SECRET', message: 'x' }] });
     await make().scan(project(), 'check-again');
     expect(setUp).not.toHaveBeenCalled();
     expect(created).toEqual([]);

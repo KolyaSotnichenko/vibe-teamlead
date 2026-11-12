@@ -22,7 +22,7 @@ import { ReadinessTab } from './ReadinessTab';
 import { DeployChecklist } from './DeployChecklist';
 import { useDeployEnv } from './useDeployEnv';
 import { useReadiness } from './useReadiness';
-import { isWebUrl, openWebUrl, useGitHubErrorText } from './status';
+import { isCiBlocker, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
 const ATTENTION: ReadonlySet<GitHubError['kind']> = new Set(['no-connection', 'permissions', 'not-found']);
 
@@ -101,8 +101,8 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
   const restartRuns = useCallback(() => void window.electronAPI.deploy.startRuns(projectId, selectedRef.current), [projectId]);
   const env = useDeployEnv(projectId, restartRuns);
   const readiness = useReadiness(projectId);
-  // Unsupported blockers have no task and are not counted
-  const blockerCount = readiness?.result?.blockers.filter((b) => b.kind !== 'unsupported').length ?? 0;
+  // Code and workflow blockers only (an old saved result's unsupported ones are not counted)
+  const blockerCount = readiness?.result?.blockers.filter(isCiBlocker).length ?? 0;
   const notSetUp = !!env.state && !env.state.settings?.enabled;
 
   const runs = state?.runs ?? [];
@@ -268,7 +268,7 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
       {tab === 'readiness' && (
         <div role="tabpanel" id="deploy-panel-readiness" aria-labelledby="deploy-tab-readiness" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
-          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} isSetUp={!!env.state?.settings?.enabled} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
+          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} isSetUp={!!env.state?.settings?.repo} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
         </div>
       )}
       {tab === 'environment' && (

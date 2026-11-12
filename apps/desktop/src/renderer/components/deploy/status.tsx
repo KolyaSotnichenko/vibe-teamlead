@@ -3,7 +3,7 @@
  * Design system: radius 0, ink for done, vermilion only for a failure, the word always present for screen readers.
  */
 import { useTranslation } from 'react-i18next';
-import type { DeployStatus, GitHubError, GraphNodeStatus } from '../../../shared/types/deploy';
+import type { DeployStatus, GitHubError, GraphNodeStatus, ReadinessBlocker } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
 
 /** A run, job or step as a graph status (same rules as the main process's run graph). */
@@ -118,6 +118,9 @@ export function useDeployErrorText() {
   const { t } = useTranslation(['deploy']);
   return (kind: string | undefined): string => t(`deploy:env.errors.${kind && DEPLOY_ERROR_KINDS.has(kind) ? kind : 'unknown'}`);
 }
+
+/** Code and workflow blockers only: an old saved result may still hold the removed Deploy's `unsupported` ones. */
+export const isCiBlocker = (b: ReadinessBlocker): boolean => b.kind === 'code' || b.kind === 'workflow';
 
 /** Only http(s) URLs become links; anything else from GitHub or a host is not shown as one. */
 export function isWebUrl(url: string | null | undefined): url is string {

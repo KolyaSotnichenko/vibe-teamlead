@@ -1,5 +1,5 @@
 /**
- * Deploy readiness scan orchestration: one scan per project at a time (more requests while
+ * CI readiness scan orchestration: one scan per project at a time (more requests while
  * one runs share ONE follow-up), three triggers (first open, after a merge into main,
  * Check again) and blocker tasks from the result. Setup is never started from here: the owner
  * starts it. Nothing here throws into a caller; a failed scan keeps the saved result.
@@ -18,7 +18,8 @@ export const SCAN_FAILED = 'The readiness scan failed. Try again.';
 export interface ReadinessDeps {
   scan(input: ScanInput): Promise<ReadinessResult>;
   lastMainRun(project: Project): Promise<ScanInput['lastMainRun']>;
-  variableNames(project: Project): Promise<string[]>;
+  /** The repository's GitHub Actions secret names (names only) */
+  secretNames(project: Project): Promise<string[]>;
   headCommit(projectPath: string): Promise<string | undefined>;
   tasks: DeployTaskDeps;
   emit(projectId: string, state: ReadinessState): void;
@@ -74,7 +75,6 @@ export function createReadiness(deps: ReadinessDeps) {
   /** The saved scan's blockers, then the keys with an open task the saved scan lost: what the scan keeps keys for */
   const knownBlockers = (project: Project, previous: ReadinessResult | null): KnownBlocker[] => {
     const known: KnownBlocker[] = (previous?.blockers ?? [])
-      .filter((b) => b.kind !== 'unsupported')
       .map((b) => ({ key: b.key, kind: b.kind, subject: b.subject, title: b.title }));
     try {
       for (const open of openDeployBlockers(project, deps.tasks.getTasks, deps.tasks.now?.())) {
@@ -92,8 +92,8 @@ export function createReadiness(deps: ReadinessDeps) {
     emit(project);
     let result: ReadinessResult;
     try {
-      const [variableNames, commit, lastMainRun] = await Promise.all([
-        deps.variableNames(project).catch(() => [] as string[]),
+      const [secretNames, commit, lastMainRun] = await Promise.all([
+        deps.secretNames(project).catch(() => [] as string[]),
         deps.headCommit(project.path).catch(() => undefined),
         deps.lastMainRun(project).catch(() => undefined),
       ]);
@@ -102,9 +102,7 @@ export function createReadiness(deps: ReadinessDeps) {
         projectPath: project.path,
         ...(known.length ? { knownBlockers: known } : {}),
         ...(commit ? { commit } : {}),
-        variableNames,
-        databaseAdded: false,
-        servicesAdded: [],
+        secretNames,
         // Only a run of the commit being scanned says something about it (after a merge, the last run is of the commit before)
         ...(lastMainRun && commit && lastMainRun.sha === commit ? { lastMainRun } : {}),
       });

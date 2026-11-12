@@ -32,7 +32,7 @@ vi.mock('../../deploy/setup', async (orig) => ({ ...(await orig<typeof import('.
 const cleanup = vi.hoisted(() => ({ cleanupVercelLeftovers: vi.fn(async (_userData: string) => undefined) }));
 vi.mock('../../deploy/ci-setup', async (orig) => ({ ...(await orig<typeof import('../../deploy/ci-setup')>()), ...cleanup }));
 
-const readiness = vi.hoisted(() => ({ deps: undefined as undefined | { variableNames: (p: unknown) => Promise<string[]> } & Record<string, unknown> }));
+const readiness = vi.hoisted(() => ({ deps: undefined as undefined | { secretNames: (p: unknown) => Promise<string[]> } & Record<string, unknown> }));
 vi.mock('../../deploy/readiness', () => ({
   createReadiness: (deps: typeof readiness.deps) => {
     readiness.deps = deps;
@@ -183,10 +183,73 @@ describe('deploy environment IPC', () => {
       gh.listRepoSecretNames.mockResolvedValue(['API_KEY']);
       expect(readiness.deps).not.toHaveProperty('setUp');
       expect(readiness.deps).not.toHaveProperty('canAutoSetUp');
-      expect(await readiness.deps?.variableNames({ settings: {} })).toEqual([]);
+      expect(readiness.deps).not.toHaveProperty('variableNames');
+      expect(await readiness.deps?.secretNames({ settings: {} })).toEqual([]);
       expect(gh.listRepoSecretNames).not.toHaveBeenCalled();
-      expect(await readiness.deps?.variableNames({ settings: { deploy: { repo: { owner: 'o', repo: 'r', createdByApp: true } } } })).toEqual(['API_KEY']);
+      expect(await readiness.deps?.secretNames({ settings: { deploy: { repo: { owner: 'o', repo: 'r', createdByApp: true } } } })).toEqual(['API_KEY']);
       expect(gh.listRepoSecretNames).toHaveBeenCalledWith('o', 'r');
+    });
+  });
+
+  describe('secrets', () => {
+    const setUp = () => {
+      p1().settings.deploy = { enabled: true, repo: { owner: 'o', repo: 'r', createdByApp: true } };
+    };
+
+    it('setSecret saves the value as a GitHub Actions secret of the recorded repository and returns no value', async () => {
+      setUp();
+      gh.setRepoSecret.mockResolvedValueOnce(undefined);
+      const r = await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', 'API_KEY', 's3cr3t-value');
+      expect(r).toEqual({ success: true, data: { ok: true } });
+      expect(gh.setRepoSecret).toHaveBeenCalledWith('o', 'r', 'API_KEY', 's3cr3t-value');
+      expect(JSON.stringify(r)).not.toContain('s3cr3t-value');
+    });
+
+    it('setSecret checks the name by GitHub\'s rules and the value before any call', async () => {
+      setUp();
+      for (const [name, value] of [
+        ['GITHUB_TOKEN', 'v'],
+        ['lower', 'v'],
+        ['1ABC', 'v'],
+        ['A-B', 'v'],
+        [42, 'v'],
+        ['API_KEY', ''],
+        ['API_KEY', 7],
+        ['API_KEY', 'x'.repeat(64 * 1024 + 1)],
+      ] as const) {
+        expect(await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', name, value)).toEqual({ success: true, data: { ok: false, kind: 'invalid' } });
+      }
+      expect(gh.setRepoSecret).not.toHaveBeenCalled();
+    });
+
+    it('setSecret before CI is set up says so and calls nothing', async () => {
+      expect(await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', 'API_KEY', 'v')).toEqual({ success: true, data: { ok: false, kind: 'not-set-up' } });
+      expect(gh.setRepoSecret).not.toHaveBeenCalled();
+    });
+
+    it('a GitHub failure travels as its kind only, never the message (it could echo the value)', async () => {
+      setUp();
+      const err = Object.assign(new Error('boom v4lue'), { name: 'GitHubWriteError', kind: 'permissions' });
+      gh.setRepoSecret.mockRejectedValueOnce(err);
+      const r = await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', 'API_KEY', 'v4lue');
+      expect(r).toEqual({ success: true, data: { ok: false, kind: 'permissions' } });
+      gh.setRepoSecret.mockRejectedValueOnce(new Error('v4lue'));
+      expect(await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', 'API_KEY', 'v4lue')).toEqual({ success: true, data: { ok: false, kind: 'unavailable' } });
+    });
+
+    it('listSecrets lists names only; not set up and failures are kinds', async () => {
+      expect(await invoke(IPC_CHANNELS.DEPLOY_LIST_SECRETS, 'p1')).toEqual({ success: true, data: { ok: false, kind: 'not-set-up' } });
+      setUp();
+      gh.listRepoSecretNames.mockResolvedValueOnce(['API_KEY', 'NPM_TOKEN']);
+      expect(await invoke(IPC_CHANNELS.DEPLOY_LIST_SECRETS, 'p1')).toEqual({ success: true, data: { ok: true, names: ['API_KEY', 'NPM_TOKEN'] } });
+      expect(gh.listRepoSecretNames).toHaveBeenCalledWith('o', 'r');
+      gh.listRepoSecretNames.mockRejectedValueOnce(Object.assign(new Error('x'), { name: 'GitHubWriteError', kind: 'rate-limit' }));
+      expect(await invoke(IPC_CHANNELS.DEPLOY_LIST_SECRETS, 'p1')).toEqual({ success: true, data: { ok: false, kind: 'rate-limit' } });
+    });
+
+    it('an unknown project fails', async () => {
+      expect(await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'nope', 'API_KEY', 'v')).toMatchObject({ success: false });
+      expect(await invoke(IPC_CHANNELS.DEPLOY_LIST_SECRETS, 'nope')).toMatchObject({ success: false });
     });
   });
 });
