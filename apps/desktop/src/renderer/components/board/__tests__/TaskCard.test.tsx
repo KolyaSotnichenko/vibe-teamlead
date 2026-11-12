@@ -156,6 +156,72 @@ describe('TaskCard', () => {
     expect(shortDependency('custom-id')).toBe('custom-id');
   });
 
+  describe('layout (Variant A)', () => {
+    afterEach(() => {
+      cleanup();
+      resetPreviewSubscription();
+    });
+
+    it('puts priority and time in a meta row inside the body, not in the strip', () => {
+      render(<TaskCard task={task({ metadata: { priority: 'urgent' } })} onClick={vi.fn()} onStatusChange={vi.fn()} />);
+      const meta = screen.getByTestId('task-meta-row');
+      const strip = screen.getByTestId('task-action-strip');
+      expect(meta).toHaveClass('flex-wrap');
+      expect(meta.querySelector('[data-testid="priority-chip"]')).toHaveClass('uppercase', 'bg-destructive');
+      expect(meta.querySelector('time')).toBeInTheDocument();
+      expect(meta.textContent).toContain('board.worktree');
+      expect(strip.contains(meta)).toBe(false);
+      expect(strip.querySelector('time')).toBeNull();
+    });
+
+    it.each([
+      ['high', 'bg-destructive'],
+      ['medium', 'border-foreground'],
+      ['low', 'bg-accent'],
+    ])('styles %s priority as a chip', (priority, cls) => {
+      render(<TaskCard task={task({ metadata: { priority: priority as 'high' } })} onClick={vi.fn()} />);
+      expect(screen.getByTestId('priority-chip')).toHaveClass(cls);
+    });
+
+    it('keeps only buttons in the strip, with a truncating primary label and a 44px menu', () => {
+      render(<TaskCard task={task()} onClick={vi.fn()} onStatusChange={vi.fn()} />);
+      const strip = screen.getByTestId('task-action-strip');
+      const buttons = Array.from(strip.children);
+      expect(buttons.every((el) => el.tagName === 'BUTTON')).toBe(true);
+      const stop = screen.getByRole('button', { name: 'actions.stop' });
+      expect(stop).toHaveClass('flex-1', 'min-w-0');
+      expect(stop.querySelector('span.truncate')).toHaveTextContent('actions.stop');
+      expect(screen.getByRole('button', { name: 'actions.taskActions' })).toHaveClass('w-11', 'border-l');
+    });
+
+    it('shows a ready preview as its own row between body and strip', async () => {
+      (window as unknown as { electronAPI: unknown }).electronAPI = {
+        openExternal: vi.fn(),
+        deploy: {
+          previewState: vi.fn(async () => ({ state: 'ready', url: 'https://x.vercel.app', builtAt: new Date().toISOString() })),
+          onPreviewUpdate: vi.fn(() => () => undefined),
+        },
+      };
+      render(<TaskCard task={task()} onClick={vi.fn()} onStatusChange={vi.fn()} />);
+      const row = await screen.findByTestId('task-preview-row');
+      const strip = screen.getByTestId('task-action-strip');
+      expect(strip.contains(row)).toBe(false);
+      expect(row.nextElementSibling).toBe(strip);
+      expect(row).toHaveClass('min-h-11', 'w-full');
+      expect(row.querySelector('span.truncate')).toHaveTextContent('taskPreview.ready');
+      expect(row.querySelector('.font-mono')).toBeInTheDocument();
+    });
+
+    it('breathes while building', async () => {
+      (window as unknown as { electronAPI: unknown }).electronAPI = {
+        openExternal: vi.fn(),
+        deploy: { previewState: vi.fn(async () => ({ state: 'building' })), onPreviewUpdate: vi.fn(() => () => undefined) },
+      };
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      expect(await screen.findByTestId('task-preview-mark')).toHaveClass('vt-breathe');
+    });
+  });
+
   describe('the preview button', () => {
     const withPreview = (data: unknown) => {
       const openExternal = vi.fn();
