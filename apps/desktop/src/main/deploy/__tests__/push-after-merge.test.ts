@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Project } from '../../../shared/types';
 import { previewPushAllowed, worktreePushNewBranches } from '../branch-push';
 import { lastPushResult, pushMainAfterMerge, type PushAfterMergeDeps, type DeployPushResult } from '../push-after-merge';
 
@@ -35,7 +36,7 @@ describe('pushMainAfterMerge', () => {
     const publicRepo = { enabled: true, repo: { owner: 'me', repo: 'app', createdByApp: true, public: true } };
     expect(await pushMainAfterMerge(project(publicRepo), d, 'main')).toEqual({ pushed: true });
     expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'main');
-    const p = project(publicRepo);
+    const p = project(publicRepo) as Project;
     expect(previewPushAllowed(p, { metadata: {} } as never)).toEqual({ allowed: false, reason: 'public-repo' });
     expect(worktreePushNewBranches(p.settings, true)).toBe(false);
   });
