@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAutoMerge, type AutoMergeApi } from '../auto-merge';
+import { autoMergeEnabled } from '../../hooks/useAutoMerge';
 
 const passed = { success: true, data: { status: 'passed' } };
 
@@ -105,5 +106,39 @@ describe('a UI task held for the preview', () => {
     const { auto, onLeft } = setup();
     await auto.statusChanged('t', 'human_review', 'in_progress');
     expect(onLeft).toHaveBeenCalledWith('t');
+  });
+});
+
+describe('deploy tasks with the project switch off', () => {
+  const projectOff = { id: 'p', settings: { autoMerge: false } } as never;
+  const reviewed = (sourceType: string) => ({ id: 't', projectId: 'p', status: 'human_review', reviewReason: 'completed', metadata: { sourceType } }) as never;
+
+  function merger(task: unknown) {
+    const mergeWorktree = vi.fn(async () => ({ success: true, data: { success: true, message: 'ok' } }));
+    const api = {
+      getTaskMergeState: vi.fn(async () => ({ success: true, data: null })),
+      getTaskSecurityQaError: vi.fn(async () => ({ success: true, data: null })),
+      getTaskVerification: vi.fn(async () => passed),
+      mergeWorktree,
+    } as unknown as AutoMergeApi;
+    const auto = createAutoMerge({
+      api,
+      getTask: () => task as never,
+      isEnabled: (t) => autoMergeEnabled(projectOff, t),
+      onProblem: vi.fn(),
+    });
+    return { auto, mergeWorktree };
+  }
+
+  it('merges a deploy task that QA approved, by itself', async () => {
+    const { auto, mergeWorktree } = merger(reviewed('deploy'));
+    await auto.statusChanged('t', 'ai_review', 'human_review');
+    expect(mergeWorktree).toHaveBeenCalledWith('t', { auto: true, projectId: 'p' });
+  });
+
+  it('leaves a manual task to you while the project switch is off', async () => {
+    const { auto, mergeWorktree } = merger(reviewed('manual'));
+    await auto.statusChanged('t', 'ai_review', 'human_review');
+    expect(mergeWorktree).not.toHaveBeenCalled();
   });
 });
