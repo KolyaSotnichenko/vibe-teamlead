@@ -238,8 +238,11 @@ export const DEFAULT_AGENT_PROFILES: AgentProfile[] = [
 // Models that support Fast Mode (same model, faster API routing, higher cost)
 export const FAST_MODE_MODELS: readonly string[] = ['opus', 'opus-1m'] as const;
 
-// Models that use adaptive thinking (Opus dynamically decides how much to think within the budget cap)
-export const ADAPTIVE_THINKING_MODELS: readonly string[] = ['opus', 'opus-1m'] as const;
+// Models that think adaptively, with an effort level (the 5.5 family: Opus, Sonnet and Haiku)
+export const ADAPTIVE_THINKING_MODELS: readonly string[] = [
+  'opus', 'opus-1m', 'sonnet', 'haiku',
+  'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5',
+] as const;
 
 // Valid thinking levels for validation
 export const VALID_THINKING_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
@@ -271,7 +274,7 @@ export const MEMORY_BACKENDS = [
 
 export type ReasoningType =
   | 'thinking_tokens'     // budget-based extended thinking
-  | 'adaptive_effort'     // Opus: effort level within a budget cap
+  | 'adaptive_effort'     // current models: an effort level, the model decides how much to think
   | 'none';               // no extended thinking
 
 export const REASONING_TYPE_BADGES: Record<ReasoningType, { i18nKey: string } | null> = {
@@ -280,7 +283,7 @@ export const REASONING_TYPE_BADGES: Record<ReasoningType, { i18nKey: string } | 
   none: null,
 };
 
-/** How a Claude model thinks (Haiku has no extended thinking). */
+/** How a Claude model thinks. Haiku before 5.5 has no thinking the app can set. */
 export function getReasoningTypeForModel(modelValue: string): ReasoningType {
   if (ADAPTIVE_THINKING_MODELS.includes(modelValue)) return 'adaptive_effort';
   if (modelValue === 'haiku' || modelValue.includes('haiku')) return 'none';
