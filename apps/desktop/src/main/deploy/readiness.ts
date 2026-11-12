@@ -96,7 +96,8 @@ export function createReadiness(deps: ReadinessDeps) {
     let result: ReadinessResult;
     try {
       const [secretNames, workflowSecrets, commit, lastMainRun] = await Promise.all([
-        deps.secretNames(project).catch(() => [] as string[]),
+        // Unknown when the listing fails: the scan then asks for no secret (never every one as missing)
+        deps.secretNames(project).catch(() => undefined),
         (deps.workflowSecretNames ?? workflowSecretNames)(project.path).catch(() => [] as string[]),
         deps.headCommit(project.path).catch(() => undefined),
         deps.lastMainRun(project).catch(() => undefined),
@@ -106,7 +107,7 @@ export function createReadiness(deps: ReadinessDeps) {
         projectPath: project.path,
         ...(known.length ? { knownBlockers: known } : {}),
         ...(commit ? { commit } : {}),
-        secretNames,
+        ...(secretNames ? { secretNames } : {}),
         workflowSecretNames: workflowSecrets,
         // Only a run of the commit being scanned says something about it (after a merge, the last run is of the commit before)
         ...(lastMainRun && commit && lastMainRun.sha === commit ? { lastMainRun } : {}),

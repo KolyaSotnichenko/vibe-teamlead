@@ -18,8 +18,8 @@ import { loadPrompt } from '../prompts/prompt-loader';
 export interface ScanInput {
   projectPath: string;
   commit?: string;
-  /** The repository's GitHub Actions secret names; never values */
-  secretNames: string[];
+  /** The repository's GitHub Actions secret names; never values. Undefined: the listing failed (unknown), so no secret items this scan */
+  secretNames?: string[];
   /** The secrets the project's workflows read (`secrets.NAME`, GitHub's own left out): the only names a secret item may have */
   workflowSecretNames: string[];
   /** `sha`: the commit the run was of (the scan gets the run only when it is the commit scanned) */
@@ -132,7 +132,9 @@ export function readinessPrompt(input: ScanInput): string {
   const lines = [
     `The project root is ${input.projectPath}.`,
     input.commit ? `Scan the code at commit ${input.commit}.` : 'Scan the code as it is checked out.',
-    `GitHub Actions secret names the repository already has: ${input.secretNames.length ? input.secretNames.join(', ') : 'none'}.`,
+    input.secretNames
+      ? `GitHub Actions secret names the repository already has: ${input.secretNames.length ? input.secretNames.join(', ') : 'none'}.`
+      : 'The repository\'s GitHub Actions secret names could not be listed this time: report no secret items.',
     `Secrets the workflows read: ${input.workflowSecretNames.length ? input.workflowSecretNames.join(', ') : 'none'}.`,
   ];
   const run = input.lastMainRun;
@@ -175,15 +177,19 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
   });
   if (!result.output) throw new Error('The readiness scan returned no result. Try again.');
 
-  const configured = new Set(input.secretNames.map((name) => name.toUpperCase()));
+  // Unknown (the listing failed): no secret items this scan, rather than every workflow secret marked missing
+  const known = input.secretNames !== undefined;
+  const configured = new Set((input.secretNames ?? []).map((name) => name.toUpperCase()));
   // GitHub's own (GITHUB_*) are never asked for, even if a workflow reads one
   const read = new Set(input.workflowSecretNames.map((name) => name.toUpperCase()).filter((name) => !PLATFORM_VARIABLE(name)));
-  const owner = ownerItems(result.output.owner, configured, read);
+  const owner = ownerItems(result.output.owner, configured, read).filter((item) => known || item.kind !== 'secret');
   const candidates: Array<{ kind: ReadinessBlocker['kind']; subject: string; title: string; detail: string; sameAs?: string }> = [];
   for (const raw of result.output.blockers) {
     // Only the owner can supply a secret's value: secret items they save to GitHub, not a task.
     // Only when every name is a secret a workflow reads that GitHub lacks; otherwise it stays a blocker.
     const variables = unconfiguredVariables(raw);
+    // Secret names unknown: a blocker only about secrets the workflows read is neither a task nor an item (GitHub may have them)
+    if (!known && variables?.every((name) => read.has(name))) continue;
     if (variables?.every((name) => read.has(name) && !configured.has(name))) {
       for (const name of variables) {
         if (owner.some((item) => item.variable === name)) continue;
@@ -199,6 +205,13 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
       detail: clip(raw.detail, DETAIL_CHARS),
       ...(raw.sameAs ? { sameAs: raw.sameAs } : {}),
     });
+  }
+  // Every secret a workflow reads that GitHub lacks is an item, whether or not the model named it
+  if (known) {
+    for (const name of read) {
+      if (configured.has(name) || !isValidSecretName(name) || owner.some((item) => item.kind === 'secret' && item.variable === name)) continue;
+      owner.push({ kind: 'secret', variable: name, message: clip(`CI needs the secret ${name}.`, OWNER_MESSAGE_CHARS) });
+    }
   }
   // The same problem found again keeps the key it has (and its task)
   const knownKeys = assignKnownKeys(candidates, input.knownBlockers ?? []);

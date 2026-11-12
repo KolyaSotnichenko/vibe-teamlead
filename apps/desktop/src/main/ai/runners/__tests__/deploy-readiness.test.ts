@@ -116,6 +116,8 @@ describe('runReadinessScan', () => {
       { kind: 'secret', variable: 'SENDGRID_KEY', message: 'a' },
       { kind: 'secret', variable: 'NPM_TOKEN', message: 'lower case in the workflow' },
       { kind: 'other', message: 'Turn on billing' },
+      // The rest the workflows read and GitHub lacks, whether the model named them or not
+      ...['CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'API_BASE_URL'].map((name) => ({ kind: 'secret', variable: name, message: `CI needs the secret ${name}.` })),
     ]);
   });
 
@@ -168,6 +170,8 @@ describe('runReadinessScan', () => {
       ['secret', 'CSRF_SECRET'],
       ['secret', 'WEB_ORIGIN'],
       ['secret', 'SESSION_COOKIE_SECURE'],
+      ['secret', 'API_BASE_URL'],
+      ['secret', 'NPM_TOKEN'],
     ]);
     expect(result.owner[1].message).toBe('CI needs the secret CSRF_SECRET.');
   });
@@ -184,7 +188,7 @@ describe('runReadinessScan', () => {
     };
     const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
     expect(result.blockers.map((b) => b.title)).toEqual(['Required API env vars are not configured', 'CSRF_SECRET and DATABASE_URL are missing']);
-    expect(result.owner.map((o) => o.variable)).toEqual(['SENDGRID_KEY']);
+    expect(result.owner.map((o) => o.variable)).toEqual(['SENDGRID_KEY', 'CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'API_BASE_URL', 'NPM_TOKEN']);
   });
 
   it('no workflow secrets read: no secret items at all, every code blocker stays', async () => {
@@ -212,13 +216,13 @@ describe('runReadinessScan', () => {
       { title: 'Undefined variable breaks the build', detail: 'src/a.ts uses FOO_BAR before it is declared.' },
     ]);
     expect(r.blockers.map((b) => b.title)).toEqual(['Env var validation is missing', 'Undefined variable breaks the build']);
-    expect(variables(r)).toEqual(['SENDGRID_KEY']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY', 'CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'API_BASE_URL', 'NPM_TOKEN']);
   });
 
   it('takes the names from the title first, the detail only when the title has none', async () => {
     const r = await scanBlockers([{ title: 'API_BASE_URL is not set in production build', detail: 'web/vite.config.ts also mentions OTHER_NAME.' }]);
     expect(r.blockers).toEqual([]);
-    expect(variables(r)).toEqual(['SENDGRID_KEY', 'API_BASE_URL']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY', 'API_BASE_URL', 'CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'NPM_TOKEN']);
   });
 
   it('ignores names without an underscore and the platform\'s own variables', async () => {
@@ -228,7 +232,7 @@ describe('runReadinessScan', () => {
       { title: 'Env vars are not configured', detail: 'deploy reads GITHUB_TOKEN and CSRF_SECRET.' },
     ]);
     expect(r.blockers.map((b) => b.title)).toEqual(['Env vars are not configured', 'PORT is not set']);
-    expect(variables(r)).toEqual(['SENDGRID_KEY', 'CSRF_SECRET']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY', 'CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'API_BASE_URL', 'NPM_TOKEN']);
   });
 
   it('drops a blocker only when its variables are owner items now', async () => {
@@ -240,13 +244,40 @@ describe('runReadinessScan', () => {
       { title: 'SENDGRID_KEY is not set', detail: 'mail.ts' },
     ]);
     expect(r.blockers.map((b) => b.title)).toEqual(['DATABASE_URL is not configured', 'GITHUB_TOKEN is missing']);
-    expect(variables(r)).toEqual(['SENDGRID_KEY']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY', 'CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'API_BASE_URL', 'NPM_TOKEN']);
   });
 
   it('keeps a variable blocker it cannot name a variable for', async () => {
     const out = { ...output, blockers: [{ kind: 'code', subject: 'env', title: 'Env vars not configured', detail: 'Some settings are missing.' }] };
     const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
     expect(result.blockers).toHaveLength(1);
+  });
+
+  it('secret names unknown (the listing failed): no secret items at all, none marked missing; the prompt says so', async () => {
+    const out = {
+      ...output,
+      blockers: [...output.blockers, { kind: 'code', subject: 'ci secrets', title: 'CSRF_SECRET is not set', detail: 'd' }],
+      owner: [{ kind: 'secret', variable: 'SENDGRID_KEY', message: 'Add it' }, { kind: 'other', message: 'Turn on billing' }],
+    };
+    const run = fakeRun(out);
+    const { secretNames: _s, ...unknown } = input;
+    const result = await runReadinessScan(unknown, { run, feature, now });
+    expect(result.owner).toEqual([{ kind: 'other', message: 'Turn on billing' }]);
+    // A blocker only about secrets the workflows read is neither a task nor an item: GitHub may have them
+    expect(result.blockers.map((b) => b.title)).not.toContain('CSRF_SECRET is not set');
+    expect((run.mock.calls[0][0] as { prompt: string }).prompt).toContain('could not be listed');
+  });
+
+  it('the listing succeeded: every secret a workflow reads that GitHub lacks is an item, even when the model names none', async () => {
+    const out = { ...output, owner: [{ kind: 'secret', variable: 'NPM_TOKEN', message: 'From the model' }] };
+    const result = await runReadinessScan(
+      { ...input, workflowSecretNames: ['NPM_TOKEN', 'CSRF_SECRET', 'DATABASE_URL', 'GITHUB_TOKEN'] },
+      { run: fakeRun(out), feature, now },
+    );
+    expect(result.owner).toEqual([
+      { kind: 'secret', variable: 'NPM_TOKEN', message: 'From the model' },
+      { kind: 'secret', variable: 'CSRF_SECRET', message: 'CI needs the secret CSRF_SECRET.' },
+    ]);
   });
 
   it('throws when the model returns no output', async () => {

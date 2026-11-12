@@ -129,6 +129,11 @@ describe('triggers', () => {
     expect(scan.mock.calls[0][0]).not.toHaveProperty('variableNames');
   });
 
+  it('a failed secret listing passes no names (unknown), never an empty list', async () => {
+    await make({ secretNames: async () => { throw new Error('403'); } }).scan(project(), 'check-again');
+    expect(scan.mock.calls[0][0]).not.toHaveProperty('secretNames');
+  });
+
   it('passes the secrets the project\'s workflows read (none when it has no workflow)', async () => {
     await make().scan(project(), 'check-again');
     expect(scan.mock.calls[0][0].workflowSecretNames).toEqual([]);
