@@ -41,7 +41,7 @@ The **Readiness** tab (between Runs and Environment) shows what stands between t
 
 **When it scans.** The scan runs the first time Deploy opens for a project with no saved result, after a merge into main for a project that has one, and on **Check again**. It is a model call, so it costs tokens. The scan reads code and example env files, never the values in `.env` files or keys. Its model is **Deploy readiness** in Settings → Agent Settings → feature models (default Sonnet, low thinking).
 
-**Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The task starts by itself and, after QA, merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is. A workflow blocker and a failed run on main never get a task at the same time.
+**Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The tasks go into the **Queue** and start by themselves as the project's parallel-task limit allows, like any queued task (queued tasks start while the task board is open). After QA, a task merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is. A workflow blocker and a failed run on main never get a task at the same time.
 
 **The workflow.** The GitHub Actions workflow is written for this project. It installs on a clean runner what the checks need: browsers for Playwright and for unit tests in browser mode, services, the package manager. Task branches run typecheck and unit tests; main runs everything; Vercel deploys. After the workflow lands on main, the app follows its first run like any run on main, and a failure becomes a fix task.
 
@@ -51,7 +51,7 @@ The **Readiness** tab (between Runs and Environment) shows what stands between t
 
 **What Vercel can't run.** Redis (Upstash) and Blob are added from Environment → Services. Kafka, queue consumers and always-running workers are listed as parts Vercel can't run, without a task.
 
-**Needed from you** lists what only you can do, such as adding a variable's value. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers the last check found (parts Vercel can't run are not counted); it updates when the check runs again, for example after merges.
+**Needed from you** lists what only you can do. Environment variables the deployed app needs and that aren't in the project yet (third-party keys and the app's own settings and secrets alike) are listed here one by one, each with a button to add its value; they never become tasks, since an agent can't know the values. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers the last check found (parts Vercel can't run are not counted); it updates when the check runs again, for example after merges.
 
 **Nothing blocks.** When the last blocker is fixed, deploy is set up by itself. The exception is a Vercel account with teams where none was chosen for the project yet: choose one on the Environment tab first.
 

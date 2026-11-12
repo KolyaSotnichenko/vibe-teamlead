@@ -7,7 +7,7 @@
 import { z } from 'zod';
 
 import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
-import type { ReadinessBlocker, ReadinessResult, ServiceKind } from '../../../shared/types/deploy';
+import type { ReadinessBlocker, ReadinessOwnerItem, ReadinessResult, ServiceKind } from '../../../shared/types/deploy';
 import { clip, clipLine } from '../../deploy/clip';
 import { blockerKey } from '../../deploy/readiness-store';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
@@ -58,6 +58,30 @@ const SUBJECT_CHARS = 120;
 const DETAIL_CHARS = 2000;
 const OWNER_MESSAGE_CHARS = 500;
 
+/**
+ * A blocker that only says variables aren't configured (for example "Required API env vars are
+ * not configured"): the prompt makes those owner items, this catches the ones that slip through.
+ * Matched on the subject and title only, which must say both "variables/secrets" and "not
+ * configured/missing"; "Missing env validation" or "Hardcoded localhost" don't match.
+ */
+const UNCONFIGURED_VARIABLES = [
+  /\b(?:env(?:ironment)?\s+var(?:iable)?s?|variables?|secrets?)\b[^.]*\b(?:not\s+(?:configured|set|defined|provided)|missing|unset|unconfigured)\b/i,
+  /\b(?:missing|unset|unconfigured|undefined)\s+(?:required\s+)?(?:env(?:ironment)?\s+)?(?:var(?:iable)?s?|secrets?)\b/i,
+];
+/** Variable names as code reads them: upper case with at least one underscore */
+const VARIABLE_NAME = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
+/** Set by Vercel itself, never by the owner */
+const PLATFORM_VARIABLE = (name: string) => name.startsWith('VERCEL_') || name === 'NODE_ENV' || name === 'CI';
+
+/** The variables an "unconfigured variables" blocker names, or undefined when it isn't one (or names none). */
+function unconfiguredVariables(blocker: { kind: string; subject: string; title: string; detail: string }): string[] | undefined {
+  if (blocker.kind !== 'code' && blocker.kind !== 'workflow') return undefined;
+  const head = `${blocker.subject}. ${blocker.title}`;
+  if (!UNCONFIGURED_VARIABLES.some((pattern) => pattern.test(head))) return undefined;
+  const names = [...new Set(`${blocker.title} ${blocker.detail}`.match(VARIABLE_NAME) ?? [])];
+  return names.length ? names : undefined;
+}
+
 export interface ReadinessScanDeps {
   run?: typeof runClaudeTask;
   feature?: () => { model: string; thinkingLevel: string };
@@ -105,9 +129,20 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
   });
   if (!result.output) throw new Error('The readiness scan returned no result. Try again.');
 
+  const owner: ReadinessOwnerItem[] = result.output.owner.map((item) => ({ ...item, message: clip(item.message, OWNER_MESSAGE_CHARS) }));
+  const configured = new Set(input.variableNames);
   const seen = new Set<string>();
   const blockers: ReadinessBlocker[] = [];
   for (const raw of result.output.blockers) {
+    // Only the owner can set a variable: an owner item with a value field, not a task
+    const variables = unconfiguredVariables(raw);
+    if (variables) {
+      for (const name of variables) {
+        if (configured.has(name) || PLATFORM_VARIABLE(name) || owner.some((item) => item.variable === name)) continue;
+        owner.push({ kind: 'variable', variable: name, message: clip(`The deployed app needs ${name}.`, OWNER_MESSAGE_CHARS) });
+      }
+      continue;
+    }
     // Clipped after parsing: a long answer is cut, it doesn't fail the scan
     const blocker = {
       kind: raw.kind,
@@ -126,7 +161,7 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
     commit: input.commit,
     blockers,
     services: result.output.services,
-    owner: result.output.owner.map((item) => ({ ...item, message: clip(item.message, OWNER_MESSAGE_CHARS) })),
+    owner,
     workflow: {
       path: result.output.workflowPath,
       lastMainRun: input.lastMainRun ? { conclusion: input.lastMainRun.conclusion, runId: input.lastMainRun.runId } : undefined,

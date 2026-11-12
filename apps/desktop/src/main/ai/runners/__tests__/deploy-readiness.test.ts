@@ -94,6 +94,43 @@ describe('runReadinessScan', () => {
     expect(system).toContain('example env files');
   });
 
+  it('tells the agent that unconfigured variables are owner items, one per variable, never blockers', async () => {
+    const run = fakeRun();
+    await runReadinessScan(input, { run, feature, now });
+    const system = (run.mock.calls[0][0] as { systemPrompt: string }).systemPrompt;
+    expect(system).toContain('one item per variable');
+    expect(system).toContain("the app's own settings and secrets");
+    expect(system).toMatch(/never a blocker/i);
+    expect(system).not.toContain('an env var that is read but never configured');
+  });
+
+  it('turns a blocker that only says variables are not configured into owner variable items', async () => {
+    const out = {
+      ...output,
+      blockers: [
+        { kind: 'code', subject: 'api env vars', title: 'Required API env vars are not configured', detail: 'apps/api/src/config.ts reads CSRF_SECRET, WEB_ORIGIN, SESSION_COOKIE_SECURE and DATABASE_URL; NODE_ENV and VERCEL_URL too.' },
+        { kind: 'workflow', subject: 'ci secrets', title: 'Missing secrets for the deploy job', detail: 'deploy.yml needs SENDGRID_KEY.' },
+        { kind: 'code', subject: 'api client base url', title: 'Hardcoded localhost', detail: 'src/api.ts uses localhost; read API_BASE_URL instead.' },
+        { kind: 'code', subject: 'env validation', title: 'Missing env validation crashes the build', detail: 'zod schema in env.ts throws on MY_FLAG.' },
+      ],
+    };
+    const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
+    expect(result.blockers.map((b) => b.title)).toEqual(['Hardcoded localhost', 'Missing env validation crashes the build']);
+    // Configured (DATABASE_URL), already listed (SENDGRID_KEY) and Vercel's own (NODE_ENV, VERCEL_URL) are not added
+    expect(result.owner.map((o) => [o.kind, o.variable])).toEqual([
+      ['variable', 'SENDGRID_KEY'],
+      ['variable', 'CSRF_SECRET'],
+      ['variable', 'WEB_ORIGIN'],
+      ['variable', 'SESSION_COOKIE_SECURE'],
+    ]);
+  });
+
+  it('keeps a variable blocker it cannot name a variable for', async () => {
+    const out = { ...output, blockers: [{ kind: 'code', subject: 'env', title: 'Env vars not configured', detail: 'Some settings are missing.' }] };
+    const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
+    expect(result.blockers).toHaveLength(1);
+  });
+
   it('throws when the model returns no output', async () => {
     await expect(runReadinessScan(input, { run: fakeRun(null), feature, now })).rejects.toThrow();
   });

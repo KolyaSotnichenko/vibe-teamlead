@@ -10,7 +10,7 @@ The target is Vercel, with Vercel's Git integration deploying every push.
 
 Each blocker has a `kind`, a `subject`, a `title` and a `detail` (what is wrong, where in the code, and what a fix looks like).
 
-- `code`: something that stops a build or a run on Vercel. Examples: migrations that never run, a hardcoded localhost, an env var that is read but never configured.
+- `code`: something that stops a build or a run on Vercel and that a change to the code fixes. Examples: migrations that never run, a hardcoded localhost. A variable that isn't configured is never a blocker (see `owner`), even when the code reads it without a default: an agent changing the code can't supply its value.
 - `workflow`: report one when `.github/workflows` has no workflow that runs the project's checks, **or** when the existing workflow misses something the checks need on a clean runner. Examples: a browser install for Playwright **and** for browser-mode unit tests (`vitest` `browser.enabled`), a database or other service container, the package manager setup, or any step the project's check commands need. Each gap is its own blocker. When the last CI run on main failed, its failed jobs point at the gaps.
 - `unsupported`: a part that must run all the time and has no managed equivalent on Vercel, such as a Kafka broker, a queue consumer or a long-running worker. Give the reason in `detail`. No task is made for these.
 
@@ -24,7 +24,9 @@ Every external service the project uses, from the compose file and from the code
 
 ### `owner`
 
-Third-party keys the code reads that are not in the configured variable names, plus anything only the owner can do (accounts, domains, approvals). For a variable, use kind `variable` and give its `variable` name and a `message`. Never ask for, quote or guess a value.
+Every environment variable the deployed app reads (or a workflow needs as a secret) that is not in the configured variable names, plus anything only the owner can do (accounts, domains, approvals). That covers third-party keys and the app's own settings and secrets alike (for example a session or CSRF secret, the web origin, a cookie flag): only the owner can set their values on Vercel, so they are never a blocker and never a task.
+
+For a variable, use kind `variable`, one item per variable, with its exact `variable` name and a `message` saying what it is for. Leave out the variables Vercel sets itself (`VERCEL_*`, `NODE_ENV`, `CI`). Never ask for, quote or guess a value.
 
 ### `workflowPath`
 
