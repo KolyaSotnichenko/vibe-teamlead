@@ -21,6 +21,7 @@ import { findTaskWorktree } from "../worktree-paths";
 import { findTaskAndProject } from "./task/shared";
 import { safeSendToRenderer } from "./utils";
 import { onSubtasksProgress, setBranchPushDeps } from "../deploy/branch-push";
+import { invalidatePreview } from "../deploy/preview-state";
 import { pushWithAppToken } from "../deploy/github-write";
 import { branchHead } from "../deploy/push-after-merge";
 import { taskStateManager } from "../task-state-manager";
@@ -46,8 +47,11 @@ export function registerAgenteventsHandlers(
     {
       push: pushWithAppToken,
       head: branchHead,
-      emit: (projectId, taskId) =>
-        safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, { projectId, taskId }),
+      emit: (projectId, taskId) => {
+        // A new push makes the cached preview stale
+        invalidatePreview(taskId);
+        safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, { projectId, taskId });
+      },
     },
     (taskId) => findTaskAndProject(taskId),
   );

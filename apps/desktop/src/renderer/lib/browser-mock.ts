@@ -251,6 +251,8 @@ const browserMockAPI: ElectronAPI = {
     onSetupProgress: () => () => {},
     onPushResult: () => () => {},
     isDeployTask: async () => false,
+    previewState: async () => ({ state: 'not-set-up' as const }),
+    onPreviewUpdate: () => () => undefined,
     readinessState: async () => ({ success: true, data: { scanning: false, tasks: {} } }),
     scanReadiness: async () => ({ success: true }),
     onReadinessUpdate: () => () => {},

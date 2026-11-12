@@ -633,6 +633,7 @@ export const IPC_CHANNELS = {
   DEPLOY_SETUP_PROGRESS: 'deploy:setupProgress',  // Event: the step setup reached (main -> renderer)
   DEPLOY_READINESS_STATE: 'deploy:readinessState',
   DEPLOY_READINESS_SCAN: 'deploy:readinessScan',
+  DEPLOY_PREVIEW_STATE: 'deploy:previewState',
   DEPLOY_PREVIEW_UPDATE: 'deploy:previewUpdate',  // Event: a task branch was pushed for a preview (main -> renderer)
   DEPLOY_IS_DEPLOY_TASK: 'deploy:isDeployTask',  // Whether the readiness scan created a task (ledger lookup)
   DEPLOY_READINESS_UPDATE: 'deploy:readinessUpdate',  // Event: readiness state changed (main -> renderer)

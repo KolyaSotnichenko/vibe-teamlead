@@ -69,7 +69,18 @@ export interface DeployDeployment {
   url?: string;
   logUrl?: string;
   createdAt: string;
+  /** The commit deployed (set by `deploymentsForRef`). */
+  sha?: string;
 }
+
+/** A task's preview, from the GitHub Deployments of its branch. */
+export type TaskPreview =
+  | { state: 'not-set-up' }
+  | { state: 'unavailable'; reason: 'public-repo' | 'push-off' }
+  | { state: 'not-pushed'; pushError?: string }
+  | { state: 'building'; previousUrl?: string; pushError?: string }
+  | { state: 'ready'; url: string; builtAt: string; pushError?: string }
+  | { state: 'failed'; runId?: number; jobId?: number; pushError?: string };
 
 export type GraphNodeStatus = 'queued' | 'running' | 'success' | 'failure' | 'skipped' | 'cancelled';
 
@@ -145,6 +156,10 @@ export interface DeployAPI {
   /** Starts a scan (or joins the one running). `reason`: 'open' scans only when nothing is saved; default 'check-again'. */
   scanReadiness: (projectId: string, reason?: 'open' | 'check-again') => Promise<import('./common').IPCResult>;
   onReadinessUpdate: (callback: (update: { projectId: string; state: ReadinessState }) => void) => () => void;
+  /** The task's preview state (raw value, never rejects in practice; unknown task or project: not-pushed). */
+  previewState: (projectId: string, taskId: string) => Promise<TaskPreview>;
+  /** A task's branch was pushed (success or failure): ask for `previewState` again. */
+  onPreviewUpdate: (callback: (update: { projectId: string; taskId: string }) => void) => () => void;
 }
 
 /** The Vercel account the app is signed in to (Settings → Vercel). Never carries a token. */

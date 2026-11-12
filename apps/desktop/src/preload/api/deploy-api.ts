@@ -57,6 +57,12 @@ export const createDeployAPI = (): DeployAPI => ({
     ipcRenderer.on(IPC_CHANNELS.DEPLOY_READINESS_UPDATE, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_READINESS_UPDATE, handler);
   },
+  previewState: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.DEPLOY_PREVIEW_STATE, projectId, taskId),
+  onPreviewUpdate: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, update: { projectId: string; taskId: string }) => callback(update);
+    ipcRenderer.on(IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, handler);
+  },
 });
 
 export const createVercelAPI = (): VercelAPI => ({

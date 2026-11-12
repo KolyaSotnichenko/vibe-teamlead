@@ -186,6 +186,20 @@ export function createActionsClient(fetcher: GitHubFetcher) {
       );
     },
 
+    /** Deployments of a branch (or any ref), newest first, each with its latest status. */
+    async deploymentsForRef(owner: string, repo: string, ref: string, perPage = 10): Promise<DeployDeployment[]> {
+      const list = arr(await get(`/repos/${owner}/${repo}/deployments?ref=${encodeURIComponent(ref)}&per_page=${perPage}`));
+      const mapped = await Promise.all(
+        list.map(async (d) => {
+          const out = mapDeployment(d, await latestStatus(owner, repo, d.id));
+          const sha = optStr(d.sha);
+          if (sha) out.sha = sha;
+          return out;
+        })
+      );
+      return mapped.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
     async productionUrl(owner: string, repo: string): Promise<string | null> {
       const list = arr(await get(`/repos/${owner}/${repo}/deployments?per_page=30`))
         .filter((d) => /^production$/i.test(str(d.environment)))

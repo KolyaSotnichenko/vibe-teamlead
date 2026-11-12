@@ -25,6 +25,7 @@ import type {
   DeploySetVariableResult,
   DeployVariableInput,
   ReadinessState,
+  TaskPreview,
 } from '../../shared/types/deploy';
 import type { AgentManager } from '../agent';
 import { runReadinessScan } from '../ai/runners/deploy-readiness';
@@ -33,6 +34,7 @@ import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, repoVisibility, setRepoSecret } from '../deploy/github-write';
 import { type DeployTaskDeps, isDeployTask } from '../deploy/deploy-tasks';
+import { previewState } from '../deploy/preview-state';
 import { autoSetUpAllowed, createReadiness } from '../deploy/readiness';
 import { setMainRunDeps, setReadiness } from '../deploy/readiness-instance';
 import { findLastMainRun, handleMainRuns, type MainRunDeps } from '../deploy/main-runs';
@@ -289,6 +291,19 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       // Not awaited: the renderer follows progress through the update event
       void readiness.scan(project, reason === 'open' ? 'open' : 'check-again');
       return { success: true };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DEPLOY_PREVIEW_STATE,
+    async (_event, projectId: string, taskId: string): Promise<TaskPreview> => {
+      const project = projectStore.getProject(projectId);
+      const task = project ? projectStore.getTasks(projectId).find((t) => t.id === taskId || t.specId === taskId) : undefined;
+      if (!project || !task) return { state: 'not-pushed' };
+      return previewState(project, task, {
+        actions: createActionsClient(githubFetcher),
+        resolveRepo,
+      });
     }
   );
 

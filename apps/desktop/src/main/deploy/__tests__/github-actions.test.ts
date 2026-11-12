@@ -168,6 +168,19 @@ describe('deployments', () => {
   });
 });
 
+describe('deploymentsForRef', () => {
+  it('encodes the ref, merges the latest status and keeps the sha', async () => {
+    const { c, calls } = client({
+      '/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=10': ok(fx('deployments.json')),
+      '/repos/acme/app/deployments/1/statuses?per_page=1': ok(fx('statuses-1.json').slice(0, 1)),
+      '/repos/acme/app/deployments/2/statuses?per_page=1': ok(fx('statuses-2.json')),
+    });
+    const d = await c.deploymentsForRef('acme', 'app', 'vibe-teamlead/001-x');
+    expect(calls[0]).toBe('/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=10');
+    expect(d.map((x) => [x.environment, x.sha])).toEqual([['Preview', 'abc123'], ['Production', 'abc123']]);
+  });
+});
+
 describe('productionUrl', () => {
   it('picks the newest successful Production deployment', async () => {
     const list = [
