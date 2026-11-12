@@ -7,6 +7,8 @@ import type { Project, Task } from '../../../shared/types';
 import type { ReadinessBlocker, ReadinessResult, ReadinessState } from '../../../shared/types/deploy';
 import { autoSetUpAllowed, createReadiness, type ReadinessDeps } from '../readiness';
 import { readReadiness, writeReadiness } from '../readiness-store';
+import { runReadinessScan, type ScanInput } from '../../ai/runners/deploy-readiness';
+import { readFileSync } from 'node:fs';
 
 let dir: string;
 let deploy: Record<string, unknown> | undefined;
@@ -338,5 +340,67 @@ describe('autoSetUpAllowed', () => {
   it('R3: waits for a team choice when the account has teams and none is recorded', async () => {
     expect(await autoSetUpAllowed(p(), deps({ vercelTeamCount: vi.fn(async () => 2) }))).toBe(false);
     expect(await autoSetUpAllowed(p({ vercelTeamId: 'team_1' }), deps({ vercelTeamCount: vi.fn(async () => 2) }))).toBe(true);
+  });
+});
+
+describe('a rescan that words a known blocker differently (roadmaply, beta.39)', () => {
+  const migrations1 = { kind: 'code', subject: 'api migrations', title: 'Prisma migrations never run on deploy', detail: 'd' };
+  const migrations2 = { kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' };
+  const logo = { kind: 'code', subject: 'logo upload storage', title: 'Uploads use the local filesystem', detail: 'd' };
+  let answers: unknown[][];
+  let inputs: ScanInput[];
+  const realScan = (input: ScanInput) => {
+    inputs.push(input);
+    const blockers = answers.shift() ?? [];
+    return runReadinessScan(input, {
+      run: (async () => ({ text: '', output: { blockers, services: [], owner: [] }, session: {} })) as never,
+      feature: () => ({ model: 'm', thinkingLevel: 'low' }),
+      now: () => new Date('2026-11-12T10:00:00Z'),
+    });
+  };
+  const ledgerTasks = () =>
+    (JSON.parse(readFileSync(path.join(dir, '.vibe-teamlead', 'deploy', 'tasks.json'), 'utf-8')).tasks as Array<{ key: string; settled?: boolean }>).map((t) => [t.key, !!t.settled]);
+
+  beforeEach(() => { answers = []; inputs = []; });
+
+  it('reuses the open key: no second task, nothing settled; an unrelated blocker gets its task', async () => {
+    answers = [[migrations1], [migrations2, logo]];
+    const r = make({ scan: realScan as never });
+    await r.scan(project(), 'check-again');
+    expect(created).toHaveLength(1);
+    tasks[0].status = 'in_progress' as never;
+    (tasks[0] as { title: string }).title = 'Prisma migrations never run on deploy';
+    await r.scan(project(), 'check-again');
+    expect(inputs[1].knownBlockers).toEqual([
+      { key: 'code-api-migrations', kind: 'code', subject: 'api migrations', title: 'Prisma migrations never run on deploy' },
+    ]);
+    expect(readReadiness(dir)?.blockers.map((b) => b.key)).toEqual(['code-api-migrations', 'code-logo-upload-storage']);
+    expect(created).toHaveLength(2);
+    expect(ledgerTasks()).toEqual([['code-api-migrations', false], ['code-logo-upload-storage', false]]);
+  });
+
+  it('knows an open task\'s key even when the saved result lost it', async () => {
+    answers = [[migrations1], [], [migrations2]];
+    const r = make({ scan: realScan as never });
+    await r.scan(project(), 'check-again');
+    (tasks[0] as { title: string }).title = 'Prisma migrations never run on deploy';
+    tasks[0].status = 'in_progress' as never;
+    await r.scan(project(), 'check-again');
+    await r.scan(project(), 'check-again');
+    expect(inputs[2].knownBlockers).toEqual([{ key: 'code-api-migrations', kind: 'code', title: 'Prisma migrations never run on deploy' }]);
+    expect(created).toHaveLength(1);
+    expect(ledgerTasks()).toEqual([['code-api-migrations', false]]);
+  });
+
+  it('a blocker whose task is done and that is still reported gets a new task as before', async () => {
+    answers = [[migrations1], [migrations2]];
+    const r = make({ scan: realScan as never });
+    await r.scan(project(), 'check-again');
+    (tasks[0] as { title: string }).title = 'Prisma migrations never run on deploy';
+    tasks[0].status = 'done' as never;
+    await r.scan(project(), 'check-again');
+    expect(readReadiness(dir)?.blockers.map((b) => b.key)).toEqual(['code-api-migrations']);
+    expect(created).toHaveLength(2);
+    expect(ledgerTasks()).toEqual([['code-api-migrations', false], ['code-api-migrations', false]]);
   });
 });

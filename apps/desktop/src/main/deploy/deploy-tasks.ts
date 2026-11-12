@@ -110,7 +110,7 @@ function recordTask(projectPath: string, key: string, kind: DeployKeyKind, specI
 
 /** Entries written before kinds were recorded: a run key or a scan key (blockerKey puts the kind first) */
 const kindOf = (entry: LedgerTask): DeployKeyKind | undefined =>
-  entry.kind ?? (entry.key.startsWith('run:') ? 'run' : entry.key.startsWith('workflow') ? 'workflow' : undefined);
+  entry.kind ?? (entry.key.startsWith('run:') ? 'run' : entry.key.startsWith('workflow') ? 'workflow' : entry.key.startsWith('code') ? 'code' : undefined);
 
 const isOpenEntry = (entry: LedgerTask, tasks: Task[], now: Date): boolean => {
   const task = tasks.find((t) => t.specId === entry.specId);
@@ -176,8 +176,11 @@ export function gaveUpKeys(projectPath: string): GaveUp[] {
 }
 
 /** The problem of these keys went away: their past tasks no longer count and they are not given up. */
-function settle(projectPath: string, settles: (key: string) => boolean): void {
+function settle(projectPath: string, settlesKey: (key: string) => boolean, open?: { tasks: Task[]; now: Date }): void {
   const ledger = readLedger(projectPath);
+  // A key with an open task is still being fixed: a scan that words it differently doesn't settle it
+  const busy = new Set(open ? ledger.tasks.filter((entry) => isOpenEntry(entry, open.tasks, open.now)).map((entry) => entry.key) : []);
+  const settles = (key: string) => !busy.has(key) && settlesKey(key);
   let changed = false;
   for (const entry of ledger.tasks) {
     if (!entry.settled && settles(entry.key)) {
@@ -196,10 +199,30 @@ export function resetFixCount(projectPath: string, key: string): void {
   settle(projectPath, (k) => k === key);
 }
 
-/** A scan found these blocker keys: every other scan key's count starts again (run keys are left alone). */
-export function resetMissingBlockers(projectPath: string, present: string[]): void {
+/**
+ * A scan found these blocker keys: every other scan key's count starts again (run keys are left
+ * alone), except a key whose task is still open (`tasks`, the project's task list).
+ */
+export function resetMissingBlockers(projectPath: string, present: string[], tasks?: Task[], now: Date = new Date()): void {
   const found = new Set(present);
-  settle(projectPath, (k) => !k.startsWith('run:') && !found.has(k));
+  settle(projectPath, (k) => !k.startsWith('run:') && !found.has(k), tasks ? { tasks, now } : undefined);
+}
+
+/** The code and workflow keys with an open task, and that task's title: what the next scan is told it knows. */
+export function openDeployBlockers(
+  project: Project,
+  getTasks: DeployTaskDeps['getTasks'],
+  now: Date = new Date(),
+): Array<{ key: string; kind: 'code' | 'workflow'; title: string }> {
+  const tasks = getTasks(project.id);
+  const out: Array<{ key: string; kind: 'code' | 'workflow'; title: string }> = [];
+  for (const entry of readLedger(project.path).tasks) {
+    const kind = kindOf(entry);
+    if ((kind !== 'code' && kind !== 'workflow') || out.some((b) => b.key === entry.key) || !isOpenEntry(entry, tasks, now)) continue;
+    const title = tasks.find((t) => t.specId === entry.specId)?.title;
+    out.push({ key: entry.key, kind, title: typeof title === 'string' ? title : entry.key });
+  }
+  return out;
 }
 
 /**

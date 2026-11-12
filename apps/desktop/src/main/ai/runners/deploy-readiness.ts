@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
 import type { ReadinessBlocker, ReadinessOwnerItem, ReadinessResult, ServiceKind } from '../../../shared/types/deploy';
 import { clip, clipLine } from '../../deploy/clip';
-import { blockerKey } from '../../deploy/readiness-store';
+import { blockerKey, type KnownBlocker, matchKnownBlocker } from '../../deploy/readiness-store';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ThinkingLevel } from '../config/types';
 import { loadPrompt } from '../prompts/prompt-loader';
@@ -23,7 +23,12 @@ export interface ScanInput {
   servicesAdded: ServiceKind[];
   /** `sha`: the commit the run was of (the scan gets the run only when it is the commit scanned) */
   lastMainRun?: { conclusion: string; runId: number; failedJobs: string[]; workflowPath?: string; sha?: string };
+  /** Blockers already known (the saved scan's, open tasks'): a problem found again keeps its key */
+  knownBlockers?: KnownBlocker[];
 }
+
+/** Known blockers named in the prompt, at most */
+export const KNOWN_IN_PROMPT = 30;
 
 /** The agent's part of a ReadinessResult. Plain objects and enums only (the SDK enforces its JSON Schema). */
 export const ReadinessScanSchema = z.object({
@@ -116,6 +121,14 @@ export function readinessPrompt(input: ScanInput): string {
   } else {
     lines.push('There is no CI run on main yet.');
   }
+  const known = (input.knownBlockers ?? []).filter((b) => b.kind !== 'unsupported').slice(0, KNOWN_IN_PROMPT);
+  if (known.length) {
+    lines.push(
+      'Known blockers (subject: title):',
+      ...known.map((b) => `- ${b.kind} ${clipLine(b.subject ?? b.key, SUBJECT_CHARS)}: ${clipLine(b.title, TITLE_CHARS)}`),
+      'If a problem you find is one of these, reuse its subject exactly.',
+    );
+  }
   lines.push('Report what blocks a first deploy, as described in your instructions.');
   return lines.join('\n');
 }
@@ -141,6 +154,10 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
   const owner: ReadinessOwnerItem[] = result.output.owner.map((item) => ({ ...item, message: clip(item.message, OWNER_MESSAGE_CHARS) }));
   const configured = new Set(input.variableNames);
   const seen = new Set<string>();
+  const known = input.knownBlockers ?? [];
+  // Known keys some blocker names exactly: not for another blocker's looser match
+  const knownKeys = new Set(known.map((b) => b.key));
+  const exact = new Set(result.output.blockers.map((b) => blockerKey(b.kind, clipLine(b.subject, SUBJECT_CHARS))).filter((k) => knownKeys.has(k)));
   const blockers: ReadinessBlocker[] = [];
   for (const raw of result.output.blockers) {
     // Only the owner can set a variable: an owner item with a value field, not a task
@@ -163,7 +180,10 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
       title: clipLine(raw.title, TITLE_CHARS),
       detail: clip(raw.detail, DETAIL_CHARS),
     };
-    const key = blockerKey(blocker.kind, blocker.subject);
+    // The same problem in other words keeps the key it has (and its task): one known key per blocker
+    const own = blockerKey(blocker.kind, blocker.subject);
+    const taken = new Set([...seen, ...[...exact].filter((k) => k !== own)]);
+    const key = seen.has(own) || exact.has(own) ? own : (matchKnownBlocker(blocker, known, taken)?.key ?? own);
     if (seen.has(key)) continue;
     seen.add(key);
     blockers.push({ ...blocker, key });

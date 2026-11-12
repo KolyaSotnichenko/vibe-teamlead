@@ -184,3 +184,79 @@ describe('runReadinessScan', () => {
     await expect(runReadinessScan(input, { run, feature, now })).rejects.toThrow('boom');
   });
 });
+
+describe('known blockers keep their keys (roadmaply: the same problems came back under new subjects)', () => {
+  const known = [
+    { key: 'code-api-migrations', kind: 'code' as const, subject: 'api migrations', title: 'Prisma migrations never run on deploy' },
+    { key: 'code-web-api-base-url', kind: 'code' as const, subject: 'web api base url', title: 'Web app falls back to hardcoded localhost API' },
+    { key: 'code-transactional-email', kind: 'code' as const, title: 'Only a console email provider exists' },
+  ];
+  const scan = (blockers: unknown[]) =>
+    runReadinessScan({ ...input, knownBlockers: known }, { run: fakeRun({ ...output, blockers }), feature, now });
+
+  it('lists the known blockers in the prompt and asks to reuse their subjects', async () => {
+    const run = fakeRun();
+    await runReadinessScan({ ...input, knownBlockers: known }, { run, feature, now });
+    const prompt = (run.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain('Known blockers');
+    expect(prompt).toContain('api migrations');
+    expect(prompt).toContain('Prisma migrations never run on deploy');
+    expect(prompt).toContain('reuse its subject exactly');
+  });
+
+  it('caps the known list at 30', async () => {
+    const run = fakeRun();
+    const many = Array.from({ length: 40 }, (_, i) => ({ key: `code-k${i}`, kind: 'code' as const, subject: `thing ${i}`, title: `Title ${i}` }));
+    await runReadinessScan({ ...input, knownBlockers: many }, { run, feature, now });
+    const prompt = (run.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain('thing 29');
+    expect(prompt).not.toContain('thing 30');
+  });
+
+  it('says nothing about known blockers when there are none', async () => {
+    const run = fakeRun();
+    await runReadinessScan(input, { run, feature, now });
+    expect((run.mock.calls[0][0] as { prompt: string }).prompt).not.toContain('Known blockers');
+  });
+
+  it('a new subject with the same title reuses the known key', async () => {
+    const result = await scan([{ kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' }]);
+    expect(result.blockers.map((b) => b.key)).toEqual(['code-api-migrations']);
+  });
+
+  it('a reworded title of the same thing reuses the known key', async () => {
+    const result = await scan([{ kind: 'code', subject: 'api client base url', title: 'Web API client falls back to localhost', detail: 'd' }]);
+    expect(result.blockers.map((b) => b.key)).toEqual(['code-web-api-base-url']);
+  });
+
+  it('the known subject returned by the model gives the known key', async () => {
+    const result = await scan([{ kind: 'code', subject: 'transactional email', title: 'No real email transport', detail: 'd' }]);
+    expect(result.blockers.map((b) => b.key)).toEqual(['code-transactional-email']);
+  });
+
+  it('an unrelated blocker keeps its own key', async () => {
+    const result = await scan([{ kind: 'code', subject: 'logo upload storage', title: 'Uploads use the local filesystem', detail: 'd' }]);
+    expect(result.blockers.map((b) => b.key)).toEqual([blockerKey('code', 'logo upload storage')]);
+  });
+
+  it('a different kind never takes a known key', async () => {
+    const result = await scan([{ kind: 'workflow', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' }]);
+    expect(result.blockers.map((b) => b.key)).toEqual([blockerKey('workflow', 'database migrations')]);
+  });
+
+  it('a blocker naming the known subject exactly wins the key over a looser match before it', async () => {
+    const result = await scan([
+      { kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' },
+      { kind: 'code', subject: 'api migrations', title: 'Migrations', detail: 'd' },
+    ]);
+    expect(result.blockers.map((b) => b.key)).toEqual([blockerKey('code', 'database migrations'), 'code-api-migrations']);
+  });
+
+  it('one known key goes to one blocker only', async () => {
+    const result = await scan([
+      { kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy', detail: 'd' },
+      { kind: 'code', subject: 'migrations', title: 'Prisma migrations never run on deploy', detail: 'again' },
+    ]);
+    expect(result.blockers.map((b) => b.key)).toEqual(['code-api-migrations', blockerKey('code', 'migrations')]);
+  });
+});

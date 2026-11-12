@@ -7,9 +7,9 @@
 import type { Project } from '../../shared/types';
 import type { ReadinessResult, ReadinessState, ServiceKind } from '../../shared/types/deploy';
 import type { ScanInput } from '../ai/runners/deploy-readiness';
-import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus, type GaveUp, gaveUpKeys, resetMissingBlockers } from './deploy-tasks';
+import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus, type GaveUp, gaveUpKeys, openDeployBlockers, resetMissingBlockers } from './deploy-tasks';
 import { resolveMainBranch } from './push-after-merge';
-import { readReadiness, writeReadiness } from './readiness-store';
+import { type KnownBlocker, readReadiness, writeReadiness } from './readiness-store';
 
 export type ReadinessReason = 'open' | 'check-again' | 'merge';
 
@@ -102,6 +102,21 @@ export function createReadiness(deps: ReadinessDeps) {
     }
   };
 
+  /** The saved scan's blockers, then the keys with an open task the saved scan lost: what the scan keeps keys for */
+  const knownBlockers = (project: Project, previous: ReadinessResult | null): KnownBlocker[] => {
+    const known: KnownBlocker[] = (previous?.blockers ?? [])
+      .filter((b) => b.kind !== 'unsupported')
+      .map((b) => ({ key: b.key, kind: b.kind, subject: b.subject, title: b.title }));
+    try {
+      for (const open of openDeployBlockers(project, deps.tasks.getTasks, deps.tasks.now?.())) {
+        if (!known.some((b) => b.key === open.key)) known.push(open);
+      }
+    } catch {
+      // the saved scan's blockers still count
+    }
+    return known;
+  };
+
   async function scanOnce(project: Project): Promise<void> {
     const previous = readReadiness(project.path);
     errors.delete(project.id);
@@ -114,8 +129,10 @@ export function createReadiness(deps: ReadinessDeps) {
         deps.headCommit(project.path).catch(() => undefined),
         deps.lastMainRun(project).catch(() => undefined),
       ]);
+      const known = knownBlockers(project, previous);
       result = await deps.scan({
         projectPath: project.path,
+        ...(known.length ? { knownBlockers: known } : {}),
         ...(commit ? { commit } : {}),
         variableNames,
         databaseAdded: !!deploy?.database,
@@ -131,7 +148,8 @@ export function createReadiness(deps: ReadinessDeps) {
     }
     try {
       // A blocker this scan no longer finds is gone: its fix count starts again
-      resetMissingBlockers(project.path, result.blockers.map((b) => b.key));
+      // (but never while its task is open: a key the scan lost is still being fixed)
+      resetMissingBlockers(project.path, result.blockers.map((b) => b.key), deps.tasks.getTasks(project.id), deps.tasks.now?.());
       await createBlockerTasks(project, result.blockers, deps.tasks);
     } catch {
       // the saved result stands; the next scan creates the tasks

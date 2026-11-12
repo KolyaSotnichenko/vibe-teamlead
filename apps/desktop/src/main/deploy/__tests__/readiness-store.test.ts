@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ReadinessResult } from '../../../shared/types/deploy';
-import { blockerKey, readReadiness, writeReadiness } from '../readiness-store';
+import { blockerKey, matchKnownBlocker, readReadiness, sameBlocker, writeReadiness } from '../readiness-store';
 
 const result: ReadinessResult = {
   scannedAt: '2026-11-12T10:00:00.000Z',
@@ -59,5 +59,29 @@ describe('blockerKey', () => {
 
   it('never exceeds 80 characters', () => {
     expect(blockerKey('unsupported', 'x'.repeat(500)).length).toBeLessThanOrEqual(80);
+  });
+});
+
+describe('sameBlocker (threshold: half the words of subject and title together)', () => {
+  const migrations = { key: 'code-api-migrations', kind: 'code' as const, subject: 'api migrations', title: 'Prisma migrations never run on deploy' };
+
+  it('matches the same title under a new subject', () => {
+    expect(sameBlocker({ kind: 'code', subject: 'database migrations', title: 'Prisma migrations never run on deploy' }, migrations)).toBe(true);
+  });
+
+  it('does not match two different problems that share a word', () => {
+    expect(sameBlocker({ kind: 'code', subject: 'api base url', title: 'Web API base URL is hardcoded' }, migrations)).toBe(false);
+    expect(sameBlocker({ kind: 'code', subject: 'api rate limit', title: 'Rate limiting stores counters in memory' }, migrations)).toBe(false);
+  });
+
+  it('uses the words of the key when a known blocker has no subject', () => {
+    expect(sameBlocker({ kind: 'code', subject: 'api migrations', title: 'Something else entirely' }, { key: 'code-api-migrations', kind: 'code', title: 'Old' })).toBe(true);
+  });
+
+  it('matchKnownBlocker picks the best match, skipping the keys already taken', () => {
+    const other = { key: 'code-db-migrations-lock', kind: 'code' as const, subject: 'migration lock', title: 'Migrations race on deploy' };
+    const blocker = { kind: 'code' as const, subject: 'database migrations', title: 'Prisma migrations never run on deploy' };
+    expect(matchKnownBlocker(blocker, [other, migrations], new Set())?.key).toBe('code-api-migrations');
+    expect(matchKnownBlocker(blocker, [other, migrations], new Set(['code-api-migrations']))?.key).not.toBe('code-api-migrations');
   });
 });

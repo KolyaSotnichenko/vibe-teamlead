@@ -12,6 +12,7 @@ import {
   deployTaskStatus,
   gaveUpKeys,
   isDeployTask,
+  openDeployBlockers,
   resetFixCount,
   resetMissingBlockers,
   type DeployTaskDeps,
@@ -199,6 +200,42 @@ describe('giving up after two fixes', () => {
     writeFileSync(ledger(), JSON.stringify({ tasks: [], handledRuns: [5], gaveUp: [{ key: 'code:x' }] }));
     await createBlockerTasks(project(), [code], deps());
     expect(JSON.parse(readFileSync(ledger(), 'utf-8'))).toMatchObject({ handledRuns: [5], gaveUp: [{ key: 'code:x' }] });
+  });
+});
+
+describe('a key with an open task is never settled (roadmaply: a rescan renamed open blockers)', () => {
+  const migrations: ReadinessBlocker = { key: 'code-api-migrations', kind: 'code', subject: 'api migrations', title: 'Prisma migrations never run on deploy', detail: 'd' };
+  const settled = () => (JSON.parse(readFileSync(ledger(), 'utf-8')).tasks as Array<{ key: string; settled?: boolean }>).map((t) => [t.key, !!t.settled]);
+
+  it('a scan without the key leaves its open task counting', async () => {
+    await createBlockerTasks(project(), [migrations], deps());
+    tasks[0].status = 'in_progress' as never;
+    resetMissingBlockers(dir, [], tasks);
+    expect(settled()).toEqual([['code-api-migrations', false]]);
+  });
+
+  it('settles the key once its task is closed or gone', async () => {
+    await createBlockerTasks(project(), [migrations], deps());
+    tasks[0].status = 'done' as never;
+    resetMissingBlockers(dir, [], tasks);
+    expect(settled()).toEqual([['code-api-migrations', true]]);
+  });
+
+  it('settles a key whose task is missing from the list (and not just created)', async () => {
+    await createBlockerTasks(project(), [migrations], deps());
+    resetMissingBlockers(dir, [], [], new Date('2026-11-12T11:00:00Z'));
+    expect(settled()).toEqual([['code-api-migrations', true]]);
+  });
+
+  it('openDeployBlockers lists the open code and workflow keys with their task titles, not run keys or closed ones', async () => {
+    await createBlockerTasks(project(), [migrations, wf, code], deps());
+    await createRunFixTask(project(), { key: 'run:ci.yml', title: 'Fix CI', description: 'x' }, deps());
+    tasks.forEach((t, i) => { (t as { title: string }).title = `T${i + 1}`; });
+    tasks[2].status = 'done' as never;
+    expect(openDeployBlockers(project(), () => tasks)).toEqual([
+      { key: 'code-api-migrations', kind: 'code', title: 'T1' },
+      { key: 'workflow:ci', kind: 'workflow', title: 'T2' },
+    ]);
   });
 });
 
