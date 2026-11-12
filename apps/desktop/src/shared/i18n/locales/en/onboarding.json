@@ -254,7 +254,9 @@
     "skipHint": "You can skip this step and create tasks later from the dashboard."
   },
   "accounts": {
-    "title": "Connect GitHub (optional)",
+    "title": "Connect your accounts (optional)",
+    "vercelTitle": "Vercel",
+    "vercelPurpose": "Connecting Vercel lets agents deploy your projects to a live link.",
     "purpose": "Signing in with GitHub lets agents push branches and open pull requests, and later deploy.",
     "connectedAs": "Signed in to GitHub as {{login}}",
     "connected": "Signed in to GitHub",

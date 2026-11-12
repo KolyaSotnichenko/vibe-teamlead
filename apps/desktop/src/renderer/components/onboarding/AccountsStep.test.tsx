@@ -23,6 +23,15 @@ const api = {
   openExternal: vi.fn(async () => undefined),
   onGitHubAuthDeviceCode: vi.fn(() => () => {})
 };
+const vercel = {
+  status: vi.fn(),
+  connect: vi.fn(),
+  cancelConnect: vi.fn(async () => ({ success: true })),
+  setToken: vi.fn(),
+  disconnect: vi.fn(),
+  onConnectState: vi.fn(() => () => {})
+};
+(api as Record<string, unknown>).vercel = vercel;
 Object.defineProperty(window, 'electronAPI', { value: api, writable: true });
 
 describe('AccountsStep', () => {
@@ -31,6 +40,7 @@ describe('AccountsStep', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vercel.status.mockResolvedValue({ success: true, data: { connected: false } });
     api.checkGitHubAuth.mockResolvedValue({ success: true, data: { authenticated: false } });
     api.getGitHubToken.mockResolvedValue({ success: true, data: { token: 'tok' } });
     api.getGitHubAppAccess.mockResolvedValue({ success: true, data: { installed: true, repositorySelection: 'all' } });
@@ -91,5 +101,27 @@ describe('AccountsStep', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'onboarding:accounts.continue' }));
     expect(onNext).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'onboarding:accounts.skip' })).not.toBeInTheDocument();
+  });
+
+  it('renders the Vercel section with its panel', async () => {
+    render(<AccountsStep onNext={onNext} onBack={onBack} />);
+    expect(screen.getByText('onboarding:accounts.vercelTitle')).toBeInTheDocument();
+    expect(screen.getByText('onboarding:accounts.vercelPurpose')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'vercel.connect' })).toBeInTheDocument();
+  });
+
+  it('offers Continue when only Vercel is connected', async () => {
+    vercel.status.mockResolvedValue({ success: true, data: { connected: true, source: 'token', user: { username: 'ada' } } });
+    render(<AccountsStep onNext={onNext} onBack={onBack} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'onboarding:accounts.continue' }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'onboarding:accounts.skip' })).not.toBeInTheDocument();
+  });
+
+  it('offers Skip when neither is connected', async () => {
+    render(<AccountsStep onNext={onNext} onBack={onBack} />);
+    await screen.findByRole('button', { name: 'vercel.connect' });
+    expect(screen.getByRole('button', { name: 'onboarding:accounts.skip' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'onboarding:accounts.continue' })).not.toBeInTheDocument();
   });
 });

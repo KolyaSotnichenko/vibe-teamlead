@@ -4,7 +4,7 @@
  * them and only reports the account.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -27,7 +27,12 @@ const ERROR_KINDS: ReadonlySet<string> = new Set([
 
 type Phase = { kind: 'idle' } | { kind: 'starting' } | { kind: 'connecting'; state: VercelConnectState };
 
-export function VercelPanel() {
+interface VercelPanelProps {
+  /** Called with the account's connectedness after each status change. */
+  onStatusChange?: (connected: boolean) => void;
+}
+
+export function VercelPanel({ onStatusChange }: VercelPanelProps = {}) {
   const { t } = useTranslation('settings');
   const [status, setStatus] = useState<VercelStatus | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
@@ -35,6 +40,9 @@ export function VercelPanel() {
   const [showPaste, setShowPaste] = useState(false);
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState<'token' | 'disconnect' | null>(null);
+  const connectRunning = useRef(false);
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
   const errorText = useCallback(
     (kind: string | undefined): string => t(`vercel.errors.${kind && ERROR_KINDS.has(kind) ? kind : 'unknown'}`),
     [t],
@@ -56,8 +64,21 @@ export function VercelPanel() {
     return window.electronAPI.vercel.onConnectState((state) => setPhase({ kind: 'connecting', state }));
   }, [load]);
 
+  useEffect(() => {
+    if (status) onStatusChangeRef.current?.(status.connected);
+  }, [status]);
+
+  // A sign-in this panel started must not outlive it (the wizard step can be left mid-flow).
+  useEffect(
+    () => () => {
+      if (connectRunning.current) void window.electronAPI.vercel.cancelConnect();
+    },
+    [],
+  );
+
   const handleConnect = async () => {
     setError(null);
+    connectRunning.current = true;
     setPhase({ kind: 'starting' });
     try {
       const result = await window.electronAPI.vercel.connect();
@@ -67,6 +88,7 @@ export function VercelPanel() {
         setError(errorText(result.error));
       }
     } finally {
+      connectRunning.current = false;
       setPhase({ kind: 'idle' });
     }
   };

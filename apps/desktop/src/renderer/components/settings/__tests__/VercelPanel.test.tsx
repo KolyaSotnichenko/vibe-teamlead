@@ -123,4 +123,34 @@ describe('VercelPanel', () => {
     await waitFor(() => expect(api.setToken).toHaveBeenCalledWith('tok'));
     expect(await screen.findByText('Vercel did not accept this token.')).toBeInTheDocument();
   });
+
+  it('reports connectedness to onStatusChange after the status read and after connecting', async () => {
+    const onStatusChange = vi.fn();
+    render(<VercelPanel onStatusChange={onStatusChange} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Vercel' }));
+    expect(onStatusChange).toHaveBeenCalledWith(false);
+    await act(async () => finishConnect?.({ success: true, data: connected }));
+    await waitFor(() => expect(onStatusChange).toHaveBeenLastCalledWith(true));
+  });
+
+  it('reports true when already connected on load', async () => {
+    api.status.mockResolvedValue({ success: true, data: connected });
+    const onStatusChange = vi.fn();
+    render(<VercelPanel onStatusChange={onStatusChange} />);
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalledWith(true));
+  });
+
+  it('unmounting during a running sign-in cancels it once', async () => {
+    const { unmount } = render(<VercelPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Vercel' }));
+    unmount();
+    expect(api.cancelConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('unmounting when idle does not cancel', async () => {
+    const { unmount } = render(<VercelPanel />);
+    await screen.findByRole('button', { name: 'Connect Vercel' });
+    unmount();
+    expect(api.cancelConnect).not.toHaveBeenCalled();
+  });
 });

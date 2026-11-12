@@ -91,6 +91,14 @@ Object.defineProperty(window, 'electronAPI', {
     worktreeDetectTools: vi.fn().mockResolvedValue({ success: false }),
     tools: { check: mockToolsCheck },
     openExternal: vi.fn(),
+    vercel: {
+      status: vi.fn().mockResolvedValue({ success: true, data: { connected: false } }),
+      connect: vi.fn(),
+      cancelConnect: vi.fn().mockResolvedValue({ success: true }),
+      setToken: vi.fn(),
+      disconnect: vi.fn(),
+      onConnectState: vi.fn(() => () => {}),
+    },
   },
   writable: true
 });
