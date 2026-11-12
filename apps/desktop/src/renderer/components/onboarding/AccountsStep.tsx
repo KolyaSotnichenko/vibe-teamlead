@@ -15,7 +15,7 @@ interface AccountsStepProps {
  *
  * Signs in to GitHub (and optionally Vercel) with the same device flow the setup modal uses
  * (GitHubOAuthFlow). It only signs in; anything skipped can be connected
- * later in the project's settings.
+ * later in Settings or from the Deploy tab.
  */
 export function AccountsStep({ onNext, onBack }: AccountsStepProps) {
   const { t } = useTranslation(['onboarding', 'dialogs']);
