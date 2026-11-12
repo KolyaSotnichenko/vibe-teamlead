@@ -16,7 +16,6 @@ const blocker = (subject: string): ReadinessBlocker => ({ key: `code:${subject}`
 const result = (blockers: ReadinessBlocker[]): ReadinessResult => ({
   scannedAt: '2026-11-12T10:00:00Z',
   blockers,
-  services: [],
   owner: [],
   workflow: {},
 });
@@ -71,6 +70,33 @@ describe('triggers', () => {
     await r.scan(project(), 'open');
     expect(scan).toHaveBeenCalledTimes(1);
     expect(readReadiness(dir)).not.toBeNull();
+  });
+
+  it('a result the old Vercel Deploy saved is not shown, and open scans for a CI result', async () => {
+    mkdirSync(path.join(dir, '.vibe-teamlead', 'deploy'), { recursive: true });
+    writeFileSync(
+      path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'),
+      JSON.stringify({
+        scannedAt: '2026-11-01T10:00:00Z',
+        blockers: [blocker('hosting')],
+        services: [],
+        owner: [{ kind: 'variable', variable: 'DATABASE_URL', message: 'Set DATABASE_URL' }],
+        workflow: {},
+      }),
+    );
+    const r = make();
+    expect(r.state(project()).result).toBeUndefined();
+    await r.scan(project(), 'open');
+    expect(scan).toHaveBeenCalledTimes(1);
+    expect(r.state(project()).result).toMatchObject({ blockers: [], owner: [] });
+  });
+
+  it('a CI result saved by this version is shown and open does not scan again', async () => {
+    writeReadiness(dir, result([blocker('a')]));
+    const r = make();
+    expect(r.state(project()).result?.blockers.map((b) => b.key)).toEqual(['code:a']);
+    await r.scan(project(), 'open');
+    expect(scan).not.toHaveBeenCalled();
   });
 
   it('merge without a saved result does not scan', async () => {

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -38,30 +38,38 @@ describe('readiness store', () => {
     expect(readReadiness(dir)).toBeNull();
   });
 
-  it('reads an old Deploy result: variable items as secrets, unsupported blockers and services dropped', () => {
+  it('writes a CI stamp, and reads a result without it (the old Vercel Deploy\'s) as absent', () => {
+    writeReadiness(dir, result);
+    expect(JSON.parse(readFileSync(file(), 'utf-8')).ci).toBe(1);
+    writeFileSync(file(), JSON.stringify(result));
+    expect(readReadiness(dir)).toBeNull();
+  });
+
+  it('reads an old Deploy result as absent: services, unsupported blockers or variable items, even stamped', () => {
     mkdirSync(path.dirname(file()), { recursive: true });
-    writeFileSync(
-      file(),
-      JSON.stringify({
-        ...result,
-        blockers: [...result.blockers, { key: 'unsupported-kafka', kind: 'unsupported', subject: 'kafka', title: 'Kafka', detail: 'x' }],
-        services: [{ kind: 'postgres', name: 'db', managed: true }],
-        owner: [{ kind: 'variable', variable: 'API_KEY', message: 'Set API_KEY' }, { kind: 'other', message: 'Buy a domain' }],
-      }),
-    );
-    expect(readReadiness(dir)).toEqual({ ...result, owner: [result.owner[0], { kind: 'other', message: 'Buy a domain' }] });
+    const old = [
+      { ...result, services: [{ kind: 'postgres', name: 'db', managed: true }] },
+      { ...result, blockers: [...result.blockers, { key: 'unsupported-kafka', kind: 'unsupported', subject: 'kafka', title: 'Kafka', detail: 'x' }] },
+      { ...result, owner: [{ kind: 'variable', variable: 'DATABASE_URL', message: 'Set DATABASE_URL' }] },
+    ];
+    for (const saved of old) {
+      writeFileSync(file(), JSON.stringify(saved));
+      expect(readReadiness(dir)).toBeNull();
+      writeFileSync(file(), JSON.stringify({ ...saved, ci: 1 }));
+      expect(readReadiness(dir)).toBeNull();
+    }
   });
 
   it('reads a result without services, and skips malformed owner items and blockers', () => {
     mkdirSync(path.dirname(file()), { recursive: true });
     const bad = [null, 'x', { kind: 'weird', message: 'm' }, { kind: 'other' }, { kind: 'other', message: 7 }, { kind: 'secret', variable: 7, message: 'm' }];
-    writeFileSync(file(), JSON.stringify({ ...result, owner: [...bad, ...result.owner], blockers: [null, ...result.blockers] }));
+    writeFileSync(file(), JSON.stringify({ ...result, ci: 1, owner: [...bad, ...result.owner], blockers: [null, ...result.blockers] }));
     expect(readReadiness(dir)).toEqual(result);
   });
 
   it('reads null when the file is a symlink', () => {
     const target = path.join(dir, 'real.json');
-    writeFileSync(target, JSON.stringify(result));
+    writeFileSync(target, JSON.stringify({ ...result, ci: 1 }));
     mkdirSync(path.dirname(file()), { recursive: true });
     symlinkSync(target, file());
     expect(readReadiness(dir)).toBeNull();

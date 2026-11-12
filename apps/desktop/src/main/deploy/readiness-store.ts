@@ -144,21 +144,33 @@ export function assignKnownKeys(blockers: Array<NewBlocker & { sameAs?: string }
 const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
-/** A saved blocker of a kind CI readiness has; the old Deploy's `unsupported` ones are dropped. */
+/**
+ * Stamped on every result this version writes. A result without it was saved by the old Vercel
+ * Deploy (beta.36–39): its `variable` items were Vercel runtime variables, never CI secrets, and its
+ * `code` blockers were about hosting, so it reads as absent and the first open scans for CI.
+ */
+const CI_RESULT = 1;
+
+/** A saved blocker of a kind CI readiness has */
 const isBlocker = (b: unknown): b is ReadinessBlocker => isObject(b) && (b.kind === 'code' || b.kind === 'workflow');
 
-/** A saved owner item (a string message, a string name if any); the old Deploy's `variable` kind is a secret now. */
+/** A saved owner item (a string message, a string name if any) */
 function ownerItem(item: unknown): ReadinessOwnerItem | null {
   if (!isObject(item) || typeof item.message !== 'string') return null;
   if (item.variable !== undefined && typeof item.variable !== 'string') return null;
-  const kind = item.kind === 'variable' ? 'secret' : item.kind;
-  if (kind !== 'secret' && kind !== 'other') return null;
-  return { ...(item as unknown as ReadinessOwnerItem), kind };
+  if (item.kind !== 'secret' && item.kind !== 'other') return null;
+  return item as unknown as ReadinessOwnerItem;
 }
 
+/** What only the old Vercel Deploy saved: services, an `unsupported` blocker, a `variable` item */
+const isOldDeploy = (parsed: Record<string, unknown>, blockers: unknown[], owner: unknown[]): boolean =>
+  parsed.services !== undefined ||
+  blockers.some((b) => isObject(b) && b.kind === 'unsupported') ||
+  owner.some((o) => isObject(o) && o.kind === 'variable');
+
 /**
- * The stored scan; null when missing, malformed or a symlink. A result the old Vercel Deploy saved
- * still reads: its services are dropped, `unsupported` blockers too, `variable` items are secrets.
+ * The stored CI scan; null when missing, malformed, a symlink, or saved by the old Vercel Deploy
+ * (no CI stamp, or services / `unsupported` blockers / `variable` items).
  */
 export function readReadiness(projectPath: string): ReadinessResult | null {
   try {
@@ -168,7 +180,8 @@ export function readReadiness(projectPath: string): ReadinessResult | null {
     if (!isObject(parsed) || typeof parsed.scannedAt !== 'string') return null;
     if (!isArray(parsed.blockers) || !isArray(parsed.owner)) return null;
     if (!isObject(parsed.workflow)) return null;
-    const { services: _services, ...rest } = parsed;
+    if (parsed.ci !== CI_RESULT || isOldDeploy(parsed, parsed.blockers, parsed.owner)) return null;
+    const { ci: _ci, ...rest } = parsed;
     return {
       ...(rest as unknown as ReadinessResult),
       blockers: parsed.blockers.filter(isBlocker),
@@ -181,5 +194,6 @@ export function readReadiness(projectPath: string): ReadinessResult | null {
 
 export function writeReadiness(projectPath: string, result: ReadinessResult): void {
   mkdirSync(folder(projectPath), { recursive: true });
-  writeFileReplacingSync(file(projectPath), `${JSON.stringify(result, null, 2)}\n`);
+  const { services: _services, ...rest } = result;
+  writeFileReplacingSync(file(projectPath), `${JSON.stringify({ ...rest, ci: CI_RESULT }, null, 2)}\n`);
 }

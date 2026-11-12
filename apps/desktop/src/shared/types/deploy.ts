@@ -245,7 +245,7 @@ export interface ReadinessResult {
   scannedAt: string;
   commit?: string;
   blockers: ReadinessBlocker[];
-  /** Old saved results only (the removed Vercel deploy's services): dropped on read, never shown. */
+  /** Only the removed Vercel Deploy saved it: such a result reads as absent; never written. */
   services?: unknown[];
   owner: ReadinessOwnerItem[];
   workflow: { path?: string; lastMainRun?: { conclusion: string; runId: number } };

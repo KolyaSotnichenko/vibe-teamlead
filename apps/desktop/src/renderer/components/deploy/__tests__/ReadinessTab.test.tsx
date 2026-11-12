@@ -166,11 +166,14 @@ describe('Readiness tab', () => {
     expect(screen.queryByText('deploy:readiness.setUpCiFirst')).toBeNull();
   });
 
-  it('an old variable item is a secret', async () => {
-    const old = result({ owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] as unknown as ReadinessResult['owner'] });
+  it('never shows an old Vercel variable item (a runtime variable, not a CI secret)', async () => {
+    const old = result({ owner: [{ kind: 'variable', variable: 'DATABASE_URL', message: 'Set DATABASE_URL' }] as unknown as ReadinessResult['owner'] });
     setup({ result: old, scanning: false, tasks: {} });
     await openTab();
-    expect(await screen.findByRole('button', { name: 'deploy:readiness.addSecret' })).toBeInTheDocument();
+    await screen.findByText('Fix the build');
+    expect(screen.queryByText('DATABASE_URL')).toBeNull();
+    expect(screen.queryByText('Set DATABASE_URL')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'deploy:readiness.addSecret' })).toBeNull();
   });
 
   it('a secret saved from the item goes to GitHub and the item is gone without a new check', async () => {

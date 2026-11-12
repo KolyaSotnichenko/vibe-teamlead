@@ -26,9 +26,11 @@ const CONCLUSIONS: Record<string, 'success' | 'attention' | 'skipped'> = {
 
 const TASK_STATUSES: ReadonlySet<string> = new Set(['backlog', 'queue', 'in_progress', 'ai_review', 'human_review', 'done', 'pr_created', 'error']);
 
-/** The secret an owner item names (an old result says `variable` for it), or undefined. */
-const secretOf = (item: ReadinessOwnerItem): string | undefined =>
-  (item.kind === 'secret' || (item.kind as string) === 'variable') && item.variable ? item.variable : undefined;
+/** The secret an owner item names, or undefined. */
+const secretOf = (item: ReadinessOwnerItem): string | undefined => (item.kind === 'secret' && item.variable ? item.variable : undefined);
+
+/** A CI owner item: the old Vercel Deploy's `variable` items were runtime variables, never CI secrets, and are never shown */
+const isCiOwnerItem = (item: ReadinessOwnerItem): boolean => item.kind === 'secret' || item.kind === 'other';
 
 export interface ReadinessTabProps {
   projectId: string;
@@ -107,7 +109,7 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
 
   const blockers = (result?.blockers ?? []).filter(isCiBlocker);
   // Before setup there is no repository to hold secrets; after it, the ones GitHub has are done
-  const owner = (result?.owner ?? []).filter((item) => {
+  const owner = (result?.owner ?? []).filter(isCiOwnerItem).filter((item) => {
     const secret = secretOf(item);
     return !(isSetUp && secret && present.has(secret));
   });

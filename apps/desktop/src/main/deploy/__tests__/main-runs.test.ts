@@ -27,7 +27,7 @@ function saveReadiness() {
   mkdirSync(path.join(dir, '.vibe-teamlead', 'deploy'), { recursive: true });
   writeFileSync(
     path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'),
-    JSON.stringify({ scannedAt: 'x', blockers: [], services: [], owner: [], workflow: { state: 'present' } }),
+    JSON.stringify({ ci: 1, scannedAt: 'x', blockers: [], owner: [], workflow: { state: 'present' } }),
   );
 }
 
@@ -430,7 +430,7 @@ describe('no run-fix task while open tasks already work on the failure', () => {
   const checksWorkflow = (workflowPath: string) =>
     writeFileSync(
       path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'),
-      JSON.stringify({ scannedAt: 'x', blockers: [], services: [], owner: [], workflow: { path: workflowPath } }),
+      JSON.stringify({ ci: 1, scannedAt: 'x', blockers: [], owner: [], workflow: { path: workflowPath } }),
     );
 
   it.each([
