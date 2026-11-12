@@ -6,6 +6,8 @@ import { execFile } from 'child_process';
 import type { Project } from '../../shared/types';
 import type {
   DeployDeployment,
+  DeployDeploymentStatus,
+  DeployRefDeployment,
   DeployDeploymentState,
   DeployJob,
   DeployRun,
@@ -186,18 +188,24 @@ export function createActionsClient(fetcher: GitHubFetcher) {
       );
     },
 
-    /** Deployments of a branch (or any ref), newest first, each with its latest status. */
-    async deploymentsForRef(owner: string, repo: string, ref: string, perPage = 10): Promise<DeployDeployment[]> {
+    /** Deployments of a branch (or any ref), newest first, without statuses (one call). */
+    async refDeployments(owner: string, repo: string, ref: string, perPage = 5): Promise<DeployRefDeployment[]> {
       const list = arr(await get(`/repos/${owner}/${repo}/deployments?ref=${encodeURIComponent(ref)}&per_page=${perPage}`));
-      const mapped = await Promise.all(
-        list.map(async (d) => {
-          const out = mapDeployment(d, await latestStatus(owner, repo, d.id));
+      return list
+        .filter((d) => typeof d.id === 'number')
+        .map((d) => {
+          const out: DeployRefDeployment = { id: d.id as number, environment: str(d.environment), createdAt: str(d.created_at) };
           const sha = optStr(d.sha);
           if (sha) out.sha = sha;
           return out;
         })
-      );
-      return mapped.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    /** The latest status of one deployment (`pending` when it has none yet). */
+    async deploymentStatus(owner: string, repo: string, id: number): Promise<DeployDeploymentStatus> {
+      const { state, url, logUrl } = mapDeployment({}, await latestStatus(owner, repo, id));
+      return { state, ...(url ? { url } : {}), ...(logUrl ? { logUrl } : {}) };
     },
 
     async productionUrl(owner: string, repo: string): Promise<string | null> {

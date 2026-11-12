@@ -19,18 +19,26 @@ const dep = (over: Partial<DeployDeployment>): DeployDeployment => ({
 });
 
 function deps(over: Partial<{ deployments: DeployDeployment[]; runs: DeployRun[]; jobs: DeployJob[]; fail: boolean }> = {}) {
-  const deploymentsForRef = vi.fn(async () => {
+  const list = over.deployments ?? [];
+  // The list without statuses; each status is asked for on its own (by the index as id)
+  const refDeployments = vi.fn(async () => {
     if (over.fail) throw new Error('boom');
-    return over.deployments ?? [];
+    return list
+      .map((d, id) => ({ id, environment: d.environment, createdAt: d.createdAt, ...(d.sha ? { sha: d.sha } : {}) }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  });
+  const deploymentStatus = vi.fn(async (_o: string, _r: string, id: number) => {
+    const d = list[id];
+    return { state: d.state, ...(d.url ? { url: d.url } : {}), ...(d.logUrl ? { logUrl: d.logUrl } : {}) };
   });
   const runs = vi.fn(async () => over.runs ?? []);
   const jobs = vi.fn(async () => over.jobs ?? []);
   const d: PreviewDeps = {
-    actions: { deploymentsForRef, runs, jobs },
+    actions: { refDeployments, deploymentStatus, runs, jobs },
     resolveRepo: async () => ({ owner: 'acme', repo: 'app' }),
     now: () => 1000,
   };
-  return { d, deploymentsForRef, runs, jobs };
+  return { d, refDeployments, deploymentsForRef: refDeployments, deploymentStatus, runs, jobs };
 }
 
 beforeEach(() => {
@@ -72,7 +80,7 @@ describe('previewState', () => {
       ],
     });
     expect(await previewState(project, task(), d)).toEqual({ state: 'ready', url: 'https://p.vercel.app', builtAt: '2026-11-10T11:00:00Z' });
-    expect(deploymentsForRef).toHaveBeenCalledWith('acme', 'app', 'vibe-teamlead/001-x');
+    expect(deploymentsForRef).toHaveBeenCalledWith('acme', 'app', 'vibe-teamlead/001-x', 5);
   });
 
   it('building keeps the newest older success as previousUrl', async () => {
@@ -104,7 +112,7 @@ describe('previewState', () => {
   it('failed links the run of the failed sha and its first failed job', async () => {
     const run = (id: number, sha: string): DeployRun => ({ id, sha } as DeployRun);
     const { d, runs, jobs } = deps({
-      deployments: [dep({ state: 'failure', url: undefined, sha: 's9' })],
+      deployments: [dep({ state: 'failure', url: undefined, sha: 's9', logUrl: 'https://vercel.com/acme/app/log' })],
       runs: [run(30, 'other'), run(20, 's9'), run(10, 's9')],
       jobs: [
         { id: 1, name: 'a', conclusion: 'success' } as DeployJob,
@@ -117,15 +125,42 @@ describe('previewState', () => {
     expect(jobs).toHaveBeenCalledWith('acme', 'app', 20);
   });
 
-  it('failed falls back to the newest run on the branch, and to no link', async () => {
+  it('failed without a failed run of that sha links the Vercel build log, never an unrelated run', async () => {
     const { d } = deps({
-      deployments: [dep({ state: 'error', url: undefined, sha: 'zz' })],
+      deployments: [dep({ state: 'error', url: undefined, sha: 'zz', logUrl: 'https://vercel.com/acme/app/build' })],
       runs: [{ id: 5, sha: 'q' } as DeployRun],
       jobs: [{ id: 7, name: 'b', conclusion: 'failure' } as DeployJob],
     });
-    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 5, jobId: 7 });
-    invalidatePreview('t1');
-    expect(await previewState(project, task(), deps({ deployments: [dep({ state: 'failure', url: undefined })] }).d)).toEqual({ state: 'failed' });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', logUrl: 'https://vercel.com/acme/app/build' });
+  });
+
+  it('a run of the sha whose jobs all passed is not linked either', async () => {
+    const { d } = deps({
+      deployments: [dep({ state: 'failure', url: undefined, sha: 's9', logUrl: 'https://vercel.com/log' })],
+      runs: [{ id: 5, sha: 's9' } as DeployRun],
+      jobs: [{ id: 7, name: 'b', conclusion: 'success' } as DeployJob],
+    });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', logUrl: 'https://vercel.com/log' });
+  });
+
+  it('a log URL that is not https is dropped', async () => {
+    const { d } = deps({ deployments: [dep({ state: 'failure', url: undefined, logUrl: 'http://vercel.com/log' })] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed' });
+  });
+
+  it('inactive with an https url is ready (GitHub retires older Preview deployments)', async () => {
+    const { d } = deps({ deployments: [dep({ state: 'inactive', url: 'https://old-but-fine.vercel.app' })] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'ready', url: 'https://old-but-fine.vercel.app', builtAt: '2026-11-10T10:00:00Z' });
+  });
+
+  it('an inactive older deployment is the previous URL while building', async () => {
+    const { d } = deps({
+      deployments: [
+        dep({ state: 'in_progress', url: undefined, createdAt: '2026-11-10T11:00:00Z' }),
+        dep({ state: 'inactive', url: 'https://prev.vercel.app', createdAt: '2026-11-10T10:00:00Z' }),
+      ],
+    });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'building', previousUrl: 'https://prev.vercel.app' });
   });
 
   it('an earlier success then a refused push keeps the preview with pushError', async () => {
@@ -144,9 +179,9 @@ describe('previewState', () => {
 });
 
 describe('cache', () => {
-  it('two calls within 30 s make one GitHub call; after 30 s a second', async () => {
+  it('building: two calls within 30 s make one GitHub call; after 30 s a second', async () => {
     let t = 1000;
-    const { d, deploymentsForRef } = deps({ deployments: [dep({})] });
+    const { d, deploymentsForRef } = deps({ deployments: [dep({ state: 'in_progress', url: undefined })] });
     d.now = () => t;
     await previewState(project, task(), d);
     t += 29_000;
@@ -166,5 +201,70 @@ describe('cache', () => {
     invalidatePreview('t1');
     await previewState(project, task(), d);
     expect(deploymentsForRef).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('GitHub cost', () => {
+  it('a ready newest deployment costs one list call and one status call (5 per page)', async () => {
+    const { d, refDeployments, deploymentStatus } = deps({
+      deployments: [
+        dep({ createdAt: '2026-11-10T11:00:00Z' }),
+        dep({ createdAt: '2026-11-10T10:00:00Z' }),
+        dep({ createdAt: '2026-11-10T09:00:00Z' }),
+      ],
+    });
+    await previewState(project, task(), d);
+    expect(refDeployments).toHaveBeenCalledWith('acme', 'app', 'vibe-teamlead/001-x', 5);
+    expect(deploymentStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('building stops at the first older ready deployment', async () => {
+    const { d, deploymentStatus } = deps({
+      deployments: [
+        dep({ state: 'in_progress', url: undefined, createdAt: '2026-11-10T11:00:00Z' }),
+        dep({ url: 'https://ready-1', createdAt: '2026-11-10T10:00:00Z' }),
+        dep({ url: 'https://ready-0', createdAt: '2026-11-10T09:00:00Z' }),
+        dep({ url: 'https://ready-00', createdAt: '2026-11-10T08:00:00Z' }),
+      ],
+    });
+    await previewState(project, task(), d);
+    expect(deploymentStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('ready and failed stay cached until the next push; building only 30 s', async () => {
+    let t = 1000;
+    const ready = deps({ deployments: [dep({})] });
+    ready.d.now = () => t;
+    await previewState(project, task(), ready.d);
+    t += 10 * 60_000;
+    await previewState(project, task(), ready.d);
+    expect(ready.refDeployments).toHaveBeenCalledTimes(1);
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h2', at: 'y' });
+    await previewState(project, task(), ready.d);
+    expect(ready.refDeployments).toHaveBeenCalledTimes(2);
+
+    invalidatePreview('t1');
+    const failed = deps({ deployments: [dep({ state: 'failure', url: undefined })] });
+    failed.d.now = () => t;
+    await previewState(project, task(), failed.d);
+    t += 10 * 60_000;
+    await previewState(project, task(), failed.d);
+    expect(failed.refDeployments).toHaveBeenCalledTimes(1);
+
+    invalidatePreview('t1');
+    const building = deps({ deployments: [dep({ state: 'in_progress', url: undefined })] });
+    building.d.now = () => t;
+    await previewState(project, task(), building.d);
+    t += 31_000;
+    await previewState(project, task(), building.d);
+    expect(building.refDeployments).toHaveBeenCalledTimes(2);
+  });
+
+  it('concurrent asks for one task share one read', async () => {
+    const { d, refDeployments } = deps({ deployments: [dep({})] });
+    const [a, b, c] = await Promise.all([previewState(project, task(), d), previewState(project, task(), d), previewState(project, task(), d)]);
+    expect(refDeployments).toHaveBeenCalledTimes(1);
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
   });
 });

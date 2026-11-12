@@ -69,8 +69,23 @@ export interface DeployDeployment {
   url?: string;
   logUrl?: string;
   createdAt: string;
-  /** The commit deployed (set by `deploymentsForRef`). */
+  /** The commit deployed. */
   sha?: string;
+}
+
+/** A deployment of a ref, before its status is read (`refDeployments`). */
+export interface DeployRefDeployment {
+  id: number;
+  environment: string;
+  createdAt: string;
+  sha?: string;
+}
+
+/** A deployment's latest status (`deploymentStatus`). */
+export interface DeployDeploymentStatus {
+  state: DeployDeploymentState;
+  url?: string;
+  logUrl?: string;
 }
 
 /** A task's preview, from the GitHub Deployments of its branch. */
@@ -80,7 +95,8 @@ export type TaskPreview =
   | { state: 'not-pushed'; pushError?: string }
   | { state: 'building'; previousUrl?: string; pushError?: string }
   | { state: 'ready'; url: string; builtAt: string; pushError?: string }
-  | { state: 'failed'; runId?: number; jobId?: number; pushError?: string };
+  /** `runId`: the failed Actions run of that commit; else `logUrl`: Vercel's build log (https). */
+  | { state: 'failed'; runId?: number; jobId?: number; logUrl?: string; pushError?: string };
 
 /** Where the Deploy page should open (the `open-deploy` window event's detail). */
 export interface DeployTarget {

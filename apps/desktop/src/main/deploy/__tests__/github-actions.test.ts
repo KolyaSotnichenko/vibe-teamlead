@@ -168,16 +168,27 @@ describe('deployments', () => {
   });
 });
 
-describe('deploymentsForRef', () => {
-  it('encodes the ref, merges the latest status and keeps the sha', async () => {
+describe('refDeployments and deploymentStatus', () => {
+  it('lists a ref\'s deployments newest first without asking for any status (5 per page)', async () => {
     const { c, calls } = client({
-      '/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=10': ok(fx('deployments.json')),
-      '/repos/acme/app/deployments/1/statuses?per_page=1': ok(fx('statuses-1.json').slice(0, 1)),
-      '/repos/acme/app/deployments/2/statuses?per_page=1': ok(fx('statuses-2.json')),
+      '/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=5': ok(fx('deployments.json')),
     });
-    const d = await c.deploymentsForRef('acme', 'app', 'vibe-teamlead/001-x');
-    expect(calls[0]).toBe('/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=10');
-    expect(d.map((x) => [x.environment, x.sha])).toEqual([['Preview', 'abc123'], ['Production', 'abc123']]);
+    const d = await c.refDeployments('acme', 'app', 'vibe-teamlead/001-x');
+    expect(calls).toEqual(['/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=5']);
+    expect(d).toEqual([
+      { id: 2, environment: 'Preview', createdAt: '2026-11-10T10:07:00Z', sha: 'abc123' },
+      { id: 1, environment: 'Production', createdAt: '2026-11-10T10:06:00Z', sha: 'abc123' },
+    ]);
+  });
+
+  it('reads one deployment\'s latest status', async () => {
+    const { c, calls } = client({
+      '/repos/acme/app/deployments/2/statuses?per_page=1': ok([{ state: 'inactive', environment_url: 'https://x.vercel.app', log_url: 'https://vercel.com/log', created_at: 'z' }]),
+      '/repos/acme/app/deployments/3/statuses?per_page=1': ok([]),
+    });
+    expect(await c.deploymentStatus('acme', 'app', 2)).toEqual({ state: 'inactive', url: 'https://x.vercel.app', logUrl: 'https://vercel.com/log' });
+    expect(await c.deploymentStatus('acme', 'app', 3)).toEqual({ state: 'pending' });
+    expect(calls).toHaveLength(2);
   });
 });
 
