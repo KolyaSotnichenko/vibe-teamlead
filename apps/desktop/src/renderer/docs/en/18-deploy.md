@@ -35,11 +35,23 @@ The **Deploy** stage and the **Production** link come from GitHub Deployments, n
 
 Settings → Vercel connects the Vercel account Deploy uses to set up hosting. **Connect Vercel** downloads the Vercel CLI the first time (about 180 MB, checked before use; a download that gets no data for a minute is stopped), shows a code and opens Vercel's sign-in page in your browser; confirm the code there. **Cancel** stops the sign-in and nothing is saved. The sign-in stays in the app's own folder, not in your own Vercel CLI, and is renewed by itself. You can paste a Vercel token instead; it is stored encrypted on this Mac and is used in place of the browser sign-in. If this Mac can't encrypt it, the token is not saved (never as plain text): sign in in the browser instead. With a pasted token nothing is downloaded until you first click **Add database**, which then downloads the Vercel CLI with its progress and a **Cancel** button. **Disconnect** removes both from this Mac (it does not revoke anything on Vercel).
 
-**Services.** When the readiness check finds that the project needs Redis or Blob, the **Services** section lists them, each with **Add**. Redis comes from the Vercel Marketplace (Upstash) and Blob is Vercel's own file storage; both go through the same steps as the database: Marketplace terms (for Redis) are shown first and accepted only when you click Accept, the CLI download shows progress with **Cancel**, and their variables go to Production and Preview. Services Vercel can't provide are listed with the reason.
-
 ## Readiness
 
-The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy. It scans the project when you first open it and again on **Check again**. Each blocker (code or workflow) has its own task; the title opens the task, and the blocker turns done when the task is. Parts Vibe Teamlead can't deploy to Vercel are listed without a task. **Needed from you** lists what only you can do, such as adding a variable's value. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers the last check found (parts Vibe Teamlead can't deploy are not counted); it updates when the check runs again, for example after merges.
+The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy.
+
+**When it scans.** The scan runs the first time Deploy opens for a project with no saved result, after a merge into main for a project that has one, and on **Check again**. It is a model call, so it costs tokens. Its model is **Deploy readiness** in Settings → Agents → feature models (default Sonnet, low thinking).
+
+**Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The task starts by itself and, after QA, merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is.
+
+**The workflow.** The GitHub Actions workflow is written for this project. It installs on a clean runner what the checks need: browsers for Playwright and for unit tests in browser mode, services, the package manager. Task branches run typecheck and unit tests; main runs everything; Vercel deploys.
+
+**After a push to main.** The app follows that commit's runs for up to an hour. The newest failed run of a workflow on main becomes one urgent fix task, with the logs of the failed jobs. While that task is open there is no second one. Runs from forks and pull requests are ignored.
+
+**What Vercel can't run.** Redis (Upstash) and Blob are added from Environment → Services. Kafka, queue consumers and always-running workers are listed as parts Vercel can't run, without a task.
+
+**Needed from you** lists what only you can do, such as adding a variable's value. **CI** shows the workflow and the last run on main. The number on the tab is how many blockers the last check found (parts Vercel can't run are not counted); it updates when the check runs again, for example after merges.
+
+**Nothing blocks.** When the last blocker is fixed, deploy is set up by itself. The exception is a Vercel account with teams where none was chosen for the project yet: choose one on the Environment tab first.
 
 ## Environment: set up deploy
 
@@ -61,8 +73,10 @@ A project whose git configuration is unusual (for example, `origin` defined thro
 
 **Add database** adds a free Postgres database (Neon) to the Vercel project. The first time, Vercel asks you to accept Neon's Marketplace terms: the tab shows the policy links with the site each one opens, and nothing is accepted until you click **Accept and add database**. If Vercel needs a step only its dashboard can do, the tab links there. With a pasted token, the first **Add database** downloads the Vercel CLI first (progress and **Cancel** show on the tab).
 
+**Services.** When the readiness check finds that the project needs Redis or Blob, the **Services** section of the Environment tab lists them, each with **Add**. Redis comes from the Vercel Marketplace (Upstash) and Blob is Vercel's own file storage; both go through the same steps as the database: Marketplace terms (for Redis) are shown first and accepted only when you click Accept, the CLI download shows progress with **Cancel**, and their variables go to Production and Preview. Services Vercel can't provide are listed with the reason.
+
 **Preview deployments and the database.** The database's variables go to Production and Preview, so preview deployments may use the same database as production, and what a preview writes lands in your production data. That is not the case when the Neon integration's preview branching is on: then each preview gets its own copy (a database branch). To check, open Vercel → **Storage** → the database → its settings, and see whether preview deployments get their own database branch; turn it on there if you want previews kept apart.
 
 ## What comes next
 
-Coming in later versions of Deploy: a readiness scan that turns blockers into tasks, a GitHub Actions workflow for the project, and previews on task cards.
+Coming in later versions of Deploy: previews on task cards, and Vercel in onboarding.
