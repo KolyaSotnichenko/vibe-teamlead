@@ -226,6 +226,10 @@ describe('TaskStateManager', () => {
       expect(heard.map(([, s]) => s)).toContain('ai_review');
       expect(heard.map(([, s]) => s)).toContain('human_review');
       expect(heard.every(([id]) => id === mockTask.id)).toBe(true);
+      const reasons: Array<string | undefined> = [];
+      manager.onStatusChange((_id, _s, reason) => reasons.push(reason));
+      manager.handleManualStatusChange(mockTask.id, 'human_review', createMockTask({ status: 'human_review', reviewReason: 'completed' }), mockProject);
+      expect(reasons).toContain('completed');
       off();
       const before = heard.length;
       manager.handleManualStatusChange(mockTask.id, 'backlog', mockTask, mockProject);

@@ -38,14 +38,14 @@ export class TaskStateManager {
   private taskContextById = new Map<string, TaskContextEntry>();
   private terminalEventSeen = new Set<string>();
   private getMainWindow: (() => BrowserWindow | null) | null = null;
-  private statusListeners = new Set<(taskId: string, status: TaskStatus, projectId?: string) => void>();
+  private statusListeners = new Set<(taskId: string, status: TaskStatus, reviewReason?: ReviewReason) => void>();
 
   configure(getMainWindow: () => BrowserWindow | null): void {
     this.getMainWindow = getMainWindow;
   }
 
   /** Hears every status change this manager announces. Returns the unsubscribe. */
-  onStatusChange(listener: (taskId: string, status: TaskStatus, projectId?: string) => void): () => void {
+  onStatusChange(listener: (taskId: string, status: TaskStatus, reviewReason?: ReviewReason) => void): () => void {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
   }
@@ -361,7 +361,7 @@ export class TaskStateManager {
   ): void {
     for (const listener of this.statusListeners) {
       try {
-        listener(taskId, status, projectId);
+        listener(taskId, status, reviewReason);
       } catch {
         // a listener never stops the status
       }

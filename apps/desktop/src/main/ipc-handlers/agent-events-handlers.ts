@@ -62,7 +62,9 @@ export function registerAgenteventsHandlers(
     (taskId) => findTaskAndProject(taskId),
   );
   // The last commits of a task (the final subtask's, the QA fixes) reach its preview here
-  taskStateManager.onStatusChange((taskId, status) => {
+  // (not for a plan or design waiting for approval: no code was written yet)
+  taskStateManager.onStatusChange((taskId, status, reviewReason) => {
+    if (reviewReason === "plan_review" || reviewReason === "design_review") return;
     if (status === "ai_review" || status === "human_review") requestPreviewPush(taskId);
   });
   agentManager.on("session-ended", (taskId: string) => requestPreviewPush(taskId));
