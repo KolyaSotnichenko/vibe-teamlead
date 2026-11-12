@@ -157,9 +157,17 @@ export class TaskStateManager {
         }
         return true;
       }
-      case 'backlog':
+      case 'backlog': {
+        const before = this.actors.get(taskId) ? this.getCurrentState(taskId) : undefined;
         this.handleUiEvent(taskId, { type: 'USER_STOPPED', hasPlan: false }, task, project);
+        // A task queued outside the machine (Deploy, brief import) leaves it in backlog: no
+        // transition, so nothing would be saved and a later read would queue the task again
+        if (before === 'backlog' && this.getCurrentState(taskId) === 'backlog' && task.status !== 'backlog') {
+          this.persistStatus(task, project, 'backlog', undefined, 'backlog', 'idle');
+          this.emitStatus(taskId, 'backlog', undefined, project.id);
+        }
         return true;
+      }
       case 'human_review':
         // Already in human_review (e.g., stage-only merge keeps task in review).
         // Emit status directly since there's no XState transition needed.

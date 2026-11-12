@@ -243,6 +243,29 @@ describe('TaskStateManager', () => {
   });
 
   describe('handleManualStatusChange', () => {
+    it('moved back to Planning a second time (queued again meanwhile, machine still in backlog) it is saved again', async () => {
+      const { persistPlanStatusAndReasonSync } = await import('../ipc-handlers/task/plan-file-utils');
+      const queued = createMockTask({ status: 'queue' });
+      manager.handleManualStatusChange(queued.id, 'backlog', queued, mockProject);
+      vi.mocked(persistPlanStatusAndReasonSync).mockClear();
+      const heard: string[] = [];
+      manager.onStatusChange((_id, s) => heard.push(s));
+      manager.handleManualStatusChange(queued.id, 'backlog', createMockTask({ status: 'queue' }), mockProject);
+      expect(persistPlanStatusAndReasonSync).toHaveBeenCalledWith(expect.any(String), 'backlog', undefined, mockProject.id, 'backlog', 'idle');
+      expect(heard).toContain('backlog');
+    });
+
+    it('a queued task moved back to Planning is saved as backlog, so a later read does not queue it again', async () => {
+      const { persistPlanStatusAndReasonSync } = await import('../ipc-handlers/task/plan-file-utils');
+      const queued = createMockTask({ status: 'queue' });
+      vi.mocked(persistPlanStatusAndReasonSync).mockClear();
+      const heard: string[] = [];
+      manager.onStatusChange((_id, s) => heard.push(s));
+      expect(manager.handleManualStatusChange(queued.id, 'backlog', queued, mockProject)).toBe(true);
+      expect(persistPlanStatusAndReasonSync).toHaveBeenCalledWith(expect.any(String), 'backlog', undefined, mockProject.id, 'backlog', 'idle');
+      expect(heard).toContain('backlog');
+    });
+
     it('should handle done status', () => {
       const result = manager.handleManualStatusChange(mockTask.id, 'done', mockTask, mockProject);
       expect(result).toBe(true);
