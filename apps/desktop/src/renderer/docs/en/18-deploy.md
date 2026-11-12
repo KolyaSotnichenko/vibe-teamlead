@@ -43,7 +43,7 @@ The **Readiness** tab (between Runs and Environment) shows what stands between t
 
 **Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The task starts by itself and, after QA, merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is.
 
-**The workflow.** The GitHub Actions workflow is written for this project. It installs on a clean runner what the checks need: browsers for Playwright and for unit tests in browser mode, services, the package manager. Task branches run typecheck and unit tests; main runs everything; Vercel deploys.
+**The workflow.** The GitHub Actions workflow is written for this project. It installs on a clean runner what the checks need: browsers for Playwright and for unit tests in browser mode, services, the package manager. Task branches run typecheck and unit tests; main runs everything; Vercel deploys. After the workflow lands on main, the app follows its first run like any run on main, and a failure becomes a fix task.
 
 **After a push to main.** The app follows that commit's runs for up to an hour. The newest failed run of a workflow on main becomes one urgent fix task, with the logs of the failed jobs. While that task is open there is no second one. Runs from forks and pull requests are ignored.
 
