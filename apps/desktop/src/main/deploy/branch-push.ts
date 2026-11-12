@@ -64,7 +64,12 @@ async function pushOnce(project: Project, task: Task, deps: BranchPushDeps): Pro
     await deps.push(project.path, `https://github.com/${deploy.repo.owner}/${deploy.repo.repo}.git`, `${branch}:${branch}`);
     record = sha ? { sha, at } : { at };
   } catch (e) {
-    record = { ...(at ? { at } : {}), error: { kind: e instanceof GitHubWriteError ? e.kind : 'unavailable' } };
+    // The last successful push stays: its preview is still valid
+    const prev = records.get(task.id);
+    record = {
+      ...(prev?.sha ? { sha: prev.sha, ...(prev.at ? { at: prev.at } : {}) } : at ? { at } : {}),
+      error: { kind: e instanceof GitHubWriteError ? e.kind : 'unavailable' },
+    };
   }
   records.set(task.id, record);
   try {

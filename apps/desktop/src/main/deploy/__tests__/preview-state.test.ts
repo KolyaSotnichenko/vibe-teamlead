@@ -128,6 +128,12 @@ describe('previewState', () => {
     expect(await previewState(project, task(), deps({ deployments: [dep({ state: 'failure', url: undefined })] }).d)).toEqual({ state: 'failed' });
   });
 
+  it('an earlier success then a refused push keeps the preview with pushError', async () => {
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: 'x', error: { kind: 'conflict' } });
+    const { d } = deps({ deployments: [dep({})] });
+    expect(await previewState(project, task(), d)).toMatchObject({ state: 'ready', pushError: 'conflict' });
+  });
+
   it('GitHub errors give building and are not cached', async () => {
     const bad = deps({ fail: true });
     expect(await previewState(project, task(), bad.d)).toEqual({ state: 'building' });

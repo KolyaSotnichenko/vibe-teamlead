@@ -72,7 +72,7 @@ export async function previewState(project: Project, task: Task, deps: PreviewDe
   const push = lastBranchPush(task.id);
   const pushError = push?.error?.kind;
   const withError = <T extends TaskPreview>(s: T): T => (pushError ? { ...s, pushError } : s);
-  const pushed = !!push && !push.error && !!(push.sha ?? push.at);
+  const pushed = !!push?.sha;
   if (!PREVIEW_STATUSES.has(task.status) || !pushed) return withError({ state: 'not-pushed' });
 
   const key = `${push.sha ?? ''}|${push.at ?? ''}`;

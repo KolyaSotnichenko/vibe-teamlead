@@ -97,6 +97,20 @@ describe('pushTaskBranch', () => {
     expect(push).toHaveBeenCalledTimes(2);
   });
 
+  it('a refused push keeps the last successful sha; a later success clears the error', async () => {
+    const push = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new GitHubWriteError('conflict', 'rejected'))
+      .mockResolvedValueOnce(undefined);
+    const { deps } = makeDeps(push);
+    const ok = await pushTaskBranch(project(), task('k'), deps);
+    const bad = await pushTaskBranch(project(), task('k'), deps);
+    expect(bad.sha).toBe(ok.sha);
+    expect(bad.error).toEqual({ kind: 'conflict' });
+    expect((await pushTaskBranch(project(), task('k'), deps)).error).toBeUndefined();
+  });
+
   it('a queued follow-up is re-checked with fresh settings', async () => {
     const gate = deferred();
     const push = vi.fn(async () => { if (push.mock.calls.length === 1) await gate.promise; });
