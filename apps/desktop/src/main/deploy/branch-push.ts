@@ -51,6 +51,19 @@ export function previewPushAllowed(project: Project, task: Task): PreviewPushAll
   return { allowed: true };
 }
 
+/**
+ * Whether a task's new branch is pushed when its worktree is made. A deploy repository that
+ * is not known to be private gets no task branch at all (its previews are off too).
+ */
+export function worktreePushNewBranches(
+  settings: Project['settings'] | undefined,
+  optionValue: boolean | undefined,
+): boolean {
+  const deploy = settings?.deploy;
+  if (deploy?.enabled && deploy.repo && deploy.repo.public !== false) return false;
+  return optionValue ?? settings?.pushNewBranches !== false;
+}
+
 interface TaskState {
   running: boolean;
   queued?: { project: Project; task: Task; promise: Promise<BranchPushRecord>; resolve: (r: BranchPushRecord) => void };

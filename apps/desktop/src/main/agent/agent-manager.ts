@@ -25,6 +25,7 @@ import { createOrGetWorktree } from '../ai/worktree';
 import { findTaskWorktree } from '../worktree-paths';
 import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
 import { qaKickoffContext } from '../ai/orchestration/qa-kickoff';
+import { worktreePushNewBranches } from '../deploy/branch-push';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -259,7 +260,7 @@ export class AgentManager extends EventEmitter {
           specId,
           baseBranch,
           options.useLocalBranch ?? false,
-          options.pushNewBranches ?? (project?.settings?.pushNewBranches !== false),
+          worktreePushNewBranches(project?.settings, options.pushNewBranches),
           project?.autoBuildPath,
         );
         worktreePath = result.worktreePath;

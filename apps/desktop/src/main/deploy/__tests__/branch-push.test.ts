@@ -7,6 +7,7 @@ import {
   requestPreviewPush,
   setBranchPushDeps,
   setBranchPushStore,
+  worktreePushNewBranches,
   type BranchPushDeps,
 } from '../branch-push';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -337,5 +338,23 @@ describe('visibility re-check before a preview push', () => {
     await pushTaskBranch(p, task('v3'), deps);
     expect(push).toHaveBeenCalledTimes(2);
     expect(visibility).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('worktreePushNewBranches (the task branch push when its worktree is made)', () => {
+  const settings = (deploy: unknown, pushNewBranches?: boolean) => ({ deploy, ...(pushNewBranches === undefined ? {} : { pushNewBranches }) }) as never;
+  it('a public repository (or one of unknown visibility) gets no task branch pushed', () => {
+    expect(worktreePushNewBranches(settings({ enabled: true, repo: { ...repo, public: true } }), undefined)).toBe(false);
+    const { public: _p, ...unknown } = repo;
+    expect(worktreePushNewBranches(settings({ enabled: true, repo: unknown }), undefined)).toBe(false);
+    expect(worktreePushNewBranches(settings({ enabled: true, repo: { ...repo, public: true } }), true)).toBe(false);
+  });
+  it('otherwise the task option, then the project setting (default on)', () => {
+    expect(worktreePushNewBranches(settings({ enabled: true, repo }), undefined)).toBe(true);
+    expect(worktreePushNewBranches(settings(undefined), undefined)).toBe(true);
+    expect(worktreePushNewBranches(settings({ enabled: false, repo: { ...repo, public: true } }), undefined)).toBe(true);
+    expect(worktreePushNewBranches(settings(undefined, false), undefined)).toBe(false);
+    expect(worktreePushNewBranches(settings(undefined, false), true)).toBe(true);
+    expect(worktreePushNewBranches(undefined, undefined)).toBe(true);
   });
 });
