@@ -1,5 +1,5 @@
 /**
- * Deploy → Environment: set up CI (the GitHub repository steps), what the owner must do, what
+ * Deploy → Setup: set up CI (the GitHub repository steps), what the owner must do, what
  * exists (the repository) and the last push of main after a merge.
  */
 import { useState } from 'react';
@@ -13,7 +13,8 @@ import type {
 import { Button } from '../ui/button';
 import { NeededFromYou } from './NeededFromYou';
 import { Notice, Row, Section } from './parts';
-import type { DeployEnv } from './useDeployEnv';
+import { isCiSetUp, type DeployEnv } from './useDeployEnv';
+import { SecretsSection } from './SecretsSection';
 import { formatRelative, LinkButton, StatusMark, useDeployErrorText } from './status';
 
 /** Push failures with their own text; any other kind uses the shared deploy error text. */
@@ -26,7 +27,8 @@ function stepStatus(
   at: { current?: DeploySetupStep; running: boolean; failed: boolean; waiting: boolean; settings: DeployProjectSettings | null }
 ): GraphNodeStatus | 'attention' {
   if (step === 'push' && at.settings?.repo && !at.settings.repo.createdByApp) return 'skipped';
-  if (at.current === 'done' || (!at.running && at.settings?.enabled)) return 'success';
+  // A repository is recorded but the last run stopped before 'done': that run's step decides
+  if (at.current === 'done' || (!at.running && !at.current && isCiSetUp(at.settings))) return 'success';
   // Before 'repo' setup checks the accounts: shown as the first step
   const current = STEPS.indexOf(at.current ?? 'repo');
   const index = STEPS.indexOf(step);
@@ -45,7 +47,7 @@ export interface EnvironmentTabProps {
   env: DeployEnv;
 }
 
-export function EnvironmentTab({ env, onConnectGitHub }: EnvironmentTabProps) {
+export function EnvironmentTab({ projectId, env, onConnectGitHub }: EnvironmentTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
   const errorText = useDeployErrorText();
   const pushErrorText = (kind: string | undefined): string =>
@@ -66,7 +68,7 @@ export function EnvironmentTab({ env, onConnectGitHub }: EnvironmentTabProps) {
   const open = (n: NeededItem) => !acknowledged.has(n.id);
   const needed: NeededItem[] = (lastSetup?.needed ?? []).filter(open);
 
-  const setupDone = !!settings?.enabled;
+  const setupDone = isCiSetUp(settings);
   const setupFailed = !!lastSetup?.error;
   const setupWaiting = (lastSetup?.needed ?? []).some((n) => n.kind !== 'public-repo-warning' && open(n));
   const showSetup = !setupDone || setupRunning || (lastSetup && lastSetup.step !== 'done');
@@ -114,6 +116,8 @@ export function EnvironmentTab({ env, onConnectGitHub }: EnvironmentTabProps) {
         onAcknowledge={(id) => setAcknowledged((s) => new Set([...s, id]))}
         onConnectGitHub={onConnectGitHub}
       />
+
+      {setupDone && <SecretsSection projectId={projectId} />}
 
       {settings?.repo && (
         <Section id="deploy-exists-title" title={t('deploy:exists.title')}>

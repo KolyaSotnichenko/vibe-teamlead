@@ -78,7 +78,7 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     success: true,
     data: { installed: true, repositorySelection: 'all', repoReachable: true } as Record<string, unknown>,
   }));
-  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal, getGitHubAppAccess, vercel: { status: vi.fn(async () => ({ success: true, data: { connected: false } })) } };
+  (window as unknown as { electronAPI: unknown }).electronAPI = { deploy, openExternal, getGitHubAppAccess };
   const view = render(<DeployPage projectId="p1" {...props} />);
   const emit = (s: DeployRunsState) => act(() => push?.(s));
   return { deploy, emit, view, unsubscribe, openExternal, getGitHubAppAccess };

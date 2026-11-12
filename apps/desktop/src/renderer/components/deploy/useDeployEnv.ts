@@ -3,7 +3,7 @@
  * and the push after a merge, kept live through main's events.
  */
 import { useCallback, useEffect, useState } from 'react';
-import type { DeployEnvState, DeploySetupState, DeploySetupStep } from '../../../shared/types/deploy';
+import type { DeployEnvState, DeployProjectSettings, DeploySetupState, DeploySetupStep } from '../../../shared/types/deploy';
 
 export interface DeployEnv {
   /** null until the first answer from main. */
@@ -14,6 +14,11 @@ export interface DeployEnv {
   requestFailed: boolean;
   refresh: () => Promise<void>;
   setUp: () => Promise<DeploySetupState | undefined>;
+}
+
+/** CI is set up when a repository is recorded (the same rule as main's `isCiSetUp`). */
+export function isCiSetUp(settings: DeployProjectSettings | null | undefined): boolean {
+  return !!settings?.repo;
 }
 
 const EMPTY: DeployEnvState = { settings: null, setupRunning: false };

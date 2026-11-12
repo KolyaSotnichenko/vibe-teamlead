@@ -3,7 +3,7 @@
   "tabs": {
     "runs": "Runs",
     "readiness": "Readiness",
-    "environment": "Environment"
+    "environment": "Setup"
   },
   "loading": "Loading GitHub Actions runs…",
   "empty": {
@@ -64,21 +64,17 @@
     "preparing": "GitHub is still preparing this log"
   },
   "setup": {
-    "title": "Set up deploy",
-    "description": "Vibe Teamlead creates a private GitHub repository if the project has none, pushes the main branch, and connects it to a Vercel project. Every merge into main then goes to production.",
-    "cta": "Set up deploy",
-    "team": "Vercel account",
-    "personal": "Personal ({{name}})",
-    "personalNoName": "Personal",
-    "start": "Set up deploy",
+    "title": "Set up CI",
+    "description": "Vibe Teamlead creates a private GitHub repository if the project has none and pushes the main branch. GitHub Actions then checks every change in CI.",
+    "cta": "Set up CI",
+    "start": "Set up CI",
     "running": "Setting up…",
     "retry": "Try again",
     "steps": "Setup steps",
     "step": {
       "repo": "GitHub repository",
       "push": "Push the main branch",
-      "vercel": "Vercel project",
-      "done": "Deploy on"
+      "done": "CI is on"
     }
   },
   "needed": {
@@ -117,6 +113,14 @@
     "private": "Private",
     "vercel": "Vercel project",
     "database": "Database"
+  },
+  "secrets": {
+    "title": "Secrets",
+    "description": "Secret values the CI workflow reads, saved as GitHub Actions secrets. Only names are shown: values can’t be read back.",
+    "none": "No secrets yet.",
+    "add": "Add a secret",
+    "replace": "Replace {{name}}",
+    "replaceShort": "Replace"
   },
   "database": {
     "title": "Database",
@@ -226,15 +230,13 @@
     }
   },
   "checklist": {
-    "title": "Before deploy works",
+    "title": "Before CI works",
     "github": "Sign in to GitHub",
     "app": "Install the Vibe Teamlead GitHub App",
-    "vercel": "Connect Vercel",
-    "setUp": "Set up deploy for this project",
+    "setUp": "Set up CI for this project",
     "actions": {
       "github": "Sign in",
-      "app": "Install",
-      "vercel": "Connect"
+      "app": "Install"
     }
   },
   "readiness": {

@@ -93,7 +93,7 @@ export function useGitHubErrorText() {
   };
 }
 
-/** Error kinds the Environment tab has words for (setup, variables, database, Vercel, GitHub, the push after a merge). */
+/** Error kinds the Environment tab has words for (setup, secrets, GitHub, the push after a merge). */
 const DEPLOY_ERROR_KINDS: ReadonlySet<string> = new Set([
   'no-connection',
   'permissions',

@@ -20,7 +20,7 @@ import { JobPanel } from './JobPanel';
 import { EnvironmentTab } from './EnvironmentTab';
 import { ReadinessTab } from './ReadinessTab';
 import { DeployChecklist } from './DeployChecklist';
-import { useDeployEnv } from './useDeployEnv';
+import { isCiSetUp, useDeployEnv } from './useDeployEnv';
 import { useReadiness } from './useReadiness';
 import { isCiBlocker, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
@@ -103,7 +103,7 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
   const readiness = useReadiness(projectId);
   // Code and workflow blockers only (an old saved result's unsupported ones are not counted)
   const blockerCount = readiness?.result?.blockers.filter(isCiBlocker).length ?? 0;
-  const notSetUp = !!env.state && !env.state.settings?.enabled;
+  const notSetUp = !!env.state && !isCiSetUp(env.state.settings);
 
   const runs = state?.runs ?? [];
   // A picked run that dropped off the list falls back to the poller's choice, as in the main process
@@ -268,7 +268,7 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
       {tab === 'readiness' && (
         <div role="tabpanel" id="deploy-panel-readiness" aria-labelledby="deploy-tab-readiness" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
-          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} isSetUp={!!env.state?.settings?.repo} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
+          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} isSetUp={isCiSetUp(env.state?.settings)} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
         </div>
       )}
       {tab === 'environment' && (

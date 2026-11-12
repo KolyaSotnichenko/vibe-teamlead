@@ -47,6 +47,7 @@ const setUpSettings: DeployProjectSettings = {
 interface Opts {
   env?: Partial<DeployEnvState>;
   setUp?: (projectId: string) => Promise<unknown>;
+  secrets?: string[];
 }
 
 function setup(opts: Opts = {}) {
@@ -65,6 +66,8 @@ function setup(opts: Opts = {}) {
     readinessState: vi.fn(async () => ({ success: true, data: { scanning: false, tasks: {} } })),
     onReadinessUpdate: vi.fn(() => () => undefined),
     onSetupProgress: vi.fn((cb: (p: DeploySetupProgress) => void) => { progress = cb; return () => undefined; }),
+    listSecrets: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true, names: opts.secrets ?? [] } })),
+    setSecret: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ success: true, data: { ok: true } })),
     onPushResult: vi.fn((cb: (r: DeployPushResult) => void) => { pushResult = cb; return () => undefined; }),
   };
   const openExternal = vi.fn(async () => undefined);
@@ -247,5 +250,80 @@ describe('Push after merge', () => {
     const notice = await within(panel).findByText(/^deploy:push\.failed/);
     expect(notice).toHaveTextContent(text);
     expect(notice).not.toHaveTextContent('RAW');
+  });
+});
+
+describe('Setup rule: a recorded repository means set up', () => {
+  it('a repository without the old enabled flag counts as set up (no steps, secrets shown)', async () => {
+    setup({ env: { settings: { enabled: false, repo: { owner: 'acme', repo: 'shop', createdByApp: true, public: false } } } });
+    const panel = await openEnvironment();
+    expect(within(panel).queryByRole('button', { name: 'deploy:setup.start' })).not.toBeInTheDocument();
+    expect(await within(panel).findByText('deploy:secrets.title')).toBeInTheDocument();
+  });
+
+  it('enabled without a repository is not set up', async () => {
+    setup({ env: { settings: { enabled: true } } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByRole('button', { name: 'deploy:setup.start' })).toBeInTheDocument();
+    expect(within(panel).queryByText('deploy:secrets.title')).not.toBeInTheDocument();
+  });
+});
+
+describe('Secrets', () => {
+  it('not set up: no secrets section and no listing', async () => {
+    const h = setup();
+    const panel = await openEnvironment();
+    await within(panel).findByRole('button', { name: 'deploy:setup.start' });
+    expect(within(panel).queryByText('deploy:secrets.title')).not.toBeInTheDocument();
+    expect(h.deploy.listSecrets).not.toHaveBeenCalled();
+  });
+
+  it('lists the names, never values', async () => {
+    setup({ env: { settings: setUpSettings }, secrets: ['API_KEY', 'DB_URL'] });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByText('API_KEY')).toBeInTheDocument();
+    expect(within(panel).getByText('DB_URL')).toBeInTheDocument();
+  });
+
+  it('none yet: says so', async () => {
+    setup({ env: { settings: setUpSettings } });
+    const panel = await openEnvironment();
+    expect(await within(panel).findByText('deploy:secrets.none')).toBeInTheDocument();
+  });
+
+  it('listing failed: shows the error words', async () => {
+    const h = setup({ env: { settings: setUpSettings } });
+    h.deploy.listSecrets.mockResolvedValue({ success: true, data: { ok: false, kind: 'permissions' } });
+    cleanup();
+    h.deploy.state.mockResolvedValue({ success: true, data: { settings: setUpSettings, setupRunning: false } });
+    render(<DeployPage projectId="p1" />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'deploy:tabs.environment' }));
+    const panel = await screen.findByRole('tabpanel');
+    expect(await within(panel).findByText('deploy:env.errors.permissions')).toBeInTheDocument();
+  });
+
+  it('adds a secret through the dialog and refreshes the list', async () => {
+    const h = setup({ env: { settings: setUpSettings }, secrets: ['API_KEY'] });
+    const panel = await openEnvironment();
+    await within(panel).findByText('API_KEY');
+    h.deploy.listSecrets.mockResolvedValue({ success: true, data: { ok: true, names: ['API_KEY', 'NEW_ONE'] } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'deploy:secrets.add' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('deploy:secretDialog.name'), { target: { value: 'NEW_ONE' } });
+    fireEvent.change(within(dialog).getByLabelText('deploy:secretDialog.value'), { target: { value: 'hunter2' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'deploy:secretDialog.save' }));
+    await waitFor(() => expect(h.deploy.setSecret).toHaveBeenCalledWith('p1', 'NEW_ONE', 'hunter2'));
+    expect(await within(panel).findByText('NEW_ONE')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByText('hunter2')).not.toBeInTheDocument();
+  });
+
+  it('replace on a name opens the dialog with that name', async () => {
+    setup({ env: { settings: setUpSettings }, secrets: ['API_KEY'] });
+    const panel = await openEnvironment();
+    await within(panel).findByText('API_KEY');
+    fireEvent.click(within(panel).getByRole('button', { name: /deploy:secrets\.replace/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('deploy:secretDialog.name')).toHaveValue('API_KEY');
   });
 });
