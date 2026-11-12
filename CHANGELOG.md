@@ -2,6 +2,12 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.39 - 2026-11-12
+
+- Task cards are laid out anew: the title gets up to three lines, the status, priority and time sit in a row under the progress that wraps instead of overlapping, the preview has its own row, and the bottom strip holds only buttons. Long labels (Ukrainian ones included) are cut with an ellipsis instead of running into each other. Only urgent and high priority get a coloured chip.
+- Deploy → Readiness: tasks for blockers now wait in the queue and start as the project's parallel-task limit allows, instead of all at once. The urgent fix for a failed run on main still starts right away.
+- Variables the deployed app needs (secrets, allowed origins, cookie settings, …) are listed under Needed from you instead of becoming tasks. Before deploy is set up the list says to set it up first; after that each one has a button to add its value, and a notice says how many are still missing.
+
 ## 2.0.0-beta.38 - 2026-11-12
 
 - Previews on task cards: once deploy is set up on a private repository, each task gets its own Vercel preview. The card shows **Preview** with a spinner while it builds, **Preview ↗** when it's ready (hover shows the link and build time) and **Preview failed** when the build failed (opens Vercel's build log, or the failed run in Deploy). The task window says the same, and how to set up deploy when it isn't.
