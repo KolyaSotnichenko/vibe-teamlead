@@ -212,6 +212,7 @@ export interface TaskMetadata {
   gitlabUrl?: string;  // GitLab issue URL
   briefId?: string;  // Brief this task was imported from (briefs/<id>/)
   briefTaskKey?: string;  // Task key inside that brief's proposal
+  deployKey?: string;  // Deploy readiness blocker or run-fix key this task was created for
 
   // Classification
   category?: TaskCategory;
