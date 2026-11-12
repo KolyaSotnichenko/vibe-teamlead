@@ -17,7 +17,7 @@
     "connect": "Під’єднати GitHub",
     "permissions": "GitHub App Vibe Teamlead не може читати Actions цього репозиторію. Надайте їй доступ до репозиторію.",
     "manageAccess": "Керувати доступом на GitHub",
-    "installApp": "Установити застосунок на GitHub",
+    "installApp": "Встановити застосунок на GitHub",
     "not-found": "GitHub не знаходить цей репозиторій, або застосунок не має до нього доступу.",
     "rate-limit": "Ліміт запитів GitHub вичерпано. Пауза до {{time}}",
     "rateLimitNoTime": "Ліміт запитів GitHub вичерпано. Поки що пауза",
@@ -54,7 +54,7 @@
     "steps": "Кроки",
     "noSteps": "Кроків ще немає",
     "fullLog": "Повний лог на GitHub",
-    "noDetails": "Хостинг ще нічого не повідомив"
+    "noDetails": "GitHub ще нічого не повідомив"
   },
   "log": {
     "label": "Лог {{job}}",
@@ -149,7 +149,7 @@
     "setUp": "Налаштувати CI для цього проєкту",
     "actions": {
       "github": "Увійти",
-      "app": "Установити"
+      "app": "Встановити"
     }
   },
   "readiness": {

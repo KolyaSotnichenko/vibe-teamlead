@@ -54,7 +54,7 @@
     "steps": "Steps",
     "noSteps": "No steps yet",
     "fullLog": "Full log on GitHub",
-    "noDetails": "No details from the host yet"
+    "noDetails": "No details from GitHub yet"
   },
   "log": {
     "label": "Log of {{job}}",

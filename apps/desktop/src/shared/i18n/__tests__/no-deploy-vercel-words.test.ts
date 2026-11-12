@@ -59,3 +59,31 @@ describe('no Vercel or Deploy words in the UI and docs', () => {
     expect(bad).toEqual([]);
   });
 });
+
+describe('CI wording (final review)', () => {
+  const locale = (lang: string, file: string) => JSON.parse(readFileSync(join(LOCALES_DIR, lang, file), 'utf-8'));
+  const doc = (lang: string, file: string) => readFileSync(join(DOCS_DIR, lang, file), 'utf-8');
+
+  it('a job without details waits for GitHub, not a host', () => {
+    expect(locale('en', 'deploy.json').job.noDetails).toBe('No details from GitHub yet');
+    expect(locale('uk', 'deploy.json').job.noDetails).toBe('GitHub ще нічого не повідомив');
+  });
+
+  it('uk says "Встановити" for installing the app, never "Установити"', () => {
+    const texts = strings(locale('uk', 'deploy.json'), '').map(([, text]) => text);
+    expect(texts.filter((text) => /Установити/.test(text))).toEqual([]);
+  });
+
+  it('uk docs: the public repository is a notice, and the task card line says «задачі»', () => {
+    expect(doc('uk', '18-ci.md')).not.toContain('зважити, що репозиторій публічний');
+    expect(doc('uk', '18-ci.md')).toContain('повідомлення, що репозиторій публічний');
+    expect(doc('uk', '02-screens.md')).toContain('статус CI гілки задачі');
+  });
+
+  it('18-ci.md: the permissions list has Administration and no Commit statuses', () => {
+    for (const lang of ['en', 'uk']) {
+      expect(doc(lang, '18-ci.md')).toContain('Administration');
+      expect(doc(lang, '18-ci.md')).not.toContain('Commit statuses');
+    }
+  });
+});
