@@ -10,6 +10,8 @@ vi.mock('../branch-push', () => ({
 import { previewPushAllowed, lastBranchPush } from '../branch-push';
 import { invalidatePreview, previewState, type PreviewDeps } from '../preview-state';
 
+const NOW_ISO = new Date(1000).toISOString();
+const NOW_ISO2 = new Date(1001).toISOString();
 const project = { id: 'p1', path: '/p' } as unknown as Project;
 const task = (over: Partial<Task> = {}) =>
   ({ id: 't1', specId: '001-x', status: 'in_progress', ...over }) as unknown as Task;
@@ -31,7 +33,7 @@ function deps(over: Partial<{ runs: DeployRun[]; jobs: DeployJob[]; fail: boolea
 beforeEach(() => {
   invalidatePreview('t1');
   vi.mocked(previewPushAllowed).mockReturnValue({ allowed: true });
-  vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: 'x' });
+  vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: NOW_ISO });
 });
 
 const run = (id: number, sha: string, status: DeployRun['status'] = 'completed', conclusion?: string): DeployRun =>
@@ -53,7 +55,7 @@ describe('previewState (CI status of the pushed sha)', () => {
     expect(await previewState(project, task(), d)).toEqual({ state: 'not-pushed' });
     vi.mocked(lastBranchPush).mockReturnValue({ at: 'x', error: { kind: 'auth' } });
     expect(await previewState(project, task(), d)).toEqual({ state: 'not-pushed', pushError: 'auth' });
-    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: 'x' });
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: NOW_ISO });
     expect(await previewState(project, task({ status: 'backlog' }), d)).toEqual({ state: 'not-pushed' });
     expect(runs).not.toHaveBeenCalled();
   });
@@ -120,7 +122,7 @@ describe('previewState (CI status of the pushed sha)', () => {
   });
 
   it('a refused push keeps the state with pushError', async () => {
-    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: 'x', error: { kind: 'conflict' } });
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: NOW_ISO, error: { kind: 'conflict' } });
     expect(await previewState(project, task(), deps().d)).toEqual({ state: 'waiting', pushError: 'conflict' });
   });
 
@@ -171,7 +173,7 @@ describe('cache', () => {
     const { d, runs } = deps();
     d.now = () => t;
     await previewState(project, task(), d);
-    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h2', at: 'y' });
+    vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h2', at: NOW_ISO2 });
     await previewState(project, task(), d);
     expect(runs).toHaveBeenCalledTimes(2);
     invalidatePreview('t1');
@@ -215,6 +217,16 @@ describe('settling when no run comes', () => {
     vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h2', at: new Date(t).toISOString() });
     expect(await previewState(project, task(), d)).toEqual({ state: 'waiting' });
     expect(runs).toHaveBeenCalledTimes(2);
+  });
+
+  it('a push without a valid time settles (no run)', async () => {
+    for (const at of [undefined, 'garbage']) {
+      invalidatePreview('t1');
+      vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at } as never);
+      expect(await previewState(project, task(), deps().d)).toEqual({ state: 'waiting', settled: true });
+      invalidatePreview('t1');
+      expect(await previewState(project, task(), deps({ fail: true }).d)).toEqual({ state: 'waiting', settled: true });
+    }
   });
 
   it('a GitHub error: waiting within 10 minutes, settled after', async () => {

@@ -44,7 +44,8 @@ export function invalidatePreview(taskId: string): void {
 /** True when the push is older than the point after which a missing run is not expected any more. */
 function pushIsOld(pushedAt: string | undefined, now: number): boolean {
   const at = Date.parse(pushedAt ?? '');
-  return !Number.isNaN(at) && now - at > SETTLE_AFTER_MS;
+  // a push without a usable time can never be told young: settle rather than poll forever
+  return Number.isNaN(at) || now - at > SETTLE_AFTER_MS;
 }
 
 async function compute(project: Project, branch: string, deps: PreviewDeps, pushedSha: string, old: boolean): Promise<Core | null> {
