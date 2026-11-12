@@ -54,7 +54,8 @@ describe('readiness store', () => {
 
   it('reads a result without services, and skips malformed owner items and blockers', () => {
     mkdirSync(path.dirname(file()), { recursive: true });
-    writeFileSync(file(), JSON.stringify({ ...result, owner: [null, 'x', { kind: 'weird', message: 'm' }, ...result.owner], blockers: [null, ...result.blockers] }));
+    const bad = [null, 'x', { kind: 'weird', message: 'm' }, { kind: 'other' }, { kind: 'other', message: 7 }, { kind: 'secret', variable: 7, message: 'm' }];
+    writeFileSync(file(), JSON.stringify({ ...result, owner: [...bad, ...result.owner], blockers: [null, ...result.blockers] }));
     expect(readReadiness(dir)).toEqual(result);
   });
 

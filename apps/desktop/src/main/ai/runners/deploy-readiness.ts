@@ -20,6 +20,8 @@ export interface ScanInput {
   commit?: string;
   /** The repository's GitHub Actions secret names; never values */
   secretNames: string[];
+  /** The secrets the project's workflows read (`secrets.NAME`, GitHub's own left out): the only names a secret item may have */
+  workflowSecretNames: string[];
   /** `sha`: the commit the run was of (the scan gets the run only when it is the commit scanned) */
   lastMainRun?: { conclusion: string; runId: number; failedJobs: string[]; workflowPath?: string; sha?: string };
   /** Blockers already known (the saved scan's, open tasks'): a problem found again keeps its key */
@@ -57,11 +59,14 @@ const DETAIL_CHARS = 2000;
 const OWNER_MESSAGE_CHARS = 500;
 
 /**
- * A code blocker that only says variables aren't configured (for example "Required API env vars
- * are not configured"): only the owner can supply a value, as a GitHub Actions secret. The prompt
- * makes those owner `secret` items; this catches the ones that slip through. Matched on the title only, where the missing wording must apply to env vars, secrets
- * or a named UPPER_SNAKE variable: "Env var validation is missing" and "Undefined variable breaks
- * the build" don't match. Workflow blockers are left alone (a CI gap is often an agent's fix).
+ * A code blocker that only says variables aren't configured (for example "Required secrets are
+ * not configured"): when every name it lists is a secret a workflow reads (`secrets.NAME`) and
+ * GitHub lacks, only the owner can supply the values, so it becomes owner `secret` items. Any
+ * other name (NODE_ENV, an app setting no workflow passes as a secret) keeps it a blocker: an
+ * agent can fix the code or the workflow. Matched on the title only, where the missing wording
+ * must apply to env vars, secrets or a named UPPER_SNAKE variable: "Env var validation is
+ * missing" and "Undefined variable breaks the build" don't match. Workflow blockers are left
+ * alone (a CI gap is often an agent's fix).
  */
 const SNAKE = '[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+';
 const MISSING = '(?:(?:are|is)\\s+)?(?:still\\s+)?(?:not\\s+(?:set|configured|defined|provided)|missing|unset|unconfigured)\\b';
@@ -80,21 +85,28 @@ const VARIABLE_NAME = new RegExp(`\\b${SNAKE}\\b`, 'g');
 /** Set by GitHub Actions itself (GITHUB_TOKEN and the like), never by the owner; GitHub refuses such secret names */
 const PLATFORM_VARIABLE = (name: string) => name.startsWith('GITHUB_');
 
-/** The variables an "unconfigured variables" code blocker names (the title's, else the detail's), or undefined when it isn't one or names none. */
+/**
+ * The variables an "unconfigured variables" code blocker names (the title's, else the detail's;
+ * GitHub's own left out), or undefined when it isn't one or names none.
+ */
 function unconfiguredVariables(blocker: { kind: string; title: string; detail: string }): string[] | undefined {
   if (blocker.kind !== 'code') return undefined;
   if (!UNCONFIGURED_VARIABLES.some((pattern) => pattern.test(blocker.title))) return undefined;
   const fromTitle = blocker.title.match(VARIABLE_NAME) ?? [];
-  const names = [...new Set(fromTitle.length ? fromTitle : (blocker.detail.match(VARIABLE_NAME) ?? []))];
+  const names = [...new Set(fromTitle.length ? fromTitle : (blocker.detail.match(VARIABLE_NAME) ?? []))].filter((name) => !PLATFORM_VARIABLE(name));
   return names.length ? names : undefined;
 }
 
 /**
- * The model's owner items, cleaned: a secret by its name as GitHub stores it (upper case), once;
- * none GitHub has already or sets itself; a secret without a name GitHub accepts is an `other`
- * item (its message still says what is needed). Messages clipped. Pure.
+ * The model's owner items, cleaned: a secret by its name as GitHub stores it (upper case), once,
+ * and only when a workflow reads it and GitHub lacks it; any other secret item is dropped (no
+ * workflow needs it, so there is nothing to ask the owner for). Messages clipped. Pure.
  */
-function ownerItems(items: Array<{ kind: 'secret' | 'other'; variable?: string; message: string }>, configured: ReadonlySet<string>): ReadinessOwnerItem[] {
+function ownerItems(
+  items: Array<{ kind: 'secret' | 'other'; variable?: string; message: string }>,
+  configured: ReadonlySet<string>,
+  read: ReadonlySet<string>,
+): ReadinessOwnerItem[] {
   const out: ReadinessOwnerItem[] = [];
   for (const item of items) {
     const message = clip(item.message, OWNER_MESSAGE_CHARS);
@@ -103,8 +115,8 @@ function ownerItems(items: Array<{ kind: 'secret' | 'other'; variable?: string; 
       continue;
     }
     const name = (item.variable ?? '').trim().toUpperCase();
-    if (PLATFORM_VARIABLE(name) || configured.has(name) || out.some((o) => o.kind === 'secret' && o.variable === name)) continue;
-    out.push(isValidSecretName(name) ? { kind: 'secret', variable: name, message } : { kind: 'other', message });
+    if (!read.has(name) || !isValidSecretName(name) || configured.has(name) || out.some((o) => o.kind === 'secret' && o.variable === name)) continue;
+    out.push({ kind: 'secret', variable: name, message });
   }
   return out;
 }
@@ -121,6 +133,7 @@ export function readinessPrompt(input: ScanInput): string {
     `The project root is ${input.projectPath}.`,
     input.commit ? `Scan the code at commit ${input.commit}.` : 'Scan the code as it is checked out.',
     `GitHub Actions secret names the repository already has: ${input.secretNames.length ? input.secretNames.join(', ') : 'none'}.`,
+    `Secrets the workflows read: ${input.workflowSecretNames.length ? input.workflowSecretNames.join(', ') : 'none'}.`,
   ];
   const run = input.lastMainRun;
   if (run) {
@@ -163,21 +176,20 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
   if (!result.output) throw new Error('The readiness scan returned no result. Try again.');
 
   const configured = new Set(input.secretNames.map((name) => name.toUpperCase()));
-  const owner = ownerItems(result.output.owner, configured);
+  // GitHub's own (GITHUB_*) are never asked for, even if a workflow reads one
+  const read = new Set(input.workflowSecretNames.map((name) => name.toUpperCase()).filter((name) => !PLATFORM_VARIABLE(name)));
+  const owner = ownerItems(result.output.owner, configured, read);
   const candidates: Array<{ kind: ReadinessBlocker['kind']; subject: string; title: string; detail: string; sameAs?: string }> = [];
   for (const raw of result.output.blockers) {
-    // Only the owner can supply a value: a secret item they save to GitHub, not a task
+    // Only the owner can supply a secret's value: secret items they save to GitHub, not a task.
+    // Only when every name is a secret a workflow reads that GitHub lacks; otherwise it stays a blocker.
     const variables = unconfiguredVariables(raw);
-    if (variables) {
-      let added = 0;
+    if (variables?.every((name) => read.has(name) && !configured.has(name))) {
       for (const name of variables) {
-        if (configured.has(name) || PLATFORM_VARIABLE(name) || owner.some((item) => item.variable === name)) continue;
+        if (owner.some((item) => item.variable === name)) continue;
         owner.push({ kind: 'secret', variable: name, message: clip(`CI needs the secret ${name}.`, OWNER_MESSAGE_CHARS) });
-        added++;
       }
-      // Dropped only when the owner now has every variable it names; otherwise it stays a blocker
-      const listed = variables.every((name) => owner.some((item) => item.variable === name));
-      if (added > 0 || listed) continue;
+      continue;
     }
     // Clipped after parsing: a long answer is cut, it doesn't fail the scan
     candidates.push({

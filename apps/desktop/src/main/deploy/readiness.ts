@@ -10,6 +10,7 @@ import type { ScanInput } from '../ai/runners/deploy-readiness';
 import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus, type GaveUp, gaveUpKeys, openDeployBlockers, resetMissingBlockers } from './deploy-tasks';
 import { resolveMainBranch } from './push-after-merge';
 import { type KnownBlocker, readReadiness, writeReadiness } from './readiness-store';
+import { workflowSecretNames } from './workflow-secrets';
 
 export type ReadinessReason = 'open' | 'check-again' | 'merge';
 
@@ -20,6 +21,8 @@ export interface ReadinessDeps {
   lastMainRun(project: Project): Promise<ScanInput['lastMainRun']>;
   /** The repository's GitHub Actions secret names (names only) */
   secretNames(project: Project): Promise<string[]>;
+  /** The secrets the project's workflows read (`secrets.NAME`); read from its .github/workflows by default. */
+  workflowSecretNames?(projectPath: string): Promise<string[]>;
   headCommit(projectPath: string): Promise<string | undefined>;
   tasks: DeployTaskDeps;
   emit(projectId: string, state: ReadinessState): void;
@@ -92,8 +95,9 @@ export function createReadiness(deps: ReadinessDeps) {
     emit(project);
     let result: ReadinessResult;
     try {
-      const [secretNames, commit, lastMainRun] = await Promise.all([
+      const [secretNames, workflowSecrets, commit, lastMainRun] = await Promise.all([
         deps.secretNames(project).catch(() => [] as string[]),
+        (deps.workflowSecretNames ?? workflowSecretNames)(project.path).catch(() => [] as string[]),
         deps.headCommit(project.path).catch(() => undefined),
         deps.lastMainRun(project).catch(() => undefined),
       ]);
@@ -103,6 +107,7 @@ export function createReadiness(deps: ReadinessDeps) {
         ...(known.length ? { knownBlockers: known } : {}),
         ...(commit ? { commit } : {}),
         secretNames,
+        workflowSecretNames: workflowSecrets,
         // Only a run of the commit being scanned says something about it (after a merge, the last run is of the commit before)
         ...(lastMainRun && commit && lastMainRun.sha === commit ? { lastMainRun } : {}),
       });

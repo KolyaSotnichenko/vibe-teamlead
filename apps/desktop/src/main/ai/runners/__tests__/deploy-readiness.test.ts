@@ -8,6 +8,8 @@ const input: ScanInput = {
   projectPath: '/tmp/proj',
   commit: 'abc123',
   secretNames: ['DATABASE_URL', 'STRIPE_SECRET_KEY'],
+  // What `secrets.NAME` in the project's workflows reads (DATABASE_URL and STRIPE_SECRET_KEY are in GitHub already)
+  workflowSecretNames: ['SENDGRID_KEY', 'CSRF_SECRET', 'WEB_ORIGIN', 'SESSION_COOKIE_SECURE', 'API_BASE_URL', 'NPM_TOKEN', 'DATABASE_URL', 'STRIPE_SECRET_KEY'],
   lastMainRun: { conclusion: 'failure', runId: 42, failedJobs: ['test'], workflowPath: '.github/workflows/ci.yml' },
 };
 
@@ -95,7 +97,7 @@ describe('runReadinessScan', () => {
     expect(Object.keys(ReadinessScanSchema.shape)).not.toContain('services');
   });
 
-  it('drops secret items GitHub has already, GitHub\'s own and repeats; a secret without a usable name becomes other', async () => {
+  it('keeps a secret item only for a name a workflow reads that GitHub lacks, once', async () => {
     const out = {
       ...output,
       owner: [
@@ -105,6 +107,7 @@ describe('runReadinessScan', () => {
         { kind: 'secret', variable: 'sendgrid_key', message: 'repeat, other case' },
         { kind: 'secret', variable: 'npm_token', message: 'lower case in the workflow' },
         { kind: 'secret', message: 'no name' },
+        { kind: 'secret', variable: 'NODE_ENV', message: 'no workflow reads it' },
         { kind: 'other', message: 'Turn on billing' },
       ],
     };
@@ -112,7 +115,6 @@ describe('runReadinessScan', () => {
     expect(result.owner).toEqual([
       { kind: 'secret', variable: 'SENDGRID_KEY', message: 'a' },
       { kind: 'secret', variable: 'NPM_TOKEN', message: 'lower case in the workflow' },
-      { kind: 'other', message: 'no name' },
       { kind: 'other', message: 'Turn on billing' },
     ]);
   });
@@ -150,29 +152,52 @@ describe('runReadinessScan', () => {
     expect(system).not.toContain('an env var that is read but never configured');
   });
 
-  it('turns a blocker that only says variables are not configured into owner secret items', async () => {
+  it('turns a code blocker into secret items when every name it lists is a secret a workflow reads', async () => {
     const out = {
       ...output,
       blockers: [
-        { kind: 'code', subject: 'api env vars', title: 'Required API env vars are not configured', detail: 'apps/api/src/config.ts reads CSRF_SECRET, WEB_ORIGIN, SESSION_COOKIE_SECURE and DATABASE_URL; NODE_ENV and VERCEL_URL too.' },
-        { kind: 'workflow', subject: 'ci secrets', title: 'Missing secrets for the deploy job', detail: 'deploy.yml needs SENDGRID_KEY.' },
-        { kind: 'code', subject: 'api client base url', title: 'Hardcoded localhost', detail: 'src/api.ts uses localhost; read API_BASE_URL instead.' },
-        { kind: 'code', subject: 'env validation', title: 'Missing env validation crashes the build', detail: 'zod schema in env.ts throws on MY_FLAG.' },
+        { kind: 'code', subject: 'ci secrets', title: 'Required secrets are not configured', detail: 'ci.yml passes CSRF_SECRET, WEB_ORIGIN and SESSION_COOKIE_SECURE to the tests.' },
+        { kind: 'workflow', subject: 'ci secrets', title: 'Missing secrets for the e2e job', detail: 'ci.yml needs SENDGRID_KEY.' },
       ],
     };
     const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
     // Workflow blockers are left alone: a CI gap is often a fix an agent can make
-    expect(result.blockers.map((b) => b.title)).toEqual(['Missing secrets for the deploy job', 'Hardcoded localhost', 'Missing env validation crashes the build']);
-    // In GitHub already (DATABASE_URL) and already listed (SENDGRID_KEY) are not added; only GITHUB_ names are the platform's
+    expect(result.blockers.map((b) => b.title)).toEqual(['Missing secrets for the e2e job']);
     expect(result.owner.map((o) => [o.kind, o.variable])).toEqual([
       ['secret', 'SENDGRID_KEY'],
       ['secret', 'CSRF_SECRET'],
       ['secret', 'WEB_ORIGIN'],
       ['secret', 'SESSION_COOKIE_SECURE'],
-      ['secret', 'NODE_ENV'],
-      ['secret', 'VERCEL_URL'],
     ]);
     expect(result.owner[1].message).toBe('CI needs the secret CSRF_SECRET.');
+  });
+
+  it('keeps the code blocker when a name it lists is not read by a workflow, or is in GitHub already', async () => {
+    const out = {
+      ...output,
+      blockers: [
+        // NODE_ENV and VERCEL_URL: no workflow reads them as secrets; an agent can fix the code
+        { kind: 'code', subject: 'api env vars', title: 'Required API env vars are not configured', detail: 'config.ts reads CSRF_SECRET, NODE_ENV and VERCEL_URL.' },
+        // DATABASE_URL is in GitHub already
+        { kind: 'code', subject: 'db url', title: 'CSRF_SECRET and DATABASE_URL are missing', detail: 'db.ts' },
+      ],
+    };
+    const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
+    expect(result.blockers.map((b) => b.title)).toEqual(['Required API env vars are not configured', 'CSRF_SECRET and DATABASE_URL are missing']);
+    expect(result.owner.map((o) => o.variable)).toEqual(['SENDGRID_KEY']);
+  });
+
+  it('no workflow secrets read: no secret items at all, every code blocker stays', async () => {
+    const out = { ...output, blockers: [{ kind: 'code', subject: 's', title: 'CSRF_SECRET is not set', detail: 'd' }] };
+    const result = await runReadinessScan({ ...input, workflowSecretNames: [] }, { run: fakeRun(out), feature, now });
+    expect(result.blockers.map((b) => b.title)).toEqual(['CSRF_SECRET is not set']);
+    expect(result.owner).toEqual([]);
+  });
+
+  it('tells the agent which secrets the workflows read', async () => {
+    const run = fakeRun();
+    await runReadinessScan(input, { run, feature, now });
+    expect((run.mock.calls[0][0] as { prompt: string }).prompt).toContain('Secrets the workflows read: SENDGRID_KEY, CSRF_SECRET');
   });
 
   const scanBlockers = async (blockers: Array<{ title: string; detail: string }>) => {

@@ -189,6 +189,11 @@ describe('deploy environment IPC', () => {
       expect(await readiness.deps?.secretNames({ settings: { deploy: { repo: { owner: 'o', repo: 'r', createdByApp: true } } } })).toEqual(['API_KEY']);
       expect(gh.listRepoSecretNames).toHaveBeenCalledWith('o', 'r');
     });
+
+    it('follow the one set-up rule (a repository recorded): enabled alone lists none', async () => {
+      expect(await readiness.deps?.secretNames({ settings: { deploy: { enabled: true } } })).toEqual([]);
+      expect(gh.listRepoSecretNames).not.toHaveBeenCalled();
+    });
   });
 
   describe('secrets', () => {
@@ -215,11 +220,19 @@ describe('deploy environment IPC', () => {
         [42, 'v'],
         ['API_KEY', ''],
         ['API_KEY', 7],
-        ['API_KEY', 'x'.repeat(64 * 1024 + 1)],
+        ['API_KEY', 'x'.repeat(48 * 1024 + 1)],
+        // 48 KB counted in bytes: 24K two-byte letters + 1 is over
+        ['API_KEY', 'ї'.repeat(24 * 1024) + 'x'],
       ] as const) {
         expect(await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', name, value)).toEqual({ success: true, data: { ok: false, kind: 'invalid' } });
       }
       expect(gh.setRepoSecret).not.toHaveBeenCalled();
+    });
+
+    it('setSecret takes a value of exactly 48 KB', async () => {
+      setUp();
+      gh.setRepoSecret.mockResolvedValueOnce(undefined);
+      expect(await invoke(IPC_CHANNELS.DEPLOY_SET_SECRET, 'p1', 'API_KEY', 'ї'.repeat(24 * 1024))).toEqual({ success: true, data: { ok: true } });
     });
 
     it('setSecret before CI is set up says so and calls nothing', async () => {

@@ -1,7 +1,7 @@
 /**
  * Add a CI secret: a name (GitHub's rules) and a value entered once, saved as a GitHub Actions
  * secret of the project's repository through `deploy:setSecret` (main seals it for GitHub). The
- * value is never shown again: it is dropped from state once saved, on close and on unmount.
+ * value is never shown again: it is dropped from state once saved and on close (and goes with the component).
  * Used by the Readiness tab (a missing secret) and the Setup tab (add or replace).
  */
 import { useEffect, useId, useState } from 'react';
@@ -32,10 +32,9 @@ export function SecretDialog({ open, projectId, initialName, onClose, onSaved }:
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  // Closed (cancel, Escape, outside click) or unmounted: the typed value is dropped
+  // Closed (cancel, Escape, outside click): the typed value is dropped
   useEffect(() => {
     if (!open) setValue('');
-    return () => setValue('');
   }, [open]);
 
   useEffect(() => {

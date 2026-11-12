@@ -45,8 +45,8 @@ import { safeSendToRenderer } from './utils';
 
 const deploySettings = (project: Project): DeployProjectSettings => project.settings.deploy ?? { enabled: false };
 
-/** GitHub's limit for a secret value */
-const MAX_SECRET_VALUE = 48 * 1024;
+/** GitHub's limit for a secret value, in bytes */
+const MAX_SECRET_BYTES = 48 * 1024;
 
 /** The kinds a GitHub write error carries; anything else (or a free-text message) becomes `unavailable`. */
 const SECRET_ERROR_KINDS: ReadonlySet<string> = new Set(['no-connection', 'permissions', 'not-found', 'rate-limit', 'unavailable', 'conflict', 'invalid']);
@@ -199,7 +199,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     lastMainRun: (project) => findLastMainRun(project, mainRunDeps),
     // Names only: the GitHub Actions secrets of the recorded repository (none before setup)
     secretNames: async (project) => {
-      const repo = deploySettings(project).repo;
+      const repo = secretsRepo(project);
       return repo ? listRepoSecretNames(repo.owner, repo.repo) : [];
     },
     headCommit,
@@ -238,7 +238,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       if (!project) return { success: false, error: 'Project not found' };
       // The value goes only into the sealed GitHub call: never logged, stored or returned
       if (typeof name !== 'string' || !isValidSecretName(name)) return { success: true, data: { ok: false, kind: 'invalid' } };
-      if (typeof value !== 'string' || value === '' || value.length > MAX_SECRET_VALUE) return { success: true, data: { ok: false, kind: 'invalid' } };
+      if (typeof value !== 'string' || value === '' || Buffer.byteLength(value, 'utf8') > MAX_SECRET_BYTES) return { success: true, data: { ok: false, kind: 'invalid' } };
       const repo = secretsRepo(project);
       if (!repo) return { success: true, data: { ok: false, kind: 'not-set-up' } };
       try {

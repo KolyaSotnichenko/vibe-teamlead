@@ -103,6 +103,15 @@ describe('triggers', () => {
     expect(scan.mock.calls[0][0]).not.toHaveProperty('variableNames');
   });
 
+  it('passes the secrets the project\'s workflows read (none when it has no workflow)', async () => {
+    await make().scan(project(), 'check-again');
+    expect(scan.mock.calls[0][0].workflowSecretNames).toEqual([]);
+    mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true });
+    writeFileSync(path.join(dir, '.github', 'workflows', 'ci.yml'), 'env:\n  K: ${{ secrets.NPM_TOKEN }}\n');
+    await make().scan(project(), 'check-again');
+    expect(scan.mock.calls[1][0].workflowSecretNames).toEqual(['NPM_TOKEN']);
+  });
+
   it('passes the last run on main only when it ran on the commit being scanned', async () => {
     const last = { conclusion: 'failure', runId: 7, failedJobs: ['test'], sha: 'abc' };
     await make({ lastMainRun: async () => last }).scan(project(), 'check-again');

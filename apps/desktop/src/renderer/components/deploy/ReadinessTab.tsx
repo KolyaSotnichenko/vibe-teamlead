@@ -60,9 +60,18 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
     }
   }, [projectId]);
 
+  // Listed again after each check: secrets may have been added on GitHub meanwhile
+  const scannedAt = readiness?.result?.scannedAt;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scannedAt is the trigger (a new check), not a value read here
   useEffect(() => {
     if (isSetUp) void loadSecrets();
-  }, [isSetUp, loadSecrets]);
+  }, [isSetUp, loadSecrets, scannedAt]);
+
+  // A new check starts: the last "saved" note is old news
+  const checking = readiness?.scanning ?? false;
+  useEffect(() => {
+    if (checking) setSavedNote(null);
+  }, [checking]);
 
   if (!readiness) return <p className="text-sm text-muted-foreground">{t('deploy:readiness.loading')}</p>;
   const { result, scanning, error, tasks } = readiness;

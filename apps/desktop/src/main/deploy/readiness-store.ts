@@ -147,9 +147,10 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 /** A saved blocker of a kind CI readiness has; the old Deploy's `unsupported` ones are dropped. */
 const isBlocker = (b: unknown): b is ReadinessBlocker => isObject(b) && (b.kind === 'code' || b.kind === 'workflow');
 
-/** A saved owner item; the old Deploy's `variable` kind is a secret now. */
+/** A saved owner item (a string message, a string name if any); the old Deploy's `variable` kind is a secret now. */
 function ownerItem(item: unknown): ReadinessOwnerItem | null {
-  if (!isObject(item)) return null;
+  if (!isObject(item) || typeof item.message !== 'string') return null;
+  if (item.variable !== undefined && typeof item.variable !== 'string') return null;
   const kind = item.kind === 'variable' ? 'secret' : item.kind;
   if (kind !== 'secret' && kind !== 'other') return null;
   return { ...(item as unknown as ReadinessOwnerItem), kind };

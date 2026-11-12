@@ -192,6 +192,23 @@ describe('Readiness tab', () => {
     expect(document.body.innerHTML).not.toContain('v4lue');
   });
 
+  it('a new check clears the saved note and lists GitHub\'s secrets again', async () => {
+    const { deploy, emit } = setup({ result: secrets(), scanning: false, tasks: {} });
+    await openTab();
+    await waitFor(() => expect(deploy.listSecrets).toHaveBeenCalledTimes(1));
+    const item = (await screen.findByText('CSRF_SECRET')).closest('li') as HTMLElement;
+    fireEvent.click(within(item).getByRole('button', { name: 'deploy:readiness.addSecret' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('deploy:secretDialog.value'), { target: { value: 'v' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'deploy:secretDialog.save' }));
+    expect(await screen.findByText('deploy:readiness.secretSaved {"name":"CSRF_SECRET"}')).toBeInTheDocument();
+
+    emit({ result: secrets(), scanning: true, tasks: {} });
+    expect(screen.queryByText(/deploy:readiness\.secretSaved/)).toBeNull();
+    emit({ result: secrets({ scannedAt: '2026-11-12T10:00:00Z' }), scanning: false, tasks: {} });
+    await waitFor(() => expect(deploy.listSecrets).toHaveBeenCalledTimes(2));
+  });
+
   it('says nothing blocks deploy', async () => {
     setup({ result: result({ blockers: [] }), scanning: false, tasks: {} });
     await openTab();
