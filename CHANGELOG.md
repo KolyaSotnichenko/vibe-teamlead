@@ -4,9 +4,12 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.40 - 2026-11-12
 
-- Tasks: a task the app queued itself (Deploy, spec document import) now stays in Planning when you move it there, instead of coming back to the queue.
-- Deploy → Readiness: a problem found again in other words no longer becomes a second task. The check is told which blockers it already knows and says when it finds one of them again; a blocker whose task is still open is never treated as gone.
-- Deploy: when Vercel reports only through the commit's status on GitHub (no GitHub Deployments), Runs shows the deploy stage from it and task cards show the preview state ("Preview built" links to Vercel when no preview address is given).
+- Deploy is now **CI**. Vercel is gone from the app: no Vercel account, project, database or variables in Settings, onboarding or the CI page. Leftover Vercel files from earlier betas are cleaned up on start.
+- CI keeps what runs on GitHub: Runs, pushes of main after a merge and of task branches, and one fix task for a failed run on main. Setup only needs GitHub (repository, push of main). Main is pushed to the project's own repository after a merge, public ones included. Task branches go only to a private repository.
+- Task cards show their branch's CI status (running, passed, failed with a link to that run), settling 10 minutes after a push.
+- CI readiness checks what the workflow needs on a clean runner. Secrets the workflow reads are listed under Needed from you and are added as GitHub Actions secrets right from the app. A result saved by an earlier beta is checked again on first open.
+- Tasks: a task the app queued itself (CI, spec document import) now stays in Planning when you move it there, instead of coming back to the queue.
+- CI readiness: a problem found again in other words no longer becomes a second task; a blocker whose task is still open is never treated as gone.
 - A failed run on main gets no extra fix task while an open task already works on that failure; it is checked again once that task closes.
 
 ## 2.0.0-beta.39 - 2026-11-12
