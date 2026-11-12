@@ -128,6 +128,11 @@ function postError(data: string): void {
   postMessage({ type: 'error', taskId: config.taskId, data, projectId: config.projectId });
 }
 
+/** A coder or QA fixer session ended: the main process pushes the task branch for its preview. */
+function postSessionEnded(agentType: 'coder' | 'qa_fixer'): void {
+  postMessage({ type: 'session-ended', taskId: config.taskId, projectId: config.projectId, data: { agentType } });
+}
+
 function postTaskEvent(eventType: string, extra?: Record<string, unknown>): void {
   parentPort?.postMessage({
     type: 'task-event',
@@ -1000,6 +1005,8 @@ async function runBuildOrchestrator(
   });
 
   orchestrator.on('session-complete', (_result: SessionResult, phase: string) => {
+    // The coder commits after marking its subtask done: push the branch now (preview)
+    if (phase === 'coding') postSessionEnded('coder');
     // Notify the main process that a session (subtask) completed.
     // This triggers persistPlanPhaseSync → invalidateTasksCache so the frontend
     // sees updated subtask statuses in the implementation plan.
@@ -1175,6 +1182,8 @@ async function runQualityAssurance(
   });
 
   qaLoop.on('log', taskLogger(postLog, logWriter, 'qa'));
+  // The fixer committed its fixes: push the branch (preview)
+  qaLoop.on('qa-fix-complete', () => postSessionEnded('qa_fixer'));
   if (hooks) {
     qaLoop.on('qa-iteration-start', hooks.onReview);
     qaLoop.on('qa-fix-start', hooks.onFix);

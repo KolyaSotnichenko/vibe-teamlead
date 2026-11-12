@@ -127,7 +127,16 @@ export type WorkerMessage =
   | WorkerQuestionCancelledMessage
   | WorkerRenderDiagramMessage
   | WorkerMemoryRequestMessage
-  | WorkerBaseFailuresMessage;
+  | WorkerBaseFailuresMessage
+  | WorkerSessionEndedMessage;
+
+/** A coder or QA fixer session ended: the task branch may have new commits (preview push). */
+export interface WorkerSessionEndedMessage {
+  type: 'session-ended';
+  taskId: string;
+  projectId?: string;
+  data: { agentType: 'coder' | 'qa_fixer' };
+}
 
 /** App checks that fail on main too: the main process starts one task to fix main (verification/base-fix.ts) */
 export interface WorkerBaseFailuresMessage {

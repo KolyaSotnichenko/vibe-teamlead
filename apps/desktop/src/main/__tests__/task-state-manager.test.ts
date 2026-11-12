@@ -214,6 +214,30 @@ describe('TaskStateManager', () => {
     });
   });
 
+  describe('status listeners', () => {
+    it('hear every status change, also without a window (previews push on review)', () => {
+      const heard: Array<[string, string]> = [];
+      const off = manager.onStatusChange((taskId, status) => heard.push([taskId, status]));
+      const base = { taskId: mockTask.id, specId: mockTask.specId, projectId: mockProject.id, timestamp: new Date().toISOString() };
+      manager.handleTaskEvent(mockTask.id, { ...base, type: 'PLANNING_STARTED', eventId: 'e1', sequence: 0 }, mockTask, mockProject);
+      manager.handleTaskEvent(mockTask.id, { ...base, type: 'PLANNING_COMPLETE', eventId: 'e2', sequence: 1, hasSubtasks: true, subtaskCount: 1, requireReviewBeforeCoding: false }, mockTask, mockProject);
+      manager.handleTaskEvent(mockTask.id, { ...base, type: 'QA_STARTED', eventId: 'e3', sequence: 2, iteration: 0, maxIterations: 3 }, mockTask, mockProject);
+      manager.handleTaskEvent(mockTask.id, { ...base, type: 'QA_PASSED', eventId: 'e4', sequence: 3, iteration: 1, testsRun: {} }, mockTask, mockProject);
+      expect(heard.map(([, s]) => s)).toContain('ai_review');
+      expect(heard.map(([, s]) => s)).toContain('human_review');
+      expect(heard.every(([id]) => id === mockTask.id)).toBe(true);
+      off();
+      const before = heard.length;
+      manager.handleManualStatusChange(mockTask.id, 'backlog', mockTask, mockProject);
+      expect(heard.length).toBe(before);
+    });
+
+    it('a throwing listener does not stop the status', () => {
+      manager.onStatusChange(() => { throw new Error('x'); });
+      expect(manager.handleManualStatusChange(mockTask.id, 'backlog', mockTask, mockProject)).toBe(true);
+    });
+  });
+
   describe('handleManualStatusChange', () => {
     it('should handle done status', () => {
       const result = manager.handleManualStatusChange(mockTask.id, 'done', mockTask, mockProject);

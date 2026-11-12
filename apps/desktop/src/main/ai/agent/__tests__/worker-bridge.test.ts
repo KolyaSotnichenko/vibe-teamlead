@@ -245,6 +245,17 @@ describe('WorkerBridge', () => {
       expect(handler).toHaveBeenCalledWith('task-123', 'fail', 'proj-456');
     });
 
+    it('emits session-ended when a coder or QA fixer session ends (the branch may have new commits)', () => {
+      const handler = vi.fn();
+      bridge.on('session-ended', handler);
+      bridge.spawn(createConfig());
+
+      const msg: WorkerMessage = { type: 'session-ended', taskId: 'task-123', projectId: 'proj-456', data: { agentType: 'qa_fixer' } };
+      getWorker().emit('message', msg);
+
+      expect(handler).toHaveBeenCalledWith('task-123', { agentType: 'qa_fixer' }, 'proj-456');
+    });
+
     it('emits execution-progress events from worker progress messages', () => {
       const handler = vi.fn();
       bridge.on('execution-progress', handler);

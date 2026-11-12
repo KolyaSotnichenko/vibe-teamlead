@@ -295,6 +295,10 @@ export class WorkerBridge extends EventEmitter {
         this.emitTyped('base-failures', message.taskId, message.data, message.projectId);
         break;
 
+      case 'session-ended':
+        this.emitTyped('session-ended', message.taskId, message.data, message.projectId);
+        break;
+
       case 'render-diagram':
         void this.renderDiagram(message.requestId, message.path);
         break;

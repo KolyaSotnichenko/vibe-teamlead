@@ -38,9 +38,16 @@ export class TaskStateManager {
   private taskContextById = new Map<string, TaskContextEntry>();
   private terminalEventSeen = new Set<string>();
   private getMainWindow: (() => BrowserWindow | null) | null = null;
+  private statusListeners = new Set<(taskId: string, status: TaskStatus, projectId?: string) => void>();
 
   configure(getMainWindow: () => BrowserWindow | null): void {
     this.getMainWindow = getMainWindow;
+  }
+
+  /** Hears every status change this manager announces. Returns the unsubscribe. */
+  onStatusChange(listener: (taskId: string, status: TaskStatus, projectId?: string) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => this.statusListeners.delete(listener);
   }
 
   handleTaskEvent(taskId: string, event: TaskEventPayload, task: Task, project: Project): boolean {
@@ -352,6 +359,13 @@ export class TaskStateManager {
     reviewReason: ReviewReason | undefined,
     projectId?: string
   ): void {
+    for (const listener of this.statusListeners) {
+      try {
+        listener(taskId, status, projectId);
+      } catch {
+        // a listener never stops the status
+      }
+    }
     if (!this.getMainWindow) {
       console.warn(`[TaskStateManager] emitStatus: No main window, cannot emit status ${status} for ${taskId}`);
       return;

@@ -683,6 +683,10 @@ export class AgentProcessManager {
       this.emitter.emit('base-failures', tId, data, pId);
     });
 
+    bridge.on('session-ended', (tId: string, data: unknown, pId?: string) => {
+      this.emitter.emit('session-ended', tId, data, pId);
+    });
+
     bridge.on('agent-question', (tId: string, request: AgentQuestionRequest, pId?: string) => {
       addPendingQuestion({ ...request, taskId: tId, projectId: pId, askedAt: Date.now() }, bridge);
       this.emitter.emit('agent-question', tId, request, pId);

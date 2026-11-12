@@ -48,6 +48,8 @@ export interface AgentManagerEvents {
   'agent-question-resolved': (taskId: string, questionId: string, projectId?: string) => void;
   /** The app's checks fail on main too (verification/base-fix.ts) */
   'base-failures': (taskId: string, data: { failures: import('../ai/verification/base-fix').BaseFailure[]; baseCommit: string }, projectId?: string) => void;
+  /** A coder or QA fixer session ended: the task branch may have new commits */
+  'session-ended': (taskId: string, data: { agentType: 'coder' | 'qa_fixer' }, projectId?: string) => void;
 }
 
 /** Questions an agent asked, as sent by the worker (before task metadata is added). */
