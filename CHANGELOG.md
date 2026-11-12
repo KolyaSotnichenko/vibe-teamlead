@@ -2,6 +2,15 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.38 - 2026-11-12
+
+- Previews on task cards: once deploy is set up on a private repository, each task gets its own Vercel preview. The card shows **Preview** with a spinner while it builds, **Preview ↗** when it's ready (hover shows the link and build time) and **Preview failed** when the build failed (opens Vercel's build log, or the failed run in Deploy). The task window says the same, and how to set up deploy when it isn't.
+- Task branches are pushed to GitHub after each finished subtask, after QA fixes and when the task goes to review, so the preview shows the latest code. A refused push doesn't stop the agent; the task window says why. Previews survive an app restart.
+- A public repository (or one whose visibility can't be checked) never gets task branches pushed; visibility is checked again every hour.
+- First-run wizard: the Accounts step connects Vercel next to GitHub.
+- Settings → Agents: Haiku 5.5 and Sonnet 5.5 take a thinking level, like Opus.
+- Note: Vercel builds previews from the agents' code with the Preview environment's variables. Keep live keys (payments and similar) to Production, or use test values for Preview.
+
 ## 2.0.0-beta.37 - 2026-11-12
 
 - Deploy → Readiness: a new tab checks what stops the project from going live. It runs the first time you open Deploy, after merges into main and on **Check again**; its model is "Deploy readiness" in Settings → Agents (Sonnet by default). The tab's number counts the blockers it found.
