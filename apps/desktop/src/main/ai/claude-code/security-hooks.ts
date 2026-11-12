@@ -16,10 +16,16 @@
  *   git check is a best-effort tokenizer, not a shell parser. The real backstop
  *   is the QA loop's content snapshot of the worktree before and after each
  *   reviewer session (reviewer-changes.ts), which reports what the reviewer changed.
+ * - The Deploy readiness scan never reads secret files (`.env`, `.env.*` except example
+ *   files, `*.pem`, `*.key`, `id_rsa*`): Read and Glob of such a path are denied (symlinks
+ *   resolved), and Grep must name one ordinary file or carry a glob that can't match one.
  */
 
+import { realpathSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, resolve } from 'node:path';
+
+import { minimatch } from 'minimatch';
 
 import type { HookCallbackMatcher, HookJSONOutput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 
@@ -111,6 +117,63 @@ const APP_REQUEST_FILES = new Set(['qa_fix_request.md', 'qa_rerun']);
  */
 const BROWSER_SERVER_CODE = /^mcp__.+__browser_run_code(_unsafe)?$/;
 
+/** Example env files name variables without values: the scan reads these. */
+const ENV_EXAMPLE = /\.(example|sample|template|dist)$/;
+
+/** A file name that holds secrets: `.env`, `.env.*` (not an example), `*.pem`, `*.key`, `id_rsa*`. */
+export function isSecretFileName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n === '.env' || n.startsWith('.env.')) return !ENV_EXAMPLE.test(n);
+  return n.endsWith('.pem') || n.endsWith('.key') || n.startsWith('id_rsa');
+}
+
+/** Names a Grep glob is tried against: one that matches any of them could read a secret file. */
+const SECRET_SAMPLES = ['.env', '.env.local', '.env.production', 'server.pem', 'server.key', 'id_rsa', 'config/.env', 'a/b/.env.local', 'certs/tls.key'];
+
+const SCAN_SECRET_RULE = 'The readiness scan never reads secret files (.env, .env.*, *.pem, *.key, id_rsa*). Take variable names from the example env files and the code.';
+
+/** The path or its symlink target names a secret file. */
+function isSecretPath(target: string): boolean {
+  if (isSecretFileName(basename(target))) return true;
+  try {
+    return isSecretFileName(basename(realpathSync(target)));
+  } catch {
+    return false;
+  }
+}
+
+function isFile(target: string): boolean {
+  try {
+    return statSync(target).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Read, Glob and Grep of the readiness scan: deny what could read a secret file. */
+function evaluateScanRead(toolName: string, toolInput: Record<string, unknown> | null, context: ToolContext): HookJSONOutput | null {
+  const at = (raw: unknown): string | undefined =>
+    typeof raw === 'string' && raw ? (isAbsolute(raw) ? resolve(raw) : resolve(context.cwd, raw)) : undefined;
+  if (toolName === 'Read' || toolName === 'Glob') {
+    const target = at(toolName === 'Read' ? toolInput?.file_path : toolInput?.path);
+    return target && isSecretPath(target) ? deny(SCAN_SECRET_RULE) : null;
+  }
+  if (toolName !== 'Grep') return null;
+  const target = at(toolInput?.path);
+  if (target && isSecretPath(target)) return deny(SCAN_SECRET_RULE);
+  // One ordinary file: nothing else is searched
+  if (target && isFile(target)) return null;
+  const glob = typeof toolInput?.glob === 'string' ? toolInput.glob.trim() : '';
+  if (!glob) {
+    return deny(`${SCAN_SECRET_RULE} Grep over a folder needs a glob for the files to search, such as "*.{ts,tsx,js}".`);
+  }
+  const matchBase = !glob.includes('/');
+  if (SECRET_SAMPLES.some((name) => minimatch(name, glob, { dot: true, matchBase, nocase: true }))) {
+    return deny(`${SCAN_SECRET_RULE} The glob "${glob}" can match one; name the file types to search, such as "*.{ts,tsx,js}".`);
+  }
+  return null;
+}
+
 /** Directories a session may write to. */
 export function writeRoots(context: ToolContext): string[] {
   if (context.allowedWritePaths?.length) return context.allowedWritePaths;
@@ -123,6 +186,11 @@ export function evaluatePreToolUse(
   toolInput: Record<string, unknown> | null,
   context: ToolContext,
 ): HookJSONOutput {
+  if (context.agentType === 'deploy_readiness') {
+    const scanned = evaluateScanRead(toolName, toolInput, context);
+    if (scanned) return scanned;
+  }
+
   if (BROWSER_SERVER_CODE.test(toolName)) {
     return deny('Running code in the browser server is not allowed. Use browser_click, browser_type, browser_fill_form and browser_snapshot instead.');
   }

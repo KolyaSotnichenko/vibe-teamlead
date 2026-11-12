@@ -86,6 +86,14 @@ describe('runReadinessScan', () => {
     expect(result.owner[0].message.length).toBeLessThanOrEqual(500);
   });
 
+  it('tells the agent env values are off-limits (names from example files only)', async () => {
+    const run = fakeRun();
+    await runReadinessScan(input, { run, feature, now });
+    const system = (run.mock.calls[0][0] as { systemPrompt: string }).systemPrompt;
+    expect(system).toContain('Environment values are off-limits');
+    expect(system).toContain('example env files');
+  });
+
   it('throws when the model returns no output', async () => {
     await expect(runReadinessScan(input, { run: fakeRun(null), feature, now })).rejects.toThrow();
   });
