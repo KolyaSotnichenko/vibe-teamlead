@@ -16,7 +16,7 @@ vi.mock('../../deploy/github-actions', () => ({
   createActionsClient: () => client,
   resolveRepo: vi.fn(async () => ({ owner: 'o', repo: 'r' })),
 }));
-const scanReadiness = vi.hoisted(() => vi.fn(async () => undefined));
+const scanReadiness = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => undefined));
 vi.mock('../../deploy/readiness', () => ({
   createReadiness: () => ({ state: () => ({ scanning: false, tasks: {} }), scan: scanReadiness }),
 }));
