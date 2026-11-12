@@ -9,7 +9,7 @@ import type { DeployVariableInput, ReadinessBlocker, ReadinessState } from '../.
 import { Button } from '../ui/button';
 import { Notice, Row, Section } from './parts';
 import { VariableDialog } from './VariableDialog';
-import { formatRelative, StatusMark } from './status';
+import { formatRelative, isWebUrl, openWebUrl, StatusMark } from './status';
 
 const CONCLUSIONS: Record<string, 'success' | 'attention' | 'skipped'> = {
   success: 'success',
@@ -86,6 +86,11 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
   const blockers = result?.blockers ?? [];
   const owner = result?.owner ?? [];
   const run = result?.workflow.lastMainRun;
+  const conclusion = run && Object.hasOwn(CONCLUSIONS, run.conclusion) ? run.conclusion : undefined;
+  const gaveUp = readiness.gaveUp ?? [];
+  /** A given-up key by name: its blocker's title, or the workflow of a run key */
+  const gaveUpLabel = (key: string) =>
+    key.startsWith('run:') ? key.slice('run:'.length) : (blockers.find((b) => b.key === key)?.title ?? key);
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -124,9 +129,30 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
         </Section>
       )}
 
-      {owner.length > 0 && (
+      {(owner.length > 0 || gaveUp.length > 0) && (
         <Section id="deploy-readiness-owner" title={t('deploy:readiness.owner')}>
           <ul className="flex flex-col border border-foreground">
+            {gaveUp.map((key) => {
+              const link = readiness.gaveUpLinks?.[key];
+              return (
+                <li key={`gave-up-${key}`} className="flex flex-col gap-1 border-b border-border px-3 py-3 last:border-b-0">
+                  <div className="flex items-baseline gap-2">
+                    <StatusMark status="attention" />
+                    <span className={`text-sm font-semibold text-foreground${key.startsWith('run:') ? ' font-mono' : ''}`}>{gaveUpLabel(key)}</span>
+                  </div>
+                  <p className="pl-6 text-sm text-foreground">{t('deploy:readiness.gaveUp')}</p>
+                  {isWebUrl(link) && (
+                    <button
+                      type="button"
+                      onClick={() => openWebUrl(link)}
+                      className="self-start pl-6 text-sm text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {t('deploy:readiness.openRun')}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
             {owner.map((item, i) => (
               <li key={`${item.variable ?? 'other'}-${i}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3 last:border-b-0">
                 <span className="min-w-0 flex-1 text-sm text-foreground">
@@ -153,8 +179,8 @@ export function ReadinessTab({ projectId, readiness, notSetUp, onSetUp, onOpenRu
               {run ? (
                 <>
                   <span className="inline-flex items-center gap-2">
-                    <StatusMark status={CONCLUSIONS[run.conclusion] ?? 'skipped'} />
-                    <span>{t(`deploy:readiness.conclusions.${run.conclusion in CONCLUSIONS ? run.conclusion : 'unknown'}`)}</span>
+                    <StatusMark status={conclusion ? CONCLUSIONS[conclusion] : 'skipped'} />
+                    <span>{t(`deploy:readiness.conclusions.${conclusion ?? 'unknown'}`)}</span>
                   </span>
                   <button
                     type="button"

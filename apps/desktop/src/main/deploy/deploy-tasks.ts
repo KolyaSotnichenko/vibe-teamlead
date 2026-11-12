@@ -2,7 +2,11 @@
  * Tasks the Deploy readiness scan and failing runs create: one open task per key, so scanning
  * again (or two callers at once) doesn't pile up duplicates. Same pattern as base-fix tasks
  * (ipc-handlers/task/base-fix-handler.ts). The ledger file also holds the handled run ids
- * (written by the runs poller), so every write keeps them.
+ * (written by the runs poller) and the keys given up on, so every write keeps them.
+ *
+ * A problem fixed twice that comes back a third time gets no third task: its key is given up
+ * and shown to the owner. The count starts again when the problem goes away (a passing run of
+ * the workflow, a scan without the blocker).
  */
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -22,12 +26,35 @@ export interface DeployTaskDeps {
   now?(): Date;
 }
 
+/** What a key fixes: a code or workflow blocker of the scan, or a failing run (`run:<workflow path>`) */
+export type DeployKeyKind = 'code' | 'workflow' | 'run';
+
+interface LedgerTask {
+  key: string;
+  specId: string;
+  at: string;
+  kind?: DeployKeyKind;
+  /** The problem went away after this task: it no longer counts toward giving up */
+  settled?: boolean;
+}
+
+export interface GaveUp {
+  key: string;
+  /** The last failed run, for a run key */
+  url?: string;
+}
+
 interface Ledger {
-  tasks: Array<{ key: string; specId: string; at: string }>;
+  tasks: LedgerTask[];
   handledRuns: number[];
+  gaveUp: GaveUp[];
 }
 
 const MAX_TASKS = 200;
+/** Closed tasks for one key before Vibe Teamlead stops trying */
+const MAX_FIXES = 2;
+/** A task this young that the (cached) task list doesn't show yet is still being set up: open */
+const FRESH_MS = 60_000;
 /** Done or handed over as a PR: no longer fixing anything */
 const CLOSED = new Set(['done', 'pr_created']);
 /** project|key being created right now: two callers can report it in the same moment */
@@ -43,9 +70,10 @@ function readLedger(projectPath: string): Ledger {
     return {
       tasks: Array.isArray(parsed?.tasks) ? parsed.tasks : [],
       handledRuns: Array.isArray(parsed?.handledRuns) ? parsed.handledRuns : [],
+      gaveUp: Array.isArray(parsed?.gaveUp) ? parsed.gaveUp.filter((g) => typeof g?.key === 'string') : [],
     };
   } catch {
-    return { tasks: [], handledRuns: [] };
+    return { tasks: [], handledRuns: [], gaveUp: [] };
   }
 }
 
@@ -71,28 +99,48 @@ export function markRunHandled(projectPath: string, runId: number): void {
   writeLedger(projectPath, ledger);
 }
 
-function recordTask(projectPath: string, key: string, specId: string, now: Date): void {
+function recordTask(projectPath: string, key: string, kind: DeployKeyKind, specId: string, now: Date): void {
   const ledger = readLedger(projectPath);
-  ledger.tasks = [...ledger.tasks.filter((t) => t.specId !== specId), { key, specId, at: now.toISOString() }].slice(-MAX_TASKS);
+  ledger.tasks = [...ledger.tasks.filter((t) => t.specId !== specId), { key, specId, at: now.toISOString(), kind }].slice(-MAX_TASKS);
   writeLedger(projectPath, ledger);
 }
 
-function isOpenKey(project: Project, key: string, getTasks: DeployTaskDeps['getTasks']): boolean {
-  const tasks = getTasks(project.id);
-  return readLedger(project.path).tasks.some((entry) => entry.key === key && tasks.some((t) => t.specId === entry.specId && !CLOSED.has(t.status)));
-}
+/** Entries written before kinds were recorded: a run key or a scan key (blockerKey puts the kind first) */
+const kindOf = (entry: LedgerTask): DeployKeyKind | undefined =>
+  entry.kind ?? (entry.key.startsWith('run:') ? 'run' : entry.key.startsWith('workflow') ? 'workflow' : undefined);
 
-/** Creates and starts one task for a key unless one is open or being created. */
+const isOpenEntry = (entry: LedgerTask, tasks: Task[], now: Date): boolean => {
+  const task = tasks.find((t) => t.specId === entry.specId);
+  if (task) return !CLOSED.has(task.status);
+  const age = now.getTime() - Date.parse(entry.at);
+  return Number.isFinite(age) && age >= 0 && age < FRESH_MS;
+};
+
+/** Creates and starts one task for a key unless one is open or being created, or the key is given up. */
 async function createKeyed(
   project: Project,
   key: string,
+  kind: DeployKeyKind,
   title: string,
   description: string,
   extra: Partial<TaskMetadata>,
   deps: DeployTaskDeps,
+  opts: { url?: string; blockedBy?: DeployKeyKind } = {},
 ): Promise<boolean> {
   const lock = `${project.path}|${key}`;
-  if (creating.has(lock) || isOpenKey(project, key, deps.getTasks)) return false;
+  if (creating.has(lock)) return false;
+  const now = deps.now?.() ?? new Date();
+  const tasks = deps.getTasks(project.id);
+  const ledger = readLedger(project.path);
+  const mine = ledger.tasks.filter((entry) => entry.key === key);
+  if (mine.some((entry) => isOpenEntry(entry, tasks, now))) return false;
+  // A workflow blocker and a failing run are often the same failure: one task at a time
+  if (opts.blockedBy && ledger.tasks.some((entry) => kindOf(entry) === opts.blockedBy && isOpenEntry(entry, tasks, now))) return false;
+  const fixes = mine.filter((entry) => !entry.settled && tasks.some((t) => t.specId === entry.specId && CLOSED.has(t.status))).length;
+  if (fixes >= MAX_FIXES) {
+    giveUp(project.path, key, opts.url);
+    return false;
+  }
   creating.add(lock);
   try {
     const created = await deps.createTask(project, title, description, {
@@ -101,12 +149,53 @@ async function createKeyed(
       deployKey: key,
       ...extra,
     });
-    recordTask(project.path, key, created.specId, deps.now?.() ?? new Date());
+    recordTask(project.path, key, kind, created.specId, now);
     await deps.startTask(created.id);
     return true;
   } finally {
     creating.delete(lock);
   }
+}
+
+function giveUp(projectPath: string, key: string, url: string | undefined): void {
+  const ledger = readLedger(projectPath);
+  const entry: GaveUp = url ? { key, url } : { key };
+  const current = ledger.gaveUp.find((g) => g.key === key);
+  if (current && current.url === entry.url) return;
+  ledger.gaveUp = [...ledger.gaveUp.filter((g) => g.key !== key), entry];
+  writeLedger(projectPath, ledger);
+}
+
+/** Keys Vibe Teamlead stopped fixing (two fixes and the problem is still there). */
+export function gaveUpKeys(projectPath: string): GaveUp[] {
+  return readLedger(projectPath).gaveUp;
+}
+
+/** The problem of these keys went away: their past tasks no longer count and they are not given up. */
+function settle(projectPath: string, settles: (key: string) => boolean): void {
+  const ledger = readLedger(projectPath);
+  let changed = false;
+  for (const entry of ledger.tasks) {
+    if (!entry.settled && settles(entry.key)) {
+      entry.settled = true;
+      changed = true;
+    }
+  }
+  const gaveUp = ledger.gaveUp.filter((g) => !settles(g.key));
+  if (gaveUp.length !== ledger.gaveUp.length) changed = true;
+  if (!changed) return;
+  writeLedger(projectPath, { ...ledger, gaveUp });
+}
+
+/** A key's problem is gone (its workflow's newest run passed): the count starts again. */
+export function resetFixCount(projectPath: string, key: string): void {
+  settle(projectPath, (k) => k === key);
+}
+
+/** A scan found these blocker keys: every other scan key's count starts again (run keys are left alone). */
+export function resetMissingBlockers(projectPath: string, present: string[]): void {
+  const found = new Set(present);
+  settle(projectPath, (k) => !k.startsWith('run:') && !found.has(k));
 }
 
 /** One task per code or workflow blocker without an open task. Returns the keys it created. */
@@ -123,19 +212,32 @@ export async function createBlockerTasks(project: Project, blockers: ReadinessBl
     const made = await createKeyed(
       project,
       blocker.key,
+      blocker.kind,
       blocker.title,
       description,
       { category: workflow ? 'infrastructure' : 'bug_fix', priority: 'high' },
       deps,
+      // A run-fix task open for a workflow already works on it
+      workflow ? { blockedBy: 'run' } : {},
     );
     if (made) keys.push(blocker.key);
   }
   return keys;
 }
 
-/** An urgent task for a failing run; false when its key already has an open task. */
-export function createRunFixTask(project: Project, fix: { key: string; title: string; description: string }, deps: DeployTaskDeps): Promise<boolean> {
-  return createKeyed(project, fix.key, fix.title, fix.description, { category: 'bug_fix', priority: 'urgent' }, deps);
+/**
+ * An urgent task for a failing run; false when its key already has an open task, a workflow
+ * blocker task is open, or the key is given up (`url`, the run, is kept for the owner).
+ */
+export function createRunFixTask(
+  project: Project,
+  fix: { key: string; title: string; description: string; url?: string },
+  deps: DeployTaskDeps,
+): Promise<boolean> {
+  return createKeyed(project, fix.key, 'run', fix.title, fix.description, { category: 'bug_fix', priority: 'urgent' }, deps, {
+    blockedBy: 'workflow',
+    ...(fix.url ? { url: fix.url } : {}),
+  });
 }
 
 /**

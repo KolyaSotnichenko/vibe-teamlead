@@ -259,6 +259,8 @@
     "lastRun": "Last run on main",
     "openRuns": "Open Runs",
     "noRun": "No run on main yet",
+    "gaveUp": "Vibe Teamlead tried to fix this twice and it still fails. Look at it yourself.",
+    "openRun": "Open the run on GitHub",
     "clear": "Nothing blocks deploy",
     "conclusions": {
       "success": "Succeeded",

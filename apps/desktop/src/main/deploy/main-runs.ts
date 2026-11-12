@@ -7,7 +7,7 @@
 import type { Project } from '../../shared/types';
 import type { DeployRun } from '../../shared/types/deploy';
 import { clipLine } from './clip';
-import { createRunFixTask, type DeployTaskDeps, markRunHandled, wasRunHandled } from './deploy-tasks';
+import { createRunFixTask, type DeployTaskDeps, markRunHandled, resetFixCount, wasRunHandled } from './deploy-tasks';
 import type { ActionsClient } from './github-actions';
 import { resolveMainBranch } from './push-after-merge';
 import { readReadiness } from './readiness-store';
@@ -94,8 +94,16 @@ export async function handleMainRun(
   inFlight.add(lock);
   try {
     if (!run.conclusion || !FAILED.has(run.conclusion)) {
+      if (run.conclusion !== 'success') {
+        markRunHandled(project.path, run.id);
+        return 'seen';
+      }
+      // A passing own run: the workflow's fix count starts again
+      const repo = await deps.resolveRepo(project);
+      if (!repo) return 'seen';
+      if (isOwnPushOnMain(run, repo, await resolveMainBranch(project, deps.branches))) resetFixCount(project.path, runKey(run));
       markRunHandled(project.path, run.id);
-      return run.conclusion === 'success' ? 'passed' : 'seen';
+      return 'passed';
     }
     const repo = await deps.resolveRepo(project);
     if (!repo) return 'seen';
@@ -125,7 +133,7 @@ export async function handleMainRun(
     ].join('\n\n');
     const made = await createRunFixTask(
       project,
-      { key: `run:${run.workflowPath}`, title: `Fix the failed ${name} run on main`, description },
+      { key: runKey(run), title: `Fix the failed ${name} run on main`, description, url: run.htmlUrl },
       deps.tasks,
     );
     markRunHandled(project.path, run.id);
@@ -134,6 +142,8 @@ export async function handleMainRun(
     inFlight.delete(lock);
   }
 }
+
+const runKey = (run: DeployRun): string => `run:${run.workflowPath}`;
 
 const newer = (a: DeployRun, b: DeployRun): boolean => a.startedAt > b.startedAt || (a.startedAt === b.startedAt && a.id > b.id);
 

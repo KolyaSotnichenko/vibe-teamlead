@@ -6,7 +6,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
 import type { ReadinessBlocker } from '../../../shared/types/deploy';
 import { tryLoadPrompt } from '../../ai/prompts/prompt-loader';
-import { createBlockerTasks, createRunFixTask, deployTaskStatus, isDeployTask, type DeployTaskDeps } from '../deploy-tasks';
+import {
+  createBlockerTasks,
+  createRunFixTask,
+  deployTaskStatus,
+  gaveUpKeys,
+  isDeployTask,
+  resetFixCount,
+  resetMissingBlockers,
+  type DeployTaskDeps,
+} from '../deploy-tasks';
 
 let dir: string;
 let tasks: Task[];
@@ -95,6 +104,114 @@ describe('createBlockerTasks', () => {
     expect(l.tasks).toHaveLength(200);
     expect(l.tasks[199].key).toBe('code:localhost');
     expect(l.handledRuns).toEqual([5, 6]);
+  });
+});
+
+describe('open and closed task states (R1 ledger)', () => {
+  it('a key whose task is in progress is open', async () => {
+    await createBlockerTasks(project(), [code], deps());
+    tasks[0].status = 'in_progress' as never;
+    expect(await createBlockerTasks(project(), [code], deps())).toEqual([]);
+  });
+
+  it('a key whose task became a PR is closed', async () => {
+    await createBlockerTasks(project(), [code], deps());
+    tasks[0].status = 'pr_created' as never;
+    expect(await createBlockerTasks(project(), [code], deps())).toEqual(['code:localhost']);
+  });
+
+  it('an old done task and a new open one: the key is open', async () => {
+    await createBlockerTasks(project(), [code], deps());
+    tasks[0].status = 'done' as never;
+    await createBlockerTasks(project(), [code], deps());
+    expect(tasks.map((t) => t.status)).toEqual(['done', 'backlog']);
+    expect(await createBlockerTasks(project(), [code], deps())).toEqual([]);
+    expect(tasks).toHaveLength(2);
+  });
+
+  it('a task just created but not in the (cached) task list yet counts as open for 60 s', async () => {
+    let clock = new Date('2026-11-12T10:00:00Z');
+    const cached: Task[] = [];
+    const d = { ...deps(), getTasks: () => cached, now: () => clock };
+    await createBlockerTasks(project(), [code], d);
+    expect(await createBlockerTasks(project(), [code], d)).toEqual([]);
+    clock = new Date('2026-11-12T10:01:01Z');
+    expect(await createBlockerTasks(project(), [code], d)).toEqual(['code:localhost']);
+  });
+});
+
+describe('giving up after two fixes', () => {
+  const closeAll = () => { for (const t of tasks) t.status = 'done' as never; };
+
+  it('a blocker found again after two closed tasks gets no third task; the key is given up', async () => {
+    await createBlockerTasks(project(), [code], deps());
+    closeAll();
+    await createBlockerTasks(project(), [code], deps());
+    closeAll();
+    expect(await createBlockerTasks(project(), [code], deps())).toEqual([]);
+    expect(tasks).toHaveLength(2);
+    expect(gaveUpKeys(dir)).toEqual([{ key: 'code:localhost' }]);
+    // Still given up, still no task
+    expect(await createBlockerTasks(project(), [code], deps())).toEqual([]);
+    expect(tasks).toHaveLength(2);
+  });
+
+  it('a run failing again after two closed tasks is given up, with the run link', async () => {
+    const fix = (n: number) => ({ key: 'run:ci.yml', title: 'Fix CI', description: 'it fails', url: `https://github.com/o/r/actions/runs/${n}` });
+    await createRunFixTask(project(), fix(1), deps());
+    closeAll();
+    await createRunFixTask(project(), fix(2), deps());
+    closeAll();
+    expect(await createRunFixTask(project(), fix(3), deps())).toBe(false);
+    expect(tasks).toHaveLength(2);
+    expect(gaveUpKeys(dir)).toEqual([{ key: 'run:ci.yml', url: 'https://github.com/o/r/actions/runs/3' }]);
+  });
+
+  it('a passing run resets its key: the next failure gets a task again', async () => {
+    const fix = { key: 'run:ci.yml', title: 'Fix CI', description: 'it fails' };
+    await createRunFixTask(project(), fix, deps());
+    closeAll();
+    await createRunFixTask(project(), fix, deps());
+    closeAll();
+    await createRunFixTask(project(), fix, deps());
+    resetFixCount(dir, 'run:ci.yml');
+    expect(gaveUpKeys(dir)).toEqual([]);
+    expect(await createRunFixTask(project(), fix, deps())).toBe(true);
+  });
+
+  it('a blocker missing from a scan resets; present ones and run keys keep their count', async () => {
+    const other: ReadinessBlocker = { ...code, key: 'code:other', subject: 'other' };
+    for (let i = 0; i < 3; i++) {
+      await createBlockerTasks(project(), [code, other], deps());
+      closeAll();
+    }
+    expect(gaveUpKeys(dir).map((g) => g.key).sort()).toEqual(['code:localhost', 'code:other']);
+    resetMissingBlockers(dir, ['code:other']);
+    expect(gaveUpKeys(dir)).toEqual([{ key: 'code:other' }]);
+    expect(await createBlockerTasks(project(), [code, other], deps())).toEqual(['code:localhost']);
+  });
+
+  it('keeps gaveUp and handledRuns through other ledger writes', async () => {
+    mkdirSync(path.dirname(ledger()), { recursive: true });
+    writeFileSync(ledger(), JSON.stringify({ tasks: [], handledRuns: [5], gaveUp: [{ key: 'code:x' }] }));
+    await createBlockerTasks(project(), [code], deps());
+    expect(JSON.parse(readFileSync(ledger(), 'utf-8'))).toMatchObject({ handledRuns: [5], gaveUp: [{ key: 'code:x' }] });
+  });
+});
+
+describe('workflow blocker and run fix never run side by side', () => {
+  it('no workflow blocker task while a run-fix task is open; code blockers still get theirs', async () => {
+    await createRunFixTask(project(), { key: 'run:ci.yml', title: 'Fix CI', description: 'x' }, deps());
+    expect(await createBlockerTasks(project(), [code, wf], deps())).toEqual(['code:localhost']);
+    tasks[0].status = 'done' as never;
+    expect(await createBlockerTasks(project(), [wf], deps())).toEqual(['workflow:ci']);
+  });
+
+  it('no run-fix task while a workflow blocker task is open', async () => {
+    await createBlockerTasks(project(), [wf], deps());
+    expect(await createRunFixTask(project(), { key: 'run:ci.yml', title: 'Fix CI', description: 'x' }, deps())).toBe(false);
+    tasks[0].status = 'done' as never;
+    expect(await createRunFixTask(project(), { key: 'run:ci.yml', title: 'Fix CI', description: 'x' }, deps())).toBe(true);
   });
 });
 

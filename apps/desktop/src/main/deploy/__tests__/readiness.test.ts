@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -118,6 +118,34 @@ describe('triggers', () => {
     const p = { ...project(), settings: { deploy: { enabled: true, services: { redis: { addedAt: 't' } } } } } as unknown as Project;
     await make().scan(p, 'check-again');
     expect(scan).toHaveBeenCalledWith(expect.objectContaining({ servicesAdded: ['redis'] }));
+  });
+});
+
+describe('giving up', () => {
+  it('a blocker fixed twice and found again is given up and shown; a scan without it starts the count again', async () => {
+    const r = make();
+    scan.mockResolvedValue(result([blocker('x')]));
+    for (let i = 0; i < 3; i++) {
+      await r.scan(project(), 'check-again');
+      for (const t of tasks) t.status = 'done' as never;
+    }
+    expect(created).toHaveLength(2);
+    expect(r.state(project()).gaveUp).toEqual(['code:x']);
+    scan.mockResolvedValue(result([]));
+    await r.scan(project(), 'check-again');
+    expect(r.state(project()).gaveUp).toBeUndefined();
+    scan.mockResolvedValue(result([blocker('x')]));
+    await r.scan(project(), 'check-again');
+    expect(created).toHaveLength(3);
+  });
+
+  it('a given-up run key carries its run link', () => {
+    mkdirSync(path.join(dir, '.vibe-teamlead', 'deploy'), { recursive: true });
+    writeFileSync(
+      path.join(dir, '.vibe-teamlead', 'deploy', 'tasks.json'),
+      JSON.stringify({ tasks: [], handledRuns: [], gaveUp: [{ key: 'run:ci.yml', url: 'https://github.com/o/r/actions/runs/3' }] }),
+    );
+    expect(make().state(project())).toMatchObject({ gaveUp: ['run:ci.yml'], gaveUpLinks: { 'run:ci.yml': 'https://github.com/o/r/actions/runs/3' } });
   });
 });
 

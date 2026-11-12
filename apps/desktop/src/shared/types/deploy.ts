@@ -407,4 +407,8 @@ export interface ReadinessState {
   error?: string;
   /** Deploy tasks by blocker key */
   tasks: Record<string, { specId: string; status?: string }>;
+  /** Keys Vibe Teamlead stopped fixing: fixed twice and the problem is still there (omitted when none) */
+  gaveUp?: string[];
+  /** The last failed run of a given-up run key (`run:<workflow path>`), by key */
+  gaveUpLinks?: Record<string, string>;
 }

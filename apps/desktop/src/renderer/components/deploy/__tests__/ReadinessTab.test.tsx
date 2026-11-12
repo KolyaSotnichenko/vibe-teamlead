@@ -155,6 +155,32 @@ describe('Readiness tab', () => {
     expect(text.parentElement?.querySelector('[data-marker="attention"]')).not.toBeNull();
   });
 
+  it('falls back for an inherited property name as a conclusion', async () => {
+    setup({ result: result({ workflow: { path: 'ci.yml', lastMainRun: { conclusion: 'constructor', runId: 7 } } }), scanning: false, tasks: {} });
+    await openTab();
+    expect(await screen.findByText('deploy:readiness.conclusions.unknown')).toBeInTheDocument();
+  });
+
+  it('shows given-up keys under Needed from you: the blocker title, or the workflow with a link to the run', async () => {
+    setup({
+      result: result(),
+      scanning: false,
+      tasks: {},
+      gaveUp: ['code:a', 'run:.github/workflows/ci.yml'],
+      gaveUpLinks: { 'run:.github/workflows/ci.yml': 'https://github.com/o/r/actions/runs/3' },
+    });
+    await openTab();
+    expect(await screen.findByText('deploy:readiness.owner')).toBeInTheDocument();
+    expect(screen.getAllByText('deploy:readiness.gaveUp')).toHaveLength(2);
+    const section = document.getElementById('deploy-readiness-owner')?.closest('section') as HTMLElement;
+    expect(section).toHaveTextContent('Fix the build');
+    expect(section).toHaveTextContent('.github/workflows/ci.yml');
+    fireEvent.click(screen.getByRole('button', { name: 'deploy:readiness.openRun' }));
+    expect((window as unknown as { electronAPI: { openExternal: ReturnType<typeof vi.fn> } }).electronAPI.openExternal).toHaveBeenCalledWith(
+      'https://github.com/o/r/actions/runs/3',
+    );
+  });
+
   it('falls back for an unknown conclusion', async () => {
     setup({ result: result({ workflow: { path: 'ci.yml', lastMainRun: { conclusion: 'weird', runId: 7 } } }), scanning: false, tasks: {} });
     await openTab();

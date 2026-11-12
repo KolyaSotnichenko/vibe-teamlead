@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
 import type { DeployJob, DeployRun } from '../../../shared/types/deploy';
-import { type DeployTaskDeps, markRunHandled, wasRunHandled } from '../deploy-tasks';
+import { type DeployTaskDeps, gaveUpKeys, markRunHandled, wasRunHandled } from '../deploy-tasks';
 import { findLastMainRun, handleMainRun, handleMainRuns, isOwnPushOnMain, watchMainRuns, type MainRunDeps } from '../main-runs';
 
 let dir: string;
@@ -100,6 +100,23 @@ describe('handleMainRun', () => {
     await handleMainRun(project(), run(10), deps);
     await handleMainRun(project(), run(11, { name: 'Lint', workflowPath: '.github/workflows/lint.yml' }), deps);
     expect(created.map((c) => c.title)).toEqual(['Fix the failed CI run on main', 'Fix the failed Lint run on main']);
+  });
+
+  it('gives up on a workflow after two fixes, keeps the run link, and starts again once a run passes', async () => {
+    const deps = makeDeps();
+    for (const id of [10, 11]) {
+      await handleMainRun(project(), run(id), deps);
+      tasks[tasks.length - 1].status = 'done' as never;
+    }
+    expect(await handleMainRun(project(), run(12), deps)).toBe('open');
+    expect(created).toHaveLength(2);
+    expect(gaveUpKeys(dir)).toEqual([{ key: 'run:.github/workflows/ci.yml', url: 'https://github.com/o/r/actions/runs/12' }]);
+    // A fork's passing run says nothing about the own workflow
+    await handleMainRun(project(), run(13, { conclusion: 'success', headRepo: 'evil/r' }), deps);
+    expect(gaveUpKeys(dir)).toHaveLength(1);
+    expect(await handleMainRun(project(), run(14, { conclusion: 'success' }), deps)).toBe('passed');
+    expect(gaveUpKeys(dir)).toEqual([]);
+    expect(await handleMainRun(project(), run(15), deps)).toBe('created');
   });
 
   it('a passed run makes nothing', async () => {

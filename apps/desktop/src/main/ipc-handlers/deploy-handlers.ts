@@ -92,8 +92,12 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
   const taskDeps: DeployTaskDeps = {
     getTasks: (projectId) => projectStore.getTasks(projectId),
     // Lazy: the task handlers are heavy and import much of the app
-    createTask: async (project, title, description, metadata) =>
-      (await import('./task/crud-handlers')).createTaskInProject(project, title, description, metadata),
+    createTask: async (project, title, description, metadata) => {
+      const task = await (await import('./task/crud-handlers')).createTaskInProject(project, title, description, metadata);
+      // The next open-task check must see it (the ledger also treats a task under 60 s old as open)
+      projectStore.invalidateTasksCache(project.id);
+      return task;
+    },
     startTask: async (id) => {
       if (!agentManager) return;
       await (await import('./task/execution-handlers')).startTask(agentManager, getMainWindow, id);

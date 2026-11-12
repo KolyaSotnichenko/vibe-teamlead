@@ -7,7 +7,7 @@
 import type { Project } from '../../shared/types';
 import type { ReadinessResult, ReadinessState, ServiceKind } from '../../shared/types/deploy';
 import type { ScanInput } from '../ai/runners/deploy-readiness';
-import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus } from './deploy-tasks';
+import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus, type GaveUp, gaveUpKeys, resetMissingBlockers } from './deploy-tasks';
 import { resolveMainBranch } from './push-after-merge';
 import { readReadiness, writeReadiness } from './readiness-store';
 
@@ -49,7 +49,21 @@ export function createReadiness(deps: ReadinessDeps) {
     } catch {
       // the task list is informational
     }
-    return { ...(result ? { result } : {}), scanning: flights.has(project.id), ...(error ? { error } : {}), tasks };
+    let gaveUp: GaveUp[] = [];
+    try {
+      gaveUp = gaveUpKeys(project.path);
+    } catch {
+      // informational
+    }
+    const links = Object.fromEntries(gaveUp.filter((g) => g.url).map((g) => [g.key, g.url as string]));
+    return {
+      ...(result ? { result } : {}),
+      scanning: flights.has(project.id),
+      ...(error ? { error } : {}),
+      tasks,
+      ...(gaveUp.length ? { gaveUp: gaveUp.map((g) => g.key) } : {}),
+      ...(Object.keys(links).length ? { gaveUpLinks: links } : {}),
+    };
   };
 
   const emit = (project: Project) => {
@@ -88,6 +102,8 @@ export function createReadiness(deps: ReadinessDeps) {
       return;
     }
     try {
+      // A blocker this scan no longer finds is gone: its fix count starts again
+      resetMissingBlockers(project.path, result.blockers.map((b) => b.key));
       await createBlockerTasks(project, result.blockers, deps.tasks);
     } catch {
       // the saved result stands; the next scan creates the tasks
