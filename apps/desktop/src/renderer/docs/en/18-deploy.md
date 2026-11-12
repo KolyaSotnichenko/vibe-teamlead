@@ -39,7 +39,7 @@ Settings → Vercel connects the Vercel account Deploy uses to set up hosting. *
 
 The **Readiness** tab (between Runs and Environment) shows what stands between the project and a first deploy.
 
-**When it scans.** The scan runs the first time Deploy opens for a project with no saved result, after a merge into main for a project that has one, and on **Check again**. It is a model call, so it costs tokens. Its model is **Deploy readiness** in Settings → Agents → feature models (default Sonnet, low thinking).
+**When it scans.** The scan runs the first time Deploy opens for a project with no saved result, after a merge into main for a project that has one, and on **Check again**. It is a model call, so it costs tokens. Its model is **Deploy readiness** in Settings → Agent Settings → feature models (default Sonnet, low thinking).
 
 **Blockers become tasks.** Each blocker in the code or in the CI workflow gets its own task. The task starts by itself and, after QA, merges by itself, even when the project's auto-merge is off. This applies only to tasks Deploy itself created. A new check doesn't duplicate a task that is still open. The title opens the task, and the blocker turns done when the task is.
 
