@@ -19,7 +19,7 @@ type Repo = { owner: string; repo: string };
 type Timer = unknown;
 
 export interface RunsPollerDeps {
-  client: Pick<ActionsClient, 'runs' | 'jobs' | 'workflowFile' | 'deployments' | 'productionUrl'>;
+  client: Pick<ActionsClient, 'runs' | 'jobs' | 'workflowFile' | 'deployments' | 'commitStatuses' | 'productionUrl'>;
   resolveRepo: (project: Project) => Promise<Repo | null>;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => Timer;
@@ -48,7 +48,11 @@ interface Session {
   workflowFailures: Map<string, { at: number; error: GitHubError }>;
   productionUrl?: string | null;
   productionUrlAt?: number;
+  /** Finished Vercel commit statuses by sha: they don't change, so they are read once */
+  statusCache: Map<string, DeployDeployment[]>;
 }
+
+const FINISHED_STATES = new Set(['success', 'failure', 'error']);
 
 const asGitHubError = (e: unknown): GitHubError => {
   const kind = (e as GitHubError | null)?.kind;
@@ -136,6 +140,25 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     }
   }
 
+  /**
+   * The deploy stage of a sha: its GitHub Deployments, else Vercel's commit statuses (Vercel's Git
+   * integration may report only those). A failed status read leaves the stage out; never throws
+   * for it.
+   */
+  async function deploymentsOf(s: Session, repo: Repo, sha: string): Promise<DeployDeployment[]> {
+    const deployments = await deps.client.deployments(repo.owner, repo.repo, sha);
+    if (deployments.length) return deployments;
+    const cached = s.statusCache.get(sha);
+    if (cached) return cached;
+    try {
+      const statuses = await deps.client.commitStatuses(repo.owner, repo.repo, sha);
+      if (statuses.length && statuses.every((d) => FINISHED_STATES.has(d.state))) s.statusCache.set(sha, statuses);
+      return statuses;
+    } catch {
+      return [];
+    }
+  }
+
   async function refreshProductionUrl(s: Session, repo: Repo): Promise<void> {
     if (s.productionUrlAt !== undefined && now() - s.productionUrlAt < PRODUCTION_URL_MS) return;
     s.productionUrlAt = now();
@@ -182,7 +205,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
         const jobs: DeployJob[] = await deps.client.jobs(repo.owner, repo.repo, run.id);
         const wf = await workflowYaml(s, repo, run);
         workflowError = wf.error;
-        const deployments: DeployDeployment[] = await deps.client.deployments(repo.owner, repo.repo, run.sha);
+        const deployments = await deploymentsOf(s, repo, run.sha);
         selected = { runId: run.id, jobs, graph: buildRunGraph(wf.yaml, jobs, deployments) };
       }
       await refreshProductionUrl(s, repo);
@@ -229,7 +252,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
   return {
     start(project: Project, selectedRunId?: number): void {
       if (session) halt(session);
-      session = { project, generation: 0, selectedRunId, workflowCache: new Map(), workflowFailures: new Map() };
+      session = { project, generation: 0, selectedRunId, workflowCache: new Map(), workflowFailures: new Map(), statusCache: new Map() };
       void begin(session);
     },
 

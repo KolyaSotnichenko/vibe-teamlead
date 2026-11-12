@@ -121,6 +121,44 @@ function mapJob(j: Obj): DeployJob {
 
 const enc = (p: string): string => p.split('/').map(encodeURIComponent).join('/');
 
+/** An https link without credentials, else undefined */
+function httpsUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' && !u.username && !u.password ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Vercel's Git integration statuses; "Vercel Preview Comments" is its comments feature, not a build */
+const VERCEL_CONTEXT = /^vercel/i;
+const NOT_A_BUILD = /comments/i;
+const COMMIT_STATE: Record<string, DeployDeploymentState> = { pending: 'in_progress', success: 'success', failure: 'failure', error: 'failure' };
+
+/** A preview URL Vercel put in the status text: only an https *.vercel.app address (never guessed from anything else) */
+function vercelAppUrl(description: string): string | undefined {
+  for (const match of description.match(/https:\/\/[^\s"'<>()]+/g) ?? []) {
+    const url = httpsUrl(match.replace(/[.,;:]+$/, ''));
+    if (url && new URL(url).hostname.endsWith('.vercel.app')) return url;
+  }
+  return undefined;
+}
+
+/** A commit status of Vercel as a deployment: the context names it; target_url is the Vercel page (https only). */
+function mapCommitStatus(s: Obj): DeployDeployment | null {
+  const context = str(s.context);
+  const state = COMMIT_STATE[str(s.state)];
+  if (!VERCEL_CONTEXT.test(context) || NOT_A_BUILD.test(context) || !state) return null;
+  const out: DeployDeployment = { environment: context, state, createdAt: str(s.created_at) || str(s.updated_at) };
+  const url = vercelAppUrl(str(s.description));
+  if (url) out.url = url;
+  const logUrl = httpsUrl(s.target_url);
+  if (logUrl) out.logUrl = logUrl;
+  return out;
+}
+
 export function createActionsClient(fetcher: GitHubFetcher) {
   async function get(endpoint: string): Promise<unknown> {
     const res = await fetcher(endpoint);
@@ -206,6 +244,20 @@ export function createActionsClient(fetcher: GitHubFetcher) {
     async deploymentStatus(owner: string, repo: string, id: number): Promise<DeployDeploymentStatus> {
       const { state, url, logUrl } = mapDeployment({}, await latestStatus(owner, repo, id));
       return { state, ...(url ? { url } : {}), ...(logUrl ? { logUrl } : {}) };
+    },
+
+    /**
+     * Vercel's commit statuses of a ref (a sha or a branch, whose head is meant), newest per
+     * context, as deployments: Vercel reports through these when it makes no GitHub Deployment.
+     * One call; GitHub lists statuses newest first.
+     */
+    async commitStatuses(owner: string, repo: string, ref: string, perPage = 20): Promise<DeployDeployment[]> {
+      const out: DeployDeployment[] = [];
+      for (const s of arr(await get(`/repos/${owner}/${repo}/commits/${enc(ref)}/statuses?per_page=${perPage}`))) {
+        const d = mapCommitStatus(s);
+        if (d && !out.some((x) => x.environment === d.environment)) out.push(d);
+      }
+      return out;
     },
 
     async productionUrl(owner: string, repo: string): Promise<string | null> {

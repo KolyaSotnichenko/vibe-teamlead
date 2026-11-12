@@ -88,13 +88,18 @@ export interface DeployDeploymentStatus {
   logUrl?: string;
 }
 
-/** A task's preview, from the GitHub Deployments of its branch. */
+/** A task's preview, from the GitHub Deployments of its branch (else Vercel's commit status of its head). */
 export type TaskPreview =
   | { state: 'not-set-up' }
   | { state: 'unavailable'; reason: 'public-repo' | 'push-off' }
   | { state: 'not-pushed'; pushError?: string }
   | { state: 'building'; previousUrl?: string; pushError?: string }
   | { state: 'ready'; url: string; builtAt: string; pushError?: string }
+  /**
+   * Vercel built it but reported only a commit status, which carries no preview address:
+   * `logUrl` is the deployment's page on Vercel (https), where the preview opens from.
+   */
+  | { state: 'built'; logUrl: string; builtAt: string; pushError?: string }
   /** `runId`: the failed Actions run of that commit; else `logUrl`: Vercel's build log (https). */
   | { state: 'failed'; runId?: number; jobId?: number; logUrl?: string; pushError?: string };
 

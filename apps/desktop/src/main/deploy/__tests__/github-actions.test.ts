@@ -278,3 +278,59 @@ describe('resolveRepo', () => {
     expect(await resolveRepo(project)).toBeNull();
   });
 });
+
+describe('commitStatuses (Vercel reports through commit statuses when it makes no GitHub Deployment)', () => {
+  const route = '/repos/acme/app/commits/vibe-teamlead/001-x/statuses?per_page=20';
+  const status = (over: Record<string, unknown>) => ({
+    context: 'Vercel',
+    state: 'pending',
+    description: 'Vercel is deploying your app',
+    target_url: 'https://vercel.com/acme/app/AbC123',
+    created_at: '2026-11-12T10:00:00Z',
+    updated_at: '2026-11-12T10:00:00Z',
+    ...over,
+  });
+
+  it('reads the ref statuses once and keeps the newest Vercel one per context', async () => {
+    const { c, calls } = client({
+      [route]: ok([
+        status({ state: 'failure', description: 'Deployment has failed — run the build locally', created_at: '2026-11-12T10:02:00Z' }),
+        status({ context: 'ci/circleci', state: 'success', target_url: 'https://circleci.com/x' }),
+        status({ state: 'pending', created_at: '2026-11-12T10:00:00Z' }),
+        status({ context: 'Vercel Preview Comments', state: 'success' }),
+      ]),
+    });
+    expect(await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x')).toEqual([
+      { environment: 'Vercel', state: 'failure', createdAt: '2026-11-12T10:02:00Z', logUrl: 'https://vercel.com/acme/app/AbC123' },
+    ]);
+    expect(calls).toEqual([route]);
+  });
+
+  it('maps pending to in_progress, success to success, error to failure', async () => {
+    for (const [state, mapped] of [['pending', 'in_progress'], ['success', 'success'], ['error', 'failure'], ['failure', 'failure']]) {
+      const { c } = client({ [route]: ok([status({ state })]) });
+      expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].state).toBe(mapped);
+    }
+  });
+
+  it('keeps only https links: no logUrl for an http or odd target', async () => {
+    for (const target of ['http://vercel.com/x', 'javascript:alert(1)', 'https://user:pw@vercel.com/x', null]) {
+      const { c } = client({ [route]: ok([status({ target_url: target })]) });
+      expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].logUrl).toBeUndefined();
+    }
+  });
+
+  it('takes a preview URL only from the description, only an https *.vercel.app one; never guesses it', async () => {
+    const { c } = client({ [route]: ok([status({ state: 'success', description: 'Deployment has completed' })]) });
+    expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].url).toBeUndefined();
+    const { c: c2 } = client({ [route]: ok([status({ state: 'success', description: 'Ready: https://app-git-x-acme.vercel.app' })]) });
+    expect((await c2.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].url).toBe('https://app-git-x-acme.vercel.app');
+    const { c: c3 } = client({ [route]: ok([status({ state: 'success', description: 'Ready: https://evil.example.com/vercel.app' })]) });
+    expect((await c3.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].url).toBeUndefined();
+  });
+
+  it('is empty when there are no Vercel statuses', async () => {
+    const { c } = client({ [route]: ok([status({ context: 'ci/test' })]) });
+    expect(await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x')).toEqual([]);
+  });
+});

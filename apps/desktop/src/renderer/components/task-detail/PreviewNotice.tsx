@@ -1,7 +1,8 @@
 /**
  * What the task's preview says about itself in the task window: where to set deploy up,
  * why there is no preview, why the last push failed, that it is building (with the previous
- * link), that it failed (with the build log or the failed run), or the link itself.
+ * link), that it failed (with the build log or the failed run), that Vercel built it (with its
+ * page there, when Vercel gave no preview address), or the link itself.
  */
 
 import { useId } from 'react';
@@ -82,6 +83,22 @@ export function PreviewNotice({ task, onGoToDeploy }: { task: Task; onGoToDeploy
       >
         {action.label}
       </button>
+    );
+  } else if (preview.state === 'built' && isHttpsUrl(preview.logUrl)) {
+    // Vercel reported only a commit status: no preview address, its deployment page has the link
+    title = t('taskPreview.builtTitle');
+    const logUrl = preview.logUrl;
+    lines.push(
+      <p key="built" className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm">
+        <button
+          type="button"
+          onClick={() => openWebUrl(logUrl)}
+          className="text-sm text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-2"
+        >
+          {t('taskPreview.openInVercel')}
+        </button>
+        <span className="text-xs text-muted-foreground">{t('taskPreview.built', { when: formatRelative(preview.builtAt, i18n.language) })}</span>
+      </p>
     );
   } else if (preview.state === 'ready' && isHttpsUrl(preview.url)) {
     title = t('taskPreview.title');

@@ -16,7 +16,7 @@ A job that runs several times (a matrix, such as one image per app, or a reusabl
 
 ## Deployment and production link
 
-The **Deploy** stage and the **Production** link come from GitHub Deployments, not from the workflow. A host that reports to GitHub, for example Vercel through its GitHub integration, shows up there with its status and its log. When nothing reports deployments, the graph shows the workflow's jobs only.
+The **Deploy** stage and the **Production** link come from GitHub Deployments, not from the workflow. A host that reports to GitHub, for example Vercel through its GitHub integration, shows up there with its status and its log. Vercel sometimes reports only a commit status (the **Vercel** check on the commit) and no deployment: then the **Deploy** stage comes from that status, with its state and a link to the deployment on Vercel. When nothing reports deployments, the graph shows the workflow's jobs only.
 
 ## What it needs
 
@@ -67,13 +67,14 @@ A task's preview is the Vercel build of its own branch, shown on the task's card
 - **Branch not pushed yet:** nothing.
 - **Building:** **Preview** with a spinner. It opens the previous link, if there is one.
 - **Ready:** **Preview ↗**, opening the link (https only). Hover to see the address and when it was built.
+- **Built, address unknown:** **Preview built — open in Vercel**, opening the deployment's page on Vercel, where the preview link is. This is when Vercel reports the build only as a commit status, which carries no preview address; the app never guesses one.
 - **Failed:** **Preview failed**. It opens Vercel's build log. When a GitHub Actions check of that commit failed, it opens Deploy → Runs on that run instead, at the log of the job that failed.
 
 The task window says the same: the link, **Building the preview…** (with the previous link, if there is one), or **The preview failed** with the build log or the failed run.
 
 For a public repository the task window says previews need a private repository, and no task branch is pushed at all, not even when the task starts. The app checks again, at most once an hour, that the repository is still private; when it is no longer private, pushes stop.
 
-**Where the state comes from.** From GitHub Deployments for the task branch, the same source as the Deploy tab. While a build is running it refreshes every 30 seconds, and again whenever the branch is pushed. A ready or failed preview is not asked for again until the next push.
+**Where the state comes from.** From GitHub Deployments for the task branch, the same source as the Deploy tab. When the branch has none, from Vercel's commit status of the branch's newest commit: running is building, failed is failed (with the link to Vercel), and passed is ready when the status gives a preview address, else built. While a build is running it refreshes every 30 seconds, and again whenever the branch is pushed. A ready or failed preview is not asked for again until the next push.
 
 **Sign-in.** Vercel protects previews by default: open the link while signed in to Vercel.
 

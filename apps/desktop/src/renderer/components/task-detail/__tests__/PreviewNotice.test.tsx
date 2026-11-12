@@ -56,6 +56,13 @@ describe('PreviewNotice', () => {
     expect(screen.getByText(/taskPreview\.pushError\.permissions/)).toBeInTheDocument();
   });
 
+  it('built without a preview address: says it is built and opens the Vercel page', async () => {
+    const { openExternal } = setup({ state: 'built', logUrl: 'https://vercel.com/acme/app/AbC', builtAt: new Date().toISOString() });
+    expect(await screen.findByText('taskPreview.builtTitle')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'taskPreview.openInVercel' }));
+    expect(openExternal).toHaveBeenCalledWith('https://vercel.com/acme/app/AbC');
+  });
+
   it('shows the link and when it was built', async () => {
     const { openExternal } = setup({ state: 'ready', url: 'https://x.vercel.app', builtAt: new Date().toISOString() });
     fireEvent.click(await screen.findByRole('button', { name: 'https://x.vercel.app' }));

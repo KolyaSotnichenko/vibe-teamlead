@@ -1355,6 +1355,9 @@
       "permissions": "застосунок не має права на push",
       "no-connection": "немає з’єднання",
       "unavailable": "GitHub недоступний"
-    }
+    },
+    "builtInVercel": "Перегляд зібрано — відкрити у Vercel",
+    "builtTitle": "Перегляд зібрано",
+    "openInVercel": "Відкрити у Vercel"
   }
 }

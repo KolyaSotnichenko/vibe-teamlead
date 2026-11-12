@@ -1,10 +1,12 @@
 /**
- * A task's preview, from the GitHub Deployments of its branch (Vercel reports them).
+ * A task's preview, from the GitHub Deployments of its branch (Vercel reports them), else from
+ * Vercel's commit status of the branch head (Vercel's Git integration may report only that).
  * Nothing here pushes; the branch push is `branch-push.ts`. GitHub errors give `building`
  * (the preview may still arrive) and are never cached.
  *
  * Cost: one list call (5 deployments), then statuses newest first, only until the answer is
- * known. `ready` and `failed` stay cached until the next push; `building` for 30 s.
+ * known; with no deployment, one call for the commit statuses. `ready`, `built` and `failed` stay
+ * cached until the next push; `building` for 30 s.
  * Concurrent asks for one task share one read.
  */
 import { TASK_BRANCH_PREFIX } from '../../shared/constants/config';
@@ -14,7 +16,7 @@ import { lastBranchPush, previewPushAllowed } from './branch-push';
 import type { ActionsClient } from './github-actions';
 
 export interface PreviewDeps {
-  actions: Pick<ActionsClient, 'refDeployments' | 'deploymentStatus' | 'runs' | 'jobs'>;
+  actions: Pick<ActionsClient, 'refDeployments' | 'deploymentStatus' | 'runs' | 'jobs' | 'commitStatuses'>;
   resolveRepo(project: Project): Promise<{ owner: string; repo: string } | null>;
   now?(): number;
 }
@@ -73,14 +75,32 @@ async function failedLink(
   return log;
 }
 
-async function compute(project: Project, branch: string, deps: PreviewDeps): Promise<Core | null> {
+/**
+ * Vercel's commit status of the branch head, for a repository where Vercel makes no GitHub
+ * Deployment. A status has no preview address: `ready` only when one is known, else `built` with
+ * Vercel's page for the deployment (no URL is guessed).
+ */
+async function fromCommitStatus(deps: PreviewDeps, owner: string, repo: string, branch: string, sha: string | undefined): Promise<Core> {
+  const status = (await deps.actions.commitStatuses(owner, repo, branch))[0];
+  if (!status) return { state: 'building' };
+  if (status.state === 'failure' || status.state === 'error') {
+    return { state: 'failed', ...(await failedLink(deps, owner, repo, branch, sha, status.logUrl)) };
+  }
+  if (status.state === 'success') {
+    if (isHttps(status.url)) return { state: 'ready', url: status.url, builtAt: status.createdAt };
+    if (isHttps(status.logUrl)) return { state: 'built', logUrl: status.logUrl, builtAt: status.createdAt };
+  }
+  return { state: 'building' };
+}
+
+async function compute(project: Project, branch: string, deps: PreviewDeps, pushedSha?: string): Promise<Core | null> {
   const repo = await deps.resolveRepo(project);
   if (!repo) return null;
   const list = (await deps.actions.refDeployments(repo.owner, repo.repo, branch, PAGE))
     .filter((d) => !/^production$/i.test(d.environment))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const newest = list[0];
-  if (!newest) return { state: 'building' };
+  if (!newest) return fromCommitStatus(deps, repo.owner, repo.repo, branch, pushedSha);
   const status = await deps.actions.deploymentStatus(repo.owner, repo.repo, newest.id);
   if (isReady(status)) return { state: 'ready', url: status.url as string, builtAt: newest.createdAt };
   if (status.state === 'failure' || status.state === 'error') {
@@ -114,7 +134,7 @@ export async function previewState(project: Project, task: Task, deps: PreviewDe
 
   let flight = inFlight.get(task.id);
   if (!flight || flight.key !== key) {
-    const promise = compute(project, `${TASK_BRANCH_PREFIX}${task.specId}`, deps).catch(() => null);
+    const promise = compute(project, `${TASK_BRANCH_PREFIX}${task.specId}`, deps, push.sha).catch(() => null);
     flight = { key, promise };
     inFlight.set(task.id, flight);
     const mine = flight;

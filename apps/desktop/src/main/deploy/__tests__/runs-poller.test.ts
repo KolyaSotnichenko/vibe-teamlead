@@ -15,6 +15,7 @@ function setup(over: Record<string, unknown> = {}) {
     jobs: vi.fn(async () => []),
     workflowFile: vi.fn(async () => 'jobs:\n  build:\n    runs-on: x\n'),
     deployments: vi.fn(async () => []),
+    commitStatuses: vi.fn(async () => []),
     productionUrl: vi.fn(async () => 'https://prod.example'),
     jobLog: vi.fn(async () => 'log'),
     ...over,
@@ -369,5 +370,57 @@ describe('createRunsPoller main runs', () => {
     poller.start(project());
     for (let i = 0; i < 40; i++) await Promise.resolve();
     expect(seen).toEqual([[4, 2, 1]]);
+  });
+});
+
+describe('deploy stage from Vercel commit statuses (no GitHub Deployments for the sha)', () => {
+  const vercel = (state: 'in_progress' | 'success' | 'failure') => ({
+    environment: 'Vercel', state, createdAt: '2026-11-12T10:00:00Z', logUrl: 'https://vercel.com/acme/app/AbC',
+  });
+  const deployNodes = (s: DeployRunsState) => s.selected?.graph.columns.find((c) => c.stage === 'deploy')?.nodes ?? [];
+
+  it('builds the deploy column from the Vercel status of the run\'s sha, with its link', async () => {
+    const t = setup({ commitStatuses: vi.fn(async () => [vercel('failure')]) });
+    t.poller.start(project());
+    await t.flush();
+    expect(t.client.commitStatuses).toHaveBeenCalledWith('o', 'r', 'sha3');
+    expect(deployNodes(t.emitted.at(-1)!)).toEqual([
+      expect.objectContaining({ key: 'deploy:Vercel', label: 'Vercel', status: 'failure', logUrl: 'https://vercel.com/acme/app/AbC' }),
+    ]);
+  });
+
+  it('does not read statuses when the sha has deployments', async () => {
+    const t = setup({
+      deployments: vi.fn(async () => [{ environment: 'Production', state: 'success', createdAt: 'x' }]),
+      commitStatuses: vi.fn(async () => [vercel('failure')]),
+    });
+    t.poller.start(project());
+    await t.flush();
+    expect(t.client.commitStatuses).not.toHaveBeenCalled();
+    expect(deployNodes(t.emitted.at(-1)!).map((n) => n.label)).toEqual(['Production']);
+  });
+
+  it('a finished status is read once per sha; a pending one again on the next poll', async () => {
+    const done = setup({ runs: vi.fn(async () => [run(3, 'in_progress')]), commitStatuses: vi.fn(async () => [vercel('success')]) });
+    done.poller.start(project());
+    await done.flush();
+    await done.fire();
+    expect(done.client.commitStatuses).toHaveBeenCalledTimes(1);
+    expect(deployNodes(done.emitted.at(-1)!)[0].status).toBe('success');
+    const pending = setup({ runs: vi.fn(async () => [run(3, 'in_progress')]), commitStatuses: vi.fn(async () => [vercel('in_progress')]) });
+    pending.poller.start(project());
+    await pending.flush();
+    await pending.fire();
+    expect(pending.client.commitStatuses).toHaveBeenCalledTimes(2);
+    expect(deployNodes(pending.emitted.at(-1)!)[0].status).toBe('running');
+  });
+
+  it('a failed status read leaves the graph without a deploy column and is no error', async () => {
+    const t = setup({ commitStatuses: vi.fn(async () => { throw { kind: 'unavailable', message: 'x' }; }) });
+    t.poller.start(project());
+    await t.flush();
+    const s = t.emitted.at(-1)!;
+    expect(deployNodes(s)).toEqual([]);
+    expect(s.error).toBeUndefined();
   });
 });

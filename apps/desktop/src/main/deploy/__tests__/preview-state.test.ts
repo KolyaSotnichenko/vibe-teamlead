@@ -18,7 +18,7 @@ const dep = (over: Partial<DeployDeployment>): DeployDeployment => ({
   environment: 'Preview', state: 'success', url: 'https://p.vercel.app', createdAt: '2026-11-10T10:00:00Z', sha: 's1', ...over,
 });
 
-function deps(over: Partial<{ deployments: DeployDeployment[]; runs: DeployRun[]; jobs: DeployJob[]; fail: boolean }> = {}) {
+function deps(over: Partial<{ deployments: DeployDeployment[]; runs: DeployRun[]; jobs: DeployJob[]; fail: boolean; statuses: DeployDeployment[] }> = {}) {
   const list = over.deployments ?? [];
   // The list without statuses; each status is asked for on its own (by the index as id)
   const refDeployments = vi.fn(async () => {
@@ -33,12 +33,13 @@ function deps(over: Partial<{ deployments: DeployDeployment[]; runs: DeployRun[]
   });
   const runs = vi.fn(async () => over.runs ?? []);
   const jobs = vi.fn(async () => over.jobs ?? []);
+  const commitStatuses = vi.fn(async () => over.statuses ?? []);
   const d: PreviewDeps = {
-    actions: { refDeployments, deploymentStatus, runs, jobs },
+    actions: { refDeployments, deploymentStatus, runs, jobs, commitStatuses },
     resolveRepo: async () => ({ owner: 'acme', repo: 'app' }),
     now: () => 1000,
   };
-  return { d, refDeployments, deploymentsForRef: refDeployments, deploymentStatus, runs, jobs };
+  return { d, refDeployments, deploymentsForRef: refDeployments, deploymentStatus, runs, jobs, commitStatuses };
 }
 
 beforeEach(() => {
@@ -266,5 +267,62 @@ describe('GitHub cost', () => {
     expect(refDeployments).toHaveBeenCalledTimes(1);
     expect(a).toEqual(b);
     expect(b).toEqual(c);
+  });
+});
+
+describe('previewState from Vercel commit statuses (no GitHub Deployments for the branch)', () => {
+  const vercel = (over: Partial<DeployDeployment>): DeployDeployment => ({
+    environment: 'Vercel', state: 'in_progress', createdAt: '2026-11-12T10:00:00Z', logUrl: 'https://vercel.com/acme/app/AbC', ...over,
+  });
+
+  it('pending is building, asked for by the branch', async () => {
+    const { d, commitStatuses } = deps({ statuses: [vercel({})] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'building' });
+    expect(commitStatuses).toHaveBeenCalledWith('acme', 'app', 'vibe-teamlead/001-x');
+  });
+
+  it('failure is failed with the Vercel page as the log', async () => {
+    const { d } = deps({ statuses: [vercel({ state: 'failure' })] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', logUrl: 'https://vercel.com/acme/app/AbC' });
+  });
+
+  it('failure with a failed Actions run of the pushed commit links that run', async () => {
+    const { d } = deps({
+      statuses: [vercel({ state: 'failure' })],
+      runs: [{ id: 9, sha: 'h1' } as DeployRun],
+      jobs: [{ id: 4, conclusion: 'failure' } as DeployJob],
+    });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'failed', runId: 9, jobId: 4 });
+  });
+
+  it('success with a known https preview URL is ready', async () => {
+    const { d } = deps({ statuses: [vercel({ state: 'success', url: 'https://app-git-x.vercel.app' })] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'ready', url: 'https://app-git-x.vercel.app', builtAt: '2026-11-12T10:00:00Z' });
+  });
+
+  it('success without a preview URL is built, linking to the Vercel page, never a guessed URL', async () => {
+    const { d } = deps({ statuses: [vercel({ state: 'success' })] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'built', logUrl: 'https://vercel.com/acme/app/AbC', builtAt: '2026-11-12T10:00:00Z' });
+  });
+
+  it('success with no https link at all stays building', async () => {
+    const { d } = deps({ statuses: [vercel({ state: 'success', logUrl: 'http://vercel.com/x' })] });
+    expect(await previewState(project, task(), d)).toEqual({ state: 'building' });
+  });
+
+  it('no statuses either: building', async () => {
+    const { d } = deps();
+    expect(await previewState(project, task(), d)).toEqual({ state: 'building' });
+  });
+
+  it('built is cached until the next push; statuses are not read when deployments exist', async () => {
+    const { d, commitStatuses } = deps({ statuses: [vercel({ state: 'success' })] });
+    await previewState(project, task(), d);
+    await previewState(project, task(), d);
+    expect(commitStatuses).toHaveBeenCalledTimes(1);
+    invalidatePreview('t1');
+    const withDeployments = deps({ deployments: [dep({})], statuses: [vercel({ state: 'failure' })] });
+    expect((await previewState(project, task(), withDeployments.d)).state).toBe('ready');
+    expect(withDeployments.commitStatuses).not.toHaveBeenCalled();
   });
 });

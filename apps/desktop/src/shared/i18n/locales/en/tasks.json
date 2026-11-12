@@ -1287,6 +1287,9 @@
       "permissions": "the app has no permission to push",
       "no-connection": "no connection",
       "unavailable": "GitHub is not available"
-    }
+    },
+    "builtInVercel": "Preview built — open in Vercel",
+    "builtTitle": "Preview built",
+    "openInVercel": "Open in Vercel"
   }
 }

@@ -341,6 +341,7 @@ export const TaskCard = memo(function TaskCard({
   const handlePreview = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (preview?.state === 'ready') openWebUrl(preview.url);
+    else if (preview?.state === 'built' && isHttpsUrl(preview.logUrl)) openWebUrl(preview.logUrl);
     else if (preview?.state === 'building' && isHttpsUrl(preview.previousUrl)) openWebUrl(preview.previousUrl);
     else if (preview?.state === 'failed' && preview.runId === undefined && isHttpsUrl(preview.logUrl)) {
       // Vercel built it (no Actions run): its build log says why
@@ -394,7 +395,10 @@ export const TaskCard = memo(function TaskCard({
   const showDescription = !stage.current && !stage.finished && counts.total === 0 && !!sanitizedDescription;
 
   const showPreview =
-    preview?.state === 'building' || (preview?.state === 'ready' && isHttpsUrl(preview.url)) || preview?.state === 'failed';
+    preview?.state === 'building' ||
+    (preview?.state === 'ready' && isHttpsUrl(preview.url)) ||
+    (preview?.state === 'built' && isHttpsUrl(preview.logUrl)) ||
+    preview?.state === 'failed';
 
   const actionClass =
     'flex min-h-11 min-w-0 flex-1 items-center justify-start gap-2 px-4 text-sm font-medium ' +
@@ -583,7 +587,7 @@ export const TaskCard = memo(function TaskCard({
             data-marker={preview.state === 'building' ? 'running' : undefined}
             className={cn('h-2 w-2 shrink-0', preview.state === 'failed' ? 'bg-destructive' : 'bg-foreground', preview.state === 'building' && 'vt-breathe')}
           />
-          <span className="min-w-0 flex-1 truncate">{t(`taskPreview.${preview.state === 'building' ? 'button' : preview.state}`)}</span>
+          <span className="min-w-0 flex-1 truncate">{t(`taskPreview.${preview.state === 'building' ? 'button' : preview.state === 'built' ? 'builtInVercel' : preview.state}`)}</span>
           {preview.state === 'building' && <span className="sr-only">{t('taskPreview.building')}</span>}
           {preview.state === 'ready' && formatSince(preview.builtAt, i18n.language) && (
             <span className="shrink-0 font-mono text-xs text-muted-foreground">

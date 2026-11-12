@@ -298,6 +298,23 @@ describe('TaskCard', () => {
       expect(onClick).not.toHaveBeenCalled();
     });
 
+    it('built (Vercel gave no preview address) says so and opens the Vercel page', async () => {
+      const open = withPreview({ state: 'built', logUrl: 'https://vercel.com/acme/app/AbC', builtAt: new Date().toISOString() });
+      const onClick = vi.fn();
+      render(<TaskCard task={task()} onClick={onClick} />);
+      const button = await screen.findByRole('button', { name: /taskPreview\.builtInVercel/ });
+      fireEvent.click(button);
+      expect(open).toHaveBeenCalledWith('https://vercel.com/acme/app/AbC');
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('renders no button for a built preview whose Vercel link is not https', async () => {
+      withPreview({ state: 'built', logUrl: 'http://vercel.com/x', builtAt: new Date().toISOString() });
+      render(<TaskCard task={task()} onClick={vi.fn()} />);
+      await waitFor(() => expect(window.electronAPI.deploy.previewState).toHaveBeenCalled());
+      expect(screen.queryByText(/taskPreview\./)).not.toBeInTheDocument();
+    });
+
     it('renders no button for a ready preview whose URL is not https', async () => {
       withPreview({ state: 'ready', url: 'http://x.vercel.app', builtAt: new Date().toISOString() });
       render(<TaskCard task={task()} onClick={vi.fn()} />);
