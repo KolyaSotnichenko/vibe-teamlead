@@ -43,6 +43,7 @@ function make(over: Partial<ReadinessDeps> = {}) {
         return t;
       },
       startTask: async () => {},
+      queueTask: async () => {},
     },
     setUp: setUp as never,
     canAutoSetUp: canAutoSetUp as never,

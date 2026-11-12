@@ -731,6 +731,27 @@ export async function syncTasksFromDisk(projectId: string): Promise<void> {
   }
 }
 
+/** Coalesces a burst of events for new tasks (a Deploy scan creates several at once) into one read */
+const UNKNOWN_TASK_SYNC_MS = 100;
+const unknownTaskSyncs = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * A status event for a task the board doesn't have: main created it (Deploy blocker tasks are
+ * created and queued there). Reads the task list soon, so the task appears; one that arrives in
+ * the queue is then started by the board's queue when a slot is free. Returns whether it will read.
+ */
+export function syncIfUnknownTask(taskId: string, projectId: string | undefined): boolean {
+  if (!projectId) return false;
+  if (findTaskIndex(useTaskStore.getState().tasks, taskId) !== -1) return false;
+  if (!unknownTaskSyncs.has(projectId)) {
+    unknownTaskSyncs.set(projectId, setTimeout(() => {
+      unknownTaskSyncs.delete(projectId);
+      void syncTasksFromDisk(projectId);
+    }, UNKNOWN_TASK_SYNC_MS));
+  }
+  return true;
+}
+
 export async function loadTasks(projectId: string, options?: { forceRefresh?: boolean }): Promise<void> {
   const store = useTaskStore.getState();
   store.setLoading(true);

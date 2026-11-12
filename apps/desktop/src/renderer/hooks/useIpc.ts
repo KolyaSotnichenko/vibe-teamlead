@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
-import { useTaskStore } from '../stores/task-store';
+import { syncIfUnknownTask, useTaskStore } from '../stores/task-store';
 import { useRoadmapStore } from '../stores/roadmap-store';
 import { useRateLimitStore } from '../stores/rate-limit-store';
 import { useAuthFailureStore } from '../stores/auth-failure-store';
@@ -218,6 +218,9 @@ export function useIpcListeners(): void {
         });
         // Filter by project to prevent multi-project interference
         if (!isTaskForCurrentProject(projectId)) return;
+        // A task main just created (a Deploy blocker task) isn't on the board yet: read the list
+        const { activeProjectId, selectedProjectId } = useProjectStore.getState();
+        syncIfUnknownTask(taskId, projectId || activeProjectId || selectedProjectId || undefined);
         queueUpdate(taskId, { status, reviewReason });
 
         // Sync roadmap feature when task completes

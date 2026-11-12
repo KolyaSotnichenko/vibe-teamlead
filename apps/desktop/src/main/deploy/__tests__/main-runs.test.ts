@@ -46,6 +46,7 @@ function makeDeps(over: Partial<MainRunDeps> = {}) {
       return t;
     },
     startTask: async (id) => { started.push(id); },
+    queueTask: async () => { throw new Error('a run-fix task starts at once'); },
   };
   const deps: MainRunDeps = { client, resolveRepo: async () => ({ owner: 'o', repo: 'r' }), tasks: taskDeps, ...over };
   return Object.assign(deps, { client });

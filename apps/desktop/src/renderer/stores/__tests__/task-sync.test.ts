@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../../../shared/types';
-import { syncTasksFromDisk, useTaskStore } from '../task-store';
+import { syncIfUnknownTask, syncTasksFromDisk, useTaskStore } from '../task-store';
 
 function task(id: string, status: Task['status'], extra: Partial<Task> = {}): Task {
   return { id, specId: id, projectId: 'p', title: id, description: '', status, subtasks: [], logs: [], createdAt: new Date(), updatedAt: new Date(), ...extra } as Task;
@@ -55,5 +55,36 @@ describe('syncTasksFromDisk', () => {
     (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { ...(window as any).electronAPI, getTasks: vi.fn().mockResolvedValue({ success: false, error: 'x' }) };
     await syncTasksFromDisk('p');
     expect(useTaskStore.getState().tasks.map((t) => t.status)).toEqual(['in_progress', 'queue']);
+  });
+});
+
+describe('syncIfUnknownTask', () => {
+  beforeEach(() => {
+    useTaskStore.getState().setTasks([task('a', 'in_progress')]);
+  });
+
+  it('reads the task list once for a burst of tasks main created, and adds them to the board', async () => {
+    vi.useFakeTimers();
+    try {
+      const getTasks = vi.fn().mockResolvedValue({ success: true, data: [task('a', 'in_progress'), task('d1', 'queue'), task('d2', 'queue')] });
+      (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { ...(window as any).electronAPI, getTasks };
+
+      expect(syncIfUnknownTask('d1', 'p')).toBe(true);
+      expect(syncIfUnknownTask('d2', 'p')).toBe(true);
+      await vi.runAllTimersAsync();
+
+      expect(getTasks).toHaveBeenCalledTimes(1);
+      expect(useTaskStore.getState().tasks.map((t) => [t.id, t.status])).toEqual([['a', 'in_progress'], ['d1', 'queue'], ['d2', 'queue']]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves known tasks to the status event', () => {
+    const getTasks = vi.fn();
+    (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { ...(window as any).electronAPI, getTasks };
+    expect(syncIfUnknownTask('a', 'p')).toBe(false);
+    expect(syncIfUnknownTask('x', undefined)).toBe(false);
+    expect(getTasks).not.toHaveBeenCalled();
   });
 });

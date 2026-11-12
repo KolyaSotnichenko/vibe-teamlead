@@ -20,6 +20,7 @@ import {
 let dir: string;
 let tasks: Task[];
 let started: string[];
+let queued: string[];
 let created: Array<{ title: string; description: string; metadata: TaskMetadata }>;
 const project = () => ({ id: 'p1', path: dir, settings: {} }) as unknown as Project;
 const ledger = () => path.join(dir, '.vibe-teamlead', 'deploy', 'tasks.json');
@@ -34,6 +35,7 @@ function deps(): DeployTaskDeps {
       return t;
     },
     startTask: async (id) => { started.push(id); },
+    queueTask: async (id) => { queued.push(id); },
     defaultModels: () => ({ model: 'm' } as Partial<TaskMetadata>),
     now: () => new Date('2026-11-12T10:00:00Z'),
   };
@@ -44,14 +46,15 @@ const wf: ReadinessBlocker = { key: 'workflow:ci', kind: 'workflow', subject: 'c
 const unsupported: ReadinessBlocker = { key: 'unsupported:go', kind: 'unsupported', subject: 'go', title: 'Go', detail: 'x' };
 const FIXED = 'Found by the Deploy readiness scan; fix what blocks deploying to Vercel. Don\'t delete, skip or weaken tests.';
 
-beforeEach(() => { dir = mkdtempSync(path.join(tmpdir(), 'dtasks-')); tasks = []; started = []; created = []; });
+beforeEach(() => { dir = mkdtempSync(path.join(tmpdir(), 'dtasks-')); tasks = []; started = []; queued = []; created = []; });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 describe('createBlockerTasks', () => {
-  it('creates and starts one task per blocker', async () => {
+  it('creates one task per blocker and queues it (the parallel-task limit applies), never starting it', async () => {
     const keys = await createBlockerTasks(project(), [code, wf], deps());
     expect(keys).toEqual(['code:localhost', 'workflow:ci']);
-    expect(started).toEqual(['t1', 't2']);
+    expect(queued).toEqual(['t1', 't2']);
+    expect(started).toEqual([]);
     expect(created[0].metadata).toMatchObject({ model: 'm', sourceType: 'deploy', priority: 'high', deployKey: 'code:localhost', category: 'bug_fix' });
     expect(created[1].metadata.category).toBe('infrastructure');
   });
@@ -221,7 +224,9 @@ describe('createRunFixTask', () => {
     expect(await createRunFixTask(project(), fix, deps())).toBe(true);
     expect(created[0]).toMatchObject({ title: 'Fix CI', description: 'it fails' });
     expect(created[0].metadata).toMatchObject({ priority: 'urgent', category: 'bug_fix', sourceType: 'deploy', deployKey: 'run:7' });
+    // Urgent: started at once, not queued
     expect(started).toEqual(['t1']);
+    expect(queued).toEqual([]);
     expect(await createRunFixTask(project(), fix, deps())).toBe(false);
   });
 });

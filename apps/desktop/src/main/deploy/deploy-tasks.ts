@@ -20,7 +20,10 @@ import { writeFileReplacingSync } from '../ai/safe-write';
 export interface DeployTaskDeps {
   getTasks(projectId: string): Task[];
   createTask(project: Project, title: string, description: string, metadata: TaskMetadata): Promise<Task>;
+  /** Starts a task at once, past the queue: only urgent fixes (a failing run on main) */
   startTask(taskId: string): Promise<void>;
+  /** Puts a task in the queue: it starts when the project's parallel-task limit has a free slot */
+  queueTask(taskId: string): Promise<void>;
   /** The user's default models for a new task */
   defaultModels?(): Partial<TaskMetadata>;
   now?(): Date;
@@ -116,7 +119,7 @@ const isOpenEntry = (entry: LedgerTask, tasks: Task[], now: Date): boolean => {
   return Number.isFinite(age) && age >= 0 && age < FRESH_MS;
 };
 
-/** Creates and starts one task for a key unless one is open or being created, or the key is given up. */
+/** Creates one task for a key and queues it (or starts it now, `start: 'now'`) unless one is open or being created, or the key is given up. */
 async function createKeyed(
   project: Project,
   key: string,
@@ -125,7 +128,7 @@ async function createKeyed(
   description: string,
   extra: Partial<TaskMetadata>,
   deps: DeployTaskDeps,
-  opts: { url?: string; blockedBy?: DeployKeyKind } = {},
+  opts: { url?: string; blockedBy?: DeployKeyKind; start?: 'now' | 'queue' } = {},
 ): Promise<boolean> {
   const lock = `${project.path}|${key}`;
   if (creating.has(lock)) return false;
@@ -150,7 +153,8 @@ async function createKeyed(
       ...extra,
     });
     recordTask(project.path, key, kind, created.specId, now);
-    await deps.startTask(created.id);
+    if (opts.start === 'now') await deps.startTask(created.id);
+    else await deps.queueTask(created.id);
     return true;
   } finally {
     creating.delete(lock);
@@ -198,7 +202,11 @@ export function resetMissingBlockers(projectPath: string, present: string[]): vo
   settle(projectPath, (k) => !k.startsWith('run:') && !found.has(k));
 }
 
-/** One task per code or workflow blocker without an open task. Returns the keys it created. */
+/**
+ * One task per code or workflow blocker without an open task, put in the queue: a scan can find
+ * several blockers, and they wait for the project's parallel-task limit like any task. Returns the
+ * keys it created.
+ */
 export async function createBlockerTasks(project: Project, blockers: ReadinessBlocker[], deps: DeployTaskDeps): Promise<string[]> {
   const keys: string[] = [];
   for (const blocker of blockers) {
@@ -236,6 +244,8 @@ export function createRunFixTask(
 ): Promise<boolean> {
   return createKeyed(project, fix.key, 'run', fix.title, fix.description, { category: 'bug_fix', priority: 'urgent' }, deps, {
     blockedBy: 'workflow',
+    // Urgent: main is broken, so it starts at once like a base-fix task
+    start: 'now',
     ...(fix.url ? { url: fix.url } : {}),
   });
 }

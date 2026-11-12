@@ -1,5 +1,5 @@
 import { occupiesSlot, parallelTaskLimit, slotHolderLabels } from '../../shared/utils/task-slots';
-import { isReadyToStart } from '../lib/task-dependencies';
+import { isReadyToStart, nextQueuedToStart } from '../lib/task-dependencies';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
@@ -538,13 +538,11 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         // Get CURRENT state from store to ensure accuracy
         const currentTasks = useTaskStore.getState().tasks;
         const inProgressCount = currentTasks.filter(occupiesSlot).length;
-        // Tasks whose dependencies (brief import) are not done yet keep waiting.
-        const queuedTasks = currentTasks.filter((t) =>
-          t.status === 'queue' && !t.metadata?.archivedAt && !attemptedTaskIds.has(t.id) && isReadyToStart(t, currentTasks)
-        );
+        // The oldest queued task that may start (dependencies done), if a slot is free
+        const nextTask = nextQueuedToStart(currentTasks, maxParallelTasks, attemptedTaskIds);
 
         // Stop if no capacity, no queued tasks, or too many consecutive failures
-        if (inProgressCount >= maxParallelTasks || queuedTasks.length === 0) {
+        if (!nextTask) {
           break;
         }
 
@@ -552,13 +550,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           console.warn(`[Queue] Stopping queue processing after ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
           break;
         }
-
-        // Get the oldest task in queue (FIFO ordering)
-        const nextTask = queuedTasks.sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateA - dateB; // Ascending order (oldest first)
-        })[0];
 
         console.log(`[Queue] Auto-promoting task ${nextTask.id} from Queue to In Progress (${inProgressCount + 1}/${maxParallelTasks})`);
         const result = await persistTaskStatus(nextTask.id, 'in_progress');

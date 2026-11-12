@@ -128,6 +128,10 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       if (!agentManager) return;
       await (await import('./task/execution-handlers')).startTask(agentManager, getMainWindow, id);
     },
+    // Blocker tasks wait for a free slot (the project's parallel-task limit) like any task
+    queueTask: async (id) => {
+      await (await import('./task/queue-task')).queueTask(getMainWindow, id);
+    },
     defaultModels: () => resolveDefaultTaskModels(readSettingsFile() as never),
   };
   const mainRunDeps: MainRunDeps = { client, resolveRepo, tasks: taskDeps };
