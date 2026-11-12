@@ -74,6 +74,21 @@ async function pushOnce(
   return outcome;
 }
 
+/** The project's main branch: settings.mainBranch, else `main` or `master` among the local branches (read from .git files). Undefined when unknown; never throws. */
+export async function resolveMainBranch(
+  project: Pick<Project, 'path' | 'settings'>,
+  branches?: (projectPath: string) => Promise<string[]>,
+): Promise<string | undefined> {
+  if (project.settings?.mainBranch) return project.settings.mainBranch;
+  let names: string[] = [];
+  try {
+    names = await (branches ?? (async (p) => (await readGitInfo(p))?.branches ?? []))(project.path);
+  } catch {
+    // unknown
+  }
+  return names.includes('main') ? 'main' : names.includes('master') ? 'master' : undefined;
+}
+
 /** Fire and forget from the merge handler; never rejects. */
 export async function pushMainAfterMerge(
   project: Pick<Project, 'id' | 'path' | 'settings'>,
@@ -82,16 +97,7 @@ export async function pushMainAfterMerge(
 ): Promise<PushAfterMergeOutcome> {
   const deploy = project.settings?.deploy;
   if (!deploy?.enabled || !deploy.repo) return { pushed: false };
-  let main = project.settings.mainBranch;
-  if (!main) {
-    let names: string[] = [];
-    try {
-      names = await (deps.branches ?? (async (p) => (await readGitInfo(p))?.branches ?? []))(project.path);
-    } catch {
-      // unknown: no push
-    }
-    main = names.includes('main') ? 'main' : names.includes('master') ? 'master' : undefined;
-  }
+  const main = await resolveMainBranch(project, deps.branches);
   // Only the project's main branch goes to GitHub, never a merge into some other branch
   if (!main || mergedInto !== main) return { pushed: false };
   const branch = main;

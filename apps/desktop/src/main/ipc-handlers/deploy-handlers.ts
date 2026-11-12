@@ -30,9 +30,9 @@ import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
 import { createReadiness } from '../deploy/readiness';
 import { setReadiness } from '../deploy/readiness-instance';
-import { lastPushResult } from '../deploy/push-after-merge';
+import { lastPushResult, resolveMainBranch } from '../deploy/push-after-merge';
 import { createRunsPoller, fetchJobLog } from '../deploy/runs-poller';
-import { createSetupDeps, readGitInfo, saveDeployPatch, setUpDeploy } from '../deploy/setup';
+import { createSetupDeps, saveDeployPatch, setUpDeploy } from '../deploy/setup';
 import { listDeployVariables, setDeployVariable, type VariablesDeps } from '../deploy/variables';
 import { createVercelClient, defaultVercelFetcher } from '../deploy/vercel-api';
 import { getVercelToken, vercelCliPaths, vercelStatus } from '../deploy/vercel-credential';
@@ -197,18 +197,12 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
 
   // --- Readiness -------------------------------------------------------------------------------
 
-  const mainBranchOf = async (project: Project): Promise<string | undefined> => {
-    if (project.settings.mainBranch) return project.settings.mainBranch;
-    const names = (await readGitInfo(project.path))?.branches ?? [];
-    return names.includes('main') ? 'main' : names.includes('master') ? 'master' : undefined;
-  };
-
   const readiness = createReadiness({
     scan: (input) => runReadinessScan(input),
     lastMainRun: async (project): Promise<ScanInput['lastMainRun']> => {
       try {
         const repo = await resolveRepo(project);
-        const main = await mainBranchOf(project);
+        const main = await resolveMainBranch(project);
         if (!repo || !main) return undefined;
         const runs = await client.runs(repo.owner, repo.repo, READINESS_FAILED_RUNS);
         const run = runs

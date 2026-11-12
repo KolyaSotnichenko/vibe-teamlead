@@ -8,8 +8,8 @@ import type { Project } from '../../shared/types';
 import type { ReadinessResult, ReadinessState } from '../../shared/types/deploy';
 import type { ScanInput } from '../ai/runners/deploy-readiness';
 import { createBlockerTasks, type DeployTaskDeps, deployTaskStatus } from './deploy-tasks';
+import { resolveMainBranch } from './push-after-merge';
 import { readReadiness, writeReadiness } from './readiness-store';
-import { readGitInfo } from './setup';
 
 export type ReadinessReason = 'open' | 'check-again' | 'merge';
 
@@ -32,17 +32,6 @@ export interface ReadinessDeps {
 interface Flight {
   promise: Promise<void>;
   again: boolean;
-}
-
-async function mainBranch(project: Project, deps: ReadinessDeps): Promise<string | undefined> {
-  if (project.settings?.mainBranch) return project.settings.mainBranch;
-  let names: string[] = [];
-  try {
-    names = await (deps.branches ?? (async (p) => (await readGitInfo(p))?.branches ?? []))(project.path);
-  } catch {
-    // unknown: no scan
-  }
-  return names.includes('main') ? 'main' : names.includes('master') ? 'master' : undefined;
 }
 
 const blocksDeploy = (r: ReadinessResult | null): boolean => !!r?.blockers.some((b) => b.kind === 'code' || b.kind === 'workflow');
@@ -138,12 +127,13 @@ export function createReadiness(deps: ReadinessDeps) {
         if (reason === 'open' && saved) return;
         if (reason === 'merge') {
           if (!saved) return;
-          const main = await mainBranch(project, deps);
+          const main = await resolveMainBranch(project, deps.branches);
           if (!main || mergedInto !== main) return;
         }
         const running = flights.get(project.id);
         if (running) {
-          running.again = true;
+          // An 'open' joins the running scan: it only asks for a first result, which this scan produces
+          if (reason !== 'open') running.again = true;
           return running.promise;
         }
         const flight: Flight = { again: false, promise: Promise.resolve() };

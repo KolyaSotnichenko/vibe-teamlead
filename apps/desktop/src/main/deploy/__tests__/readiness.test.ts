@@ -118,6 +118,21 @@ describe('single flight', () => {
   });
 });
 
+describe('open while the first scan runs', () => {
+  it('two concurrent opens with nothing saved scan once', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    scan.mockImplementationOnce(async () => { await gate; return result([]); });
+    const r = make();
+    const first = r.scan(project(), 'open');
+    await Promise.resolve();
+    const second = r.scan(project(), 'open');
+    release();
+    await Promise.all([first, second]);
+    expect(scan).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('outcome', () => {
   it('a failing scan keeps the old result, sets the error and creates no task', async () => {
     writeReadiness(dir, result([blocker('old')]));
