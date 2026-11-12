@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.40 - 2026-11-12
+
+- Tasks: a task the app queued itself (Deploy, spec document import) now stays in Planning when you move it there, instead of coming back to the queue.
+- Deploy → Readiness: a problem found again in other words no longer becomes a second task. The check is told which blockers it already knows and says when it finds one of them again; a blocker whose task is still open is never treated as gone.
+- Deploy: when Vercel reports only through the commit's status on GitHub (no GitHub Deployments), Runs shows the deploy stage from it and task cards show the preview state ("Preview built" links to Vercel when no preview address is given).
+- A failed run on main gets no extra fix task while an open task already works on that failure; it is checked again once that task closes.
+
 ## 2.0.0-beta.39 - 2026-11-12
 
 - Task cards are laid out anew: the title gets up to three lines, the status, priority and time sit in a row under the progress that wraps instead of overlapping, the preview has its own row, and the bottom strip holds only buttons. Long labels (Ukrainian ones included) are cut with an ellipsis instead of running into each other. Only urgent and high priority get a coloured chip.
