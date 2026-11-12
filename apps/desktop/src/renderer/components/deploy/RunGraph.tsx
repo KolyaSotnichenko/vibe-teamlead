@@ -7,7 +7,7 @@ import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeployJob, GraphNode, RunGraph as RunGraphData } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
-import { StatusMark, formatDuration, formatRelative } from './status';
+import { StatusMark, formatDuration } from './status';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 interface RunGraphProps {
@@ -23,7 +23,6 @@ function useStageLabel() {
   return (stage: string): string => {
     const level = /^level-(\d+)$/.exec(stage);
     if (level) return t('deploy:graph.stage', { n: Number(level[1]) });
-    if (stage === 'deploy') return t('deploy:graph.deploy');
     return t('deploy:graph.other');
   };
 }
@@ -46,19 +45,13 @@ function Connector({ state }: { state: ConnectorState }) {
   );
 }
 
-/** What a node stands for beyond its label: the jobs behind it, and when a deployment went live. */
+/** What a node stands for beyond its label: the jobs behind it. */
 function useNodeDetails() {
-  const { t, i18n } = useTranslation(['deploy']);
   return (node: GraphNode, jobs: DeployJob[]): string[] => {
     const details: string[] = [];
     const names = node.jobIds.map((id) => jobs.find((j) => j.id === id)?.name).filter((n): n is string => !!n);
     // Several jobs folded into one node, or a single job whose name differs from the label (e.g. "Image …")
     if (names.length > 1 || (names.length === 1 && names[0] !== node.label)) details.push(...names);
-    // Only a deployment that is live: not while it is still queued or running
-    if (node.deployedAt && node.status !== 'running' && node.status !== 'queued') {
-      const ago = formatRelative(node.deployedAt, i18n.language);
-      if (ago) details.push(t('deploy:graph.deployed', { ago }));
-    }
     return details;
   };
 }

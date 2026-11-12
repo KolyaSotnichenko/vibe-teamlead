@@ -206,13 +206,13 @@ describe('Needed from you', () => {
 });
 
 describe('What exists', () => {
-  it('repository with visibility and production URL; old Vercel data shows nothing of Vercel', async () => {
+  it('repository with visibility, no production URL; old Vercel data shows nothing of Vercel', async () => {
     const h = setup({
       env: { settings: { ...setUpSettings, vercel: { projectId: 'prj_1', projectName: 'shop-web' }, database: { provider: 'neon', addedAt: 'x' } } as DeployProjectSettings },
     });
-    h.runs({ projectId: 'p1', repo: { owner: 'acme', repo: 'shop' }, runs: [], productionUrl: 'https://shop.vercel.app', nextPollAt: '2026-11-11T10:06:00Z' });
+    h.runs({ projectId: 'p1', repo: { owner: 'acme', repo: 'shop' }, runs: [], nextPollAt: '2026-11-11T10:06:00Z' });
     const panel = await openEnvironment();
-    fireEvent.click(await within(panel).findByRole('button', { name: 'shop.vercel.app' }));
+    expect(within(panel).queryByText('shop.vercel.app')).not.toBeInTheDocument();
     h.openExternal.mockClear();
     fireEvent.click(await within(panel).findByRole('button', { name: 'acme/shop' }));
     expect(within(panel).getByText('deploy:exists.private')).toBeInTheDocument();

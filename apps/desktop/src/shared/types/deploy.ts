@@ -54,40 +54,6 @@ export interface DeployJob {
   steps: DeployStep[];
 }
 
-export type DeployDeploymentState =
-  | 'queued'
-  | 'in_progress'
-  | 'success'
-  | 'failure'
-  | 'error'
-  | 'inactive'
-  | 'pending';
-
-export interface DeployDeployment {
-  environment: string;
-  state: DeployDeploymentState;
-  url?: string;
-  logUrl?: string;
-  createdAt: string;
-  /** The commit deployed. */
-  sha?: string;
-}
-
-/** A deployment of a ref, before its status is read (`refDeployments`). */
-export interface DeployRefDeployment {
-  id: number;
-  environment: string;
-  createdAt: string;
-  sha?: string;
-}
-
-/** A deployment's latest status (`deploymentStatus`). */
-export interface DeployDeploymentStatus {
-  state: DeployDeploymentState;
-  url?: string;
-  logUrl?: string;
-}
-
 /** A task's preview, from the GitHub Deployments of its branch (else Vercel's commit status of its head). */
 export type TaskPreview =
   | { state: 'not-set-up' }
@@ -119,15 +85,11 @@ export interface GraphNode {
   status: GraphNodeStatus;
   startedAt?: string;
   completedAt?: string;
-  /** Deployment nodes only: when the deployment was created (they have no start or duration) */
-  deployedAt?: string;
-  deploymentUrl?: string;
-  logUrl?: string;
 }
 
 /**
  * `stage` is a stable identifier, not display text: `level-<n>` (n from 1, the n-th level of the
- * workflow's needs), `other` (jobs not in the workflow file) or `deploy`. The UI translates it.
+ * workflow's needs) or `other` (jobs not in the workflow file). The UI translates it.
  */
 export interface RunGraph {
   columns: Array<{ stage: string; nodes: GraphNode[] }>;
@@ -139,7 +101,6 @@ export interface DeployRunsState {
   repo?: { owner: string; repo: string };
   runs: DeployRun[];
   selected?: { runId: number; jobs: DeployJob[]; graph: RunGraph };
-  productionUrl?: string | null;
   error?: GitHubError;
   /** ISO time of the next poll. */
   nextPollAt: string;

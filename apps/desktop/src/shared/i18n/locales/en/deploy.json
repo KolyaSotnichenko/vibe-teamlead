@@ -31,17 +31,14 @@
     "listLabel": "GitHub Actions runs"
   },
   "run": {
-    "openOnGitHub": "Open on GitHub",
-    "production": "Production"
+    "openOnGitHub": "Open on GitHub"
   },
   "graph": {
     "stage": "Stage {{n}}",
     "other": "Other jobs",
-    "deploy": "Deploy",
     "loading": "Loading this run’s jobs…",
     "empty": "This run has no jobs yet",
-    "paused": "Paused by GitHub’s rate limit; this run loads when it lifts",
-    "deployed": "Deployed {{ago}}"
+    "paused": "Paused by GitHub’s rate limit; this run loads when it lifts"
   },
   "status": {
     "queued": "Queued",
@@ -57,8 +54,6 @@
     "steps": "Steps",
     "noSteps": "No steps yet",
     "fullLog": "Full log on GitHub",
-    "deployment": "Deployment",
-    "deploymentLog": "Deployment log",
     "noDetails": "No details from the host yet"
   },
   "log": {
@@ -121,7 +116,6 @@
     "public": "Public",
     "private": "Private",
     "vercel": "Vercel project",
-    "production": "Production",
     "database": "Database"
   },
   "database": {

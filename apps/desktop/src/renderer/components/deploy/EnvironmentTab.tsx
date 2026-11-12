@@ -1,6 +1,6 @@
 /**
  * Deploy → Environment: set up CI (the GitHub repository steps), what the owner must do, what
- * exists (the repository, production URL) and the last push of main after a merge.
+ * exists (the repository) and the last push of main after a merge.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ import { Button } from '../ui/button';
 import { NeededFromYou } from './NeededFromYou';
 import { Notice, Row, Section } from './parts';
 import type { DeployEnv } from './useDeployEnv';
-import { displayUrl, formatRelative, isWebUrl, LinkButton, StatusMark, useDeployErrorText } from './status';
+import { formatRelative, LinkButton, StatusMark, useDeployErrorText } from './status';
 
 /** Push failures with their own text; any other kind uses the shared deploy error text. */
 const PUSH_ERROR_KINDS: ReadonlySet<string> = new Set(['conflict', 'permissions', 'no-connection', 'unavailable']);
@@ -43,10 +43,9 @@ export interface EnvironmentTabProps {
   /** Opens the GitHub sign-in dialog the Deploy page owns. */
   onConnectGitHub: () => void;
   env: DeployEnv;
-  productionUrl?: string | null;
 }
 
-export function EnvironmentTab({ env, productionUrl, onConnectGitHub }: EnvironmentTabProps) {
+export function EnvironmentTab({ env, onConnectGitHub }: EnvironmentTabProps) {
   const { t, i18n } = useTranslation(['deploy']);
   const errorText = useDeployErrorText();
   const pushErrorText = (kind: string | undefined): string =>
@@ -127,13 +126,6 @@ export function EnvironmentTab({ env, productionUrl, onConnectGitHub }: Environm
                 <span className="text-xs text-muted-foreground">
                   {settings.repo.public ? t('deploy:exists.public') : t('deploy:exists.private')}
                 </span>
-              </Row>
-            )}
-            {isWebUrl(productionUrl) && (
-              <Row label={t('deploy:exists.production')}>
-                <LinkButton url={productionUrl} mono>
-                  {displayUrl(productionUrl)}
-                </LinkButton>
               </Row>
             )}
           </dl>

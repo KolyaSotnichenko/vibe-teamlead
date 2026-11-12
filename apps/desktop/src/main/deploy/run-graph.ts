@@ -1,11 +1,10 @@
 /**
  * Builds the run graph of one workflow run: columns are the topological levels of the
  * workflow's `jobs.<id>.needs`, nodes are workflow jobs (matrix and reusable-workflow
- * jobs from the API folded into them), and deployments form a last column.
+ * jobs from the API folded into them).
  */
 import { load } from 'js-yaml';
 import type {
-  DeployDeployment,
   DeployJob,
   GraphNode,
   GraphNodeStatus,
@@ -22,7 +21,6 @@ interface WorkflowJob {
   matchers: Array<(name: string) => boolean>;
 }
 
-const DEPLOY_STAGE = 'deploy';
 const OTHER_STAGE = 'other';
 
 function jobStatus(job: DeployJob): GraphNodeStatus {
@@ -40,23 +38,6 @@ function jobStatus(job: DeployJob): GraphNodeStatus {
     case 'skipped':
     case 'neutral':
       return 'skipped';
-    default:
-      return 'skipped';
-  }
-}
-
-function deploymentStatus(d: DeployDeployment): GraphNodeStatus {
-  switch (d.state) {
-    case 'success':
-      return 'success';
-    case 'failure':
-    case 'error':
-      return 'failure';
-    case 'in_progress':
-      return 'running';
-    case 'queued':
-    case 'pending':
-      return 'queued';
     default:
       return 'skipped';
   }
@@ -196,33 +177,7 @@ function makeNode(key: string, label: string, jobs: DeployJob[]): GraphNode {
   };
 }
 
-function deployColumn(deployments: DeployDeployment[]): { stage: string; nodes: GraphNode[] } | null {
-  if (deployments.length === 0) return null;
-  const latest = new Map<string, DeployDeployment>();
-  for (const d of deployments) {
-    const prev = latest.get(d.environment);
-    if (!prev || d.createdAt >= prev.createdAt) latest.set(d.environment, d);
-  }
-  return {
-    stage: DEPLOY_STAGE,
-    nodes: [...latest.values()].map((d) => ({
-      key: `deploy:${d.environment}`,
-      label: d.environment,
-      jobIds: [],
-      status: deploymentStatus(d),
-      // No duration for a deployment (it would count up from when it went live); only that time
-      deployedAt: d.createdAt,
-      deploymentUrl: d.url,
-      logUrl: d.logUrl,
-    })),
-  };
-}
-
-export function buildRunGraph(
-  workflowYaml: string | null,
-  jobs: DeployJob[],
-  deployments: DeployDeployment[],
-): RunGraph {
+export function buildRunGraph(workflowYaml: string | null, jobs: DeployJob[]): RunGraph {
   const columns: RunGraph['columns'] = [];
   const workflow = parseWorkflow(workflowYaml);
   const levelOf = workflow ? levels(workflow) : null;
@@ -258,7 +213,5 @@ export function buildRunGraph(
     }
   }
 
-  const deploy = deployColumn(deployments);
-  if (deploy) columns.push(deploy);
   return { columns };
 }

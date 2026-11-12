@@ -5,10 +5,6 @@
 import { execFile } from 'child_process';
 import type { Project } from '../../shared/types';
 import type {
-  DeployDeployment,
-  DeployDeploymentStatus,
-  DeployRefDeployment,
-  DeployDeploymentState,
   DeployJob,
   DeployRun,
   DeployStatus,
@@ -121,68 +117,11 @@ function mapJob(j: Obj): DeployJob {
 
 const enc = (p: string): string => p.split('/').map(encodeURIComponent).join('/');
 
-/** An https link without credentials, else undefined */
-function httpsUrl(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  try {
-    const u = new URL(value);
-    return u.protocol === 'https:' && !u.username && !u.password ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Vercel's Git integration statuses; "Vercel Preview Comments" is its comments feature, not a build */
-const VERCEL_CONTEXT = /^vercel/i;
-const NOT_A_BUILD = /comments/i;
-const COMMIT_STATE: Record<string, DeployDeploymentState> = { pending: 'in_progress', success: 'success', failure: 'failure', error: 'failure' };
-
-/** A preview URL Vercel put in the status text: only an https *.vercel.app address (never guessed from anything else) */
-function vercelAppUrl(description: string): string | undefined {
-  for (const match of description.match(/https:\/\/[^\s"'<>()]+/g) ?? []) {
-    const url = httpsUrl(match.replace(/[.,;:]+$/, ''));
-    if (url && new URL(url).hostname.endsWith('.vercel.app')) return url;
-  }
-  return undefined;
-}
-
-/** A commit status of Vercel as a deployment: the context names it; target_url is the Vercel page (https only). */
-function mapCommitStatus(s: Obj): DeployDeployment | null {
-  const context = str(s.context);
-  const state = COMMIT_STATE[str(s.state)];
-  if (!VERCEL_CONTEXT.test(context) || NOT_A_BUILD.test(context) || !state) return null;
-  const out: DeployDeployment = { environment: context, state, createdAt: str(s.created_at) || str(s.updated_at) };
-  const url = vercelAppUrl(str(s.description));
-  if (url) out.url = url;
-  // Vercel's own page for the deployment, nowhere else
-  const logUrl = httpsUrl(s.target_url);
-  if (logUrl && new URL(logUrl).hostname.toLowerCase() === 'vercel.com') out.logUrl = logUrl;
-  return out;
-}
-
 export function createActionsClient(fetcher: GitHubFetcher) {
   async function get(endpoint: string): Promise<unknown> {
     const res = await fetcher(endpoint);
     if (res.status >= 200 && res.status < 300) return res.body;
     throw classifyGitHubError(res.status, res.headers, res.body);
-  }
-
-  async function latestStatus(owner: string, repo: string, id: unknown): Promise<Obj | null> {
-    const statuses = arr(await get(`/repos/${owner}/${repo}/deployments/${id}/statuses?per_page=1`));
-    return statuses[0] ?? null;
-  }
-
-  function mapDeployment(d: Obj, status: Obj | null): DeployDeployment {
-    const out: DeployDeployment = {
-      environment: str(d.environment),
-      state: (str(status?.state) || 'pending') as DeployDeploymentState,
-      createdAt: str(d.created_at),
-    };
-    const url = optStr(status?.environment_url);
-    if (url) out.url = url;
-    const logUrl = optStr(status?.log_url);
-    if (logUrl) out.logUrl = logUrl;
-    return out;
   }
 
   return {
@@ -218,59 +157,6 @@ export function createActionsClient(fetcher: GitHubFetcher) {
         if ((e as GitHubError).kind === 'not-found') return null;
         throw e;
       }
-    },
-
-    async deployments(owner: string, repo: string, sha: string): Promise<DeployDeployment[]> {
-      const list = arr(await get(`/repos/${owner}/${repo}/deployments?sha=${encodeURIComponent(sha)}`));
-      return Promise.all(
-        list.map(async (d) => mapDeployment(d, await latestStatus(owner, repo, d.id)))
-      );
-    },
-
-    /** Deployments of a branch (or any ref), newest first, without statuses (one call). */
-    async refDeployments(owner: string, repo: string, ref: string, perPage = 5): Promise<DeployRefDeployment[]> {
-      const list = arr(await get(`/repos/${owner}/${repo}/deployments?ref=${encodeURIComponent(ref)}&per_page=${perPage}`));
-      return list
-        .filter((d) => typeof d.id === 'number')
-        .map((d) => {
-          const out: DeployRefDeployment = { id: d.id as number, environment: str(d.environment), createdAt: str(d.created_at) };
-          const sha = optStr(d.sha);
-          if (sha) out.sha = sha;
-          return out;
-        })
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    },
-
-    /** The latest status of one deployment (`pending` when it has none yet). */
-    async deploymentStatus(owner: string, repo: string, id: number): Promise<DeployDeploymentStatus> {
-      const { state, url, logUrl } = mapDeployment({}, await latestStatus(owner, repo, id));
-      return { state, ...(url ? { url } : {}), ...(logUrl ? { logUrl } : {}) };
-    },
-
-    /**
-     * Vercel's commit statuses of a ref (a sha or a branch, whose head is meant), newest per
-     * context, as deployments: Vercel reports through these when it makes no GitHub Deployment.
-     * One call; GitHub lists statuses newest first.
-     */
-    async commitStatuses(owner: string, repo: string, ref: string, perPage = 20): Promise<DeployDeployment[]> {
-      const out: DeployDeployment[] = [];
-      for (const s of arr(await get(`/repos/${owner}/${repo}/commits/${enc(ref)}/statuses?per_page=${perPage}`))) {
-        const d = mapCommitStatus(s);
-        if (d && !out.some((x) => x.environment === d.environment)) out.push(d);
-      }
-      return out;
-    },
-
-    async productionUrl(owner: string, repo: string): Promise<string | null> {
-      const list = arr(await get(`/repos/${owner}/${repo}/deployments?per_page=30`))
-        .filter((d) => /^production$/i.test(str(d.environment)))
-        .sort((a, b) => str(b.created_at).localeCompare(str(a.created_at)));
-      for (const d of list) {
-        const status = await latestStatus(owner, repo, d.id);
-        const url = status?.state === 'success' ? optStr(status.environment_url) : undefined;
-        if (url) return url;
-      }
-      return null;
     },
   };
 }

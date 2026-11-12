@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeployJob, DeployJobLog, DeployRun, GraphNode } from '../../../shared/types/deploy';
 import { cn } from '../../lib/utils';
-import { StatusMark, displayUrl, formatDuration, isWebUrl, openWebUrl, toNodeStatus, useGitHubErrorText } from './status';
+import { StatusMark, formatDuration, isWebUrl, openWebUrl, toNodeStatus, useGitHubErrorText } from './status';
 
 interface JobPanelProps {
   projectId: string;
@@ -152,23 +152,7 @@ export function JobPanel({ projectId, run, node, jobs, pollKey }: JobPanelProps)
         </div>
       )}
 
-      {!job && (
-        <div className="flex flex-col gap-2">
-          {isWebUrl(node.deploymentUrl) && (
-            <div className="flex items-baseline gap-2">
-              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{t('deploy:job.deployment')}</span>
-              <LinkButton url={node.deploymentUrl}>{displayUrl(node.deploymentUrl)}</LinkButton>
-            </div>
-          )}
-          {isWebUrl(node.logUrl) ? (
-            <div>
-              <LinkButton url={node.logUrl}>{t('deploy:job.deploymentLog')}</LinkButton>
-            </div>
-          ) : (
-            !isWebUrl(node.deploymentUrl) && <p className="text-sm text-muted-foreground">{t('deploy:job.noDetails')}</p>
-          )}
-        </div>
-      )}
+      {!job && <p className="text-sm text-muted-foreground">{t('deploy:job.noDetails')}</p>}
 
       {job && (
         <>

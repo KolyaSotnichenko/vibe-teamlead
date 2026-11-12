@@ -48,7 +48,6 @@ const graph: RunGraph = {
       { key: 'unit', label: 'unit', jobIds: [13], status: 'failure' },
     ] },
     { stage: 'level-2', nodes: [{ key: 'e2e', label: 'e2e', jobIds: [12], status: 'running' }] },
-    { stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'queued' }] },
   ],
 };
 
@@ -56,7 +55,6 @@ const base = (over: Partial<DeployRunsState> = {}): DeployRunsState => ({
   projectId: 'p1', repo: { owner: 'acme', repo: 'app' },
   runs: [run(18, { status: 'in_progress', conclusion: undefined }), run(17), run(16, { conclusion: 'failure' })],
   selected: { runId: 18, jobs, graph },
-  productionUrl: 'https://app.vercel.app',
   nextPollAt: '2026-11-11T10:06:00Z',
   ...over,
 });
@@ -74,8 +72,6 @@ function setup(log: DeployJobLog = { state: 'ready', text: 'line one\nline two' 
     state: vi.fn(async () => ({ success: true, data: { settings: { enabled: true }, setupRunning: false, databaseRunning: false } })),
     onSetupProgress: vi.fn(() => () => undefined),
     onPushResult: vi.fn(() => () => undefined),
-    onDatabaseProgress: vi.fn(() => () => undefined),
-    cancelDatabase: vi.fn(async () => ({ success: true })),
   };
   const openExternal = vi.fn(async () => undefined);
   const getGitHubAppAccess = vi.fn(async (_repo?: string) => ({
@@ -104,7 +100,6 @@ describe('DeployPage', () => {
     // header of the selected run
     expect(screen.getByRole('heading', { name: /Merge task 18/ })).toBeInTheDocument();
     expect(screen.getByText(/push · main · abcdef1/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'app.vercel.app' })).toBeInTheDocument();
   });
 
   it('ignores updates for another project', () => {
@@ -130,7 +125,7 @@ describe('DeployPage', () => {
     const { emit } = setup();
     emit(base());
     expect(screen.getByText('deploy:graph.stage {"n":1}')).toBeInTheDocument();
-    expect(screen.getByText('deploy:graph.deploy')).toBeInTheDocument();
+    expect(screen.queryByText('deploy:graph.deploy')).not.toBeInTheDocument();
     const running = screen.getByRole('button', { name: /^e2e/ });
     expect(running).toHaveAttribute('data-status', 'running');
     expect(running.querySelector('[data-marker="running"]')).not.toBeNull();
@@ -190,27 +185,6 @@ describe('DeployPage', () => {
     const node = screen.getByRole('button', { name: /^Image …/ });
     expect(node.getAttribute('aria-label')).toBe('Image …, deploy:status.success, Image (api)');
     expect(await tooltipLines(node)).toEqual(['Image …', 'Image (api)']);
-  });
-
-  it('shows no duration for a deployment, and when it went live in the tooltip and aria-label', async () => {
-    const { emit } = setup();
-    const deployedAt = new Date(Date.now() - 18 * 86_400_000).toISOString();
-    const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'success', deployedAt }] }] };
-    emit(base({ selected: { runId: 18, jobs, graph: g } }));
-    const node = screen.getByRole('button', { name: /^production/ });
-    expect(node.textContent).not.toMatch(/\d+:\d{2}/);
-    expect(node.getAttribute('aria-label')).toBe('production, deploy:status.success, deploy:graph.deployed {"ago":"18 days ago"}');
-    expect(await tooltipLines(node)).toEqual(['production', 'deploy:graph.deployed {"ago":"18 days ago"}']);
-  });
-
-  it('does not say when a deployment went live while it is still running', async () => {
-    const { emit } = setup();
-    const deployedAt = new Date(Date.now() - 60_000).toISOString();
-    const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'deploy:production', label: 'production', jobIds: [], status: 'running', deployedAt }] }] };
-    emit(base({ selected: { runId: 18, jobs, graph: g } }));
-    const node = screen.getByRole('button', { name: /^production/ });
-    expect(node.getAttribute('aria-label')).toBe('production, deploy:status.running');
-    expect(await tooltipLines(node)).toEqual(['production']);
   });
 
   it('scrolls the runs list in the app\'s thin scroll area', () => {
@@ -398,18 +372,11 @@ describe('DeployPage', () => {
     expect(screen.getByRole('button', { name: 'deploy:errors.manageAccess' })).toBeInTheDocument();
   });
 
-  it('shows no link for a URL that is not http(s), and survives a failed openExternal', async () => {
-    const { emit, openExternal } = setup();
-    openExternal.mockImplementation(async () => { throw new Error('nope'); });
-    const g: RunGraph = { columns: [{ stage: 'deploy', nodes: [{ key: 'd', label: 'production', jobIds: [], status: 'success', deploymentUrl: 'javascript:alert(1)', logUrl: 'https://vercel.com/log' }] }] };
-    emit(base({ productionUrl: 'file:///etc/passwd', selected: { runId: 18, jobs, graph: g } }));
-    expect(screen.queryByText('/etc/passwd')).not.toBeInTheDocument();
-    expect(screen.queryByText('file:///etc/passwd')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^production/ }));
-    expect(screen.queryByText(/alert/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'deploy:job.deploymentLog' }));
-    await act(async () => undefined);
-    expect(openExternal).toHaveBeenCalledWith('https://vercel.com/log');
+  it('has no production link or deploy node: an old state with a production URL shows none', () => {
+    const { emit } = setup();
+    emit(base({ ...({ productionUrl: 'https://app.vercel.app' } as object), selected: { runId: 18, jobs, graph: { columns: [] } } }));
+    expect(screen.queryByText('app.vercel.app')).not.toBeInTheDocument();
+    expect(screen.queryByText('deploy:run.production')).not.toBeInTheDocument();
   });
 
   it('says it is paused instead of loading when a run is picked during a rate limit', () => {

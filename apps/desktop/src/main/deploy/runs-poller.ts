@@ -4,7 +4,6 @@
  */
 import type { Project } from '../../shared/types';
 import type {
-  DeployDeployment,
   DeployJob,
   DeployJobLog,
   DeployRun,
@@ -19,7 +18,7 @@ type Repo = { owner: string; repo: string };
 type Timer = unknown;
 
 export interface RunsPollerDeps {
-  client: Pick<ActionsClient, 'runs' | 'jobs' | 'workflowFile' | 'deployments' | 'commitStatuses' | 'productionUrl'>;
+  client: Pick<ActionsClient, 'runs' | 'jobs' | 'workflowFile'>;
   resolveRepo: (project: Project) => Promise<Repo | null>;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => Timer;
@@ -33,7 +32,6 @@ export interface RunsPollerDeps {
 
 const ACTIVE_MS = 5_000;
 const IDLE_MS = 60_000;
-const PRODUCTION_URL_MS = 60_000;
 const WORKFLOW_RETRY_MS = 60_000;
 
 interface Session {
@@ -46,16 +44,7 @@ interface Session {
   workflowCache: Map<string, string | null>;
   /** Failed workflow fetches by path@sha: when, and the error. */
   workflowFailures: Map<string, { at: number; error: GitHubError }>;
-  productionUrl?: string | null;
-  productionUrlAt?: number;
-  /** Vercel commit statuses by sha: finished ones for good, none at all (a completed run) for a while */
-  statusCache: Map<string, { list: DeployDeployment[]; until: number }>;
 }
-
-/** A completed run's sha without any Vercel status: asked again after this long */
-const NO_STATUS_TTL_MS = 5 * 60_000;
-
-const FINISHED_STATES = new Set(['success', 'failure', 'error']);
 
 const asGitHubError = (e: unknown): GitHubError => {
   const kind = (e as GitHubError | null)?.kind;
@@ -143,37 +132,6 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     }
   }
 
-  /**
-   * The deploy stage of a sha: its GitHub Deployments, else Vercel's commit statuses (Vercel's Git
-   * integration may report only those). A failed status read leaves the stage out; never throws
-   * for it.
-   */
-  async function deploymentsOf(s: Session, repo: Repo, run: DeployRun): Promise<DeployDeployment[]> {
-    const sha = run.sha;
-    const deployments = await deps.client.deployments(repo.owner, repo.repo, sha);
-    if (deployments.length) return deployments;
-    const cached = s.statusCache.get(sha);
-    if (cached && now() < cached.until) return cached.list;
-    try {
-      const statuses = await deps.client.commitStatuses(repo.owner, repo.repo, sha);
-      if (statuses.length && statuses.every((d) => FINISHED_STATES.has(d.state))) s.statusCache.set(sha, { list: statuses, until: Infinity });
-      else if (!statuses.length && run.status === 'completed') s.statusCache.set(sha, { list: [], until: now() + NO_STATUS_TTL_MS });
-      return statuses;
-    } catch {
-      return [];
-    }
-  }
-
-  async function refreshProductionUrl(s: Session, repo: Repo): Promise<void> {
-    if (s.productionUrlAt !== undefined && now() - s.productionUrlAt < PRODUCTION_URL_MS) return;
-    s.productionUrlAt = now();
-    try {
-      s.productionUrl = await deps.client.productionUrl(repo.owner, repo.repo);
-    } catch {
-      // keep the last known value
-    }
-  }
-
   /** Completed runs on main to the main-run handler; never throws. */
   async function handleMainRuns(project: Project, repo: Repo, runs: DeployRun[]): Promise<void> {
     if (!deps.handleMainRuns) return;
@@ -210,10 +168,8 @@ export function createRunsPoller(deps: RunsPollerDeps) {
         const jobs: DeployJob[] = await deps.client.jobs(repo.owner, repo.repo, run.id);
         const wf = await workflowYaml(s, repo, run);
         workflowError = wf.error;
-        const deployments = await deploymentsOf(s, repo, run);
-        selected = { runId: run.id, jobs, graph: buildRunGraph(wf.yaml, jobs, deployments) };
+        selected = { runId: run.id, jobs, graph: buildRunGraph(wf.yaml, jobs) };
       }
-      await refreshProductionUrl(s, repo);
     } catch (e) {
       error = asGitHubError(e);
     }
@@ -226,7 +182,6 @@ export function createRunsPoller(deps: RunsPollerDeps) {
       repo: s.repo,
       runs,
       selected,
-      productionUrl: s.productionUrl,
       nextPollAt: new Date(now() + delay).toISOString(),
     };
     if (error) state.error = error;
@@ -257,7 +212,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
   return {
     start(project: Project, selectedRunId?: number): void {
       if (session) halt(session);
-      session = { project, generation: 0, selectedRunId, workflowCache: new Map(), workflowFailures: new Map(), statusCache: new Map() };
+      session = { project, generation: 0, selectedRunId, workflowCache: new Map(), workflowFailures: new Map() };
       void begin(session);
     },
 

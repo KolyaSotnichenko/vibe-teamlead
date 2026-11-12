@@ -122,17 +122,6 @@ describe('mapping details', () => {
     expect(r.workflowPath).toBe('.github/workflows/ci.yml');
     expect(r.status).toBe('queued');
   });
-  it('productionUrl skips a success without environment_url', async () => {
-    const { c } = client({
-      '/repos/acme/app/deployments?per_page=30': ok([
-        { id: 2, environment: 'Production', created_at: '2026-11-11T00:00:00Z' },
-        { id: 1, environment: 'Production', created_at: '2026-11-10T00:00:00Z' },
-      ]),
-      '/repos/acme/app/deployments/2/statuses?per_page=1': ok([{ state: 'success', created_at: 'a' }]),
-      '/repos/acme/app/deployments/1/statuses?per_page=1': ok([{ state: 'success', environment_url: 'https://o.example.com', created_at: 'b' }]),
-    });
-    expect(await c.productionUrl('acme', 'app')).toBe('https://o.example.com');
-  });
 });
 
 describe('jobLog', () => {
@@ -146,69 +135,10 @@ describe('jobLog', () => {
   });
 });
 
-describe('deployments', () => {
-  const routes = () => ({
-    '/repos/acme/app/deployments?sha=abc123': ok(fx('deployments.json')),
-    '/repos/acme/app/deployments/1/statuses?per_page=1': ok(fx('statuses-1.json').slice(0, 1)),
-    '/repos/acme/app/deployments/2/statuses?per_page=1': ok(fx('statuses-2.json')),
-  });
-  it('merges each latest status', async () => {
-    const { c } = client(routes());
-    const d = await c.deployments('acme', 'app', 'abc123');
-    expect(d).toEqual([
-      { environment: 'Production', state: 'success', url: 'https://app.example.com', logUrl: 'https://example.com/log/1', createdAt: '2026-11-10T10:06:00Z' },
-      { environment: 'Preview', state: 'failure', createdAt: '2026-11-10T10:07:00Z' },
-    ]);
-  });
-  it('falls back to pending without statuses', async () => {
-    const r = routes() as Record<string, unknown>;
-    r['/repos/acme/app/deployments/2/statuses?per_page=1'] = ok([]);
-    const { c } = client(r);
-    expect((await c.deployments('acme', 'app', 'abc123'))[1].state).toBe('pending');
-  });
-});
-
-describe('refDeployments and deploymentStatus', () => {
-  it('lists a ref\'s deployments newest first without asking for any status (5 per page)', async () => {
-    const { c, calls } = client({
-      '/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=5': ok(fx('deployments.json')),
-    });
-    const d = await c.refDeployments('acme', 'app', 'vibe-teamlead/001-x');
-    expect(calls).toEqual(['/repos/acme/app/deployments?ref=vibe-teamlead%2F001-x&per_page=5']);
-    expect(d).toEqual([
-      { id: 2, environment: 'Preview', createdAt: '2026-11-10T10:07:00Z', sha: 'abc123' },
-      { id: 1, environment: 'Production', createdAt: '2026-11-10T10:06:00Z', sha: 'abc123' },
-    ]);
-  });
-
-  it('reads one deployment\'s latest status', async () => {
-    const { c, calls } = client({
-      '/repos/acme/app/deployments/2/statuses?per_page=1': ok([{ state: 'inactive', environment_url: 'https://x.vercel.app', log_url: 'https://vercel.com/log', created_at: 'z' }]),
-      '/repos/acme/app/deployments/3/statuses?per_page=1': ok([]),
-    });
-    expect(await c.deploymentStatus('acme', 'app', 2)).toEqual({ state: 'inactive', url: 'https://x.vercel.app', logUrl: 'https://vercel.com/log' });
-    expect(await c.deploymentStatus('acme', 'app', 3)).toEqual({ state: 'pending' });
-    expect(calls).toHaveLength(2);
-  });
-});
-
-describe('productionUrl', () => {
-  it('picks the newest successful Production deployment', async () => {
-    const list = [
-      { id: 9, environment: 'Preview', created_at: '2026-11-11T00:00:00Z' },
-      { id: 8, environment: 'production', created_at: '2026-11-10T00:00:00Z' },
-      { id: 7, environment: 'Production', created_at: '2026-11-09T00:00:00Z' },
-    ];
-    const { c } = client({
-      '/repos/acme/app/deployments?per_page=30': ok(list),
-      '/repos/acme/app/deployments/8/statuses?per_page=1': ok([{ state: 'failure', created_at: 'x' }]),
-      '/repos/acme/app/deployments/7/statuses?per_page=1': ok([{ state: 'success', environment_url: 'https://old.example.com', created_at: 'y' }]),
-    });
-    expect(await c.productionUrl('acme', 'app')).toBe('https://old.example.com');
-  });
-  it('returns null when none', async () => {
-    const { c } = client({ '/repos/acme/app/deployments?per_page=30': ok([]) });
-    expect(await c.productionUrl('acme', 'app')).toBeNull();
+describe('no deployment or Vercel reads', () => {
+  it('the client only reads runs, jobs, workflow files and logs', () => {
+    const { c } = client({});
+    expect(Object.keys(c).sort()).toEqual(['jobLog', 'jobs', 'runs', 'workflowFile']);
   });
 });
 
@@ -276,61 +206,5 @@ describe('resolveRepo', () => {
     vi.mocked(getGitHubConfigAsync).mockResolvedValue(null);
     gitAnswers(new Error('no remote'));
     expect(await resolveRepo(project)).toBeNull();
-  });
-});
-
-describe('commitStatuses (Vercel reports through commit statuses when it makes no GitHub Deployment)', () => {
-  const route = '/repos/acme/app/commits/vibe-teamlead/001-x/statuses?per_page=20';
-  const status = (over: Record<string, unknown>) => ({
-    context: 'Vercel',
-    state: 'pending',
-    description: 'Vercel is deploying your app',
-    target_url: 'https://vercel.com/acme/app/AbC123',
-    created_at: '2026-11-12T10:00:00Z',
-    updated_at: '2026-11-12T10:00:00Z',
-    ...over,
-  });
-
-  it('reads the ref statuses once and keeps the newest Vercel one per context', async () => {
-    const { c, calls } = client({
-      [route]: ok([
-        status({ state: 'failure', description: 'Deployment has failed — run the build locally', created_at: '2026-11-12T10:02:00Z' }),
-        status({ context: 'ci/circleci', state: 'success', target_url: 'https://circleci.com/x' }),
-        status({ state: 'pending', created_at: '2026-11-12T10:00:00Z' }),
-        status({ context: 'Vercel Preview Comments', state: 'success' }),
-      ]),
-    });
-    expect(await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x')).toEqual([
-      { environment: 'Vercel', state: 'failure', createdAt: '2026-11-12T10:02:00Z', logUrl: 'https://vercel.com/acme/app/AbC123' },
-    ]);
-    expect(calls).toEqual([route]);
-  });
-
-  it('maps pending to in_progress, success to success, error to failure', async () => {
-    for (const [state, mapped] of [['pending', 'in_progress'], ['success', 'success'], ['error', 'failure'], ['failure', 'failure']]) {
-      const { c } = client({ [route]: ok([status({ state })]) });
-      expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].state).toBe(mapped);
-    }
-  });
-
-  it('keeps only https links to vercel.com: no logUrl for an http, odd or foreign target', async () => {
-    for (const target of ['http://vercel.com/x', 'javascript:alert(1)', 'https://user:pw@vercel.com/x', 'https://evil.example/x', null]) {
-      const { c } = client({ [route]: ok([status({ target_url: target })]) });
-      expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].logUrl).toBeUndefined();
-    }
-  });
-
-  it('takes a preview URL only from the description, only an https *.vercel.app one; never guesses it', async () => {
-    const { c } = client({ [route]: ok([status({ state: 'success', description: 'Deployment has completed' })]) });
-    expect((await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].url).toBeUndefined();
-    const { c: c2 } = client({ [route]: ok([status({ state: 'success', description: 'Ready: https://app-git-x-acme.vercel.app' })]) });
-    expect((await c2.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].url).toBe('https://app-git-x-acme.vercel.app');
-    const { c: c3 } = client({ [route]: ok([status({ state: 'success', description: 'Ready: https://evil.example.com/vercel.app' })]) });
-    expect((await c3.commitStatuses('acme', 'app', 'vibe-teamlead/001-x'))[0].url).toBeUndefined();
-  });
-
-  it('is empty when there are no Vercel statuses', async () => {
-    const { c } = client({ [route]: ok([status({ context: 'ci/test' })]) });
-    expect(await c.commitStatuses('acme', 'app', 'vibe-teamlead/001-x')).toEqual([]);
   });
 });

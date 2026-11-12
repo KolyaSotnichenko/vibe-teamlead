@@ -8,8 +8,6 @@ const client = vi.hoisted(() => ({
   runs: vi.fn(async () => []),
   jobs: vi.fn(async () => []),
   workflowFile: vi.fn(async () => null),
-  deployments: vi.fn(async () => []),
-  productionUrl: vi.fn(async () => null),
   jobLog: vi.fn(async () => 'line'),
 }));
 vi.mock('../../deploy/github-actions', () => ({

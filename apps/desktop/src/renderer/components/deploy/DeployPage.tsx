@@ -22,7 +22,7 @@ import { ReadinessTab } from './ReadinessTab';
 import { DeployChecklist } from './DeployChecklist';
 import { useDeployEnv } from './useDeployEnv';
 import { useReadiness } from './useReadiness';
-import { displayUrl, isWebUrl, openWebUrl, useGitHubErrorText } from './status';
+import { isWebUrl, openWebUrl, useGitHubErrorText } from './status';
 
 const ATTENTION: ReadonlySet<GitHubError['kind']> = new Set(['no-connection', 'permissions', 'not-found']);
 
@@ -189,18 +189,6 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
                   )}
                 </div>
               </div>
-              {isWebUrl(state.productionUrl) && (
-                <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{t('deploy:run.production')}</span>
-                  <button
-                    type="button"
-                    onClick={() => openWebUrl(state.productionUrl as string)}
-                    className="font-mono text-[13px] font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {displayUrl(state.productionUrl as string)}
-                  </button>
-                </div>
-              )}
             </div>
           )}
           {selected && run ? (
@@ -286,7 +274,7 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
       {tab === 'environment' && (
         <div role="tabpanel" id="deploy-panel-environment" aria-labelledby="deploy-tab-environment" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
-          <EnvironmentTab projectId={projectId} env={env} productionUrl={state?.productionUrl} onConnectGitHub={() => setSigningIn(true)} />
+          <EnvironmentTab projectId={projectId} env={env} onConnectGitHub={() => setSigningIn(true)} />
         </div>
       )}
 

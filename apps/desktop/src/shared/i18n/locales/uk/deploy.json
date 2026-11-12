@@ -31,17 +31,14 @@
     "listLabel": "Запуски GitHub Actions"
   },
   "run": {
-    "openOnGitHub": "Відкрити на GitHub",
-    "production": "Продакшн"
+    "openOnGitHub": "Відкрити на GitHub"
   },
   "graph": {
     "stage": "Етап {{n}}",
     "other": "Інші джоби",
-    "deploy": "Деплой",
     "loading": "Завантажуємо джоби цього запуску…",
     "empty": "У цього запуску ще немає джобів",
-    "paused": "Пауза через ліміт запитів GitHub; запуск завантажиться, щойно його знімуть",
-    "deployed": "Розгорнуто {{ago}}"
+    "paused": "Пауза через ліміт запитів GitHub; запуск завантажиться, щойно його знімуть"
   },
   "status": {
     "queued": "У черзі",
@@ -57,8 +54,6 @@
     "steps": "Кроки",
     "noSteps": "Кроків ще немає",
     "fullLog": "Повний лог на GitHub",
-    "deployment": "Деплой",
-    "deploymentLog": "Лог деплою",
     "noDetails": "Хостинг ще нічого не повідомив"
   },
   "log": {
@@ -121,7 +116,6 @@
     "public": "Публічний",
     "private": "Приватний",
     "vercel": "Проєкт Vercel",
-    "production": "Продакшн",
     "database": "База даних"
   },
   "database": {
