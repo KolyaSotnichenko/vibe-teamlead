@@ -32,6 +32,6 @@ The path of the workflow that runs the project's checks, when there is one.
 
 ## How to work
 
-Environment values are off-limits. Never open `.env`, `.env.*` (other than `.env.example`, `.env.sample`, `.env.template`, `.env.dist`), `*.pem`, `*.key` or `id_rsa*` files; the app denies those reads. Take variable names from the example env files and from the code that reads them. When you Grep a folder, pass a `glob` for the source files you mean, such as `*.{ts,tsx,js}`.
+Environment values are off-limits. Never open `.env`, `.env.*` (other than `.env.example`, `.env.sample`, `.env.template`, `.env.dist`), `*.pem`, `*.key` or `id_rsa*` files; the app denies those reads. Take variable names from the example env files and from the code that reads them. When you Grep a folder, pass an extension-only `glob`, such as `*.{ts,tsx,js}` or `**/*.yml`; read only files inside the project.
 
 Start with the package manifest, the compose file, `.github/workflows`, the env example files and the config files; then follow the code that reads environment variables, connects to services or starts background processes. Answer with the structured output only.

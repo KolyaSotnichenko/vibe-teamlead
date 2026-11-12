@@ -62,7 +62,39 @@ describe('the readiness scan never reads secret files', () => {
     expect(denied(evaluatePreToolUse('Grep', { pattern: 'x', glob: '!*.ts' }, scan))).toBe(true);
     expect(denied(evaluatePreToolUse('Grep', { pattern: 'process.env', glob: '*.{ts,tsx,js}' }, scan))).toBe(false);
     expect(denied(evaluatePreToolUse('Grep', { pattern: 'process.env', path: 'src', glob: '**/*.ts' }, scan))).toBe(false);
-    expect(denied(evaluatePreToolUse('Grep', { pattern: 'x', glob: '.env.example' }, scan))).toBe(false);
+    expect(denied(evaluatePreToolUse('Grep', { pattern: 'x', glob: '*.example' }, scan))).toBe(false);
+  });
+
+  it('Grep globs are an allowlist of extension patterns', () => {
+    const grep = (input: Record<string, unknown>) => denied(evaluatePreToolUse('Grep', { pattern: 'x', ...input }, scan));
+    expect(grep({ glob: '*', path: root })).toBe(true);
+    expect(grep({ glob: '*.ts .env' })).toBe(true);
+    expect(grep({ glob: '*.ts,.env' })).toBe(true);
+    expect(grep({ glob: '*.{ts,env}' })).toBe(true);
+    expect(grep({ glob: '*.[ek]*' })).toBe(true);
+    expect(grep({ glob: '.env.example' })).toBe(true);
+    expect(grep({ glob: 'src/**/*.ts' })).toBe(true);
+    expect(grep({ glob: '**/*.{ts,tsx}' })).toBe(false);
+    expect(grep({ glob: '*.yml' })).toBe(false);
+    expect(grep({ glob: '**/*.prisma' })).toBe(false);
+  });
+
+  it('a path through a symlink to .env is denied for Read and Grep; package.json is fine', () => {
+    writeFileSync(join(root, 'package.json'), '{}');
+    expect(denied(evaluatePreToolUse('Read', { file_path: 'innocent.txt' }, scan))).toBe(true);
+    expect(denied(evaluatePreToolUse('Grep', { pattern: 'x', path: 'innocent.txt' }, scan))).toBe(true);
+    expect(denied(evaluatePreToolUse('Grep', { pattern: 'x', path: 'package.json' }, scan))).toBe(false);
+    expect(denied(evaluatePreToolUse('Read', { file_path: 'package.json' }, scan))).toBe(false);
+  });
+
+  it('Read and Grep stay inside the project (realpath)', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'vtl-outside-'));
+    writeFileSync(join(outside, 'creds.txt'), 'x');
+    symlinkSync(join(outside, 'creds.txt'), join(root, 'link-out.txt'));
+    expect(denied(evaluatePreToolUse('Read', { file_path: join(outside, 'creds.txt') }, scan))).toBe(true);
+    expect(denied(evaluatePreToolUse('Read', { file_path: 'link-out.txt' }, scan))).toBe(true);
+    expect(denied(evaluatePreToolUse('Grep', { pattern: 'x', path: outside, glob: '*.txt' }, scan))).toBe(true);
+    rmSync(outside, { recursive: true, force: true });
   });
 
   it('Grep of one ordinary file needs no glob', () => {
