@@ -253,6 +253,14 @@ describe('automatic setup', () => {
     expect(setUp).toHaveBeenCalledTimes(1);
   });
 
+  it('blockers -> none with variable owner items still sets up (values can only be added once it is)', async () => {
+    writeReadiness(dir, result([blocker('x')]));
+    scan.mockResolvedValue({ ...result([]), owner: [{ kind: 'variable', variable: 'CSRF_SECRET', message: 'x' }] });
+    await make().scan(project(), 'check-again');
+    expect(setUp).toHaveBeenCalledTimes(1);
+    expect(created).toEqual([]);
+  });
+
   it('a workflow-only change counts: unsupported blockers do not', async () => {
     writeReadiness(dir, result([blocker('x')]));
     scan.mockResolvedValueOnce(result([{ key: 'unsupported:go', kind: 'unsupported', subject: 'go', title: 'Go', detail: 'x' }]));

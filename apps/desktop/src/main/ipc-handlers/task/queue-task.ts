@@ -7,6 +7,7 @@
 import type { BrowserWindow } from 'electron';
 
 import { IPC_CHANNELS } from '../../../shared/constants';
+import { projectStore } from '../../project-store';
 import { safeSendToRenderer } from '../utils';
 import { createPlanIfNotExists, getPlanPath, persistPlanStatus } from './plan-file-utils';
 import { findTaskAndProject } from './shared';
@@ -17,6 +18,7 @@ export async function queueTask(getMainWindow: () => BrowserWindow | null, taskI
   const planPath = getPlanPath(project, task);
   if (!(await persistPlanStatus(planPath, 'queue', project.id))) {
     await createPlanIfNotExists(planPath, task, 'queue');
+    projectStore.invalidateTasksCache(project.id);
   }
   safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_STATUS_CHANGE, taskId, 'queue', project.id);
 }

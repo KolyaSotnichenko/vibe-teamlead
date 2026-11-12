@@ -18,6 +18,7 @@ vi.mock('../../utils', () => ({
 vi.mock('../../../project-store', () => ({ projectStore: { invalidateTasksCache: vi.fn() } }));
 
 import { IPC_CHANNELS } from '../../../../shared/constants';
+import { projectStore } from '../../../project-store';
 import { queueTask } from '../queue-task';
 
 let dir: string;
@@ -43,8 +44,11 @@ describe('queueTask', () => {
   });
 
   it('creates the plan when it is missing', async () => {
+    vi.mocked(projectStore.invalidateTasksCache).mockClear();
     await queueTask(() => null, 't1');
     expect(JSON.parse(readFileSync(planFile(), 'utf-8')).status).toBe('queue');
+    // The task list must read the new plan
+    expect(projectStore.invalidateTasksCache).toHaveBeenCalledWith('p1');
     expect(sent).toHaveLength(1);
   });
 

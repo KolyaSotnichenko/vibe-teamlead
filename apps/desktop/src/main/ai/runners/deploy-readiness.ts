@@ -59,26 +59,35 @@ const DETAIL_CHARS = 2000;
 const OWNER_MESSAGE_CHARS = 500;
 
 /**
- * A blocker that only says variables aren't configured (for example "Required API env vars are
- * not configured"): the prompt makes those owner items, this catches the ones that slip through.
- * Matched on the subject and title only, which must say both "variables/secrets" and "not
- * configured/missing"; "Missing env validation" or "Hardcoded localhost" don't match.
+ * A code blocker that only says variables aren't configured (for example "Required API env vars
+ * are not configured"): the prompt makes those owner items, this catches the ones that slip
+ * through. Matched on the title only, where the missing wording must apply to env vars, secrets
+ * or a named UPPER_SNAKE variable: "Env var validation is missing" and "Undefined variable breaks
+ * the build" don't match. Workflow blockers are left alone (a CI gap is often an agent's fix).
  */
+const SNAKE = '[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+';
+const MISSING = '(?:(?:are|is)\\s+)?(?:still\\s+)?(?:not\\s+(?:set|configured|defined|provided)|missing|unset|unconfigured)\\b';
 const UNCONFIGURED_VARIABLES = [
-  /\b(?:env(?:ironment)?\s+var(?:iable)?s?|variables?|secrets?)\b[^.]*\b(?:not\s+(?:configured|set|defined|provided)|missing|unset|unconfigured)\b/i,
-  /\b(?:missing|unset|unconfigured|undefined)\s+(?:required\s+)?(?:env(?:ironment)?\s+)?(?:var(?:iable)?s?|secrets?)\b/i,
+  // "API env vars are not configured", "Secrets missing"
+  new RegExp(`\\b(?:env(?:ironment)?\\s+var(?:iable)?s?|secrets?)\\s+${MISSING}`, 'i'),
+  // "API_BASE_URL is not set", "CSRF_SECRET and WEB_ORIGIN are missing"
+  new RegExp(`\\b${SNAKE}(?:\\s*(?:,|and)\\s*${SNAKE})*\\s+${MISSING}`),
+  // "Missing env vars", "Missing required secrets: ..."
+  /\b(?:missing|unset|unconfigured)\s+(?:required\s+)?(?:env(?:ironment)?\s+var(?:iable)?s?|secrets?)\b(?!\s+(?:validation|schema|checks?|parsing|loading|loader|handling|names?)\b)/i,
+  // "Missing API_KEY"
+  new RegExp(`\\b(?:[Mm]issing|[Uu]nset)\\s+${SNAKE}\\b`),
 ];
 /** Variable names as code reads them: upper case with at least one underscore */
-const VARIABLE_NAME = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
-/** Set by Vercel itself, never by the owner */
-const PLATFORM_VARIABLE = (name: string) => name.startsWith('VERCEL_') || name === 'NODE_ENV' || name === 'CI';
+const VARIABLE_NAME = new RegExp(`\\b${SNAKE}\\b`, 'g');
+/** Set by the platform (Vercel, GitHub Actions), never by the owner */
+const PLATFORM_VARIABLE = (name: string) => name.startsWith('VERCEL_') || name.startsWith('GITHUB_') || name === 'NODE_ENV' || name === 'CI';
 
-/** The variables an "unconfigured variables" blocker names, or undefined when it isn't one (or names none). */
-function unconfiguredVariables(blocker: { kind: string; subject: string; title: string; detail: string }): string[] | undefined {
-  if (blocker.kind !== 'code' && blocker.kind !== 'workflow') return undefined;
-  const head = `${blocker.subject}. ${blocker.title}`;
-  if (!UNCONFIGURED_VARIABLES.some((pattern) => pattern.test(head))) return undefined;
-  const names = [...new Set(`${blocker.title} ${blocker.detail}`.match(VARIABLE_NAME) ?? [])];
+/** The variables an "unconfigured variables" code blocker names (the title's, else the detail's), or undefined when it isn't one or names none. */
+function unconfiguredVariables(blocker: { kind: string; title: string; detail: string }): string[] | undefined {
+  if (blocker.kind !== 'code') return undefined;
+  if (!UNCONFIGURED_VARIABLES.some((pattern) => pattern.test(blocker.title))) return undefined;
+  const fromTitle = blocker.title.match(VARIABLE_NAME) ?? [];
+  const names = [...new Set(fromTitle.length ? fromTitle : (blocker.detail.match(VARIABLE_NAME) ?? []))];
   return names.length ? names : undefined;
 }
 
@@ -137,11 +146,15 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
     // Only the owner can set a variable: an owner item with a value field, not a task
     const variables = unconfiguredVariables(raw);
     if (variables) {
+      let added = 0;
       for (const name of variables) {
         if (configured.has(name) || PLATFORM_VARIABLE(name) || owner.some((item) => item.variable === name)) continue;
         owner.push({ kind: 'variable', variable: name, message: clip(`The deployed app needs ${name}.`, OWNER_MESSAGE_CHARS) });
+        added++;
       }
-      continue;
+      // Dropped only when the owner now has every variable it names; otherwise it stays a blocker
+      const listed = variables.every((name) => owner.some((item) => item.variable === name));
+      if (added > 0 || listed) continue;
     }
     // Clipped after parsing: a long answer is cut, it doesn't fail the scan
     const blocker = {

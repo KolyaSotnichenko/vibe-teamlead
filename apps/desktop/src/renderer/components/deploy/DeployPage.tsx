@@ -280,7 +280,7 @@ export function DeployPage({ projectId, onGoToTask, initialTab, initialRunId, in
       {tab === 'readiness' && (
         <div role="tabpanel" id="deploy-panel-readiness" aria-labelledby="deploy-tab-readiness" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
           {checklist && <div className="mb-6">{checklist}</div>}
-          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
+          <ReadinessTab projectId={projectId} readiness={readiness} notSetUp={notSetUp} isSetUp={!!env.state?.settings?.enabled} onSetUp={() => setTab('environment')} onOpenRuns={() => setTab('runs')} onGoToTask={onGoToTask} />
         </div>
       )}
       {tab === 'environment' && (

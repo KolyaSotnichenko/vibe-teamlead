@@ -115,7 +115,8 @@ describe('runReadinessScan', () => {
       ],
     };
     const result = await runReadinessScan(input, { run: fakeRun(out), feature, now });
-    expect(result.blockers.map((b) => b.title)).toEqual(['Hardcoded localhost', 'Missing env validation crashes the build']);
+    // Workflow blockers are left alone: a CI gap is often a fix an agent can make
+    expect(result.blockers.map((b) => b.title)).toEqual(['Missing secrets for the deploy job', 'Hardcoded localhost', 'Missing env validation crashes the build']);
     // Configured (DATABASE_URL), already listed (SENDGRID_KEY) and Vercel's own (NODE_ENV, VERCEL_URL) are not added
     expect(result.owner.map((o) => [o.kind, o.variable])).toEqual([
       ['variable', 'SENDGRID_KEY'],
@@ -123,6 +124,49 @@ describe('runReadinessScan', () => {
       ['variable', 'WEB_ORIGIN'],
       ['variable', 'SESSION_COOKIE_SECURE'],
     ]);
+  });
+
+  const scanBlockers = async (blockers: Array<{ title: string; detail: string }>) => {
+    const out = { ...output, blockers: blockers.map((b, i) => ({ kind: 'code', subject: `s${i}`, ...b })) };
+    return runReadinessScan(input, { run: fakeRun(out), feature, now });
+  };
+  const variables = (r: Awaited<ReturnType<typeof scanBlockers>>) => r.owner.filter((o) => o.kind === 'variable').map((o) => o.variable);
+
+  it('keeps blockers that are about variables but not about values missing', async () => {
+    const r = await scanBlockers([
+      { title: 'Env var validation is missing', detail: 'env.ts never checks FOO_BAR.' },
+      { title: 'Undefined variable breaks the build', detail: 'src/a.ts uses FOO_BAR before it is declared.' },
+    ]);
+    expect(r.blockers.map((b) => b.title)).toEqual(['Env var validation is missing', 'Undefined variable breaks the build']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY']);
+  });
+
+  it('takes the names from the title first, the detail only when the title has none', async () => {
+    const r = await scanBlockers([{ title: 'API_BASE_URL is not set in production build', detail: 'web/vite.config.ts also mentions OTHER_NAME.' }]);
+    expect(r.blockers).toEqual([]);
+    expect(variables(r)).toEqual(['SENDGRID_KEY', 'API_BASE_URL']);
+  });
+
+  it('ignores names without an underscore and the platform\'s own variables', async () => {
+    const r = await scanBlockers([
+      { title: 'Env vars are not configured', detail: 'server.ts reads PORT.' },
+      { title: 'PORT is not set', detail: 'server.ts reads PORT.' },
+      { title: 'Env vars are not configured', detail: 'deploy reads GITHUB_TOKEN and CSRF_SECRET.' },
+    ]);
+    expect(r.blockers.map((b) => b.title)).toEqual(['Env vars are not configured', 'PORT is not set']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY', 'CSRF_SECRET']);
+  });
+
+  it('drops a blocker only when its variables are owner items now', async () => {
+    const r = await scanBlockers([
+      // Configured already: nothing to add, so the blocker stays for the agent to look at
+      { title: 'DATABASE_URL is not configured', detail: 'db.ts' },
+      { title: 'GITHUB_TOKEN is missing', detail: 'release.ts' },
+      // Already listed for the owner
+      { title: 'SENDGRID_KEY is not set', detail: 'mail.ts' },
+    ]);
+    expect(r.blockers.map((b) => b.title)).toEqual(['DATABASE_URL is not configured', 'GITHUB_TOKEN is missing']);
+    expect(variables(r)).toEqual(['SENDGRID_KEY']);
   });
 
   it('keeps a variable blocker it cannot name a variable for', async () => {
