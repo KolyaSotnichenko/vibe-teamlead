@@ -118,14 +118,20 @@ const BROWSER_SERVER_CODE = /^mcp__.+__browser_run_code(_unsafe)?$/;
 /** Example env files name variables without values: the scan reads these. */
 const ENV_EXAMPLE = /\.(example|sample|template|dist)$/;
 
-/** A file name that holds secrets: any `.env*` (not an example), `id_rsa*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`. */
+/** Credential files known by their whole name. */
+const SECRET_NAMES = new Set(['credentials', '.npmrc', '.netrc', '.pgpass']);
+
+/**
+ * A file name that holds secrets: any `.env*` (not an example), SSH keys (`id_rsa*`, `id_ed25519*`,
+ * `id_ecdsa*`, `id_dsa*`), `*.pem`, `*.key`, `*.p12`, `*.pfx`, and credentials files by name.
+ */
 export function isSecretFileName(name: string): boolean {
   const n = name.toLowerCase();
   if (n.startsWith('.env')) return !ENV_EXAMPLE.test(n);
-  return n.startsWith('id_rsa') || /\.(pem|key|p12|pfx)$/.test(n);
+  return SECRET_NAMES.has(n) || /^id_(rsa|ed25519|ecdsa|dsa)/.test(n) || /\.(pem|key|p12|pfx)$/.test(n);
 }
 
-const SCAN_SECRET_RULE = 'The readiness scan never reads secret files (.env*, *.pem, *.key, *.p12, *.pfx, id_rsa*) or anything outside the project. Take variable names from the example env files and the code.';
+const SCAN_SECRET_RULE = 'The readiness scan never reads secret files (.env*, *.pem, *.key, *.p12, *.pfx, SSH keys, credentials) or anything outside the project. Take variable names from the example env files and the code.';
 
 const SCAN_GREP_RULE = 'List files with Glob and Read or Grep one file at a time; .env files are off-limits.';
 
@@ -165,6 +171,11 @@ function isFile(target: string): boolean {
 function evaluateScanRead(toolName: string, toolInput: Record<string, unknown> | null, context: ToolContext): HookJSONOutput | null {
   const at = (raw: unknown): string | undefined =>
     typeof raw === 'string' && raw ? (isAbsolute(raw) ? resolve(raw) : resolve(context.cwd, raw)) : undefined;
+  // The tools expand `~` to the home folder; resolved here it would look like a folder in the project.
+  const home = (raw: unknown) => typeof raw === 'string' && raw.trim().startsWith('~');
+  if (['Read', 'Grep', 'Glob'].includes(toolName) && (home(toolInput?.file_path) || home(toolInput?.path))) {
+    return deny(SCAN_SECRET_RULE);
+  }
   if (toolName === 'Read') {
     const target = at(toolInput?.file_path);
     return target && forbiddenPath(target, context.cwd) ? deny(SCAN_SECRET_RULE) : null;

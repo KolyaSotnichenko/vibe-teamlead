@@ -26,6 +26,7 @@ describe('isSecretFileName', () => {
   it.each([
     '.env', '.env.local', '.env.production', '.ENV', '.env.json', '.env.local.yml', '.envrc',
     'server.pem', 'tls.key', 'cert.p12', 'cert.pfx', 'id_rsa', 'id_rsa.pub', 'id_rsa.txt',
+    'id_ed25519', 'id_ecdsa', 'id_dsa', 'credentials', '.npmrc', '.netrc', '.pgpass',
   ])('%s is secret', (name) => {
     expect(isSecretFileName(name)).toBe(true);
   });
@@ -44,6 +45,14 @@ describe('the readiness scan never reads secret files', () => {
     expect(read('.env.example')).toBe(false);
     expect(read('src/app.ts')).toBe(false);
     expect(read('package.json')).toBe(false);
+  });
+
+  it('a home path (~) is never read: the tool expands it, the check would not', () => {
+    for (const p of ['~/.aws/credentials', '~/.ssh/id_ed25519', '~/notes.txt', '~']) {
+      expect(read(p)).toBe(true);
+      expect(grep({ path: p })).toBe(true);
+      expect(denied(evaluatePreToolUse('Glob', { pattern: '*', path: p }, scan))).toBe(true);
+    }
   });
 
   it('Glob inside a secret path is denied; listing file names is fine', () => {
