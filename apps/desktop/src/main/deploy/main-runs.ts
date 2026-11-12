@@ -4,7 +4,7 @@
  * Deploy tab's poller and from a watcher that follows the runs of a just-pushed commit.
  * Logs come from GitHub, which masks repository secrets; nothing else is added to them.
  */
-import type { Project } from '../../shared/types';
+import type { Project, Task } from '../../shared/types';
 import type { DeployRun } from '../../shared/types/deploy';
 import { clipLine } from './clip';
 import { createRunFixTask, type DeployTaskDeps, markRunHandled, resetFixCount, wasRunHandled } from './deploy-tasks';
@@ -35,6 +35,36 @@ const RUNS_PER_POLL = 30;
 const LAST_RUN_LOOKBACK = 20;
 const FAILED = new Set(['failure', 'timed_out', 'startup_failure']);
 const FAILED_JOB = new Set(['failure', 'timed_out']);
+
+/** Done or handed over as a PR: no longer working on anything */
+const CLOSED_TASK = new Set(['done', 'pr_created']);
+
+const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Whether an open task already works on this run's failure: a base-fix task (it repairs main), or
+ * a task whose title or description names the workflow file (path or file name), or the workflow
+ * as a workflow ("CI run", "CI workflow", "failing CI"; the bare name is too common a word, as in
+ * a workflow named Build). Deterministic, from the task list only.
+ */
+function coveredByOpenTask(run: DeployRun, tasks: Task[]): boolean {
+  const file = run.workflowPath.split('/').pop() ?? '';
+  const name = run.name.trim();
+  const patterns: RegExp[] = [];
+  if (run.workflowPath) patterns.push(new RegExp(escape(run.workflowPath), 'i'));
+  if (file) patterns.push(new RegExp(`(?:^|[^\\w.-])${escape(file)}(?![\\w-])`, 'i'));
+  if (name.length >= 2) {
+    const n = escape(name);
+    patterns.push(new RegExp(`(?:^|\\W)${n}\\s+(?:runs?|workflows?|checks?|jobs?|pipelines?|builds?|failures?)\\b`, 'i'));
+    patterns.push(new RegExp(`\\b(?:failed|failing|broken|red)\\s+${n}(?:$|\\W)`, 'i'));
+  }
+  return tasks.some((task) => {
+    if (CLOSED_TASK.has(task.status)) return false;
+    if (task.metadata?.sourceType === 'base-fix') return true;
+    const text = `${typeof task.title === 'string' ? task.title : ''}\n${typeof task.description === 'string' ? task.description : ''}`;
+    return patterns.some((pattern) => pattern.test(text));
+  });
+}
 
 /** Handled-in-flight run ids: the poller and a watcher can see the same run in the same moment */
 const inFlight = new Set<string>();
@@ -110,6 +140,11 @@ export async function handleMainRun(
     if (!isOwnPushOnMain(run, repo, await resolveMainBranch(project, deps.branches))) {
       markRunHandled(project.path, run.id);
       return 'seen';
+    }
+    // Another open task is on it already (a base fix, or a task about this workflow): no second one
+    if (coveredByOpenTask(run, deps.tasks.getTasks(project.id))) {
+      markRunHandled(project.path, run.id);
+      return 'open';
     }
     const jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
     const sections: string[] = [];

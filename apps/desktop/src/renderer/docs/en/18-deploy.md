@@ -45,7 +45,7 @@ The **Readiness** tab (between Runs and Environment) shows what stands between t
 
 **The workflow.** The GitHub Actions workflow is written for this project. It installs on a clean runner what the checks need: browsers for Playwright and for unit tests in browser mode, services, the package manager. Task branches run typecheck and unit tests; main runs everything; Vercel deploys. After the workflow lands on main, the app follows its first run like any run on main, and a failure becomes a fix task.
 
-**After a push to main.** The app follows that commit's runs for up to an hour. The newest failed run of a workflow on main becomes one urgent fix task, with the logs of the failed jobs. While that task is open there is no second one. Runs from forks and pull requests are ignored.
+**After a push to main.** The app follows that commit's runs for up to an hour. The newest failed run of a workflow on main becomes one urgent fix task, with the logs of the failed jobs. While that task is open there is no second one. There is none either while another open task already works on it: a base-branch fix, a workflow blocker task, or a task whose title or description names the workflow's file or the workflow as such ("CI run", "CI workflow", "failing CI"). Runs from forks and pull requests are ignored.
 
 **Giving up.** When a blocker or a failing workflow has been fixed twice and comes back, there is no third task: it moves to **Needed from you** (with a link to the run), and you look at it yourself. Once the workflow passes or the scan no longer finds the blocker, the count starts again.
 

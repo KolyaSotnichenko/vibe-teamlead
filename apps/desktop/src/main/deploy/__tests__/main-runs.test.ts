@@ -415,3 +415,43 @@ describe('watchMainRuns', () => {
     expect(deps.client.runs).not.toHaveBeenCalled();
   });
 });
+
+describe('no run-fix task while open tasks already work on the failure', () => {
+  const open = (over: Record<string, unknown>) => tasks.push({ id: `o${tasks.length}`, specId: `9${tasks.length}-o`, status: 'in_progress', title: 'Other', description: '', ...over } as unknown as Task);
+
+  it.each([
+    ['its title names the workflow run', { title: 'Fix the failing CI run on main' }],
+    ['its title names the workflow', { title: 'CI workflow misses the Postgres service' }],
+    ['its description names the workflow file', { description: 'The job in .github/workflows/ci.yml needs a browser.' }],
+    ['its description names the file by its name', { description: 'Add a Playwright install step to ci.yml' }],
+    ['it is a base-fix task', { title: 'Fix the base branch', metadata: { sourceType: 'base-fix' } }],
+  ])('none while an open task covers it (%s); the run is handled', async (_name, over) => {
+    open(over);
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('open');
+    expect(created).toHaveLength(0);
+    expect(wasRunHandled(dir, 10)).toBe(true);
+  });
+
+  it('a closed task that names the workflow does not count', async () => {
+    open({ title: 'Fix the failing CI run on main', status: 'done' });
+    open({ title: 'Fix the base branch', metadata: { sourceType: 'base-fix' }, status: 'pr_created' });
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('created');
+  });
+
+  it('a task that only uses the workflow name as a word does not count', async () => {
+    open({ title: 'Build the settings page', description: 'Then test it.' });
+    expect(await handleMainRun(project(), run(10, { name: 'Build', workflowPath: '.github/workflows/build.yml' }), makeDeps())).toBe('created');
+  });
+
+  it('an open deploy workflow task holds the run task back (the run is handled)', async () => {
+    mkdirSync(path.join(dir, '.vibe-teamlead', 'deploy'), { recursive: true });
+    writeFileSync(
+      path.join(dir, '.vibe-teamlead', 'deploy', 'tasks.json'),
+      JSON.stringify({ tasks: [{ key: 'workflow-ci-browser-install', kind: 'workflow', specId: '90-o', at: '2026-01-01T00:00:00Z' }], handledRuns: [], gaveUp: [] }),
+    );
+    open({ title: 'Install browsers on the runner' });
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('open');
+    expect(created).toHaveLength(0);
+    expect(wasRunHandled(dir, 10)).toBe(true);
+  });
+});
