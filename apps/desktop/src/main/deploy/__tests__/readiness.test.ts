@@ -179,6 +179,39 @@ describe('open while the first scan runs', () => {
   });
 });
 
+describe('a failed first scan', () => {
+  it('is not retried by opening the tab again, only by Check again', async () => {
+    scan.mockRejectedValueOnce(new Error('down'));
+    const r = make();
+    await r.scan(project(), 'open');
+    await r.scan(project(), 'open');
+    expect(scan).toHaveBeenCalledTimes(1);
+    await r.scan(project(), 'check-again');
+    expect(scan).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('fresh project per scan', () => {
+  it('each scan of a flight reads the project again, so setup sees deploy turned on meanwhile', async () => {
+    writeReadiness(dir, result([blocker('a')]));
+    let enabled = false;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    scan.mockImplementationOnce(async () => { await gate; return result([blocker('a')]); });
+    const loadProject = vi.fn(() => ({ ...project(), settings: { deploy: { enabled } } }) as unknown as Project);
+    const r = make({ loadProject });
+    const first = r.scan(project(), 'check-again');
+    await Promise.resolve();
+    const queued = r.scan(project(), 'check-again');
+    enabled = true; // the owner set deploy up by hand while the first scan ran
+    release();
+    await Promise.all([first, queued]);
+    expect(scan).toHaveBeenCalledTimes(2);
+    expect(loadProject).toHaveBeenCalledTimes(2);
+    expect(setUp).not.toHaveBeenCalled();
+  });
+});
+
 describe('outcome', () => {
   it('a failing scan keeps the old result, sets the error and creates no task', async () => {
     writeReadiness(dir, result([blocker('old')]));

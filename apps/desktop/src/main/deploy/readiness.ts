@@ -27,6 +27,8 @@ export interface ReadinessDeps {
   canAutoSetUp?(project: Project): Promise<boolean>;
   /** The project's local branch names (to find main when not configured); read from .git files by default. */
   branches?(projectPath: string): Promise<string[]>;
+  /** The project as saved now (each scan of a flight re-reads it, so a queued scan sees fresh settings) */
+  loadProject?(projectId: string): Project | undefined;
 }
 
 interface Flight {
@@ -153,7 +155,13 @@ export function createReadiness(deps: ReadinessDeps) {
     try {
       do {
         flight.again = false;
-        await scanOnce(project);
+        let fresh = project;
+        try {
+          fresh = deps.loadProject?.(project.id) ?? project;
+        } catch {
+          // the project as the caller passed it
+        }
+        await scanOnce(fresh);
       } while (flight.again);
     } finally {
       flights.delete(project.id);
@@ -167,7 +175,8 @@ export function createReadiness(deps: ReadinessDeps) {
     async scan(project: Project, reason: ReadinessReason, mergedInto?: string): Promise<void> {
       try {
         const saved = readReadiness(project.path);
-        if (reason === 'open' && saved) return;
+        // 'open' asks for a first result only; after a failed scan only Check again retries
+        if (reason === 'open' && (saved || errors.has(project.id))) return;
         if (reason === 'merge') {
           if (!saved) return;
           const main = await resolveMainBranch(project, deps.branches);

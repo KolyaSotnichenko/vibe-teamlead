@@ -244,6 +244,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
         repoVisibility: (owner, repo) => repoVisibility(owner, repo),
       }),
     emit: (projectId, state) => safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_READINESS_UPDATE, { projectId, state }),
+    loadProject: (projectId) => projectStore.getProject(projectId),
   });
   setReadiness(readiness);
 
