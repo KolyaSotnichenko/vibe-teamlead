@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Project, Task } from '../../../shared/types';
 import type { ReadinessBlocker, ReadinessResult, ReadinessState } from '../../../shared/types/deploy';
-import { createReadiness, type ReadinessDeps } from '../readiness';
+import { autoSetUpAllowed, createReadiness, type ReadinessDeps } from '../readiness';
 import { readReadiness, writeReadiness } from '../readiness-store';
 
 let dir: string;
@@ -264,5 +264,37 @@ describe('automatic setup', () => {
     const r = make();
     await r.scan(project(), 'check-again');
     expect(r.state(project()).error).toBeUndefined();
+  });
+});
+
+describe('autoSetUpAllowed', () => {
+  const p = (deploy: Record<string, unknown> = {}) => ({ id: 'p1', path: '/x', settings: { deploy: { enabled: false, ...deploy } } }) as unknown as Project;
+  const deps = (over: Partial<Parameters<typeof autoSetUpAllowed>[1]> = {}) => ({
+    vercelTeamCount: vi.fn(async () => 0),
+    resolveRepo: vi.fn(async () => ({ owner: 'o', repo: 'r' })),
+    repoVisibility: vi.fn(async () => 'private' as const),
+    ...over,
+  });
+
+  it('allows a private GitHub origin, or no GitHub origin at all (setup makes a private one)', async () => {
+    expect(await autoSetUpAllowed(p(), deps())).toBe(true);
+    expect(await autoSetUpAllowed(p(), deps({ resolveRepo: vi.fn(async () => null) }))).toBe(true);
+  });
+
+  it('refuses a repo recorded as public, without asking GitHub', async () => {
+    const d = deps();
+    expect(await autoSetUpAllowed(p({ repo: { owner: 'o', repo: 'r', createdByApp: false, public: true } }), d)).toBe(false);
+    expect(d.repoVisibility).not.toHaveBeenCalled();
+  });
+
+  it('refuses a public origin, or one whose visibility cannot be read', async () => {
+    expect(await autoSetUpAllowed(p(), deps({ repoVisibility: vi.fn(async () => 'public' as const) }))).toBe(false);
+    expect(await autoSetUpAllowed(p(), deps({ repoVisibility: vi.fn(async () => { throw new Error('403'); }) }))).toBe(false);
+    expect(await autoSetUpAllowed(p(), deps({ resolveRepo: vi.fn(async () => { throw new Error('git'); }) }))).toBe(false);
+  });
+
+  it('R3: waits for a team choice when the account has teams and none is recorded', async () => {
+    expect(await autoSetUpAllowed(p(), deps({ vercelTeamCount: vi.fn(async () => 2) }))).toBe(false);
+    expect(await autoSetUpAllowed(p({ vercelTeamId: 'team_1' }), deps({ vercelTeamCount: vi.fn(async () => 2) }))).toBe(true);
   });
 });

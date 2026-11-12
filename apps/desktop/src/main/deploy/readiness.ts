@@ -36,6 +36,32 @@ interface Flight {
 
 const blocksDeploy = (r: ReadinessResult | null): boolean => !!r?.blockers.some((b) => b.kind === 'code' || b.kind === 'workflow');
 
+export interface AutoSetUpDeps {
+  /** Teams of the signed-in Vercel account */
+  vercelTeamCount(): Promise<number>;
+  resolveRepo(project: Project): Promise<{ owner: string; repo: string } | null>;
+  repoVisibility(owner: string, repo: string): Promise<'private' | 'public'>;
+}
+
+/**
+ * Whether setup may start on its own once the last blocker is gone. Not onto a public repository
+ * (recorded as public, or a GitHub origin that is public or whose visibility can't be read): the
+ * owner sets that up by hand, after the warning. Not while a Vercel account with teams has no
+ * team recorded for the project (R3). Never throws: any failure is false.
+ */
+export async function autoSetUpAllowed(project: Project, deps: AutoSetUpDeps): Promise<boolean> {
+  try {
+    const deploy = project.settings?.deploy;
+    if (deploy?.repo?.public) return false;
+    const repo = await deps.resolveRepo(project);
+    if (repo && (await deps.repoVisibility(repo.owner, repo.repo)) !== 'private') return false;
+    if (deploy?.vercelTeamId) return true;
+    return (await deps.vercelTeamCount()) === 0;
+  } catch {
+    return false;
+  }
+}
+
 export function createReadiness(deps: ReadinessDeps) {
   const flights = new Map<string, Flight>();
   const errors = new Map<string, string>();

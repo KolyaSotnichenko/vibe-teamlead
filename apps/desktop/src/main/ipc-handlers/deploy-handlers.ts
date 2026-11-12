@@ -28,9 +28,9 @@ import { runReadinessScan } from '../ai/runners/deploy-readiness';
 import { addDatabase, addIntegration } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
-import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
+import { listRepoSecretNames, repoVisibility, setRepoSecret } from '../deploy/github-write';
 import { type DeployTaskDeps, isDeployTask } from '../deploy/deploy-tasks';
-import { createReadiness } from '../deploy/readiness';
+import { autoSetUpAllowed, createReadiness } from '../deploy/readiness';
 import { setMainRunDeps, setReadiness } from '../deploy/readiness-instance';
 import { findLastMainRun, handleMainRuns, type MainRunDeps } from '../deploy/main-runs';
 import { lastPushResult, resolveMainBranch } from '../deploy/push-after-merge';
@@ -236,12 +236,13 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
     tasks: taskDeps,
     // The team recorded for the project is used by setup itself (runSetup reads settings.deploy.vercelTeamId)
     setUp: (project) => runSetup(project),
-    canAutoSetUp: async (project) => {
-      const fresh = projectStore.getProject(project.id) ?? project;
-      if (fresh.settings.deploy?.vercelTeamId) return true;
-      // An account with teams and no recorded choice: the owner picks the team, setup waits for them
-      return !((await vercelStatus()).teams?.length);
-    },
+    // Not onto a public repository, and not before the owner picks a team of a team account
+    canAutoSetUp: (project) =>
+      autoSetUpAllowed(projectStore.getProject(project.id) ?? project, {
+        vercelTeamCount: async () => (await vercelStatus()).teams?.length ?? 0,
+        resolveRepo,
+        repoVisibility: (owner, repo) => repoVisibility(owner, repo),
+      }),
     emit: (projectId, state) => safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_READINESS_UPDATE, { projectId, state }),
   });
   setReadiness(readiness);
