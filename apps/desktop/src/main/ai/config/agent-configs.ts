@@ -169,6 +169,7 @@ export type AgentType =
   | 'competitor_analysis'
   | 'ideation'
   | 'brief_analyst'
+  | 'deploy_readiness'
   | 'design_system'
   | 'ux_reviewer'
   | 'designer';
@@ -363,6 +364,13 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   },
   brief_analyst: {
     // Reads the brief and the project; writes nothing (the proposal is structured output).
+    tools: [...BASE_READ_TOOLS],
+    mcpServers: [],
+    appTools: [],
+    thinkingDefault: 'high',
+  },
+  deploy_readiness: {
+    // Reads the project for what blocks a first Vercel deploy; writes nothing (structured output).
     tools: [...BASE_READ_TOOLS],
     mcpServers: [],
     appTools: [],
