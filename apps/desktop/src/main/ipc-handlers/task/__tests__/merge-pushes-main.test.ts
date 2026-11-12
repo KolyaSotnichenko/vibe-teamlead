@@ -17,7 +17,7 @@ const found = {
 vi.mock('../shared', () => ({ findTaskAndProject: () => found }));
 vi.mock('../../../worktree-paths', () => ({ findTaskWorktree: () => null }));
 vi.mock('../../../task-state-manager', () => ({ taskStateManager: { handleManualStatusChange: vi.fn(), configure: vi.fn() } }));
-vi.mock('../../../project-store', () => ({ projectStore: {} }));
+vi.mock('../../../project-store', () => ({ projectStore: { getProject: () => undefined } }));
 vi.mock('../../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 vi.mock('../../../ai/claude-code/credential', () => ({ resolveClaudeCredential: vi.fn() }));
 const merge = vi.hoisted(() => ({ result: { status: 'merged' } as { status: string } }));
@@ -28,7 +28,11 @@ vi.mock('../../../ai/merge/integrate-task', () => ({
 }));
 vi.mock('../plan-file-utils', () => ({ persistPlanStatus: vi.fn(async () => true), updateTaskMetadataPrUrl: vi.fn() }));
 const pushMain = vi.hoisted(() => vi.fn(async () => ({ pushed: true })));
-vi.mock('../../../deploy/push-after-merge', () => ({ pushMainAfterMerge: pushMain }));
+vi.mock('../../../deploy/push-after-merge', () => ({ pushMainAfterMerge: pushMain, branchHead: vi.fn() }));
+const watchRuns = vi.hoisted(() => vi.fn());
+vi.mock('../../../deploy/main-runs', () => ({ watchMainRuns: watchRuns }));
+const runDeps = { tag: 'deps' };
+vi.mock('../../../deploy/readiness-instance', () => ({ getReadiness: () => undefined, getMainRunDeps: () => runDeps }));
 vi.mock('../../../deploy/github-write', () => ({ pushWithAppToken: vi.fn() }));
 
 import { IPC_CHANNELS } from '../../../../shared/constants';
@@ -39,6 +43,7 @@ const mergeTask = (options?: unknown) => handlers.get(IPC_CHANNELS.TASK_WORKTREE
 describe('merge into main pushes main', () => {
   beforeEach(() => {
     pushMain.mockClear();
+    watchRuns.mockClear();
     handlers.clear();
     registerWorktreeHandlers(() => null);
   });
@@ -65,6 +70,22 @@ describe('merge into main pushes main', () => {
       rmSync(dir, { recursive: true, force: true });
     }
     expect((pushMain.mock.calls[0] as unknown[])[2]).toBe('develop');
+  });
+
+  it('follows the runs of the pushed commit after a push with a sha', async () => {
+    merge.result = { status: 'merged' };
+    pushMain.mockResolvedValueOnce({ pushed: true, sha: 'abc123' } as never);
+    await mergeTask({});
+    await new Promise((r) => setTimeout(r, 0));
+    expect(watchRuns).toHaveBeenCalledWith(found.project, 'abc123', runDeps);
+  });
+
+  it('does not follow runs when nothing was pushed or the sha is unknown', async () => {
+    merge.result = { status: 'merged' };
+    pushMain.mockResolvedValueOnce({ pushed: false } as never);
+    await mergeTask({});
+    await new Promise((r) => setTimeout(r, 0));
+    expect(watchRuns).not.toHaveBeenCalled();
   });
 
   it('does not call it for a stage-only merge', async () => {

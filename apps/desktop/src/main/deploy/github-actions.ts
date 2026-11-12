@@ -143,8 +143,9 @@ export function createActionsClient(fetcher: GitHubFetcher) {
   }
 
   return {
-    async runs(owner: string, repo: string, perPage = 20): Promise<DeployRun[]> {
-      const body = (await get(`/repos/${owner}/${repo}/actions/runs?per_page=${perPage}`)) as Obj;
+    async runs(owner: string, repo: string, perPage = 20, branch?: string): Promise<DeployRun[]> {
+      const filter = branch ? `&branch=${encodeURIComponent(branch)}` : '';
+      const body = (await get(`/repos/${owner}/${repo}/actions/runs?per_page=${perPage}${filter}`)) as Obj;
       return arr(body?.workflow_runs).map(mapRun);
     },
 

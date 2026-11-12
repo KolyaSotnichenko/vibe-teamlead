@@ -24,6 +24,10 @@ export interface RunsPollerDeps {
   setTimer?: (fn: () => void, ms: number) => Timer;
   clearTimer?: (timer: Timer) => void;
   emit: (state: DeployRunsState) => void;
+  /** Gets every completed run on the project's main branch; may be called again with a run it has seen. Errors are swallowed. */
+  handleMainRun?: (project: Project, run: DeployRun) => Promise<unknown>;
+  /** The branch whose runs go to handleMainRun */
+  mainBranch?: (project: Project) => Promise<string | undefined>;
 }
 
 const ACTIVE_MS = 5_000;
@@ -141,6 +145,25 @@ export function createRunsPoller(deps: RunsPollerDeps) {
     }
   }
 
+  /** Completed runs on main, oldest first, to the main-run handler; never throws. */
+  async function handleMainRuns(project: Project, runs: DeployRun[]): Promise<void> {
+    if (!deps.handleMainRun) return;
+    try {
+      const main = await deps.mainBranch?.(project);
+      if (!main) return;
+      const completed = runs.filter((r) => r.branch === main && r.status === 'completed').reverse();
+      for (const r of completed) {
+        try {
+          await deps.handleMainRun(project, r);
+        } catch {
+          // retried on the next poll
+        }
+      }
+    } catch {
+      // informational
+    }
+  }
+
   async function tick(s: Session): Promise<void> {
     const generation = ++s.generation;
     if (s.timer !== undefined) clearTimer(s.timer);
@@ -155,6 +178,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
       const repo = s.repo as Repo;
       runs = await deps.client.runs(repo.owner, repo.repo);
       if (!current()) return;
+      void handleMainRuns(s.project, runs);
       const run = runs.find((r) => r.id === s.selectedRunId) ?? runs[0];
       s.selectedRunId = run?.id;
       if (!run) selected = undefined;

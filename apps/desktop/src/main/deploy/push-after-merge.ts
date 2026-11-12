@@ -6,8 +6,11 @@
  * and a burst of merges is not a burst of pushes. Nothing here throws: the result
  * goes to the emitter and back to the caller.
  */
+import { execFile } from 'node:child_process';
 import type { Project } from '../../shared/types';
 import type { DeployPushResult } from '../../shared/types/deploy';
+import { getToolPath } from '../cli-tool-manager';
+import { getIsolatedGitEnv } from '../utils/git-isolation';
 import { readGitInfo } from './setup';
 
 export type { DeployPushResult };
@@ -19,11 +22,30 @@ export interface PushAfterMergeDeps {
   now?: () => string;
   /** The project's local branch names, read from .git files; readGitInfo in production */
   branches?: (projectPath: string) => Promise<string[]>;
+  /** The commit a branch points at (what was pushed); `branchHead` in production. Without it the outcome has no sha. */
+  headSha?: (projectPath: string, branch: string) => Promise<string | undefined>;
 }
 
 export interface PushAfterMergeOutcome {
   pushed: boolean;
   error?: string;
+  /** The commit pushed (only when the pushed branch's head could be read) */
+  sha?: string;
+}
+
+/** The commit a local branch points at; undefined on any failure. */
+export function branchHead(projectPath: string, branch: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      getToolPath('git'),
+      ['rev-parse', '--verify', `refs/heads/${branch}`],
+      { cwd: projectPath, env: getIsolatedGitEnv() as NodeJS.ProcessEnv, timeout: 10_000, encoding: 'utf-8' },
+      (err, stdout) => {
+        const sha = String(stdout ?? '').trim();
+        resolve(!err && /^[0-9a-f]{40,64}$/.test(sha) ? sha : undefined);
+      },
+    );
+  });
 }
 
 interface Queued {
@@ -56,9 +78,11 @@ async function pushOnce(
   let result: DeployPushResult;
   let outcome: PushAfterMergeOutcome;
   try {
+    // Read before the push: a merge that lands meanwhile has its own (queued) push
+    const sha = deps.headSha ? await deps.headSha(projectPath, branch).catch(() => undefined) : undefined;
     await deps.push(projectPath, url, branch);
     result = { projectId, ok: true, at };
-    outcome = { pushed: true };
+    outcome = sha ? { pushed: true, sha } : { pushed: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'The push failed';
     const kind = typeof (e as { kind?: unknown })?.kind === 'string' ? (e as { kind: string }).kind : 'unknown';

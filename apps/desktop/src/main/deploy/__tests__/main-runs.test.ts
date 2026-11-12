@@ -1,0 +1,208 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { Project, Task, TaskMetadata } from '../../../shared/types';
+import type { DeployJob, DeployRun } from '../../../shared/types/deploy';
+import { type DeployTaskDeps, markRunHandled, wasRunHandled } from '../deploy-tasks';
+import { handleMainRun, watchMainRuns, type MainRunDeps } from '../main-runs';
+
+let dir: string;
+let tasks: Task[];
+let created: Array<{ title: string; description: string; metadata: TaskMetadata }>;
+let started: string[];
+let seq = 0;
+
+const project = (over: Record<string, unknown> = {}) =>
+  ({ id: `p${seq}`, path: dir, settings: { mainBranch: 'main', deploy: { enabled: true } }, ...over }) as unknown as Project;
+
+const run = (id: number, over: Partial<DeployRun> = {}): DeployRun => ({
+  id, number: id, name: 'CI', title: 't', branch: 'main', sha: 'abc', event: 'push', status: 'completed', conclusion: 'failure',
+  startedAt: '', updatedAt: '', htmlUrl: `https://github.com/o/r/actions/runs/${id}`, workflowPath: '.github/workflows/ci.yml', ...over,
+});
+const job = (id: number, name: string, conclusion: string): DeployJob => ({ id, name, status: 'completed', conclusion, steps: [] });
+
+function saveReadiness() {
+  mkdirSync(path.join(dir, '.vibe-teamlead', 'deploy'), { recursive: true });
+  writeFileSync(
+    path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'),
+    JSON.stringify({ scannedAt: 'x', blockers: [], services: [], owner: [], workflow: { state: 'present' } }),
+  );
+}
+
+function makeDeps(over: Partial<MainRunDeps> = {}) {
+  const client = {
+    runs: vi.fn(async () => [] as DeployRun[]),
+    jobs: vi.fn(async () => [job(1, 'build', 'failure'), job(2, 'lint', 'success')]),
+    jobLog: vi.fn(async () => Array.from({ length: 300 }, (_, i) => `line ${i + 1}`).join('\n')),
+  };
+  const taskDeps: DeployTaskDeps = {
+    getTasks: () => tasks,
+    createTask: async (_p, title, description, metadata) => {
+      const t = { id: `t${tasks.length + 1}`, specId: `00${tasks.length + 1}-x`, status: 'backlog' } as unknown as Task;
+      tasks.push(t);
+      created.push({ title, description, metadata });
+      return t;
+    },
+    startTask: async (id) => { started.push(id); },
+  };
+  const deps: MainRunDeps = { client, resolveRepo: async () => ({ owner: 'o', repo: 'r' }), tasks: taskDeps, ...over };
+  return Object.assign(deps, { client });
+}
+
+beforeEach(() => { seq++; dir = mkdtempSync(path.join(tmpdir(), 'mainruns-')); tasks = []; created = []; started = []; saveReadiness(); });
+afterEach(() => { rmSync(dir, { recursive: true, force: true }); vi.useRealTimers(); });
+
+describe('handleMainRun', () => {
+  it('a failed run creates one urgent task with failed jobs, log tails and the run URL', async () => {
+    const deps = makeDeps();
+    expect(await handleMainRun(project(), run(10), deps)).toBe('created');
+    expect(created).toHaveLength(1);
+    expect(created[0].title).toBe('Fix the failed CI run on main');
+    expect(created[0].metadata).toMatchObject({ priority: 'urgent', deployKey: 'run:.github/workflows/ci.yml' });
+    const d = created[0].description;
+    expect(d).toContain('build');
+    expect(d).not.toContain('lint');
+    expect(d).toContain('line 300');
+    expect(d).toContain('line 101');
+    expect(d).not.toContain('line 100\n');
+    expect(d).toContain('https://github.com/o/r/actions/runs/10');
+    expect(d).toContain("Fix whichever is wrong, the project or the workflow; don't skip or weaken checks.");
+    expect(started).toEqual(['t1']);
+  });
+
+  it('the same run again is seen', async () => {
+    const deps = makeDeps();
+    await handleMainRun(project(), run(10), deps);
+    expect(await handleMainRun(project(), run(10), deps)).toBe('seen');
+    expect(created).toHaveLength(1);
+    expect(wasRunHandled(dir, 10)).toBe(true);
+  });
+
+  it('a second failed run of the same workflow while the task is open makes no task', async () => {
+    const deps = makeDeps();
+    await handleMainRun(project(), run(10), deps);
+    expect(await handleMainRun(project(), run(11), deps)).toBe('open');
+    expect(created).toHaveLength(1);
+  });
+
+  it('after the task is done a new failed run makes a new task', async () => {
+    const deps = makeDeps();
+    await handleMainRun(project(), run(10), deps);
+    tasks[0].status = 'done' as never;
+    expect(await handleMainRun(project(), run(11), deps)).toBe('created');
+    expect(created).toHaveLength(2);
+  });
+
+  it('two workflows make two tasks', async () => {
+    const deps = makeDeps();
+    await handleMainRun(project(), run(10), deps);
+    await handleMainRun(project(), run(11, { name: 'Lint', workflowPath: '.github/workflows/lint.yml' }), deps);
+    expect(created.map((c) => c.title)).toEqual(['Fix the failed CI run on main', 'Fix the failed Lint run on main']);
+  });
+
+  it('a passed run makes nothing', async () => {
+    const deps = makeDeps();
+    expect(await handleMainRun(project(), run(10, { conclusion: 'success' }), deps)).toBe('passed');
+    expect(created).toHaveLength(0);
+    expect(deps.client.jobs).not.toHaveBeenCalled();
+  });
+
+  it('does nothing without deploy enabled or a saved readiness result', async () => {
+    const deps = makeDeps();
+    expect(await handleMainRun(project({ settings: { deploy: { enabled: false } } }), run(10), deps)).toBe('seen');
+    rmSync(path.join(dir, '.vibe-teamlead', 'deploy', 'readiness.json'));
+    expect(await handleMainRun(project(), run(11), deps)).toBe('seen');
+    expect(created).toHaveLength(0);
+    expect(deps.client.jobs).not.toHaveBeenCalled();
+  });
+
+  it('keeps the created task entries when marking runs handled', async () => {
+    const deps = makeDeps();
+    await handleMainRun(project(), run(10), deps);
+    for (let i = 0; i < 120; i++) markRunHandled(dir, 1000 + i);
+    expect(wasRunHandled(dir, 10)).toBe(false);
+    expect(wasRunHandled(dir, 1119)).toBe(true);
+    expect(await handleMainRun(project(), run(500), deps)).toBe('open');
+  });
+});
+
+describe('watchMainRuns', () => {
+  function timers() {
+    let now = 0;
+    const pending: Array<{ fn: () => void; ms: number }> = [];
+    return {
+      now: () => now,
+      setTimer: ((fn: () => void, ms: number) => { const t = { fn, ms }; pending.push(t); return t; }) as never,
+      clearTimer: (() => undefined) as never,
+      pending,
+      async fire() {
+        const t = pending.shift();
+        if (!t) return false;
+        now += t.ms;
+        t.fn();
+        for (let i = 0; i < 40; i++) await Promise.resolve();
+        return true;
+      },
+    };
+  }
+  const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
+
+  it('polls runs of the sha on main, handles completed ones and stops when all are completed', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs
+      .mockResolvedValueOnce([run(10, { status: 'in_progress', conclusion: undefined })])
+      .mockResolvedValue([run(10)]);
+    watchMainRuns(project(), 'abc', deps);
+    await flush();
+    expect(deps.client.runs).toHaveBeenCalledWith('o', 'r', expect.any(Number), 'main');
+    expect(created).toHaveLength(0);
+    expect(t.pending[0].ms).toBe(60_000);
+    await t.fire();
+    expect(created).toHaveLength(1);
+    expect(t.pending).toHaveLength(0);
+  });
+
+  it('only follows runs of the pushed sha', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs.mockResolvedValue([run(10, { sha: 'other' })]);
+    watchMainRuns(project(), 'abc', deps);
+    await flush();
+    expect(created).toHaveLength(0);
+    expect(t.pending).toHaveLength(1);
+  });
+
+  it('stops after 60 minutes', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs.mockResolvedValue([run(10, { status: 'in_progress', conclusion: undefined })]);
+    watchMainRuns(project(), 'abc', deps);
+    await flush();
+    let fires = 0;
+    while (t.pending.length && fires < 200) { await t.fire(); fires++; }
+    expect(fires).toBe(60);
+    expect(t.pending).toHaveLength(0);
+  });
+
+  it('one watcher per project and sha', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs.mockResolvedValue([]);
+    watchMainRuns(project(), 'abc', deps);
+    watchMainRuns(project(), 'abc', deps);
+    await flush();
+    expect(deps.client.runs).toHaveBeenCalledTimes(1);
+    expect(t.pending).toHaveLength(1);
+  });
+
+  it('does not watch a project without deploy or readiness', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    watchMainRuns(project({ settings: {} }), 'abc', deps);
+    await flush();
+    expect(deps.client.runs).not.toHaveBeenCalled();
+  });
+});

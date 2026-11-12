@@ -30,6 +30,13 @@ describe('pushMainAfterMerge', () => {
     expect(emitted).toEqual([{ projectId: 'p1', ok: true, at: '2026-01-01T00:00:00.000Z' }]);
   });
 
+  it('reports the commit it pushed when headSha is given', async () => {
+    const push = vi.fn(async () => {});
+    const { d } = deps(push);
+    d.headSha = async (_p, branch) => `sha-of-${branch}`;
+    expect(await pushMainAfterMerge(project(enabled, 'trunk'), d, 'trunk')).toEqual({ pushed: true, sha: 'sha-of-trunk' });
+  });
+
   it('a merge into a non-main branch does not push', async () => {
     const push = vi.fn(async () => {});
     const { d, emitted } = deps(push);

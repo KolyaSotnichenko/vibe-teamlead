@@ -37,6 +37,12 @@ function client(routes: Record<string, unknown>) {
 }
 
 describe('runs', () => {
+  it('can filter by branch', async () => {
+    const { c, calls } = client({ '/repos/acme/app/actions/runs?per_page=30&branch=feat%2Fx': ok({ workflow_runs: [] }) });
+    await c.runs('acme', 'app', 30, 'feat/x');
+    expect(calls).toEqual(['/repos/acme/app/actions/runs?per_page=30&branch=feat%2Fx']);
+  });
+
   it('maps workflow runs', async () => {
     const { c, calls } = client({ '/repos/acme/app/actions/runs?per_page=20': ok(fx('runs.json')) });
     const runs = await c.runs('acme', 'app');

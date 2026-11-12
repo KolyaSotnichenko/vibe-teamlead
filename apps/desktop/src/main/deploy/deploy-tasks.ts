@@ -49,13 +49,32 @@ function readLedger(projectPath: string): Ledger {
   }
 }
 
-function recordTask(projectPath: string, key: string, specId: string, now: Date): void {
-  const ledger = readLedger(projectPath);
-  ledger.tasks = [...ledger.tasks.filter((t) => t.specId !== specId), { key, specId, at: now.toISOString() }].slice(-MAX_TASKS);
+function writeLedger(projectPath: string, ledger: Ledger): void {
   const file = ledgerPath(projectPath);
   const dir = path.dirname(file);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileReplacingSync(file, JSON.stringify(ledger, null, 2));
+}
+
+const MAX_HANDLED_RUNS = 100;
+
+/** Whether a run on main was already looked at (the ledger keeps the last 100 ids). */
+export function wasRunHandled(projectPath: string, runId: number): boolean {
+  return readLedger(projectPath).handledRuns.includes(runId);
+}
+
+/** Remembers a run id; the task entries of the ledger stay as they are. */
+export function markRunHandled(projectPath: string, runId: number): void {
+  const ledger = readLedger(projectPath);
+  if (ledger.handledRuns.includes(runId)) return;
+  ledger.handledRuns = [...ledger.handledRuns, runId].slice(-MAX_HANDLED_RUNS);
+  writeLedger(projectPath, ledger);
+}
+
+function recordTask(projectPath: string, key: string, specId: string, now: Date): void {
+  const ledger = readLedger(projectPath);
+  ledger.tasks = [...ledger.tasks.filter((t) => t.specId !== specId), { key, specId, at: now.toISOString() }].slice(-MAX_TASKS);
+  writeLedger(projectPath, ledger);
 }
 
 function isOpenKey(project: Project, key: string, getTasks: DeployTaskDeps['getTasks']): boolean {

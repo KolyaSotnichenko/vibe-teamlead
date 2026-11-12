@@ -28,9 +28,10 @@ import { addDatabase } from '../deploy/database';
 import { createActionsClient, resolveRepo } from '../deploy/github-actions';
 import { githubFetcher } from '../deploy/github-fetcher';
 import { listRepoSecretNames, setRepoSecret } from '../deploy/github-write';
-import { isDeployTask } from '../deploy/deploy-tasks';
+import { type DeployTaskDeps, isDeployTask } from '../deploy/deploy-tasks';
 import { createReadiness } from '../deploy/readiness';
-import { setReadiness } from '../deploy/readiness-instance';
+import { setMainRunDeps, setReadiness } from '../deploy/readiness-instance';
+import { handleMainRun, type MainRunDeps } from '../deploy/main-runs';
 import { lastPushResult, resolveMainBranch } from '../deploy/push-after-merge';
 import { createRunsPoller, fetchJobLog } from '../deploy/runs-poller';
 import { createSetupDeps, saveDeployPatch, setUpDeploy } from '../deploy/setup';
@@ -87,10 +88,27 @@ function headCommit(projectPath: string): Promise<string | undefined> {
 
 export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null, agentManager?: AgentManager): void {
   const client = createActionsClient(githubFetcher);
+
+  // Tasks the readiness scan and failing runs create
+  const taskDeps: DeployTaskDeps = {
+    getTasks: (projectId) => projectStore.getTasks(projectId),
+    // Lazy: the task handlers are heavy and import much of the app
+    createTask: async (project, title, description, metadata) =>
+      (await import('./task/crud-handlers')).createTaskInProject(project, title, description, metadata),
+    startTask: async (id) => {
+      if (!agentManager) return;
+      await (await import('./task/execution-handlers')).startTask(agentManager, getMainWindow, id);
+    },
+    defaultModels: () => resolveDefaultTaskModels(readSettingsFile() as never),
+  };
+  const mainRunDeps: MainRunDeps = { client, resolveRepo, tasks: taskDeps };
+  setMainRunDeps(mainRunDeps);
   const poller = createRunsPoller({
     client,
     resolveRepo,
     emit: (state) => safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_RUNS_UPDATE, state),
+    mainBranch: (project) => resolveMainBranch(project),
+    handleMainRun: (project, run) => handleMainRun(projectStore.getProject(project.id) ?? project, run, mainRunDeps),
   });
 
   // The renderer cannot stop polling when it reloads or goes away, so main does.
@@ -231,17 +249,7 @@ export function registerDeployHandlers(getMainWindow: () => BrowserWindow | null
       return listed.ok ? listed.variables.map((v) => v.name) : [];
     },
     headCommit,
-    tasks: {
-      getTasks: (projectId) => projectStore.getTasks(projectId),
-      // Lazy: the task handlers are heavy and import much of the app
-      createTask: async (project, title, description, metadata) =>
-        (await import('./task/crud-handlers')).createTaskInProject(project, title, description, metadata),
-      startTask: async (id) => {
-        if (!agentManager) return;
-        await (await import('./task/execution-handlers')).startTask(agentManager, getMainWindow, id);
-      },
-      defaultModels: () => resolveDefaultTaskModels(readSettingsFile() as never),
-    },
+    tasks: taskDeps,
     // The team recorded for the project is used by setup itself (runSetup reads settings.deploy.vercelTeamId)
     setUp: (project) => runSetup(project),
     canAutoSetUp: async (project) => {

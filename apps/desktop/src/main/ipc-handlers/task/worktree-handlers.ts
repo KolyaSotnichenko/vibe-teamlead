@@ -36,8 +36,9 @@ import { killProcessGracefully } from '../../platform';
 import { stripAnsiCodes } from '../../../shared/utils/ansi-sanitizer';
 import { taskStateManager } from '../../task-state-manager';
 import { safeSendToRenderer } from '../utils';
-import { getReadiness } from '../../deploy/readiness-instance';
-import { pushMainAfterMerge } from '../../deploy/push-after-merge';
+import { getMainRunDeps, getReadiness } from '../../deploy/readiness-instance';
+import { watchMainRuns } from '../../deploy/main-runs';
+import { branchHead, pushMainAfterMerge } from '../../deploy/push-after-merge';
 import { pushWithAppToken } from '../../deploy/github-write';
 import type { MergeWorktreeOptions } from '../../../shared/types/task';
 
@@ -2263,9 +2264,20 @@ export function registerWorktreeHandlers(
                   {
                     push: pushWithAppToken,
                     emit: (result) => { safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PUSH_RESULT, result); },
+                    headSha: branchHead,
                   },
                   effectiveBaseBranch,
-                ).catch(() => undefined);
+                ).then((outcome) => {
+                  // Deploy: follow the GitHub Actions runs of the pushed commit; a failed one becomes a fix task
+                  const runDeps = getMainRunDeps();
+                  if (outcome.pushed && outcome.sha && runDeps) {
+                    try {
+                      watchMainRuns(projectStore.getProject(project.id) ?? project, outcome.sha, runDeps);
+                    } catch {
+                      // informational
+                    }
+                  }
+                }).catch(() => undefined);
 
                 // Deploy: rescan readiness after a merge into main (never blocks or fails the merge)
                 try {
