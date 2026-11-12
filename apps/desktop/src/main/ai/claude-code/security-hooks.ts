@@ -16,9 +16,9 @@
  *   git check is a best-effort tokenizer, not a shell parser. The real backstop
  *   is the QA loop's content snapshot of the worktree before and after each
  *   reviewer session (reviewer-changes.ts), which reports what the reviewer changed.
- * - The Deploy readiness scan never reads secret files (`.env`, `.env.*` except example
- *   files, `*.pem`, `*.key`, `id_rsa*`) nor anything outside the project (realpaths): Read
- *   and Grep are an allowlist (Grep: one such file, or an extension-only glob of a safe set).
+ * - The Deploy readiness scan never reads secret files (any `.env*` except example
+ *   files, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`) nor anything outside the project
+ *   (realpaths): Read takes one such file, Grep only one such file, never a folder.
  */
 
 import { realpathSync, statSync } from 'node:fs';
@@ -118,30 +118,16 @@ const BROWSER_SERVER_CODE = /^mcp__.+__browser_run_code(_unsafe)?$/;
 /** Example env files name variables without values: the scan reads these. */
 const ENV_EXAMPLE = /\.(example|sample|template|dist)$/;
 
-/** A file name that holds secrets: `.env`, `.env.*` (not an example), `*.pem`, `*.key`, `id_rsa*`. */
+/** A file name that holds secrets: any `.env*` (not an example), `id_rsa*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`. */
 export function isSecretFileName(name: string): boolean {
   const n = name.toLowerCase();
-  if (n === '.env' || n.startsWith('.env.')) return !ENV_EXAMPLE.test(n);
-  return n.endsWith('.pem') || n.endsWith('.key') || n.startsWith('id_rsa');
+  if (n.startsWith('.env')) return !ENV_EXAMPLE.test(n);
+  return n.startsWith('id_rsa') || /\.(pem|key|p12|pfx)$/.test(n);
 }
 
-/** Extensions a Grep glob may name: source, config and docs, never a secret file type. */
-const SAFE_GREP_EXTS = new Set([
-  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'yml', 'yaml', 'toml', 'md', 'py', 'go', 'rs',
-  'prisma', 'sql', 'html', 'css', 'txt', 'lock', 'example', 'sample', 'template',
-]);
+const SCAN_SECRET_RULE = 'The readiness scan never reads secret files (.env*, *.pem, *.key, *.p12, *.pfx, id_rsa*) or anything outside the project. Take variable names from the example env files and the code.';
 
-/** `*.ext`, `** /*.ext`, `*.{a,b}` or `** /*.{a,b}` (no space) with every extension allowed; nothing else (ripgrep splits other shapes). */
-const EXT_GLOB = /^(?:\*\*\/)?\*\.(?:([a-z0-9]+)|\{([a-z0-9]+(?:,[a-z0-9]+)*)\})$/i;
-
-export function isSafeGrepGlob(glob: string): boolean {
-  const m = EXT_GLOB.exec(glob);
-  if (!m) return false;
-  const exts = m[1] ? [m[1]] : m[2].split(',');
-  return exts.every((e) => SAFE_GREP_EXTS.has(e.toLowerCase()));
-}
-
-const SCAN_SECRET_RULE = 'The readiness scan never reads secret files (.env, .env.*, *.pem, *.key, id_rsa*) or anything outside the project. Take variable names from the example env files and the code.';
+const SCAN_GREP_RULE = 'List files with Glob and Read or Grep one file at a time; .env files are off-limits.';
 
 /** Where a path really leads: symlinks resolved (for a missing file, through its folder). */
 function realTarget(target: string): string {
@@ -172,9 +158,9 @@ function isFile(target: string): boolean {
 }
 
 /**
- * Read, Glob and Grep of the readiness scan: an allowlist. Read: a non-secret file inside the
- * project (realpath). Grep: one such file, or a folder inside the project with an extension-only
- * glob from a fixed safe set. Glob lists names only; a secret path is still denied.
+ * Read, Glob and Grep of the readiness scan. Read: a non-secret file inside the project (realpath).
+ * Grep: only one existing regular file of that kind; never a folder (a glob can't be trusted to
+ * leave secret files out). Glob lists names only; a secret path is still denied.
  */
 function evaluateScanRead(toolName: string, toolInput: Record<string, unknown> | null, context: ToolContext): HookJSONOutput | null {
   const at = (raw: unknown): string | undefined =>
@@ -188,14 +174,8 @@ function evaluateScanRead(toolName: string, toolInput: Record<string, unknown> |
     return target && isSecretFileName(basename(realTarget(target))) ? deny(SCAN_SECRET_RULE) : null;
   }
   if (toolName !== 'Grep') return null;
-  const target = at(toolInput?.path) ?? context.cwd;
-  if (forbiddenPath(target, context.cwd)) return deny(SCAN_SECRET_RULE);
-  // One ordinary file: nothing else is searched
-  if (isFile(realTarget(target))) return null;
-  const glob = typeof toolInput?.glob === 'string' ? toolInput.glob.trim() : '';
-  if (!isSafeGrepGlob(glob)) {
-    return deny(`${SCAN_SECRET_RULE} Grep a single file by its path, or pass an extension glob such as "*.{ts,tsx,js}" or "**/*.yml".`);
-  }
+  const target = at(toolInput?.path);
+  if (!target || forbiddenPath(target, context.cwd) || !isFile(realTarget(target))) return deny(SCAN_GREP_RULE);
   return null;
 }
 
