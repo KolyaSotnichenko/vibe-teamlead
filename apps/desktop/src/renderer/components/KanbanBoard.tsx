@@ -43,6 +43,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import type { Task, TaskStatus, TaskOrderState } from '../../shared/types';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 // Type guard for valid drop column targets - preserves literal type from TASK_STATUS_COLUMNS
 const VALID_DROP_COLUMNS = new Set<string>(TASK_STATUS_COLUMNS);
@@ -402,7 +403,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     // calls persistTaskStatus directly, never this function.
     // ============================================
     if (newStatus === 'in_progress' && isQueueAtCapacity(taskId)) {
-      console.log('[Queue] In Progress full, redirecting task to Queue');
+      debugLog('[Queue] In Progress full, redirecting task to Queue');
       newStatus = 'queue';
     }
 
@@ -521,7 +522,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   const processQueue = useCallback(async () => {
     // Prevent concurrent executions to avoid race conditions
     if (isProcessingQueueRef.current) {
-      console.log('[Queue] Already processing queue, skipping duplicate call');
+      debugLog('[Queue] Already processing queue, skipping duplicate call');
       return;
     }
 
@@ -551,7 +552,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           break;
         }
 
-        console.log(`[Queue] Auto-promoting task ${nextTask.id} from Queue to In Progress (${inProgressCount + 1}/${maxParallelTasks})`);
+        debugLog(`[Queue] Auto-promoting task ${nextTask.id} from Queue to In Progress (${inProgressCount + 1}/${maxParallelTasks})`);
         const result = await persistTaskStatus(nextTask.id, 'in_progress', { fromQueue: true });
 
         if (result.success) {
@@ -585,7 +586,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       (taskId, oldStatus, newStatus) => {
         // When a task leaves in_progress (e.g., goes to human_review), process the queue
         if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
-          console.log(`[Queue] Task ${taskId} left in_progress, processing queue to fill slot`);
+          debugLog(`[Queue] Task ${taskId} left in_progress, processing queue to fill slot`);
           processQueue();
         } else if (newStatus === 'done' || newStatus === 'queue') {
           // A finished task may unblock queued tasks that depend on it; a task

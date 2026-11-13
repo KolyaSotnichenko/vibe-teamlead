@@ -27,6 +27,7 @@ import type {
   AppUpdateInfo,
   NotificationSettings
 } from '../../../shared/types';
+import { debugLog } from '../../../shared/utils/debug-logger';
 
 /**
  * Release notes renderer that handles both HTML and markdown input.
@@ -111,7 +112,7 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
           // An update was already downloaded - show "Install and Restart" button
           setAppUpdateInfo(result.data);
           setIsAppUpdateDownloaded(true);
-          console.log('[AdvancedSettings] Found already-downloaded update:', result.data.version);
+          debugLog('[AdvancedSettings] Found already-downloaded update:', result.data.version);
           return; // Don't check for new updates if we already have one downloaded
         }
       } catch (err) {

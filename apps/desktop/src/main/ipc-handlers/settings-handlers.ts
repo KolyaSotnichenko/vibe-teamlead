@@ -18,6 +18,7 @@ import { readSettingsFile, writeSettingsFile } from '../settings-utils';
 import { resetMemoryService } from './context/memory-service-factory';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { stripLegacySettings } from '../ai/claude-code/credential-migration';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Register all settings-related IPC handlers
@@ -379,7 +380,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.APP_VERSION, async (): Promise<string> => {
     // Return the actual bundled version from package.json
     const version = app.getVersion();
-    console.log('[settings-handlers] APP_VERSION returning:', version);
+    debugLog('[settings-handlers] APP_VERSION returning:', version);
     return version;
   });
 
@@ -544,7 +545,7 @@ export function registerSettingsHandlers(
 
         if (languagesToSet.length > 0) {
           session.defaultSession.setSpellCheckerLanguages(languagesToSet);
-          console.log(`[SPELLCHECK] Languages set to: ${languagesToSet.join(', ')} for app language: ${language}`);
+          debugLog(`[SPELLCHECK] Languages set to: ${languagesToSet.join(', ')} for app language: ${language}`);
         } else {
           console.warn(`[SPELLCHECK] No valid spell check languages available for: ${language}`);
         }

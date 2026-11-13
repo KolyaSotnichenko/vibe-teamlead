@@ -49,7 +49,9 @@
       },
       "suspicious": {
         "recommended": true,
-        "noConsole": "off",
+        // CLAUDE.md: no console.log in production code. Use debugLog (shared/utils/debug-logger) for
+        // diagnostics; console.warn and console.error stay for what must always be seen
+        "noConsole": { "level": "error", "options": { "allow": ["warn", "error", "info", "debug", "assert", "trace"] } },
         "noEmptyBlockStatements": "warn",
         "noAssignInExpressions": "warn",
         "useAwait": "off",
@@ -72,5 +74,12 @@
   "files": {
     "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.json", "!vendor/**", "!vendor-bin/**"],
     "ignoreUnknown": true
-  }
+  },
+  "overrides": [
+    {
+      // Build and install scripts print to the terminal; tests and browser mocks may log
+      "includes": ["scripts/**", "e2e/**", "**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "src/renderer/lib/mocks/**", "src/renderer/lib/browser-mock.ts"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ]
 }

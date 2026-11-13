@@ -4,6 +4,7 @@ import { useProjectStore } from '../../../stores/project-store';
 import { useSettingsStore } from '../../../stores/settings-store';
 import { checkTaskRunning, isIncompleteHumanReview, getTaskProgress, useTaskStore, loadTasks, hasRecentActivity } from '../../../stores/task-store';
 import type { Task, TaskLogs, TaskLogPhase, WorktreeStatus, WorktreeDiff, MergeConflict, MergeStats, GitConflictInfo, ImageAttachment } from '../../../../shared/types';
+import { debugLog } from '../../../../shared/utils/debug-logger';
 
 /**
  * Validates task subtasks structure to prevent infinite loops during resume.
@@ -423,7 +424,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
 
     // Check if subtasks are valid
     if (validateTaskSubtasks(task)) {
-      console.log('[reloadPlanForIncompleteTask] Subtasks are valid, no reload needed');
+      debugLog('[reloadPlanForIncompleteTask] Subtasks are valid, no reload needed');
       return true; // Subtasks are valid, proceed
     }
 
@@ -456,7 +457,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
         return false;
       }
 
-      console.log('[reloadPlanForIncompleteTask] Successfully reloaded plan with valid subtasks:', {
+      debugLog('[reloadPlanForIncompleteTask] Successfully reloaded plan with valid subtasks:', {
         taskId: task.id,
         subtaskCount: updatedTask.subtasks?.length ?? 0
       });

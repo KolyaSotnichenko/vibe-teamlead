@@ -11,6 +11,7 @@ import { findTaskWorktree } from './worktree-paths';
 import { getSpecsDir, AUTO_BUILD_PATHS } from '../shared/constants';
 import { existsSync } from 'fs';
 import path from 'path';
+import { debugLog } from '../shared/utils/debug-logger';
 
 type TaskActor = ActorRefFrom<typeof taskMachine>;
 
@@ -249,7 +250,7 @@ export class TaskStateManager {
     this.lastStateByTask.clear();
     this.terminalEventSeen.clear();
     this.taskContextById.clear();
-    console.log('[TaskStateManager] Cleared task actors and state for refresh (preserved sequence tracking)');
+    debugLog('[TaskStateManager] Cleared task actors and state for refresh (preserved sequence tracking)');
   }
 
   private setTaskContext(taskId: string, task: Task, project: Project): void {

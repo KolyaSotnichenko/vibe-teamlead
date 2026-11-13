@@ -35,6 +35,7 @@ import {
   clearETagCacheForProject,
 } from '../ipc-handlers/github/utils';
 import { safeSendToRenderer } from '../ipc-handlers/utils';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * PR data from GitHub API (minimal fields needed for status polling)
@@ -217,7 +218,7 @@ export class PRStatusPoller {
 
     this.contexts.set(projectId, context);
 
-    console.log(
+    debugLog(
       `[PRStatusPoller] Started polling for ${projectId} with ${prNumbers.length} PRs`
     );
 
@@ -261,7 +262,7 @@ export class PRStatusPoller {
     this.contexts.delete(projectId);
     this.lastErrors.delete(projectId);
 
-    console.log(`[PRStatusPoller] Stopped polling for ${projectId}`);
+    debugLog(`[PRStatusPoller] Stopped polling for ${projectId}`);
   }
 
   /**
@@ -319,7 +320,7 @@ export class PRStatusPoller {
       }
     }
 
-    console.log(
+    debugLog(
       `[PRStatusPoller] Added ${prNumbers.length} PRs to ${projectId}`
     );
   }
@@ -341,7 +342,7 @@ export class PRStatusPoller {
       context.prStates.delete(prNumber);
     }
 
-    console.log(
+    debugLog(
       `[PRStatusPoller] Removed ${prNumbers.length} PRs from ${projectId}`
     );
   }
@@ -798,7 +799,7 @@ export class PRStatusPoller {
         this.resumePolling();
       }, delayMs);
 
-      console.log(
+      debugLog(
         `[PRStatusPoller] Will resume polling in ${Math.round(delayMs / 1000)}s`
       );
     }
@@ -821,7 +822,7 @@ export class PRStatusPoller {
     this.isPausedForRateLimit = false;
     this.rateLimitResumeTimeout = null;
 
-    console.log('[PRStatusPoller] Resuming polling after rate limit reset');
+    debugLog('[PRStatusPoller] Resuming polling after rate limit reset');
 
     // Stagger polls across contexts (5s apart) to avoid burst
     this.clearStaggeredResumeTimeouts();

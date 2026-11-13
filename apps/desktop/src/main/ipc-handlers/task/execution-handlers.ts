@@ -34,6 +34,7 @@ import { handleBaseFailures } from './base-fix-handler';
 import { createTaskInProject } from './crud-handlers';
 import { resolveDefaultTaskModels } from '../../../shared/utils/task-models';
 import { readSettingsFile } from '../../settings-utils';
+import { debugLog } from '../../../shared/utils/debug-logger';
 
 /** Whether the app's Claude credential (API key or personal-mode token) is available */
 function hasClaudeCredential(): boolean {
@@ -500,7 +501,7 @@ export function registerTaskExecutionHandlers(
                 }
                 writeFileSync(imagePath, imageBuffer);
                 savedImages.push(`feedback_images/${sanitizedFilename}`);
-                console.log('[TASK_REVIEW] Saved image:', sanitizedFilename);
+                debugLog('[TASK_REVIEW] Saved image:', sanitizedFilename);
               } catch (imgError) {
                 console.error('[TASK_REVIEW] Failed to save image:', image.filename, imgError);
               }
@@ -940,7 +941,7 @@ export function registerTaskExecutionHandlers(
 
       // Update implementation_plan.json
       const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-      console.log(`[Recovery] Writing to plan file at: ${planPath} (task location: ${task.location || 'main'})`);
+      debugLog(`[Recovery] Writing to plan file at: ${planPath} (task location: ${task.location || 'main'})`);
 
       // Also update the OTHER location if task exists in both main and worktree
       // This ensures consistency regardless of which version getTasks() prefers
@@ -957,7 +958,7 @@ export function registerTaskExecutionHandlers(
       if (worktreeSpecDir && worktreeSpecDir !== specDir && existsSync(path.join(worktreeSpecDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN))) {
         planPathsToUpdate.push(path.join(worktreeSpecDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN));
       }
-      console.log(`[Recovery] Will update ${planPathsToUpdate.length} plan file(s):`, planPathsToUpdate);
+      debugLog(`[Recovery] Will update ${planPathsToUpdate.length} plan file(s):`, planPathsToUpdate);
 
       try {
         // Read the plan to analyze subtask progress
@@ -1027,7 +1028,7 @@ export function registerTaskExecutionHandlers(
           const { allCompleted } = checkSubtasksCompletion(plan);
 
           if (allCompleted) {
-            console.log('[Recovery] Task is fully complete (all subtasks done), setting to human_review without restart');
+            debugLog('[Recovery] Task is fully complete (all subtasks done), setting to human_review without restart');
             // Don't reset any subtasks - task is done!
             // Just update status in plan file (project store reads from file, no separate update needed)
             plan.status = 'human_review';
@@ -1041,7 +1042,7 @@ export function registerTaskExecutionHandlers(
             for (const pathToUpdate of planPathsToUpdate) {
               try {
                 writeFileAtomicSync(pathToUpdate, planContent);
-                console.log(`[Recovery] Successfully wrote to: ${pathToUpdate}`);
+                debugLog(`[Recovery] Successfully wrote to: ${pathToUpdate}`);
                 writeSucceededForComplete = true;
               } catch (writeError) {
                 console.error(`[Recovery] Failed to write plan file at ${pathToUpdate}:`, writeError);
@@ -1085,7 +1086,7 @@ export function registerTaskExecutionHandlers(
                 resetSucceeded = true;
                 totalResetCount += resetResult.resetCount;
                 if (resetResult.resetCount > 0) {
-                  console.log(`[Recovery] Reset ${resetResult.resetCount} stuck subtask(s) in: ${pathToUpdate}`);
+                  debugLog(`[Recovery] Reset ${resetResult.resetCount} stuck subtask(s) in: ${pathToUpdate}`);
                 }
               } else {
                 resetFailedCount++;
@@ -1107,7 +1108,7 @@ export function registerTaskExecutionHandlers(
             console.warn(`[Recovery] Partial reset: ${totalResetCount} subtask(s) reset, but ${resetFailedCount} location(s) failed`);
           }
 
-          console.log(`[Recovery] Total ${totalResetCount} subtask(s) reset across all locations`);
+          debugLog(`[Recovery] Total ${totalResetCount} subtask(s) reset across all locations`);
 
           // Clear attempt_history.json to break infinite recovery loops.
           // Without this, the backend re-reads stuck markers from attempt_history
@@ -1149,7 +1150,7 @@ export function registerTaskExecutionHandlers(
               };
 
               writeFileAtomicSync(attemptHistoryPath, JSON.stringify(history, null, 2));
-              console.log(`[Recovery] Cleared attempt_history.json at: ${dir} (reset ${stuckIds.size} stuck entries)`);
+              debugLog(`[Recovery] Cleared attempt_history.json at: ${dir} (reset ${stuckIds.size} stuck entries)`);
             } catch (historyErr) {
               console.warn(`[Recovery] Could not parse attempt_history at ${dir}:`, historyErr);
             }
@@ -1215,7 +1216,7 @@ export function registerTaskExecutionHandlers(
               for (const pathToUpdate of planPathsToUpdate) {
                 try {
                   writeFileAtomicSync(pathToUpdate, restartPlanContent);
-                  console.log(`[Recovery] Wrote restart status to: ${pathToUpdate}`);
+                  debugLog(`[Recovery] Wrote restart status to: ${pathToUpdate}`);
                 } catch (writeError) {
                   console.error(`[Recovery] Failed to write plan file for restart at ${pathToUpdate}:`, writeError);
                   // Continue with restart attempt even if file write fails

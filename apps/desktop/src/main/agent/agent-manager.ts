@@ -26,6 +26,7 @@ import { findTaskWorktree } from '../worktree-paths';
 import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
 import { qaKickoffContext } from '../ai/orchestration/qa-kickoff';
 import { worktreePushNewBranches } from '../deploy/branch-push';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -71,14 +72,14 @@ export class AgentManager extends EventEmitter {
    * Scans all projects for implementation_plan.json files and resets any stuck subtasks
    */
   async runStartupRecoveryScan(): Promise<void> {
-    console.log('[AgentManager] Running startup recovery scan for stuck subtasks...');
+    debugLog('[AgentManager] Running startup recovery scan for stuck subtasks...');
 
     try {
       // Get all projects from the store
       const projects = projectStore.getProjects();
 
       if (projects.length === 0) {
-        console.log('[AgentManager] No projects found - skipping startup recovery scan');
+        debugLog('[AgentManager] No projects found - skipping startup recovery scan');
         return;
       }
 
@@ -120,7 +121,7 @@ export class AgentManager extends EventEmitter {
 
             if (success && resetCount > 0) {
               totalReset += resetCount;
-              console.log(`[AgentManager] Startup recovery: Reset ${resetCount} stuck subtask(s) in ${specDirName}`);
+              debugLog(`[AgentManager] Startup recovery: Reset ${resetCount} stuck subtask(s) in ${specDirName}`);
             }
           }
         } catch (err) {
@@ -129,9 +130,9 @@ export class AgentManager extends EventEmitter {
       }
 
       if (totalReset > 0) {
-        console.log(`[AgentManager] Startup recovery complete: Reset ${totalReset} stuck subtask(s) across ${totalScanned} task(s)`);
+        debugLog(`[AgentManager] Startup recovery complete: Reset ${totalReset} stuck subtask(s) across ${totalScanned} task(s)`);
       } else {
-        console.log(`[AgentManager] Startup recovery complete: No stuck subtasks found (scanned ${totalScanned} task(s))`);
+        debugLog(`[AgentManager] Startup recovery complete: No stuck subtasks found (scanned ${totalScanned} task(s))`);
       }
     } catch (err) {
       console.error('[AgentManager] Startup recovery scan failed:', err);
@@ -156,11 +157,11 @@ export class AgentManager extends EventEmitter {
     // Reset stuck subtasks if restarting an existing spec creation task
     if (specDir) {
       const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-      console.log('[AgentManager] Resetting stuck subtasks before spec creation restart:', planPath);
+      debugLog('[AgentManager] Resetting stuck subtasks before spec creation restart:', planPath);
       try {
         const { success, resetCount } = await resetStuckSubtasks(planPath);
         if (success && resetCount > 0) {
-          console.log(`[AgentManager] Successfully reset ${resetCount} stuck subtask(s) before spec creation`);
+          debugLog(`[AgentManager] Successfully reset ${resetCount} stuck subtask(s) before spec creation`);
         }
       } catch (err) {
         console.warn('[AgentManager] Failed to reset stuck subtasks before spec creation:', err);

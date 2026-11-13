@@ -11,6 +11,7 @@ import path from 'path';
 import { promisify } from 'util';
 
 import type { SupportedCLI, SupportedIDE, SupportedTerminal } from '../../shared/types';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -897,7 +898,7 @@ export async function detectInstalledTools(): Promise<DetectedTools> {
   const terminals: DetectedTool[] = [];
 
   // Build app cache using platform-native detection (fast!)
-  console.log('[DevTools] Starting smart app detection...');
+  debugLog('[DevTools] Starting smart app detection...');
   const startTime = Date.now();
 
   if (platform === 'darwin') {
@@ -908,7 +909,7 @@ export async function detectInstalledTools(): Promise<DetectedTools> {
     installedAppsCache = await detectLinuxApps();
   }
 
-  console.log(`[DevTools] Found ${installedAppsCache.size} apps in ${Date.now() - startTime}ms`);
+  debugLog(`[DevTools] Found ${installedAppsCache.size} apps in ${Date.now() - startTime}ms`);
 
   // Detect IDEs using cached app list + specific path checks
   for (const [id, config] of Object.entries(IDE_DETECTION)) {
@@ -1009,7 +1010,7 @@ export async function detectInstalledTools(): Promise<DetectedTools> {
     }
   }
 
-  console.log(`[DevTools] Detection complete: ${ides.length} IDEs, ${terminals.length} terminals, ${clis.length} CLIs`);
+  debugLog(`[DevTools] Detection complete: ${ides.length} IDEs, ${terminals.length} terminals, ${clis.length} CLIs`);
   return { ides, terminals, clis };
 }
 

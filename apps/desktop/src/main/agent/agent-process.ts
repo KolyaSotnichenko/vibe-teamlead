@@ -21,6 +21,7 @@ import { projectStore } from '../project-store';
 import { getAugmentedEnv } from '../env-utils';
 import { getToolInfo, getClaudeCliPathForSdk } from '../cli-tool-manager';
 import { killProcessGracefully, isWindows } from '../platform';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
  * Type for supported CLI tools
@@ -73,14 +74,14 @@ function deriveGitBashPath(gitExePath: string): string | null {
     const bashPath = path.join(gitRoot, 'bin', 'bash.exe');
 
     if (existsSync(bashPath)) {
-      console.log('[AgentProcess] Derived git-bash path:', bashPath);
+      debugLog('[AgentProcess] Derived git-bash path:', bashPath);
       return bashPath;
     }
 
     // Fallback: check one level up if gitRoot didn't work
     const altBashPath = path.join(path.dirname(gitRoot), 'bin', 'bash.exe');
     if (existsSync(altBashPath)) {
-      console.log('[AgentProcess] Found git-bash at alternate path:', altBashPath);
+      debugLog('[AgentProcess] Found git-bash at alternate path:', altBashPath);
       return altBashPath;
     }
 
@@ -142,16 +143,16 @@ export class AgentProcessManager {
           const cliPath = getClaudeCliPathForSdk();
           if (cliPath) {
             env[envVarName] = cliPath;
-            console.log(`[AgentProcess] Setting ${envVarName}:`, cliPath, '(source: cli-tool-manager)');
+            debugLog(`[AgentProcess] Setting ${envVarName}:`, cliPath, '(source: cli-tool-manager)');
           } else {
-            console.log(`[AgentProcess] Claude CLI is .cmd file on Windows, not setting ${envVarName} - SDK will use bundled CLI`);
+            debugLog(`[AgentProcess] Claude CLI is .cmd file on Windows, not setting ${envVarName} - SDK will use bundled CLI`);
           }
         } else {
           // For other tools, use standard detection
           const toolInfo = getToolInfo(toolName);
           if (toolInfo.found && toolInfo.path) {
             env[envVarName] = toolInfo.path;
-            console.log(`[AgentProcess] Setting ${envVarName}:`, toolInfo.path, `(source: ${toolInfo.source})`);
+            debugLog(`[AgentProcess] Setting ${envVarName}:`, toolInfo.path, `(source: ${toolInfo.source})`);
           }
         }
       } catch (error) {
@@ -181,7 +182,7 @@ export class AgentProcessManager {
           const bashPath = deriveGitBashPath(gitInfo.path);
           if (bashPath) {
             gitBashEnv['CLAUDE_CODE_GIT_BASH_PATH'] = bashPath;
-            console.log('[AgentProcess] Setting CLAUDE_CODE_GIT_BASH_PATH:', bashPath);
+            debugLog('[AgentProcess] Setting CLAUDE_CODE_GIT_BASH_PATH:', bashPath);
           }
         }
       } catch (error) {
@@ -216,10 +217,10 @@ export class AgentProcessManager {
     allOutput: string,
     processType: ProcessType
   ): boolean {
-    console.log('[AgentProcess] Checking for rate limit in output (last 500 chars):', allOutput.slice(-500));
+    debugLog('[AgentProcess] Checking for rate limit in output (last 500 chars):', allOutput.slice(-500));
 
     const rateLimitDetection = detectRateLimit(allOutput);
-    console.log('[AgentProcess] Rate limit detection result:', {
+    debugLog('[AgentProcess] Rate limit detection result:', {
       isRateLimited: rateLimitDetection.isRateLimited,
       resetTime: rateLimitDetection.resetTime,
       limitType: rateLimitDetection.limitType
@@ -228,7 +229,7 @@ export class AgentProcessManager {
     if (rateLimitDetection.isRateLimited) {
       const source = processType === 'spec-creation' ? 'roadmap' : 'task';
       const rateLimitInfo = createSDKRateLimitInfo(source, rateLimitDetection, { taskId });
-      console.log('[AgentProcess] Emitting sdk-rate-limit event:', rateLimitInfo);
+      debugLog('[AgentProcess] Emitting sdk-rate-limit event:', rateLimitInfo);
       this.emitter.emit('sdk-rate-limit', rateLimitInfo);
       return true;
     }
@@ -237,15 +238,15 @@ export class AgentProcessManager {
   }
 
   private handleAuthFailure(taskId: string, allOutput: string): boolean {
-    console.log('[AgentProcess] No rate limit detected - checking for auth failure');
+    debugLog('[AgentProcess] No rate limit detected - checking for auth failure');
     const authFailureDetection = detectAuthFailure(allOutput);
 
     if (!authFailureDetection.isAuthFailure) {
-      console.log('[AgentProcess] Process failed but no rate limit or auth failure detected');
+      debugLog('[AgentProcess] Process failed but no rate limit or auth failure detected');
       return false;
     }
 
-    console.log('[AgentProcess] Auth failure detected:', authFailureDetection);
+    debugLog('[AgentProcess] Auth failure detected:', authFailureDetection);
 
     this.emitter.emit('auth-failure', taskId, {
       failureType: authFailureDetection.failureType,
@@ -412,7 +413,7 @@ export class AgentProcessManager {
     // fall back to the local spawnId variable to check if this specific spawn was killed.
     const currentSpawnId = this.state.getProcess(taskId)?.spawnId ?? spawnId;
     if (this.state.wasSpawnKilled(currentSpawnId)) {
-      console.log(`[AgentProcess] Task ${taskId} was killed during spawn setup. Terminating newly created process.`);
+      debugLog(`[AgentProcess] Task ${taskId} was killed during spawn setup. Terminating newly created process.`);
       killProcessGracefully(childProcess, {
         debugPrefix: '[AgentProcess]',
         debug: process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development'
@@ -450,31 +451,31 @@ export class AgentProcessManager {
 
       const hasMarker = line.includes('__EXEC_PHASE__');
       if (isDebug && hasMarker) {
-        console.log(`[PhaseDebug:${taskId}] Found marker in line: "${line.substring(0, 200)}"`);
+        debugLog(`[PhaseDebug:${taskId}] Found marker in line: "${line.substring(0, 200)}"`);
       }
 
       // Log all task event markers for debugging
       if (line.includes('__TASK_EVENT__')) {
-        console.log(`[AgentProcess:${taskId}] Found __TASK_EVENT__ marker in line:`, line.substring(0, 300));
+        debugLog(`[AgentProcess:${taskId}] Found __TASK_EVENT__ marker in line:`, line.substring(0, 300));
       }
 
       const taskEvent = parseTaskEvent(line);
       if (taskEvent) {
-        console.log(`[AgentProcess:${taskId}] Parsed task event:`, taskEvent.type, taskEvent);
+        debugLog(`[AgentProcess:${taskId}] Parsed task event:`, taskEvent.type, taskEvent);
         this.emitter.emit('task-event', taskId, taskEvent, projectId);
       }
 
       const phaseUpdate = this.events.parseExecutionPhase(line, currentPhase, isSpecRunner);
 
       if (isDebug && hasMarker) {
-        console.log(`[PhaseDebug:${taskId}] Parse result:`, phaseUpdate);
+        debugLog(`[PhaseDebug:${taskId}] Parse result:`, phaseUpdate);
       }
 
       if (phaseUpdate) {
         const phaseChanged = phaseUpdate.phase !== currentPhase;
 
         if (isDebug) {
-          console.log(`[PhaseDebug:${taskId}] Phase update: ${currentPhase} -> ${phaseUpdate.phase} (changed: ${phaseChanged})`);
+          debugLog(`[PhaseDebug:${taskId}] Phase update: ${currentPhase} -> ${phaseUpdate.phase} (changed: ${phaseChanged})`);
         }
 
         // FIX (ACS-203): Manage completedPhases when phases transition
@@ -487,7 +488,7 @@ export class AgentProcessManager {
           if (isCompletablePhase(currentPhase) && !completedPhases.includes(currentPhase)) {
             completedPhases.push(currentPhase);
             if (isDebug) {
-              console.log(`[PhaseDebug:${taskId}] Marked phase as completed:`, { phase: currentPhase, completedPhases });
+              debugLog(`[PhaseDebug:${taskId}] Marked phase as completed:`, { phase: currentPhase, completedPhases });
             }
           }
         }
@@ -510,7 +511,7 @@ export class AgentProcessManager {
         const overallProgress = this.events.calculateOverallProgress(currentPhase, phaseProgress);
 
         if (isDebug) {
-          console.log(`[PhaseDebug:${taskId}] Emitting execution-progress:`, { phase: currentPhase, phaseProgress, overallProgress, completedPhases });
+          debugLog(`[PhaseDebug:${taskId}] Emitting execution-progress:`, { phase: currentPhase, phaseProgress, overallProgress, completedPhases });
         }
 
         this.emitter.emit('execution-progress', taskId, {
@@ -527,8 +528,8 @@ export class AgentProcessManager {
 
     const processBufferedOutput = (buffer: string, newData: string): string => {
       if (isDebug && newData.includes('__EXEC_PHASE__')) {
-        console.log(`[PhaseDebug:${taskId}] Raw chunk with marker (${newData.length} bytes): "${newData.substring(0, 300)}"`);
-        console.log(`[PhaseDebug:${taskId}] Current buffer before append (${buffer.length} bytes): "${buffer.substring(0, 100)}"`);
+        debugLog(`[PhaseDebug:${taskId}] Raw chunk with marker (${newData.length} bytes): "${newData.substring(0, 300)}"`);
+        debugLog(`[PhaseDebug:${taskId}] Current buffer before append (${buffer.length} bytes): "${buffer.substring(0, 100)}"`);
       }
 
       buffer += newData;
@@ -536,7 +537,7 @@ export class AgentProcessManager {
       const remaining = lines.pop() || '';
 
       if (isDebug && newData.includes('__EXEC_PHASE__')) {
-        console.log(`[PhaseDebug:${taskId}] Split into ${lines.length} complete lines, remaining buffer: "${remaining.substring(0, 100)}"`);
+        debugLog(`[PhaseDebug:${taskId}] Split into ${lines.length} complete lines, remaining buffer: "${remaining.substring(0, 100)}"`);
       }
 
       for (const line of lines) {
@@ -544,7 +545,7 @@ export class AgentProcessManager {
           this.emitter.emit('log', taskId, line + '\n', projectId);
           processLog(line);
           if (isDebug) {
-            console.log(`[Agent:${taskId}] ${line}`);
+            debugLog(`[Agent:${taskId}] ${line}`);
           }
         }
       }
@@ -578,7 +579,7 @@ export class AgentProcessManager {
       }
 
       if (code !== 0) {
-        console.log('[AgentProcess] Process failed with code:', code, 'for task:', taskId);
+        debugLog('[AgentProcess] Process failed with code:', code, 'for task:', taskId);
         const wasHandled = this.handleProcessFailure(taskId, allOutput, processType);
 
         if (wasHandled) {
@@ -666,7 +667,7 @@ export class AgentProcessManager {
     bridge.on('log', (tId: string, log: string, pId?: string) => {
       this.emitter.emit('log', tId, log, pId);
       if (isDebug) {
-        console.log(`[Agent:${tId}] ${log}`);
+        debugLog(`[Agent:${tId}] ${log}`);
       }
     });
 

@@ -50,6 +50,7 @@ import { useTaskStore } from '../stores/task-store';
 import { useToast } from '../hooks/use-toast';
 import type { WorktreeListItem, WorktreeMergeResult, TerminalWorktreeConfig, WorktreeStatus, Task, WorktreeCreatePROptions, WorktreeCreatePRResult } from '../../shared/types';
 import { CreatePRDialog } from './task-detail/task-review/CreatePRDialog';
+import { debugLog } from '../../shared/utils/debug-logger';
 
 // Prefix constants for worktree ID parsing
 const TASK_PREFIX = 'task:';
@@ -174,8 +175,8 @@ export function Worktrees({ projectId }: WorktreesProps) {
         window.electronAPI.listTerminalWorktrees(selectedProject.path)
       ]);
 
-      console.log('[Worktrees] Task worktrees result:', taskResult);
-      console.log('[Worktrees] Terminal worktrees result:', terminalResult);
+      debugLog('[Worktrees] Task worktrees result:', taskResult);
+      debugLog('[Worktrees] Terminal worktrees result:', terminalResult);
 
       if (taskResult.success) {
         // Always update state when successful, even if data is null/undefined
@@ -188,7 +189,7 @@ export function Worktrees({ projectId }: WorktreesProps) {
         // Always update state when successful, ensuring a new array reference to force React re-render
         // This is critical when data is an empty array - we need a new reference to update the UI
         const newWorktrees = Array.isArray(terminalResult.data) ? [...terminalResult.data] : [];
-        console.log('[Worktrees] Setting terminal worktrees:', newWorktrees);
+        debugLog('[Worktrees] Setting terminal worktrees:', newWorktrees);
         setTerminalWorktrees(newWorktrees);
       } else {
         console.warn('[Worktrees] Terminal worktrees fetch failed:', terminalResult);

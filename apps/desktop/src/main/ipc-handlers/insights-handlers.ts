@@ -23,6 +23,7 @@ import { insightsService } from "../insights-service";
 import { safeSendToRenderer } from "./utils";
 import { getFeatureSettings } from "./feature-settings-helper";
 import type { ThinkingLevel } from "../../shared/types/settings";
+import { debugLog } from "../../shared/utils/debug-logger";
 
 /**
  * Read insights feature settings (Claude model + thinking level)
@@ -80,7 +81,7 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
         ...modelConfig,
       };
 
-      console.log("[Insights Handler] Using model config:", {
+      debugLog("[Insights Handler] Using model config:", {
         model: configWithSettings.model,
         thinkingLevel: configWithSettings.thinkingLevel,
       });

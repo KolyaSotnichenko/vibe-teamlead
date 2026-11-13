@@ -22,6 +22,7 @@ import {
   PRODUCTION_TRACE_SAMPLE_RATE,
   type SentryErrorEvent
 } from '../shared/utils/sentry-privacy';
+import { debugLog } from '../shared/utils/debug-logger';
 
 /**
  * Build-time constants defined in electron.vite.config.ts
@@ -116,8 +117,8 @@ export function initSentryMain(): void {
   const shouldEnable = hasDsn && (app.isPackaged || process.env.SENTRY_DEV === 'true');
 
   if (!hasDsn) {
-    console.log('[Sentry] No SENTRY_DSN configured - error reporting disabled');
-    console.log('[Sentry] To enable: set SENTRY_DSN environment variable');
+    debugLog('[Sentry] No SENTRY_DSN configured - error reporting disabled');
+    debugLog('[Sentry] To enable: set SENTRY_DSN environment variable');
   }
 
   Sentry.init({
@@ -144,7 +145,7 @@ export function initSentryMain(): void {
   // Listen for settings changes from renderer process
   ipcMain.on(IPC_CHANNELS.SENTRY_STATE_CHANGED, (_event, enabled: boolean) => {
     sentryEnabledState = enabled;
-    console.log(`[Sentry] Error reporting ${enabled ? 'enabled' : 'disabled'} (via IPC)`);
+    debugLog(`[Sentry] Error reporting ${enabled ? 'enabled' : 'disabled'} (via IPC)`);
   });
 
   ipcMain.handle(IPC_CHANNELS.GET_SENTRY_CONFIG, () => {
@@ -156,7 +157,7 @@ export function initSentryMain(): void {
   });
 
   if (hasDsn) {
-    console.log(`[Sentry] Main process initialized (enabled: ${sentryEnabledState}, traces: ${cachedTracesSampleRate}, profiles: ${cachedProfilesSampleRate})`);
+    debugLog(`[Sentry] Main process initialized (enabled: ${sentryEnabledState}, traces: ${cachedTracesSampleRate}, profiles: ${cachedProfilesSampleRate})`);
   }
 }
 
@@ -172,7 +173,7 @@ export function isSentryEnabled(): boolean {
  */
 export function setSentryEnabled(enabled: boolean): void {
   sentryEnabledState = enabled;
-  console.log(`[Sentry] Error reporting ${enabled ? 'enabled' : 'disabled'} (programmatic)`);
+  debugLog(`[Sentry] Error reporting ${enabled ? 'enabled' : 'disabled'} (programmatic)`);
 }
 
 /**
