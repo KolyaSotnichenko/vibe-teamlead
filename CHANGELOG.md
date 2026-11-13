@@ -4,6 +4,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.41 - 2026-11-13
 
+- Board: the ⋮ menu on a task card can now delete the task, not only move it between columns. It asks first and warns about uncommitted work in the task's worktree; a running task is stopped first.
 - CI: right after a merge pushes main, a fix task is no longer made for the previous commit's failed run. Until GitHub lists a run of the pushed commit, older failures wait; if none shows up within an hour, the older failure gets its task.
 
 ## 2.0.0-beta.40 - 2026-11-12
