@@ -166,6 +166,39 @@ describe('Readiness tab', () => {
     expect(screen.queryByText('deploy:readiness.setUpCiFirst')).toBeNull();
   });
 
+  // F-007: a check that could not list the repository's secrets used to look like "nothing needed"
+  describe('secrets a check could not check', () => {
+    const unchecked = () => result({ blockers: [], owner: [], uncheckedSecrets: ['NPM_TOKEN', 'CSRF_SECRET'] });
+
+    it('after setup, once GitHub lists its secrets: the missing ones are items with Add secret, the others are done', async () => {
+      const { deploy } = setup({ result: unchecked(), scanning: false, tasks: {} }, { secrets: ['NPM_TOKEN'] });
+      await openTab();
+      await waitFor(() => expect(deploy.listSecrets).toHaveBeenCalledWith('p1'));
+      const item = (await screen.findByText('CSRF_SECRET')).closest('li') as HTMLElement;
+      expect(within(item).getByRole('button', { name: 'deploy:readiness.addSecret' })).toBeInTheDocument();
+      expect(screen.queryByText('NPM_TOKEN')).toBeNull();
+      expect(screen.queryByText(/deploy:readiness\.secretsUnchecked/)).toBeNull();
+      expect(screen.getByText('deploy:readiness.secretsLeft {"count":1}')).toBeInTheDocument();
+    });
+
+    it('after setup, while GitHub does not list its secrets: says which could not be checked, and not that nothing blocks CI', async () => {
+      const { deploy } = setup({ result: unchecked(), scanning: false, tasks: {} });
+      deploy.listSecrets.mockImplementation(async () => ({ success: true, data: { ok: false, kind: 'unavailable' } }) as never);
+      await openTab();
+      await waitFor(() => expect(deploy.listSecrets).toHaveBeenCalled());
+      expect(await screen.findByText('deploy:readiness.secretsUnchecked {"names":"NPM_TOKEN, CSRF_SECRET"}')).toBeInTheDocument();
+      expect(screen.queryByText('deploy:readiness.clear')).toBeNull();
+    });
+
+    it('before setup: each is listed and says to set up CI first', async () => {
+      setup({ result: unchecked(), scanning: false, tasks: {} }, { setUp: false });
+      await openTab();
+      const name = await screen.findByText('CSRF_SECRET');
+      expect(within(name.closest('li') as HTMLElement).getByText('deploy:readiness.setUpCiFirst')).toBeInTheDocument();
+      expect(screen.getByText('NPM_TOKEN')).toBeInTheDocument();
+    });
+  });
+
   it('never shows an old Vercel variable item (a runtime variable, not a CI secret)', async () => {
     const old = result({ owner: [{ kind: 'variable', variable: 'DATABASE_URL', message: 'Set DATABASE_URL' }] as unknown as ReadinessResult['owner'] });
     setup({ result: old, scanning: false, tasks: {} });

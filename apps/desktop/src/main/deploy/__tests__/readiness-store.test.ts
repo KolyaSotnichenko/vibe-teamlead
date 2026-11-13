@@ -67,6 +67,18 @@ describe('readiness store', () => {
     expect(readReadiness(dir)).toEqual(result);
   });
 
+  // F-007
+  it('keeps the secrets a check could not check, and drops a list that is not one', () => {
+    writeReadiness(dir, { ...result, uncheckedSecrets: ['NPM_TOKEN', 'CSRF_SECRET'] });
+    expect(readReadiness(dir)?.uncheckedSecrets).toEqual(['NPM_TOKEN', 'CSRF_SECRET']);
+    writeFileSync(file(), JSON.stringify({ ...result, ci: 1, uncheckedSecrets: ['OK_NAME', 7, 'bad name', ''] }));
+    expect(readReadiness(dir)?.uncheckedSecrets).toEqual(['OK_NAME']);
+    writeFileSync(file(), JSON.stringify({ ...result, ci: 1, uncheckedSecrets: 'NPM_TOKEN' }));
+    expect(readReadiness(dir)).toEqual(result);
+    writeFileSync(file(), JSON.stringify({ ...result, ci: 1, uncheckedSecrets: [] }));
+    expect(readReadiness(dir)).toEqual(result);
+  });
+
   it('reads null when the file is a symlink', () => {
     const target = path.join(dir, 'real.json');
     writeFileSync(target, JSON.stringify({ ...result, ci: 1 }));

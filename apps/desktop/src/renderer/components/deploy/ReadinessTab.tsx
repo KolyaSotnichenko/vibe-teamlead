@@ -52,11 +52,16 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
   const [savedNote, setSavedNote] = useState<string | null>(null);
   /** The repository's GitHub Actions secret names (set up only): a scan's secret items that have one are done */
   const [present, setPresent] = useState<ReadonlySet<string>>(new Set());
+  /** GitHub has listed its secret names at least once: only then is a name that isn't in `present` known to be missing */
+  const [presentKnown, setPresentKnown] = useState(false);
 
   const loadSecrets = useCallback(async () => {
     try {
       const r = await window.electronAPI.deploy.listSecrets(projectId);
-      if (r.success && r.data?.ok) setPresent(new Set(r.data.names));
+      if (r.success && r.data?.ok) {
+        setPresent(new Set(r.data.names));
+        setPresentKnown(true);
+      }
     } catch {
       // the check's list stands
     }
@@ -109,10 +114,19 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
 
   const blockers = (result?.blockers ?? []).filter(isCiBlocker);
   // Before setup there is no repository to hold secrets; after it, the ones GitHub has are done
-  const owner = (result?.owner ?? []).filter(isCiOwnerItem).filter((item) => {
+  const checked = (result?.owner ?? []).filter(isCiOwnerItem);
+  // Secrets the check could not check (GitHub did not list its secret names then). Before setup they are
+  // items like any secret; after it they wait until this window has the list, then the missing ones are items
+  const unchecked = (result?.uncheckedSecrets ?? []).filter((name) => !checked.some((item) => secretOf(item) === name));
+  const uncheckedKnown = !isSetUp || presentKnown;
+  const owner = [
+    ...checked,
+    ...(uncheckedKnown ? unchecked.map((name): ReadinessOwnerItem => ({ kind: 'secret', variable: name, message: '' })) : []),
+  ].filter((item) => {
     const secret = secretOf(item);
     return !(isSetUp && secret && present.has(secret));
   });
+  const stillUnchecked = uncheckedKnown ? [] : unchecked;
   const secretsLeft = isSetUp ? owner.filter((item) => secretOf(item)).length : 0;
   const run = result?.workflow.lastMainRun;
   const conclusion = run && Object.hasOwn(CONCLUSIONS, run.conclusion) ? run.conclusion : undefined;
@@ -143,12 +157,15 @@ export function ReadinessTab({ projectId, readiness, notSetUp, isSetUp = false, 
       </div>
 
       {secretsLeft > 0 && <Notice tone="attention">{t('deploy:readiness.secretsLeft', { count: secretsLeft })}</Notice>}
+      {stillUnchecked.length > 0 && (
+        <Notice tone="attention">{t('deploy:readiness.secretsUnchecked', { names: stillUnchecked.join(', ') })}</Notice>
+      )}
       {error && <Notice tone="attention">{t('deploy:readiness.error')}</Notice>}
       {savedNote && <Notice tone="info">{savedNote}</Notice>}
 
       {result && blockers.length === 0 && (
         <div className="flex flex-col items-start gap-3">
-          <Notice tone="info">{t('deploy:readiness.clear')}</Notice>
+          {stillUnchecked.length === 0 && <Notice tone="info">{t('deploy:readiness.clear')}</Notice>}
           {notSetUp && <Button onClick={onSetUp}>{t('deploy:setup.start')}</Button>}
         </div>
       )}

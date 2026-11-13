@@ -224,11 +224,16 @@ export async function runReadinessScan(input: ScanInput, deps: ReadinessScanDeps
     blockers.push({ ...blocker, key });
   });
 
+  // Secret names unknown: the secrets the workflows read are named as not checked, so the result
+  // does not read as "nothing is needed" (the window asks GitHub again, without a new scan)
+  const unchecked = known ? [] : [...read].filter(isValidSecretName).sort();
+
   return {
     scannedAt: now().toISOString(),
     commit: input.commit,
     blockers,
     owner,
+    ...(unchecked.length ? { uncheckedSecrets: unchecked } : {}),
     workflow: {
       path: result.output.workflowPath,
       lastMainRun: input.lastMainRun ? { conclusion: input.lastMainRun.conclusion, runId: input.lastMainRun.runId } : undefined,

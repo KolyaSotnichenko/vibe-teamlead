@@ -244,6 +244,11 @@ export interface ReadinessResult {
   /** Only the removed Vercel Deploy saved it: such a result reads as absent; never written. */
   services?: unknown[];
   owner: ReadinessOwnerItem[];
+  /**
+   * Secrets the workflows read that this check could not check: GitHub did not list the
+   * repository's secret names. Absent when the names were listed (missing ones are then in `owner`).
+   */
+  uncheckedSecrets?: string[];
   workflow: { path?: string; lastMainRun?: { conclusion: string; runId: number } };
 }
 

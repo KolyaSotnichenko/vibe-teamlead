@@ -184,6 +184,7 @@
     "noRun": "No run on main yet",
     "gaveUp": "Vibe Teamlead tried to fix this twice and it still fails. Look at it yourself.",
     "openRun": "Open the run on GitHub",
+    "secretsUnchecked": "Could not check whether GitHub has these secrets: {{names}}. They are checked when you open CI again or run the check again.",
     "clear": "Nothing blocks CI",
     "conclusions": {
       "success": "Succeeded",

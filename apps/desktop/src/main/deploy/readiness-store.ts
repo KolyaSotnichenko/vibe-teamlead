@@ -7,6 +7,7 @@ import { lstatSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { BlockerKind, ReadinessBlocker, ReadinessOwnerItem, ReadinessResult } from '../../shared/types/deploy';
+import { isValidSecretName } from '../../shared/utils/github-secret-name';
 import { writeFileReplacingSync } from '../ai/safe-write';
 
 const KEY_CHARS = 80;
@@ -181,11 +182,15 @@ export function readReadiness(projectPath: string): ReadinessResult | null {
     if (!isArray(parsed.blockers) || !isArray(parsed.owner)) return null;
     if (!isObject(parsed.workflow)) return null;
     if (parsed.ci !== CI_RESULT || isOldDeploy(parsed, parsed.blockers, parsed.owner)) return null;
-    const { ci: _ci, ...rest } = parsed;
+    const { ci: _ci, uncheckedSecrets: savedUnchecked, ...rest } = parsed;
+    const unchecked = isArray(savedUnchecked)
+      ? savedUnchecked.filter((name): name is string => typeof name === 'string' && isValidSecretName(name))
+      : [];
     return {
       ...(rest as unknown as ReadinessResult),
       blockers: parsed.blockers.filter(isBlocker),
       owner: parsed.owner.map(ownerItem).filter((item): item is ReadinessOwnerItem => item !== null),
+      ...(unchecked.length ? { uncheckedSecrets: unchecked } : {}),
     };
   } catch {
     return null;

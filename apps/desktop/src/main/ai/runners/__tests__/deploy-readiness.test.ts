@@ -266,6 +266,19 @@ describe('runReadinessScan', () => {
     // A blocker only about secrets the workflows read is neither a task nor an item: GitHub may have them
     expect(result.blockers.map((b) => b.title)).not.toContain('CSRF_SECRET is not set');
     expect((run.mock.calls[0][0] as { prompt: string }).prompt).toContain('could not be listed');
+    // F-007: what could not be checked is said, not dropped in silence
+    expect(result.uncheckedSecrets).toEqual(['API_BASE_URL', 'CSRF_SECRET', 'DATABASE_URL', 'NPM_TOKEN', 'SENDGRID_KEY', 'SESSION_COOKIE_SECURE', 'STRIPE_SECRET_KEY', 'WEB_ORIGIN']);
+  });
+
+  it('secret names unknown and the workflows read none: nothing is left unchecked', async () => {
+    const { secretNames: _s, ...unknown } = input;
+    const result = await runReadinessScan({ ...unknown, workflowSecretNames: ['GITHUB_TOKEN'] }, { run: fakeRun(), feature, now });
+    expect(result).not.toHaveProperty('uncheckedSecrets');
+  });
+
+  it('secret names known: nothing is left unchecked', async () => {
+    const result = await runReadinessScan(input, { run: fakeRun(), feature, now });
+    expect(result).not.toHaveProperty('uncheckedSecrets');
   });
 
   it('the listing succeeded: every secret a workflow reads that GitHub lacks is an item, even when the model names none', async () => {
