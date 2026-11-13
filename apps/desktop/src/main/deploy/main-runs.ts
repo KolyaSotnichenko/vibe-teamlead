@@ -81,21 +81,25 @@ function coveredByOpenTask(run: DeployRun, tasks: Task[], checksWorkflow: string
 
 /** Planning tasks named in the fix task, at most */
 const PLANNING_TASKS_NAMED = 3;
+/** A spec folder name as the app makes it (number and slug): the only thing of a task that is named */
+const SPEC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
 /**
  * Tasks still in Planning that name this run's workflow. Nobody works on them, so they don't
  * hold the fix back (main is broken now), but one of them may be the owner's own task about the
- * same failure: the fix task says so, and the owner decides. One line, titles clipped; empty
- * when there is none. Deterministic, from the task list only.
+ * same failure: the fix task says so, and the owner decides. Only their spec ids are named,
+ * never a title or description: a Planning task can come from an imported issue, and this text
+ * goes into the description of a task that starts by itself. One line; empty when there is
+ * none. Deterministic, from the task list only.
  */
 function planningNote(run: DeployRun, tasks: Task[]): string {
   const patterns = workflowPatterns(run);
-  const waiting = tasks.filter((task) => task.status === 'backlog' && !task.metadata?.archivedAt && namesWorkflow(task, patterns));
+  const waiting = tasks
+    .filter((task) => task.status === 'backlog' && !task.metadata?.archivedAt && namesWorkflow(task, patterns))
+    .map((task) => task.specId)
+    .filter((specId): specId is string => typeof specId === 'string' && SPEC_ID.test(specId));
   if (!waiting.length) return '';
-  const named = waiting
-    .slice(0, PLANNING_TASKS_NAMED)
-    .map((task) => `"${clipLine(typeof task.title === 'string' ? task.title : task.specId, NAME_CHARS)}" (${task.specId})`)
-    .join(', ');
+  const named = waiting.slice(0, PLANNING_TASKS_NAMED).join(', ');
   const more = waiting.length > PLANNING_TASKS_NAMED ? ` and ${waiting.length - PLANNING_TASKS_NAMED} more` : '';
   const one = waiting.length === 1;
   return `Note for the owner: ${one ? 'a task' : 'tasks'} in Planning ${one ? 'names' : 'name'} the same workflow and may be about this failure: ${named}${more}. Check ${one ? 'it' : 'them'} before you start ${one ? 'it' : 'them'}.`;
