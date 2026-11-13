@@ -30,17 +30,15 @@ export default defineConfig({
   main: {
     define: { ...sentryDefines, ...embeddedKeys },
     plugins: [externalizeDepsPlugin({
-      // Bundle these packages into the main process (they won't be in node_modules in packaged app)
+      // Bundled into the main process. What is left external must be in package.json `dependencies`:
+      // only those are packed into the app (renderer libraries and build tools are devDependencies)
       exclude: [
         'uuid',
         'chokidar',
         'dotenv',
         'electron-log',
-        'proper-lockfile',
         'semver',
         'zod',
-        '@anthropic-ai/sdk',
-        'kuzu',
         'electron-updater',
         '@electron-toolkit/utils',
         // Sentry and its transitive dependencies (opentelemetry -> debug -> ms)
@@ -63,11 +61,6 @@ export default defineConfig({
         '@ai-sdk/openai-compatible',
         '@ai-sdk/provider',
         '@ai-sdk/provider-utils',
-        // Additional packages that get hoisted to root node_modules by npm workspaces
-        // but must be bundled since electron-builder only packages apps/desktop/node_modules
-        '@ai-sdk/mcp',
-        '@modelcontextprotocol/sdk',
-        '@tavily/core',
         // GitHub Actions secret sealing (crypto_box_seal)
         'libsodium-wrappers',
         'libsodium',
