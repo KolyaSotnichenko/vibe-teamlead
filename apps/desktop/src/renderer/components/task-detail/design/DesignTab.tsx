@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePolling } from '../../../hooks/usePolling';
 import { useTranslation } from 'react-i18next';
 import { Loader2, MessageSquarePlus, Play, X } from 'lucide-react';
 
@@ -44,11 +45,7 @@ export function DesignTab({ task }: { task: Task }) {
   useEffect(() => {
     void load();
   }, [load, task.status, task.reviewReason, task.executionProgress?.message]);
-  useEffect(() => {
-    if (task.status !== 'in_progress') return;
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [load, task.status]);
+  usePolling(load, POLL_MS, task.status === 'in_progress');
 
   const waiting = design?.waiting ?? null;
   const hasScreens = !!design?.frames.some((f) => f.kind === 'screen');

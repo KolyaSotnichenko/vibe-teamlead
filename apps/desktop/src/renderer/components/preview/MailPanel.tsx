@@ -3,7 +3,8 @@
  * configure SMTP. Nothing leaves the machine; links in a message open in the preview.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import { useTranslation } from 'react-i18next';
 
 import type { PreviewMailMessage, PreviewMailSummary } from '../../../shared/types';
@@ -15,20 +16,20 @@ export function MailPanel({ projectId, mail, reason }: { projectId: string; mail
   const [list, setList] = useState<PreviewMailSummary[]>([]);
   const [open, setOpen] = useState<PreviewMailMessage | null>(null);
 
+  // The project the newest answer may be shown for: an answer for another one is dropped
+  const shown = useRef(projectId);
+  shown.current = projectId;
+  const load = useCallback(
+    () =>
+      window.electronAPI.preview.mailList(projectId).then((result) => {
+        if (shown.current === projectId && result.success && result.data) setList(result.data);
+      }),
+    [projectId],
+  );
+  usePolling(load, REFRESH_MS, mail === 'started');
   useEffect(() => {
-    if (mail !== 'started') return;
-    let live = true;
-    const load = () =>
-      void window.electronAPI.preview.mailList(projectId).then((result) => {
-        if (live && result.success && result.data) setList(result.data);
-      });
-    load();
-    const timer = setInterval(load, REFRESH_MS);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [projectId, mail]);
+    if (mail === 'started') void load();
+  }, [load, mail]);
 
   if (mail !== 'started') {
     return (

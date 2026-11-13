@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { useTranslation } from 'react-i18next';
 import type { GatewayModelUsage, ModelPrice, ProjectUsageSummary } from '../../shared/types';
 import { currentPrice, priceLooksSwapped, withNewPrice } from '../../shared/utils/gateway-prices';
@@ -51,14 +52,13 @@ function useProjectUsage(projectId: string | null): { usage: ProjectUsageSummary
       .catch(() => {});
   }, [projectId]);
 
+  // Sessions append as they end: refresh while the window is visible
+  usePolling(load, REFRESH_MS);
   useEffect(() => {
     setUsage(null);
     load();
-    // Sessions append as they end: refresh while the window is visible
-    const timer = setInterval(() => document.visibilityState === 'visible' && load(), REFRESH_MS);
     window.addEventListener('focus', load);
     return () => {
-      clearInterval(timer);
       window.removeEventListener('focus', load);
     };
   }, [load]);

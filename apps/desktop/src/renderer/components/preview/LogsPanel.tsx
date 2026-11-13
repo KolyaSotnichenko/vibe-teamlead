@@ -3,7 +3,8 @@
  * line (a verification link a "console" mail provider prints) open in the preview.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import { useTranslation } from 'react-i18next';
 
 import { Input } from '../ui/input';
@@ -41,19 +42,20 @@ export function LogsPanel({ projectId }: { projectId: string }) {
   const [query, setQuery] = useState('');
   const end = useRef<HTMLDivElement>(null);
 
+  // The project the newest answer may be shown for: an answer for another one is dropped
+  const current = useRef(projectId);
+  current.current = projectId;
+  const load = useCallback(
+    () =>
+      window.electronAPI.preview.logs(projectId).then((result) => {
+        if (current.current === projectId && result.success && result.data) setLogs(result.data);
+      }),
+    [projectId],
+  );
   useEffect(() => {
-    let live = true;
-    const load = () =>
-      void window.electronAPI.preview.logs(projectId).then((result) => {
-        if (live && result.success && result.data) setLogs(result.data);
-      });
-    load();
-    const timer = setInterval(load, REFRESH_MS);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [projectId]);
+    void load();
+  }, [load]);
+  usePolling(load, REFRESH_MS);
 
   const shown = logs.find((log) => log.service === service) ?? logs[0];
   const lines = useMemo(() => {

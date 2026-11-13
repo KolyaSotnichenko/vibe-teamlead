@@ -1,5 +1,6 @@
 import { DocsView } from './components/docs/DocsView';
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
+import { usePolling } from './hooks/usePolling';
 import { AgentQuestionPanel } from './components/agent-questions/AgentQuestionPanel';
 import { initAgentQuestions } from './stores/agent-questions-store';
 import { useTranslation } from 'react-i18next';
@@ -392,19 +393,16 @@ export function App() {
   const hasActiveTasks = useTaskStore((state) =>
     state.tasks.some((t) => ['in_progress', 'ai_review', 'queue'].includes(t.status) && !t.metadata?.archivedAt)
   );
+  const syncProjectId = activeProjectId || selectedProjectId;
+  const syncActiveTasks = !!syncProjectId && hasActiveTasks;
+  const syncTasks = useCallback(() => (syncProjectId ? syncTasksFromDisk(syncProjectId) : undefined), [syncProjectId]);
+  usePolling(syncTasks, TASK_SYNC_INTERVAL_MS, syncActiveTasks);
   useEffect(() => {
-    const currentProjectId = activeProjectId || selectedProjectId;
-    if (!currentProjectId || !hasActiveTasks) return;
-    const sync = () => {
-      if (document.visibilityState === 'visible') void syncTasksFromDisk(currentProjectId);
-    };
-    const timer = window.setInterval(sync, TASK_SYNC_INTERVAL_MS);
-    window.addEventListener('focus', sync);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', sync);
-    };
-  }, [activeProjectId, selectedProjectId, hasActiveTasks]);
+    if (!syncActiveTasks) return;
+    const onFocus = () => void syncTasks();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [syncActiveTasks, syncTasks]);
 
   // Load tasks when project changes
   useEffect(() => {
