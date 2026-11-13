@@ -16,6 +16,10 @@
  *   git check is a best-effort tokenizer, not a shell parser. The real backstop
  *   is the QA loop's content snapshot of the worktree before and after each
  *   reviewer session (reviewer-changes.ts), which reports what the reviewer changed.
+ * - The app's Claude credential never reaches a command an agent runs: Claude Code hands its
+ *   own environment (the API key, the subscription token, the gateway URL) to every Bash
+ *   command, so each one starts by unsetting them. Project tests, install scripts and dev
+ *   servers then can't read the key or spend it.
  * - The Deploy readiness scan never reads secret files (any `.env*` except example
  *   files, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`) nor anything outside the project
  *   (realpaths): Read takes one such file, Grep only one such file, never a folder.
@@ -94,6 +98,17 @@ function reviewerSegmentAllowed(segment: string): boolean {
 /** Exported for unit tests: does this Bash command do anything with git besides reading? */
 export function reviewerBashDenied(command: string): boolean {
   return splitCommandSegments(command).some((segment) => !reviewerSegmentAllowed(segment));
+}
+
+/** What gives a process the app's access to Claude: never passed on to the commands an agent runs. */
+export const CLAUDE_CREDENTIAL_ENV = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN'] as const;
+
+const CREDENTIAL_UNSET = `unset ${CLAUDE_CREDENTIAL_ENV.join(' ')}; `;
+
+/** A Bash command that starts without the app's Claude credential in its environment. Pure. */
+export function withoutClaudeCredentials(command: string): string {
+  if (!command || command.startsWith(CREDENTIAL_UNSET)) return command;
+  return `${CREDENTIAL_UNSET}${command}`;
 }
 
 function deny(reason: string): HookJSONOutput {
@@ -223,9 +238,9 @@ export function evaluatePreToolUse(
     if (context.agentType === 'qa_reviewer' && reviewerBashDenied(command)) {
       return deny(`Only read-only git commands (diff, log, show, status, blame, …) are allowed here, run in the task's folder without -C. ${REVIEWER_RULE}`);
     }
-    const labelled = labelDockerRuns(command, context.cwd);
-    if (labelled !== command) {
-      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: { ...toolInput, command: labelled } } };
+    const rewritten = withoutClaudeCredentials(labelDockerRuns(command, context.cwd));
+    if (rewritten !== command) {
+      return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: { ...toolInput, command: rewritten } } };
     }
     return {};
   }

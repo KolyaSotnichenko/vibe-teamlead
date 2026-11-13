@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluatePreToolUse } from '../security-hooks';
+import { evaluatePreToolUse, withoutClaudeCredentials } from '../security-hooks';
 import type { ToolContext } from '../../tools/types';
 
 const context: ToolContext = {
@@ -53,10 +53,11 @@ describe("a container an agent starts", () => {
       hookSpecificOutput?: { permissionDecision?: string; updatedInput?: Record<string, unknown> };
     };
     expect(output.hookSpecificOutput?.permissionDecision).toBe('allow');
-    expect(output.hookSpecificOutput?.updatedInput).toEqual({ command: "docker run --label 'vibe-teamlead.task-folder=/work/tree' -d pg", description: 'db' });
+    expect(output.hookSpecificOutput?.updatedInput).toEqual({ command: withoutClaudeCredentials("docker run --label 'vibe-teamlead.task-folder=/work/tree' -d pg"), description: 'db' });
   });
 
-  it('changes nothing about other commands', () => {
-    expect(evaluatePreToolUse('Bash', { command: 'docker ps' }, context)).toEqual({});
+  it('adds no label to other commands', () => {
+    const output = evaluatePreToolUse('Bash', { command: 'docker ps' }, context) as { hookSpecificOutput?: { updatedInput?: Record<string, unknown> } };
+    expect(output.hookSpecificOutput?.updatedInput).toEqual({ command: withoutClaudeCredentials('docker ps') });
   });
 });

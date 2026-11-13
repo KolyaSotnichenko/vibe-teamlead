@@ -11,7 +11,7 @@
 | **Browser check** | QA opens the app in Chrome (Playwright / DevTools MCP), takes screenshots and reads the console. |
 | **Strix** | Pentest in Docker (optional). Findings at the level you set block the task and go to the QA fixer. Smaller ones don't stop it: the app files them as one new task on the board, without repeats, for you to start when you choose. |
 | **Security hooks** | Path boundaries, a list of forbidden commands (everything else is allowed), a ban on killing the app's own processes. |
-| **Environment isolation** | Agents run with their own Claude Code configuration (`~/.vibe-teamlead/claude-code`), not your `~/.claude`. Environment variables are filtered. |
+| **Environment isolation** | Agents run with their own Claude Code configuration (`~/.vibe-teamlead/claude-code`), not your `~/.claude`. Environment variables are filtered. The commands an agent runs (tests, installs, dev servers) start without the app's Claude key, so project code can't read or spend it. |
 
 The scanners (gitleaks, OSV-Scanner), Claude Code, CodeGraph, Superpowers and Mermaid ship with the app, so you don't need to install anything separately. Semgrep is not bundled (it is a Python package): install it if you want that gate. Docker and Chrome are needed only for Strix and browser checks. The status of all tools is shown in Settings → Tools.
 
