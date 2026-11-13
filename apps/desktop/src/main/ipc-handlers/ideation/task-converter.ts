@@ -3,7 +3,8 @@
  */
 
 import path from 'path';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
+import { writeFileReplacingSync } from '../../ai/safe-write';
 import type { IpcMainInvokeEvent } from 'electron';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type {
@@ -153,7 +154,7 @@ function createSpecFiles(
     final_acceptance: [],
     spec_file: 'spec.md'
   };
-  writeFileSync(
+  writeFileReplacingSync(
     path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN),
     JSON.stringify(initialPlan, null, 2),
     'utf-8'
@@ -173,7 +174,7 @@ ${idea.rationale}
 ---
 *This spec was created from ideation and is pending detailed specification.*
 `;
-  writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE), specContent, 'utf-8');
+  writeFileReplacingSync(path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE), specContent, 'utf-8');
 }
 
 /**
@@ -250,7 +251,7 @@ export async function convertIdeaToTask(
 
       // Save metadata
       const metadataPath = path.join(specDir, 'task_metadata.json');
-      writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+      writeFileReplacingSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
 
       // Update idea status to archived (converted ideas are archived)
       idea.status = 'archived';

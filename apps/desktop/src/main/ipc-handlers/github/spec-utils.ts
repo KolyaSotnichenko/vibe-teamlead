@@ -3,7 +3,8 @@
  */
 
 import path from 'path';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { writeFileReplacingSync } from '../../ai/safe-write';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { Project, TaskMetadata } from '../../../shared/types';
 import { withSpecNumberLock } from '../../utils/spec-number-lock';
@@ -138,7 +139,7 @@ export async function createSpecForIssue(
       phases: []
     };
     // lgtm[js/http-to-file-access] - specDir is controlled, slugifiedTitle sanitizes input
-    writeFileSync(
+    writeFileReplacingSync(
       path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN),
       JSON.stringify(implementationPlan, null, 2),
       'utf-8'
@@ -150,7 +151,7 @@ export async function createSpecForIssue(
       workflow_type: 'feature'
     };
     // lgtm[js/http-to-file-access] - specDir is controlled, slugifiedTitle sanitizes input
-    writeFileSync(
+    writeFileReplacingSync(
       path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS),
       JSON.stringify(requirements, null, 2),
       'utf-8'
@@ -170,7 +171,7 @@ export async function createSpecForIssue(
       ...(baseBranch && { baseBranch })
     };
     // lgtm[js/http-to-file-access] - specDir is controlled, slugifiedTitle sanitizes input
-    writeFileSync(
+    writeFileReplacingSync(
       path.join(specDir, 'task_metadata.json'),
       JSON.stringify(metadata, null, 2),
       'utf-8'
@@ -241,7 +242,7 @@ export function updateImplementationPlanStatus(specDir: string, status: string):
     const plan = JSON.parse(content);
     plan.status = status;
     plan.updated_at = new Date().toISOString();
-    writeFileSync(planPath, JSON.stringify(plan, null, 2), 'utf-8');
+    writeFileReplacingSync(planPath, JSON.stringify(plan, null, 2), 'utf-8');
   } catch (error) {
     // File doesn't exist or couldn't be read - this is expected for new specs
     // Log legitimate errors (malformed JSON, disk write failures, permission errors)

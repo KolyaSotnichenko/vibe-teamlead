@@ -4,7 +4,8 @@ import type { BrowserWindow } from 'electron';
 import { IPC_CHANNELS, getSpecsDir, AUTO_BUILD_PATHS } from '../../shared/constants';
 import type { IPCResult, LinearIssue, LinearTeam, LinearProject, LinearImportResult, LinearSyncStatus, Project, TaskMetadata } from '../../shared/types';
 import path from 'path';
-import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs';
+import { writeFileReplacingSync } from '../ai/safe-write';
 import { projectStore } from '../project-store';
 import { parseEnvFile } from './utils';
 import { sanitizeText, sanitizeUrl } from './shared/sanitize';
@@ -505,7 +506,7 @@ ${safeDescription || 'No description provided.'}
               phases: []
             };
             // lgtm[js/http-to-file-access] - specDir is controlled, Linear data sanitized
-            writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), JSON.stringify(implementationPlan, null, 2), 'utf-8');
+            writeFileReplacingSync(path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), JSON.stringify(implementationPlan, null, 2), 'utf-8');
 
             // Create requirements.json
             const requirements = {
@@ -513,7 +514,7 @@ ${safeDescription || 'No description provided.'}
               workflow_type: 'feature'
             };
             // lgtm[js/http-to-file-access] - specDir is controlled, Linear data sanitized
-            writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS), JSON.stringify(requirements, null, 2), 'utf-8');
+            writeFileReplacingSync(path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS), JSON.stringify(requirements, null, 2), 'utf-8');
 
             // Build metadata
             const metadata: TaskMetadata = {
@@ -524,7 +525,7 @@ ${safeDescription || 'No description provided.'}
               category: 'feature'
             };
             // lgtm[js/http-to-file-access] - specDir is controlled, Linear data sanitized
-            writeFileSync(path.join(specDir, 'task_metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8');
+            writeFileReplacingSync(path.join(specDir, 'task_metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8');
 
             // Start spec creation with the existing spec directory
             agentManager.startSpecCreation(specId, project.path, description, specDir, metadata);

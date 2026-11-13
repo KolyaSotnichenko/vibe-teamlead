@@ -5,6 +5,7 @@ import type { IPCResult, Project, Task, TaskMetadata, TaskOutcome } from '../../
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, Dirent } from 'fs';
+import { writeFileReplacingSync } from '../../ai/safe-write';
 import { updateRoadmapFeatureOutcome } from '../../utils/roadmap-utils';
 import { projectStore } from '../../project-store';
 import { titleGenerator } from '../../title-generator';
@@ -250,13 +251,13 @@ export async function createTaskInProject(
   };
 
   const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-  writeFileSync(planPath, JSON.stringify(implementationPlan, null, 2), 'utf-8');
+  writeFileReplacingSync(planPath, JSON.stringify(implementationPlan, null, 2), 'utf-8');
 
   // Save task metadata if provided (sanitize thinking levels before writing)
   if (taskMetadata) {
     sanitizeThinkingLevels(taskMetadata);
     const metadataPath = path.join(specDir, 'task_metadata.json');
-    writeFileSync(metadataPath, JSON.stringify(taskMetadata, null, 2), 'utf-8');
+    writeFileReplacingSync(metadataPath, JSON.stringify(taskMetadata, null, 2), 'utf-8');
     console.warn(`[TASK_CREATE] [Fast Mode] ${taskMetadata.fastMode ? 'ENABLED' : 'disabled'} — written to task_metadata.json for spec ${specId}`);
   }
 
@@ -276,7 +277,7 @@ export async function createTaskInProject(
   }
 
   const requirementsPath = path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS);
-  writeFileSync(requirementsPath, JSON.stringify(requirements, null, 2), 'utf-8');
+  writeFileReplacingSync(requirementsPath, JSON.stringify(requirements, null, 2), 'utf-8');
 
   // Create the task object
   const task: Task = {
@@ -510,7 +511,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           }
           plan.updated_at = new Date().toISOString();
 
-          writeFileSync(planPath, JSON.stringify(plan, null, 2), 'utf-8');
+          writeFileReplacingSync(planPath, JSON.stringify(plan, null, 2), 'utf-8');
         } catch (planErr: unknown) {
           // File missing or invalid JSON - continue anyway
           if ((planErr as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -540,7 +541,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
             );
           }
 
-          writeFileSync(specPath, specContent, 'utf-8');
+          writeFileReplacingSync(specPath, specContent, 'utf-8');
         } catch (specErr: unknown) {
           // File missing or update failed - continue anyway
           if ((specErr as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -615,7 +616,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           sanitizeThinkingLevels(updatedMetadata);
           const metadataPath = path.join(specDir, 'task_metadata.json');
           try {
-            writeFileSync(metadataPath, JSON.stringify(updatedMetadata, null, 2), 'utf-8');
+            writeFileReplacingSync(metadataPath, JSON.stringify(updatedMetadata, null, 2), 'utf-8');
           } catch (err) {
             console.error('Failed to update task_metadata.json:', err);
           }
@@ -636,7 +637,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
               requirements.workflow_type = updates.metadata.category;
             }
 
-            writeFileSync(requirementsPath, JSON.stringify(requirements, null, 2), 'utf-8');
+            writeFileReplacingSync(requirementsPath, JSON.stringify(requirements, null, 2), 'utf-8');
           } catch (err) {
             if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
               console.error('Failed to update requirements.json:', err);

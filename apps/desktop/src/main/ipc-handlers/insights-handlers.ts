@@ -2,7 +2,8 @@ import { ipcMain, app } from "electron";
 import { specSlug } from '../../shared/utils/spec-slug';
 import type { BrowserWindow } from "electron";
 import path from "path";
-import { existsSync, readdirSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, readdirSync, mkdirSync } from "fs";
+import { writeFileReplacingSync } from "../ai/safe-write";
 import {
   IPC_CHANNELS,
   getSpecsDir,
@@ -188,11 +189,11 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
         };
 
         const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-        writeFileSync(planPath, JSON.stringify(implementationPlan, null, 2), 'utf-8');
+        writeFileReplacingSync(planPath, JSON.stringify(implementationPlan, null, 2), 'utf-8');
 
         // Save task metadata
         const metadataPath = path.join(specDir, "task_metadata.json");
-        writeFileSync(metadataPath, JSON.stringify(taskMetadata, null, 2), 'utf-8');
+        writeFileReplacingSync(metadataPath, JSON.stringify(taskMetadata, null, 2), 'utf-8');
 
         // Create the task object
         const task: Task = {
