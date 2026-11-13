@@ -143,31 +143,6 @@ export function registerTerminalHandlers(terminalManager: TerminalManager): void
     }
   );
 
-  ipcMain.handle(
-    IPC_CHANNELS.TERMINAL_CLEAR_SESSIONS,
-    async (_, projectPath: string): Promise<IPCResult> => {
-      try {
-        terminalManager.clearSavedSessions(projectPath);
-        return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to clear terminal sessions'
-        };
-      }
-    }
-  );
-
-  ipcMain.on(
-    IPC_CHANNELS.TERMINAL_RESUME_CLAUDE,
-    (_, id: string, sessionId?: string) => {
-      // Use async version to avoid blocking main process during CLI detection
-      terminalManager.resumeClaudeAsync(id, sessionId).catch((error) => {
-        console.warn('[terminal-handlers] Failed to resume Claude:', error);
-      });
-    }
-  );
-
   // Activate deferred Claude resume when terminal becomes active
   // This is triggered by the renderer when a terminal with pendingCLIResume becomes the active tab
   ipcMain.on(

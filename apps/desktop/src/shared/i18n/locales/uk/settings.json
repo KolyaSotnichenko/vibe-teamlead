@@ -1016,7 +1016,7 @@
     },
     "githubIssues": {
       "label": "GitHub Issues",
-      "description": "Автоматичне сортування й мітки для issues"
+      "description": "Дослідження issues і автовиправлення"
     },
     "githubPrs": {
       "label": "Рев’ю PR на GitHub",

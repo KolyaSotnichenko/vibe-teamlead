@@ -137,48 +137,6 @@ export function registerGetMergeRequests(): void {
  * Get a single merge request by IID
  */
 export function registerGetMergeRequest(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_GET_MERGE_REQUEST,
-    async (_event, projectId: string, mrIid: number): Promise<IPCResult<GitLabMergeRequest>> => {
-      debugLog('getGitLabMergeRequest handler called', { mrIid });
-
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const config = await getGitLabConfig(project);
-      if (!config) {
-        return {
-          success: false,
-          error: 'GitLab not configured'
-        };
-      }
-
-      try {
-        const encodedProject = encodeProjectPath(config.project);
-
-        const apiMr = await gitlabFetch(
-          config.token,
-          config.instanceUrl,
-          `/projects/${encodedProject}/merge_requests/${mrIid}`
-        ) as GitLabAPIMergeRequest;
-
-        const mr = transformMergeRequest(apiMr);
-
-        return {
-          success: true,
-          data: mr
-        };
-      } catch (error) {
-        debugLog('Failed to get merge request:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get merge request'
-        };
-      }
-    }
-  );
 }
 
 /**
@@ -265,67 +223,6 @@ export function registerCreateMergeRequest(): void {
  * Update a merge request
  */
 export function registerUpdateMergeRequest(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_UPDATE_MERGE_REQUEST,
-    async (
-      _event,
-      projectId: string,
-      mrIid: number,
-      updates: Partial<CreateMergeRequestOptions>
-    ): Promise<IPCResult<GitLabMergeRequest>> => {
-      debugLog('updateGitLabMergeRequest handler called', { mrIid });
-
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const config = await getGitLabConfig(project);
-      if (!config) {
-        return {
-          success: false,
-          error: 'GitLab not configured'
-        };
-      }
-
-      try {
-        const encodedProject = encodeProjectPath(config.project);
-
-        const mrBody: Record<string, unknown> = {};
-
-        if (updates.title !== undefined) mrBody.title = updates.title;
-        if (updates.description !== undefined) mrBody.description = updates.description;
-        if (updates.targetBranch !== undefined) mrBody.target_branch = updates.targetBranch;
-        if (updates.labels !== undefined) mrBody.labels = updates.labels.join(',');
-        if (updates.assigneeIds !== undefined) mrBody.assignee_ids = updates.assigneeIds;
-
-        const apiMr = await gitlabFetch(
-          config.token,
-          config.instanceUrl,
-          `/projects/${encodedProject}/merge_requests/${mrIid}`,
-          {
-            method: 'PUT',
-            body: JSON.stringify(mrBody)
-          }
-        ) as GitLabAPIMergeRequest;
-
-        debugLog('Merge request updated:', { iid: apiMr.iid });
-
-        const mr = transformMergeRequest(apiMr);
-
-        return {
-          success: true,
-          data: mr
-        };
-      } catch (error) {
-        debugLog('Failed to update merge request:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to update merge request'
-        };
-      }
-    }
-  );
 }
 
 /**

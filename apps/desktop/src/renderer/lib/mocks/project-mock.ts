@@ -104,11 +104,6 @@ export const projectMock = {
     ]
   }),
 
-  getCurrentGitBranch: async () => ({
-    success: true,
-    data: 'main'
-  }),
-
   detectMainBranch: async () => ({
     success: true,
     data: 'main'

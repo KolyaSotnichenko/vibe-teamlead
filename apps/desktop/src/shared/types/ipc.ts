@@ -15,13 +15,11 @@ import type {
   FileNode,
   ProjectContextData,
   ProjectIndex,
-  MemorySystemStatus,
   ContextSearchResult,
   RendererMemory,
   ProjectEnvConfig,
   InfrastructureStatus,
   MemoryValidationResult,
-  MemoryConnectionTestResult,
   GitStatus,
   CustomMcpServer,
   McpHealthCheckResult,
@@ -47,7 +45,6 @@ import type {
   FailedSubtaskDecision,
   TaskMetadata,
   TaskLogs,
-  TaskLogStreamChunk,
   ImageAttachment,
   ReviewReason,
   MergeProgress,
@@ -113,17 +110,14 @@ import type {
   LinearIssue,
   LinearImportResult,
   LinearSyncStatus,
-  GitHubRepository,
   GitHubIssue,
   GitHubSyncStatus,
   GitHubImportResult,
   GitHubInvestigationResult,
   GitHubInvestigationStatus,
-  GitLabProject,
   GitLabIssue,
   GitLabMergeRequest,
   GitLabNote,
-  GitLabGroup,
   GitLabSyncStatus,
   GitLabImportResult,
   GitLabInvestigationResult,
@@ -201,7 +195,6 @@ export interface ElectronAPI {
   recoverStuckTask: (taskId: string, options?: TaskRecoveryOptions) => Promise<IPCResult<TaskRecoveryResult>>;
   resolveFailedSubtasks: (taskId: string, decision: FailedSubtaskDecision) => Promise<IPCResult<{ changed: string[] }>>;
   checkTaskRunning: (taskId: string) => Promise<IPCResult<boolean>>;
-  resumePausedTask: (taskId: string) => Promise<IPCResult>;
 
   // Image operations
   loadImageThumbnail: (projectPath: string, specId: string, imagePath: string) => Promise<IPCResult<string>>;
@@ -226,7 +219,6 @@ export interface ElectronAPI {
 
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
-  unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
 
   // Event listeners
   onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan, projectId?: string) => void) => () => void;
@@ -248,8 +240,6 @@ export interface ElectronAPI {
   // Terminal session management (persistence/restore)
   getTerminalSessions: (projectPath: string) => Promise<IPCResult<TerminalSession[]>>;
   restoreTerminalSession: (session: TerminalSession, cols?: number, rows?: number) => Promise<IPCResult<TerminalRestoreResult>>;
-  clearTerminalSessions: (projectPath: string) => Promise<IPCResult>;
-  resumeClaudeInTerminal: (id: string, sessionId?: string) => void;
   activateDeferredClaudeResume: (id: string) => void;
   getTerminalSessionDates: (projectPath?: string) => Promise<IPCResult<SessionDateInfo[]>>;
   getTerminalSessionsForDate: (date: string, projectPath: string) => Promise<IPCResult<TerminalSession[]>>;
@@ -296,7 +286,6 @@ export interface ElectronAPI {
 
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;
-  getSentryDsn: () => Promise<string>;
   getSentryConfig: () => Promise<{ dsn: string; tracesSampleRate: number; profilesSampleRate: number }>;
 
   getCliToolsInfo: () => Promise<IPCResult<{
@@ -306,8 +295,6 @@ export interface ElectronAPI {
     glab: import('./cli').ToolDetectionResult;
     claude: import('./cli').ToolDetectionResult;
   }>>;
-  /** Check if Claude Code onboarding is complete (reads ~/.claude.json) */
-  getClaudeCodeOnboardingStatus: () => Promise<IPCResult<{ hasCompletedOnboarding: boolean }>>;
 
   // Claude credential (the key is write-only from the renderer)
   getClaudeCredentialStatus: () => Promise<IPCResult<ClaudeCredentialStatus>>;
@@ -342,11 +329,7 @@ export interface ElectronAPI {
     projectId: string,
     featureId: string
   ) => Promise<IPCResult<Task>>;
-
-  // Roadmap progress persistence
-  saveRoadmapProgress: (projectId: string, progress: PersistedRoadmapProgress) => Promise<IPCResult>;
   loadRoadmapProgress: (projectId: string) => Promise<IPCResult<PersistedRoadmapProgress | null>>;
-  clearRoadmapProgress: (projectId: string) => Promise<IPCResult>;
 
   // Roadmap event listeners
   onRoadmapProgress: (
@@ -365,7 +348,6 @@ export interface ElectronAPI {
   // Context operations
   getProjectContext: (projectId: string) => Promise<IPCResult<ProjectContextData>>;
   refreshProjectIndex: (projectId: string) => Promise<IPCResult<ProjectIndex>>;
-  getMemoryStatus: (projectId: string) => Promise<IPCResult<MemorySystemStatus>>;
   searchMemories: (projectId: string, query: string) => Promise<IPCResult<ContextSearchResult[]>>;
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<RendererMemory[]>>;
 
@@ -389,16 +371,12 @@ export interface ElectronAPI {
   getLinearIssues: (projectId: string, teamId?: string, projectId_?: string) => Promise<IPCResult<LinearIssue[]>>;
   importLinearIssues: (projectId: string, issueIds: string[]) => Promise<IPCResult<LinearImportResult>>;
   checkLinearConnection: (projectId: string) => Promise<IPCResult<LinearSyncStatus>>;
-
-  // GitHub integration operations
-  getGitHubRepositories: (projectId: string) => Promise<IPCResult<GitHubRepository[]>>;
   getGitHubIssues: (
     projectId: string,
     state?: 'open' | 'closed' | 'all',
     page?: number,
     fetchAll?: boolean
   ) => Promise<IPCResult<{ issues: GitHubIssue[]; hasMore: boolean }>>;
-  getGitHubIssue: (projectId: string, issueNumber: number) => Promise<IPCResult<GitHubIssue>>;
   checkGitHubConnection: (projectId: string) => Promise<IPCResult<GitHubSyncStatus>>;
   investigateGitHubIssue: (projectId: string, issueNumber: number, selectedCommentIds?: number[]) => void;
   getIssueComments: (projectId: string, issueNumber: number) => Promise<IPCResult<Array<{ id: number; body: string; user: { login: string; avatar_url?: string }; created_at: string; updated_at: string }>>>;
@@ -409,9 +387,6 @@ export interface ElectronAPI {
     releaseNotes: string,
     options?: { draft?: boolean; prerelease?: boolean }
   ) => Promise<IPCResult<{ url: string }>>;
-
-  // GitHub sign-in (GitHub App device flow)
-  checkGitHubCli: () => Promise<IPCResult<{ installed: boolean; version?: string }>>;
   checkGitHubAuth: () => Promise<IPCResult<{ authenticated: boolean; username?: string }>>;
   startGitHubAuth: () => Promise<IPCResult<{
     success: boolean;
@@ -422,7 +397,6 @@ export interface ElectronAPI {
     fallbackUrl?: string;
   }>>;
   cancelGitHubAuth: () => Promise<IPCResult>;
-  signOutGitHub: () => Promise<IPCResult>;
   getGitHubToken: () => Promise<IPCResult<{ token: string }>>;
   getGitHubUser: () => Promise<IPCResult<{ username: string; name?: string }>>;
   listGitHubUserRepos: () => Promise<IPCResult<{ repos: Array<{ fullName: string; description: string | null; isPrivate: boolean }> }>>;
@@ -454,25 +428,14 @@ export interface ElectronAPI {
   onGitHubInvestigationError: (
     callback: (projectId: string, error: string) => void
   ) => () => void;
-
-  // GitLab integration operations
-  getGitLabProjects: (projectId: string) => Promise<IPCResult<GitLabProject[]>>;
   getGitLabIssues: (projectId: string, state?: 'opened' | 'closed' | 'all') => Promise<IPCResult<GitLabIssue[]>>;
-  getGitLabIssue: (projectId: string, issueIid: number) => Promise<IPCResult<GitLabIssue>>;
   getGitLabIssueNotes: (projectId: string, issueIid: number) => Promise<IPCResult<GitLabNote[]>>;
   checkGitLabConnection: (projectId: string) => Promise<IPCResult<GitLabSyncStatus>>;
   investigateGitLabIssue: (projectId: string, issueIid: number, selectedNoteIds?: number[]) => void;
   importGitLabIssues: (projectId: string, issueIids: number[]) => Promise<IPCResult<GitLabImportResult>>;
-  createGitLabRelease: (
-    projectId: string,
-    tagName: string,
-    releaseNotes: string,
-    options?: { ref?: string }
-  ) => Promise<IPCResult<{ url: string }>>;
 
   // GitLab Merge Request operations
   getGitLabMergeRequests: (projectId: string, state?: 'opened' | 'closed' | 'merged' | 'all') => Promise<IPCResult<GitLabMergeRequest[]>>;
-  getGitLabMergeRequest: (projectId: string, mrIid: number) => Promise<IPCResult<GitLabMergeRequest>>;
   createGitLabMergeRequest: (
     projectId: string,
     options: {
@@ -485,11 +448,6 @@ export interface ElectronAPI {
       removeSourceBranch?: boolean;
       squash?: boolean;
     }
-  ) => Promise<IPCResult<GitLabMergeRequest>>;
-  updateGitLabMergeRequest: (
-    projectId: string,
-    mrIid: number,
-    updates: { title?: string; description?: string; labels?: string[]; state_event?: 'close' | 'reopen' }
   ) => Promise<IPCResult<GitLabMergeRequest>>;
 
   // GitLab MR Review operations (AI-powered)
@@ -528,18 +486,6 @@ export interface ElectronAPI {
   getGitLabToken: (hostname?: string) => Promise<IPCResult<{ token: string }>>;
   getGitLabUser: (hostname?: string) => Promise<IPCResult<{ username: string; name?: string }>>;
   listGitLabUserProjects: (hostname?: string) => Promise<IPCResult<{ projects: Array<{ pathWithNamespace: string; description: string | null; visibility: string }> }>>;
-  detectGitLabProject: (projectPath: string) => Promise<IPCResult<{ project: string; instanceUrl: string } | null>>;
-  getGitLabBranches: (projectPath: string, token: string, instanceUrl?: string) => Promise<IPCResult<string[]>>;
-  createGitLabProject: (
-    projectName: string,
-    options: { description?: string; visibility?: 'private' | 'internal' | 'public'; projectPath: string; namespaceId?: number; hostname?: string }
-  ) => Promise<IPCResult<{ pathWithNamespace: string; webUrl: string }>>;
-  addGitLabRemote: (
-    projectPath: string,
-    projectPathWithNamespace: string,
-    instanceUrl?: string
-  ) => Promise<IPCResult<{ remoteUrl: string }>>;
-  listGitLabGroups: (hostname?: string) => Promise<IPCResult<{ groups: GitLabGroup[] }>>;
 
   // GitLab event listeners
   onGitLabInvestigationProgress: (
@@ -740,9 +686,6 @@ export interface ElectronAPI {
   onTaskLogsChanged: (
     callback: (specId: string, logs: TaskLogs) => void
   ) => () => void;
-  onTaskLogsStream: (
-    callback: (specId: string, chunk: TaskLogStreamChunk) => void
-  ) => () => void;
   onMergeProgress: (
     callback: (taskId: string, progress: MergeProgress) => void
   ) => () => void;
@@ -756,7 +699,6 @@ export interface ElectronAPI {
   getGitBranches: (projectPath: string) => Promise<IPCResult<string[]>>;
   /** Get branches with structured type information (local vs remote) */
   getGitBranchesWithInfo: (projectPath: string) => Promise<IPCResult<GitBranchDetail[]>>;
-  getCurrentGitBranch: (projectPath: string) => Promise<IPCResult<string | null>>;
   detectMainBranch: (projectPath: string) => Promise<IPCResult<string | null>>;
   checkGitStatus: (projectPath: string) => Promise<IPCResult<GitStatus>>;
   initializeGit: (projectPath: string) => Promise<IPCResult<InitializationResult>>;
@@ -821,13 +763,6 @@ export interface ElectronAPI {
   }>;
   openLogsFolder: () => Promise<{ success: boolean; error?: string }>;
   copyDebugInfo: () => Promise<{ success: boolean; error?: string }>;
-  getRecentErrors: (maxCount?: number) => Promise<string[]>;
-  listLogFiles: () => Promise<Array<{
-    name: string;
-    path: string;
-    size: number;
-    modified: string;
-  }>>;
 
   // MCP Server health check operations
   checkMcpHealth: (server: CustomMcpServer) => Promise<IPCResult<McpHealthCheckResult>>;

@@ -18,7 +18,6 @@ Handles project lifecycle and Python environment management:
 - `PROJECT_UPDATE_SETTINGS` - Update project settings
 - `PROJECT_INITIALIZE` - Initialize .vibe-teamlead directory
 - `PROJECT_CHECK_VERSION` - Check initialization status
-- `project:has-local-source` - Check if project has local Vibe Teamlead source
 - Python environment initialization and status events
 
 #### `task-handlers.ts` (52KB) - Largest module

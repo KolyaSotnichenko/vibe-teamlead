@@ -18,7 +18,7 @@ import type {
 } from "../../shared/types";
 import type { RoadmapConfig } from "../agent/types";
 import path from "path";
-import { existsSync, mkdirSync, readdirSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, } from "fs";
 import { projectStore } from "../project-store";
 import { AgentManager } from "../agent";
 import { debugLog, debugError } from "../../shared/utils/debug-logger";
@@ -614,62 +614,6 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
     }
   );
 
-  // ============================================
-  // Roadmap Progress Persistence
-  // Note: SAVE and CLEAR handlers are exposed for API completeness and future use.
-  // Currently, progress is saved internally by agent-queue.ts and cleared when
-  // generation completes. The LOAD handler is used by the renderer to restore
-  // persisted progress state on app restart or project switch.
-  // ============================================
-
-  ipcMain.handle(
-    IPC_CHANNELS.ROADMAP_PROGRESS_SAVE,
-    async (
-      _,
-      projectId: string,
-      progressData: PersistedRoadmapProgress
-    ): Promise<IPCResult> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: "Project not found" };
-      }
-
-      const roadmapDir = path.join(project.path, AUTO_BUILD_PATHS.ROADMAP_DIR);
-      const progressPath = path.join(roadmapDir, AUTO_BUILD_PATHS.GENERATION_PROGRESS);
-
-      try {
-        // Ensure roadmap directory exists
-        if (!existsSync(roadmapDir)) {
-          mkdirSync(roadmapDir, { recursive: true });
-        }
-
-        // Derive isRunning from phase (active phases are running)
-        const isRunning = progressData.phase !== 'idle' && progressData.phase !== 'complete' && progressData.phase !== 'error';
-
-        // Transform camelCase to snake_case for JSON file
-        const fileData = {
-          phase: progressData.phase,
-          progress: progressData.progress,
-          message: progressData.message,
-          started_at: progressData.startedAt || new Date().toISOString(),
-          last_update_at: progressData.lastActivityAt || new Date().toISOString(),
-          is_running: isRunning,
-        };
-
-        await writeFileWithRetry(progressPath, JSON.stringify(fileData, null, 2), { encoding: 'utf-8' });
-        debugLog("[Roadmap Handler] Saved progress checkpoint:", { projectId, phase: progressData.phase });
-
-        return { success: true };
-      } catch (error) {
-        debugError("[Roadmap Handler] Failed to save progress:", error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Failed to save progress",
-        };
-      }
-    }
-  );
-
   ipcMain.handle(
     IPC_CHANNELS.ROADMAP_PROGRESS_LOAD,
     async (
@@ -721,36 +665,6 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to load progress",
-        };
-      }
-    }
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.ROADMAP_PROGRESS_CLEAR,
-    async (_, projectId: string): Promise<IPCResult> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: "Project not found" };
-      }
-
-      const progressPath = path.join(
-        project.path,
-        AUTO_BUILD_PATHS.ROADMAP_DIR,
-        AUTO_BUILD_PATHS.GENERATION_PROGRESS
-      );
-
-      try {
-        if (existsSync(progressPath)) {
-          unlinkSync(progressPath);
-          debugLog("[Roadmap Handler] Cleared progress checkpoint:", { projectId });
-        }
-        return { success: true };
-      } catch (error) {
-        debugError("[Roadmap Handler] Failed to clear progress:", error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Failed to clear progress",
         };
       }
     }

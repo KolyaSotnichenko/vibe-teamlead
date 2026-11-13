@@ -147,11 +147,6 @@ export function initSentryMain(): void {
     console.log(`[Sentry] Error reporting ${enabled ? 'enabled' : 'disabled'} (via IPC)`);
   });
 
-  // IPC handler for renderer to get Sentry config
-  ipcMain.handle(IPC_CHANNELS.GET_SENTRY_DSN, () => {
-    return cachedDsn;
-  });
-
   ipcMain.handle(IPC_CHANNELS.GET_SENTRY_CONFIG, () => {
     return {
       dsn: cachedDsn,

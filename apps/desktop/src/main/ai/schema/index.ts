@@ -69,11 +69,6 @@ export {
 } from './pr-review';
 
 export {
-  TriageResultSchema,
-  type ValidatedTriageResult,
-} from './triage';
-
-export {
   ExtractedInsightsSchema,
   TaskSuggestionSchema,
   type ValidatedExtractedInsights,
@@ -88,8 +83,6 @@ export {
   type ImplementationPlanOutput,
   QASignoffOutputSchema,
   type QASignoffOutput,
-  TriageResultOutputSchema,
-  type TriageResultOutput,
   ExtractedInsightsOutputSchema,
   type ExtractedInsightsOutput,
 } from './output';

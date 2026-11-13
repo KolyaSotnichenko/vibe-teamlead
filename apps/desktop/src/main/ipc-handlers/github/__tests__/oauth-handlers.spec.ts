@@ -178,44 +178,6 @@ describe('GitHub OAuth Handlers', () => {
 
 
 
-  describe('gh CLI Check Handler', () => {
-    it('should return installed: true when gh CLI is found', async () => {
-      // Mock findExecutable to return gh path
-      mockFindExecutable.mockReturnValue('/usr/local/bin/gh');
-
-      // Version check runs asynchronously (execFile)
-      mockExecFile.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: (e: Error | null, r?: unknown) => void) => {
-        cb(null, { stdout: args[0] === '--version' ? 'gh version 2.65.0 (2024-01-15)\n' : '', stderr: '' });
-      });
-
-      const { registerCheckGhCli } = await import('../oauth-handlers');
-      registerCheckGhCli();
-
-      const result = await ipcMain.invokeHandler('github:checkCli', {});
-
-      expect(result).toHaveProperty('success', true);
-      const data = (result as { data: { installed: boolean; version: string } }).data;
-      expect(data.installed).toBe(true);
-      expect(data.version).toContain('gh version');
-    });
-
-    it('should return installed: false when gh CLI is not found', async () => {
-      // Mock findExecutable to return null (not found)
-      mockFindExecutable.mockReturnValue(null);
-
-      const { registerCheckGhCli } = await import('../oauth-handlers');
-      registerCheckGhCli();
-
-      const result = await ipcMain.invokeHandler('github:checkCli', {});
-
-      expect(result).toHaveProperty('success', true);
-      const data = (result as { data: { installed: boolean } }).data;
-      expect(data.installed).toBe(false);
-    });
-  });
-
-
-
   describe('Repository Validation', () => {
     it('should reject invalid repository format', async () => {
       const { registerGetGitHubBranches } = await import('../oauth-handlers');

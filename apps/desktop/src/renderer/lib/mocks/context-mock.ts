@@ -19,15 +19,6 @@ export const contextMock = {
     error: 'Not available in browser mock'
   }),
 
-  getMemoryStatus: async () => ({
-    success: true,
-    data: {
-      enabled: false,
-      available: false,
-      reason: 'Browser mock environment'
-    }
-  }),
-
   searchMemories: async () => ({
     success: true,
     data: []

@@ -97,11 +97,7 @@ const browserMockAPI: ElectronAPI = {
   }),
 
   stopRoadmap: async () => ({ success: true }),
-
-  // Roadmap Progress Persistence
-  saveRoadmapProgress: async () => ({ success: true }),
   loadRoadmapProgress: async () => ({ success: true, data: null }),
-  clearRoadmapProgress: async () => ({ success: true }),
 
   // Roadmap Event Listeners
   onRoadmapProgress: () => () => {},
@@ -129,20 +125,15 @@ const browserMockAPI: ElectronAPI = {
 
   // GitHub API
   github: {
-    getGitHubRepositories: async () => ({ success: true, data: [] }),
     getGitHubIssues: async () => ({ success: true, data: { issues: [], hasMore: false } }),
-    getGitHubIssue: async () => ({ success: true, data: null as any }),
     getIssueComments: async () => ({ success: true, data: [] }),
     checkGitHubConnection: async () => ({ success: true, data: { connected: false, repoFullName: undefined, error: undefined } }),
     investigateGitHubIssue: () => {},
     importGitHubIssues: async () => ({ success: true, data: { success: true, imported: 0, failed: 0, issues: [] } }),
     createGitHubRelease: async () => ({ success: true, data: { url: '' } }),
-    suggestReleaseVersion: async () => ({ success: true, data: { suggestedVersion: '1.0.0', currentVersion: '0.0.0', bumpType: 'minor' as const, commitCount: 0, reason: 'Initial' } }),
-    checkGitHubCli: async () => ({ success: true, data: { installed: false } }),
     checkGitHubAuth: async () => ({ success: true, data: { authenticated: false } }),
     startGitHubAuth: async () => ({ success: true, data: { success: false } }),
     cancelGitHubAuth: async () => ({ success: true }),
-    signOutGitHub: async () => ({ success: true }),
     getGitHubToken: async () => ({ success: true, data: { token: '' } }),
     getGitHubUser: async () => ({ success: true, data: { username: '' } }),
     listGitHubUserRepos: async () => ({ success: true, data: { repos: [] } }),
@@ -160,7 +151,6 @@ const browserMockAPI: ElectronAPI = {
     getAutoFixConfig: async () => null,
     saveAutoFixConfig: async () => true,
     getAutoFixQueue: async () => [],
-    checkAutoFixLabels: async () => [],
     checkNewIssues: async () => [],
     startAutoFix: () => {},
     onAutoFixProgress: () => () => {},
@@ -179,7 +169,6 @@ const browserMockAPI: ElectronAPI = {
     getPRReview: async () => null,
     getPRReviewsBatch: async () => ({}),
     notifyExternalReviewComplete: async () => {},
-    deletePRReview: async () => true,
     checkNewCommits: async () => ({ hasNewCommits: false, newCommitCount: 0 }),
     checkMergeReadiness: async () => ({ isDraft: false, mergeable: 'UNKNOWN' as const, isBehind: false, ciStatus: 'none' as const, blockers: [] }),
     updatePRBranch: async () => ({ success: true }),
@@ -187,9 +176,6 @@ const browserMockAPI: ElectronAPI = {
     getPRLogs: async () => null,
     getWorkflowsAwaitingApproval: async () => ({ awaiting_approval: 0, workflow_runs: [], can_approve: false }),
     approveWorkflow: async () => true,
-    onPRReviewProgress: () => () => {},
-    onPRReviewComplete: () => () => {},
-    onPRReviewError: () => () => {},
     onPRReviewStateChange: () => () => {},
     onPRLogsUpdated: () => () => {},
     batchAutoFix: () => {},
@@ -411,8 +397,6 @@ const browserMockAPI: ElectronAPI = {
   }),
   openLogsFolder: async () => ({ success: false, error: 'Not available in browser mode' }),
   copyDebugInfo: async () => ({ success: false, error: 'Not available in browser mode' }),
-  getRecentErrors: async () => [],
-  listLogFiles: async () => []
 };
 
 /**

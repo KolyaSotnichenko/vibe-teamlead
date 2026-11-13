@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
-import type { IPCResult, TaskLogs, TaskLogStreamChunk } from '../../../shared/types';
+import type { IPCResult, TaskLogs } from '../../../shared/types';
 import path from 'path';
 import { projectStore } from '../../project-store';
 import { taskLogService } from '../../task-log-service';
@@ -142,13 +142,6 @@ export function registerTaskLogsHandlers(getMainWindow: () => BrowserWindow | nu
     const mainWindow = getMainWindow();
     if (mainWindow) {
       mainWindow.webContents.send(IPC_CHANNELS.TASK_LOGS_CHANGED, specId, logs);
-    }
-  });
-
-  taskLogService.on('stream-chunk', (specId: string, chunk: TaskLogStreamChunk) => {
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-      mainWindow.webContents.send(IPC_CHANNELS.TASK_LOGS_STREAM, specId, chunk);
     }
   });
 }

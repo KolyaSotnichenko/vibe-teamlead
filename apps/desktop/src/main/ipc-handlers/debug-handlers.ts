@@ -15,7 +15,6 @@ import {
   getLogsPath,
   getRecentErrors,
   generateDebugReport,
-  listLogFiles,
   logger
 } from '../app-logger';
 
@@ -74,20 +73,6 @@ export function registerDebugHandlers(): void {
       logger.error('Failed to copy debug info:', error);
       return { success: false, error: errorMessage };
     }
-  });
-
-  // Get recent errors
-  ipcMain.handle(IPC_CHANNELS.DEBUG_GET_RECENT_ERRORS, async (_, maxCount?: number): Promise<string[]> => {
-    return getRecentErrors(maxCount ?? 20);
-  });
-
-  // List log files
-  ipcMain.handle(IPC_CHANNELS.DEBUG_LIST_LOG_FILES, async (): Promise<LogFileInfo[]> => {
-    const files = listLogFiles();
-    return files.map(f => ({
-      ...f,
-      modified: f.modified.toISOString()
-    }));
   });
 
   logger.info('Debug IPC handlers registered');

@@ -203,59 +203,6 @@ function getAutoFixQueue(project: Project): AutoFixQueueItem[] {
   return queue.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-// IPC communication helpers removed - using createIPCCommunicators instead
-
-/**
- * Check for issues with auto-fix labels
- */
-async function checkAutoFixLabels(project: Project): Promise<number[]> {
-  const config = getAutoFixConfig(project);
-  if (!config.enabled || config.labels.length === 0) {
-    return [];
-  }
-
-  const ghConfig = await getGitHubConfigAsync(project);
-  if (!ghConfig) {
-    return [];
-  }
-
-  // Fetch open issues
-  const issues = await githubFetch(
-    ghConfig.token,
-    `/repos/${ghConfig.repo}/issues?state=open&per_page=100`
-  ) as Array<{
-    number: number;
-    labels: Array<{ name: string }>;
-    pull_request?: unknown;
-  }>;
-
-  // Filter for issues (not PRs) with matching labels
-  const queue = getAutoFixQueue(project);
-  const pendingIssues = new Set(queue.map(q => q.issueNumber));
-
-  const matchingIssues: number[] = [];
-
-  for (const issue of issues) {
-    // Skip pull requests
-    if (issue.pull_request) continue;
-
-    // Skip already in queue
-    if (pendingIssues.has(issue.number)) continue;
-
-    // Check for matching labels
-    const issueLabels = issue.labels.map(l => l.name.toLowerCase());
-    const hasMatchingLabel = config.labels.some(
-      label => issueLabels.includes(label.toLowerCase())
-    );
-
-    if (hasMatchingLabel) {
-      matchingIssues.push(issue.number);
-    }
-  }
-
-  return matchingIssues;
-}
-
 /**
  * Check for NEW issues not yet in the auto-fix queue (no labels required).
  * Uses GitHub API directly instead of Python subprocess.
@@ -465,20 +412,6 @@ export function registerAutoFixHandlers(
         const queue = getAutoFixQueue(project);
         debugLog('AutoFix queue loaded', { count: queue.length });
         return queue;
-      });
-      return result ?? [];
-    }
-  );
-
-  // Check for issues with auto-fix labels
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_AUTOFIX_CHECK_LABELS,
-    async (_, projectId: string): Promise<number[]> => {
-      debugLog('checkAutoFixLabels handler called', { projectId });
-      const result = await withProjectOrNull(projectId, async (project) => {
-        const issues = await checkAutoFixLabels(project);
-        debugLog('Issues with auto-fix labels', { count: issues.length, issues });
-        return issues;
       });
       return result ?? [];
     }

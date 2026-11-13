@@ -1,8 +1,6 @@
-import { ipcMain } from 'electron';
+
 import type { BrowserWindow } from 'electron';
-import { IPC_CHANNELS } from '../../../shared/constants';
-import type { IPCResult, MemorySystemStatus } from '../../../shared/types';
-import { projectStore } from '../../project-store';
+import type { MemorySystemStatus } from '../../../shared/types';
 import { getMemoryService, getEmbeddingProvider } from './memory-service-factory';
 
 /**
@@ -39,23 +37,4 @@ export async function buildMemoryStatus(): Promise<MemorySystemStatus> {
 export function registerMemoryStatusHandlers(
   _getMainWindow: () => BrowserWindow | null
 ): void {
-  ipcMain.handle(
-    IPC_CHANNELS.CONTEXT_MEMORY_STATUS,
-    async (_event, _projectId: string): Promise<IPCResult<MemorySystemStatus>> => {
-      const project = _projectId ? projectStore.getProject(_projectId) : null;
-      if (_projectId && !project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const memoryStatus = await buildMemoryStatus();
-        return { success: true, data: memoryStatus };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to check memory status',
-        };
-      }
-    }
-  );
 }

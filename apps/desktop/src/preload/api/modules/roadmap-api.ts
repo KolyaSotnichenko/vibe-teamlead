@@ -33,11 +33,7 @@ export interface RoadmapAPI {
 
   // Competitor analysis
   saveCompetitorAnalysis: (projectId: string, competitorAnalysis: CompetitorAnalysis) => Promise<IPCResult>;
-
-  // Progress persistence
-  saveRoadmapProgress: (projectId: string, progress: PersistedRoadmapProgress) => Promise<IPCResult>;
   loadRoadmapProgress: (projectId: string) => Promise<IPCResult<PersistedRoadmapProgress | null>>;
-  clearRoadmapProgress: (projectId: string) => Promise<IPCResult>;
 
   // Event Listeners
   onRoadmapProgress: (
@@ -94,15 +90,8 @@ export const createRoadmapAPI = (): RoadmapAPI => ({
   saveCompetitorAnalysis: (projectId: string, competitorAnalysis: CompetitorAnalysis): Promise<IPCResult> =>
     invokeIpc(IPC_CHANNELS.COMPETITOR_ANALYSIS_SAVE, projectId, competitorAnalysis),
 
-  // Progress persistence
-  saveRoadmapProgress: (projectId: string, progress: PersistedRoadmapProgress): Promise<IPCResult> =>
-    invokeIpc(IPC_CHANNELS.ROADMAP_PROGRESS_SAVE, projectId, progress),
-
   loadRoadmapProgress: (projectId: string): Promise<IPCResult<PersistedRoadmapProgress | null>> =>
     invokeIpc(IPC_CHANNELS.ROADMAP_PROGRESS_LOAD, projectId),
-
-  clearRoadmapProgress: (projectId: string): Promise<IPCResult> =>
-    invokeIpc(IPC_CHANNELS.ROADMAP_PROGRESS_CLEAR, projectId),
 
   // Event Listeners
   onRoadmapProgress: (

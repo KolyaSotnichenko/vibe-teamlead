@@ -98,46 +98,6 @@ export function registerCheckConnection(): void {
  * Get list of GitLab projects accessible to the user
  */
 export function registerGetProjects(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_GET_PROJECTS,
-    async (_event, projectId: string): Promise<IPCResult<GitLabAPIProject[]>> => {
-      debugLog('getGitLabProjects handler called');
-
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const config = await getGitLabConfig(project);
-      if (!config) {
-        return {
-          success: false,
-          error: 'GitLab not configured'
-        };
-      }
-
-      try {
-        const projects = await gitlabFetch(
-          config.token,
-          config.instanceUrl,
-          '/projects?membership=true&per_page=100'
-        ) as GitLabAPIProject[];
-
-        debugLog('Found projects:', projects.length);
-
-        return {
-          success: true,
-          data: projects
-        };
-      } catch (error) {
-        debugLog('Failed to get projects:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get projects'
-        };
-      }
-    }
-  );
 }
 
 /**

@@ -15,7 +15,6 @@ import { projectStore } from '../project-store';
 import {
   initializeProject,
   isInitialized,
-  hasLocalSource,
   checkGitStatus,
   initializeGit
 } from '../project-initializer';
@@ -177,22 +176,6 @@ function getGitBranchesWithInfo(projectPath: string): GitBranchDetail[] {
     });
   } catch {
     return [];
-  }
-}
-
-/**
- * Get the current git branch for a directory
- */
-function getCurrentGitBranch(projectPath: string): string | null {
-  try {
-    const result = execFileSync(getToolPath('git'), ['rev-parse', '--abbrev-ref', 'HEAD'], {
-      cwd: projectPath,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    return result.trim() || null;
-  } catch {
-    return null;
   }
 }
 
@@ -422,25 +405,6 @@ export function registerProjectHandlers(
     }
   );
 
-  // Check if project has local Vibe Teamlead source (is dev project)
-  ipcMain.handle(
-    'project:has-local-source',
-    async (_, projectId: string): Promise<IPCResult<boolean>> => {
-      try {
-        const project = projectStore.getProject(projectId);
-        if (!project) {
-          return { success: false, error: 'Project not found' };
-        }
-        return { success: true, data: hasLocalSource(project.path) };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
-  );
-
   // ============================================
   // Git Operations
   // ============================================
@@ -474,25 +438,6 @@ export function registerProjectHandlers(
         }
         const branches = getGitBranchesWithInfo(projectPath);
         return { success: true, data: branches };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
-  );
-
-  // Get current branch for a project
-  ipcMain.handle(
-    IPC_CHANNELS.GIT_GET_CURRENT_BRANCH,
-    async (_, projectPath: string): Promise<IPCResult<string | null>> => {
-      try {
-        if (!existsSync(projectPath)) {
-          return { success: false, error: 'Directory does not exist' };
-        }
-        const branch = getCurrentGitBranch(projectPath);
-        return { success: true, data: branch };
       } catch (error) {
         return {
           success: false,

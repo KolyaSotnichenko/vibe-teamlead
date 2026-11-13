@@ -37,8 +37,6 @@ export interface DebugAPI {
   getDebugInfo: () => Promise<DebugInfo>;
   openLogsFolder: () => Promise<DebugResult>;
   copyDebugInfo: () => Promise<DebugResult>;
-  getRecentErrors: (maxCount?: number) => Promise<string[]>;
-  listLogFiles: () => Promise<LogFileInfo[]>;
 }
 
 /**
@@ -53,10 +51,4 @@ export const createDebugAPI = (): DebugAPI => ({
 
   copyDebugInfo: (): Promise<DebugResult> =>
     invokeIpc(IPC_CHANNELS.DEBUG_COPY_DEBUG_INFO),
-
-  getRecentErrors: (maxCount?: number): Promise<string[]> =>
-    invokeIpc(IPC_CHANNELS.DEBUG_GET_RECENT_ERRORS, maxCount),
-
-  listLogFiles: (): Promise<LogFileInfo[]> =>
-    invokeIpc(IPC_CHANNELS.DEBUG_LIST_LOG_FILES)
 });

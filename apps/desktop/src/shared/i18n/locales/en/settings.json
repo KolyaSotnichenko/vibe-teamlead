@@ -1012,7 +1012,7 @@
     },
     "githubIssues": {
       "label": "GitHub Issues",
-      "description": "Automated issue triage and labeling"
+      "description": "Issue investigation and auto-fix"
     },
     "githubPrs": {
       "label": "GitHub PR Review",

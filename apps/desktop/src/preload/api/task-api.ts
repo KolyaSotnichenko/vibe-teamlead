@@ -9,7 +9,6 @@ import type {
   ImplementationPlan,
   TaskMetadata,
   TaskLogs,
-  TaskLogStreamChunk,
   ReviewReason,
   MergeProgress,
   MergeState,
@@ -56,7 +55,6 @@ export interface TaskAPI {
   ) => Promise<IPCResult<TaskRecoveryResult>>;
   resolveFailedSubtasks: (taskId: string, decision: import('../../shared/types').FailedSubtaskDecision) => Promise<IPCResult<{ changed: string[] }>>;
   checkTaskRunning: (taskId: string) => Promise<IPCResult<boolean>>;
-  resumePausedTask: (taskId: string) => Promise<IPCResult>;
 
   // Worktree Change Detection
   checkWorktreeChanges: (taskId: string) => Promise<IPCResult<{ hasChanges: boolean; worktreePath?: string; changedFileCount?: number }>>;
@@ -77,7 +75,6 @@ export interface TaskAPI {
   worktreeOpenInTerminal: (worktreePath: string, terminal: SupportedTerminal, customPath?: string) => Promise<IPCResult<{ opened: boolean }>>;
   worktreeDetectTools: () => Promise<IPCResult<{ ides: Array<{ id: string; name: string; path: string; installed: boolean }>; terminals: Array<{ id: string; name: string; path: string; installed: boolean }> }>>;
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
-  unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
 
   // Task Event Listeners
@@ -105,7 +102,6 @@ export interface TaskAPI {
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
   unwatchTaskLogs: (specId: string) => Promise<IPCResult>;
   onTaskLogsChanged: (callback: (specId: string, logs: TaskLogs) => void) => () => void;
-  onTaskLogsStream: (callback: (specId: string, chunk: TaskLogStreamChunk) => void) => () => void;
 
   // Merge Progress Events
   onMergeProgress: (callback: (taskId: string, progress: MergeProgress) => void) => () => void;
@@ -167,9 +163,6 @@ export const createTaskAPI = (): TaskAPI => ({
   checkTaskRunning: (taskId: string): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_CHECK_RUNNING, taskId),
 
-  resumePausedTask: (taskId: string): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_RESUME_PAUSED, taskId),
-
   // Worktree Change Detection
   checkWorktreeChanges: (taskId: string): Promise<IPCResult<{ hasChanges: boolean; worktreePath?: string; changedFileCount?: number }>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_CHECK_WORKTREE_CHANGES, taskId),
@@ -214,9 +207,6 @@ export const createTaskAPI = (): TaskAPI => ({
 
   archiveTasks: (projectId: string, taskIds: string[], version?: string): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_ARCHIVE, projectId, taskIds, version),
-
-  unarchiveTasks: (projectId: string, taskIds: string[]): Promise<IPCResult<boolean>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TASK_UNARCHIVE, projectId, taskIds),
 
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions): Promise<IPCResult<WorktreeCreatePRResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_CREATE_PR, taskId, options),
@@ -356,22 +346,6 @@ export const createTaskAPI = (): TaskAPI => ({
     ipcRenderer.on(IPC_CHANNELS.TASK_LOGS_CHANGED, handler);
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.TASK_LOGS_CHANGED, handler);
-    };
-  },
-
-  onTaskLogsStream: (
-    callback: (specId: string, chunk: TaskLogStreamChunk) => void
-  ): (() => void) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      specId: string,
-      chunk: TaskLogStreamChunk
-    ): void => {
-      callback(specId, chunk);
-    };
-    ipcRenderer.on(IPC_CHANNELS.TASK_LOGS_STREAM, handler);
-    return () => {
-      ipcRenderer.removeListener(IPC_CHANNELS.TASK_LOGS_STREAM, handler);
     };
   },
 

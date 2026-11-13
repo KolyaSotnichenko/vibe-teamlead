@@ -33,8 +33,6 @@ export interface TerminalAPI {
     cols?: number,
     rows?: number
   ) => Promise<IPCResult<import('../../shared/types').TerminalRestoreResult>>;
-  clearTerminalSessions: (projectPath: string) => Promise<IPCResult>;
-  resumeClaudeInTerminal: (id: string, sessionId?: string) => void;
   activateDeferredClaudeResume: (id: string) => void;
   getTerminalSessionDates: (projectPath?: string) => Promise<IPCResult<import('../../shared/types').SessionDateInfo[]>>;
   getTerminalSessionsForDate: (
@@ -110,12 +108,6 @@ export const createTerminalAPI = (): TerminalAPI => ({
     rows?: number
   ): Promise<IPCResult<import('../../shared/types').TerminalRestoreResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_RESTORE_SESSION, session, cols, rows),
-
-  clearTerminalSessions: (projectPath: string): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TERMINAL_CLEAR_SESSIONS, projectPath),
-
-  resumeClaudeInTerminal: (id: string, sessionId?: string, ): void =>
-    ipcRenderer.send(IPC_CHANNELS.TERMINAL_RESUME_CLAUDE, id, sessionId),
 
   activateDeferredClaudeResume: (id: string): void =>
     ipcRenderer.send(IPC_CHANNELS.TERMINAL_ACTIVATE_DEFERRED_RESUME, id),

@@ -31,24 +31,4 @@ export function registerTaskArchiveHandlers(): void {
       }
     }
   );
-
-  /**
-   * Unarchive tasks
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.TASK_UNARCHIVE,
-    async (_, projectId: string, taskIds: string[]): Promise<IPCResult<boolean>> => {
-      console.warn('[IPC] TASK_UNARCHIVE called with projectId:', projectId, 'taskIds:', taskIds);
-
-      const result = projectStore.unarchiveTasks(projectId, taskIds);
-
-      if (result) {
-        console.warn('[IPC] TASK_UNARCHIVE success');
-        return { success: true, data: true };
-      } else {
-        console.error('[IPC] TASK_UNARCHIVE failed');
-        return { success: false, error: 'Failed to unarchive tasks' };
-      }
-    }
-  );
 }

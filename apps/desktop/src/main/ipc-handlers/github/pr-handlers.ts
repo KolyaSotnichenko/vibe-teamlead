@@ -26,9 +26,7 @@ import { createContextLogger } from "./utils/logger";
 import { withProjectOrNull } from "./utils/project-middleware";
 import { createIPCCommunicators } from "./utils/ipc-communicator";
 import {
-  runMultiPassReview,
   type PRContext,
-  type PRReviewEngineConfig,
   type ChangedFile,
   type AIBotComment,
 } from "../../ai/runners/github/pr-review-engine";
@@ -44,7 +42,6 @@ import {
 import type { ModelShorthand, ThinkingLevel } from "../../ai/config/types";
 import { getPRStatusPoller } from "../../services/pr-status-poller";
 import { safeBreadcrumb, safeCaptureException } from "../../sentry";
-import { sanitizeForSentry } from "../../../shared/utils/sentry-privacy";
 import { PRReviewStateManager } from "../../pr-review-state-manager";
 import type { PRReviewResult as PreloadPRReviewResult } from "../../../preload/api/modules/github-api";
 import type {
@@ -256,13 +253,6 @@ const ciWaitAbortControllers = new Map<string, AbortController>();
  */
 function getReviewKey(projectId: string, prNumber: number): string {
   return `${projectId}:${prNumber}`;
-}
-
-/**
- * Returns env vars for Claude.md usage; enabled unless explicitly opted out.
- */
-function getClaudeMdEnv(project: Project): Record<string, string> | undefined {
-  return project.settings?.useClaudeMd !== false ? { USE_CLAUDE_MD: "true" } : undefined;
 }
 
 /**
@@ -1970,34 +1960,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     }
   );
 
-  // Get PR diff
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_PR_GET_DIFF,
-    async (_, projectId: string, prNumber: number): Promise<string | null> => {
-      return withProjectOrNull(projectId, async (project) => {
-        const config = await getGitHubConfigAsync(project);
-        if (!config) return null;
-
-        try {
-          const { execFileSync } = await import("child_process");
-          // Validate prNumber to prevent command injection
-          if (!Number.isInteger(prNumber) || prNumber <= 0) {
-            throw new Error("Invalid PR number");
-          }
-          // Use execFileSync with arguments array to prevent command injection
-          const diff = execFileSync("gh", ["pr", "diff", String(prNumber)], {
-            cwd: project.path,
-            encoding: "utf-8",
-            env: getAugmentedEnv(),
-          });
-          return diff;
-        } catch {
-          return null;
-        }
-      });
-    }
-  );
-
   // Get saved review
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_PR_GET_REVIEW,
@@ -2545,68 +2507,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
         }
       });
       return postResult ?? false;
-    }
-  );
-
-  // Delete review from PR
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_PR_DELETE_REVIEW,
-    async (_, projectId: string, prNumber: number): Promise<boolean> => {
-      debugLog("deletePRReview handler called", { projectId, prNumber });
-      const deleteResult = await withProjectOrNull(projectId, async (project) => {
-        const result = getReviewResult(project, prNumber);
-        if (!result || !result.reviewId) {
-          debugLog("No review ID found for deletion", { prNumber });
-          return false;
-        }
-
-        const config = await getGitHubConfigAsync(project);
-        if (!config) {
-          debugLog("No GitHub config found");
-          return false;
-        }
-
-        try {
-          debugLog("Deleting review from GitHub", { prNumber, reviewId: result.reviewId });
-
-          // Delete review via GitHub API
-          await githubFetch(
-            config.token,
-            `/repos/${config.repo}/pulls/${prNumber}/reviews/${result.reviewId}`,
-            {
-              method: "DELETE",
-            }
-          );
-
-          debugLog("Review deleted successfully", { prNumber, reviewId: result.reviewId });
-
-          // Clear the review ID from the stored result
-          const reviewPath = path.join(getGitHubDir(project), "pr", `review_${prNumber}.json`);
-          try {
-            const rawData = fs.readFileSync(reviewPath, "utf-8");
-            const sanitizedData = sanitizeNetworkData(rawData);
-            const data = JSON.parse(sanitizedData);
-            delete data.review_id;
-            fs.writeFileSync(reviewPath, JSON.stringify(data, null, 2), "utf-8");
-            debugLog("Cleared review ID from result file", { prNumber });
-          } catch {
-            // File doesn't exist or couldn't be read - this is expected if review wasn't saved
-            debugLog("Review result file not found or unreadable, skipping update", { prNumber });
-          }
-
-          // Send state update event to refresh UI immediately (non-blocking)
-          sendReviewStateUpdate(project, prNumber, projectId, getMainWindow, "after deletion");
-
-          return true;
-        } catch (error) {
-          debugLog("Failed to delete review", {
-            prNumber,
-            error: error instanceof Error ? error.message : error,
-          });
-          return false;
-        }
-      });
-      return deleteResult ?? false;
     }
   );
 
@@ -3505,137 +3405,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
       });
 
       return result ?? false;
-    }
-  );
-
-  // Get PR review memories from the memory layer
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_PR_MEMORY_GET,
-    async (_, projectId: string, limit: number = 10): Promise<PRReviewMemory[]> => {
-      debugLog("getPRReviewMemories handler called", { projectId, limit });
-      const result = await withProjectOrNull(projectId, async (project) => {
-        const memoryDir = path.join(getGitHubDir(project), "memory", project.name || "unknown");
-        const memories: PRReviewMemory[] = [];
-
-        // Try to load from file-based storage
-        try {
-          const indexPath = path.join(memoryDir, "reviews_index.json");
-          if (!fs.existsSync(indexPath)) {
-            debugLog("No PR review memories found", { projectId });
-            return [];
-          }
-
-          const indexContent = fs.readFileSync(indexPath, "utf-8");
-          const index = JSON.parse(sanitizeNetworkData(indexContent));
-          const reviews = index.reviews || [];
-
-          // Load individual review memories
-          for (const entry of reviews.slice(0, limit)) {
-            try {
-              const reviewPath = path.join(memoryDir, `pr_${entry.pr_number}_review.json`);
-              if (fs.existsSync(reviewPath)) {
-                const reviewContent = fs.readFileSync(reviewPath, "utf-8");
-                const memory = JSON.parse(sanitizeNetworkData(reviewContent));
-                memories.push({
-                  prNumber: memory.pr_number,
-                  repo: memory.repo,
-                  verdict: memory.summary?.verdict || "unknown",
-                  timestamp: memory.timestamp,
-                  summary: memory.summary,
-                  keyFindings: memory.key_findings || [],
-                  patterns: memory.patterns || [],
-                  gotchas: memory.gotchas || [],
-                  isFollowup: memory.is_followup || false,
-                });
-              }
-            } catch (err) {
-              debugLog("Failed to load PR review memory", {
-                prNumber: entry.pr_number,
-                error: err instanceof Error ? err.message : err,
-              });
-            }
-          }
-
-          debugLog("Loaded PR review memories", { count: memories.length });
-          return memories;
-        } catch (error) {
-          debugLog("Failed to load PR review memories", {
-            error: error instanceof Error ? error.message : error,
-          });
-          return [];
-        }
-      });
-      return result ?? [];
-    }
-  );
-
-  // Search PR review memories
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_PR_MEMORY_SEARCH,
-    async (_, projectId: string, query: string, limit: number = 10): Promise<PRReviewMemory[]> => {
-      debugLog("searchPRReviewMemories handler called", { projectId, query, limit });
-      const result = await withProjectOrNull(projectId, async (project) => {
-        const memoryDir = path.join(getGitHubDir(project), "memory", project.name || "unknown");
-        const memories: PRReviewMemory[] = [];
-        const queryLower = query.toLowerCase();
-
-        // Search through file-based storage
-        try {
-          const indexPath = path.join(memoryDir, "reviews_index.json");
-          if (!fs.existsSync(indexPath)) {
-            return [];
-          }
-
-          const indexContent = fs.readFileSync(indexPath, "utf-8");
-          const index = JSON.parse(sanitizeNetworkData(indexContent));
-          const reviews = index.reviews || [];
-
-          // Search individual review memories
-          for (const entry of reviews) {
-            try {
-              const reviewPath = path.join(memoryDir, `pr_${entry.pr_number}_review.json`);
-              if (fs.existsSync(reviewPath)) {
-                const reviewContent = fs.readFileSync(reviewPath, "utf-8");
-
-                // Check if content matches query
-                if (reviewContent.toLowerCase().includes(queryLower)) {
-                  const memory = JSON.parse(sanitizeNetworkData(reviewContent));
-                  memories.push({
-                    prNumber: memory.pr_number,
-                    repo: memory.repo,
-                    verdict: memory.summary?.verdict || "unknown",
-                    timestamp: memory.timestamp,
-                    summary: memory.summary,
-                    keyFindings: memory.key_findings || [],
-                    patterns: memory.patterns || [],
-                    gotchas: memory.gotchas || [],
-                    isFollowup: memory.is_followup || false,
-                  });
-                }
-              }
-
-              // Stop if we have enough
-              if (memories.length >= limit) {
-                break;
-              }
-            } catch (err) {
-              debugLog("Failed to search PR review memory", {
-                prNumber: entry.pr_number,
-                error: err instanceof Error ? err.message : err,
-              });
-            }
-          }
-
-          debugLog("Found matching PR review memories", { count: memories.length, query });
-          return memories;
-        } catch (error) {
-          debugLog("Failed to search PR review memories", {
-            error: error instanceof Error ? error.message : error,
-          });
-          return [];
-        }
-      });
-      return result ?? [];
     }
   );
 

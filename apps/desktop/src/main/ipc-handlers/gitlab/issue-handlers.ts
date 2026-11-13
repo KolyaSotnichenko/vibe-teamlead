@@ -142,48 +142,6 @@ export function registerGetIssues(): void {
  * Get a single issue by IID
  */
 export function registerGetIssue(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_GET_ISSUE,
-    async (_event, projectId: string, issueIid: number): Promise<IPCResult<GitLabIssue>> => {
-      debugLog('getGitLabIssue handler called', { issueIid });
-
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const config = await getGitLabConfig(project);
-      if (!config) {
-        return {
-          success: false,
-          error: 'GitLab not configured'
-        };
-      }
-
-      try {
-        const encodedProject = encodeProjectPath(config.project);
-
-        const apiIssue = await gitlabFetch(
-          config.token,
-          config.instanceUrl,
-          `/projects/${encodedProject}/issues/${issueIid}`
-        ) as GitLabAPIIssue;
-
-        const issue = transformIssue(apiIssue, config.project);
-
-        return {
-          success: true,
-          data: issue
-        };
-      } catch (error) {
-        debugLog('Failed to get issue:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get issue'
-        };
-      }
-    }
-  );
 }
 
 /**

@@ -58,7 +58,6 @@ export const taskMock = {
 
   // Task archive operations
   archiveTasks: async () => ({ success: true, data: true }),
-  unarchiveTasks: async () => ({ success: true, data: true }),
 
   // Task status operations
   updateTaskStatus: async (_taskId: string, _status: string, _options?: { forceCleanup?: boolean }) => ({ success: true }),
@@ -76,8 +75,6 @@ export const taskMock = {
   }),
 
   checkTaskRunning: async () => ({ success: true, data: false }),
-
-  resumePausedTask: async () => ({ success: true }),
 
   // Worktree change detection
   checkWorktreeChanges: async (_taskId: string) => ({
@@ -140,6 +137,5 @@ export const taskMock = {
   onTaskStatusChange: () => () => {},
   onTaskExecutionProgress: () => () => {},
   onTaskLogsChanged: () => () => {},
-  onTaskLogsStream: () => () => {},
   onMergeProgress: () => () => {}
 };

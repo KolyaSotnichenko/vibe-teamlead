@@ -8,11 +8,8 @@ import { execFileSync, spawn } from 'child_process';
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult } from '../../../shared/types';
 import { getAugmentedEnv, findExecutable } from '../../env-utils';
-import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import { openTerminalWithCommand } from '../claude-code-handlers';
 import type { GitLabAuthStartResult } from './types';
-
-const DEFAULT_GITLAB_URL = 'https://gitlab.com';
 
 // Debug logging helper - requires BOTH development mode AND DEBUG flag for OAuth handlers
 // This is intentionally more restrictive than other handlers to prevent accidental token logging
@@ -53,18 +50,6 @@ function debugLog(message: string, data?: unknown): void {
       console.debug(`[GitLab OAuth] ${message}`);
     }
   }
-}
-
-// Regex pattern to validate GitLab project format (group/project or group/subgroup/project)
-const GITLAB_PROJECT_PATTERN = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/;
-
-/**
- * Validate that a project string matches the expected format
- */
-function isValidGitLabProject(project: string): boolean {
-  // Allow numeric IDs
-  if (/^\d+$/.test(project)) return true;
-  return GITLAB_PROJECT_PATTERN.test(project);
 }
 
 /**
@@ -464,301 +449,30 @@ export function registerListUserProjects(): void {
  * Detect GitLab project from git remote origin
  */
 export function registerDetectGitLabProject(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_DETECT_PROJECT,
-    async (_event, projectPath: string): Promise<IPCResult<{ project: string; instanceUrl: string }>> => {
-      debugLog('detectGitLabProject handler called', { projectPath });
-      try {
-        const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
-          encoding: 'utf-8',
-          cwd: projectPath,
-          stdio: 'pipe',
-          env: getIsolatedGitEnv()
-        }).trim();
-
-        debugLog('Remote URL:', remoteUrl);
-
-        // Parse GitLab project from URL
-        // SSH: git@gitlab.example.com:group/project.git
-        // HTTPS: https://gitlab.example.com/group/project.git
-        let instanceUrl = DEFAULT_GITLAB_URL;
-        let project = '';
-
-        const sshMatch = remoteUrl.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
-        if (sshMatch) {
-          instanceUrl = `https://${sshMatch[1]}`;
-          project = sshMatch[2];
-        }
-
-        const httpsMatch = remoteUrl.match(/^https?:\/\/([^/]+)\/(.+?)(?:\.git)?$/);
-        if (httpsMatch) {
-          instanceUrl = `https://${httpsMatch[1]}`;
-          project = httpsMatch[2];
-        }
-
-        if (project) {
-          debugLog('Detected project:', { project, instanceUrl });
-          return {
-            success: true,
-            data: { project, instanceUrl }
-          };
-        }
-
-        return {
-          success: false,
-          error: 'Could not parse GitLab project from remote URL'
-        };
-      } catch (error) {
-        debugLog('Failed to detect project:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to detect GitLab project'
-        };
-      }
-    }
-  );
 }
 
 /**
  * Get branches from GitLab project
  */
 export function registerGetGitLabBranches(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_GET_BRANCHES,
-    async (_event, project: string, instanceUrl: string): Promise<IPCResult<string[]>> => {
-      debugLog('getGitLabBranches handler called', { project, instanceUrl });
-
-      if (!isValidGitLabProject(project)) {
-        return {
-          success: false,
-          error: 'Invalid project format'
-        };
-      }
-
-      const hostname = getHostnameFromUrl(instanceUrl);
-      const encodedProject = encodeURIComponent(project);
-
-      try {
-        const args = ['api', `projects/${encodedProject}/repository/branches`, '--paginate', '--jq', '.[].name'];
-        if (hostname !== 'gitlab.com') {
-          args.push('--hostname', hostname);
-        }
-
-        const output = execFileSync('glab', args, {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-          env: getAugmentedEnv()
-        });
-
-        const branches = output.trim().split('\n').filter(b => b.length > 0);
-        debugLog('Found branches:', branches.length);
-
-        return {
-          success: true,
-          data: branches
-        };
-      } catch (error) {
-        debugLog('Failed to get branches:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get branches'
-        };
-      }
-    }
-  );
 }
 
 /**
  * Create a new GitLab project
  */
 export function registerCreateGitLabProject(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_CREATE_PROJECT,
-    async (
-      _event,
-      projectName: string,
-      options: { description?: string; visibility?: string; projectPath: string; namespace?: string; instanceUrl?: string }
-    ): Promise<IPCResult<{ pathWithNamespace: string; webUrl: string }>> => {
-      debugLog('createGitLabProject handler called', { projectName, options });
-
-      if (!/^[A-Za-z0-9_.-]+$/.test(projectName)) {
-        return {
-          success: false,
-          error: 'Invalid project name'
-        };
-      }
-
-      const hostname = options.instanceUrl ? getHostnameFromUrl(options.instanceUrl) : 'gitlab.com';
-
-      try {
-        const args = ['repo', 'create', projectName, '--source', options.projectPath];
-
-        if (options.visibility) {
-          args.push('--visibility', options.visibility);
-        } else {
-          args.push('--visibility', 'private');
-        }
-
-        if (options.description) {
-          args.push('--description', options.description);
-        }
-
-        if (options.namespace) {
-          args.push('--group', options.namespace);
-        }
-
-        if (hostname !== 'gitlab.com') {
-          args.push('--hostname', hostname);
-        }
-
-        debugLog('Running: glab', args);
-        const output = execFileSync('glab', args, {
-          encoding: 'utf-8',
-          cwd: options.projectPath,
-          stdio: 'pipe',
-          env: getAugmentedEnv()
-        });
-
-        debugLog('glab repo create output:', output);
-
-        // Parse output to get project info
-        const urlMatch = output.match(/https?:\/\/[^\s]+/);
-        const webUrl = urlMatch ? urlMatch[0] : `https://${hostname}/${options.namespace || ''}/${projectName}`;
-        const pathWithNamespace = options.namespace ? `${options.namespace}/${projectName}` : projectName;
-
-        return {
-          success: true,
-          data: { pathWithNamespace, webUrl }
-        };
-      } catch (error) {
-        debugLog('Failed to create project:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to create project'
-        };
-      }
-    }
-  );
 }
 
 /**
  * Add a remote origin to a local git repository
  */
 export function registerAddGitLabRemote(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_ADD_REMOTE,
-    async (
-      _event,
-      projectPath: string,
-      projectFullPath: string,
-      instanceUrl?: string
-    ): Promise<IPCResult<{ remoteUrl: string }>> => {
-      debugLog('addGitLabRemote handler called', { projectPath, projectFullPath, instanceUrl });
-
-      if (!isValidGitLabProject(projectFullPath)) {
-        return {
-          success: false,
-          error: 'Invalid project format'
-        };
-      }
-
-      const baseUrl = (instanceUrl || DEFAULT_GITLAB_URL).replace(/\/$/, '');
-      const remoteUrl = `${baseUrl}/${projectFullPath}.git`;
-
-      try {
-        // Check if origin exists
-        try {
-          execFileSync('git', ['remote', 'get-url', 'origin'], {
-            cwd: projectPath,
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            env: getIsolatedGitEnv()
-          });
-          // Remove existing origin
-          execFileSync('git', ['remote', 'remove', 'origin'], {
-            cwd: projectPath,
-            encoding: 'utf-8',
-            stdio: 'pipe',
-            env: getIsolatedGitEnv()
-          });
-        } catch {
-          // No origin exists
-        }
-
-        execFileSync('git', ['remote', 'add', 'origin', remoteUrl], {
-          cwd: projectPath,
-          encoding: 'utf-8',
-          stdio: 'pipe',
-          env: getIsolatedGitEnv()
-        });
-
-        return {
-          success: true,
-          data: { remoteUrl }
-        };
-      } catch (error) {
-        debugLog('Failed to add remote:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to add remote'
-        };
-      }
-    }
-  );
 }
 
 /**
  * List user's GitLab groups
  */
 export function registerListGitLabGroups(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITLAB_LIST_GROUPS,
-    async (_event, instanceUrl?: string): Promise<IPCResult<{ groups: Array<{ id: number; name: string; path: string; fullPath: string }> }>> => {
-      debugLog('listGitLabGroups handler called', { instanceUrl });
-      const hostname = instanceUrl ? getHostnameFromUrl(instanceUrl) : 'gitlab.com';
-
-      try {
-        const args = ['api', 'groups', '--jq', '.[] | {id: .id, name: .name, path: .path, fullPath: .full_path}'];
-        if (hostname !== 'gitlab.com') {
-          args.push('--hostname', hostname);
-        }
-
-        const output = execFileSync('glab', args, {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-          env: getAugmentedEnv()
-        });
-
-        const groups: Array<{ id: number; name: string; path: string; fullPath: string }> = [];
-        const lines = output.trim().split('\n').filter(line => line.trim());
-
-        for (const line of lines) {
-          try {
-            const group = JSON.parse(line);
-            groups.push({
-              id: group.id,
-              name: group.name,
-              path: group.path,
-              fullPath: group.fullPath
-            });
-          } catch {
-            // Skip invalid JSON
-          }
-        }
-
-        return {
-          success: true,
-          data: { groups }
-        };
-      } catch (error) {
-        debugLog('Failed to list groups:', error instanceof Error ? error.message : error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to list groups'
-        };
-      }
-    }
-  );
 }
 
 /**

@@ -1,14 +1,11 @@
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type {
   GitHubAppAccess,
-  GitHubRepository,
-  GitHubIssue,
   GitHubSyncStatus,
   GitHubImportResult,
   GitHubInvestigationStatus,
   GitHubInvestigationResult,
   IPCResult,
-  VersionSuggestion,
   PaginatedIssuesResult,
   PRStatusUpdate,
   PollingMetadata
@@ -156,15 +153,12 @@ export type { PaginatedIssuesResult };
  * GitHub Integration API operations
  */
 export interface GitHubAPI {
-  // Operations
-  getGitHubRepositories: (projectId: string) => Promise<IPCResult<GitHubRepository[]>>;
   getGitHubIssues: (
     projectId: string,
     state?: 'open' | 'closed' | 'all',
     page?: number,
     fetchAll?: boolean
   ) => Promise<IPCResult<PaginatedIssuesResult>>;
-  getGitHubIssue: (projectId: string, issueNumber: number) => Promise<IPCResult<GitHubIssue>>;
   getIssueComments: (projectId: string, issueNumber: number) => Promise<IPCResult<any[]>>;
   checkGitHubConnection: (projectId: string) => Promise<IPCResult<GitHubSyncStatus>>;
   investigateGitHubIssue: (projectId: string, issueNumber: number, selectedCommentIds?: number[]) => void;
@@ -175,16 +169,9 @@ export interface GitHubAPI {
     releaseNotes: string,
     options?: { draft?: boolean; prerelease?: boolean }
   ) => Promise<IPCResult<{ url: string }>>;
-
-  /** AI-powered version suggestion based on commits since last release */
-  suggestReleaseVersion: (projectId: string) => Promise<IPCResult<VersionSuggestion>>;
-
-  // GitHub sign-in (GitHub App device flow)
-  checkGitHubCli: () => Promise<IPCResult<{ installed: boolean; version?: string }>>;
   checkGitHubAuth: () => Promise<IPCResult<{ authenticated: boolean; username?: string }>>;
   startGitHubAuth: () => Promise<IPCResult<{ success: boolean; message?: string }>>;
   cancelGitHubAuth: () => Promise<IPCResult>;
-  signOutGitHub: () => Promise<IPCResult>;
   getGitHubToken: () => Promise<IPCResult<{ token: string }>>;
   getGitHubUser: () => Promise<IPCResult<{ username: string; name?: string }>>;
   listGitHubUserRepos: () => Promise<IPCResult<{ repos: Array<{ fullName: string; description: string | null; isPrivate: boolean }> }>>;
@@ -228,7 +215,6 @@ export interface GitHubAPI {
   getAutoFixConfig: (projectId: string) => Promise<AutoFixConfig | null>;
   saveAutoFixConfig: (projectId: string, config: AutoFixConfig) => Promise<boolean>;
   getAutoFixQueue: (projectId: string) => Promise<AutoFixQueueItem[]>;
-  checkAutoFixLabels: (projectId: string) => Promise<number[]>;
   checkNewIssues: (projectId: string) => Promise<Array<{number: number}>>;
   startAutoFix: (projectId: string, issueNumber: number) => void;
 
@@ -281,7 +267,6 @@ export interface GitHubAPI {
   runPRReview: (projectId: string, prNumber: number) => void;
   cancelPRReview: (projectId: string, prNumber: number) => Promise<boolean>;
   postPRReview: (projectId: string, prNumber: number, selectedFindingIds?: string[], options?: { forceApprove?: boolean }) => Promise<boolean>;
-  deletePRReview: (projectId: string, prNumber: number) => Promise<boolean>;
   postPRComment: (projectId: string, prNumber: number, body: string) => Promise<boolean>;
   mergePR: (projectId: string, prNumber: number, mergeMethod?: 'merge' | 'squash' | 'rebase') => Promise<boolean>;
   assignPR: (projectId: string, prNumber: number, username: string) => Promise<boolean>;
@@ -304,17 +289,6 @@ export interface GitHubAPI {
   // Workflow approval (for fork PRs)
   getWorkflowsAwaitingApproval: (projectId: string, prNumber: number) => Promise<WorkflowsAwaitingApprovalResult>;
   approveWorkflow: (projectId: string, runId: number) => Promise<boolean>;
-
-  // PR event listeners
-  onPRReviewProgress: (
-    callback: (projectId: string, progress: PRReviewProgress) => void
-  ) => IpcListenerCleanup;
-  onPRReviewComplete: (
-    callback: (projectId: string, result: PRReviewResult) => void
-  ) => IpcListenerCleanup;
-  onPRReviewError: (
-    callback: (projectId: string, error: { prNumber: number; error: string }) => void
-  ) => IpcListenerCleanup;
   onPRReviewStateChange: (
     callback: (key: string, state: PRReviewStatePayload) => void
   ) => IpcListenerCleanup;
@@ -537,9 +511,6 @@ export interface PRLogs {
  * Creates the GitHub Integration API implementation
  */
 export const createGitHubAPI = (): GitHubAPI => ({
-  // Operations
-  getGitHubRepositories: (projectId: string): Promise<IPCResult<GitHubRepository[]>> =>
-    invokeIpc(IPC_CHANNELS.GITHUB_GET_REPOSITORIES, projectId),
 
   getGitHubIssues: (
     projectId: string,
@@ -548,9 +519,6 @@ export const createGitHubAPI = (): GitHubAPI => ({
     fetchAll?: boolean
   ): Promise<IPCResult<PaginatedIssuesResult>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_GET_ISSUES, projectId, state, page, fetchAll),
-
-  getGitHubIssue: (projectId: string, issueNumber: number): Promise<IPCResult<GitHubIssue>> =>
-    invokeIpc(IPC_CHANNELS.GITHUB_GET_ISSUE, projectId, issueNumber),
 
   getIssueComments: (projectId: string, issueNumber: number): Promise<IPCResult<any[]>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_GET_ISSUE_COMMENTS, projectId, issueNumber),
@@ -572,16 +540,7 @@ export const createGitHubAPI = (): GitHubAPI => ({
   ): Promise<IPCResult<{ url: string }>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_CREATE_RELEASE, projectId, version, releaseNotes, options),
 
-  suggestReleaseVersion: (projectId: string): Promise<IPCResult<VersionSuggestion>> =>
-    invokeIpc(IPC_CHANNELS.RELEASE_SUGGEST_VERSION, projectId),
-
-  // GitHub sign-in (GitHub App device flow)
-  checkGitHubCli: (): Promise<IPCResult<{ installed: boolean; version?: string }>> =>
-    invokeIpc(IPC_CHANNELS.GITHUB_CHECK_CLI),
-
   cancelGitHubAuth: (): Promise<IPCResult> => invokeIpc(IPC_CHANNELS.GITHUB_CANCEL_AUTH),
-
-  signOutGitHub: (): Promise<IPCResult> => invokeIpc(IPC_CHANNELS.GITHUB_SIGN_OUT),
 
   checkGitHubAuth: (): Promise<IPCResult<{ authenticated: boolean; username?: string }>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_CHECK_AUTH),
@@ -660,9 +619,6 @@ export const createGitHubAPI = (): GitHubAPI => ({
 
   getAutoFixQueue: (projectId: string): Promise<AutoFixQueueItem[]> =>
     invokeIpc(IPC_CHANNELS.GITHUB_AUTOFIX_GET_QUEUE, projectId),
-
-  checkAutoFixLabels: (projectId: string): Promise<number[]> =>
-    invokeIpc(IPC_CHANNELS.GITHUB_AUTOFIX_CHECK_LABELS, projectId),
 
   checkNewIssues: (projectId: string): Promise<Array<{number: number}>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_AUTOFIX_CHECK_NEW, projectId),
@@ -753,9 +709,6 @@ export const createGitHubAPI = (): GitHubAPI => ({
   postPRReview: (projectId: string, prNumber: number, selectedFindingIds?: string[], options?: { forceApprove?: boolean }): Promise<boolean> =>
     invokeIpc(IPC_CHANNELS.GITHUB_PR_POST_REVIEW, projectId, prNumber, selectedFindingIds, options),
 
-  deletePRReview: (projectId: string, prNumber: number): Promise<boolean> =>
-    invokeIpc(IPC_CHANNELS.GITHUB_PR_DELETE_REVIEW, projectId, prNumber),
-
   postPRComment: (projectId: string, prNumber: number, body: string): Promise<boolean> =>
     invokeIpc(IPC_CHANNELS.GITHUB_PR_POST_COMMENT, projectId, prNumber, body),
 
@@ -801,22 +754,6 @@ export const createGitHubAPI = (): GitHubAPI => ({
 
   approveWorkflow: (projectId: string, runId: number): Promise<boolean> =>
     invokeIpc(IPC_CHANNELS.GITHUB_WORKFLOW_APPROVE, projectId, runId),
-
-  // PR event listeners
-  onPRReviewProgress: (
-    callback: (projectId: string, progress: PRReviewProgress) => void
-  ): IpcListenerCleanup =>
-    createIpcListener(IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS, callback),
-
-  onPRReviewComplete: (
-    callback: (projectId: string, result: PRReviewResult) => void
-  ): IpcListenerCleanup =>
-    createIpcListener(IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE, callback),
-
-  onPRReviewError: (
-    callback: (projectId: string, error: { prNumber: number; error: string }) => void
-  ): IpcListenerCleanup =>
-    createIpcListener(IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR, callback),
 
   onPRReviewStateChange: (
     callback: (key: string, state: PRReviewStatePayload) => void

@@ -20,8 +20,7 @@ export const settingsMock = {
   // Sentry error reporting
   notifySentryStateChanged: (_enabled: boolean) => {
     console.warn('[browser-mock] notifySentryStateChanged called');
-  },
-  getSentryDsn: async () => '',  // No DSN in browser mode
+  },  // No DSN in browser mode
   getSentryConfig: async () => ({ dsn: '', tracesSampleRate: 0, profilesSampleRate: 0 }),
 
   // Spell check (no-op in browser mode)
@@ -36,12 +35,6 @@ export const settingsMock = {
       glab: { found: false, source: 'fallback' as const, message: 'Not available in browser mode' },
       claude: { found: false, source: 'fallback' as const, message: 'Not available in browser mode' }
     }
-  }),
-
-  // Claude Code onboarding status (mock - always returns false in browser mode)
-  getClaudeCodeOnboardingStatus: async () => ({
-    success: true,
-    data: { hasCompletedOnboarding: false }
   }),
 
   // Claude credential (mock - kept in memory, the key is never echoed back)

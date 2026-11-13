@@ -31,8 +31,7 @@ export const IPC_CHANNELS = {
   TASK_UPDATE_STATUS: 'task:updateStatus',
   TASK_RECOVER_STUCK: 'task:recoverStuck',
   TASK_RESOLVE_FAILED_SUBTASKS: 'task:resolveFailedSubtasks',  // Skip subtasks the coder gave up on, or send them back with an instruction
-  TASK_CHECK_RUNNING: 'task:checkRunning',
-  TASK_RESUME_PAUSED: 'task:resumePaused',  // Resume a rate-limited or auth-paused task
+  TASK_CHECK_RUNNING: 'task:checkRunning',  // Resume a rate-limited or auth-paused task
   TASK_LOAD_IMAGE_THUMBNAIL: 'task:loadImageThumbnail',
   TASK_CHECK_WORKTREE_CHANGES: 'task:checkWorktreeChanges',
 
@@ -50,7 +49,6 @@ export const IPC_CHANNELS = {
   TASK_WORKTREE_DETECT_TOOLS: 'task:worktreeDetectTools',  // Detect installed IDEs/terminals
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
-  TASK_UNARCHIVE: 'task:unarchive',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
   // Task events (main -> renderer)
@@ -69,8 +67,7 @@ export const IPC_CHANNELS = {
   TASK_LOGS_GET: 'task:logsGet',           // Load logs from spec dir
   TASK_LOGS_WATCH: 'task:logsWatch',       // Start watching for log changes
   TASK_LOGS_UNWATCH: 'task:logsUnwatch',   // Stop watching for log changes
-  TASK_LOGS_CHANGED: 'task:logsChanged',   // Event: logs changed (main -> renderer)
-  TASK_LOGS_STREAM: 'task:logsStream',     // Event: streaming log chunk (main -> renderer)
+  TASK_LOGS_CHANGED: 'task:logsChanged',     // Event: streaming log chunk (main -> renderer)
   TASK_MERGE_PROGRESS: 'task:mergeProgress',  // Event: merge progress update (main -> renderer)
 
   // Task workspace (parsed spec, ACs, plan, timeline, architecture from the spec dir)
@@ -165,8 +162,6 @@ export const IPC_CHANNELS = {
   // Terminal session management
   TERMINAL_GET_SESSIONS: 'terminal:getSessions',
   TERMINAL_RESTORE_SESSION: 'terminal:restoreSession',
-  TERMINAL_CLEAR_SESSIONS: 'terminal:clearSessions',
-  TERMINAL_RESUME_CLAUDE: 'terminal:resumeClaude',
   TERMINAL_ACTIVATE_DEFERRED_RESUME: 'terminal:activateDeferredResume',  // Trigger deferred Claude resume when terminal becomes active
   TERMINAL_GET_SESSION_DATES: 'terminal:getSessionDates',
   TERMINAL_GET_SESSIONS_FOR_DATE: 'terminal:getSessionsForDate',
@@ -205,8 +200,7 @@ export const IPC_CHANNELS = {
   // Settings
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
-  SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
-  SETTINGS_CLAUDE_CODE_GET_ONBOARDING_STATUS: 'settings:claudeCode:getOnboardingStatus',  // Check hasCompletedOnboarding from ~/.claude.json
+  SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',  // Check hasCompletedOnboarding from ~/.claude.json
 
   // Dialogs
   DIALOG_SELECT_DIRECTORY: 'dialog:selectDirectory',
@@ -225,7 +219,6 @@ export const IPC_CHANNELS = {
   ROADMAP_GET_STATUS: 'roadmap:getStatus',
   ROADMAP_SAVE: 'roadmap:save',
   ROADMAP_GENERATE: 'roadmap:generate',
-  ROADMAP_GENERATE_WITH_COMPETITOR: 'roadmap:generateWithCompetitor',
   ROADMAP_REFRESH: 'roadmap:refresh',
   ROADMAP_STOP: 'roadmap:stop',
   ROADMAP_UPDATE_FEATURE: 'roadmap:updateFeature',
@@ -237,16 +230,11 @@ export const IPC_CHANNELS = {
   ROADMAP_COMPLETE: 'roadmap:complete',
   ROADMAP_ERROR: 'roadmap:error',
   ROADMAP_STOPPED: 'roadmap:stopped',
-
-  // Roadmap progress persistence (per-project state)
-  ROADMAP_PROGRESS_SAVE: 'roadmap:progressSave',
   ROADMAP_PROGRESS_LOAD: 'roadmap:progressLoad',
-  ROADMAP_PROGRESS_CLEAR: 'roadmap:progressClear',
 
   // Context operations
   CONTEXT_GET: 'context:get',
   CONTEXT_REFRESH_INDEX: 'context:refreshIndex',
-  CONTEXT_MEMORY_STATUS: 'context:memoryStatus',
   CONTEXT_SEARCH_MEMORIES: 'context:searchMemories',
   CONTEXT_GET_MEMORIES: 'context:getMemories',
   CONTEXT_MEMORY_PIN: 'context:memory:pin',
@@ -285,23 +273,15 @@ export const IPC_CHANNELS = {
   LINEAR_GET_ISSUES: 'linear:getIssues',
   LINEAR_IMPORT_ISSUES: 'linear:importIssues',
   LINEAR_CHECK_CONNECTION: 'linear:checkConnection',
-
-  // GitHub integration
-  GITHUB_GET_REPOSITORIES: 'github:getRepositories',
   GITHUB_GET_ISSUES: 'github:getIssues',
-  GITHUB_GET_ISSUE: 'github:getIssue',
   GITHUB_GET_ISSUE_COMMENTS: 'github:getIssueComments',
   GITHUB_CHECK_CONNECTION: 'github:checkConnection',
   GITHUB_INVESTIGATE_ISSUE: 'github:investigateIssue',
   GITHUB_IMPORT_ISSUES: 'github:importIssues',
   GITHUB_CREATE_RELEASE: 'github:createRelease',
-
-  // GitHub sign-in (GitHub App device flow) and repositories
-  GITHUB_CHECK_CLI: 'github:checkCli',
   GITHUB_CHECK_AUTH: 'github:checkAuth',
   GITHUB_START_AUTH: 'github:startAuth',
   GITHUB_CANCEL_AUTH: 'github:cancelAuth',
-  GITHUB_SIGN_OUT: 'github:signOut',
   GITHUB_GET_TOKEN: 'github:getToken',
   GITHUB_GET_USER: 'github:getUser',
   GITHUB_LIST_USER_REPOS: 'github:listUserRepos',
@@ -320,22 +300,15 @@ export const IPC_CHANNELS = {
   GITHUB_INVESTIGATION_PROGRESS: 'github:investigationProgress',
   GITHUB_INVESTIGATION_COMPLETE: 'github:investigationComplete',
   GITHUB_INVESTIGATION_ERROR: 'github:investigationError',
-
-// GitLab integration
-  GITLAB_GET_PROJECTS: 'gitlab:getProjects',
   GITLAB_GET_ISSUES: 'gitlab:getIssues',
-  GITLAB_GET_ISSUE: 'gitlab:getIssue',
   GITLAB_GET_ISSUE_NOTES: 'gitlab:getIssueNotes',
   GITLAB_CHECK_CONNECTION: 'gitlab:checkConnection',
   GITLAB_INVESTIGATE_ISSUE: 'gitlab:investigateIssue',
   GITLAB_IMPORT_ISSUES: 'gitlab:importIssues',
-  GITLAB_CREATE_RELEASE: 'gitlab:createRelease',
 
   // GitLab Merge Requests (equivalent to GitHub PRs)
   GITLAB_GET_MERGE_REQUESTS: 'gitlab:getMergeRequests',
-  GITLAB_GET_MERGE_REQUEST: 'gitlab:getMergeRequest',
   GITLAB_CREATE_MERGE_REQUEST: 'gitlab:createMergeRequest',
-  GITLAB_UPDATE_MERGE_REQUEST: 'gitlab:updateMergeRequest',
 
   // GitLab OAuth (glab CLI authentication)
   GITLAB_CHECK_CLI: 'gitlab:checkCli',
@@ -345,19 +318,11 @@ export const IPC_CHANNELS = {
   GITLAB_GET_TOKEN: 'gitlab:getToken',
   GITLAB_GET_USER: 'gitlab:getUser',
   GITLAB_LIST_USER_PROJECTS: 'gitlab:listUserProjects',
-  GITLAB_DETECT_PROJECT: 'gitlab:detectProject',
-  GITLAB_GET_BRANCHES: 'gitlab:getBranches',
-  GITLAB_CREATE_PROJECT: 'gitlab:createProject',
-  GITLAB_ADD_REMOTE: 'gitlab:addRemote',
-  GITLAB_LIST_GROUPS: 'gitlab:listGroups',
 
   // GitLab events (main -> renderer)
   GITLAB_INVESTIGATION_PROGRESS: 'gitlab:investigationProgress',
   GITLAB_INVESTIGATION_COMPLETE: 'gitlab:investigationComplete',
   GITLAB_INVESTIGATION_ERROR: 'gitlab:investigationError',
-
-  // GitLab MR Review operations
-  GITLAB_MR_GET_DIFF: 'gitlab:mr:getDiff',
   GITLAB_MR_REVIEW: 'gitlab:mr:review',
   GITLAB_MR_REVIEW_CANCEL: 'gitlab:mr:reviewCancel',
   GITLAB_MR_GET_REVIEW: 'gitlab:mr:getReview',
@@ -374,49 +339,9 @@ export const IPC_CHANNELS = {
   GITLAB_MR_REVIEW_COMPLETE: 'gitlab:mr:reviewComplete',
   GITLAB_MR_REVIEW_ERROR: 'gitlab:mr:reviewError',
 
-  // GitLab Auto-Fix operations
-  GITLAB_AUTOFIX_START: 'gitlab:autofix:start',
-  GITLAB_AUTOFIX_STOP: 'gitlab:autofix:stop',
-  GITLAB_AUTOFIX_GET_QUEUE: 'gitlab:autofix:getQueue',
-  GITLAB_AUTOFIX_CHECK_LABELS: 'gitlab:autofix:checkLabels',
-  GITLAB_AUTOFIX_CHECK_NEW: 'gitlab:autofix:checkNew',
-  GITLAB_AUTOFIX_GET_CONFIG: 'gitlab:autofix:getConfig',
-  GITLAB_AUTOFIX_SAVE_CONFIG: 'gitlab:autofix:saveConfig',
-  GITLAB_AUTOFIX_BATCH: 'gitlab:autofix:batch',
-  GITLAB_AUTOFIX_GET_BATCHES: 'gitlab:autofix:getBatches',
-
-  // GitLab Auto-Fix events (main -> renderer)
-  GITLAB_AUTOFIX_PROGRESS: 'gitlab:autofix:progress',
-  GITLAB_AUTOFIX_COMPLETE: 'gitlab:autofix:complete',
-  GITLAB_AUTOFIX_ERROR: 'gitlab:autofix:error',
-  GITLAB_AUTOFIX_BATCH_PROGRESS: 'gitlab:autofix:batchProgress',
-  GITLAB_AUTOFIX_BATCH_COMPLETE: 'gitlab:autofix:batchComplete',
-  GITLAB_AUTOFIX_BATCH_ERROR: 'gitlab:autofix:batchError',
-
-  // GitLab Issue Analysis Preview (proactive batch workflow)
-  GITLAB_AUTOFIX_ANALYZE_PREVIEW: 'gitlab:autofix:analyzePreview',
-  GITLAB_AUTOFIX_ANALYZE_PREVIEW_PROGRESS: 'gitlab:autofix:analyzePreviewProgress',
-  GITLAB_AUTOFIX_ANALYZE_PREVIEW_COMPLETE: 'gitlab:autofix:analyzePreviewComplete',
-  GITLAB_AUTOFIX_ANALYZE_PREVIEW_ERROR: 'gitlab:autofix:analyzePreviewError',
-  GITLAB_AUTOFIX_APPROVE_BATCHES: 'gitlab:autofix:approveBatches',
-
-  // GitLab Issue Triage operations
-  GITLAB_TRIAGE_RUN: 'gitlab:triage:run',
-  GITLAB_TRIAGE_GET_RESULTS: 'gitlab:triage:getResults',
-  GITLAB_TRIAGE_APPLY_LABELS: 'gitlab:triage:applyLabels',
-  GITLAB_TRIAGE_GET_CONFIG: 'gitlab:triage:getConfig',
-  GITLAB_TRIAGE_SAVE_CONFIG: 'gitlab:triage:saveConfig',
-
-  // GitLab Issue Triage events (main -> renderer)
-  GITLAB_TRIAGE_PROGRESS: 'gitlab:triage:progress',
-  GITLAB_TRIAGE_COMPLETE: 'gitlab:triage:complete',
-  GITLAB_TRIAGE_ERROR: 'gitlab:triage:error',
-
   // GitHub Auto-Fix operations
   GITHUB_AUTOFIX_START: 'github:autofix:start',
-  GITHUB_AUTOFIX_STOP: 'github:autofix:stop',
   GITHUB_AUTOFIX_GET_QUEUE: 'github:autofix:getQueue',
-  GITHUB_AUTOFIX_CHECK_LABELS: 'github:autofix:checkLabels',
   GITHUB_AUTOFIX_CHECK_NEW: 'github:autofix:checkNew',
   GITHUB_AUTOFIX_GET_CONFIG: 'github:autofix:getConfig',
   GITHUB_AUTOFIX_SAVE_CONFIG: 'github:autofix:saveConfig',
@@ -442,29 +367,26 @@ export const IPC_CHANNELS = {
   GITHUB_PR_LIST: 'github:pr:list',
   GITHUB_PR_LIST_MORE: 'github:pr:listMore',  // Load more PRs (pagination)
   GITHUB_PR_GET: 'github:pr:get',
-  GITHUB_PR_GET_DIFF: 'github:pr:getDiff',
   GITHUB_PR_REVIEW: 'github:pr:review',
   GITHUB_PR_REVIEW_CANCEL: 'github:pr:reviewCancel',
   GITHUB_PR_GET_REVIEW: 'github:pr:getReview',
   GITHUB_PR_GET_REVIEWS_BATCH: 'github:pr:getReviewsBatch',  // Batch load reviews for multiple PRs
   GITHUB_PR_POST_REVIEW: 'github:pr:postReview',
-  GITHUB_PR_DELETE_REVIEW: 'github:pr:deleteReview',
   GITHUB_PR_MERGE: 'github:pr:merge',
   GITHUB_PR_ASSIGN: 'github:pr:assign',
   GITHUB_PR_POST_COMMENT: 'github:pr:postComment',
-  GITHUB_PR_FIX: 'github:pr:fix',
   GITHUB_PR_FOLLOWUP_REVIEW: 'github:pr:followupReview',
   GITHUB_PR_CHECK_NEW_COMMITS: 'github:pr:checkNewCommits',
   GITHUB_PR_CHECK_MERGE_READINESS: 'github:pr:checkMergeReadiness',
   GITHUB_PR_MARK_REVIEW_POSTED: 'github:pr:markReviewPosted',
   GITHUB_PR_UPDATE_BRANCH: 'github:pr:updateBranch',
   GITHUB_PR_NOTIFY_EXTERNAL_REVIEW_COMPLETE: 'github:pr:notifyExternalReviewComplete',
-
-  // GitHub PR Review events (main -> renderer)
+  GITHUB_PR_REVIEW_STATE_CHANGE: 'github:pr:reviewStateChange',
+  // Still sent by pr-handlers.ts, but the window follows a review through GITHUB_PR_REVIEW_STATE_CHANGE
+  // and listens to none of these three. They go when the senders in pr-handlers.ts do.
   GITHUB_PR_REVIEW_PROGRESS: 'github:pr:reviewProgress',
   GITHUB_PR_REVIEW_COMPLETE: 'github:pr:reviewComplete',
   GITHUB_PR_REVIEW_ERROR: 'github:pr:reviewError',
-  GITHUB_PR_REVIEW_STATE_CHANGE: 'github:pr:reviewStateChange',
   GITHUB_PR_LOGS_UPDATED: 'github:pr:logsUpdated',
 
   // GitHub PR Logs (for viewing AI review logs)
@@ -473,27 +395,11 @@ export const IPC_CHANNELS = {
   // GitHub PR Status Polling (production system checks)
   GITHUB_PR_STATUS_POLL_START: 'github:pr:statusPollStart',   // Start polling PR status
   GITHUB_PR_STATUS_POLL_STOP: 'github:pr:statusPollStop',     // Stop polling PR status
-  GITHUB_PR_STATUS_UPDATE: 'github:pr:statusUpdate',          // Event: PR status updated (main -> renderer)
-
-  // GitHub PR Memory operations (saves review insights to memory layer)
-  GITHUB_PR_MEMORY_GET: 'github:pr:memory:get',        // Get PR review memories
-  GITHUB_PR_MEMORY_SEARCH: 'github:pr:memory:search',  // Search PR review memories
+  GITHUB_PR_STATUS_UPDATE: 'github:pr:statusUpdate',  // Search PR review memories
 
   // GitHub Workflow Approval (for fork PRs)
   GITHUB_WORKFLOWS_AWAITING_APPROVAL: 'github:workflows:awaitingApproval',
   GITHUB_WORKFLOW_APPROVE: 'github:workflow:approve',
-
-  // GitHub Issue Triage operations
-  GITHUB_TRIAGE_RUN: 'github:triage:run',
-  GITHUB_TRIAGE_GET_RESULTS: 'github:triage:getResults',
-  GITHUB_TRIAGE_APPLY_LABELS: 'github:triage:applyLabels',
-  GITHUB_TRIAGE_GET_CONFIG: 'github:triage:getConfig',
-  GITHUB_TRIAGE_SAVE_CONFIG: 'github:triage:saveConfig',
-
-  // GitHub Issue Triage events (main -> renderer)
-  GITHUB_TRIAGE_PROGRESS: 'github:triage:progress',
-  GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
-  GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
   // Ollama model detection and management
   OLLAMA_CHECK_STATUS: 'ollama:checkStatus',
@@ -553,7 +459,6 @@ export const IPC_CHANNELS = {
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',
   GIT_GET_BRANCHES_WITH_INFO: 'git:getBranchesWithInfo',
-  GIT_GET_CURRENT_BRANCH: 'git:getCurrentBranch',
   GIT_DETECT_MAIN_BRANCH: 'git:detectMainBranch',
   GIT_CHECK_STATUS: 'git:checkStatus',
   GIT_INITIALIZE: 'git:initialize',
@@ -575,23 +480,12 @@ export const IPC_CHANNELS = {
   APP_UPDATE_AUTO_INSTALL: 'app-update:auto-install',  // Countdown or wait before the restart
   APP_SLEPT_WHILE_RUNNING: 'app:slept-while-running',  // The Mac slept while agents were working
   APP_UPDATE_STABLE_DOWNGRADE: 'app-update:stable-downgrade',  // Stable version available for downgrade from beta
-  APP_UPDATE_READONLY_VOLUME: 'app-update:readonly-volume',  // App running from read-only volume (DMG), needs to be moved
-
-  // Release operations
-  RELEASE_SUGGEST_VERSION: 'release:suggestVersion',
-  RELEASE_CREATE: 'release:create',
-  RELEASE_PREFLIGHT: 'release:preflight',
-  RELEASE_GET_VERSIONS: 'release:getVersions',
-
-  // Release events (main -> renderer)
-  RELEASE_PROGRESS: 'release:progress',
+  APP_UPDATE_READONLY_VOLUME: 'app-update:readonly-volume',
 
   // Debug operations
   DEBUG_GET_INFO: 'debug:getInfo',
   DEBUG_OPEN_LOGS_FOLDER: 'debug:openLogsFolder',
   DEBUG_COPY_DEBUG_INFO: 'debug:copyDebugInfo',
-  DEBUG_GET_RECENT_ERRORS: 'debug:getRecentErrors',
-  DEBUG_LIST_LOG_FILES: 'debug:listLogFiles',
 
   // Claude Code CLI operations
   CLAUDE_CODE_CHECK_VERSION: 'claudeCode:checkVersion',
@@ -606,8 +500,7 @@ export const IPC_CHANNELS = {
   MCP_TEST_CONNECTION: 'mcp:testConnection',     // Full MCP protocol test
 
   // Sentry error reporting
-  SENTRY_STATE_CHANGED: 'sentry:state-changed',  // Notify main process when setting changes
-  GET_SENTRY_DSN: 'sentry:get-dsn',              // Get DSN from main process (env var)
+  SENTRY_STATE_CHANGED: 'sentry:state-changed',              // Get DSN from main process (env var)
   GET_SENTRY_CONFIG: 'sentry:get-config',        // Get full Sentry config (DSN + sample rates)
 
   // Spell check

@@ -45,7 +45,6 @@ export interface ProjectAPI {
   // Context Operations
   getProjectContext: (projectId: string) => Promise<IPCResult<unknown>>;
   refreshProjectIndex: (projectId: string) => Promise<IPCResult<unknown>>;
-  getMemoryStatus: (projectId: string) => Promise<IPCResult<unknown>>;
   searchMemories: (projectId: string, query: string) => Promise<IPCResult<unknown>>;
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<unknown>>;
 
@@ -66,17 +65,6 @@ export interface ProjectAPI {
     initGit: boolean
   ) => Promise<IPCResult<import('../../shared/types').CreateProjectFolderResult>>;
   getDefaultProjectLocation: () => Promise<string | null>;
-
-   // Ollama Model Management
-   scanOllamaModels: (baseUrl: string) => Promise<IPCResult<{
-     models: Array<{
-       name: string;
-       size: number;
-       modified_at: string;
-       digest: string;
-     }>;
-   }>>;
-   downloadOllamaModel: (baseUrl: string, modelName: string) => Promise<IPCResult<{ message: string }>>;
    onDownloadProgress: (callback: (data: {
      modelName: string;
      status: string;
@@ -90,7 +78,6 @@ export interface ProjectAPI {
   getGitBranches: (projectPath: string) => Promise<IPCResult<string[]>>;
   /** Get branches with structured type information (local vs remote) */
   getGitBranchesWithInfo: (projectPath: string) => Promise<IPCResult<GitBranchDetail[]>>;
-  getCurrentGitBranch: (projectPath: string) => Promise<IPCResult<string | null>>;
   detectMainBranch: (projectPath: string) => Promise<IPCResult<string | null>>;
   checkGitStatus: (projectPath: string) => Promise<IPCResult<GitStatus>>;
   initializeGit: (projectPath: string) => Promise<IPCResult<InitializationResult>>;
@@ -172,9 +159,6 @@ export const createProjectAPI = (): ProjectAPI => ({
   refreshProjectIndex: (projectId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_REFRESH_INDEX, projectId),
 
-  getMemoryStatus: (projectId: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_MEMORY_STATUS, projectId),
-
   searchMemories: (projectId: string, query: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_SEARCH_MEMORIES, projectId, query),
 
@@ -213,20 +197,6 @@ export const createProjectAPI = (): ProjectAPI => ({
   getDefaultProjectLocation: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.DIALOG_GET_DEFAULT_PROJECT_LOCATION),
 
-  // Ollama Model Management
-  scanOllamaModels: (baseUrl: string): Promise<IPCResult<{
-    models: Array<{
-      name: string;
-      size: number;
-      modified_at: string;
-      digest: string;
-    }>;
-  }>> =>
-    ipcRenderer.invoke('scan-ollama-models', baseUrl),
-
-  downloadOllamaModel: (baseUrl: string, modelName: string): Promise<IPCResult<{ message: string }>> =>
-    ipcRenderer.invoke('download-ollama-model', baseUrl, modelName),
-
   onDownloadProgress: (callback: (data: {
     modelName: string;
     status: string;
@@ -245,9 +215,6 @@ export const createProjectAPI = (): ProjectAPI => ({
 
   getGitBranchesWithInfo: (projectPath: string): Promise<IPCResult<GitBranchDetail[]>> =>
     ipcRenderer.invoke(IPC_CHANNELS.GIT_GET_BRANCHES_WITH_INFO, projectPath),
-
-  getCurrentGitBranch: (projectPath: string): Promise<IPCResult<string | null>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.GIT_GET_CURRENT_BRANCH, projectPath),
 
   detectMainBranch: (projectPath: string): Promise<IPCResult<string | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.GIT_DETECT_MAIN_BRANCH, projectPath),

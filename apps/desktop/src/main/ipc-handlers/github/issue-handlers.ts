@@ -208,44 +208,6 @@ export function registerGetIssues(): void {
  * Get a single issue by number
  */
 export function registerGetIssue(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_GET_ISSUE,
-    async (_, projectId: string, issueNumber: number): Promise<IPCResult<GitHubIssue>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const config = await getGitHubConfigAsync(project);
-      if (!config) {
-        return { success: false, error: 'No GitHub token or repository configured' };
-      }
-
-      try {
-        const normalizedRepo = normalizeRepoReference(config.repo);
-        if (!normalizedRepo) {
-          return {
-            success: false,
-            error: 'Invalid repository format. Use owner/repo or GitHub URL.'
-          };
-        }
-
-        const issue = await githubFetch(
-          config.token,
-          `/repos/${normalizedRepo}/issues/${issueNumber}`
-        ) as GitHubAPIIssue;
-
-        const result = transformIssue(issue, normalizedRepo);
-
-        return { success: true, data: result };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to fetch issue'
-        };
-      }
-    }
-  );
 }
 
 /**

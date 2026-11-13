@@ -48,20 +48,9 @@ export const integrationMock = {
     }
   }),
 
-  // GitHub Integration Operations
-  getGitHubRepositories: async () => ({
-    success: true,
-    data: []
-  }),
-
   getGitHubIssues: async () => ({
     success: true,
     data: { issues: [], hasMore: false }
-  }),
-
-  getGitHubIssue: async () => ({
-    success: false,
-    error: 'Not available in browser mock'
   }),
 
   checkGitHubConnection: async () => ({
@@ -97,15 +86,6 @@ export const integrationMock = {
   onGitHubInvestigationComplete: () => () => {},
   onGitHubInvestigationError: () => () => {},
 
-  // GitHub OAuth Operations (gh CLI)
-  checkGitHubCli: async () => ({
-    success: true,
-    data: {
-      installed: false,
-      version: undefined
-    }
-  }),
-
   checkGitHubAuth: async () => ({
     success: true,
     data: {
@@ -120,8 +100,6 @@ export const integrationMock = {
   }),
 
   cancelGitHubAuth: async () => ({ success: true }),
-
-  signOutGitHub: async () => ({ success: true }),
 
   getGitHubToken: async () => ({
     success: false,
@@ -178,20 +156,9 @@ export const integrationMock = {
     }
   }),
 
-  // GitLab Integration Operations
-  getGitLabProjects: async () => ({
-    success: true,
-    data: []
-  }),
-
   getGitLabIssues: async () => ({
     success: true,
     data: []
-  }),
-
-  getGitLabIssue: async () => ({
-    success: false,
-    error: 'Not available in browser mock'
   }),
 
   getGitLabIssueNotes: async () => ({
@@ -216,22 +183,10 @@ export const integrationMock = {
     error: 'Not available in browser mock'
   }),
 
-  createGitLabRelease: async () => ({
-    success: true,
-    data: {
-      url: 'https://gitlab.com/example/repo/-/releases/v1.0.0'
-    }
-  }),
-
   // GitLab Merge Request Operations
   getGitLabMergeRequests: async () => ({
     success: true,
     data: []
-  }),
-
-  getGitLabMergeRequest: async () => ({
-    success: false,
-    error: 'Not available in browser mock'
   }),
 
   createGitLabMergeRequest: async (_projectId: string, _options: {
@@ -244,11 +199,6 @@ export const integrationMock = {
     removeSourceBranch?: boolean;
     squash?: boolean;
   }) => ({
-    success: false,
-    error: 'Not available in browser mock'
-  }),
-
-  updateGitLabMergeRequest: async () => ({
     success: false,
     error: 'Not available in browser mock'
   }),
@@ -313,36 +263,6 @@ export const integrationMock = {
       projects: [
         { pathWithNamespace: 'user/example-project', description: 'An example project', visibility: 'public' },
         { pathWithNamespace: 'user/private-project', description: 'A private project', visibility: 'private' }
-      ]
-    }
-  }),
-
-  detectGitLabProject: async () => ({
-    success: true,
-    data: { project: 'user/example-project', instanceUrl: 'https://gitlab.com' }
-  }),
-
-  getGitLabBranches: async () => ({
-    success: true,
-    data: ['main', 'develop', 'feature/example']
-  }),
-
-  createGitLabProject: async () => ({
-    success: false,
-    error: 'Not available in browser mock'
-  }),
-
-  addGitLabRemote: async () => ({
-    success: false,
-    error: 'Not available in browser mock'
-  }),
-
-  listGitLabGroups: async () => ({
-    success: true,
-    data: {
-      groups: [
-        { id: 1, name: 'Example Group', path: 'example-group', fullPath: 'example-group', description: 'An example group' },
-        { id: 2, name: 'Another Group', path: 'another-group', fullPath: 'another-group', description: 'Another group' }
       ]
     }
   }),

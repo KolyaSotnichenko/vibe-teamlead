@@ -6,9 +6,8 @@
 
 import { ipcMain } from 'electron';
 import { execFileSync } from 'child_process';
-import * as path from 'path';
 import * as fs from 'fs';
-import { getOllamaExecutablePaths, getOllamaInstallCommand as getPlatformOllamaInstallCommand, getWhichCommand, getCurrentOS } from '../platform';
+import { getOllamaExecutablePaths, getOllamaInstallCommand as getPlatformOllamaInstallCommand, getWhichCommand, } from '../platform';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type {
   IPCResult,
@@ -50,18 +49,6 @@ interface OllamaEmbeddingModel {
   description: string;      // Model description
   size_bytes: number;
   size_gb: number;
-}
-
-/**
- * Recommended Embedding Model Card
- * Pre-curated models suitable for Vibe Teamlead memory system
- */
-interface OllamaRecommendedModel {
-  name: string;          // Model identifier
-  description: string;   // Human-readable description
-  size_estimate: string; // Estimated download size (e.g., '621 MB')
-  dim: number;           // Embedding vector dimension
-  installed: boolean;    // Whether model is currently installed
 }
 
 /**
@@ -512,51 +499,5 @@ export function registerMemoryHandlers(): void {
         };
       }
     }
-  );
-
-  // ============================================
-  // Memory System (libSQL-backed) Handlers
-  // ============================================
-
-  // Search memories
-  ipcMain.handle(
-    'memory:search',
-    async (_event, query: string, filters: Record<string, unknown>) => {
-      try {
-        const { getMemoryService } = await import('./context/memory-service-factory');
-        const service = await getMemoryService();
-
-        const memories = await service.search({
-          query: query || undefined,
-          ...(filters as object),
-        });
-
-        return { success: true, data: memories };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to search memories',
-        };
-      }
-    },
-  );
-
-  // Insert a user-taught memory (from /remember command or Teach panel)
-  ipcMain.handle(
-    'memory:insert-user-taught',
-    async (_event, content: string, projectId: string, tags: string[]) => {
-      try {
-        const { getMemoryService } = await import('./context/memory-service-factory');
-        const service = await getMemoryService();
-
-        const id = await service.insertUserTaught(content, projectId, tags);
-        return { success: true, id };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to insert memory',
-        };
-      }
-    },
   );
 }

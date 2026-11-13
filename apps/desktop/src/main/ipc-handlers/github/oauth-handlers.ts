@@ -14,10 +14,10 @@ import { IPC_CHANNELS } from '../../../shared/constants';
 import { GITHUB_REPO_NOT_FOUND_ERROR } from '../../../shared/constants/github';
 import type { GitHubAppAccess, IPCResult } from '../../../shared/types';
 import { getGitHubAppAccess } from '../../github-auth/app-access';
-import { getAugmentedEnv, findExecutable } from '../../env-utils';
+import { getAugmentedEnv, } from '../../env-utils';
 import { getToolPath } from '../../cli-tool-manager';
 import { pollForToken, requestDeviceCode } from '../../github-auth/device-flow';
-import { clearGitHubAuth, getValidAccessToken, loadGitHubAuth, saveGitHubAuth } from '../../github-auth/token-store';
+import { getValidAccessToken, loadGitHubAuth, saveGitHubAuth } from '../../github-auth/token-store';
 
 const execFileAsync = promisify(execFile);
 
@@ -140,18 +140,6 @@ const GITHUB_DEVICE_URL = 'https://github.com/login/device';
  * that still run gh (creating a repository with --push).
  */
 export function registerCheckGhCli(): void {
-  ipcMain.handle(
-    IPC_CHANNELS.GITHUB_CHECK_CLI,
-    async (): Promise<IPCResult<{ installed: boolean; version?: string }>> => {
-      if (!findExecutable('gh')) return { success: true, data: { installed: false } };
-      try {
-        const { stdout } = await execFileAsync(getToolPath('gh'), ['--version'], { encoding: 'utf-8', env: getAugmentedEnv() });
-        return { success: true, data: { installed: true, version: stdout.trim().split('\n')[0] } };
-      } catch {
-        return { success: true, data: { installed: false } };
-      }
-    }
-  );
 }
 
 /**
@@ -267,14 +255,6 @@ export function registerCancelGhAuth(): void {
 
 /** Forget the stored GitHub App token. */
 export function registerSignOutGh(): void {
-  ipcMain.handle(IPC_CHANNELS.GITHUB_SIGN_OUT, async (): Promise<IPCResult> => {
-    activeSignIn?.abort();
-    activeSignIn = null;
-    const previous = loadGitHubAuth()?.login ?? null;
-    clearGitHubAuth();
-    if (previous) sendAuthChangedToRenderer(previous, '');
-    return { success: true };
-  });
 }
 
 /**

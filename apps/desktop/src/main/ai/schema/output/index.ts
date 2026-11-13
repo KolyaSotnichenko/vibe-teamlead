@@ -49,10 +49,6 @@ export {
   type VerificationItemOutput,
 } from './pr-review.output';
 
-export {
-  TriageResultOutputSchema,
-  type TriageResultOutput,
-} from './triage.output';
 
 export {
   ExtractedInsightsOutputSchema,

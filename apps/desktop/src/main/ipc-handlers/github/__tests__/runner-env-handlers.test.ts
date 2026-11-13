@@ -51,7 +51,6 @@ const mockIpcMain = vi.hoisted(() => {
 // =============================================================================
 
 const mockRunMultiPassReview = vi.fn();
-const mockTriageBatchIssues = vi.fn();
 const mockBatchProcessorGroupIssues = vi.fn();
 
 type CreateIPCCommunicators = typeof createIPCCommunicatorsType;
@@ -118,11 +117,6 @@ vi.mock('../../../ai/runners/github/parallel-orchestrator', () => {
   }
   return { ParallelOrchestratorReviewer: MockParallelOrchestratorReviewer };
 });
-
-// Mock the TypeScript triage engine
-vi.mock('../../../ai/runners/github/triage-engine', () => ({
-  triageBatchIssues: (...args: unknown[]) => mockTriageBatchIssues(...args),
-}));
 
 // Mock the TypeScript BatchProcessor — must use class syntax for vi.mock
 vi.mock('../../../ai/runners/github/batch-processor', () => {
@@ -330,48 +324,6 @@ describe('GitHub TypeScript runner usage', () => {
 
     // The handler should have called ParallelOrchestratorReviewer.review()
     expect(mockOrchestratorReview).toHaveBeenCalled();
-  });
-
-  it('calls TypeScript triageBatchIssues for triage', async () => {
-    const { githubFetch } = await import('../utils');
-    const githubFetchMock = vi.mocked(githubFetch);
-
-    // Mock GitHub API calls for triage
-    githubFetchMock.mockResolvedValue([
-      {
-        number: 1,
-        title: 'Bug: crash on startup',
-        body: 'App crashes immediately',
-        user: { login: 'reporter' },
-        created_at: new Date().toISOString(),
-        labels: [],
-        pull_request: undefined,
-      },
-    ] as unknown);
-
-    mockTriageBatchIssues.mockResolvedValue([
-      {
-        issueNumber: 1,
-        category: 'bug',
-        confidence: 0.9,
-        labelsToAdd: ['bug'],
-        labelsToRemove: [],
-        isDuplicate: false,
-        isSpam: false,
-        isFeatureCreep: false,
-        suggestedBreakdown: [],
-        priority: 'high',
-        triagedAt: new Date().toISOString(),
-      },
-    ]);
-
-    const { registerTriageHandlers } = await import('../triage-handlers');
-    registerTriageHandlers(() => createMockWindow());
-
-    await mockIpcMain.emit(IPC_CHANNELS.GITHUB_TRIAGE_RUN, projectRef.current?.id);
-
-    // The handler should have called triageBatchIssues (TypeScript runner)
-    expect(mockTriageBatchIssues).toHaveBeenCalled();
   });
 
   it('calls TypeScript BatchProcessor for autofix analyze preview', async () => {
