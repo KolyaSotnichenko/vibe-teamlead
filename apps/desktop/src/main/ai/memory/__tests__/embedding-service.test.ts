@@ -13,6 +13,11 @@ import {
 import type { Memory } from '../types';
 import type { Client } from '@libsql/client';
 
+// High RAM (>32GB) for the whole file: vitest hoists vi.mock to the top wherever it is written
+vi.mock('os', () => ({
+  totalmem: () => 64 * 1024 * 1024 * 1024, // 64 GB
+}));
+
 // ============================================================
 // GLOBAL FETCH MOCK
 // ============================================================
@@ -338,11 +343,6 @@ describe('EmbeddingService (Ollama 8b with high RAM)', () => {
   let service: EmbeddingService;
 
   beforeEach(async () => {
-    // Mock high RAM (>32GB)
-    vi.mock('os', () => ({
-      totalmem: () => 64 * 1024 * 1024 * 1024, // 64 GB
-    }));
-
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/tags')) {
         return Promise.resolve({

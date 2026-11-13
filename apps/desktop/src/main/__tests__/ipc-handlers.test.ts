@@ -221,6 +221,9 @@ describe("IPC Handlers", { timeout: 30000 }, () => {
   afterEach(() => {
     cleanupTestDirs();
     vi.clearAllMocks();
+    // Each test registers the handlers again on the same mocked ipcMain: without this the
+    // listeners pile up across tests (and Node warns about a leak)
+    ipcMain.removeAllListeners();
   });
 
   describe("project:add handler", () => {
