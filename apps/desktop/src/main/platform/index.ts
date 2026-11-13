@@ -37,6 +37,15 @@ export function getCurrentOS(): OS {
 }
 
 /**
+ * The platform as Node names it, for tables keyed by 'darwin' | 'win32' | 'linux'.
+ * Other Unix-like systems count as Linux, as in getCurrentOS.
+ */
+export function getPlatformKey(): 'darwin' | 'win32' | 'linux' {
+  const os = getCurrentOS();
+  return os === OS.Windows ? 'win32' : os === OS.macOS ? 'darwin' : 'linux';
+}
+
+/**
  * Check if running on Windows
  */
 export function isWindows(): boolean {

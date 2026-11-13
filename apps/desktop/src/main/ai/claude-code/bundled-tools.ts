@@ -30,6 +30,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 import { findOnPath } from '../../platform/exec';
+import { getPlatformKey } from '../../platform';
 
 export interface BundledTools {
   /** Absolute path to the Claude Code executable */
@@ -80,7 +81,7 @@ const TS_SERVER_CLI = join('lib', 'cli.mjs');
 const PYRIGHT_SERVER = 'langserver.index.js';
 
 function platformTarget(): string {
-  return `${process.platform}-${process.arch}`;
+  return `${getPlatformKey()}-${process.arch}`;
 }
 
 function firstExisting(paths: string[]): string | undefined {

@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import path from 'path';
 import os from 'os';
 import { debugLog } from '../../shared/utils/debug-logger';
+import { getCurrentPlatform } from '../../shared/platform';
 
 const execFileAsync = promisify(execFile);
 
@@ -101,7 +102,7 @@ export function getWindowsExecutablePaths(
   logPrefix: string = '[Windows Paths]'
 ): string[] {
   // Only run on Windows
-  if (process.platform !== 'win32') {
+  if (getCurrentPlatform() !== 'win32') {
     return [];
   }
 
@@ -180,7 +181,7 @@ export function findWindowsExecutableViaWhere(
   executable: string,
   logPrefix: string = '[Windows Where]'
 ): string | null {
-  if (process.platform !== 'win32') {
+  if (getCurrentPlatform() !== 'win32') {
     return null;
   }
 
@@ -231,7 +232,7 @@ export async function getWindowsExecutablePathsAsync(
   logPrefix: string = '[Windows Paths]'
 ): Promise<string[]> {
   // Only run on Windows
-  if (process.platform !== 'win32') {
+  if (getCurrentPlatform() !== 'win32') {
     return [];
   }
 
@@ -284,7 +285,7 @@ export async function findWindowsExecutableViaWhereAsync(
   executable: string,
   logPrefix: string = '[Windows Where]'
 ): Promise<string | null> {
-  if (process.platform !== 'win32') {
+  if (getCurrentPlatform() !== 'win32') {
     return null;
   }
 

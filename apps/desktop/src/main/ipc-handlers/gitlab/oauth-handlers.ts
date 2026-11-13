@@ -10,6 +10,7 @@ import type { IPCResult } from '../../../shared/types';
 import { getAugmentedEnv, findExecutable } from '../../env-utils';
 import { openTerminalWithCommand } from '../claude-code-handlers';
 import type { GitLabAuthStartResult } from './types';
+import { getPlatformKey } from '../../platform';
 
 // Debug logging helper - requires BOTH development mode AND DEBUG flag for OAuth handlers
 // This is intentionally more restrictive than other handlers to prevent accidental token logging
@@ -115,7 +116,7 @@ export function registerInstallGlabCli(): void {
     async (): Promise<IPCResult<{ command: string }>> => {
       debugLog('installGitLabCli handler called');
       try {
-        const platform = process.platform;
+        const platform = getPlatformKey();
         let command: string;
 
         if (platform === 'darwin') {

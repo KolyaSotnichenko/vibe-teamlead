@@ -12,6 +12,7 @@ import { promisify } from 'util';
 
 import type { SupportedCLI, SupportedIDE, SupportedTerminal } from '../../shared/types';
 import { debugLog } from '../../shared/utils/debug-logger';
+import { getPlatformKey } from '../platform';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -893,7 +894,7 @@ function isAppInstalled(
  * Uses smart platform-native detection for faster results
  */
 export async function detectInstalledTools(): Promise<DetectedTools> {
-  const platform = process.platform as 'darwin' | 'win32' | 'linux';
+  const platform = getPlatformKey();
   const ides: DetectedTool[] = [];
   const terminals: DetectedTool[] = [];
 
@@ -1018,7 +1019,7 @@ export async function detectInstalledTools(): Promise<DetectedTools> {
  * Open a directory in the specified IDE
  */
 export async function openInIDE(dirPath: string, ide: SupportedIDE, customPath?: string): Promise<{ success: boolean; error?: string }> {
-  const platform = process.platform as 'darwin' | 'win32' | 'linux';
+  const platform = getPlatformKey();
 
   try {
     if (ide === 'custom' && customPath) {
@@ -1078,7 +1079,7 @@ export async function openInIDE(dirPath: string, ide: SupportedIDE, customPath?:
  * Open a directory in the specified terminal
  */
 export async function openInTerminal(dirPath: string, terminal: SupportedTerminal, customPath?: string): Promise<{ success: boolean; error?: string }> {
-  const platform = process.platform as 'darwin' | 'win32' | 'linux';
+  const platform = getPlatformKey();
 
   try {
     if (terminal === 'custom' && customPath) {

@@ -32,7 +32,7 @@ import { removeNotesDraft } from '../preview/notes-draft';
 import { getIsolatedGitEnv } from './git-isolation';
 import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
-import { isMacOS } from '../platform';
+import { isMacOS, isWindows } from '../platform';
 
 /**
  * Options for worktree cleanup operation
@@ -230,7 +230,7 @@ async function deleteDirectoryWithRetry(
 
   // All retries exhausted - try shell rm -rf as fallback on Unix
   // Node's rm() can fail with ENOTEMPTY on macOS .app bundles
-  if (process.platform !== 'win32') {
+  if (!isWindows()) {
     try {
       console.warn(`${logPrefix} Node.js rm() failed, trying /bin/rm -rf fallback...`);
       execFileSync('/bin/rm', ['-rf', dirPath], { timeout: 60000 });

@@ -19,6 +19,7 @@ import { resetMemoryService } from './context/memory-service-factory';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { stripLegacySettings } from '../ai/claude-code/credential-migration';
 import { debugLog } from '../../shared/utils/debug-logger';
+import { getPlatformKey } from '../platform';
 
 /**
  * Register all settings-related IPC handlers
@@ -448,7 +449,7 @@ export function registerSettingsHandlers(
           };
         }
 
-        const platform = process.platform;
+        const platform = getPlatformKey();
 
         if (platform === 'darwin') {
           // macOS: Use execFileSync with argument array to prevent injection

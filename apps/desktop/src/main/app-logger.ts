@@ -19,6 +19,7 @@ import { app } from 'electron';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import os from 'os';
+import { getPlatformKey } from './platform';
 
 // Configure electron-log (wrapped in try-catch for re-import scenarios in tests)
 try {
@@ -79,7 +80,7 @@ export function getSystemInfo(): Record<string, string> {
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     chromeVersion: process.versions.chrome,
-    platform: process.platform,
+    platform: getPlatformKey(),
     arch: process.arch,
     osVersion: os.release(),
     osType: os.type(),
