@@ -165,6 +165,50 @@ describe('AgentProcessManager - spawn environment', () => {
     processManager.killAllProcesses();
   });
 
+  // F-005: quitting must not cut Claude Code and its MCP servers short
+  describe('killAllProcesses', () => {
+    const workerTask = (taskId: string, terminate: () => Promise<void>) => {
+      const bridge = { terminate: vi.fn(terminate) };
+      state.addProcess(taskId, { taskId, process: null, worker: bridge as never, startedAt: new Date(), spawnId: state.generateSpawnId() });
+      return bridge;
+    };
+
+    it('waits until every agent worker has stopped', async () => {
+      let release!: () => void;
+      const bridge = workerTask('task-1', () => new Promise<void>((resolve) => { release = resolve; }));
+      let done = false;
+      const all = processManager.killAllProcesses().then(() => { done = true; });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(bridge.terminate).toHaveBeenCalledTimes(1);
+      expect(done).toBe(false);
+      release();
+      await all;
+      expect(done).toBe(true);
+      expect(state.hasProcess('task-1')).toBe(false);
+    });
+
+    it('waits for a worker that is already stopping: closing the window stops the agents, then the app quits', async () => {
+      let release!: () => void;
+      workerTask('task-1', () => new Promise<void>((resolve) => { release = resolve; }));
+      processManager.killProcess('task-1');
+      expect(state.hasProcess('task-1')).toBe(false);
+      let done = false;
+      const all = processManager.killAllProcesses().then(() => { done = true; });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(done).toBe(false);
+      release();
+      await all;
+      expect(done).toBe(true);
+    });
+
+    it('does not hang on a worker that fails to stop', async () => {
+      workerTask('task-1', () => Promise.reject(new Error('already gone')));
+      workerTask('task-2', () => Promise.resolve());
+      await expect(processManager.killAllProcesses()).resolves.toBeUndefined();
+      expect(state.getRunningTaskIds()).toEqual([]);
+    });
+  });
+
   describe('Claude credential', () => {
     it('injects the app credential into the spawn environment', async () => {
       vi.mocked(getClaudeCredentialEnv).mockReturnValue({

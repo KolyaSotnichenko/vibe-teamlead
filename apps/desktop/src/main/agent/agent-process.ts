@@ -101,6 +101,9 @@ export class AgentProcessManager {
   private emitter: EventEmitter;
   private autoBuildSourcePath: string = '';
 
+  /** Workers asked to stop that have not exited yet */
+  private readonly stoppingWorkers = new Set<Promise<void>>();
+
   constructor(state: AgentState, events: AgentEvents, emitter: EventEmitter) {
     this.state = state;
     this.events = events;
@@ -760,6 +763,21 @@ export class AgentProcessManager {
   }
 
   /**
+   * Stop a task's worker and forget the task. Resolves when the worker is gone: the bridge asks
+   * it to abort, so the SDK shuts down Claude Code and its MCP servers, and forces it after a
+   * grace period. Never rejects.
+   */
+  private stopWorker(taskId: string, bridge: WorkerBridge, projectId?: string): Promise<void> {
+    this.dropQuestionsOf(bridge, taskId, projectId);
+    const stopped = bridge.terminate().catch(() => {});
+    this.state.deleteProcess(taskId);
+    // The task is forgotten at once, the worker takes a moment longer: killAllProcesses waits for it
+    this.stoppingWorkers.add(stopped);
+    void stopped.then(() => this.stoppingWorkers.delete(stopped));
+    return stopped;
+  }
+
+  /**
    * Kill a specific task's process
    */
   killProcess(taskId: string): boolean {
@@ -779,10 +797,7 @@ export class AgentProcessManager {
 
     // Handle worker thread termination (abort, grace period, then force)
     if (agentProcess.worker) {
-      const bridge = agentProcess.worker;
-      this.dropQuestionsOf(bridge, taskId, agentProcess.projectId);
-      void bridge.terminate().catch(() => {});
-      this.state.deleteProcess(taskId);
+      void this.stopWorker(taskId, agentProcess.worker, agentProcess.projectId);
       return true;
     }
 
@@ -820,17 +835,21 @@ export class AgentProcessManager {
           return;
         }
 
-        // Worker threads terminate immediately
-        if (agentProcess.worker && !agentProcess.process) {
-          this.killProcess(taskId);
-          resolve();
-          return;
-        }
-
         // Set up timeout to not block forever
         const timeoutId = setTimeout(() => {
           resolve();
         }, KILL_TIMEOUT_MS);
+
+        // A worker is gone only once its Claude Code session has shut down: quitting waits for
+        // that (the bridge bounds it), or the session and its MCP servers are cut short
+        if (agentProcess.worker && !agentProcess.process) {
+          this.state.markSpawnAsKilled(agentProcess.spawnId);
+          void this.stopWorker(taskId, agentProcess.worker, agentProcess.projectId).then(() => {
+            clearTimeout(timeoutId);
+            resolve();
+          });
+          return;
+        }
 
         // Listen for exit event if the process supports it
         // (process.once is available on real ChildProcess objects, but may not be in test mocks)
@@ -846,7 +865,13 @@ export class AgentProcessManager {
       });
     });
 
-    await Promise.all(killPromises);
+    // Workers a single stop (or the window closing) is still shutting down
+    const stopping = Promise.race([
+      Promise.all([...this.stoppingWorkers]),
+      new Promise<void>((resolve) => setTimeout(resolve, KILL_TIMEOUT_MS).unref?.()),
+    ]);
+
+    await Promise.all([...killPromises, stopping]);
   }
 
   /**
