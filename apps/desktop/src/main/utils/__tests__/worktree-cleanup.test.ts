@@ -83,6 +83,22 @@ describe('makeTreeWritable', () => {
     expect(mode(file)).toBe(0o644);
     expect(mode(outside)).toBe(0o444);
   });
+
+  // macOS: a leftover task folder had `user:<me> deny delete` ACLs on .pnpm-store, node_modules
+  // and .next, so even its owner could not remove them (EACCES on rmdir)
+  it.skipIf(process.platform !== 'darwin')('a worktree folder whose subfolders carry deny-delete ACLs is still removed', async () => {
+    const { dir, tasks } = project();
+    const leftover = path.join(tasks, '003-acl');
+    for (const sub of ['.pnpm-store', path.join('apps', 'web', 'node_modules'), path.join('apps', 'web', '.next')]) {
+      mkdirSync(path.join(leftover, sub), { recursive: true });
+      execFileSync('/bin/chmod', ['+a', `user:${process.env.USER} deny delete`, path.join(leftover, sub)]);
+    }
+
+    const result = await cleanupWorktree({ worktreePath: leftover, projectPath: dir, specId: '003-acl', maxRetries: 1, retryDelay: 1 });
+
+    expect(result.success).toBe(true);
+    expect(existsSync(leftover)).toBe(false);
+  });
 });
 
 describe('cleanupWorktree keeps the task spec folder', () => {

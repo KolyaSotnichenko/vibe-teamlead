@@ -32,6 +32,7 @@ import { removeNotesDraft } from '../preview/notes-draft';
 import { getIsolatedGitEnv } from './git-isolation';
 import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
+import { isMacOS } from '../platform';
 
 /**
  * Options for worktree cleanup operation
@@ -161,6 +162,15 @@ export async function preserveTaskSpec(
  * with EACCES. Symlinks are skipped, so nothing outside the folder changes.
  */
 export async function makeTreeWritable(dirPath: string): Promise<void> {
+  if (isMacOS()) {
+    // An access control list can deny deleting a folder even to its owner (`deny delete`),
+    // whatever its mode. -N removes every ACL entry; -R doesn't follow symlinks (-P is the default).
+    try {
+      execFileSync('/bin/chmod', ['-RN', dirPath], { timeout: 60000, stdio: 'ignore' });
+    } catch {
+      // Some entries kept their ACL: the mode changes below and the rm fallback still run
+    }
+  }
   const st = await lstat(dirPath);
   if (st.isSymbolicLink()) return;
   if (st.isDirectory()) {
