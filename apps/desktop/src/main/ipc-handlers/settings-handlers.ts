@@ -1,5 +1,5 @@
 import { ipcMain, dialog, app, shell, session } from 'electron';
-import { existsSync, writeFileSync, mkdirSync, statSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, statSync, readFileSync } from 'fs';
 import { execFileSync } from 'node:child_process';
 import path from 'path';
 
@@ -14,7 +14,7 @@ import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
 import { setUpdateChannel, setUpdateChannelWithDowngradeCheck } from '../app-updater';
 import { channelOnSave } from '../../shared/utils/update-channel';
-import { getSettingsPath, readSettingsFile } from '../settings-utils';
+import { getSettingsPath, readSettingsFile, writeSettingsFile } from '../settings-utils';
 import { resetMemoryService } from './context/memory-service-factory';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { stripLegacySettings } from '../ai/claude-code/credential-migration';
@@ -126,7 +126,7 @@ export function registerSettingsHandlers(
       // Persist migration changes
       if (needsSave) {
         try {
-          writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+          writeSettingsFile(settings);
         } catch (error) {
           console.error('[SETTINGS_GET] Failed to persist migration:', error);
           // Continue anyway - settings will be migrated in-memory for this session
@@ -169,7 +169,7 @@ export function registerSettingsHandlers(
           }
         }
 
-        writeFileSync(settingsPath, JSON.stringify(newSettings, null, 2), 'utf-8');
+        writeSettingsFile(newSettings);
 
         // Configure CLI tools if any paths changed
         if (

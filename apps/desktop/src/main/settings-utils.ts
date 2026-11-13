@@ -9,9 +9,10 @@
  */
 
 import { app } from 'electron';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, renameSync } from 'fs';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
+import { writeFileAtomicSync } from './utils/atomic-file';
 
 /**
  * Get the path to the settings file
@@ -22,24 +23,38 @@ export function getSettingsPath(): string {
 
 /**
  * Read and parse settings from disk.
- * Returns the raw parsed settings object, or undefined if the file doesn't exist or fails to parse.
+ * Returns the raw parsed settings object, or undefined if the file doesn't exist or fails to parse
+ * (a file that doesn't parse is moved to `settings.json.corrupt`, never overwritten).
  *
  * This function does NOT merge with defaults or perform any migrations.
  * Callers are responsible for merging with DEFAULT_APP_SETTINGS.
  */
 export function readSettingsFile(): Record<string, unknown> | undefined {
   const settingsPath = getSettingsPath();
-
   if (!existsSync(settingsPath)) {
     return undefined;
   }
-
+  let content: string;
   try {
-    const content = readFileSync(settingsPath, 'utf-8');
+    content = readFileSync(settingsPath, 'utf-8');
+  } catch {
+    return undefined;
+  }
+  try {
     return JSON.parse(content);
   } catch {
-    // Return undefined on parse error - caller will use defaults
+    // Unreadable settings are not "no settings": the next save would put the defaults over them
+    setAsideCorruptSettings(settingsPath);
     return undefined;
+  }
+}
+
+/** Moves a settings file that doesn't parse to `settings.json.corrupt`, so it can be recovered by hand. Never throws. */
+function setAsideCorruptSettings(settingsPath: string): void {
+  try {
+    renameSync(settingsPath, `${settingsPath}.corrupt`);
+  } catch {
+    // Left where it is; the caller still gets "no settings"
   }
 }
 
@@ -48,7 +63,7 @@ export function readSettingsFile(): Record<string, unknown> | undefined {
  *
  * @param settings - The settings object to write
  */
-export function writeSettingsFile(settings: Record<string, unknown>): void {
+export function writeSettingsFile(settings: object): void {
   const settingsPath = getSettingsPath();
 
   // Ensure the directory exists
@@ -57,7 +72,8 @@ export function writeSettingsFile(settings: Record<string, unknown>): void {
     mkdirSync(dir, { recursive: true });
   }
 
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  // A temporary file renamed into place: a crash mid-write can't leave half a file
+  writeFileAtomicSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 }
 
 /**
@@ -73,12 +89,18 @@ export function writeSettingsFile(settings: Record<string, unknown>): void {
 export async function readSettingsFileAsync(): Promise<Record<string, unknown> | undefined> {
   const settingsPath = getSettingsPath();
 
+  let content: string;
   try {
     // Read directly — no separate access() check to avoid TOCTOU race
-    const content = await fsPromises.readFile(settingsPath, 'utf-8');
+    content = await fsPromises.readFile(settingsPath, 'utf-8');
+  } catch {
+    // No file yet (or unreadable): the caller uses the defaults
+    return undefined;
+  }
+  try {
     return JSON.parse(content);
   } catch {
-    // Return undefined if file doesn't exist or has parse errors — caller will use defaults
+    setAsideCorruptSettings(settingsPath);
     return undefined;
   }
 }

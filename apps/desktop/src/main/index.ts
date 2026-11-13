@@ -63,7 +63,7 @@ import { bundledBrowserServers } from './ai/claude-code/bundled-tools';
 import { stopOrphanedBrowserServers } from './utils/browser-mcp-orphans';
 import { registerDesignProtocol } from './ipc-handlers/task-design-handlers';
 import { join } from 'path';
-import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
+import { accessSync, readFileSync, rmSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
@@ -78,7 +78,7 @@ import { startStallWatch } from './stall-watch';
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { createQuitGuard, quitPrompt } from './quit-guard';
-import { readSettingsFile } from './settings-utils';
+import { readSettingsFile, writeSettingsFile } from './settings-utils';
 import { migrateLegacyClaudeCredential } from './ai/claude-code/credential-migration';
 import { resolveClaudeAuth } from './ai/claude-code/credential';
 import { setDefaultClaudeAuthProvider } from './ai/claude-code/default-auth';
@@ -542,7 +542,7 @@ app.whenReady().then(() => {
 
             // Save the corrected setting - we're the only process modifying settings at startup
             try {
-              writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+              writeSettingsFile(settings);
               console.log('[main] Successfully saved migrated autoBuildPath to settings');
             } catch (writeError) {
               console.warn('[main] Failed to save migrated autoBuildPath:', writeError);
@@ -558,7 +558,7 @@ app.whenReady().then(() => {
           // Clear the stale setting so this warning doesn't repeat every startup
           try {
             delete settings.autoBuildPath;
-            writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+            writeSettingsFile(settings);
             console.log('[main] Cleared stale autoBuildPath from settings');
           } catch {
             // Non-critical - warning will just repeat next startup
