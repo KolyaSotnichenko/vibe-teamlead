@@ -330,4 +330,36 @@ describe('PRReviewStateManager', () => {
       expect(String(manager.getState(projectId, 2)!.value)).toBe('reviewing');
     });
   });
+
+  // F-008: the window reported the end of a review started elsewhere to a channel nobody handled
+  describe('a review started elsewhere ends', () => {
+    const external = () => {
+      manager.handleStartReview(projectId, prNumber);
+      manager.handleComplete(projectId, prNumber, createMockResult({ overallStatus: 'in_progress' }));
+      expect(String(manager.getState(projectId, prNumber)!.value)).toBe('externalReview');
+    };
+
+    it('with a result: the review is completed', () => {
+      external();
+      manager.handleExternalReviewEnded(projectId, prNumber, createMockResult({ summary: 'done elsewhere' }));
+      const snapshot = manager.getState(projectId, prNumber)!;
+      expect(String(snapshot.value)).toBe('completed');
+      expect(snapshot.context.result?.summary).toBe('done elsewhere');
+    });
+
+    it('without one (the window gave up waiting): the review is an error, not "reviewing" forever', () => {
+      external();
+      manager.handleExternalReviewEnded(projectId, prNumber, null);
+      const snapshot = manager.getState(projectId, prNumber)!;
+      expect(String(snapshot.value)).toBe('error');
+      expect(snapshot.context.error).toMatch(/did not finish/i);
+    });
+
+    it('ignores a result that is not one', () => {
+      external();
+      manager.handleExternalReviewEnded(projectId, prNumber, 'nonsense' as never);
+      manager.handleExternalReviewEnded(projectId, Number.NaN, createMockResult());
+      expect(String(manager.getState(projectId, prNumber)!.value)).toBe('externalReview');
+    });
+  });
 });

@@ -23,6 +23,8 @@ function buildContextKey(snapshot: { context: PRReviewContext }): string {
   return `${progressKey}|${resultKey}|${errorKey}`;
 }
 
+const EXTERNAL_REVIEW_TIMED_OUT = 'The review started elsewhere did not finish in time. Run the review again.';
+
 export class PRReviewStateManager {
   private actors = new Map<string, PRReviewActor>();
   private lastStateByPR = new Map<string, string>();
@@ -70,6 +72,20 @@ export class PRReviewStateManager {
     } else {
       actor.send({ type: 'REVIEW_COMPLETE', result } satisfies PRReviewEvent);
     }
+  }
+
+  /**
+   * The window watched a review that was started elsewhere and reports how it ended: with a
+   * result, or with none when it gave up waiting. Anything else is ignored.
+   */
+  handleExternalReviewEnded(projectId: string, prNumber: number, result: PRReviewResult | null): void {
+    if (typeof projectId !== 'string' || !Number.isInteger(prNumber)) return;
+    if (result === null) {
+      this.handleError(projectId, prNumber, EXTERNAL_REVIEW_TIMED_OUT);
+      return;
+    }
+    if (typeof result !== 'object' || result.overallStatus === 'in_progress') return;
+    this.handleComplete(projectId, prNumber, result);
   }
 
   handleError(projectId: string, prNumber: number, error: string): void {

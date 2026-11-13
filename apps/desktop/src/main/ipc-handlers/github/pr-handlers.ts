@@ -2008,6 +2008,15 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     }
   );
 
+  // The window watched a review started elsewhere (its result appears on disk) and says how it ended
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_PR_NOTIFY_EXTERNAL_REVIEW_COMPLETE,
+    async (_, projectId: string, prNumber: number, result: PreloadPRReviewResult | null): Promise<void> => {
+      // The result comes from the window, which got it from GITHUB_PR_GET_REVIEW: the preload's shape
+      stateManager.handleExternalReviewEnded(projectId, prNumber, result);
+    }
+  );
+
   // Batch get saved reviews - more efficient than individual calls
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_PR_GET_REVIEWS_BATCH,
