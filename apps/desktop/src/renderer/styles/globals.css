@@ -1320,14 +1320,7 @@ body {
   .vt-breathe { animation: none; }
 }
 
-/* Pixel teamlead: the mood's frame strip slides one frame per step */
-@keyframes vt-teamlead-play {
-  to { transform: translateX(-100%); }
-}
-.vt-teamlead-strip { will-change: transform; }
-@media (prefers-reduced-motion: reduce) {
-  .vt-teamlead-strip { animation: none !important; }
-}
+/* Pixel teamlead: the mood's frame strip is slid one frame per step by a timer (play-strip.ts), not by CSS */
 
 /* Plan graph (@xyflow/react): keyboard focus on nodes must be visible */
 .vt-plan-graph .react-flow__node:focus-visible {

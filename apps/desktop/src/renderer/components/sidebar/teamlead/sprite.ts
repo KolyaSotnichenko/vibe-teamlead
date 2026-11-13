@@ -1,8 +1,8 @@
 /**
  * The pixel teamlead ("Lead"): a 16×18 sprite drawn from rectangles, one strip
  * of frames per mood. Each strip is four SVG paths (one per colour), built once
- * and cached; the component animates the strip with a CSS steps() transform,
- * so the running app spends no JS on it. Pure — tested directly.
+ * and cached; the component slides the strip one frame per step (play-strip.ts).
+ * Pure — tested directly.
  */
 
 export type TeamleadMood =
