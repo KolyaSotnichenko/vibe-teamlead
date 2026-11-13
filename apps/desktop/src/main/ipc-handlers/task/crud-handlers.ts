@@ -14,6 +14,7 @@ import { findTaskAndProject } from './shared';
 import { findAllSpecPaths, isValidTaskId } from '../../utils/spec-path-helpers';
 import { isPathWithinBase, findTaskWorktree } from '../../worktree-paths';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
+import { requestTaskBranchDelete } from '../../deploy/branch-push';
 import { getToolPath } from '../../cli-tool-manager';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import { taskStateManager } from '../../task-state-manager';
@@ -402,6 +403,10 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           console.warn(`[TASK_DELETE] Cleanup warnings:`, cleanupResult.warnings);
         }
       }
+
+      // The branch the app pushed for this task goes from GitHub too (in the background; a task
+      // handed over as a pull request keeps its branch)
+      requestTaskBranchDelete(project, task);
 
       // Find ALL locations where this task exists (main + any remaining worktree dirs)
       // Following the archiveTasks() pattern from project-store.ts

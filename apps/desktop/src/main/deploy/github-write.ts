@@ -392,12 +392,46 @@ export async function pushWithAppToken(
   refspec: string,
   options: PushOptions = {},
 ): Promise<void> {
-  const { getToken = getValidAccessToken, runner = defaultRunner } = options;
+  checkGitHubUrl(url);
+  const { sha, dst, commonDir } = await resolvePushSource(projectPath, refspec);
+  await pushFromPrivateRepo(url, `${sha}:${dst}`, commonDir, options);
+}
+
+/**
+ * Deletes `branch` on the GitHub repo at `url`, with the App user token and the same isolation as
+ * pushWithAppToken (no project config, no hooks; nothing of the project is read at all). A branch
+ * that is already gone is fine. Only a branch can be named: no tag, no other ref.
+ */
+export async function deleteRemoteBranch(url: string, branch: string, options: PushOptions = {}): Promise<void> {
+  checkGitHubUrl(url);
+  const ref = branch.startsWith('refs/') ? branch : `refs/heads/${branch}`;
+  if (
+    !branch || branch.startsWith('-') || branch.startsWith('+') || !BRANCH_NAME.test(branch) ||
+    !ref.startsWith('refs/heads/') || ref === 'refs/heads/' || ref.includes('..') || ref.endsWith('/') || ref.endsWith('.lock')
+  ) {
+    throw invalid('Invalid branch name');
+  }
+  try {
+    await pushFromPrivateRepo(url, `:${ref}`, undefined, options);
+  } catch (error) {
+    if (error instanceof GitHubWriteError && /remote ref does not exist/i.test(error.message)) return;
+    throw error;
+  }
+}
+
+function checkGitHubUrl(url: string): void {
   const m = GITHUB_URL.exec(url);
   if (!m || m[2] === '.' || m[2] === '..') {
     throw invalid('Push target must be https://github.com/<owner>/<repo>');
   }
-  const { sha, dst, commonDir } = await resolvePushSource(projectPath, refspec);
+}
+
+/**
+ * One `git push <url> <refArg>` from a private temporary bare repo. `objectsFrom` (a project's
+ * common git dir) lends its objects through `objects/info/alternates`; a delete needs none.
+ */
+async function pushFromPrivateRepo(url: string, refArg: string, objectsFrom: string | undefined, options: PushOptions): Promise<void> {
+  const { getToken = getValidAccessToken, runner = defaultRunner } = options;
   const token = await getToken();
   if (!token) throw new GitHubWriteError('no-connection', 'Not signed in to GitHub. Please sign in first.');
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
@@ -413,8 +447,10 @@ export async function pushWithAppToken(
       env,
       timeout: 10_000,
     });
-    await mkdir(path.join(gitDir, 'objects', 'info'), { recursive: true });
-    await writeFile(path.join(gitDir, 'objects', 'info', 'alternates'), `${path.join(commonDir, 'objects')}\n`);
+    if (objectsFrom) {
+      await mkdir(path.join(gitDir, 'objects', 'info'), { recursive: true });
+      await writeFile(path.join(gitDir, 'objects', 'info', 'alternates'), `${path.join(objectsFrom, 'objects')}\n`);
+    }
     const config: Array<[string, string]> = [
       ['credential.helper', ''],
       ['http.https://github.com/.extraheader', `AUTHORIZATION: basic ${basic}`],
@@ -430,7 +466,7 @@ export async function pushWithAppToken(
     });
     env.GIT_TRACE_REDACT = '1';
     env.GIT_TERMINAL_PROMPT = '0';
-    await runner(getToolPath('git'), [`--git-dir=${gitDir}`, 'push', '--no-verify', '--', url, `${sha}:${dst}`], {
+    await runner(getToolPath('git'), [`--git-dir=${gitDir}`, 'push', '--no-verify', '--', url, refArg], {
       cwd: root,
       env,
       timeout: PUSH_TIMEOUT_MS,

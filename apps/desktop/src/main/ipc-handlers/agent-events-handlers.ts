@@ -22,7 +22,7 @@ import { findTaskAndProject } from "./task/shared";
 import { safeSendToRenderer } from "./utils";
 import { onSubtasksProgress, requestPreviewPush, setBranchPushDeps, setBranchPushStore } from "../deploy/branch-push";
 import { invalidatePreview } from "../deploy/preview-state";
-import { pushWithAppToken, repoVisibility } from "../deploy/github-write";
+import { deleteRemoteBranch, pushWithAppToken, repoVisibility } from "../deploy/github-write";
 import { saveDeployPatch } from "../deploy/setup";
 import { projectStore } from "../project-store";
 import { branchHead } from "../deploy/push-after-merge";
@@ -58,6 +58,7 @@ export function registerAgenteventsHandlers(
       },
       visibility: (owner, repo) => repoVisibility(owner, repo),
       markPublic: (projectId, repo) => saveDeployPatch(projectStore, projectId, { repo }),
+      deleteBranch: deleteRemoteBranch,
     },
     (taskId) => findTaskAndProject(taskId),
   );

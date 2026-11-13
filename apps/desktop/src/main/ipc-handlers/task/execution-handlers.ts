@@ -12,6 +12,7 @@ import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
 import { returnStaleQueuedTask, STALE_QUEUED_TASK_MESSAGE } from './queue-task';
+import { requestTaskBranchDelete } from '../../deploy/branch-push';
 import { checkGitStatus } from '../../project-initializer';
 import { resolveClaudeCredential } from '../../ai/claude-code/credential';
 import { taskStateManager } from '../../task-state-manager';
@@ -631,6 +632,9 @@ export function registerTaskExecutionHandlers(
                   );
                 }
               }
+
+              // The owner closed the task with its folder: its branch on GitHub goes too
+              requestTaskBranchDelete(project, task);
 
               console.warn(`[TASK_UPDATE_STATUS] Worktree cleanup completed successfully`);
             } catch (cleanupError) {

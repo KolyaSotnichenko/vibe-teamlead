@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  deleteTaskBranch,
   lastBranchPush,
   onSubtasksProgress,
   previewPushAllowed,
@@ -375,5 +376,62 @@ describe('worktreePushNewBranches (the task branch push when its worktree is mad
     expect(worktreePushNewBranches(settings(undefined, false), undefined)).toBe(false);
     expect(worktreePushNewBranches(settings(undefined, false), true)).toBe(true);
     expect(worktreePushNewBranches(undefined, undefined)).toBe(true);
+  });
+});
+
+// F-004: the branch of a merged or deleted task stayed on GitHub
+describe('deleteTaskBranch', () => {
+  const URL = 'https://github.com/me/app.git';
+  const pushed = async (id = 't1') => {
+    setBranchPushStore(path.join(mkdtempSync(path.join(tmpdir(), 'bp-del-')), 'branch-pushes.json'));
+    await pushTaskBranch(project(), task(id), makeDeps(vi.fn(async () => undefined) as never).deps);
+    expect(lastBranchPush(id)?.sha).toBeTruthy();
+  };
+
+  it('deletes the branch this app pushed and forgets the push', async () => {
+    await pushed();
+    const deleteBranch = vi.fn(async () => undefined);
+    expect(await deleteTaskBranch(project(), task(), { deleteBranch })).toBe('deleted');
+    expect(deleteBranch).toHaveBeenCalledWith(URL, 'vibe-teamlead/spec-t1');
+    expect(lastBranchPush('t1')).toBeUndefined();
+  });
+
+  it('forgets the push across a restart too (the store file)', async () => {
+    await pushed();
+    const file = path.join(mkdtempSync(path.join(tmpdir(), 'bp-del-')), 'branch-pushes.json');
+    writeFileSync(file, JSON.stringify({ t1: { sha: 'abc', at: '2026-01-01T00:00:00.000Z' }, t2: { sha: 'def' } }));
+    setBranchPushStore(file);
+    expect(await deleteTaskBranch(project(), task(), { deleteBranch: vi.fn(async () => undefined) })).toBe('deleted');
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ t2: { sha: 'def' } });
+  });
+
+  it('does nothing for a task whose branch was never pushed', async () => {
+    setBranchPushStore(undefined);
+    const deleteBranch = vi.fn(async () => undefined);
+    expect(await deleteTaskBranch(project(), task('never'), { deleteBranch })).toBe('not-pushed');
+    expect(deleteBranch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the branch of a task handed over as a pull request: the PR lives on it', async () => {
+    await pushed();
+    const deleteBranch = vi.fn(async () => undefined);
+    const withPr = { id: 't1', specId: 'spec-t1', status: 'pr_created', metadata: { prUrl: 'https://github.com/me/app/pull/7' } } as never;
+    expect(await deleteTaskBranch(project(), withPr, { deleteBranch })).toBe('kept');
+    expect(deleteBranch).not.toHaveBeenCalled();
+    expect(lastBranchPush('t1')?.sha).toBeTruthy();
+  });
+
+  it('keeps the record when GitHub refuses, and never rejects', async () => {
+    await pushed();
+    const deleteBranch = vi.fn(async () => { throw new GitHubWriteError('permissions', 'denied'); });
+    expect(await deleteTaskBranch(project(), task(), { deleteBranch })).toBe('failed');
+    expect(lastBranchPush('t1')?.sha).toBeTruthy();
+  });
+
+  it('does not delete without a recorded repository', async () => {
+    await pushed();
+    const deleteBranch = vi.fn(async () => undefined);
+    expect(await deleteTaskBranch(project({}, undefined), task(), { deleteBranch })).toBe('failed');
+    expect(deleteBranch).not.toHaveBeenCalled();
   });
 });

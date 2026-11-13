@@ -34,6 +34,8 @@ vi.mock('../../../deploy/main-runs', () => ({ watchMainRuns: watchRuns }));
 const runDeps = { tag: 'deps' };
 vi.mock('../../../deploy/readiness-instance', () => ({ getReadiness: () => undefined, getMainRunDeps: () => runDeps }));
 vi.mock('../../../deploy/github-write', () => ({ pushWithAppToken: vi.fn() }));
+const deleteBranch = vi.hoisted(() => vi.fn());
+vi.mock('../../../deploy/branch-push', () => ({ requestTaskBranchDelete: deleteBranch }));
 
 import { IPC_CHANNELS } from '../../../../shared/constants';
 import { registerWorktreeHandlers } from '../worktree-handlers';
@@ -44,6 +46,7 @@ describe('merge into main pushes main', () => {
   beforeEach(() => {
     pushMain.mockClear();
     watchRuns.mockClear();
+    deleteBranch.mockClear();
     handlers.clear();
     registerWorktreeHandlers(() => null);
   });
@@ -98,5 +101,21 @@ describe('merge into main pushes main', () => {
     merge.result = { status: 'refused' };
     await mergeTask({});
     expect(pushMain).not.toHaveBeenCalled();
+  });
+
+  // F-004: the branch of a merged task stayed on GitHub
+  it("asks for the task's branch on GitHub to be deleted after a full merge", async () => {
+    merge.result = { status: 'merged' };
+    await mergeTask();
+    expect(deleteBranch).toHaveBeenCalledTimes(1);
+    expect(deleteBranch).toHaveBeenCalledWith(found.project, found.task);
+  });
+
+  it('keeps the branch on GitHub after a stage-only or failed merge: the task goes on', async () => {
+    merge.result = { status: 'merged' };
+    await mergeTask({ noCommit: true });
+    merge.result = { status: 'conflicts' };
+    await mergeTask();
+    expect(deleteBranch).not.toHaveBeenCalled();
   });
 });

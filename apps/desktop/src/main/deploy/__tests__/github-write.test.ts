@@ -6,6 +6,7 @@ import path from 'path';
 import sodium from 'libsodium-wrappers';
 import {
   createPrivateRepo,
+  deleteRemoteBranch,
   pushWithAppToken,
   addOriginIfMissing,
   setRepoSecret,
@@ -580,6 +581,51 @@ describe('push and origin (real local bare remote)', () => {
   it('refuses without a token', async () => {
     const err = await pushWithAppToken(setup().work, URL_OK, 'main', { getToken: async () => null, runner: vi.fn() }).catch((e) => e);
     expect(err.kind).toBe('no-connection');
+  });
+
+  // F-004: a task's branch stayed on GitHub after the task was merged or deleted
+  describe('deleteRemoteBranch', () => {
+    const branches = (bare: string) => git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads').trim().split('\n').filter(Boolean);
+
+    it('deletes the branch on the remote and nothing else; the token stays out of argv', async () => {
+      const { bare, work } = setup();
+      git(work, 'branch', 'vibe-teamlead/001-x');
+      await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
+      await pushWithAppToken(work, URL_OK, 'vibe-teamlead/001-x', { getToken, runner: recordingRunner([], bare) });
+      expect(branches(bare)).toEqual(['refs/heads/main', 'refs/heads/vibe-teamlead/001-x']);
+      const calls: Rec[] = [];
+      await deleteRemoteBranch(URL_OK, 'vibe-teamlead/001-x', { getToken, runner: recordingRunner(calls, bare) });
+      expect(branches(bare)).toEqual(['refs/heads/main']);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].args.slice(1)).toEqual(['push', '--no-verify', '--', URL_OK, ':refs/heads/vibe-teamlead/001-x']);
+      expect(calls[0].args.join(' ')).not.toContain('tok_SECRET');
+      expect(envPairs(calls[0].env)['http.followRedirects']).toBe('false');
+      // The local branch is not this function's business
+      expect(git(work, 'branch', '--list', 'vibe-teamlead/001-x').trim()).toContain('vibe-teamlead/001-x');
+    });
+
+    it('is fine with a branch that is already gone', async () => {
+      const { bare, work } = setup();
+      await pushWithAppToken(work, URL_OK, 'main', { getToken, runner: recordingRunner([], bare) });
+      await expect(deleteRemoteBranch(URL_OK, 'vibe-teamlead/404-gone', { getToken, runner: recordingRunner([], bare) })).resolves.toBeUndefined();
+      expect(branches(bare)).toEqual(['refs/heads/main']);
+    });
+
+    it.each(['', '-f', 'a b', 'a:b', '+main', 'x..y', 'refs/tags/v1', 'trailing/', 'x.lock'])('refuses the name %j without running git', async (name) => {
+      const calls: Rec[] = [];
+      await expect(deleteRemoteBranch(URL_OK, name, { getToken, runner: recordingRunner(calls) })).rejects.toMatchObject({ kind: 'invalid' });
+      expect(calls).toHaveLength(0);
+    });
+
+    it('refuses a URL that is not a GitHub repository, and a missing token', async () => {
+      await expect(deleteRemoteBranch('https://example.com/o/r.git', 'x', { getToken })).rejects.toMatchObject({ kind: 'invalid' });
+      await expect(deleteRemoteBranch(URL_OK, 'x', { getToken: async () => null, runner: recordingRunner([]) })).rejects.toMatchObject({ kind: 'no-connection' });
+    });
+
+    it('reports any other failure', async () => {
+      const runner: GitRunner = async () => { throw Object.assign(new Error('x'), { stderr: 'remote: Permission to o/r denied to app' }); };
+      await expect(deleteRemoteBranch(URL_OK, 'vibe-teamlead/001-x', { getToken, runner })).rejects.toMatchObject({ kind: 'permissions' });
+    });
   });
 
   it('addOriginIfMissing adds once and keeps an existing origin', async () => {

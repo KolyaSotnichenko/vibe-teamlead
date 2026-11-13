@@ -13,7 +13,7 @@ import type { Project, Task } from '../../shared/types';
 import type { DeployProjectSettings } from '../../shared/types/deploy';
 import { writeFileReplacingSync } from '../ai/safe-write';
 import { TASK_BRANCH_PREFIX } from '../../shared/constants/config';
-import { GitHubWriteError, pushWithAppToken } from './github-write';
+import { type deleteRemoteBranch, GitHubWriteError, type pushWithAppToken } from './github-write';
 import { isCiSetUp } from './ci-setup';
 import { branchHead } from './push-after-merge';
 
@@ -32,6 +32,8 @@ export interface BranchPushDeps {
   visibility?(owner: string, repo: string): Promise<'private' | 'public'>;
   /** Records that the repository is no longer private. */
   markPublic?(projectId: string, repo: NonNullable<DeployProjectSettings['repo']>): void;
+  /** Deletes a branch on GitHub (github-write.ts deleteRemoteBranch) */
+  deleteBranch?: typeof deleteRemoteBranch;
 }
 
 const VISIBILITY_TTL_MS = 60 * 60_000;
@@ -130,6 +132,17 @@ function saveRecord(taskId: string, record: BranchPushRecord): void {
     writeFileReplacingSync(storeFile, JSON.stringify(Object.fromEntries(all)));
   } catch {
     // kept in memory; the file catches up on the next push
+  }
+}
+
+function removeRecord(taskId: string): void {
+  const all = loadRecords();
+  if (!all.delete(taskId) || !storeFile) return;
+  try {
+    mkdirSync(path.dirname(storeFile), { recursive: true });
+    writeFileReplacingSync(storeFile, JSON.stringify(Object.fromEntries(all)));
+  } catch {
+    // forgotten in memory; the file catches up on the next push
   }
 }
 
@@ -240,6 +253,40 @@ export async function pushTaskBranch(project: Project, task: Task, deps: BranchP
     state.running = false;
     states.delete(task.id);
   }
+}
+
+export type BranchDeleteOutcome = 'deleted' | 'not-pushed' | 'kept' | 'failed';
+
+/**
+ * A task is gone (merged, discarded or deleted): its branch on GitHub goes too, and the push
+ * record with it. Only a branch this app pushed (a push with a sha is on record) is deleted,
+ * and only its own `vibe-teamlead/<spec>` name. The branch of a task handed over as a pull
+ * request stays: the pull request lives on it. A refusal by GitHub keeps the record. Never
+ * rejects.
+ */
+export async function deleteTaskBranch(
+  project: Project,
+  task: Pick<Task, 'id' | 'specId' | 'status' | 'metadata'>,
+  deps: Pick<BranchPushDeps, 'deleteBranch'>,
+): Promise<BranchDeleteOutcome> {
+  try {
+    if (!loadRecords().get(task.id)?.sha) return 'not-pushed';
+    if (task.status === 'pr_created' || task.metadata?.prUrl) return 'kept';
+    const repo = project.settings?.deploy?.repo;
+    if (!repo || !deps.deleteBranch) return 'failed';
+    await deps.deleteBranch(`https://github.com/${repo.owner}/${repo.repo}.git`, `${TASK_BRANCH_PREFIX}${task.specId}`);
+    removeRecord(task.id);
+    completedSeen.delete(task.id);
+    return 'deleted';
+  } catch {
+    return 'failed';
+  }
+}
+
+/** deleteTaskBranch with the production dependencies, in the background. Never throws. */
+export function requestTaskBranchDelete(project: Project, task: Pick<Task, 'id' | 'specId' | 'status' | 'metadata'>): void {
+  if (!wiring) return;
+  void deleteTaskBranch(project, task, wiring.deps);
 }
 
 // ---- progress-driven wiring ----

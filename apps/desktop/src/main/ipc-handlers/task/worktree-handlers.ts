@@ -25,6 +25,7 @@ import {
 import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { cleanupWorktree } from '../../utils/worktree-cleanup';
+import { requestTaskBranchDelete } from '../../deploy/branch-push';
 import { taskDiffBase } from '../../utils/task-diff-base';
 import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
@@ -2316,6 +2317,9 @@ export function registerWorktreeHandlers(
                     debug('Cleanup warnings:', cleanupResult.warnings);
                   }
                 }
+
+                // Its work is in the project now: the task's branch on GitHub goes too (never blocks or fails the merge)
+                requestTaskBranchDelete(project, task);
               }
 
               debug('Merge result. isStageOnly:', isStageOnly, 'newStatus:', newStatus, 'staged:', staged);
@@ -2669,6 +2673,9 @@ export function registerWorktreeHandlers(
           console.warn('[TASK_WORKTREE_DISCARD] Cleanup warnings:', cleanupResult.warnings);
         }
 
+
+        // The discarded work must not stay on GitHub either (and a later run starts the branch anew)
+        requestTaskBranchDelete(project, task);
 
         // Only send status change to backlog if not skipped
         // (skip when caller will set a different status, e.g., 'done')
