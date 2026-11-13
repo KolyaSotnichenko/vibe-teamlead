@@ -5,8 +5,10 @@ import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { AppUpdateAvailableEvent, AppUpdateProgress } from "../../shared/types";
 
-// Poll for updates every 5 minutes
-const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+// The main process checks by itself (at launch, then every 4 hours) and tells this banner when an
+// update is there. The banner's own check, a request to GitHub, is only there to hear about a
+// release sooner than that: once an hour is enough.
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 interface UpdateBannerProps {
   className?: string;
