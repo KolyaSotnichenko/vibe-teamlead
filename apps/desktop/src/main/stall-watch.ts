@@ -3,7 +3,8 @@
  * this thread, so a pause here is the window hanging, however fast the machine. A
  * timer that fires late is the proof, and the record says what was running then:
  * the IPC calls still open and the slow blocking calls. The file stays on this
- * machine. No Electron imports.
+ * machine. While the window is hidden nobody can notice a pause, so the timer
+ * does not run then. No Electron imports.
  */
 
 import childProcess from 'node:child_process';
@@ -69,15 +70,34 @@ export function createStallWatch({ write }: { write: (record: StallRecord) => vo
     }
   };
 
-  return {
-    start() {
+  let started = false;
+  let hidden = false;
+  /** The timer runs only while there is someone to notice a pause: started, and the window shown */
+  const sync = () => {
+    const wanted = started && !hidden;
+    if (wanted && !timer) {
       lastTick = Date.now();
       timer = setInterval(tick, TICK_MS);
       timer.unref?.();
+    } else if (!wanted && timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+
+  return {
+    start() {
+      started = true;
+      sync();
     },
     stop() {
-      if (timer) clearInterval(timer);
-      timer = null;
+      started = false;
+      sync();
+    },
+    /** The window was hidden or minimized (false), or is shown again (true) */
+    windowShown(shown: boolean) {
+      hidden = !shown;
+      sync();
     },
     suspend() {
       asleep = true;

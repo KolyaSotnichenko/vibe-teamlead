@@ -75,6 +75,7 @@ import { TerminalManager } from './terminal-manager';
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { createSleepWatch } from './sleep-watch';
 import { startStallWatch } from './stall-watch';
+import { mainWindowWebPreferences } from './window-options';
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { createQuitGuard, quitPrompt } from './quit-guard';
@@ -172,6 +173,7 @@ function getIconPath(): string {
 let mainWindow: BrowserWindow | null = null;
 let agentManager: AgentManager | null = null;
 let terminalManager: TerminalManager | null = null;
+let stallWatch: ReturnType<typeof startStallWatch> | null = null;
 
 // Capture child process exits (renderer/GPU/utility) for crash diagnostics.
 app.on('child-process-gone', (_event, details) => {
@@ -245,15 +247,16 @@ function createWindow(): void {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 10 },
     icon: getIconPath(),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false, // Prevent terminal lag when window loses focus
-      spellcheck: true // Enable spell check for text inputs
-    }
+    webPreferences: mainWindowWebPreferences(join(__dirname, '../preload/index.mjs'))
   });
+
+  // A pause of the main process matters only while someone can see the window
+  const window = mainWindow;
+  const watchWhileShown = () => stallWatch?.windowShown(window.isVisible() && !window.isMinimized());
+  window.on('show', watchWhileShown);
+  window.on('hide', watchWhileShown);
+  window.on('minimize', watchWhileShown);
+  window.on('restore', watchWhileShown);
 
   // Show window when ready to avoid visual flash
   mainWindow.on('ready-to-show', () => {
@@ -493,9 +496,10 @@ app.whenReady().then(() => {
   powerMonitor.on('resume', sleepWatch.resume);
 
   // Before the IPC handlers are registered, so all of them report
-  const stallWatch = startStallWatch(ipcMain, app.getPath('logs'));
-  powerMonitor.on('suspend', stallWatch.suspend);
-  powerMonitor.on('resume', stallWatch.resume);
+  const watch = startStallWatch(ipcMain, app.getPath('logs'));
+  stallWatch = watch;
+  powerMonitor.on('suspend', watch.suspend);
+  powerMonitor.on('resume', watch.resume);
 
   // Load settings and configure agent manager with the prompts path
   // Uses EAFP pattern (try/catch) instead of LBYL (existsSync) to avoid TOCTOU race conditions

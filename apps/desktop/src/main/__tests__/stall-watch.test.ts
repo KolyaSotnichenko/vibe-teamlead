@@ -110,6 +110,58 @@ describe('watching the main process for pauses', () => {
     vi.advanceTimersByTime(1000);
     expect(records).toEqual([]);
   });
+
+  // F-015: a pause nobody can see is not worth waking the process ten times a second for
+  describe('while the window is hidden', () => {
+    it('runs no timer at all', () => {
+      const watch = setup();
+      expect(vi.getTimerCount()).toBe(1);
+      watch.windowShown(false);
+      expect(vi.getTimerCount()).toBe(0);
+      watch.windowShown(true);
+      expect(vi.getTimerCount()).toBe(1);
+    });
+
+    it('records nothing, and does not take the hidden time for a pause when the window shows again', () => {
+      const watch = setup();
+      watch.windowShown(false);
+      block(60_000);
+      vi.advanceTimersByTime(1000);
+      watch.windowShown(true);
+      vi.advanceTimersByTime(300);
+      expect(records).toEqual([]);
+    });
+
+    it('watches again once it shows: a pause after that is recorded', () => {
+      const watch = setup();
+      watch.windowShown(false);
+      watch.windowShown(true);
+      block(1000);
+      vi.advanceTimersByTime(100);
+      expect(records).toHaveLength(1);
+    });
+
+    it('hearing the same thing twice changes nothing', () => {
+      const watch = setup();
+      watch.windowShown(true);
+      watch.windowShown(true);
+      expect(vi.getTimerCount()).toBe(1);
+      watch.windowShown(false);
+      watch.windowShown(false);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('stays stopped when told to stop while hidden, and when shown before it was started', () => {
+      const watch = createStallWatch({ write: (record) => records.push(record) });
+      watch.windowShown(true);
+      expect(vi.getTimerCount()).toBe(0);
+      watch.start();
+      watch.windowShown(false);
+      watch.stop();
+      watch.windowShown(true);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
 });
 
 describe('telling the watch what runs', () => {
