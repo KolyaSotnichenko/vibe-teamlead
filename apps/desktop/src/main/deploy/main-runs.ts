@@ -222,7 +222,13 @@ export async function handleMainRuns(project: Project, runs: DeployRun[], deps: 
       markRunHandled(project.path, r.id);
     }
   }
+  // Right after a push of main GitHub may not list the pushed commit's runs yet: until it does, an
+  // older failure is not taken for the newest (the watcher's last tick lets it through)
+  const watch = watching.get(project.id);
+  const awaitedSha =
+    watch && !watch.final && !runs.some((r) => r.sha === watch.sha && isOwnPushOnMain(r, repo, main)) ? watch.sha : undefined;
   const settled = [...newest.values()].filter((r) => {
+    if (awaitedSha && r.sha !== awaitedSha) return false;
     const pending = unfinished.get(r.workflowPath);
     return !pending || !newer(pending, r);
   });
@@ -241,6 +247,8 @@ export async function handleMainRuns(project: Project, runs: DeployRun[], deps: 
 interface Watch {
   sha: string;
   timer?: Timer;
+  /** The last tick: older failures are no longer held back for this sha's runs */
+  final?: boolean;
 }
 
 /** One watcher per project, following the latest pushed sha */
@@ -265,6 +273,7 @@ export function watchMainRuns(project: Project, sha: string, deps: MainRunDeps):
 
   const tick = async (): Promise<void> => {
     watch.timer = undefined;
+    if (now() - started >= WATCH_LIMIT_MS) watch.final = true;
     let done = false;
     try {
       const repo = await deps.resolveRepo(project);

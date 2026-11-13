@@ -322,14 +322,46 @@ describe('watchMainRuns', () => {
     expect(t.pending).toHaveLength(0);
   });
 
-  it('only waits for runs of the pushed sha (a newest failure of another sha is still handled)', async () => {
+  it('an older failure waits while GitHub does not list a run of the pushed sha yet', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    // Right after the push: only yesterday's failed run is listed
+    deps.client.runs.mockResolvedValue([run(10, { sha: 'other', startedAt: '2026-11-12T13:34:22Z' })]);
+    watchMainRuns(project(), 'abc', deps);
+    await flush();
+    expect(created).toHaveLength(0);
+    expect(t.pending).toHaveLength(1);
+    // The pushed sha's run shows up and passes: the old failure is settled without a task
+    deps.client.runs.mockResolvedValue([
+      run(10, { sha: 'other', startedAt: '2026-11-12T13:34:22Z' }),
+      run(11, { sha: 'abc', startedAt: '2026-11-13T08:14:35Z', conclusion: 'success' }),
+    ]);
+    await t.fire();
+    expect(created).toHaveLength(0);
+    expect(t.pending).toHaveLength(0);
+  });
+
+  it('the poller also holds an older failure back while a watcher waits for the pushed sha', async () => {
+    const t = timers();
+    const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    deps.client.runs.mockResolvedValue([]);
+    const p = project();
+    watchMainRuns(p, 'abc', deps);
+    await flush();
+    await handleMainRuns(p, [run(10, { sha: 'other' })], deps);
+    expect(created).toHaveLength(0);
+  });
+
+  it('when the pushed sha never gets a run, the older failure gets its task on the last tick', async () => {
     const t = timers();
     const deps = makeDeps({ now: t.now, setTimer: t.setTimer, clearTimer: t.clearTimer });
     deps.client.runs.mockResolvedValue([run(10, { sha: 'other' })]);
     watchMainRuns(project(), 'abc', deps);
     await flush();
+    let fires = 0;
+    while (t.pending.length && fires < 200) { await t.fire(); fires++; }
+    expect(fires).toBe(60);
     expect(created).toHaveLength(1);
-    expect(t.pending).toHaveLength(1);
   });
 
   it('stops after 60 minutes', async () => {
