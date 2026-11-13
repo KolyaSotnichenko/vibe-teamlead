@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Square, Loader2, RotateCcw, Archive, GitPullRequest, MoreVertical } from 'lucide-react';
+import { Play, Square, Loader2, RotateCcw, Archive, GitPullRequest, MoreVertical, Trash2 } from 'lucide-react';
 import { selectTaskQuestion, useAgentQuestionsStore } from '../stores/agent-questions-store';
 import { Checkbox } from './ui/checkbox';
 import {
@@ -46,6 +46,7 @@ import { useMergeState } from './task-detail/useMergeState';
 import { useVerification } from './task-detail/useVerification';
 import { useSecurityQaError } from './task-detail/useSecurityQaError';
 import { useCiState } from './task-detail/useCiState';
+import { DeleteTaskDialog } from './task-detail/DeleteTaskDialog';
 import type { DeployTarget } from '../../shared/types/deploy';
 
 // Catastrophic stuck detection interval (ms).
@@ -220,6 +221,7 @@ export const TaskCard = memo(function TaskCard({
   const openQuestion = useAgentQuestionsStore((s) => s.open);
   const { toast } = useToast();
   const [isStuck, setIsStuck] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const stuckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -611,9 +613,25 @@ export const TaskCard = memo(function TaskCard({
                 <DropdownMenuLabel>{t('actions.moveTo')}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {statusMenuItems}
+                <DropdownMenuSeparator />
+                {/* A running task is stopped first (a stuck one can go) */}
+                <DropdownMenuItem
+                  disabled={isRunning && !isStuck}
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 aria-hidden className="mr-2 h-4 w-4" />
+                  {t('actions.delete')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+        </div>
+      )}
+      {showDeleteDialog && (
+        // The dialog is portaled, but its clicks still bubble through React to the card
+        <div className="contents" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <DeleteTaskDialog task={task} open={showDeleteDialog} onOpenChange={setShowDeleteDialog} />
         </div>
       )}
     </div>

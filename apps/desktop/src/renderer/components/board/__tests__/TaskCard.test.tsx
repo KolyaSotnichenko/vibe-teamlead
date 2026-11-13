@@ -16,7 +16,9 @@ vi.mock('react-i18next', () => ({
 
 const startTaskOrQueue = vi.fn(async () => ({ success: true, action: 'started' }));
 const stopTask = vi.fn();
+const deleteTask = vi.fn(async () => ({ success: true }));
 vi.mock('../../../stores/task-store', () => ({
+  deleteTask: (...args: unknown[]) => deleteTask(...(args as [])),
   stopTask: (...args: unknown[]) => stopTask(...args),
   startTaskOrQueue: (...args: unknown[]) => startTaskOrQueue(...(args as [])),
   checkTaskRunning: vi.fn(async () => true),
@@ -319,6 +321,48 @@ describe('TaskCard', () => {
       window.removeEventListener('open-deploy', heard);
       expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual(detail);
       expect(onClick).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('delete from the card menu', () => {
+    const openMenu = () => {
+      const trigger = screen.getByRole('button', { name: 'actions.taskActions' });
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    };
+    beforeEach(() => {
+      deleteTask.mockClear();
+      (window as unknown as { electronAPI: unknown }).electronAPI = {
+        checkWorktreeChanges: vi.fn(async () => ({ success: true, data: { hasChanges: true, changedFileCount: 2 } })),
+      };
+    });
+
+    it('the menu offers Delete; it asks first, warns about uncommitted work, and deletes without opening the task', async () => {
+      const onClick = vi.fn();
+      render(<TaskCard task={task({ status: 'human_review' })} onClick={onClick} onStatusChange={vi.fn()} />);
+      openMenu();
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'actions.delete' }));
+      expect(await screen.findByText('tasks:deleteDialog.title')).toBeInTheDocument();
+      expect(await screen.findByText(/tasks:deleteDialog\.uncommittedChanges {"count":2}/)).toBeInTheDocument();
+      expect(deleteTask).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: /tasks:deleteDialog\.deletePermanently/ }));
+      await waitFor(() => expect(deleteTask).toHaveBeenCalledWith('task-a'));
+      await waitFor(() => expect(screen.queryByText('tasks:deleteDialog.title')).not.toBeInTheDocument());
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('Cancel keeps the task', async () => {
+      render(<TaskCard task={task({ status: 'backlog', executionProgress: undefined, subtasks: [] })} onClick={vi.fn()} onStatusChange={vi.fn()} />);
+      openMenu();
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'actions.delete' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'tasks:deleteDialog.cancel' }));
+      await waitFor(() => expect(screen.queryByText('tasks:deleteDialog.title')).not.toBeInTheDocument());
+      expect(deleteTask).not.toHaveBeenCalled();
+    });
+
+    it('a running task cannot be deleted from the menu (stop it first)', async () => {
+      render(<TaskCard task={task()} onClick={vi.fn()} onStatusChange={vi.fn()} />);
+      openMenu();
+      expect(await screen.findByRole('menuitem', { name: 'actions.delete' })).toHaveAttribute('data-disabled');
     });
   });
 });

@@ -7,16 +7,6 @@ import { ScrollArea } from '../ui/scroll-area';
 import { TooltipProvider } from '../ui/tooltip';
 import { Button } from '../ui/button';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../ui/alert-dialog';
-import {
   Play,
   Square,
   CheckCircle2,
@@ -29,7 +19,8 @@ import {
   GitPullRequest
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { stopTask, submitReview, recoverStuckTask, deleteTask, useTaskStore, startTaskOrQueue } from '../../stores/task-store';
+import { stopTask, submitReview, recoverStuckTask, useTaskStore, startTaskOrQueue } from '../../stores/task-store';
+import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { useProjectStore } from '../../stores/project-store';
 import { TASK_STATUS_LABELS } from '../../../shared/constants';
 import { TaskEditDialog } from '../TaskEditDialog';
@@ -176,19 +167,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
     }
     state.setFeedback('');
     state.setFeedbackImages([]);
-  };
-
-  const handleDelete = async () => {
-    state.setIsDeleting(true);
-    state.setDeleteError(null);
-    const result = await deleteTask(task.id);
-    if (result.success) {
-      state.setShowDeleteDialog(false);
-      onOpenChange(false);
-    } else {
-      state.setDeleteError(result.error || t('tasks:taskDetail.deleteFailed'));
-    }
-    state.setIsDeleting(false);
   };
 
   const handleMerge = async () => {
@@ -713,71 +691,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       />
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={state.showDeleteDialog} onOpenChange={state.setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              {t('tasks:deleteDialog.title')}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="text-sm text-muted-foreground space-y-3">
-                <p>
-                  {t('tasks:deleteDialog.confirmMessage')} <strong className="text-foreground">"{task.title}"</strong>?
-                </p>
-                {state.isCheckingChanges && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('tasks:deleteDialog.checkingChanges')}
-                  </div>
-                )}
-                {state.worktreeChangesInfo?.hasChanges && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-lg text-sm space-y-1">
-                    <p className="font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4" />
-                      {t('tasks:deleteDialog.uncommittedChanges', { count: state.worktreeChangesInfo.changedFileCount })}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      {t('tasks:deleteDialog.uncommittedChangesHint')}
-                    </p>
-                  </div>
-                )}
-                <p className="text-destructive">
-                  {t('tasks:deleteDialog.destructiveWarning')}
-                </p>
-                {state.deleteError && (
-                  <p className="text-destructive bg-destructive/10 px-3 py-2 rounded-lg text-sm">
-                    {state.deleteError}
-                  </p>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={state.isDeleting}>{t('tasks:deleteDialog.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleDelete();
-              }}
-              disabled={state.isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {state.isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t('tasks:deleteDialog.deleting')}
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {t('tasks:deleteDialog.deletePermanently')}
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteTaskDialog
+        task={task}
+        open={state.showDeleteDialog}
+        onOpenChange={state.setShowDeleteDialog}
+        onDeleted={() => onOpenChange(false)}
+      />
     </TooltipProvider>
   );
 }
