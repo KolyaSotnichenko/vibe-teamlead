@@ -11,6 +11,7 @@ import { isMergeQueued } from '../../ai/merge/merge-queue';
 import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
+import { returnStaleQueuedTask, STALE_QUEUED_TASK_MESSAGE } from './queue-task';
 import { checkGitStatus } from '../../project-initializer';
 import { resolveClaudeCredential } from '../../ai/claude-code/credential';
 import { taskStateManager } from '../../task-state-manager';
@@ -556,13 +557,22 @@ export function registerTaskExecutionHandlers(
       _,
       taskId: string,
       status: TaskStatus,
-      options?: { forceCleanup?: boolean; keepWorktree?: boolean }
-    ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> => {
+      options?: { forceCleanup?: boolean; keepWorktree?: boolean; fromQueue?: boolean }
+    ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string; staleCiTask?: string }> => {
       // Find task and project first (needed for worktree check)
       const { task, project } = findTaskAndProject(taskId);
 
       if (!task || !project) {
         return { success: false, error: 'Task not found' };
+      }
+
+      // The queue is about to start it by itself: a task of the CI check must still have its reason
+      if (status === 'in_progress' && options?.fromQueue) {
+        const stale = await returnStaleQueuedTask(getMainWindow, task, project);
+        if (stale) {
+          console.warn(`[TASK_UPDATE_STATUS] Not starting queued task ${taskId}: ${stale}`);
+          return { success: false, staleCiTask: stale, error: STALE_QUEUED_TASK_MESSAGE };
+        }
       }
 
       // Validate status transition - 'done' can only be set through merge handler

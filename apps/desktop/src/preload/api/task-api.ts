@@ -47,8 +47,9 @@ export interface TaskAPI {
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
-  ) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
+    /** `fromQueue`: the queue starts the task by itself (a CI task whose reason is gone is then held) */
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean; fromQueue?: boolean }
+  ) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string; staleCiTask?: string }>;
   recoverStuckTask: (
     taskId: string,
     options?: import('../../shared/types').TaskRecoveryOptions
@@ -150,8 +151,8 @@ export const createTaskAPI = (): TaskAPI => ({
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
-  ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> =>
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean; fromQueue?: boolean }
+  ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string; staleCiTask?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE_STATUS, taskId, status, options),
 
   recoverStuckTask: (

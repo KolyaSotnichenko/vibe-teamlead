@@ -126,6 +126,7 @@
     "capacityAvailable": "{{count}} slot(s) available in In Progress.",
     "queueAll": "Add All to Queue",
     "queueAllSuccess": "Moved {{count}} tasks to queue.",
+    "staleCiTask": "\"{{title}}\" was not started: the CI check no longer reports its problem. It is back in Planning.",
     "settings": {
       "title": "Queue Settings",
       "description": "How many tasks of this project may be under way at once. A task holds its slot until it is merged.",

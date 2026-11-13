@@ -552,11 +552,15 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         }
 
         console.log(`[Queue] Auto-promoting task ${nextTask.id} from Queue to In Progress (${inProgressCount + 1}/${maxParallelTasks})`);
-        const result = await persistTaskStatus(nextTask.id, 'in_progress');
+        const result = await persistTaskStatus(nextTask.id, 'in_progress', { fromQueue: true });
 
         if (result.success) {
           // Reset consecutive failures on success
           consecutiveFailures = 0;
+        } else if (result.staleCiTask) {
+          // A task of the CI check whose reason is gone: main put it back in Planning
+          attemptedTaskIds.add(nextTask.id);
+          toast({ title: t('queue.staleCiTask', { title: nextTask.title }) });
         } else {
           // If promotion failed, log error, mark as attempted, and skip to next task
           console.error(`[Queue] Failed to promote task ${nextTask.id} to In Progress:`, result.error);
@@ -572,7 +576,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     } finally {
       isProcessingQueueRef.current = false;
     }
-  }, [maxParallelTasks]);
+  }, [maxParallelTasks, t, toast]);
 
   // Register task status change listener for queue auto-promotion
   // This ensures processQueue() is called whenever a task leaves in_progress

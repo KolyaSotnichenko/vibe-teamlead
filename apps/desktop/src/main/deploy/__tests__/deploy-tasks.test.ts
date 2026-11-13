@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
-import type { ReadinessBlocker } from '../../../shared/types/deploy';
+import type { ReadinessBlocker, ReadinessResult } from '../../../shared/types/deploy';
 import { tryLoadPrompt } from '../../ai/prompts/prompt-loader';
 import {
   createBlockerTasks,
@@ -15,6 +15,7 @@ import {
   openDeployBlockers,
   resetFixCount,
   resetMissingBlockers,
+  staleQueuedDeployTask,
   type DeployTaskDeps,
 } from '../deploy-tasks';
 
@@ -300,5 +301,49 @@ describe('isDeployTask', () => {
     mkdirSync(path.dirname(ledger()), { recursive: true });
     writeFileSync(ledger(), content);
     expect(isDeployTask(dir, '001-x')).toBe(false);
+  });
+});
+
+// F-002: the queue started a blocker task long after its reason was gone
+describe('staleQueuedDeployTask', () => {
+  const withCi = () => ({ id: 'p1', path: dir, settings: { deploy: { repo: { owner: 'o', repo: 'r' } } } }) as unknown as Project;
+  const scan = (...blockers: ReadinessBlocker[]) => ({ scannedAt: '2026-11-12T10:00:00Z', blockers, owner: [], workflow: {} }) as unknown as ReadinessResult;
+
+  it('says nothing about a task the CI check did not create', () => {
+    expect(staleQueuedDeployTask(withCi(), '009-manual', scan())).toBeUndefined();
+  });
+
+  it('lets a blocker task start while the saved check still reports its blocker', async () => {
+    await createBlockerTasks(withCi(), [code], deps());
+    expect(staleQueuedDeployTask(withCi(), tasks[0].specId, scan(code))).toBeUndefined();
+  });
+
+  it('holds a blocker task whose blocker the saved check no longer reports', async () => {
+    await createBlockerTasks(withCi(), [code, wf], deps());
+    expect(staleQueuedDeployTask(withCi(), tasks[0].specId, scan(wf))).toBe('blocker-gone');
+    expect(staleQueuedDeployTask(withCi(), tasks[1].specId, scan(wf))).toBeUndefined();
+  });
+
+  it('holds a blocker task when no check result is saved (an old Deploy result is not one)', async () => {
+    await createBlockerTasks(withCi(), [code], deps());
+    expect(staleQueuedDeployTask(withCi(), tasks[0].specId, null)).toBe('blocker-gone');
+  });
+
+  it('holds every task of the CI check once CI is no longer set up for the project', async () => {
+    await createBlockerTasks(withCi(), [code], deps());
+    await createRunFixTask(withCi(), { key: 'run:.github/workflows/ci.yml', title: 'Fix CI', description: 'd' }, deps());
+    expect(staleQueuedDeployTask(project(), tasks[0].specId, scan(code))).toBe('ci-off');
+    expect(staleQueuedDeployTask(project(), tasks[1].specId, scan(code))).toBe('ci-off');
+  });
+
+  it('leaves a run fix alone: the check result says nothing about a failed run', async () => {
+    await createRunFixTask(withCi(), { key: 'run:.github/workflows/ci.yml', title: 'Fix CI', description: 'd' }, deps());
+    expect(staleQueuedDeployTask(withCi(), tasks[0].specId, scan())).toBeUndefined();
+  });
+
+  it('holds a task of a kind the CI check no longer has (old Deploy data)', () => {
+    mkdirSync(path.dirname(ledger()), { recursive: true });
+    writeFileSync(ledger(), JSON.stringify({ tasks: [{ key: 'unsupported:go', specId: '004-go', at: '2026-10-01T10:00:00Z' }], handledRuns: [], gaveUp: [] }));
+    expect(staleQueuedDeployTask(withCi(), '004-go', scan())).toBe('blocker-gone');
   });
 });

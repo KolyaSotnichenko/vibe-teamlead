@@ -13,9 +13,10 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { Project, Task, TaskMetadata } from '../../shared/types';
-import type { ReadinessBlocker } from '../../shared/types/deploy';
+import type { ReadinessBlocker, ReadinessResult } from '../../shared/types/deploy';
 import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
 import { writeFileReplacingSync } from '../ai/safe-write';
+import { isCiSetUp } from './ci-setup';
 
 export interface DeployTaskDeps {
   getTasks(projectId: string): Task[];
@@ -280,6 +281,27 @@ export function createRunFixTask(
  */
 export function isDeployTask(projectPath: string, specId: string): boolean {
   return readLedger(projectPath).tasks.some((entry) => typeof specId === 'string' && entry?.specId === specId);
+}
+
+/** Why a task the CI check created should not start by itself any more */
+export type StaleDeployTask = 'ci-off' | 'blocker-gone';
+
+/**
+ * A task of the CI check waits in the queue for a free slot, and that can take long. Whether its
+ * reason is gone by the time it would start: CI is no longer set up for the project, or it fixes
+ * a blocker the saved check (`readiness`, null when none is saved) does not report. A run fix is
+ * not backed by the check, so only "CI is off" holds it. Undefined: the task may start, or the
+ * CI check did not create it. Reads the ledger only.
+ */
+export function staleQueuedDeployTask(project: Project, specId: string, readiness: ReadinessResult | null): StaleDeployTask | undefined {
+  const entry = readLedger(project.path).tasks.filter((t) => t?.specId === specId).pop();
+  if (!entry) return undefined;
+  if (!isCiSetUp(project)) return 'ci-off';
+  const kind = kindOf(entry);
+  if (kind === 'run') return undefined;
+  // A kind the check no longer has (old Deploy data) reports nothing either
+  if (kind !== 'code' && kind !== 'workflow') return 'blocker-gone';
+  return readiness?.blockers.some((b) => b.key === entry.key) ? undefined : 'blocker-gone';
 }
 
 /** Each ledger key's latest task: its spec and current status (undefined when the task is gone). */

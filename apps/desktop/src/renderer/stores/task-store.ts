@@ -860,6 +860,8 @@ export interface PersistStatusResult {
   success: boolean;
   worktreeExists?: boolean;
   worktreePath?: string;
+  /** The queue did not start a task of the CI check whose reason is gone; it is back in Planning */
+  staleCiTask?: boolean;
   error?: string;
 }
 
@@ -870,7 +872,7 @@ export interface PersistStatusResult {
 export async function persistTaskStatus(
   taskId: string,
   status: TaskStatus,
-  options?: { forceCleanup?: boolean; keepWorktree?: boolean }
+  options?: { forceCleanup?: boolean; keepWorktree?: boolean; fromQueue?: boolean }
 ): Promise<PersistStatusResult> {
   const store = useTaskStore.getState();
 
@@ -888,6 +890,10 @@ export async function persistTaskStatus(
           worktreePath: result.worktreePath,
           error: result.error
         };
+      }
+      if (result.staleCiTask) {
+        // Main already put the task back in Planning and told this window
+        return { success: false, staleCiTask: true, error: result.error };
       }
       console.error('Failed to persist task status:', result.error);
       return { success: false, error: result.error };
