@@ -5,7 +5,6 @@
  * locations. Handles environment variable expansion and security validation.
  *
  * Used by cli-tool-manager.ts for Git, GitHub CLI, Claude CLI, etc.
- * Follows the same pattern as homebrew-python.ts for platform-specific detection.
  */
 
 import { existsSync } from 'fs';

@@ -571,12 +571,9 @@ app.whenReady().then(() => {
       }
     }
 
-    if (settings.pythonPath || validAutoBuildPath) {
-      console.warn('[main] Configuring AgentManager with settings:', {
-        pythonPath: settings.pythonPath,
-        autoBuildPath: validAutoBuildPath
-      });
-      agentManager.configure(settings.pythonPath, validAutoBuildPath);
+    if (validAutoBuildPath) {
+      console.warn('[main] Configuring AgentManager with the prompts folder:', validAutoBuildPath);
+      agentManager.configure(validAutoBuildPath);
     }
   } catch (error: unknown) {
     // ENOENT means no settings file yet - that's fine, use defaults

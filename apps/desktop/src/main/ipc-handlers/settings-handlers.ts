@@ -111,7 +111,7 @@ export function registerSettingsHandlers(
       // Fixes issue where Windows paths persisted on macOS (and vice versa)
       // when settings were synced/transferred between platforms
       // See: upstream issue #XXX
-      const pathFields = ['pythonPath', 'gitPath', 'githubCLIPath', 'gitlabCLIPath', 'claudePath', 'autoBuildPath'] as const;
+      const pathFields = ['gitPath', 'githubCLIPath', 'gitlabCLIPath', 'claudePath', 'autoBuildPath'] as const;
       for (const field of pathFields) {
         const pathValue = settings[field];
         if (pathValue && isPathFromWrongPlatform(pathValue)) {
@@ -135,7 +135,6 @@ export function registerSettingsHandlers(
 
       // Configure CLI tools with current settings
       configureTools({
-        pythonPath: settings.pythonPath,
         gitPath: settings.gitPath,
         githubCLIPath: settings.githubCLIPath,
         gitlabCLIPath: settings.gitlabCLIPath,
@@ -173,14 +172,12 @@ export function registerSettingsHandlers(
 
         // Configure CLI tools if any paths changed
         if (
-          settings.pythonPath !== undefined ||
           settings.gitPath !== undefined ||
           settings.githubCLIPath !== undefined ||
           settings.gitlabCLIPath !== undefined ||
           settings.claudePath !== undefined
         ) {
           configureTools({
-            pythonPath: newSettings.pythonPath,
             gitPath: newSettings.gitPath,
             githubCLIPath: newSettings.githubCLIPath,
             gitlabCLIPath: newSettings.gitlabCLIPath,
@@ -233,7 +230,6 @@ export function registerSettingsHandlers(
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS_GET_CLI_TOOLS_INFO,
     async (): Promise<IPCResult<{
-      python: ReturnType<typeof getToolInfo>;
       git: ReturnType<typeof getToolInfo>;
       gh: ReturnType<typeof getToolInfo>;
       glab: ReturnType<typeof getToolInfo>;
@@ -243,7 +239,6 @@ export function registerSettingsHandlers(
         return {
           success: true,
           data: {
-            python: getToolInfo('python'),
             git: getToolInfo('git'),
             gh: getToolInfo('gh'),
             glab: getToolInfo('glab'),

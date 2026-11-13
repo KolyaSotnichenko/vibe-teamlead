@@ -256,7 +256,6 @@ export interface AppSettings {
   colorTheme?: ColorTheme;
   defaultModel: string;
   agentFramework: string;
-  pythonPath?: string;
   gitPath?: string;
   githubCLIPath?: string;
   gitlabCLIPath?: string;

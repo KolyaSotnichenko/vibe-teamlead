@@ -22,6 +22,8 @@ import { loadStoredClaudeKey, saveClaudeKey } from './credential';
 
 /** Settings fields that belonged to the removed layer. */
 export const LEGACY_SETTINGS_FIELDS = [
+  // The Python path of the pipeline that ran on Python; nothing reads it
+  'pythonPath',
   'providerAccounts',
   'globalPriorityOrder',
   'crossProviderPriorityOrder',

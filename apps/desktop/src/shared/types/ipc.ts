@@ -289,7 +289,6 @@ export interface ElectronAPI {
   getSentryConfig: () => Promise<{ dsn: string; tracesSampleRate: number; profilesSampleRate: number }>;
 
   getCliToolsInfo: () => Promise<IPCResult<{
-    python: import('./cli').ToolDetectionResult;
     git: import('./cli').ToolDetectionResult;
     gh: import('./cli').ToolDetectionResult;
     glab: import('./cli').ToolDetectionResult;

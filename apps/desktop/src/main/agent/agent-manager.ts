@@ -50,8 +50,8 @@ export class AgentManager extends EventEmitter {
   /**
    * Configure paths for the prompts
    */
-  configure(pythonPath?: string, autoBuildSourcePath?: string): void {
-    this.processManager.configure(pythonPath, autoBuildSourcePath);
+  configure(autoBuildSourcePath?: string): void {
+    this.processManager.configure(autoBuildSourcePath);
   }
 
   /**

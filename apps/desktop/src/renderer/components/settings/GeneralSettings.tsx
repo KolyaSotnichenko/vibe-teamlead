@@ -84,7 +84,6 @@ function ToolDetectionDisplay({ info, isLoading, t }: ToolDetectionDisplayProps)
 export function GeneralSettings({ settings, onSettingsChange, section }: GeneralSettingsProps) {
   const { t } = useTranslation('settings');
   const [toolsInfo, setToolsInfo] = useState<{
-    python: ToolDetectionResult;
     git: ToolDetectionResult;
     gh: ToolDetectionResult;
     glab: ToolDetectionResult;
@@ -98,7 +97,7 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
       setIsLoadingTools(true);
       window.electronAPI
         .getCliToolsInfo()
-        .then((result: { success: boolean; data?: { python: ToolDetectionResult; git: ToolDetectionResult; gh: ToolDetectionResult; glab: ToolDetectionResult; claude: ToolDetectionResult } }) => {
+        .then((result: { success: boolean; data?: { git: ToolDetectionResult; gh: ToolDetectionResult; glab: ToolDetectionResult; claude: ToolDetectionResult } }) => {
           if (result.success && result.data) {
             setToolsInfo(result.data);
           }
@@ -339,24 +338,6 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
       description={t('general.pathsDescription')}
     >
       <div className="space-y-6">
-        <div className="space-y-3">
-          <Label htmlFor="pythonPath" className="text-sm font-medium text-foreground">{t('general.pythonPath')}</Label>
-          <p className="text-sm text-muted-foreground">{t('general.pythonPathDescription')}</p>
-          <Input
-            id="pythonPath"
-            placeholder={t('general.pythonPathPlaceholder')}
-            className="w-full max-w-lg"
-            value={settings.pythonPath || ''}
-            onChange={(e) => onSettingsChange({ ...settings, pythonPath: e.target.value })}
-          />
-          {!settings.pythonPath && (
-            <ToolDetectionDisplay
-              info={toolsInfo?.python || null}
-              isLoading={isLoadingTools}
-              t={t}
-            />
-          )}
-        </div>
         <div className="space-y-3">
           <Label htmlFor="gitPath" className="text-sm font-medium text-foreground">{t('general.gitPath')}</Label>
           <p className="text-sm text-muted-foreground">{t('general.gitPathDescription')}</p>

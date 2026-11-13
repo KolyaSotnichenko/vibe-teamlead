@@ -111,7 +111,7 @@ export class AgentProcessManager {
     this.emitter = emitter;
   }
 
-  configure(_pythonPath?: string, autoBuildSourcePath?: string): void {
+  configure(autoBuildSourcePath?: string): void {
     if (autoBuildSourcePath) {
       this.autoBuildSourcePath = autoBuildSourcePath;
     }

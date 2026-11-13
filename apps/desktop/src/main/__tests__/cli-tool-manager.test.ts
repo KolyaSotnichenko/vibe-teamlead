@@ -154,11 +154,6 @@ vi.mock('../env-utils', () => {
   });
 });
 
-// Mock homebrew-python utility
-vi.mock('../utils/homebrew-python', () => ({
-  findHomebrewPython: vi.fn(() => null)
-}));
-
 // Mock windows-paths utility
 vi.mock('../utils/windows-paths', () => ({
   findWindowsExecutableViaWhere: vi.fn(() => null),

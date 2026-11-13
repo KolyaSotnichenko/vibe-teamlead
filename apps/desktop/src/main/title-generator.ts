@@ -31,15 +31,6 @@ export class TitleGenerator extends EventEmitter {
   }
 
   /**
-   * No-op configure() kept for backward compatibility with project-handlers.ts.
-   * Python path and source path are no longer needed.
-   */
-  // biome-ignore lint/suspicious/noExplicitAny: kept for backward compatibility
-  configure(_pythonPath?: string, _autoBuildSourcePath?: string): void {
-    // No-op: TypeScript implementation does not need Python path or source path
-  }
-
-  /**
    * Generate a task title from a description using Claude AI
    * @param description - The task description to generate a title from
    * @returns Promise resolving to the generated title or null on failure

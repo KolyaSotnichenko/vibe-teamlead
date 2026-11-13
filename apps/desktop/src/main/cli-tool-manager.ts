@@ -1,21 +1,19 @@
 /**
  * CLI Tool Manager
  *
- * Centralized management for CLI tools (Python, Git, GitHub CLI, Claude CLI) used throughout
+ * Centralized management for CLI tools (Git, GitHub CLI, GitLab CLI, Claude CLI) used throughout
  * the application. Provides intelligent multi-level detection with user
  * configuration support.
  *
  * Detection Priority (for each tool):
  * 1. User configuration (from settings.json)
- * 2. Virtual environment (Python only - project-specific venv)
- * 3. Homebrew (macOS - architecture-aware for Apple Silicon vs Intel)
- * 4. System PATH (augmented with common binary locations)
- * 5. Platform-specific standard locations
+ * 2. Homebrew (macOS - architecture-aware for Apple Silicon vs Intel)
+ * 3. System PATH (augmented with common binary locations)
+ * 4. Platform-specific standard locations
  *
  * Features:
  * - Session-based caching (no TTL - cache persists until app restart or settings
  *   change)
- * - Version validation (Python 3.10+ required for claude-agent-sdk)
  * - Platform-aware detection (macOS, Windows, Linux)
  * - Graceful fallbacks when tools not found
  */
@@ -25,11 +23,9 @@ import { existsSync, readdirSync, promises as fsPromises } from 'fs';
 import path from 'path';
 import os from 'os';
 import { promisify } from 'util';
-import { app } from 'electron';
 import { findExecutable, findExecutableAsync, getAugmentedEnv, getAugmentedEnvAsync, shouldUseShell, existsAsync } from './env-utils';
 import { isWindows, isMacOS, isUnix, joinPaths, getExecutableExtension } from './platform';
 import type { ToolDetectionResult } from '../shared/types';
-import { findHomebrewPython as findHomebrewPythonUtil } from './utils/homebrew-python';
 
 const execFileAsync = promisify(execFile);
 
@@ -55,14 +51,13 @@ import {
 /**
  * Supported CLI tools managed by this system
  */
-export type CLITool = 'python' | 'git' | 'gh' | 'glab' | 'claude';
+export type CLITool = 'git' | 'gh' | 'glab' | 'claude';
 
 /**
  * User configuration for CLI tool paths
  * Maps to settings stored in settings.json
  */
 export interface ToolConfig {
-  pythonPath?: string;
   gitPath?: string;
   githubCLIPath?: string;
   gitlabCLIPath?: string;
@@ -149,7 +144,7 @@ interface ClaudeDetectionPaths {
  * and async detection methods.
  *
  * Note: This is the single source of truth for CLI detection paths.
- * The Python backend relies on the Claude Agent SDK's bundled CLI,
+ * Agent sessions rely on the Claude Agent SDK's bundled CLI,
  * so it no longer needs its own path detection logic.
  *
  * @param homeDir - User's home directory (from os.homedir())
@@ -272,10 +267,10 @@ export function buildClaudeDetectionResult(
  *   import { getToolPath, configureTools } from './cli-tool-manager';
  *
  *   // Configure with user settings (optional)
- *   configureTools({ pythonPath: '/custom/python3', gitPath: '/custom/git' });
+ *   configureTools({ gitPath: '/custom/git' });
  *
  *   // Get tool path (auto-detects if not configured)
- *   const pythonPath = getToolPath('python');
+ *   const gitPath = getToolPath('git');
  *   const gitPath = getToolPath('git');
  */
 class CLIToolManager {
@@ -366,8 +361,6 @@ class CLIToolManager {
    */
   private detectToolPath(tool: CLITool): ToolDetectionResult {
     switch (tool) {
-      case 'python':
-        return this.detectPython();
       case 'git':
         return this.detectGit();
       case 'gh':
@@ -383,127 +376,6 @@ class CLIToolManager {
           message: `Unknown tool: ${tool}`,
         };
     }
-  }
-
-  /**
-   * Detect Python with multi-level priority
-   *
-   * Priority order:
-   * 1. User configuration (if valid for current platform)
-   * 2. Bundled Python (packaged apps only)
-   * 3. Homebrew Python (macOS)
-   * 4. System PATH (py -3, python3, python)
-   *
-   * Validates Python version >= 3.10.0 (required by claude-agent-sdk)
-   *
-   * @returns Detection result for Python
-   */
-  private detectPython(): ToolDetectionResult {
-    const MINIMUM_VERSION = '3.10.0';
-
-    // 1. User configuration
-    if (this.userConfig.pythonPath) {
-      // Check if path is from wrong platform (e.g., Windows path on macOS)
-      if (isWrongPlatformPath(this.userConfig.pythonPath)) {
-        console.warn(
-          `[Python] User-configured path is from different platform, ignoring: ${this.userConfig.pythonPath}`
-        );
-      } else {
-        const validation = this.validatePython(this.userConfig.pythonPath);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: this.userConfig.pythonPath,
-            version: validation.version,
-            source: 'user-config',
-            message: `Using user-configured Python: ${this.userConfig.pythonPath}`,
-          };
-        }
-        console.warn(
-          `[Python] User-configured path invalid: ${validation.message}`
-        );
-      }
-    }
-
-    // 2. Bundled Python (packaged apps only)
-    if (app.isPackaged) {
-      const bundledPath = this.getBundledPythonPath();
-      if (bundledPath) {
-        const validation = this.validatePython(bundledPath);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: bundledPath,
-            version: validation.version,
-            source: 'bundled',
-            message: `Using bundled Python: ${bundledPath}`,
-          };
-        }
-      }
-    }
-
-    // 3. Homebrew Python (macOS)
-    if (isMacOS()) {
-      const homebrewPath = this.findHomebrewPython();
-      if (homebrewPath) {
-        const validation = this.validatePython(homebrewPath);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: homebrewPath,
-            version: validation.version,
-            source: 'homebrew',
-            message: `Using Homebrew Python: ${homebrewPath}`,
-          };
-        }
-      }
-    }
-
-    // 4. System PATH (augmented)
-    const candidates =
-      isWindows()
-        ? ['py -3', 'python', 'python3', 'py']
-        : ['python3', 'python'];
-
-    for (const cmd of candidates) {
-      // Special handling for Windows 'py -3' launcher
-      if (cmd.startsWith('py ')) {
-        const validation = this.validatePython(cmd);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: cmd,
-            version: validation.version,
-            source: 'system-path',
-            message: `Using system Python: ${cmd}`,
-          };
-        }
-      } else {
-        // For regular python/python3, find the actual path
-        const pythonPath = findExecutable(cmd);
-        if (pythonPath) {
-          const validation = this.validatePython(pythonPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: pythonPath,
-              version: validation.version,
-              source: 'system-path',
-              message: `Using system Python: ${pythonPath}`,
-            };
-          }
-        }
-      }
-    }
-
-    // 5. Not found
-    return {
-      found: false,
-      source: 'fallback',
-      message:
-        `Python ${MINIMUM_VERSION}+ not found. ` +
-        'Please install Python or configure in Settings.',
-    };
   }
 
   /**
@@ -927,68 +799,6 @@ class CLIToolManager {
   }
 
   /**
-   * Validate Python version and availability
-   *
-   * Checks that Python executable exists and meets minimum version requirement
-   * (3.10.0+) for claude-agent-sdk compatibility.
-   *
-   * @param pythonCmd - The Python command to validate
-   * @returns Validation result with version information
-   */
-  private validatePython(pythonCmd: string): ToolValidation {
-    const MINIMUM_VERSION = '3.10.0';
-
-    try {
-      // Parse command to handle cases like 'py -3' on Windows
-      // This avoids command injection by using execFileSync instead of execSync
-      const parts = pythonCmd.split(' ');
-      const cmd = parts[0];
-      const args = [...parts.slice(1), '--version'];
-
-      const version = execFileSync(cmd, args, {
-        encoding: 'utf-8',
-        timeout: 5000,
-        windowsHide: true,
-        env: getAugmentedEnv(),
-      }).trim();
-
-      const match = version.match(/Python (\d+\.\d+\.\d+)/);
-      if (!match) {
-        return {
-          valid: false,
-          message: 'Unable to detect Python version',
-        };
-      }
-
-      const versionStr = match[1];
-      const [major, minor] = versionStr.split('.').map(Number);
-      const [reqMajor, reqMinor] = MINIMUM_VERSION.split('.').map(Number);
-
-      const meetsRequirement =
-        major > reqMajor || (major === reqMajor && minor >= reqMinor);
-
-      if (!meetsRequirement) {
-        return {
-          valid: false,
-          version: versionStr,
-          message: `Python ${versionStr} is too old. Requires ${MINIMUM_VERSION}+`,
-        };
-      }
-
-      return {
-        valid: true,
-        version: versionStr,
-        message: `Python ${versionStr} meets requirements`,
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        message: `Failed to validate Python: ${error}`,
-      };
-    }
-  }
-
-  /**
    * Validate Git availability and version
    *
    * @param gitCmd - The Git command to validate
@@ -1229,8 +1039,6 @@ class CLIToolManager {
     switch (tool) {
       case 'claude':
         return this.detectClaudeAsync();
-      case 'python':
-        return this.detectPythonAsync();
       case 'git':
         return this.detectGitAsync();
       case 'gh':
@@ -1312,64 +1120,6 @@ class CLIToolManager {
       return {
         valid: false,
         message: `Failed to validate Claude CLI: ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  }
-
-  /**
-   * Validate Python version asynchronously (non-blocking)
-   *
-   * @param pythonCmd - The Python command to validate
-   * @returns Promise resolving to validation result
-   */
-  private async validatePythonAsync(pythonCmd: string): Promise<ToolValidation> {
-    const MINIMUM_VERSION = '3.10.0';
-
-    try {
-      const parts = pythonCmd.split(' ');
-      const cmd = parts[0];
-      const args = [...parts.slice(1), '--version'];
-
-      const { stdout } = await execFileAsync(cmd, args, {
-        encoding: 'utf-8',
-        timeout: 5000,
-        windowsHide: true,
-        env: await getAugmentedEnvAsync(),
-      });
-
-      const version = stdout.trim();
-      const match = version.match(/Python (\d+\.\d+\.\d+)/);
-      if (!match) {
-        return {
-          valid: false,
-          message: 'Unable to detect Python version',
-        };
-      }
-
-      const versionStr = match[1];
-      const [major, minor] = versionStr.split('.').map(Number);
-      const [reqMajor, reqMinor] = MINIMUM_VERSION.split('.').map(Number);
-
-      const meetsRequirement =
-        major > reqMajor || (major === reqMajor && minor >= reqMinor);
-
-      if (!meetsRequirement) {
-        return {
-          valid: false,
-          version: versionStr,
-          message: `Python ${versionStr} is too old. Requires ${MINIMUM_VERSION}+`,
-        };
-      }
-
-      return {
-        valid: true,
-        version: versionStr,
-        message: `Python ${versionStr} meets requirements`,
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        message: `Failed to validate Python: ${error}`,
       };
     }
   }
@@ -1572,124 +1322,6 @@ class CLIToolManager {
       found: false,
       source: 'fallback',
       message: 'Claude CLI not found. Install from https://claude.ai/download',
-    };
-  }
-
-  /**
-   * Detect Python asynchronously (non-blocking)
-   *
-   * Same detection logic as detectPython but uses async validation.
-   *
-   * @returns Promise resolving to detection result
-   */
-  private async detectPythonAsync(): Promise<ToolDetectionResult> {
-    const MINIMUM_VERSION = '3.10.0';
-
-    // 1. User configuration
-    if (this.userConfig.pythonPath) {
-      if (isWrongPlatformPath(this.userConfig.pythonPath)) {
-        console.warn(
-          `[Python] User-configured path is from different platform, ignoring: ${this.userConfig.pythonPath}`
-        );
-      } else {
-        const validation = await this.validatePythonAsync(this.userConfig.pythonPath);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: this.userConfig.pythonPath,
-            version: validation.version,
-            source: 'user-config',
-            message: `Using user-configured Python: ${this.userConfig.pythonPath}`,
-          };
-        }
-        console.warn(`[Python] User-configured path invalid: ${validation.message}`);
-      }
-    }
-
-    // 2. Bundled Python (packaged apps only)
-    if (app.isPackaged) {
-      const bundledPath = this.getBundledPythonPath();
-      if (bundledPath) {
-        const validation = await this.validatePythonAsync(bundledPath);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: bundledPath,
-            version: validation.version,
-            source: 'bundled',
-            message: `Using bundled Python: ${bundledPath}`,
-          };
-        }
-      }
-    }
-
-    // 3. Homebrew Python (macOS) - simplified async version
-    if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/python3',
-        '/opt/homebrew/bin/python3.12',
-        '/opt/homebrew/bin/python3.11',
-        '/opt/homebrew/bin/python3.10',
-        '/usr/local/bin/python3',
-      ];
-      for (const pythonPath of homebrewPaths) {
-        if (await existsAsync(pythonPath)) {
-          const validation = await this.validatePythonAsync(pythonPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: pythonPath,
-              version: validation.version,
-              source: 'homebrew',
-              message: `Using Homebrew Python: ${pythonPath}`,
-            };
-          }
-        }
-      }
-    }
-
-    // 4. System PATH (augmented)
-    const candidates =
-      isWindows()
-        ? ['py -3', 'python', 'python3', 'py']
-        : ['python3', 'python'];
-
-    for (const cmd of candidates) {
-      if (cmd.startsWith('py ')) {
-        const validation = await this.validatePythonAsync(cmd);
-        if (validation.valid) {
-          return {
-            found: true,
-            path: cmd,
-            version: validation.version,
-            source: 'system-path',
-            message: `Using system Python: ${cmd}`,
-          };
-        }
-      } else {
-        const pythonPath = await findExecutableAsync(cmd);
-        if (pythonPath) {
-          const validation = await this.validatePythonAsync(pythonPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: pythonPath,
-              version: validation.version,
-              source: 'system-path',
-              message: `Using system Python: ${pythonPath}`,
-            };
-          }
-        }
-      }
-    }
-
-    // 5. Not found
-    return {
-      found: false,
-      source: 'fallback',
-      message:
-        `Python ${MINIMUM_VERSION}+ not found. ` +
-        'Please install Python or configure in Settings.',
     };
   }
 
@@ -1990,40 +1622,6 @@ class CLIToolManager {
   }
 
   /**
-   * Get bundled Python path for packaged apps
-   *
-   * Only available in packaged Electron apps where Python is bundled
-   * in the resources directory.
-   *
-   * @returns Path to bundled Python or null if not found
-   */
-  private getBundledPythonPath(): string | null {
-    if (!app.isPackaged) {
-      return null;
-    }
-
-    const resourcesPath = process.resourcesPath;
-    const pythonPath = isWindows()
-      ? path.join(resourcesPath, 'python', 'python.exe')
-      : path.join(resourcesPath, 'python', 'bin', 'python3');
-
-    return existsSync(pythonPath) ? pythonPath : null;
-  }
-
-  /**
-   * Find Homebrew Python on macOS
-   * Delegates to shared utility function.
-   *
-   * @returns Path to Homebrew Python or null if not found
-   */
-  private findHomebrewPython(): string | null {
-    return findHomebrewPythonUtil(
-      (pythonPath) => this.validatePython(pythonPath),
-      '[CLI Tools]'
-    );
-  }
-
-  /**
    * Clear cache manually
    *
    * Useful for testing or forcing re-detection.
@@ -2064,7 +1662,7 @@ const cliToolManager = new CLIToolManager();
  * ```typescript
  * import { getToolPath } from './cli-tool-manager';
  *
- * const pythonPath = getToolPath('python');
+ * const gitPath = getToolPath('git');
  * const gitPath = getToolPath('git');
  * const ghPath = getToolPath('gh');
  *
@@ -2092,7 +1690,7 @@ export function getToolPath(tool: CLITool): string {
  * import { getClaudeCliPathForSdk } from './cli-tool-manager';
  *
  * const cliPath = getClaudeCliPathForSdk();
- * // Pass to Python backend which uses Claude Agent SDK
+ * // Pass to the Claude Agent SDK
  * // If null, SDK will use its bundled claude.exe
  * ```
  */
@@ -2114,7 +1712,6 @@ export function getClaudeCliPathForSdk(): string | null {
  *
  * // When settings are loaded or updated
  * configureTools({
- *   pythonPath: settings.pythonPath,
  *   gitPath: settings.gitPath,
  *   githubCLIPath: settings.githubCLIPath,
  * });
@@ -2137,11 +1734,11 @@ export function configureTools(config: ToolConfig): void {
  * ```typescript
  * import { getToolInfo } from './cli-tool-manager';
  *
- * const pythonInfo = getToolInfo('python');
- * console.log(`Found: ${pythonInfo.found}`);
- * console.log(`Path: ${pythonInfo.path}`);
- * console.log(`Version: ${pythonInfo.version}`);
- * console.log(`Source: ${pythonInfo.source}`);
+ * const gitInfo = getToolInfo('git');
+ * console.log(`Found: ${gitInfo.found}`);
+ * console.log(`Path: ${gitInfo.path}`);
+ * console.log(`Version: ${gitInfo.version}`);
+ * console.log(`Source: ${gitInfo.source}`);
  * ```
  */
 export function getToolInfo(tool: CLITool): ToolDetectionResult {
@@ -2223,7 +1820,7 @@ export async function getToolPathAsync(tool: CLITool): Promise<string> {
  * import { getClaudeCliPathForSdkAsync } from './cli-tool-manager';
  *
  * const cliPath = await getClaudeCliPathForSdkAsync();
- * // Pass to Python backend which uses Claude Agent SDK
+ * // Pass to the Claude Agent SDK
  * ```
  */
 export async function getClaudeCliPathForSdkAsync(): Promise<string | null> {

@@ -17,7 +17,6 @@ export interface SettingsAPI {
 
   // CLI Tools Detection
   getCliToolsInfo: () => Promise<IPCResult<{
-    python: ToolDetectionResult;
     git: ToolDetectionResult;
     gh: ToolDetectionResult;
     claude: ToolDetectionResult;
@@ -52,7 +51,6 @@ export const createSettingsAPI = (): SettingsAPI => ({
 
   // CLI Tools Detection
   getCliToolsInfo: (): Promise<IPCResult<{
-    python: ToolDetectionResult;
     git: ToolDetectionResult;
     gh: ToolDetectionResult;
     claude: ToolDetectionResult;

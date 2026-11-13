@@ -56,13 +56,6 @@ export class InsightsService extends EventEmitter {
   }
 
   /**
-   * Configure paths for the prompts
-   */
-  configure(pythonPath?: string, autoBuildSourcePath?: string): void {
-    this.config.configure(pythonPath, autoBuildSourcePath);
-  }
-
-  /**
    * Load current session from disk or cache
    */
   loadSession(projectId: string, projectPath: string): InsightsSession | null {

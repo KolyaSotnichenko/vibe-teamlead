@@ -33,7 +33,6 @@ export const DEFAULT_APP_SETTINGS = {
   colorTheme: 'default' as const,
   defaultModel: 'opus',
   agentFramework: 'vibe-teamlead',
-  pythonPath: undefined as string | undefined,
   gitPath: undefined as string | undefined,
   githubCLIPath: undefined as string | undefined,
   gitlabCLIPath: undefined as string | undefined,

@@ -72,11 +72,6 @@ export class ChangelogService extends EventEmitter {
     }
   }
 
-  /** Kept for the shared configure() call from settings; nothing to configure. */
-  configure(_pythonPath?: string, _autoBuildSourcePath?: string): void {
-    // Nothing to configure: changelog runs on Claude Code
-  }
-
   /**
    * Get or create the generator instance
    */
