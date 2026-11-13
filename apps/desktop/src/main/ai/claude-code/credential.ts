@@ -14,7 +14,8 @@
  * Main process only.
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { app } from 'electron';
@@ -57,25 +58,54 @@ export function normalizeStoredCredential(parsed: Partial<StoredCredential> | un
   return { apiKey, subscriptionToken };
 }
 
-function loadStored(): StoredCredential {
+/**
+ * What the file holds, and whether it is there but could not be read (the keychain refused, or
+ * the file is damaged). Unreadable is not "no keys": a save must not put one key over both.
+ */
+function readStored(): { stored: StoredCredential; unreadable: boolean } {
   const path = storePath();
-  if (!existsSync(path)) return {};
+  if (!existsSync(path)) return { stored: {}, unreadable: false };
   try {
     const raw = decryptToken(readFileSync(path, 'utf-8'));
-    return normalizeStoredCredential(raw ? (JSON.parse(raw) as Partial<StoredCredential>) : undefined);
+    // decryptToken gives an empty string when decryption failed
+    if (!raw) return { stored: {}, unreadable: true };
+    return { stored: normalizeStoredCredential(JSON.parse(raw) as Partial<StoredCredential>), unreadable: false };
   } catch {
-    return {};
+    return { stored: {}, unreadable: true };
   }
 }
 
-function writeStored(stored: StoredCredential): void {
+function loadStored(): StoredCredential {
+  return readStored().stored;
+}
+
+/**
+ * Writes the credentials (a new file renamed into place, readable by the owner only), or removes
+ * the file when none is left. A file that could not be read is first moved to
+ * `claude-credential.json.unreadable`, so the keys in it are not lost for good.
+ */
+function writeStored(stored: StoredCredential, previousUnreadable: boolean): void {
   const path = storePath();
+  if (previousUnreadable) {
+    try {
+      renameSync(path, `${path}.unreadable`);
+    } catch {
+      // Left in place; it is replaced or removed below
+    }
+  }
   if (!stored.apiKey && !stored.subscriptionToken) {
     rmSync(path, { force: true });
     return;
   }
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, encryptToken(JSON.stringify(stored)), { mode: 0o600 });
+  const temporary = join(dirname(path), `.${randomBytes(8).toString('hex')}.claude-credential.json`);
+  try {
+    writeFileSync(temporary, encryptToken(JSON.stringify(stored)), { mode: 0o600, flag: 'wx' });
+    renameSync(temporary, path);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
 }
 
 /** The API key saved in the app, if any. */
@@ -87,16 +117,16 @@ export function loadStoredClaudeKey(): string | undefined {
 export function saveClaudeKey(key: string): ClaudeCredentialSlot {
   const value = key.trim();
   if (!value) throw new Error('The key is empty');
-  const stored = loadStored();
+  const { stored, unreadable } = readStored();
   const slot: ClaudeCredentialSlot = isSubscriptionToken(value) ? 'subscription' : 'api';
-  writeStored(slot === 'subscription' ? { ...stored, subscriptionToken: value } : { ...stored, apiKey: value });
+  writeStored(slot === 'subscription' ? { ...stored, subscriptionToken: value } : { ...stored, apiKey: value }, unreadable);
   return slot;
 }
 
 /** Remove one saved credential (default: the one the current mode uses). */
 export function clearClaudeKey(slot: ClaudeCredentialSlot = isSubscriptionModeEnabled() ? 'subscription' : 'api'): void {
-  const stored = loadStored();
-  writeStored(slot === 'subscription' ? { ...stored, subscriptionToken: undefined } : { ...stored, apiKey: undefined });
+  const { stored, unreadable } = readStored();
+  writeStored(slot === 'subscription' ? { ...stored, subscriptionToken: undefined } : { ...stored, apiKey: undefined }, unreadable);
 }
 
 /**
