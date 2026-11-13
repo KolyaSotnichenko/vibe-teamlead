@@ -82,7 +82,7 @@ describe('pushTaskBranch', () => {
     const rec = await pushTaskBranch(project(), task('a'), deps);
     expect(push).toHaveBeenCalledWith('/proj', 'https://github.com/me/app.git', 'vibe-teamlead/spec-a:vibe-teamlead/spec-a');
     expect(rec).toEqual({ sha: 'sha-of-vibe-teamlead/spec-a', at: '2026-01-01T00:00:00.000Z' });
-    expect(lastBranchPush('a')).toEqual(rec);
+    expect(lastBranchPush('p1', 'a')).toEqual(rec);
     expect(emit).toHaveBeenCalledWith('p1', 'a');
   });
 
@@ -109,7 +109,7 @@ describe('pushTaskBranch', () => {
     const { deps, emit } = makeDeps(push);
     const rec = await pushTaskBranch(project(), task('c'), deps);
     expect(rec.error).toEqual({ kind: 'conflict' });
-    expect(lastBranchPush('c')?.error?.kind).toBe('conflict');
+    expect(lastBranchPush('p1', 'c')?.error?.kind).toBe('conflict');
     expect(emit).toHaveBeenCalledTimes(1);
     const rec2 = await pushTaskBranch(project(), task('c'), deps);
     expect(rec2.error).toBeUndefined();
@@ -214,11 +214,11 @@ describe('requestPreviewPush (session end, QA fixes, review)', () => {
     // The coder marks the subtask completed before it commits
     onSubtasksProgress('r1', 1);
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
-    await vi.waitFor(() => expect(lastBranchPush('r1')?.sha).toBe('sha-1'));
+    await vi.waitFor(() => expect(lastBranchPush('p1', 'r1')?.sha).toBe('sha-1'));
     head = 'sha-2'; // the commit
     requestPreviewPush('r1'); // the coder session ended
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(lastBranchPush('r1')?.sha).toBe('sha-2'));
+    await vi.waitFor(() => expect(lastBranchPush('p1', 'r1')?.sha).toBe('sha-2'));
   });
 
   it('a QA fix commit gets pushed', async () => {
@@ -228,10 +228,10 @@ describe('requestPreviewPush (session end, QA fixes, review)', () => {
     deps.head = vi.fn(async () => head) as never;
     setBranchPushDeps(deps, () => ({ project: project(), task: task('r2') }));
     requestPreviewPush('r2');
-    await vi.waitFor(() => expect(lastBranchPush('r2')?.sha).toBe('sha-a'));
+    await vi.waitFor(() => expect(lastBranchPush('p1', 'r2')?.sha).toBe('sha-a'));
     head = 'sha-fix';
     requestPreviewPush('r2'); // the QA fixer session ended
-    await vi.waitFor(() => expect(lastBranchPush('r2')?.sha).toBe('sha-fix'));
+    await vi.waitFor(() => expect(lastBranchPush('p1', 'r2')?.sha).toBe('sha-fix'));
     expect(push).toHaveBeenCalledTimes(2);
   });
 
@@ -278,23 +278,23 @@ describe('persisted push records', () => {
     setBranchPushStore(file);
     const { deps } = makeDeps(vi.fn(async () => {}));
     await pushTaskBranch(project(), task('ps'), deps);
-    expect(JSON.parse(readFileSync(file, 'utf-8')).ps).toEqual({ sha: 'sha-of-vibe-teamlead/spec-ps', at: '2026-01-01T00:00:00.000Z' });
+    expect(JSON.parse(readFileSync(file, 'utf-8'))['p1|ps']).toEqual({ sha: 'sha-of-vibe-teamlead/spec-ps', at: '2026-01-01T00:00:00.000Z' });
     // "Restart": the in-memory records are dropped and loaded lazily from the file
     setBranchPushStore(file);
-    expect(lastBranchPush('ps')).toEqual({ sha: 'sha-of-vibe-teamlead/spec-ps', at: '2026-01-01T00:00:00.000Z' });
+    expect(lastBranchPush('p1', 'ps')).toEqual({ sha: 'sha-of-vibe-teamlead/spec-ps', at: '2026-01-01T00:00:00.000Z' });
   });
 
   it('keeps the error kind; a missing or broken file reads as empty', async () => {
     const file = path.join(dir, 'branch-pushes.json');
     setBranchPushStore(file);
-    expect(lastBranchPush('nope')).toBeUndefined();
+    expect(lastBranchPush('p1', 'nope')).toBeUndefined();
     const { deps } = makeDeps(vi.fn(async () => { throw new GitHubWriteError('permissions', 'x'); }));
     await pushTaskBranch(project(), task('pe'), deps);
     setBranchPushStore(file);
-    expect(lastBranchPush('pe')?.error).toEqual({ kind: 'permissions' });
+    expect(lastBranchPush('p1', 'pe')?.error).toEqual({ kind: 'permissions' });
     writeFileSync(file, '{oops');
     setBranchPushStore(file);
-    expect(lastBranchPush('pe')).toBeUndefined();
+    expect(lastBranchPush('p1', 'pe')).toBeUndefined();
   });
 });
 
@@ -385,7 +385,7 @@ describe('deleteTaskBranch', () => {
   const pushed = async (id = 't1') => {
     setBranchPushStore(path.join(mkdtempSync(path.join(tmpdir(), 'bp-del-')), 'branch-pushes.json'));
     await pushTaskBranch(project(), task(id), makeDeps(vi.fn(async () => undefined) as never).deps);
-    expect(lastBranchPush(id)?.sha).toBeTruthy();
+    expect(lastBranchPush('p1', id)?.sha).toBeTruthy();
   };
 
   it('deletes the branch this app pushed and forgets the push', async () => {
@@ -393,7 +393,7 @@ describe('deleteTaskBranch', () => {
     const deleteBranch = vi.fn(async () => undefined);
     expect(await deleteTaskBranch(project(), task(), { deleteBranch })).toBe('deleted');
     expect(deleteBranch).toHaveBeenCalledWith(URL, 'vibe-teamlead/spec-t1');
-    expect(lastBranchPush('t1')).toBeUndefined();
+    expect(lastBranchPush('p1', 't1')).toBeUndefined();
   });
 
   it('forgets the push across a restart too (the store file)', async () => {
@@ -418,14 +418,14 @@ describe('deleteTaskBranch', () => {
     const withPr = { id: 't1', specId: 'spec-t1', status: 'pr_created', metadata: { prUrl: 'https://github.com/me/app/pull/7' } } as never;
     expect(await deleteTaskBranch(project(), withPr, { deleteBranch })).toBe('kept');
     expect(deleteBranch).not.toHaveBeenCalled();
-    expect(lastBranchPush('t1')?.sha).toBeTruthy();
+    expect(lastBranchPush('p1', 't1')?.sha).toBeTruthy();
   });
 
   it('keeps the record when GitHub refuses, and never rejects', async () => {
     await pushed();
     const deleteBranch = vi.fn(async () => { throw new GitHubWriteError('permissions', 'denied'); });
     expect(await deleteTaskBranch(project(), task(), { deleteBranch })).toBe('failed');
-    expect(lastBranchPush('t1')?.sha).toBeTruthy();
+    expect(lastBranchPush('p1', 't1')?.sha).toBeTruthy();
   });
 
   it('does not delete without a recorded repository', async () => {
@@ -433,5 +433,41 @@ describe('deleteTaskBranch', () => {
     const deleteBranch = vi.fn(async () => undefined);
     expect(await deleteTaskBranch(project({}, undefined), task(), { deleteBranch })).toBe('failed');
     expect(deleteBranch).not.toHaveBeenCalled();
+  });
+});
+
+// F-030: a task's id is its spec folder's name, which two projects can share
+describe('push records of two projects with a task of the same name', () => {
+  const other = () => ({ id: 'p2', path: '/other', settings: { deploy: { enabled: true, repo: { ...repo, repo: 'other' } } } }) as never;
+
+  it('are kept apart, in memory and in the file', async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), 'bp-two-')), 'branch-pushes.json');
+    setBranchPushStore(file);
+    const head = vi.fn(async (projectPath: string) => `sha-in-${projectPath}`);
+    const { deps } = makeDeps(vi.fn(async () => undefined) as never);
+    await pushTaskBranch(project(), task('001-same'), { ...deps, head: head as never });
+    await pushTaskBranch(other(), task('001-same'), { ...deps, head: head as never });
+    expect(lastBranchPush('p1', '001-same')?.sha).toBe('sha-in-/proj');
+    expect(lastBranchPush('p2', '001-same')?.sha).toBe('sha-in-/other');
+    expect(Object.keys(JSON.parse(readFileSync(file, 'utf-8'))).sort()).toEqual(['p1|001-same', 'p2|001-same']);
+  });
+
+  it("deleting one project's branch leaves the other project's record", async () => {
+    setBranchPushStore(path.join(mkdtempSync(path.join(tmpdir(), 'bp-two-')), 'branch-pushes.json'));
+    const { deps } = makeDeps(vi.fn(async () => undefined) as never);
+    await pushTaskBranch(project(), task('001-same'), deps);
+    await pushTaskBranch(other(), task('001-same'), deps);
+    expect(await deleteTaskBranch(project(), task('001-same'), { deleteBranch: vi.fn(async () => undefined) })).toBe('deleted');
+    expect(lastBranchPush('p1', '001-same')).toBeUndefined();
+    expect(lastBranchPush('p2', '001-same')?.sha).toBeTruthy();
+  });
+
+  it('a record saved by task id alone, before this, is still read, and replaced by the next push', async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), 'bp-two-')), 'branch-pushes.json');
+    writeFileSync(file, JSON.stringify({ 'spec-old': { sha: 'old-sha', at: '2025-12-01T00:00:00.000Z' } }));
+    setBranchPushStore(file);
+    expect(lastBranchPush('p1', 'spec-old')?.sha).toBe('old-sha');
+    await pushTaskBranch(project(), task('spec-old'), makeDeps(vi.fn(async () => undefined) as never).deps);
+    expect(Object.keys(JSON.parse(readFileSync(file, 'utf-8')))).toEqual(['p1|spec-old']);
   });
 });

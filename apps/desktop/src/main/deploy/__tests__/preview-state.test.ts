@@ -5,6 +5,7 @@ import type { DeployJob, DeployRun } from '../../../shared/types/deploy';
 vi.mock('../branch-push', () => ({
   previewPushAllowed: vi.fn(),
   lastBranchPush: vi.fn(),
+  pushKey: (projectId: string, taskId: string) => `${projectId}|${taskId}`,
 }));
 
 import { previewPushAllowed, lastBranchPush } from '../branch-push';
@@ -31,7 +32,7 @@ function deps(over: Partial<{ runs: DeployRun[]; jobs: DeployJob[]; fail: boolea
 }
 
 beforeEach(() => {
-  invalidatePreview('t1');
+  invalidatePreview('p1', 't1');
   vi.mocked(previewPushAllowed).mockReturnValue({ allowed: true });
   vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at: NOW_ISO });
 });
@@ -76,7 +77,7 @@ describe('previewState (CI status of the pushed sha)', () => {
 
   it('a queued or in-progress run of the sha is running (even beside an older failure)', async () => {
     for (const status of ['queued', 'in_progress'] as const) {
-      invalidatePreview('t1');
+      invalidatePreview('p1', 't1');
       const { d } = deps({ runs: [run(2, 'h1', status), run(1, 'old', 'completed', 'failure')] });
       expect(await previewState(project, task(), d)).toEqual({ state: 'running' });
     }
@@ -176,7 +177,7 @@ describe('cache', () => {
     vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h2', at: NOW_ISO2 });
     await previewState(project, task(), d);
     expect(runs).toHaveBeenCalledTimes(2);
-    invalidatePreview('t1');
+    invalidatePreview('p1', 't1');
     await previewState(project, task(), d);
     expect(runs).toHaveBeenCalledTimes(3);
   });
@@ -221,10 +222,10 @@ describe('settling when no run comes', () => {
 
   it('a push without a valid time settles (no run)', async () => {
     for (const at of [undefined, 'garbage']) {
-      invalidatePreview('t1');
+      invalidatePreview('p1', 't1');
       vi.mocked(lastBranchPush).mockReturnValue({ sha: 'h1', at } as never);
       expect(await previewState(project, task(), deps().d)).toEqual({ state: 'waiting', settled: true });
-      invalidatePreview('t1');
+      invalidatePreview('p1', 't1');
       expect(await previewState(project, task(), deps({ fail: true }).d)).toEqual({ state: 'waiting', settled: true });
     }
   });
@@ -233,7 +234,7 @@ describe('settling when no run comes', () => {
     const young = deps({ fail: true });
     young.d.now = () => at + 5 * MIN;
     expect(await previewState(project, task(), young.d)).toEqual({ state: 'waiting' });
-    invalidatePreview('t1');
+    invalidatePreview('p1', 't1');
     const old = deps({ fail: true });
     old.d.now = () => at + 11 * MIN;
     expect(await previewState(project, task(), old.d)).toEqual({ state: 'waiting', settled: true });

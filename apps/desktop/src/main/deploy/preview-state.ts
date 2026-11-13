@@ -17,7 +17,7 @@
 import { TASK_BRANCH_PREFIX } from '../../shared/constants/config';
 import type { Project, Task } from '../../shared/types';
 import type { TaskCiState } from '../../shared/types/deploy';
-import { lastBranchPush, previewPushAllowed } from './branch-push';
+import { lastBranchPush, previewPushAllowed, pushKey } from './branch-push';
 import type { ActionsClient } from './github-actions';
 
 export interface PreviewDeps {
@@ -36,9 +36,9 @@ const cache = new Map<string, { key: string; at: number; core: Core }>();
 const inFlight = new Map<string, { key: string; promise: Promise<Core | null> }>();
 
 /** Drops a task's cached CI state (a new push makes it stale). */
-export function invalidatePreview(taskId: string): void {
-  cache.delete(taskId);
-  inFlight.delete(taskId);
+export function invalidatePreview(projectId: string, taskId: string): void {
+  cache.delete(pushKey(projectId, taskId));
+  inFlight.delete(pushKey(projectId, taskId));
 }
 
 /** True when the push is older than the point after which a missing run is not expected any more. */
@@ -70,7 +70,9 @@ export async function previewState(project: Project, task: Task, deps: PreviewDe
   if (!allowed.allowed) {
     return allowed.reason === 'not-set-up' ? { state: 'not-set-up' } : { state: 'unavailable', reason: allowed.reason };
   }
-  const push = lastBranchPush(task.id);
+  const push = lastBranchPush(project.id, task.id);
+  // Two projects can each have a task with this id: the cache is per project and task
+  const id = pushKey(project.id, task.id);
   const pushError = push?.error?.kind;
   const withError = <T extends TaskCiState>(s: T): T => (pushError ? { ...s, pushError } : s);
   const pushed = !!push?.sha;
@@ -78,21 +80,21 @@ export async function previewState(project: Project, task: Task, deps: PreviewDe
 
   const key = `${push.sha ?? ''}|${push.at ?? ''}`;
   const now = (deps.now ?? Date.now)();
-  const hit = cache.get(task.id);
+  const hit = cache.get(id);
   if (hit && hit.key === key && ((hit.core.state === 'waiting' ? !!hit.core.settled : hit.core.state !== 'running') || now - hit.at < LIVE_TTL_MS)) {
     return withError({ ...hit.core });
   }
 
-  let flight = inFlight.get(task.id);
+  let flight = inFlight.get(id);
   if (!flight || flight.key !== key) {
     const promise = compute(project, `${TASK_BRANCH_PREFIX}${task.specId}`, deps, push.sha as string, pushIsOld(push.at, now)).catch(() => null);
     flight = { key, promise };
-    inFlight.set(task.id, flight);
+    inFlight.set(id, flight);
     const mine = flight;
     void promise.then((core) => {
-      if (inFlight.get(task.id) !== mine) return;
-      inFlight.delete(task.id);
-      if (core) cache.set(task.id, { key, at: now, core });
+      if (inFlight.get(id) !== mine) return;
+      inFlight.delete(id);
+      if (core) cache.set(id, { key, at: now, core });
     });
   }
   const core = await flight.promise;

@@ -82,6 +82,12 @@ interface TaskState {
   queued?: { project: Project; task: Task; promise: Promise<BranchPushRecord>; resolve: (r: BranchPushRecord) => void };
 }
 
+/**
+ * A task's id is its spec folder's name, so two projects can each have a task `001-…`: pushes in
+ * flight and push records are kept per project and task.
+ */
+export const pushKey = (projectId: string, taskId: string): string => `${projectId}|${taskId}`;
+
 const states = new Map<string, TaskState>();
 let records: Map<string, BranchPushRecord> | undefined;
 let storeFile: string | undefined;
@@ -123,9 +129,11 @@ function loadRecords(): Map<string, BranchPushRecord> {
   return records;
 }
 
-function saveRecord(taskId: string, record: BranchPushRecord): void {
+function saveRecord(projectId: string, taskId: string, record: BranchPushRecord): void {
   const all = loadRecords();
-  all.set(taskId, record);
+  all.set(pushKey(projectId, taskId), record);
+  // A record from before records were kept per project: this one replaces it
+  all.delete(taskId);
   if (!storeFile) return;
   try {
     mkdirSync(path.dirname(storeFile), { recursive: true });
@@ -135,9 +143,10 @@ function saveRecord(taskId: string, record: BranchPushRecord): void {
   }
 }
 
-function removeRecord(taskId: string): void {
+function removeRecord(projectId: string, taskId: string): void {
   const all = loadRecords();
-  if (!all.delete(taskId) || !storeFile) return;
+  const removed = [all.delete(pushKey(projectId, taskId)), all.delete(taskId)].some(Boolean);
+  if (!removed || !storeFile) return;
   try {
     mkdirSync(path.dirname(storeFile), { recursive: true });
     writeFileReplacingSync(storeFile, JSON.stringify(Object.fromEntries(all)));
@@ -147,8 +156,10 @@ function removeRecord(taskId: string): void {
 }
 
 /** The last push of a task's branch (kept across restarts when a store file is set). */
-export function lastBranchPush(taskId: string): BranchPushRecord | undefined {
-  return loadRecords().get(taskId);
+export function lastBranchPush(projectId: string, taskId: string): BranchPushRecord | undefined {
+  const all = loadRecords();
+  // Falls back to a record saved before records were kept per project (by task id alone)
+  return all.get(pushKey(projectId, taskId)) ?? all.get(taskId);
 }
 
 /** False when GitHub says the repository is no longer private (then recorded as public). */
@@ -178,7 +189,7 @@ async function stillPrivate(project: Project, deps: BranchPushDeps, now: number)
 async function pushOnce(project: Project, task: Task, deps: BranchPushDeps): Promise<BranchPushRecord> {
   const branch = `${TASK_BRANCH_PREFIX}${task.specId}`;
   const deploy = project.settings?.deploy;
-  const prev = loadRecords().get(task.id);
+  const prev = lastBranchPush(project.id, task.id);
   let at = '';
   let record: BranchPushRecord;
   try {
@@ -208,7 +219,7 @@ async function pushOnce(project: Project, task: Task, deps: BranchPushDeps): Pro
       error: { kind: e instanceof GitHubWriteError ? e.kind : 'unavailable' },
     };
   }
-  saveRecord(task.id, record);
+  saveRecord(project.id, task.id, record);
   try {
     deps.emit(project.id, task.id);
   } catch {
@@ -219,10 +230,11 @@ async function pushOnce(project: Project, task: Task, deps: BranchPushDeps): Pro
 
 /** Never rejects. */
 export async function pushTaskBranch(project: Project, task: Task, deps: BranchPushDeps): Promise<BranchPushRecord> {
-  let state = states.get(task.id);
+  const key = pushKey(project.id, task.id);
+  let state = states.get(key);
   if (!state) {
     state = { running: false };
-    states.set(task.id, state);
+    states.set(key, state);
   }
   if (state.running) {
     if (state.queued) {
@@ -245,13 +257,13 @@ export async function pushTaskBranch(project: Project, task: Task, deps: BranchP
       q.resolve(
         previewPushAllowed(q.project, q.task).allowed
           ? await pushOnce(q.project, q.task, deps)
-          : (loadRecords().get(task.id) ?? {}),
+          : (lastBranchPush(project.id, task.id) ?? {}),
       );
     }
     return first;
   } finally {
     state.running = false;
-    states.delete(task.id);
+    states.delete(key);
   }
 }
 
@@ -270,12 +282,12 @@ export async function deleteTaskBranch(
   deps: Pick<BranchPushDeps, 'deleteBranch'>,
 ): Promise<BranchDeleteOutcome> {
   try {
-    if (!loadRecords().get(task.id)?.sha) return 'not-pushed';
+    if (!lastBranchPush(project.id, task.id)?.sha) return 'not-pushed';
     if (task.status === 'pr_created' || task.metadata?.prUrl) return 'kept';
     const repo = project.settings?.deploy?.repo;
     if (!repo || !deps.deleteBranch) return 'failed';
     await deps.deleteBranch(`https://github.com/${repo.owner}/${repo.repo}.git`, `${TASK_BRANCH_PREFIX}${task.specId}`);
-    removeRecord(task.id);
+    removeRecord(project.id, task.id);
     completedSeen.delete(task.id);
     return 'deleted';
   } catch {

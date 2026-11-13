@@ -53,7 +53,7 @@ export function registerAgenteventsHandlers(
       head: branchHead,
       emit: (projectId, taskId) => {
         // A new push makes the cached preview stale
-        invalidatePreview(taskId);
+        invalidatePreview(projectId, taskId);
         safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PREVIEW_UPDATE, { projectId, taskId });
       },
       visibility: (owner, repo) => repoVisibility(owner, repo),
