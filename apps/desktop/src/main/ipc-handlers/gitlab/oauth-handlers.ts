@@ -8,7 +8,7 @@ import { execFileSync, spawn } from 'child_process';
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult } from '../../../shared/types';
 import { getAugmentedEnv, findExecutable } from '../../env-utils';
-import { openTerminalWithCommand } from '../claude-code-handlers';
+import { openTerminalWithCommand } from '../../services/open-terminal';
 import type { GitLabAuthStartResult } from './types';
 import { getPlatformKey } from '../../platform';
 

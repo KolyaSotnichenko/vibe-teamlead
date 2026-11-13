@@ -12,7 +12,7 @@ import { IPC_CHANNELS } from '../../shared/constants';
 import type {
   IPCResult,
 } from '../../shared/types';
-import { openTerminalWithCommand } from './claude-code-handlers';
+import { openTerminalWithCommand } from '../services/open-terminal';
 
 /**
  * Ollama Service Status
