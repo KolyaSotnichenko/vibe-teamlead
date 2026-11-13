@@ -53,6 +53,52 @@ describe('ProjectStore', () => {
     vi.clearAllMocks();
   });
 
+  // F-025: a projects.json that did not parse, or held one bad entry, was read as "no projects",
+  // and the next save put that over the file
+  describe('a damaged projects.json', () => {
+    const storeFile = () => path.join(USER_DATA_PATH, 'store', 'projects.json');
+    const project = (id: string, over: Record<string, unknown> = {}) => ({
+      id, name: `Project ${id}`, path: TEST_PROJECT_PATH, autoBuildPath: '', settings: {},
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', ...over,
+    });
+
+    it('that cannot be parsed is kept beside the store, not lost to the next save', async () => {
+      writeFileSync(storeFile(), '{"projects": [{"id": "a", "na');
+      const { ProjectStore } = await import('../project-store');
+      const store = new ProjectStore();
+      expect(store.getProjects()).toEqual([]);
+      expect(readFileSync(`${storeFile()}.corrupt`, 'utf-8')).toBe('{"projects": [{"id": "a", "na');
+      store.addProject(TEST_PROJECT_PATH);
+      expect(readFileSync(`${storeFile()}.corrupt`, 'utf-8')).toBe('{"projects": [{"id": "a", "na');
+      expect(JSON.parse(readFileSync(storeFile(), 'utf-8')).projects).toHaveLength(1);
+    });
+
+    it('with one bad entry keeps the good projects, and a copy of the file as it was', async () => {
+      const saved = JSON.stringify({ projects: [project('a'), null, { id: 7, path: TEST_PROJECT_PATH }, project('b', { path: 42 }), project('c')], settings: {} });
+      writeFileSync(storeFile(), saved);
+      const { ProjectStore } = await import('../project-store');
+      const store = new ProjectStore();
+      expect(store.getProjects().map((p) => p.id)).toEqual(['a', 'c']);
+      expect(store.getProjects()[0].createdAt).toBeInstanceOf(Date);
+      expect(readFileSync(`${storeFile()}.corrupt`, 'utf-8')).toBe(saved);
+    });
+
+    it('whose project list is not a list is kept beside the store', async () => {
+      const saved = JSON.stringify({ projects: { a: project('a') }, settings: {} });
+      writeFileSync(storeFile(), saved);
+      const { ProjectStore } = await import('../project-store');
+      expect(new ProjectStore().getProjects()).toEqual([]);
+      expect(readFileSync(`${storeFile()}.corrupt`, 'utf-8')).toBe(saved);
+    });
+
+    it('a healthy file leaves no copy', async () => {
+      writeFileSync(storeFile(), JSON.stringify({ projects: [project('a')], settings: {} }));
+      const { ProjectStore } = await import('../project-store');
+      expect(new ProjectStore().getProjects().map((p) => p.id)).toEqual(['a']);
+      expect(existsSync(`${storeFile()}.corrupt`)).toBe(false);
+    });
+  });
+
   describe('addProject', () => {
     it('should create a new project with correct structure', async () => {
       const { ProjectStore } = await import('../project-store');

@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { readFileSync, existsSync, mkdirSync, readdirSync, Dirent } from 'fs';
+import { readFileSync, existsSync, mkdirSync, readdirSync, writeFileSync, Dirent } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask, KanbanPreferences, ExecutionPhase } from '../shared/types';
@@ -49,6 +49,13 @@ export function extraSubtaskFields(subtask: Record<string, unknown>): { notes?: 
   };
 }
 
+/** A saved entry that can be a project: an object with its id, name and path as text. Pure. */
+export function isStoredProject(value: unknown): value is Project {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  return typeof p.id === 'string' && !!p.id && typeof p.path === 'string' && !!p.path && typeof p.name === 'string';
+}
+
 export class ProjectStore {
   private storePath: string;
   private data: StoreData;
@@ -71,38 +78,63 @@ export class ProjectStore {
   }
 
   /**
-   * Load store from disk
+   * Load store from disk. A file that does not parse, or whose project list is not a list, is
+   * read as an empty store; an entry that is not a project is left out. In both cases the file
+   * as it was is first copied to `projects.json.corrupt`: the next save replaces the file, and
+   * what it held must not be lost for good.
    */
   private load(): StoreData {
-    if (existsSync(this.storePath)) {
-      try {
-        const content = readFileSync(this.storePath, 'utf-8');
-        const data = JSON.parse(content);
-        // Convert date strings back to Date objects and normalize paths to absolute
-        data.projects = data.projects.map((p: Project) => ({
-          ...p,
-          // Ensure project.path is always absolute (critical for dev mode path resolution)
-          path: ensureAbsolutePath(p.path),
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt)
-        }));
-        // Projects from before the rename: move their data to the Vibe Teamlead names
-        let renamed = false;
-        for (const project of data.projects as Project[]) {
-          if (existsSync(project.path)) logMigration(project.name, migrateProjectData(project.path));
-          const dataPath = migrateDataPathSetting(project.autoBuildPath);
-          if (dataPath !== project.autoBuildPath) {
-            project.autoBuildPath = dataPath ?? '';
-            renamed = true;
-          }
-        }
-        if (renamed) writeFileAtomicSync(this.storePath, JSON.stringify(data, null, 2));
-        return data;
-      } catch {
-        return { projects: [], settings: {} };
-      }
+    const empty = (): StoreData => ({ projects: [], settings: {} });
+    if (!existsSync(this.storePath)) return empty();
+    let content: string;
+    try {
+      content = readFileSync(this.storePath, 'utf-8');
+    } catch {
+      return empty();
     }
-    return { projects: [], settings: {} };
+    try {
+      const data = JSON.parse(content) as StoreData | null;
+      if (!data || typeof data !== 'object' || !Array.isArray(data.projects)) {
+        this.keepAside(content);
+        return empty();
+      }
+      const saved: unknown[] = data.projects;
+      const projects = saved.filter(isStoredProject);
+      if (projects.length !== saved.length) this.keepAside(content);
+      if (!data.settings || typeof data.settings !== 'object') data.settings = {};
+      // Convert date strings back to Date objects and normalize paths to absolute
+      data.projects = projects.map((p: Project) => ({
+        ...p,
+        // Ensure project.path is always absolute (critical for dev mode path resolution)
+        path: ensureAbsolutePath(p.path),
+        createdAt: new Date(p.createdAt),
+        updatedAt: new Date(p.updatedAt)
+      }));
+      // Projects from before the rename: move their data to the Vibe Teamlead names
+      let renamed = false;
+      for (const project of data.projects as Project[]) {
+        if (existsSync(project.path)) logMigration(project.name, migrateProjectData(project.path));
+        const dataPath = migrateDataPathSetting(project.autoBuildPath);
+        if (dataPath !== project.autoBuildPath) {
+          project.autoBuildPath = dataPath ?? '';
+          renamed = true;
+        }
+      }
+      if (renamed) writeFileAtomicSync(this.storePath, JSON.stringify(data, null, 2));
+      return data;
+    } catch {
+      this.keepAside(content);
+      return empty();
+    }
+  }
+
+  /** Copies an unreadable store file beside the store. Never throws. */
+  private keepAside(content: string): void {
+    try {
+      writeFileSync(`${this.storePath}.corrupt`, content, 'utf-8');
+    } catch {
+      // The copy is a courtesy; the store still starts
+    }
   }
 
   /**
