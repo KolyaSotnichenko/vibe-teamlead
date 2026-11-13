@@ -4,7 +4,7 @@
  */
 import type { BrowserWindow } from "electron";
 
-import { DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING, IPC_CHANNELS } from "../../../../shared/constants";
+import { DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING, } from "../../../../shared/constants";
 import type { AppSettings, Project } from "../../../../shared/types";
 import type { ModelShorthand, ThinkingLevel } from "../../../ai/config/types";
 import { ParallelOrchestratorReviewer, type ParallelOrchestratorConfig } from "../../../ai/runners/github/parallel-orchestrator";
@@ -13,7 +13,6 @@ import { getAugmentedEnv } from "../../../env-utils";
 import { safeBreadcrumb, safeCaptureException } from "../../../sentry";
 import { readSettingsFile } from "../../../settings-utils";
 import { getGitHubConfigAsync, githubFetch } from "../utils";
-import { createIPCCommunicators } from "../utils/ipc-communicator";
 import { createContextLogger } from "../utils/logger";
 import { PRLogCollector } from "./review-logs";
 import { savePRReviewToMemory, saveReviewResultToDisk } from "./review-store";
@@ -185,17 +184,10 @@ export async function fetchPRContext(
 export async function runPRReview(
   project: Project,
   prNumber: number,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  /** Where the review's progress goes (the review state the window follows) */
+  onProgress: (progress: PRReviewProgress) => void
 ): Promise<PRReviewResult> {
-  const { sendProgress } = createIPCCommunicators<PRReviewProgress, PRReviewResult>(
-    mainWindow,
-    {
-      progress: IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS,
-      error: IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR,
-      complete: IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE,
-    },
-    project.id
-  );
 
   const config = await getGitHubConfigAsync(project);
   if (!config) {
@@ -223,12 +215,12 @@ export async function runPRReview(
 
   try {
     logCollector.processLine(`[fetching] Fetching PR #${prNumber} from GitHub...`);
-    sendProgress({ phase: "fetching", prNumber, progress: 15, message: "Fetching PR data from GitHub..." });
+    onProgress({ phase: "fetching", prNumber, progress: 15, message: "Fetching PR data from GitHub..." });
 
     const context = await fetchPRContext(config, prNumber);
     logCollector.processLine(`[Context] Fetched ${context.changedFiles.length} changed files, ${context.commits.length} commits`);
 
-    sendProgress({ phase: "analyzing", prNumber, progress: 30, message: "Starting parallel orchestrator review..." });
+    onProgress({ phase: "analyzing", prNumber, progress: 30, message: "Starting parallel orchestrator review..." });
 
     const orchestratorConfig: ParallelOrchestratorConfig = {
       repo,
@@ -242,7 +234,7 @@ export async function runPRReview(
       (update) => {
         const allowedPhases = new Set(["fetching", "analyzing", "generating", "posting", "complete"]);
         const phase = (allowedPhases.has(update.phase) ? update.phase : "analyzing") as PRReviewProgress["phase"];
-        sendProgress({
+        onProgress({
           phase,
           prNumber,
           progress: update.progress,

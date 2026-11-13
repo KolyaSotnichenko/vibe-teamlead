@@ -166,10 +166,13 @@ vi.mock('../../../../shared/utils/sentry-privacy', () => ({
   sanitizeForSentry: vi.fn((data: unknown) => data),
 }));
 
+const reviewProgress = vi.hoisted(() => ({ messages: [] as string[] }));
 vi.mock('../../../pr-review-state-manager', () => {
   class MockPRReviewStateManager {
     handleStartReview = vi.fn();
-    handleProgress = vi.fn();
+    handleProgress = vi.fn((_projectId: string, _prNumber: number, progress: { message: string }) => {
+      reviewProgress.messages.push(progress.message);
+    });
     handleComplete = vi.fn();
     handleError = vi.fn();
     getState = vi.fn(() => null);
@@ -273,7 +276,8 @@ describe('GitHub TypeScript runner usage', () => {
     tempDirs.length = 0;
   });
 
-  it('calls ParallelOrchestratorReviewer for PR review', async () => {
+  /** GitHub answers for one open PR, and a reviewer that finds nothing */
+  const mockPullRequest = async () => {
     const { githubFetch } = await import('../utils');
     const githubFetchMock = vi.mocked(githubFetch);
 
@@ -316,6 +320,10 @@ describe('GitHub TypeScript runner usage', () => {
       summary: 'LGTM',
       agentsInvoked: ['security', 'logic'],
     });
+  };
+
+  it('calls ParallelOrchestratorReviewer for PR review', async () => {
+    await mockPullRequest();
 
     const { registerPRHandlers } = await import('../pr-handlers');
     registerPRHandlers(() => createMockWindow());
@@ -324,6 +332,26 @@ describe('GitHub TypeScript runner usage', () => {
 
     // The handler should have called ParallelOrchestratorReviewer.review()
     expect(mockOrchestratorReview).toHaveBeenCalled();
+  });
+
+  // F-031: the progress of a first review went only to channels the window does not listen to
+  it('reports the progress of a first review to the review state the window follows', async () => {
+    await mockPullRequest();
+    reviewProgress.messages.length = 0;
+    const send = vi.fn();
+    const window = { webContents: { send, isDestroyed: () => false }, isDestroyed: () => false } as unknown as BrowserWindow;
+
+    const { registerPRHandlers } = await import('../pr-handlers');
+    registerPRHandlers(() => window);
+    await mockIpcMain.emit(IPC_CHANNELS.GITHUB_PR_REVIEW, projectRef.current?.id, 123);
+
+    expect(reviewProgress.messages).toContain('Fetching PR data from GitHub...');
+    expect(reviewProgress.messages).toContain('Starting parallel orchestrator review...');
+
+    const channels = send.mock.calls.map(([channel]) => channel);
+    expect(channels).not.toContain('github:pr:reviewProgress');
+    expect(channels).not.toContain('github:pr:reviewComplete');
+    expect(channels).not.toContain('github:pr:reviewError');
   });
 
   it('calls TypeScript BatchProcessor for autofix analyze preview', async () => {

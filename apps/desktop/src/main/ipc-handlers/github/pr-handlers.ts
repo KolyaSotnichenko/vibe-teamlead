@@ -17,10 +17,8 @@ import {
 } from "../../../shared/constants";
 import { getGitHubConfigAsync, githubFetch, } from "./utils";
 import { getAugmentedEnv } from "../../env-utils";
-import type { Project, } from "../../../shared/types";
 import { createContextLogger } from "./utils/logger";
 import { withProjectOrNull } from "./utils/project-middleware";
-import { createIPCCommunicators } from "./utils/ipc-communicator";
 import {
   ParallelFollowupReviewer,
   type FollowupReviewContext,
@@ -47,45 +45,6 @@ import { CI_WAIT_PLACEHOLDER, ciWaitAbortControllers, getReviewKey, runningRevie
 
 // Debug logging
 const { debug: debugLog } = createContextLogger("GitHub PR");
-
-/**
- * Send a PR review state update event to the renderer to refresh the UI immediately.
- * Used after operations that modify review state (post, mark posted, delete).
- */
-function sendReviewStateUpdate(
-  project: Project,
-  prNumber: number,
-  projectId: string,
-  getMainWindow: () => BrowserWindow | null,
-  context: string
-): void {
-  try {
-    const updatedResult = getReviewResult(project, prNumber);
-    if (!updatedResult) {
-      debugLog("Could not retrieve updated review result for UI notification", { prNumber, context });
-      return;
-    }
-    const mainWindow = getMainWindow();
-    if (!mainWindow) return;
-    const { sendComplete } = createIPCCommunicators<PRReviewProgress, PRReviewResult>(
-      mainWindow,
-      {
-        progress: IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS,
-        error: IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR,
-        complete: IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE,
-      },
-      projectId
-    );
-    sendComplete(updatedResult);
-    debugLog(`Sent PR review state update ${context}`, { prNumber });
-  } catch (uiError) {
-    debugLog("Failed to send UI update (non-critical)", {
-      prNumber,
-      context,
-      error: uiError instanceof Error ? uiError.message : uiError,
-    });
-  }
-}
 
 /**
  * Register PR-related handlers
@@ -288,28 +247,10 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
 
     try {
       await withProjectOrNull(projectId, async (project) => {
-        const { sendProgress, sendComplete } = createIPCCommunicators<
-          PRReviewProgress,
-          PRReviewResult
-        >(
-          mainWindow,
-          {
-            progress: IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS,
-            error: IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR,
-            complete: IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE,
-          },
-          projectId
-        );
 
         // Check if already running — notify renderer so it can display ongoing logs
         if (runningReviews.has(reviewKey)) {
           debugLog("Review already running, notifying renderer", { reviewKey });
-          sendProgress({
-            phase: "analyzing",
-            prNumber,
-            progress: 50,
-            message: "Review is already in progress. Reconnecting to ongoing review...",
-          });
           return;
         }
 
@@ -331,7 +272,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
             progress: 5,
             message: "Assigning you to PR...",
           };
-          sendProgress(startProgress);
           stateManager.handleProgress(projectId, prNumber, startProgress);
 
           // Auto-assign current user to PR
@@ -362,7 +302,7 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
             const shouldProceed = await performCIWaitCheck(
               config,
               prNumber,
-              sendProgress,
+              (progress) => stateManager.handleProgress(projectId, prNumber, progress),
               "review",
               abortController.signal
             );
@@ -381,36 +321,21 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
             progress: 10,
             message: "Fetching PR data...",
           };
-          sendProgress(fetchProgress);
           stateManager.handleProgress(projectId, prNumber, fetchProgress);
 
-          const result = await runPRReview(project, prNumber, mainWindow);
+          const result = await runPRReview(project, prNumber, mainWindow, (progress) => stateManager.handleProgress(projectId, prNumber, progress));
 
           if (result.overallStatus === "in_progress") {
             // Review is already running externally (detected by BotDetector).
             // Send the result as-is so the renderer can activate external review polling.
             debugLog("PR review already in progress externally", { prNumber });
-            sendProgress({
-              phase: "complete",
-              prNumber,
-              progress: 100,
-              message: "Review already in progress",
-            });
             stateManager.handleComplete(projectId, prNumber, result as unknown as PreloadPRReviewResult);
-            sendComplete(result);
             return;
           }
 
           debugLog("PR review completed", { prNumber, findingsCount: result.findings.length });
-          sendProgress({
-            phase: "complete",
-            prNumber,
-            progress: 100,
-            message: "Review complete!",
-          });
 
           stateManager.handleComplete(projectId, prNumber, result as unknown as PreloadPRReviewResult);
-          sendComplete(result);
         } finally {
           // Clean up in case we exit before runPRReview was called (e.g., cancelled during CI wait)
           // runPRReview also has its own cleanup, but delete is idempotent
@@ -427,18 +352,8 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
         prNumber,
         error: error instanceof Error ? error.message : error,
       });
-      const { sendError } = createIPCCommunicators<PRReviewProgress, PRReviewResult>(
-        mainWindow,
-        {
-          progress: IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS,
-          error: IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR,
-          complete: IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE,
-        },
-        projectId
-      );
       const errorMessage = error instanceof Error ? error.message : "Failed to run PR review";
       stateManager.handleError(projectId, prNumber, errorMessage);
-      sendError({ prNumber, error: errorMessage });
     }
   });
 
@@ -643,7 +558,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
           }
 
           // Send state update event to refresh UI immediately (non-blocking)
-          sendReviewStateUpdate(project, prNumber, projectId, getMainWindow, "after posting");
 
           return true;
         } catch (error) {
@@ -682,7 +596,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
           debugLog("Marked review as posted", { prNumber });
 
           // Send state update event to refresh UI immediately (non-blocking)
-          sendReviewStateUpdate(project, prNumber, projectId, getMainWindow, "after marking posted");
 
           return true;
         } catch (error) {
@@ -1261,22 +1174,9 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
 
       try {
         await withProjectOrNull(projectId, async (project) => {
-          const { sendProgress, sendError, sendComplete } = createIPCCommunicators<
-            PRReviewProgress,
-            PRReviewResult
-          >(
-            mainWindow,
-            {
-              progress: IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS,
-              error: IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR,
-              complete: IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE,
-            },
-            projectId
-          );
 
           const config = await getGitHubConfigAsync(project);
           if (!config) {
-            sendError({ prNumber, error: "No GitHub configuration found for project" });
             return;
           }
 
@@ -1307,14 +1207,13 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
               progress: 5,
               message: "Starting follow-up review...",
             };
-            sendProgress(followupStartProgress);
             stateManager.handleProgress(projectId, prNumber, followupStartProgress);
 
             // Wait for CI checks to complete before starting follow-up review
             const shouldProceed = await performCIWaitCheck(
               config,
               prNumber,
-              sendProgress,
+              (progress) => stateManager.handleProgress(projectId, prNumber, progress),
               "follow-up review",
               abortController.signal
             );
@@ -1346,7 +1245,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
 
             // Fetch incremental PR data for follow-up
             const fetchChangesProgress: PRReviewProgress = { phase: "fetching", prNumber, progress: 20, message: "Fetching PR changes since last review..." };
-            sendProgress(fetchChangesProgress);
             stateManager.handleProgress(projectId, prNumber, fetchChangesProgress);
 
             // Get the previous review result for context
@@ -1421,7 +1319,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
             };
 
             const analyzeProgress: PRReviewProgress = { phase: "analyzing", prNumber, progress: 35, message: "Running follow-up analysis..." };
-            sendProgress(analyzeProgress);
             stateManager.handleProgress(projectId, prNumber, analyzeProgress);
 
             const followupReviewer = new ParallelFollowupReviewer(
@@ -1439,7 +1336,6 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
                   progress: update.progress,
                   message: update.message,
                 };
-                sendProgress(progressUpdate);
                 stateManager.handleProgress(projectId, prNumber, progressUpdate);
                 // If the message already has a bracket prefix, pass it directly so
                 // parseLogLine() extracts the correct source for frontend grouping.
@@ -1493,15 +1389,8 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
               prNumber,
               findingsCount: result.findings.length,
             });
-            sendProgress({
-              phase: "complete",
-              prNumber,
-              progress: 100,
-              message: "Follow-up review complete!",
-            });
 
             stateManager.handleComplete(projectId, prNumber, result as unknown as PreloadPRReviewResult);
-            sendComplete(result);
           } finally {
             // Always clean up registry, whether we exit normally or via error
             runningReviews.delete(reviewKey);
@@ -1514,18 +1403,8 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
           prNumber,
           error: error instanceof Error ? error.message : error,
         });
-        const { sendError } = createIPCCommunicators<PRReviewProgress, PRReviewResult>(
-          mainWindow,
-          {
-            progress: IPC_CHANNELS.GITHUB_PR_REVIEW_PROGRESS,
-            error: IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR,
-            complete: IPC_CHANNELS.GITHUB_PR_REVIEW_COMPLETE,
-          },
-          projectId
-        );
         const followupErrorMessage = error instanceof Error ? error.message : "Failed to run follow-up review";
         stateManager.handleError(projectId, prNumber, followupErrorMessage);
-        sendError({ prNumber, error: followupErrorMessage });
       }
     }
   );
