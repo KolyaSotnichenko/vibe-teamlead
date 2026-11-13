@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.41 - 2026-11-13
+
+- CI: right after a merge pushes main, a fix task is no longer made for the previous commit's failed run. Until GitHub lists a run of the pushed commit, older failures wait; if none shows up within an hour, the older failure gets its task.
+
 ## 2.0.0-beta.40 - 2026-11-12
 
 - Deploy is now **CI**. Vercel is gone from the app: no Vercel account, project, database or variables in Settings, onboarding or the CI page. Leftover Vercel files from earlier betas are cleaned up on start.
