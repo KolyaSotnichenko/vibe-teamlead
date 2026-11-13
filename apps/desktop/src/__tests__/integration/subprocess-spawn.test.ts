@@ -124,11 +124,6 @@ vi.mock('../../main/settings-utils', () => ({
   readSettingsFile: vi.fn(() => ({})),
 }));
 
-vi.mock('../../main/agent/env-utils', () => ({
-  normalizeEnvPathKey: vi.fn((k: string) => k),
-  mergePythonEnvPath: vi.fn(),
-}));
-
 // =============================================================================
 // Tests
 // =============================================================================

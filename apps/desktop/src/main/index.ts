@@ -87,7 +87,6 @@ import { appLog, setupErrorLogging } from './app-logger';
 import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { isMacOS, isWindows } from './platform';
-import { ptyDaemonClient } from './terminal/pty-daemon-client';
 import type { AppSettings } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -618,9 +617,10 @@ app.whenReady().then(() => {
 
   // Pre-warm CLI tool cache in background (non-blocking)
   // This ensures CLI detection is done before user needs it
-  // Include all commonly used tools to prevent sync blocking on first use
+  // Only the tools the app itself runs: git and gh for every project, claude for the
+  // agent terminals. Python is looked for when Settings asks (nothing in the pipeline runs it)
   setImmediate(() => {
-    preWarmToolCache(['claude', 'git', 'gh', 'python']).catch((error) => {
+    preWarmToolCache(['claude', 'git', 'gh']).catch((error) => {
       console.warn('[main] Failed to pre-warm CLI cache:', error);
     });
   });
@@ -708,10 +708,6 @@ app.on('before-quit', (event) => {
         await terminalManager.killAll();
       }
 
-      // Shut down PTY daemon client AFTER terminal cleanup completes,
-      // ensuring all kill commands reach PTY processes before the daemon disconnects
-      ptyDaemonClient.shutdown();
-      console.warn('[main] PTY daemon client shutdown complete');
     } catch (error) {
       console.error('[main] Error during pre-quit cleanup:', error);
     } finally {

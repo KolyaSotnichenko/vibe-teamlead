@@ -62,7 +62,6 @@
     "minimatch": "^10.2.4",
     "semver": "^7.7.4",
     "uuid": "^13.0.0",
-    "web-tree-sitter": "^0.26.7",
     "xstate": "^5.28.0",
     "zod": "^4.3.6"
   },
