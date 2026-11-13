@@ -11,6 +11,7 @@ import { AgentManager } from '../../agent';
 import { fileWatcher } from '../../file-watcher';
 import { findTaskAndProject } from './shared';
 import { returnStaleQueuedTask, STALE_QUEUED_TASK_MESSAGE } from './queue-task';
+import { watchAndStartAgent } from './start-agent';
 import { requestTaskBranchDelete } from '../../deploy/branch-push';
 import { checkGitStatus } from '../../project-initializer';
 import { resolveClaudeCredential } from '../../ai/claude-code/credential';
@@ -76,22 +77,6 @@ function checkSubtasksCompletion(plan: Record<string, unknown> | null): {
   const allCompleted = totalCount > 0 && completedCount === totalCount;
 
   return { allSubtasks, completedCount, totalCount, allCompleted };
-}
-
-/**
- * Get the spec directory for file watching, preferring the worktree path if it exists.
- * When a task runs in a worktree, implementation_plan.json is written there,
- * not in the main project's spec directory.
- */
-function getSpecDirForWatcher(projectPath: string, specsBaseDir: string, specId: string): string {
-  const worktreePath = findTaskWorktree(projectPath, specId);
-  if (worktreePath) {
-    const worktreeSpecDir = path.join(worktreePath, specsBaseDir, specId);
-    if (existsSync(path.join(worktreeSpecDir, 'implementation_plan.json'))) {
-      return worktreeSpecDir;
-    }
-  }
-  return path.join(projectPath, specsBaseDir, specId);
 }
 
 /**
@@ -247,82 +232,8 @@ export async function startTask(agentManager: AgentManager, getMainWindow: () =>
     console.warn(`[TASK_START] Reset ${resetResult.resetCount} stuck subtask(s) before starting`);
   }
 
-  // Start file watcher for this task
-  // Use worktree path if it exists, since the backend writes implementation_plan.json there
-  const watchSpecDir = getSpecDirForWatcher(project.path, specsBaseDir, task.specId);
-  fileWatcher.watch(taskId, watchSpecDir).catch((err) => {
-    console.error(`[TASK_START] Failed to watch spec dir for ${taskId}:`, err);
-  });
-
-  // Check if spec.md exists (indicates spec creation was already done or in progress)
-  // Check main project path for spec file (spec is created before worktree)
-  const specFilePath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
-  const hasSpec = existsSync(specFilePath);
-
-  // Check if this task needs spec creation first (no spec file = not yet created)
-  // OR if it has a spec but no implementation plan subtasks (spec created, needs planning/building)
-  const needsSpecCreation = !hasSpec;
-  // FIX (#1562): Check actual plan file for subtasks, not just task.subtasks.length.
-  // When a task crashes during planning, it may have spec.md but an empty/missing
-  // implementation_plan.json. Previously, this path would call startTaskExecution
-  // (run.py) which expects subtasks to exist. Now we check the actual plan file.
-  const needsImplementation = hasSpec && !planHasSubtasks;
-
-  console.warn('[TASK_START] hasSpec:', hasSpec, 'planHasSubtasks:', planHasSubtasks, 'needsSpecCreation:', needsSpecCreation, 'needsImplementation:', needsImplementation);
-
-  // Get base branch: task-level override takes precedence over project settings
-  const baseBranch = task.metadata?.baseBranch || project.settings?.mainBranch;
-
-  if (needsSpecCreation) {
-    // No spec file - need to run spec_runner.py to create the spec
-    const taskDescription = task.description || task.title;
-    console.warn('[TASK_START] Starting spec creation for:', task.specId, 'in:', specDir, 'baseBranch:', baseBranch);
-
-    // Start spec creation process - pass the existing spec directory
-    // so spec_runner uses it instead of creating a new one
-    // Also pass baseBranch so worktrees are created from the correct branch
-    agentManager.startSpecCreation(taskId, project.path, taskDescription, specDir, task.metadata, baseBranch, project.id);
-  } else if (needsImplementation) {
-    // Spec exists but no valid subtasks in implementation plan
-    // FIX (#1562): Use startTaskExecution (run.py) which will create the planner
-    // agent session to generate the implementation plan. run.py handles the case
-    // where implementation_plan.json is missing or has no subtasks - the planner
-    // agent will generate the plan before the coder starts.
-    console.warn('[TASK_START] Starting task execution (no valid subtasks in plan) for:', task.specId);
-    agentManager.startTaskExecution(
-      taskId,
-      project.path,
-      task.specId,
-      {
-        parallel: false,  // Sequential for planning phase
-        workers: 1,
-        baseBranch,
-        useWorktree: task.metadata?.useWorktree,
-        useLocalBranch: task.metadata?.useLocalBranch,
-        pushNewBranches: task.metadata?.pushNewBranches
-      },
-      project.id
-    );
-  } else {
-    // Task has subtasks, start normal execution
-    // Note: Parallel execution is handled internally by the agent, not via CLI flags
-    console.warn('[TASK_START] Starting task execution (has subtasks) for:', task.specId);
-
-    agentManager.startTaskExecution(
-      taskId,
-      project.path,
-      task.specId,
-      {
-        parallel: false,
-        workers: 1,
-        baseBranch,
-        useWorktree: task.metadata?.useWorktree,
-        useLocalBranch: task.metadata?.useLocalBranch,
-        pushNewBranches: task.metadata?.pushNewBranches
-      },
-      project.id
-    );
-  }
+  // Watch the plan and start the agent the task needs next (spec creation, or the build)
+  watchAndStartAgent(agentManager, taskId, task, project, specDir, '[TASK_START]');
 }
 
 /**
@@ -733,77 +644,8 @@ export function registerTaskExecutionHandlers(
             console.warn(`[TASK_UPDATE_STATUS] Reset ${resetResult.resetCount} stuck subtask(s) before starting`);
           }
 
-          // Start file watcher for this task
-          // Use worktree path if it exists, since the backend writes implementation_plan.json there
-          const watchSpecDir = getSpecDirForWatcher(project.path, specsBaseDir, task.specId);
-          fileWatcher.watch(taskId, watchSpecDir).catch((err) => {
-            console.error(`[TASK_UPDATE_STATUS] Failed to watch spec dir for ${taskId}:`, err);
-          });
-
-          // Check if spec.md exists
-          const specFilePath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
-          const hasSpec = existsSync(specFilePath);
-          const needsSpecCreation = !hasSpec;
-          // FIX (#1562): Check actual plan file for subtasks, not just task.subtasks.length
-          const updatePlanFilePath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-          let updatePlanHasSubtasks = false;
-          const updatePlanContent = safeReadFileSync(updatePlanFilePath);
-          if (updatePlanContent) {
-            try {
-              const plan = JSON.parse(updatePlanContent);
-              updatePlanHasSubtasks = checkSubtasksCompletion(plan).totalCount > 0;
-            } catch {
-              // Invalid/corrupt plan file - treat as no subtasks
-            }
-          }
-          const needsImplementation = hasSpec && !updatePlanHasSubtasks;
-
-          console.warn('[TASK_UPDATE_STATUS] hasSpec:', hasSpec, 'needsSpecCreation:', needsSpecCreation, 'needsImplementation:', needsImplementation);
-
-          // Get base branch: task-level override takes precedence over project settings
-          const baseBranchForUpdate = task.metadata?.baseBranch || project.settings?.mainBranch;
-
-          if (needsSpecCreation) {
-            // No spec file - need to run spec_runner.py to create the spec
-            const taskDescription = task.description || task.title;
-            console.warn('[TASK_UPDATE_STATUS] Starting spec creation for:', task.specId);
-            agentManager.startSpecCreation(taskId, project.path, taskDescription, specDir, task.metadata, baseBranchForUpdate, project.id);
-          } else if (needsImplementation) {
-            // Spec exists but no subtasks - run run.py to create implementation plan and execute
-            console.warn('[TASK_UPDATE_STATUS] Starting task execution (no subtasks) for:', task.specId);
-            agentManager.startTaskExecution(
-              taskId,
-              project.path,
-              task.specId,
-              {
-                parallel: false,
-                workers: 1,
-                baseBranch: baseBranchForUpdate,
-                useWorktree: task.metadata?.useWorktree,
-                useLocalBranch: task.metadata?.useLocalBranch,
-                pushNewBranches: task.metadata?.pushNewBranches
-              },
-              project.id
-            );
-          } else {
-            // Task has subtasks, start normal execution
-            // Note: Parallel execution is handled internally by the agent
-            console.warn('[TASK_UPDATE_STATUS] Starting task execution (has subtasks) for:', task.specId);
-            agentManager.startTaskExecution(
-              taskId,
-              project.path,
-              task.specId,
-              {
-                parallel: false,
-                workers: 1,
-                baseBranch: baseBranchForUpdate,
-                useWorktree: task.metadata?.useWorktree,
-                useLocalBranch: task.metadata?.useLocalBranch,
-                pushNewBranches: task.metadata?.pushNewBranches
-              },
-              project.id
-            );
-          }
+          // Watch the plan and start the agent the task needs next (spec creation, or the build)
+          watchAndStartAgent(agentManager, taskId, task, project, specDir, '[TASK_UPDATE_STATUS]');
 
           // Notify renderer about status change
           if (mainWindow) {
@@ -1198,47 +1040,9 @@ export function registerTaskExecutionHandlers(
               projectStore.invalidateTasksCache(project.id);
             }
 
-            // Start the task execution
-            // Start file watcher for this task
-            // Use worktree path if it exists, since the backend writes implementation_plan.json there
-            const watchSpecDir = getSpecDirForWatcher(project.path, specsBaseDir, task.specId);
-            fileWatcher.watch(taskId, watchSpecDir).catch((err) => {
-              console.error(`[Recovery] Failed to watch spec dir for ${taskId}:`, err);
-            });
-
-            // Check if spec.md exists to determine whether to run spec creation or task execution
-            // Check main project path for spec file (spec is created before worktree)
-            // mainSpecDir is declared earlier in the handler scope
-            const specFilePath = path.join(mainSpecDir, AUTO_BUILD_PATHS.SPEC_FILE);
-            const hasSpec = existsSync(specFilePath);
-            const needsSpecCreation = !hasSpec;
-
-            // Get base branch: task-level override takes precedence over project settings
-            const baseBranchForRecovery = task.metadata?.baseBranch || project.settings?.mainBranch;
-
-            if (needsSpecCreation) {
-              // No spec file - need to run spec_runner.py to create the spec
-              const taskDescription = task.description || task.title;
-              console.warn(`[Recovery] Starting spec creation for: ${task.specId}`);
-              agentManager.startSpecCreation(taskId, project.path, taskDescription, mainSpecDir, task.metadata, baseBranchForRecovery, project.id);
-            } else {
-              // Spec exists - run task execution
-              console.warn(`[Recovery] Starting task execution for: ${task.specId}`);
-              agentManager.startTaskExecution(
-                taskId,
-                project.path,
-                task.specId,
-                {
-                  parallel: false,
-                  workers: 1,
-                  baseBranch: baseBranchForRecovery,
-                  useWorktree: task.metadata?.useWorktree,
-                  useLocalBranch: task.metadata?.useLocalBranch,
-                  pushNewBranches: task.metadata?.pushNewBranches
-                },
-                project.id
-              );
-            }
+            // Watch the plan and start the agent the task needs next (spec creation, or the build).
+            // mainSpecDir is the project's spec folder: the spec is created before the worktree
+            watchAndStartAgent(agentManager, taskId, task, project, mainSpecDir, '[Recovery]');
 
             autoRestarted = true;
             console.warn(`[Recovery] Auto-restarted task ${taskId}`);
