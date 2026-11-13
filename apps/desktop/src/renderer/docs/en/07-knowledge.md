@@ -13,7 +13,7 @@ Who uses it:
 - the spec, architecture, plan and QA agents, to plan for the real structure;
 - the app, to decide which tools to provide (a browser for QA, whether Strix is needed).
 
-It is recomputed from the code automatically before QA. The button in Context → Project Index is there to view the passport or refresh it manually.
+This file is written when you press the button in Context → Project Index (to view the passport or refresh it). The pipeline does not wait for it: each task computes the index from the code by itself, keeps its own copy in the task's spec folder, and QA reads the code again to choose its tools.
 
 ## CodeGraph — the code map
 
