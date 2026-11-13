@@ -117,6 +117,57 @@ describe('createRunsPoller', () => {
     expect(s.runs.map((r) => r.id)).toEqual([3, 2]);
   });
 
+  // F-006: a selected run that no longer exists was asked for on every tick, with the error shown each time
+  it('a selected run GitHub no longer has is asked for once: the next tick shows the newest run, without the error', async () => {
+    const t = setup({ run: vi.fn(async () => { throw { kind: 'not-found', message: 'Not Found' }; }) });
+    t.poller.start(project(), 1);
+    await t.flush();
+    expect(t.emitted.at(-1)!.error?.kind).toBe('not-found');
+    expect(t.client.run).toHaveBeenCalledTimes(1);
+    await t.fire();
+    const s = t.emitted.at(-1)!;
+    expect(t.client.run).toHaveBeenCalledTimes(1);
+    expect(s.error).toBeUndefined();
+    expect(s.selected?.runId).toBe(3);
+  });
+
+  it('any other failure to fetch the selected run keeps the selection and is tried again', async () => {
+    const t = setup({ run: vi.fn(async () => { throw { kind: 'unavailable', message: 'offline' }; }) });
+    t.poller.start(project(), 1);
+    await t.flush();
+    await t.fire();
+    expect(t.client.run).toHaveBeenCalledTimes(2);
+    expect(t.emitted.at(-1)!.error?.kind).toBe('unavailable');
+  });
+
+  it('a finished old run fetched by id is not fetched again on every tick; an unfinished one is', async () => {
+    const done = setup();
+    done.poller.start(project(), 1);
+    await done.flush();
+    await done.fire();
+    await done.fire();
+    expect(done.client.run).toHaveBeenCalledTimes(1);
+    expect(done.emitted.at(-1)!.selected?.runId).toBe(1);
+    expect(done.emitted.at(-1)!.runs.map((r) => r.id)).toEqual([1, 3, 2]);
+
+    const going = setup({ run: vi.fn(async (_o: string, _r: string, id: number) => run(id, 'in_progress')) });
+    going.poller.start(project(), 1);
+    await going.flush();
+    await going.fire();
+    expect(going.client.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('picking the old run again asks GitHub again (a re-run may have changed it)', async () => {
+    const t = setup();
+    t.poller.start(project(), 1);
+    await t.flush();
+    t.poller.select('p1', 3);
+    await t.flush();
+    t.poller.select('p1', 1);
+    await t.flush();
+    expect(t.client.run).toHaveBeenCalledTimes(2);
+  });
+
   it('stop clears the timer and a tick in flight emits nothing', async () => {
     let release!: () => void;
     const t = setup({ runs: vi.fn(() => new Promise((r) => { release = () => r([run(3)]); })) });

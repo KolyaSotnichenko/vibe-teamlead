@@ -44,6 +44,8 @@ interface Session {
   workflowCache: Map<string, string | null>;
   /** Failed workflow fetches by path@sha: when, and the error. */
   workflowFailures: Map<string, { at: number; error: GitHubError }>;
+  /** The selected run when it is older than the newest listed and finished: fetched by id once, not on every tick */
+  oldRun?: DeployRun;
 }
 
 const asGitHubError = (e: unknown): GitHubError => {
@@ -165,8 +167,21 @@ export function createRunsPoller(deps: RunsPollerDeps) {
       if (!run && s.selectedRunId !== undefined) {
         // Older than the newest listed (a "CI failed" link to an old run): fetched by id, never another run instead
         selected = undefined;
-        run = await deps.client.run(repo.owner, repo.repo, s.selectedRunId);
-        if (!current()) return;
+        if (s.oldRun?.id === s.selectedRunId) run = s.oldRun;
+        else {
+          const wanted = s.selectedRunId;
+          try {
+            run = await deps.client.run(repo.owner, repo.repo, wanted);
+          } catch (e) {
+            // GitHub no longer has it: said once (this tick's error), then the newest run is shown.
+            // Asking again on every tick would keep the error up for a run that can't come back
+            if (asGitHubError(e).kind === 'not-found' && s.selectedRunId === wanted) s.selectedRunId = undefined;
+            throw e;
+          }
+          if (!current()) return;
+          // A finished run doesn't change: kept for the session (picking it again asks anew)
+          s.oldRun = run.status === 'completed' ? run : undefined;
+        }
         runs = [run, ...runs];
       }
       s.selectedRunId = run?.id;
@@ -227,6 +242,7 @@ export function createRunsPoller(deps: RunsPollerDeps) {
       const s = session;
       if (!s || s.project.id !== projectId || s.selectedRunId === runId) return;
       s.selectedRunId = runId;
+      s.oldRun = undefined;
       if (!s.repo) return;
       const rateLimited =
         s.last?.error?.kind === 'rate-limit' &&
