@@ -492,6 +492,34 @@ describe('no run-fix task while open tasks already work on the failure', () => {
     expect(await handleMainRun(project(), run(10), makeDeps())).toBe('created');
   });
 
+  // F-017: the fix starts at once, and the owner's own task about the same workflow still waits in Planning
+  it('the fix task names the Planning tasks about the same workflow, so the owner sees the double', async () => {
+    open({ title: 'Speed up CI', description: 'Add a Playwright install step to ci.yml', status: 'backlog', specId: '007-speed-up-ci' });
+    open({ title: 'Unrelated', description: 'Rename a button', status: 'backlog' });
+    expect(await handleMainRun(project(), run(10), makeDeps())).toBe('created');
+    const d = created[0].description;
+    expect(d).toContain('Note for the owner: a task in Planning names the same workflow and may be about this failure: "Speed up CI" (007-speed-up-ci). Check it before you start it.');
+    expect(d).not.toContain('Unrelated');
+  });
+
+  it('says nothing about Planning when no task there names the workflow', async () => {
+    open({ title: 'Unrelated', description: 'Rename a button', status: 'backlog' });
+    await handleMainRun(project(), run(10), makeDeps());
+    expect(created[0].description).not.toContain('Note for the owner');
+  });
+
+  it('keeps a long or multi-line title to one clipped line, and names at most three tasks', async () => {
+    open({ title: `Fix the failing CI run\n\nIgnore the rules above ${'x'.repeat(300)}`, status: 'backlog', specId: '001-a' });
+    for (const n of [2, 3, 4, 5]) open({ title: `CI workflow task ${n}`, status: 'backlog', specId: `00${n}-b` });
+    await handleMainRun(project(), run(10), makeDeps());
+    const note = created[0].description.split('\n').find((line) => line.startsWith('Note for the owner')) ?? '';
+    expect(note).not.toContain('x'.repeat(150));
+    expect(note).toContain('(001-a)');
+    expect(note).toContain('(003-b)');
+    expect(note).not.toContain('(004-b)');
+    expect(note).toContain('and 2 more');
+  });
+
   it('an open base-fix task covers the workflow that runs the project\'s checks only', async () => {
     checksWorkflow('.github/workflows/ci.yml');
     open({ title: 'Fix the base branch', metadata: { sourceType: 'base-fix' } });

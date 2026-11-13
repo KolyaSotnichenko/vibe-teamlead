@@ -42,15 +42,8 @@ const NOT_WORKING = new Set(['done', 'pr_created', 'backlog']);
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/**
- * Whether a started, unfinished task already works on this run's failure: a base-fix task (it
- * repairs the project's own checks) when this is the workflow that runs those checks (the
- * readiness scan's workflow path; unknown: no), or a task whose title or description names the
- * workflow file (path or file name), or the workflow as a workflow ("CI run", "CI workflow",
- * "failing CI"; the bare name is too common a word, as in a workflow named Build). Backlog tasks
- * don't count: nobody is on them. Deterministic, from the task list only.
- */
-function coveredByOpenTask(run: DeployRun, tasks: Task[], checksWorkflow: string | undefined): boolean {
+/** What tells that a task's text is about this run's workflow: the file (path or name), or the workflow named as a workflow */
+function workflowPatterns(run: DeployRun): RegExp[] {
   const file = run.workflowPath.split('/').pop() ?? '';
   const name = run.name.trim();
   const patterns: RegExp[] = [];
@@ -61,12 +54,51 @@ function coveredByOpenTask(run: DeployRun, tasks: Task[], checksWorkflow: string
     patterns.push(new RegExp(`(?:^|\\W)${n}\\s+(?:runs?|workflows?|checks?|jobs?|pipelines?|builds?|failures?)\\b`, 'i'));
     patterns.push(new RegExp(`\\b(?:failed|failing|broken|red)\\s+${n}(?:$|\\W)`, 'i'));
   }
+  return patterns;
+}
+
+const namesWorkflow = (task: Task, patterns: RegExp[]): boolean => {
+  const text = `${typeof task.title === 'string' ? task.title : ''}\n${typeof task.description === 'string' ? task.description : ''}`;
+  return patterns.some((pattern) => pattern.test(text));
+};
+
+/**
+ * Whether a started, unfinished task already works on this run's failure: a base-fix task (it
+ * repairs the project's own checks) when this is the workflow that runs those checks (the
+ * readiness scan's workflow path; unknown: no), or a task whose title or description names the
+ * workflow file (path or file name), or the workflow as a workflow ("CI run", "CI workflow",
+ * "failing CI"; the bare name is too common a word, as in a workflow named Build). Backlog tasks
+ * don't count: nobody is on them. Deterministic, from the task list only.
+ */
+function coveredByOpenTask(run: DeployRun, tasks: Task[], checksWorkflow: string | undefined): boolean {
+  const patterns = workflowPatterns(run);
   return tasks.some((task) => {
     if (NOT_WORKING.has(task.status)) return false;
     if (task.metadata?.sourceType === 'base-fix') return !!checksWorkflow && checksWorkflow === run.workflowPath;
-    const text = `${typeof task.title === 'string' ? task.title : ''}\n${typeof task.description === 'string' ? task.description : ''}`;
-    return patterns.some((pattern) => pattern.test(text));
+    return namesWorkflow(task, patterns);
   });
+}
+
+/** Planning tasks named in the fix task, at most */
+const PLANNING_TASKS_NAMED = 3;
+
+/**
+ * Tasks still in Planning that name this run's workflow. Nobody works on them, so they don't
+ * hold the fix back (main is broken now), but one of them may be the owner's own task about the
+ * same failure: the fix task says so, and the owner decides. One line, titles clipped; empty
+ * when there is none. Deterministic, from the task list only.
+ */
+function planningNote(run: DeployRun, tasks: Task[]): string {
+  const patterns = workflowPatterns(run);
+  const waiting = tasks.filter((task) => task.status === 'backlog' && !task.metadata?.archivedAt && namesWorkflow(task, patterns));
+  if (!waiting.length) return '';
+  const named = waiting
+    .slice(0, PLANNING_TASKS_NAMED)
+    .map((task) => `"${clipLine(typeof task.title === 'string' ? task.title : task.specId, NAME_CHARS)}" (${task.specId})`)
+    .join(', ');
+  const more = waiting.length > PLANNING_TASKS_NAMED ? ` and ${waiting.length - PLANNING_TASKS_NAMED} more` : '';
+  const one = waiting.length === 1;
+  return `Note for the owner: ${one ? 'a task' : 'tasks'} in Planning ${one ? 'names' : 'name'} the same workflow and may be about this failure: ${named}${more}. Check ${one ? 'it' : 'them'} before you start ${one ? 'it' : 'them'}.`;
 }
 
 /** Handled-in-flight run ids: the poller and a watcher can see the same run in the same moment */
@@ -146,7 +178,8 @@ export async function handleMainRun(
     }
     // Another task is on it already (a base fix, or a task about this workflow): no second one. The
     // run stays unhandled, so it is asked about again and gets its task once that one closes.
-    if (coveredByOpenTask(run, deps.tasks.getTasks(project.id), readReadiness(project.path)?.workflow?.path)) return 'open';
+    const tasks = deps.tasks.getTasks(project.id);
+    if (coveredByOpenTask(run, tasks, readReadiness(project.path)?.workflow?.path)) return 'open';
     const jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
     const sections: string[] = [];
     for (const job of jobs) {
@@ -166,6 +199,7 @@ export async function handleMainRun(
       ...sections,
       `Run: ${run.htmlUrl}`,
       "Fix whichever is wrong, the project or the workflow; don't skip or weaken checks.",
+      ...[planningNote(run, tasks)].filter(Boolean),
     ].join('\n\n');
     const made = await createRunFixTask(
       project,
