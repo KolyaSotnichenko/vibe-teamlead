@@ -1,5 +1,5 @@
 import path from 'path';
-import { existsSync, readFileSync, } from 'fs';
+import { existsSync, readFileSync, statSync } from 'fs';
 import { EventEmitter } from 'events';
 import type { TaskLogs, TaskLogPhase, TaskLogStreamChunk, TaskPhaseLog } from '../shared/types';
 import { findTaskWorktree } from './worktree-paths';
@@ -11,6 +11,20 @@ function findWorktreeSpecDir(projectPath: string, specId: string, specsRelPath: 
     return path.join(worktreePath, specsRelPath, specId);
   }
   return null;
+}
+
+/**
+ * What tells one version of a file from the next without reading it: when it was written and
+ * how long it is. Empty when there is no file. A log can be megabytes, and the watch looks at
+ * it every second on the thread the window waits on.
+ */
+function fileSignature(file: string): string {
+  try {
+    const info = statSync(file);
+    return `${info.mtimeMs}:${info.size}`;
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -294,29 +308,9 @@ export class TaskLogService extends EventEmitter {
       specsRelPath: specsRelPath || ''
     });
 
-    let lastMainContent = '';
-    let lastWorktreeContent = '';
-
-    // Initial load from main spec dir
-    if (existsSync(mainLogFile)) {
-      try {
-        lastMainContent = readFileSync(mainLogFile, 'utf-8');
-      } catch (_e) {
-        // Ignore parse errors on initial load
-      }
-    }
-
-    // Initial load from worktree spec dir
-    if (worktreeSpecDir) {
-      const worktreeLogFile = path.join(worktreeSpecDir, 'task_logs.json');
-      if (existsSync(worktreeLogFile)) {
-        try {
-          lastWorktreeContent = readFileSync(worktreeLogFile, 'utf-8');
-        } catch (_e) {
-          // Ignore parse errors on initial load
-        }
-      }
-    }
+    // The log files as last seen (fileSignature): only a changed file is read again
+    let lastMain = fileSignature(mainLogFile);
+    let lastWorktree = worktreeSpecDir ? fileSignature(path.join(worktreeSpecDir, 'task_logs.json')) : '';
 
     // Do initial merged load
     debugLog('[TaskLogService.startWatching] Loading initial logs');
@@ -365,31 +359,18 @@ export class TaskLogService extends EventEmitter {
       }
 
       // Check main spec dir
-      if (existsSync(mainLogFile)) {
-        try {
-          const currentContent = readFileSync(mainLogFile, 'utf-8');
-          if (currentContent !== lastMainContent) {
-            lastMainContent = currentContent;
-            mainChanged = true;
-          }
-        } catch (_error) {
-          // Ignore read/parse errors
-        }
+      const main = fileSignature(mainLogFile);
+      if (main !== lastMain) {
+        lastMain = main;
+        mainChanged = true;
       }
 
       // Check worktree spec dir
       if (currentWorktreeSpecDir) {
-        const worktreeLogFile = path.join(currentWorktreeSpecDir, 'task_logs.json');
-        if (existsSync(worktreeLogFile)) {
-          try {
-            const currentContent = readFileSync(worktreeLogFile, 'utf-8');
-            if (currentContent !== lastWorktreeContent) {
-              lastWorktreeContent = currentContent;
-              worktreeChanged = true;
-            }
-          } catch (_error) {
-            // Ignore read/parse errors
-          }
+        const worktree = fileSignature(path.join(currentWorktreeSpecDir, 'task_logs.json'));
+        if (worktree !== lastWorktree) {
+          lastWorktree = worktree;
+          worktreeChanged = true;
         }
       }
 
