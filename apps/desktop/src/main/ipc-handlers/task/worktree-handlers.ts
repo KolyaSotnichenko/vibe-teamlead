@@ -634,6 +634,498 @@ async function withRetry<T>(
 /**
  * Register worktree management handlers
  */
+/**
+ * Merge the worktree changes into the main branch: what the window's Merge button runs
+ * (TASK_WORKTREE_MERGE), and the Telegram bot's Merge.
+ */
+export async function mergeTaskWorktree(
+  getMainWindow: () => BrowserWindow | null,
+  taskId: string,
+  options?: MergeWorktreeOptions
+): Promise<IPCResult<WorktreeMergeResult>> {
+  const isDebugMode = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+  const debug = (...args: unknown[]) => {
+    if (isDebugMode) {
+      console.warn('[MERGE DEBUG]', ...args);
+    }
+  };
+
+  try {
+    debug('Handler called with taskId:', taskId, 'options:', options);
+
+    // With a project, only in it: another project can have a task with the same number
+    const { task, project } = findTaskAndProject(taskId, options?.projectId);
+    if (!task || !project) {
+      debug('Task or project not found');
+      return { success: false, error: 'Task not found' };
+    }
+
+    debug('Found task:', task.specId, 'project:', project.path);
+
+    const specDir = path.join(project.path, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId);
+    const worktreePath = findTaskWorktree(project.path, task.specId);
+
+    // Auto-fix any misconfigured bare repo before merge operation
+    // This prevents issues where git operations fail due to incorrect bare=true config
+    if (fixMisconfiguredBareRepo(project.path)) {
+      debug('Fixed misconfigured bare repository at:', project.path);
+    }
+
+    // Determine base branch with proper priority:
+    // 1. Task metadata baseBranch (explicit task-level override)
+    // 2. Project settings mainBranch (project-level default)
+    // 3. Default to 'main'
+    const taskBaseBranch = getTaskBaseBranch(specDir);
+    const projectMainBranch = project.settings?.mainBranch;
+    const effectiveBaseBranch = taskBaseBranch || projectMainBranch || 'main';
+    debug('Using base branch:', effectiveBaseBranch,
+      `(source: ${taskBaseBranch ? 'task metadata' : projectMainBranch ? 'project settings' : 'default'})`);
+
+    // Get utility settings for merge resolver model selection
+    const utilitySettings = getUtilitySettings();
+    debug('Utility settings for merge:', utilitySettings);
+
+    // Emit initial progress event so renderer shows the merge has started
+    const mainWindow = getMainWindow();
+    const emitProgress = (stage: string, percent: number, message: string, details: Record<string, unknown> = {}) => {
+      if (mainWindow) {
+        mainWindow.webContents.send(IPC_CHANNELS.TASK_MERGE_PROGRESS, taskId, {
+          type: 'progress',
+          stage,
+          percent,
+          message,
+          details
+        });
+      }
+    };
+
+    // git does the merge. What it can't do, an agent does first, in the task's folder
+    let mergeSucceeded = false;
+    let mergeError: string | undefined;
+    let conflictFiles: string[] | undefined;
+
+    const git = { git: getToolPath('git'), env: getIsolatedGitEnv() };
+    const taskBranch = { projectDir: project.path, branch: `vibe-teamlead/${task.specId}`, ...git };
+    const mergeMessage = `Merge vibe-teamlead/${task.specId}: ${task.title}`;
+
+    if (isMergeQueued(taskId)) {
+      return { success: true, data: { success: false, message: 'This task is already merging, or waiting to.' } };
+    }
+
+    // "UI tasks wait for my preview": an approved task that changed UI stops here for the owner
+    const touchesUi = project.settings?.previewBeforeAutoMerge && worktreePath
+      ? () => uiChangedSince(() => changedFilesSinceBase(worktreePath))
+      : undefined;
+    const refusal = await autoMergeRefusal(options, worktreePath, task.specId, approvedAsItIs, touchesUi);
+    if (refusal === PREVIEW_HOLD) {
+      await markWaitingForPreview([path.join(specDir, 'implementation_plan.json'), ...(worktreePath ? [path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId, 'implementation_plan.json')] : [])]);
+      return { success: true, data: { success: false, message: refusal, heldForPreview: true } };
+    }
+    if (refusal) {
+      return { success: true, data: { success: false, message: refusal } };
+    }
+
+    if (options?.reviewAction === 'cancel') {
+      const cancelled = worktreePath ? await cancelIntegrationReview({ worktreePath, ...git }) : false;
+      emitProgress('complete', 100, 'The merge was cancelled');
+      return { success: true, data: { success: cancelled, message: cancelled ? 'The merge was cancelled.' : 'No merge is waiting for review, or the task could not be put back.' } };
+    }
+
+    const verification = projectVerification(project.path, project.settings);
+    emitProgress('analyzing', 0, 'Starting the merge');
+
+    const mergeResult = await inMergeQueue(project.path, taskId, () => integrateAndMerge({
+      ...taskBranch,
+      baseBranch: effectiveBaseBranch,
+      worktreePath: worktreePath ?? undefined,
+      uncommittedApproved: async () => (worktreePath ? approvedAsItIs(worktreePath, task.specId) : false),
+      message: mergeMessage,
+      stageOnly: options?.noCommit === true,
+      confirmed: options?.reviewAction === 'commit',
+      onProgress: (stage) => (stage === 'integrating'
+        ? emitProgress('analyzing', 10, 'Bringing the latest changes into the task')
+        : emitProgress('validating', 80, 'Merging into the project')),
+      verify: verification
+        ? async () => {
+            if (!worktreePath) return { ok: true, summary: '' };
+            emitProgress('validating', 70, 'The app is running the checks itself');
+            const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, git: git.git, hostEnv: git.env });
+            const summary = describeVerification(report);
+            if (report.status === 'regression') appEvents.emit('verification-regression', { taskId, projectId: project.id });
+            return { ok: report.status !== 'regression', summary };
+          }
+        : undefined,
+      runAgent: (request) => {
+        emitProgress('resolving', 25, request.conflictFiles.length ? `An agent is resolving ${request.conflictFiles.length} conflict(s) and checking the result` : 'An agent is checking the result');
+        return runMergeIntegrator({
+          ...request,
+          worktreePath: worktreePath ?? project.path,
+          taskTitle: task.title,
+          // Settings → Agents → Utility, not a fixed model
+          model: utilitySettings.model,
+          thinkingLevel: utilitySettings.thinkingLevel as ThinkingLevel,
+          onEvent: (event) => {
+            if (event.type === 'tool-call') emitProgress('resolving', 50, `Agent: ${event.toolName}`);
+          },
+        });
+      },
+    }), (ahead) => emitProgress('analyzing', 0, `Waiting for ${ahead} other merge(s) in this project`));
+    debug('Merge result:', mergeResult);
+
+    if (mergeResult.status === 'needs_review') {
+      const count = mergeResult.files.length;
+      emitProgress('complete', 100, 'Waiting for your review');
+      return {
+        success: true,
+        data: {
+          success: true,
+          needsReview: true,
+          conflictFiles: mergeResult.files,
+          message: `An agent changed ${count} file(s) to bring in the latest changes. Nothing reached the project yet: open the task to check them and confirm.`,
+        },
+      };
+    }
+
+    if (mergeResult.status === 'conflicts') {
+      conflictFiles = mergeResult.conflictFiles;
+      mergeError = `Could not merge: ${(conflictFiles ?? []).join(', ')}. ${mergeResult.message ?? 'They are in conflict'}. Nothing was changed. Merge again.`;
+    } else if (mergeResult.status === 'refused') {
+      mergeError = mergeResult.message ?? 'Merge failed';
+    } else {
+      mergeSucceeded = true;
+      emitProgress('complete', 100, 'Merge complete');
+    }
+    if (mergeError) emitProgress('error', 0, `Merge failed: ${mergeError}`);
+
+    // Post-merge: check git status, update plan files, clean worktree
+
+        // Get git status after merge (only if project is a working tree, not a bare repo)
+        if (isGitWorkTree(project.path)) {
+          try {
+            const gitStatusAfter = execFileSync(getToolPath('git'), ['status', '--short'], { cwd: project.path, encoding: 'utf-8' });
+            debug('Git status AFTER merge in main project:\n', gitStatusAfter || '(clean)');
+            const gitDiffStaged = execFileSync(getToolPath('git'), ['diff', '--staged', '--stat'], { cwd: project.path, encoding: 'utf-8' });
+            debug('Staged changes:\n', gitDiffStaged || '(none)');
+          } catch (e) {
+            debug('Failed to get git status after:', e);
+          }
+        } else {
+          debug('Project is a bare repository - skipping git status check (this is normal for worktree-based projects)');
+        }
+
+        if (mergeSucceeded) {
+          const isStageOnly = options?.noCommit === true;
+
+          // Verify changes were actually staged when stage-only mode is requested
+          // This prevents false positives when merge was already committed previously
+          let hasActualStagedChanges = false;
+          let mergeAlreadyCommitted = false;
+
+          if (isStageOnly) {
+            // Only check staged changes if project is a working tree (not bare repo)
+            if (isGitWorkTree(project.path)) {
+              try {
+                const gitDiffStaged = execFileSync(getToolPath('git'), ['diff', '--staged', '--stat'], { cwd: project.path, encoding: 'utf-8' });
+                hasActualStagedChanges = gitDiffStaged.trim().length > 0;
+                debug('Stage-only verification: hasActualStagedChanges:', hasActualStagedChanges);
+
+                if (!hasActualStagedChanges) {
+                  // Check if worktree branch was already merged (merge commit exists)
+                  const specBranch = `vibe-teamlead/${task.specId}`;
+                  try {
+                    // Check if current branch contains all commits from spec branch
+                    // git merge-base --is-ancestor returns exit code 0 if true, 1 if false
+                    execFileSync(
+                      getToolPath('git'),
+                      ['merge-base', '--is-ancestor', specBranch, 'HEAD'],
+                      { cwd: project.path, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+                    );
+                    // If we reach here, the command succeeded (exit code 0) - branch is merged
+                    mergeAlreadyCommitted = true;
+                    debug('Merge already committed check:', mergeAlreadyCommitted);
+                  } catch {
+                    // Exit code 1 means not merged, or branch may not exist
+                    mergeAlreadyCommitted = false;
+                    debug('Could not check merge status, assuming not merged');
+                  }
+                }
+              } catch (e) {
+                debug('Failed to verify staged changes:', e);
+              }
+            } else {
+              // For bare repos, skip staging verification - merge happens in worktree
+              debug('Project is a bare repository - skipping staged changes verification');
+            }
+          }
+
+          // Determine actual status based on verification
+          let newStatus: string;
+          let planStatus: string;
+          let message: string;
+          let staged: boolean;
+
+          if (isStageOnly && !hasActualStagedChanges && mergeAlreadyCommitted) {
+            // Stage-only was requested but merge was already committed previously
+            // Keep in human_review and let user explicitly mark as done (which will trigger cleanup confirmation)
+            // This ensures user is in control of when the worktree is deleted
+            newStatus = 'human_review';
+            planStatus = 'review';
+            message = 'Changes were already merged and committed. You can mark this task as complete when ready.';
+            staged = false;
+            debug('Stage-only requested but merge already committed. Keeping in human_review for user to confirm completion.');
+            // NOTE: We intentionally do NOT auto-clean the worktree here.
+            // User can drag the task to "Done" column which will show a confirmation dialog
+            // asking if they want to delete the worktree and mark complete.
+          } else if (isStageOnly && !hasActualStagedChanges) {
+            // Stage-only was requested but no changes to stage (and not committed)
+            // This could mean nothing to merge or an error - keep in human_review for investigation
+            newStatus = 'human_review';
+            planStatus = 'review';
+            message = 'No changes to stage. The worktree may have no differences from the current branch.';
+            staged = false;
+            debug('Stage-only requested but no changes to stage.');
+          } else if (isStageOnly) {
+            // Stage-only with actual staged changes - expected success case
+            newStatus = 'human_review';
+            planStatus = 'review';
+            message = 'Changes staged in main project. Review with git status and commit when ready.';
+            staged = true;
+          } else {
+            // Full merge (not stage-only)
+            newStatus = 'done';
+            planStatus = 'completed';
+            message = 'Changes merged successfully';
+            staged = false;
+            appEvents.emit('task-merged', { taskId, projectId: project.id });
+
+            // Deploy: send the new main to GitHub (fire and forget; never blocks or fails the merge)
+            void pushMainAfterMerge(
+              project,
+              {
+                push: pushWithAppToken,
+                emit: (result) => { safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PUSH_RESULT, result); },
+                headSha: branchHead,
+              },
+              effectiveBaseBranch,
+            ).then((outcome) => {
+              // Deploy: follow the GitHub Actions runs of the pushed commit; a failed one becomes a fix task
+              const runDeps = getMainRunDeps();
+              if (outcome.pushed && outcome.sha && runDeps) {
+                try {
+                  watchMainRuns(projectStore.getProject(project.id) ?? project, outcome.sha, runDeps);
+                } catch {
+                  // informational
+                }
+              }
+            }).catch(() => undefined);
+
+            // Deploy: rescan readiness after a merge into main (never blocks or fails the merge)
+            try {
+              const fresh = projectStore.getProject(project.id) ?? project;
+              void getReadiness()?.scan(fresh, 'merge', effectiveBaseBranch).catch(() => undefined);
+            } catch {
+              // informational
+            }
+
+            // Clean up worktree after successful full merge (fixes #243)
+            // This allows drag-to-Done workflow since TASK_UPDATE_STATUS blocks 'done' when worktree exists
+            // Uses shared cleanup utility for robust Windows support (fixes #1539)
+            if (worktreePath && existsSync(worktreePath)) {
+              const cleanupResult = await cleanupWorktree({
+                worktreePath,
+                projectPath: project.path,
+                specId: task.specId,
+                logPrefix: '[TASK_WORKTREE_MERGE]',
+                specsRelPath: getSpecsDir(project.autoBuildPath),
+                deleteBranch: true
+              });
+
+              if (cleanupResult.success) {
+                debug('Worktree cleaned up after full merge:', worktreePath);
+                if (cleanupResult.branch) {
+                  debug('Task branch deleted:', cleanupResult.branch);
+                }
+              } else {
+                debug('Worktree cleanup failed (non-fatal):', cleanupResult.warnings);
+                // Non-fatal - merge succeeded; say so, so the leftover folder isn't a mystery
+                message = `Changes merged, but the task folder could not be removed (${cleanupResult.warnings[0] ?? 'unknown error'}). Delete it from Worktrees.`;
+              }
+
+              // Log any warnings for debugging
+              if (cleanupResult.warnings.length > 0) {
+                debug('Cleanup warnings:', cleanupResult.warnings);
+              }
+            }
+
+            // Its work is in the project now: the task's branch on GitHub goes too (never blocks or fails the merge)
+            requestTaskBranchDelete(project, task);
+          }
+
+          debug('Merge result. isStageOnly:', isStageOnly, 'newStatus:', newStatus, 'staged:', staged);
+          const reviewReason = newStatus === 'human_review' ? 'completed' : undefined;
+
+          // Generate AI commit message if staging succeeded
+          let suggestedCommitMessage: string | undefined;
+          if (staged) {
+            try {
+              // Get diff summary and changed files for context
+              let diffSummary = '';
+              let filesChangedList: string[] = [];
+
+              if (isGitWorkTree(project.path)) {
+                try {
+                  const [diffResult, nameOnlyResult] = await Promise.all([
+                    execFileAsync(getToolPath('git'), ['diff', '--staged', '--stat'], { cwd: project.path, encoding: 'utf-8' }),
+                    execFileAsync(getToolPath('git'), ['diff', '--staged', '--name-only'], { cwd: project.path, encoding: 'utf-8' }),
+                  ]);
+                  diffSummary = diffResult.stdout.trim();
+                  const nameOnly = nameOnlyResult.stdout.trim();
+                  filesChangedList = nameOnly ? nameOnly.split('\n') : [];
+                } catch (e) {
+                  debug('Failed to get staged diff for commit message:', e);
+                }
+              }
+
+              const { generateCommitMessage } = await import('../../ai/runners/commit-message');
+              // Settings → Agents → Utility, not a fixed model
+              const utility = getUtilitySettings();
+              suggestedCommitMessage = await generateCommitMessage({
+                projectDir: project.path,
+                specName: task.specId,
+                diffSummary,
+                filesChanged: filesChangedList,
+                modelShorthand: utility.model as ModelShorthand,
+                thinkingLevel: utility.thinkingLevel as ThinkingLevel,
+              });
+              debug('Generated commit message:', suggestedCommitMessage?.substring(0, 100));
+            } catch (e) {
+              debug('Failed to generate commit message:', e);
+            }
+          }
+
+          // Persist the status change to implementation_plan.json
+          // Issue #243: We must update BOTH the main project's plan AND the worktree's plan (if it exists)
+          // because ProjectStore prefers the worktree version when deduplicating tasks.
+          // OPTIMIZATION: Use async I/O and parallel updates to prevent UI blocking
+          // NOTE: The worktree has the same directory structure as main project
+          const planPaths: { path: string; isMain: boolean }[] = [
+            { path: path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), isMain: true },
+          ];
+          // Add worktree plan path if worktree exists
+          if (worktreePath) {
+            const worktreeSpecDir = path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId);
+            planPaths.push({ path: path.join(worktreeSpecDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), isMain: false });
+          }
+
+          const { promises: fsPromises } = require('fs');
+
+          // Update plan file with retry logic for transient failures
+          // Uses EAFP pattern (try/catch) instead of LBYL (existsSync check) to avoid TOCTOU race conditions
+          const updatePlanWithRetry = async (planPath: string, isMain: boolean): Promise<boolean> => {
+            // Helper to check if error is ENOENT (file not found)
+            const isFileNotFound = (err: unknown): boolean =>
+              !!(err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT');
+
+            try {
+              await withRetry(
+                async () => {
+                  const planContent = await fsPromises.readFile(planPath, 'utf-8');
+                  const plan = JSON.parse(planContent);
+                  plan.status = newStatus;
+                  plan.planStatus = planStatus;
+                  plan.reviewReason = reviewReason;
+                  plan.updated_at = new Date().toISOString();
+                  if (staged) {
+                    plan.stagedAt = new Date().toISOString();
+                    plan.stagedInMainProject = true;
+                  }
+                  await fsPromises.writeFile(planPath, JSON.stringify(plan, null, 2), 'utf-8');
+
+                  // Verify the write succeeded by reading back
+                  const verifyContent = await fsPromises.readFile(planPath, 'utf-8');
+                  const verifyPlan = JSON.parse(verifyContent);
+                  if (verifyPlan.status !== newStatus || verifyPlan.planStatus !== planStatus) {
+                    throw new Error('Write verification failed - status mismatch');
+                  }
+                },
+                {
+                  maxRetries: 3,
+                  baseDelayMs: 100,
+                  shouldRetry: (err) => !isFileNotFound(err) // Don't retry if file doesn't exist
+                }
+              );
+              return true;
+            } catch (err) {
+              // File doesn't exist - nothing to update (not an error)
+              if (isFileNotFound(err)) {
+                return true;
+              }
+              // Only log error if main plan fails; worktree plan might legitimately be missing or read-only
+              if (isMain) {
+                console.error('Failed to persist task status to main plan after retries:', err);
+              } else {
+                debug('Failed to persist task status to worktree plan (non-critical):', err);
+              }
+              return false;
+            }
+          };
+
+          const updatePlans = async () => {
+            const results = await Promise.all(
+              planPaths.map(({ path: planPath, isMain }) =>
+                updatePlanWithRetry(planPath, isMain)
+              )
+            );
+            // Log if main plan update failed (first element)
+            if (!results[0]) {
+              console.warn('Background plan update: main plan write may not have persisted');
+            }
+          };
+
+          // IMPORTANT: Wait for plan updates to complete before responding (fixes #243)
+          // Previously this was "fire and forget" which caused a race condition:
+          // resolve() would return before files were written, and UI refresh would read old status
+          try {
+            await updatePlans();
+          } catch (err) {
+            debug('Plan update failed:', err);
+            // Non-fatal: UI will still update, but status may not persist across refresh
+          }
+
+          // Route status change through TaskStateManager (XState) to avoid dual emission
+          taskStateManager.handleManualStatusChange(taskId, newStatus as any, task, project);
+
+          return {
+            success: true,
+            data: {
+              success: true,
+              message,
+              staged,
+              projectPath: staged ? project.path : undefined,
+              suggestedCommitMessage
+            }
+          };
+        } else {
+          // Merge failed - return error to renderer
+          debug('Merge failed. mergeError:', mergeError);
+          return {
+            success: true,
+            data: {
+              success: false,
+              message: mergeError ?? 'Merge failed',
+              conflictFiles
+            }
+          };
+        }
+  } catch (error) {
+    console.error('[MERGE] Exception in merge handler:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to merge worktree'
+    };
+  }
+}
+
 export function registerWorktreeHandlers(
   getMainWindow: () => BrowserWindow | null
 ): void {
@@ -854,487 +1346,7 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     IPC_CHANNELS.TASK_WORKTREE_MERGE,
     async (_, taskId: string, options?: MergeWorktreeOptions): Promise<IPCResult<WorktreeMergeResult>> => {
-      const isDebugMode = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
-      const debug = (...args: unknown[]) => {
-        if (isDebugMode) {
-          console.warn('[MERGE DEBUG]', ...args);
-        }
-      };
-
-      try {
-        debug('Handler called with taskId:', taskId, 'options:', options);
-
-        // With a project, only in it: another project can have a task with the same number
-        const { task, project } = findTaskAndProject(taskId, options?.projectId);
-        if (!task || !project) {
-          debug('Task or project not found');
-          return { success: false, error: 'Task not found' };
-        }
-
-        debug('Found task:', task.specId, 'project:', project.path);
-
-        const specDir = path.join(project.path, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId);
-        const worktreePath = findTaskWorktree(project.path, task.specId);
-
-        // Auto-fix any misconfigured bare repo before merge operation
-        // This prevents issues where git operations fail due to incorrect bare=true config
-        if (fixMisconfiguredBareRepo(project.path)) {
-          debug('Fixed misconfigured bare repository at:', project.path);
-        }
-
-        // Determine base branch with proper priority:
-        // 1. Task metadata baseBranch (explicit task-level override)
-        // 2. Project settings mainBranch (project-level default)
-        // 3. Default to 'main'
-        const taskBaseBranch = getTaskBaseBranch(specDir);
-        const projectMainBranch = project.settings?.mainBranch;
-        const effectiveBaseBranch = taskBaseBranch || projectMainBranch || 'main';
-        debug('Using base branch:', effectiveBaseBranch,
-          `(source: ${taskBaseBranch ? 'task metadata' : projectMainBranch ? 'project settings' : 'default'})`);
-
-        // Get utility settings for merge resolver model selection
-        const utilitySettings = getUtilitySettings();
-        debug('Utility settings for merge:', utilitySettings);
-
-        // Emit initial progress event so renderer shows the merge has started
-        const mainWindow = getMainWindow();
-        const emitProgress = (stage: string, percent: number, message: string, details: Record<string, unknown> = {}) => {
-          if (mainWindow) {
-            mainWindow.webContents.send(IPC_CHANNELS.TASK_MERGE_PROGRESS, taskId, {
-              type: 'progress',
-              stage,
-              percent,
-              message,
-              details
-            });
-          }
-        };
-
-        // git does the merge. What it can't do, an agent does first, in the task's folder
-        let mergeSucceeded = false;
-        let mergeError: string | undefined;
-        let conflictFiles: string[] | undefined;
-
-        const git = { git: getToolPath('git'), env: getIsolatedGitEnv() };
-        const taskBranch = { projectDir: project.path, branch: `vibe-teamlead/${task.specId}`, ...git };
-        const mergeMessage = `Merge vibe-teamlead/${task.specId}: ${task.title}`;
-
-        if (isMergeQueued(taskId)) {
-          return { success: true, data: { success: false, message: 'This task is already merging, or waiting to.' } };
-        }
-
-        // "UI tasks wait for my preview": an approved task that changed UI stops here for the owner
-        const touchesUi = project.settings?.previewBeforeAutoMerge && worktreePath
-          ? () => uiChangedSince(() => changedFilesSinceBase(worktreePath))
-          : undefined;
-        const refusal = await autoMergeRefusal(options, worktreePath, task.specId, approvedAsItIs, touchesUi);
-        if (refusal === PREVIEW_HOLD) {
-          await markWaitingForPreview([path.join(specDir, 'implementation_plan.json'), ...(worktreePath ? [path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId, 'implementation_plan.json')] : [])]);
-          return { success: true, data: { success: false, message: refusal, heldForPreview: true } };
-        }
-        if (refusal) {
-          return { success: true, data: { success: false, message: refusal } };
-        }
-
-        if (options?.reviewAction === 'cancel') {
-          const cancelled = worktreePath ? await cancelIntegrationReview({ worktreePath, ...git }) : false;
-          emitProgress('complete', 100, 'The merge was cancelled');
-          return { success: true, data: { success: cancelled, message: cancelled ? 'The merge was cancelled.' : 'No merge is waiting for review, or the task could not be put back.' } };
-        }
-
-        const verification = projectVerification(project.path, project.settings);
-        emitProgress('analyzing', 0, 'Starting the merge');
-
-        const mergeResult = await inMergeQueue(project.path, taskId, () => integrateAndMerge({
-          ...taskBranch,
-          baseBranch: effectiveBaseBranch,
-          worktreePath: worktreePath ?? undefined,
-          uncommittedApproved: async () => (worktreePath ? approvedAsItIs(worktreePath, task.specId) : false),
-          message: mergeMessage,
-          stageOnly: options?.noCommit === true,
-          confirmed: options?.reviewAction === 'commit',
-          onProgress: (stage) => (stage === 'integrating'
-            ? emitProgress('analyzing', 10, 'Bringing the latest changes into the task')
-            : emitProgress('validating', 80, 'Merging into the project')),
-          verify: verification
-            ? async () => {
-                if (!worktreePath) return { ok: true, summary: '' };
-                emitProgress('validating', 70, 'The app is running the checks itself');
-                const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, git: git.git, hostEnv: git.env });
-                const summary = describeVerification(report);
-                if (report.status === 'regression') appEvents.emit('verification-regression', { taskId, projectId: project.id });
-                return { ok: report.status !== 'regression', summary };
-              }
-            : undefined,
-          runAgent: (request) => {
-            emitProgress('resolving', 25, request.conflictFiles.length ? `An agent is resolving ${request.conflictFiles.length} conflict(s) and checking the result` : 'An agent is checking the result');
-            return runMergeIntegrator({
-              ...request,
-              worktreePath: worktreePath ?? project.path,
-              taskTitle: task.title,
-              // Settings → Agents → Utility, not a fixed model
-              model: utilitySettings.model,
-              thinkingLevel: utilitySettings.thinkingLevel as ThinkingLevel,
-              onEvent: (event) => {
-                if (event.type === 'tool-call') emitProgress('resolving', 50, `Agent: ${event.toolName}`);
-              },
-            });
-          },
-        }), (ahead) => emitProgress('analyzing', 0, `Waiting for ${ahead} other merge(s) in this project`));
-        debug('Merge result:', mergeResult);
-
-        if (mergeResult.status === 'needs_review') {
-          const count = mergeResult.files.length;
-          emitProgress('complete', 100, 'Waiting for your review');
-          return {
-            success: true,
-            data: {
-              success: true,
-              needsReview: true,
-              conflictFiles: mergeResult.files,
-              message: `An agent changed ${count} file(s) to bring in the latest changes. Nothing reached the project yet: open the task to check them and confirm.`,
-            },
-          };
-        }
-
-        if (mergeResult.status === 'conflicts') {
-          conflictFiles = mergeResult.conflictFiles;
-          mergeError = `Could not merge: ${(conflictFiles ?? []).join(', ')}. ${mergeResult.message ?? 'They are in conflict'}. Nothing was changed. Merge again.`;
-        } else if (mergeResult.status === 'refused') {
-          mergeError = mergeResult.message ?? 'Merge failed';
-        } else {
-          mergeSucceeded = true;
-          emitProgress('complete', 100, 'Merge complete');
-        }
-        if (mergeError) emitProgress('error', 0, `Merge failed: ${mergeError}`);
-
-        // Post-merge: check git status, update plan files, clean worktree
-
-            // Get git status after merge (only if project is a working tree, not a bare repo)
-            if (isGitWorkTree(project.path)) {
-              try {
-                const gitStatusAfter = execFileSync(getToolPath('git'), ['status', '--short'], { cwd: project.path, encoding: 'utf-8' });
-                debug('Git status AFTER merge in main project:\n', gitStatusAfter || '(clean)');
-                const gitDiffStaged = execFileSync(getToolPath('git'), ['diff', '--staged', '--stat'], { cwd: project.path, encoding: 'utf-8' });
-                debug('Staged changes:\n', gitDiffStaged || '(none)');
-              } catch (e) {
-                debug('Failed to get git status after:', e);
-              }
-            } else {
-              debug('Project is a bare repository - skipping git status check (this is normal for worktree-based projects)');
-            }
-
-            if (mergeSucceeded) {
-              const isStageOnly = options?.noCommit === true;
-
-              // Verify changes were actually staged when stage-only mode is requested
-              // This prevents false positives when merge was already committed previously
-              let hasActualStagedChanges = false;
-              let mergeAlreadyCommitted = false;
-
-              if (isStageOnly) {
-                // Only check staged changes if project is a working tree (not bare repo)
-                if (isGitWorkTree(project.path)) {
-                  try {
-                    const gitDiffStaged = execFileSync(getToolPath('git'), ['diff', '--staged', '--stat'], { cwd: project.path, encoding: 'utf-8' });
-                    hasActualStagedChanges = gitDiffStaged.trim().length > 0;
-                    debug('Stage-only verification: hasActualStagedChanges:', hasActualStagedChanges);
-
-                    if (!hasActualStagedChanges) {
-                      // Check if worktree branch was already merged (merge commit exists)
-                      const specBranch = `vibe-teamlead/${task.specId}`;
-                      try {
-                        // Check if current branch contains all commits from spec branch
-                        // git merge-base --is-ancestor returns exit code 0 if true, 1 if false
-                        execFileSync(
-                          getToolPath('git'),
-                          ['merge-base', '--is-ancestor', specBranch, 'HEAD'],
-                          { cwd: project.path, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
-                        );
-                        // If we reach here, the command succeeded (exit code 0) - branch is merged
-                        mergeAlreadyCommitted = true;
-                        debug('Merge already committed check:', mergeAlreadyCommitted);
-                      } catch {
-                        // Exit code 1 means not merged, or branch may not exist
-                        mergeAlreadyCommitted = false;
-                        debug('Could not check merge status, assuming not merged');
-                      }
-                    }
-                  } catch (e) {
-                    debug('Failed to verify staged changes:', e);
-                  }
-                } else {
-                  // For bare repos, skip staging verification - merge happens in worktree
-                  debug('Project is a bare repository - skipping staged changes verification');
-                }
-              }
-
-              // Determine actual status based on verification
-              let newStatus: string;
-              let planStatus: string;
-              let message: string;
-              let staged: boolean;
-
-              if (isStageOnly && !hasActualStagedChanges && mergeAlreadyCommitted) {
-                // Stage-only was requested but merge was already committed previously
-                // Keep in human_review and let user explicitly mark as done (which will trigger cleanup confirmation)
-                // This ensures user is in control of when the worktree is deleted
-                newStatus = 'human_review';
-                planStatus = 'review';
-                message = 'Changes were already merged and committed. You can mark this task as complete when ready.';
-                staged = false;
-                debug('Stage-only requested but merge already committed. Keeping in human_review for user to confirm completion.');
-                // NOTE: We intentionally do NOT auto-clean the worktree here.
-                // User can drag the task to "Done" column which will show a confirmation dialog
-                // asking if they want to delete the worktree and mark complete.
-              } else if (isStageOnly && !hasActualStagedChanges) {
-                // Stage-only was requested but no changes to stage (and not committed)
-                // This could mean nothing to merge or an error - keep in human_review for investigation
-                newStatus = 'human_review';
-                planStatus = 'review';
-                message = 'No changes to stage. The worktree may have no differences from the current branch.';
-                staged = false;
-                debug('Stage-only requested but no changes to stage.');
-              } else if (isStageOnly) {
-                // Stage-only with actual staged changes - expected success case
-                newStatus = 'human_review';
-                planStatus = 'review';
-                message = 'Changes staged in main project. Review with git status and commit when ready.';
-                staged = true;
-              } else {
-                // Full merge (not stage-only)
-                newStatus = 'done';
-                planStatus = 'completed';
-                message = 'Changes merged successfully';
-                staged = false;
-                appEvents.emit('task-merged', { taskId, projectId: project.id });
-
-                // Deploy: send the new main to GitHub (fire and forget; never blocks or fails the merge)
-                void pushMainAfterMerge(
-                  project,
-                  {
-                    push: pushWithAppToken,
-                    emit: (result) => { safeSendToRenderer(getMainWindow, IPC_CHANNELS.DEPLOY_PUSH_RESULT, result); },
-                    headSha: branchHead,
-                  },
-                  effectiveBaseBranch,
-                ).then((outcome) => {
-                  // Deploy: follow the GitHub Actions runs of the pushed commit; a failed one becomes a fix task
-                  const runDeps = getMainRunDeps();
-                  if (outcome.pushed && outcome.sha && runDeps) {
-                    try {
-                      watchMainRuns(projectStore.getProject(project.id) ?? project, outcome.sha, runDeps);
-                    } catch {
-                      // informational
-                    }
-                  }
-                }).catch(() => undefined);
-
-                // Deploy: rescan readiness after a merge into main (never blocks or fails the merge)
-                try {
-                  const fresh = projectStore.getProject(project.id) ?? project;
-                  void getReadiness()?.scan(fresh, 'merge', effectiveBaseBranch).catch(() => undefined);
-                } catch {
-                  // informational
-                }
-
-                // Clean up worktree after successful full merge (fixes #243)
-                // This allows drag-to-Done workflow since TASK_UPDATE_STATUS blocks 'done' when worktree exists
-                // Uses shared cleanup utility for robust Windows support (fixes #1539)
-                if (worktreePath && existsSync(worktreePath)) {
-                  const cleanupResult = await cleanupWorktree({
-                    worktreePath,
-                    projectPath: project.path,
-                    specId: task.specId,
-                    logPrefix: '[TASK_WORKTREE_MERGE]',
-                    specsRelPath: getSpecsDir(project.autoBuildPath),
-                    deleteBranch: true
-                  });
-
-                  if (cleanupResult.success) {
-                    debug('Worktree cleaned up after full merge:', worktreePath);
-                    if (cleanupResult.branch) {
-                      debug('Task branch deleted:', cleanupResult.branch);
-                    }
-                  } else {
-                    debug('Worktree cleanup failed (non-fatal):', cleanupResult.warnings);
-                    // Non-fatal - merge succeeded; say so, so the leftover folder isn't a mystery
-                    message = `Changes merged, but the task folder could not be removed (${cleanupResult.warnings[0] ?? 'unknown error'}). Delete it from Worktrees.`;
-                  }
-
-                  // Log any warnings for debugging
-                  if (cleanupResult.warnings.length > 0) {
-                    debug('Cleanup warnings:', cleanupResult.warnings);
-                  }
-                }
-
-                // Its work is in the project now: the task's branch on GitHub goes too (never blocks or fails the merge)
-                requestTaskBranchDelete(project, task);
-              }
-
-              debug('Merge result. isStageOnly:', isStageOnly, 'newStatus:', newStatus, 'staged:', staged);
-              const reviewReason = newStatus === 'human_review' ? 'completed' : undefined;
-
-              // Generate AI commit message if staging succeeded
-              let suggestedCommitMessage: string | undefined;
-              if (staged) {
-                try {
-                  // Get diff summary and changed files for context
-                  let diffSummary = '';
-                  let filesChangedList: string[] = [];
-
-                  if (isGitWorkTree(project.path)) {
-                    try {
-                      const [diffResult, nameOnlyResult] = await Promise.all([
-                        execFileAsync(getToolPath('git'), ['diff', '--staged', '--stat'], { cwd: project.path, encoding: 'utf-8' }),
-                        execFileAsync(getToolPath('git'), ['diff', '--staged', '--name-only'], { cwd: project.path, encoding: 'utf-8' }),
-                      ]);
-                      diffSummary = diffResult.stdout.trim();
-                      const nameOnly = nameOnlyResult.stdout.trim();
-                      filesChangedList = nameOnly ? nameOnly.split('\n') : [];
-                    } catch (e) {
-                      debug('Failed to get staged diff for commit message:', e);
-                    }
-                  }
-
-                  const { generateCommitMessage } = await import('../../ai/runners/commit-message');
-                  // Settings → Agents → Utility, not a fixed model
-                  const utility = getUtilitySettings();
-                  suggestedCommitMessage = await generateCommitMessage({
-                    projectDir: project.path,
-                    specName: task.specId,
-                    diffSummary,
-                    filesChanged: filesChangedList,
-                    modelShorthand: utility.model as ModelShorthand,
-                    thinkingLevel: utility.thinkingLevel as ThinkingLevel,
-                  });
-                  debug('Generated commit message:', suggestedCommitMessage?.substring(0, 100));
-                } catch (e) {
-                  debug('Failed to generate commit message:', e);
-                }
-              }
-
-              // Persist the status change to implementation_plan.json
-              // Issue #243: We must update BOTH the main project's plan AND the worktree's plan (if it exists)
-              // because ProjectStore prefers the worktree version when deduplicating tasks.
-              // OPTIMIZATION: Use async I/O and parallel updates to prevent UI blocking
-              // NOTE: The worktree has the same directory structure as main project
-              const planPaths: { path: string; isMain: boolean }[] = [
-                { path: path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), isMain: true },
-              ];
-              // Add worktree plan path if worktree exists
-              if (worktreePath) {
-                const worktreeSpecDir = path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId);
-                planPaths.push({ path: path.join(worktreeSpecDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), isMain: false });
-              }
-
-              const { promises: fsPromises } = require('fs');
-
-              // Update plan file with retry logic for transient failures
-              // Uses EAFP pattern (try/catch) instead of LBYL (existsSync check) to avoid TOCTOU race conditions
-              const updatePlanWithRetry = async (planPath: string, isMain: boolean): Promise<boolean> => {
-                // Helper to check if error is ENOENT (file not found)
-                const isFileNotFound = (err: unknown): boolean =>
-                  !!(err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT');
-
-                try {
-                  await withRetry(
-                    async () => {
-                      const planContent = await fsPromises.readFile(planPath, 'utf-8');
-                      const plan = JSON.parse(planContent);
-                      plan.status = newStatus;
-                      plan.planStatus = planStatus;
-                      plan.reviewReason = reviewReason;
-                      plan.updated_at = new Date().toISOString();
-                      if (staged) {
-                        plan.stagedAt = new Date().toISOString();
-                        plan.stagedInMainProject = true;
-                      }
-                      await fsPromises.writeFile(planPath, JSON.stringify(plan, null, 2), 'utf-8');
-
-                      // Verify the write succeeded by reading back
-                      const verifyContent = await fsPromises.readFile(planPath, 'utf-8');
-                      const verifyPlan = JSON.parse(verifyContent);
-                      if (verifyPlan.status !== newStatus || verifyPlan.planStatus !== planStatus) {
-                        throw new Error('Write verification failed - status mismatch');
-                      }
-                    },
-                    {
-                      maxRetries: 3,
-                      baseDelayMs: 100,
-                      shouldRetry: (err) => !isFileNotFound(err) // Don't retry if file doesn't exist
-                    }
-                  );
-                  return true;
-                } catch (err) {
-                  // File doesn't exist - nothing to update (not an error)
-                  if (isFileNotFound(err)) {
-                    return true;
-                  }
-                  // Only log error if main plan fails; worktree plan might legitimately be missing or read-only
-                  if (isMain) {
-                    console.error('Failed to persist task status to main plan after retries:', err);
-                  } else {
-                    debug('Failed to persist task status to worktree plan (non-critical):', err);
-                  }
-                  return false;
-                }
-              };
-
-              const updatePlans = async () => {
-                const results = await Promise.all(
-                  planPaths.map(({ path: planPath, isMain }) =>
-                    updatePlanWithRetry(planPath, isMain)
-                  )
-                );
-                // Log if main plan update failed (first element)
-                if (!results[0]) {
-                  console.warn('Background plan update: main plan write may not have persisted');
-                }
-              };
-
-              // IMPORTANT: Wait for plan updates to complete before responding (fixes #243)
-              // Previously this was "fire and forget" which caused a race condition:
-              // resolve() would return before files were written, and UI refresh would read old status
-              try {
-                await updatePlans();
-              } catch (err) {
-                debug('Plan update failed:', err);
-                // Non-fatal: UI will still update, but status may not persist across refresh
-              }
-
-              // Route status change through TaskStateManager (XState) to avoid dual emission
-              taskStateManager.handleManualStatusChange(taskId, newStatus as any, task, project);
-
-              return {
-                success: true,
-                data: {
-                  success: true,
-                  message,
-                  staged,
-                  projectPath: staged ? project.path : undefined,
-                  suggestedCommitMessage
-                }
-              };
-            } else {
-              // Merge failed - return error to renderer
-              debug('Merge failed. mergeError:', mergeError);
-              return {
-                success: true,
-                data: {
-                  success: false,
-                  message: mergeError ?? 'Merge failed',
-                  conflictFiles
-                }
-              };
-            }
-      } catch (error) {
-        console.error('[MERGE] Exception in merge handler:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to merge worktree'
-        };
-      }
+      return mergeTaskWorktree(getMainWindow, taskId, options);
     }
   );
 

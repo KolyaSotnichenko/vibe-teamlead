@@ -38,7 +38,7 @@ const deleteBranch = vi.hoisted(() => vi.fn());
 vi.mock('../../../deploy/branch-push', () => ({ requestTaskBranchDelete: deleteBranch }));
 
 import { IPC_CHANNELS } from '../../../../shared/constants';
-import { registerWorktreeHandlers } from '../worktree-handlers';
+import { mergeTaskWorktree, registerWorktreeHandlers } from '../worktree-handlers';
 
 const mergeTask = (options?: unknown) => handlers.get(IPC_CHANNELS.TASK_WORKTREE_MERGE)!({}, 't', options);
 
@@ -117,5 +117,16 @@ describe('merge into main pushes main', () => {
     merge.result = { status: 'conflicts' };
     await mergeTask();
     expect(deleteBranch).not.toHaveBeenCalled();
+  });
+
+  // The Telegram bot's Merge runs the same merge as the window's Merge button
+  it('mergeTaskWorktree is the merge the IPC handler runs', async () => {
+    merge.result = { status: 'merged' };
+    const direct = await mergeTaskWorktree(() => null, 't', {});
+    expect(direct).toEqual({ success: true, data: expect.objectContaining({ success: true, message: 'Changes merged successfully' }) });
+    expect(pushMain).toHaveBeenCalledTimes(1);
+    merge.result = { status: 'refused' };
+    const refused = await mergeTaskWorktree(() => null, 't', {});
+    expect(refused.data?.success).toBe(false);
   });
 });
