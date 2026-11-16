@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mergeTaskBranch, withoutGitHooks } from '../git-merge';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 const BINARY = Buffer.from([0x00, 0x01, 0xa8, 0x10, 0xff, 0xfe, 0x00, 0x80]);
 const BRANCH = 'vibe-teamlead/001-task';
@@ -33,6 +34,7 @@ describe('mergeTaskBranch', () => {
   beforeEach(() => {
     repo = realpathSync(mkdtempSync(join(tmpdir(), 'vtl-merge-')));
     git(repo, 'init', '-q', '-b', 'main');
+    git(repo, 'config', 'core.autocrlf', 'false'); // Git for Windows checks text out with CRLF by default
     git(repo, 'config', 'user.email', 't@t');
     git(repo, 'config', 'user.name', 't');
     writeFileSync(join(repo, 'shared.txt'), 'one\n');
@@ -183,7 +185,8 @@ describe('mergeTaskBranch', () => {
       expect(readFileSync(join(repo, 'shared.txt'), 'utf-8')).toBe('main side\n');
     });
 
-    describe('when the merge has to be undone', () => {
+    // The git wrapper that takes the index is a sh script, which Windows can't spawn
+    describe.skipIf(isWindowsHost)('when the merge has to be undone', () => {
       const lock = () => join(repo, '.git', 'index.lock');
       const merging = () => existsSync(join(repo, '.git', 'MERGE_HEAD'));
       /** git, but something else takes the index right after the merge stops */

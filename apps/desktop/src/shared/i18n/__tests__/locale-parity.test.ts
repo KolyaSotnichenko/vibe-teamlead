@@ -102,8 +102,10 @@ describe('locales', () => {
     });
 
     it('is formatted with 2-space indent, literal UTF-8 and a trailing newline', () => {
-      expect(ukRaw).not.toMatch(/\\u[0-9a-fA-F]{4}/);
-      expect(ukRaw).toBe(`${JSON.stringify(JSON.parse(ukRaw), null, 2)}\n`);
+      // A Windows checkout (core.autocrlf) has CRLF; what git stores is LF
+      const lf = ukRaw.replace(/\r\n/g, '\n');
+      expect(lf).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+      expect(lf).toBe(`${JSON.stringify(JSON.parse(lf), null, 2)}\n`);
     });
   });
 });

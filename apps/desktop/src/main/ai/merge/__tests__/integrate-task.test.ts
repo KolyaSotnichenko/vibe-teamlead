@@ -64,6 +64,7 @@ describe('integrateTask', () => {
   beforeEach(() => {
     repo = realpathSync(mkdtempSync(join(tmpdir(), 'vtl-integrate-')));
     git(repo, 'init', '-q', '-b', 'main');
+    git(repo, 'config', 'core.autocrlf', 'false'); // Git for Windows checks text out with CRLF by default
     git(repo, 'config', 'user.email', 't@t');
     git(repo, 'config', 'user.name', 't');
     writeFileSync(join(repo, 'shared.txt'), 'one\n');
