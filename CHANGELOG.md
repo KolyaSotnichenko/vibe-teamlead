@@ -6,6 +6,8 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 - Windows: a design package can be chosen as a .zip. The dialog asked for a file or a folder at once, which Windows can't show, so only folders could be picked. Off macOS the step now has two buttons, **Choose a zip** and **Choose a folder**.
 - A chosen folder that holds only .zip files (not an unpacked package) is no longer offered for import: the app asks you to choose one of the zips.
+- Task logs: the Design phase shows the designer's model and effort, like the other phases.
+- Memory: with memory turned off in Settings → Memory, no model call is made after each coder session to extract what it learned (it ran and its result was thrown away). Memory doesn't need Ollama: without it entries are still saved and search is by keywords.
 
 ## 2.0.0-beta.45 - 2026-11-16
 
