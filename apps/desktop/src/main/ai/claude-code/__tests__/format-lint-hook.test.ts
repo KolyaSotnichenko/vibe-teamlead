@@ -82,6 +82,34 @@ describe('planTools', () => {
   });
 });
 
+describe('planTools on Windows', () => {
+  const project = '/p';
+
+  it('runs the .cmd shims of node_modules/.bin (the extension-less files there are sh scripts)', () => {
+    const bin = '/p/node_modules/.bin';
+    const plan = planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`, `${bin}/prettier.cmd`, `${bin}/eslint`, `${bin}/eslint.cmd`]), 'win32');
+    expect(plan.map((t) => [t.name, t.cmd])).toEqual([
+      ['prettier', `${bin}/prettier.cmd`],
+      ['eslint', `${bin}/eslint.cmd`],
+    ]);
+    const biome = planTools('/p/src/a.ts', project, lookup([`${bin}/biome`, `${bin}/biome.cmd`]), 'win32');
+    expect(biome.map((t) => t.cmd)).toEqual([`${bin}/biome.cmd`, `${bin}/biome.cmd`]);
+    expect(planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`]), 'win32')).toEqual([]);
+  });
+
+  it('finds ruff in the venv Scripts folder and gofmt.exe next to go.exe', () => {
+    const ruff = planTools('/p/svc/app.py', project, lookup(['/p/svc/.venv/Scripts/ruff.exe']), 'win32');
+    expect(ruff.map((t) => t.cmd)).toEqual(['/p/svc/.venv/Scripts/ruff.exe', '/p/svc/.venv/Scripts/ruff.exe']);
+    const go = planTools('/p/cmd/main.go', project, lookup([], { go: 'C:/Go/bin/go.exe' }), 'win32');
+    expect(go.map((t) => t.cmd)).toEqual([join('C:/Go/bin', 'gofmt.exe'), 'C:/Go/bin/go.exe']);
+  });
+
+  it('keeps the macOS names on macOS', () => {
+    const bin = '/p/node_modules/.bin';
+    expect(planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`, `${bin}/prettier.cmd`]), 'darwin').map((t) => t.cmd)).toEqual([`${bin}/prettier`]);
+  });
+});
+
 describe('lint output parsing', () => {
   it('parses eslint JSON into lines with the rule and severity', () => {
     const json = JSON.stringify([

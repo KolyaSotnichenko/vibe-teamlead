@@ -18,6 +18,7 @@ import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path
 
 import type { HookCallbackMatcher, HookInput, HookJSONOutput } from '@anthropic-ai/claude-agent-sdk';
 
+import { getPlatformKey } from '../../platform';
 import { findOnPath, type RunOptions, type RunResult, runProcess, searchPath } from '../../platform/exec';
 import { isPathContained } from '../security/path-containment';
 import { pickHostEnv, TOOL_HOST_ENV } from './host-env';
@@ -91,14 +92,21 @@ const relFile = (file: string, projectDir: string): string => {
   return rel && !rel.startsWith('..') ? toPosix(rel) : toPosix(file);
 };
 
-/** Which tools run for this file, in order, with the project's own binaries. Pure given `lookup`. */
-export function planTools(file: string, projectDir: string, lookup: ToolLookup): ToolPlan[] {
+/**
+ * Which tools run for this file, in order, with the project's own binaries. Pure given `lookup`.
+ * On Windows the npm shims are the `.cmd` files of node_modules/.bin (the extension-less ones are
+ * sh scripts); runProcess runs them as `node <script>` (commandFor), never as a bare spawn of a
+ * .cmd (EINVAL). A venv keeps its tools in `Scripts`, and Go's tools end in `.exe`.
+ */
+export function planTools(file: string, projectDir: string, lookup: ToolLookup, platform: 'darwin' | 'win32' | 'linux' = getPlatformKey()): ToolPlan[] {
+  const windows = platform === 'win32';
+  const shim = (name: string) => (windows ? `${name}.cmd` : name);
   const ext = extname(file).toLowerCase();
   const plan: ToolPlan[] = [];
   if (JS_EXTENSIONS.has(ext)) {
-    const prettier = nearest(file, projectDir, lookup, join('node_modules', '.bin'), 'prettier');
-    const eslint = nearest(file, projectDir, lookup, join('node_modules', '.bin'), 'eslint');
-    const biome = nearest(file, projectDir, lookup, join('node_modules', '.bin'), 'biome');
+    const prettier = nearest(file, projectDir, lookup, join('node_modules', '.bin'), shim('prettier'));
+    const eslint = nearest(file, projectDir, lookup, join('node_modules', '.bin'), shim('eslint'));
+    const biome = nearest(file, projectDir, lookup, join('node_modules', '.bin'), shim('biome'));
     if (prettier) plan.push({ name: 'prettier', formats: true, cmd: prettier.bin, args: ['--write', file], cwd: prettier.dir });
     else if (biome) plan.push({ name: 'biome format', formats: true, cmd: biome.bin, args: ['format', '--write', file], cwd: biome.dir });
     if (eslint) {
@@ -122,7 +130,7 @@ export function planTools(file: string, projectDir: string, lookup: ToolLookup):
       });
     }
   } else if (ext === '.py') {
-    const venv = nearest(file, projectDir, lookup, join('.venv', 'bin'), 'ruff');
+    const venv = nearest(file, projectDir, lookup, join('.venv', windows ? 'Scripts' : 'bin'), windows ? 'ruff.exe' : 'ruff');
     const ruff = venv?.bin ?? lookup.onPath('ruff');
     if (ruff) {
       const cwd = venv?.dir ?? projectDir;
@@ -138,7 +146,7 @@ export function planTools(file: string, projectDir: string, lookup: ToolLookup):
     }
   } else if (ext === '.go') {
     const go = lookup.onPath('go');
-    const gofmt = lookup.onPath('gofmt') ?? (go ? join(dirname(go), 'gofmt') : undefined);
+    const gofmt = lookup.onPath('gofmt') ?? (go ? join(dirname(go), windows ? 'gofmt.exe' : 'gofmt') : undefined);
     if (go && gofmt) {
       const pkg = dirname(file);
       // GOTOOLCHAIN=local: never download another toolchain; GOFLAGS stays unset

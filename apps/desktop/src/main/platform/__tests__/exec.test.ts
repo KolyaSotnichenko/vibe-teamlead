@@ -167,6 +167,17 @@ describe('commandFor', () => {
     });
   });
 
+  it("runs a project's node_modules/.bin shim (prettier, eslint) as node with the package script", () => {
+    const bin = 'C:\\p\\node_modules\\.bin';
+    const script = 'C:\\p\\node_modules\\prettier\\bin\\prettier.cjs';
+    const shim = pnpmShim.replace('%dp0%\\node_modules\\pnpm\\bin\\pnpm.cjs', '%dp0%\\..\\prettier\\bin\\prettier.cjs');
+    const has = (file: string) => file === script || exists(file);
+    expect(commandFor(`${bin}\\prettier.cmd`, ['--write', 'C:\\p\\src\\a (1).ts'], 'win32', { ...env, ...path }, has, () => shim)).toEqual({
+      file: `${nodejs}\\node.exe`,
+      args: [script, '--write', 'C:\\p\\src\\a (1).ts'],
+    });
+  });
+
   it('runs any other .cmd or .bat through the shell, with plain arguments only', () => {
     expect(commandFor('C:\\x\\RUN.BAT', ['install', "it's"], 'win32', env, exists, read)).toEqual({
       file: bash,
