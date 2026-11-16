@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.44 - 2026-11-16
+
+- App checks: a new project's first task is checked too. Main has nothing to check with yet, so the app now runs the typecheck, tests and database the task itself sets up, and the task window says so. A failure blocks; a pass counts for less, since the task chose what checks it. Before, the task that sets up the whole project went through with "No app checks ran".
+- Projects: adding a project no longer writes a `.gitignore` into it. `.vibe-teamlead/` is kept out of git through the repository's own exclude file, so there is no uncommitted change in the project, and the first task's own `.gitignore` merges without a clash. If that can't be set up, the app makes no first commit rather than commit its own folder.
+
 ## 2.0.0-beta.43 - 2026-11-16
 
 - Spec documents: the open questions on the review step now reach the tasks they affect. The analyst names the tasks each question is about (the review step shows "Asked in T5, T20"), and each of those tasks gets the question in its description; its spec agent asks it when the task starts unless it is answered already. Every answer you give an agent of a task from the document is saved with the document (`clarifications.md`), so the other tasks read it instead of asking again. Before, the questions stayed on the review step and the agents never saw them.
