@@ -13,7 +13,8 @@ import { createConnection, createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 
-import { findOnPath, runProcess, searchPath } from '../../platform/exec';
+import { getPlatformKey } from '../../platform';
+import { findOnPath, killTree, runProcess, searchPath, shellCommand } from '../../platform/exec';
 import { writeFileReplacingSync } from '../safe-write';
 
 export interface StartOptions {
@@ -93,37 +94,53 @@ function answers(port: number, host: string): Promise<boolean> {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function processStart(pid: number): string {
-  try {
-    return execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf-8' }).trim();
-  } catch {
-    return '';
-  }
+type PlatformKey = 'darwin' | 'win32' | 'linux';
+
+/**
+ * How the servers' processes are told apart and stopped. macOS and Linux: a
+ * process group, its start time from `ps`. Windows has neither groups nor ps:
+ * the process itself, killTree (taskkill /T /F), no start time.
+ */
+export function devServerProcess(platform: PlatformKey) {
+  const windows = platform === 'win32';
+  const startedAt = (pid: number): string => {
+    if (windows) return '';
+    try {
+      return execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf-8' }).trim();
+    } catch {
+      return '';
+    }
+  };
+  const alive = (pid: number): boolean => {
+    try {
+      process.kill(windows ? pid : -pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const signal = (pid: number, name: NodeJS.Signals): void => {
+    if (windows) {
+      killTree(pid, name, platform);
+      return;
+    }
+    try {
+      process.kill(-pid, name);
+    } catch {
+      // Already gone
+    }
+  };
+  return { startedAt, alive, signal };
 }
 
-function groupAlive(pid: number): boolean {
-  try {
-    process.kill(-pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function signalGroup(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    // Already gone
-  }
-}
+const host = devServerProcess(getPlatformKey());
 
 async function stopGroup(pid: number): Promise<void> {
-  signalGroup(pid, 'SIGTERM');
-  for (let i = 0; i < 20 && groupAlive(pid); i++) await sleep(100);
-  if (groupAlive(pid)) {
-    signalGroup(pid, 'SIGKILL');
-    for (let i = 0; i < 10 && groupAlive(pid); i++) await sleep(100);
+  host.signal(pid, 'SIGTERM');
+  for (let i = 0; i < 20 && host.alive(pid); i++) await sleep(100);
+  if (host.alive(pid)) {
+    host.signal(pid, 'SIGKILL');
+    for (let i = 0; i < 10 && host.alive(pid); i++) await sleep(100);
   }
 }
 
@@ -171,7 +188,7 @@ function taskRoot(specDir: string): string {
  * get reused, so a listed pid is only signalled if it is still the same process
  * and it runs in this task's folder. Best effort: never throws.
  */
-export function cleanUpLeftovers(specDir: string): void {
+export function cleanUpLeftovers(specDir: string, platform: PlatformKey = getPlatformKey()): void {
   let list: unknown;
   try {
     list = JSON.parse(readFileSync(listFile(specDir), 'utf-8'));
@@ -179,7 +196,11 @@ export function cleanUpLeftovers(specDir: string): void {
     return;
   }
   const root = taskRoot(specDir);
-  for (const entry of Array.isArray(list) ? list.slice(0, MAX_LISTED) : []) {
+  // Windows has no ps or lsof to prove a listed pid is still that server, and
+  // pids are reused quickly there: leftovers are left alone rather than risk another process
+  const entries = platform === 'win32' ? [] : Array.isArray(list) ? list.slice(0, MAX_LISTED) : [];
+  const { startedAt: processStart, signal: signalGroup } = devServerProcess(platform);
+  for (const entry of entries) {
     const { pid, startedAt } = (entry ?? {}) as { pid?: unknown; startedAt?: unknown };
     if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 1 || typeof startedAt !== 'string' || !startedAt) continue;
     if (processStart(pid) !== startedAt) continue;
@@ -233,9 +254,12 @@ export async function startDevServer(options: StartOptions): Promise<StartResult
   const port = options.port && (await portFree(options.port)) ? options.port : await anyFreePort();
   const logPath = join(folder, `${name}.log`);
   const log = openSync(logPath, 'w');
-  const child = spawn('/bin/sh', ['-c', command.replaceAll('{port}', String(port))], {
+  const shell = shellCommand(command.replaceAll('{port}', String(port)));
+  const child = spawn(shell.file, shell.args, {
     cwd,
-    detached: true, // its own process group: stopping it reaches whatever it started
+    // its own process group: stopping it reaches whatever it started (killTree on Windows)
+    detached: getPlatformKey() !== 'win32',
+    windowsHide: true,
     stdio: ['ignore', log, log],
     env: serverEnv({ ...env, [portEnv]: String(port) }),
   });
@@ -245,7 +269,7 @@ export async function startDevServer(options: StartOptions): Promise<StartResult
 
   const pid = child.pid;
   if (!pid) throw new Error(`Could not start ${name}`);
-  const server: Server = { name, signature, pid, startedAt: processStart(pid), port, logPath, specDir, child };
+  const server: Server = { name, signature, pid, startedAt: host.startedAt(pid), port, logPath, specDir, child };
   running.set(name, server);
   saveList(specDir);
 
@@ -285,7 +309,7 @@ export async function stopAllDevServers(): Promise<void> {
 
 /** For an abort, when there may be no time left to wait. */
 export function killAllDevServersNow(): void {
-  for (const server of running.values()) signalGroup(server.pid, 'SIGTERM');
+  for (const server of running.values()) host.signal(server.pid, 'SIGTERM');
 }
 
 /**

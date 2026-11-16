@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { isWindows } from '../../../platform';
+
 import {
   cleanUpLeftovers,
   containersOfWorktree,
@@ -21,6 +23,9 @@ function project() {
   writeFileSync(path.join(dir, 'server.js'), SERVER);
   return { cwd: dir, specDir: dir };
 }
+
+// ps, sleep and process groups: POSIX by design (Windows: dev-servers-windows.test.ts)
+const posixOnly = isWindows();
 
 const alive = (pid: number) => {
   try {
@@ -83,7 +88,7 @@ describe('dev servers', () => {
     await expect((await fetch(changed.url)).text()).resolves.toBe('hi x');
   });
 
-  it('stopping kills the whole process group, not just the wrapper', async () => {
+  it.skipIf(posixOnly)('stopping kills the whole process group, not just the wrapper', async () => {
     const p = project();
     // The shell stays as the wrapper; node is its child, which `kill <wrapper>` would leave behind
     await startDevServer({ ...p, name: 'web', command: 'node server.js & echo $! > child.pid; wait' });
@@ -107,7 +112,7 @@ describe('dev servers', () => {
     await expect(startDevServer({ ...p, name: 'web', command: 'echo boom; exit 3' })).rejects.toThrow(/boom/);
   });
 
-  it('cleans up what a killed run left behind, checking it is the same process', async () => {
+  it.skipIf(posixOnly)('cleans up what a killed run left behind, checking it is the same process', async () => {
     const p = project();
     const started = await startDevServer({ ...p, name: 'web', command: 'node server.js' });
     const file = path.join(p.specDir, 'dev-servers', 'servers.json');
@@ -125,7 +130,7 @@ describe('dev servers', () => {
   });
 });
 
-describe('cleanUpLeftovers with a list an agent could have written', () => {
+describe.skipIf(posixOnly)('cleanUpLeftovers with a list an agent could have written', () => {
   const list = (specDir: string, content: string) => {
     mkdirSync(path.join(specDir, 'dev-servers'), { recursive: true });
     writeFileSync(path.join(specDir, 'dev-servers', 'servers.json'), content);
