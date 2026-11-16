@@ -10,6 +10,11 @@ import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 
+import { getPlatformKey } from '../../../platform';
+import { parseZipTotals, zipTool } from '../../../platform/zip';
+
+export { parseZipTotals };
+
 const UNZIP_TIMEOUT_MS = 60_000;
 const EXTRACT_POLL_MS = 250;
 
@@ -47,7 +52,7 @@ function runUnzip(bin: string, args: string[], watch?: { dir: string; maxBytes: 
     const child = execFile(
       bin,
       args,
-      { timeout: UNZIP_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 },
+      { timeout: UNZIP_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
       (err, stdout) => {
         if (timer) clearInterval(timer);
         if (tooLarge) reject(new Error('Design package is too large'));
@@ -71,14 +76,6 @@ function runUnzip(bin: string, args: string[], watch?: { dir: string; maxBytes: 
       }, EXTRACT_POLL_MS);
     }
   });
-}
-
-/** Totals from the last non-empty line of `unzip -l` output; null if it is not a summary. */
-export function parseZipTotals(listing: string): { bytes: number; files: number } | null {
-  const lines = listing.split('\n').filter((l) => l.trim() !== '');
-  const last = lines[lines.length - 1] ?? '';
-  const m = /^\s*(\d+)\s+(\d+)\s+files?\s*$/.exec(last);
-  return m ? { bytes: Number(m[1]), files: Number(m[2]) } : null;
 }
 
 function assertNoOverlap(source: string, dest: string): void {
@@ -120,7 +117,11 @@ export interface UnpackResult {
 export const MAX_SKIPPED_LISTED = 200;
 
 export interface UnpackOptions {
+  /** unzip binary (macOS); replaced in tests */
   unzip?: string;
+  /** bsdtar binary (Windows, default System32\tar.exe); replaced in tests */
+  tar?: string;
+  platform?: 'darwin' | 'win32' | 'linux';
   limits?: Partial<typeof PACKAGE_LIMITS>;
 }
 
@@ -147,13 +148,17 @@ export async function unpackDesignPackage(
     let root = source;
     if (info.isFile()) {
       tmp = await mkdtemp(path.join(os.tmpdir(), 'vt-design-pkg-'));
-      const bin = opts.unzip ?? '/usr/bin/unzip';
-      const listing = await runUnzip(bin, ['-l', '-P', '', source]);
-      const totals = parseZipTotals(listing);
+      // unzip on macOS; Windows' bsdtar (tar -tvf / -xf) elsewhere has no unzip
+      const platform = opts.platform ?? getPlatformKey();
+      const tool = zipTool(platform);
+      const bin = platform === 'win32' ? (opts.tar ?? tool.bin) : (opts.unzip ?? tool.bin);
+      const listing = await runUnzip(bin, tool.listArgs(source));
+      // Null also for an entry that would land outside the folder (zip-slip)
+      const totals = tool.totals(listing);
       if (!totals) throw new Error('Could not read the design package archive');
       if (totals.bytes > limits.totalBytes) throw new Error('Design package is too large');
       if (totals.files > limits.files) throw new Error('Design package has too many files');
-      await runUnzip(bin, ['-qq', '-o', '-P', '', source, '-d', tmp], {
+      await runUnzip(bin, tool.extractArgs(source, tmp), {
         dir: tmp,
         maxBytes: limits.totalBytes,
       });

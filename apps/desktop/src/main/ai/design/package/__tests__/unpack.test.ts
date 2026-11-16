@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { crc32 } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PACKAGE_EXTENSIONS, PACKAGE_LIMITS, parseZipTotals, unpackDesignPackage } from '../unpack';
 
@@ -12,6 +13,36 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
+
+/** A one-entry zip (stored, no compression) with any entry name, including ones zip(1) would clean up. */
+function storedZip(name: string, content: string): Buffer {
+  const nameBuf = Buffer.from(name);
+  const data = Buffer.from(content);
+  const crc = crc32(data);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt32LE(crc, 14);
+  local.writeUInt32LE(data.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(nameBuf.length, 26);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt32LE(crc, 16);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(data.length, 24);
+  central.writeUInt16LE(nameBuf.length, 28);
+  const localSize = local.length + nameBuf.length + data.length;
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + nameBuf.length, 12);
+  end.writeUInt32LE(localSize, 16);
+  return Buffer.concat([local, nameBuf, data, central, nameBuf, end]);
+}
 
 function write(file: string, content = 'x'): void {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -200,5 +231,50 @@ while [ $i -lt 40 ]; do head -c 1000 /dev/zero > "$last/f$i.md"; i=$((i+1)); sle
     );
     expect(existsSync(path.join(dest, 'keep.md'))).toBe(true);
     expect(existsSync(readFileSync(log, 'utf8').trim())).toBe(false);
+  });
+
+  describe('on Windows (bsdtar instead of unzip)', () => {
+    const win = { platform: 'win32' as const, tar: '/usr/bin/tar' };
+
+    it('lists, checks the totals and extracts a zip with tar', async () => {
+      const src = path.join(root, 'src');
+      write(path.join(src, 'pkg', 'README.md'));
+      write(path.join(src, 'pkg', 'fonts', 'A.otf'));
+      write(path.join(src, 'pkg', 'run.sh'));
+      const zip = path.join(root, 'pkg.zip');
+      execFileSync('/usr/bin/zip', ['-qr', zip, 'pkg'], { cwd: src });
+      const dest = path.join(root, 'dest');
+      const r = await unpackDesignPackage(zip, dest, win);
+      expect(r.files).toEqual(['pkg/README.md', 'pkg/fonts/A.otf']);
+      expect(r.skipped).toEqual([{ path: 'pkg/run.sh', reason: 'type' }]);
+      expect(readFileSync(path.join(dest, 'pkg', 'README.md'), 'utf8')).toBe('x');
+    });
+
+    it('refuses a zip over the declared limits, leaving dest untouched', async () => {
+      const src = path.join(root, 'src');
+      write(path.join(src, 'a.md'), 'xxxxxxxxxx');
+      write(path.join(src, 'b.md'), 'xxxxxxxxxx');
+      const zip = path.join(root, 'p.zip');
+      execFileSync('/usr/bin/zip', ['-qr', zip, '.'], { cwd: src });
+      const dest = path.join(root, 'dest');
+      write(path.join(dest, 'keep.md'));
+      await expect(unpackDesignPackage(zip, dest, { ...win, limits: { totalBytes: 5 } })).rejects.toThrow(/too large/i);
+      await expect(unpackDesignPackage(zip, dest, { ...win, limits: { files: 1 } })).rejects.toThrow(/too many/i);
+      expect(existsSync(path.join(dest, 'keep.md'))).toBe(true);
+    });
+
+    it('refuses a zip with an entry that would land outside the folder (zip-slip)', async () => {
+      const zip = path.join(root, 'slip.zip');
+      writeFileSync(zip, storedZip('../evil.md', 'pwned'));
+      const dest = path.join(root, 'out', 'dest');
+      await expect(unpackDesignPackage(zip, dest, win)).rejects.toThrow(/could not read/i);
+      expect(existsSync(path.join(root, 'out', 'evil.md'))).toBe(false);
+    });
+
+    it('refuses a file that is not a zip', async () => {
+      const zip = path.join(root, 'p.zip');
+      writeFileSync(zip, 'not really a zip');
+      await expect(unpackDesignPackage(zip, path.join(root, 'dest'), win)).rejects.toThrow();
+    });
   });
 });
