@@ -86,7 +86,8 @@ import { setDefaultClaudeAuthProvider } from './ai/claude-code/default-auth';
 import { appLog, setupErrorLogging } from './app-logger';
 import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
-import { isMacOS, isWindows } from './platform';
+import { getPlatformKey, isMacOS, isWindows } from './platform';
+import { claimSingleInstance, focusWindow, removesAppMenu } from './app-instance';
 import type { AppSettings } from '../shared/types';
 import { debugLog } from '../shared/utils/debug-logger';
 
@@ -423,6 +424,11 @@ if (isMacOS()) {
   app.name = 'Vibe Teamlead';
 }
 
+// One running app per user (a second launch focuses this window and exits). The lock is keyed
+// by the app name, so it comes after setName. Not in development: the dev build shares the name
+// and runs next to the installed app.
+const hasInstanceLock = is.dev || claimSingleInstance(app, () => focusWindow(mainWindow));
+
 // Fix Windows GPU cache permission errors (0x5 Access Denied)
 if (isWindows()) {
   app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -435,6 +441,9 @@ protocol.registerSchemesAsPrivileged([{ scheme: DESIGN_SCHEME, privileges: { sta
 
 // Initialize the application
 app.whenReady().then(() => {
+  if (!hasInstanceLock) return;
+  // Packaged Windows build: no default File/Edit/View menu bar under the title bar
+  if (removesAppMenu(getPlatformKey(), is.dev)) Menu.setApplicationMenu(null);
   registerDesignProtocol();
   // What a crashed preview left running: its servers, and its database (the volume stays)
   cleanUpPreviewLeftovers(previewWorktreesRoot(), cleanUpLeftovers);
