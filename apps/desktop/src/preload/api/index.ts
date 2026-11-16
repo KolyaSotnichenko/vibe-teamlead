@@ -20,6 +20,8 @@ import { type PreviewAPI, createPreviewAPI } from './preview-api';
 import { type DeployAPI, createDeployAPI } from './deploy-api';
 import { type UsageAPI, createUsageAPI } from './usage-api';
 import { createToolsCheckAPI } from './tools-check-api';
+import { type TelegramAPI, createTelegramAPI } from './telegram-api';
+import { type QueueAPI, createQueueAPI } from './queue-api';
 import type { ToolsCheckAPI } from '../../shared/types/tools-check';
 
 export interface ElectronAPI extends
@@ -52,6 +54,10 @@ export interface ElectronAPI extends
   deploy: DeployAPI;
   /** Token usage per project */
   usage: UsageAPI;
+  /** The Telegram bot (Settings → Telegram) */
+  telegram: TelegramAPI;
+  /** The queue pause */
+  queue: QueueAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -73,7 +79,9 @@ export const createElectronAPI = (): ElectronAPI => ({
   design: createDesignAPI(),
   preview: createPreviewAPI(),
   deploy: createDeployAPI(),
-  usage: createUsageAPI()
+  usage: createUsageAPI(),
+  telegram: createTelegramAPI(),
+  queue: createQueueAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts

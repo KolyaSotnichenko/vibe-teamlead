@@ -782,6 +782,14 @@ export interface ElectronAPI {
   deploy: import('./deploy').DeployAPI;
   /** Token usage per project */
   usage: { get: (projectId: string) => Promise<IPCResult<import('./usage').ProjectUsageSummary>> };
+  /** The Telegram bot (Settings → Telegram) */
+  telegram: import('./telegram').TelegramAPI;
+  /** The queue pause (the Telegram bot's /stop_all sets it) */
+  queue: {
+    getPaused: () => Promise<boolean>;
+    setPaused: (paused: boolean) => Promise<boolean>;
+    onPausedChange: (callback: (paused: boolean) => void) => () => void;
+  };
 }
 
 /** Platform information exposed via contextBridge for platform-specific behavior */

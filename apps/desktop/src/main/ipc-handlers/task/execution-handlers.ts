@@ -36,6 +36,7 @@ import { createTaskInProject } from './crud-handlers';
 import { resolveDefaultTaskModels } from '../../../shared/utils/task-models';
 import { readSettingsFile } from '../../settings-utils';
 import { debugLog } from '../../../shared/utils/debug-logger';
+import { queuePause, stopTaskLikeStop } from './task-control';
 
 /** Whether the app's Claude credential (API key or personal-mode token) is available */
 function hasClaudeCredential(): boolean {
@@ -236,6 +237,19 @@ export async function startTask(agentManager: AgentManager, getMainWindow: () =>
   watchAndStartAgent(agentManager, taskId, task, project, specDir, '[TASK_START]');
 }
 
+/** What the Stop button does, for one task (the window and the Telegram bot) */
+export function stopTaskById(agentManager: AgentManager, taskId: string): void {
+  stopTaskLikeStop(taskId, {
+    killTask: (id) => agentManager.killTask(id),
+    unwatch: (id) => fileWatcher.unwatch(id),
+    findTaskAndProject,
+    hasPlanWithSubtasks,
+    stopTask: (id, task, project, hasPlan) => taskStateManager.stopTask(id, task, project, hasPlan),
+    prepareForRestart: (id) => taskStateManager.prepareForRestart(id),
+    onUnwatchError: (err) => console.error('[TASK_STOP] Failed to unwatch:', err),
+  });
+}
+
 /**
  * Register task execution handlers (start, stop, review, status management, recovery)
  */
@@ -269,23 +283,18 @@ export function registerTaskExecutionHandlers(
    * Stop a task
    */
   ipcMain.on(IPC_CHANNELS.TASK_STOP, (_, taskId: string) => {
-    agentManager.killTask(taskId);
-    fileWatcher.unwatch(taskId).catch((err) => {
-      console.error('[TASK_STOP] Failed to unwatch:', err);
-    });
+    stopTaskById(agentManager, taskId);
+  });
 
-    // Find task and project to emit USER_STOPPED with plan context
-    const { task, project } = findTaskAndProject(taskId);
-
-    if (!task || !project) return;
-
-    // Use shared utility to determine if a valid implementation plan exists
-    const hasPlan = hasPlanWithSubtasks(project, task);
-
-    taskStateManager.stopTask(taskId, task, project, hasPlan);
-
-    // Clear stale tracking state so a subsequent restart works correctly
-    taskStateManager.prepareForRestart(taskId);
+  // The queue pause (the Telegram bot's /stop_all pauses it; the board asks before starting a queued task)
+  ipcMain.handle(IPC_CHANNELS.QUEUE_PAUSED_GET, () => queuePause.isPaused());
+  ipcMain.handle(IPC_CHANNELS.QUEUE_PAUSED_SET, (_, paused: boolean) => {
+    queuePause.set(paused === true);
+    return queuePause.isPaused();
+  });
+  queuePause.onChange((paused) => {
+    const window = getMainWindow();
+    if (window && !window.isDestroyed()) window.webContents.send(IPC_CHANNELS.QUEUE_PAUSED_CHANGED, paused);
   });
 
   /**

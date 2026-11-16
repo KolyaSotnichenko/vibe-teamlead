@@ -34,6 +34,7 @@ import { BulkPRDialog } from './BulkPRDialog';
 import { BriefImportDialog } from './brief-import';
 import { MergeWaitingDialog } from './board/MergeWaitingDialog';
 import { getAutoMerge } from '../hooks/useAutoMerge';
+import { syncQueuePause, useQueuePauseStore } from '../stores/queue-pause-store';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -531,6 +532,11 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
    * Promotes multiple tasks if needed (e.g., after bulk queue)
    */
   const processQueue = useCallback(async () => {
+    // Paused (the Telegram bot's /stop_all): no queued task starts until it is resumed
+    if (useQueuePauseStore.getState().paused) {
+      debugLog('[Queue] The queue is paused, not starting queued tasks');
+      return;
+    }
     // Prevent concurrent executions to avoid race conditions
     if (isProcessingQueueRef.current) {
       debugLog('[Queue] Already processing queue, skipping duplicate call');
@@ -589,6 +595,14 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       isProcessingQueueRef.current = false;
     }
   }, [maxParallelTasks, t, toast]);
+
+  // The queue pause lives in main; resuming fills the free slots
+  const queuePaused = useQueuePauseStore((state) => state.paused);
+  const resumeQueue = useQueuePauseStore((state) => state.resume);
+  useEffect(() => syncQueuePause(), []);
+  useEffect(() => {
+    if (!queuePaused) void processQueue();
+  }, [queuePaused, processQueue]);
 
   // Register task status change listener for queue auto-promotion
   // This ensures processQueue() is called whenever a task leaves in_progress
@@ -955,6 +969,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               maxParallelTasks={status === 'in_progress' || status === 'queue' ? maxParallelTasks : undefined}
               slotsInUse={status === 'in_progress' || status === 'queue' ? slotsInUse : undefined}
               slotHolderNames={status === 'queue' ? holderNames : undefined}
+              queuePaused={status === 'queue' ? queuePaused : undefined}
+              onResumeQueue={status === 'queue' ? () => void resumeQueue() : undefined}
               archivedCount={status === 'done' ? archivedCount : undefined}
               showArchived={status === 'done' ? showArchived : undefined}
               onToggleArchived={status === 'done' ? toggleShowArchived : undefined}

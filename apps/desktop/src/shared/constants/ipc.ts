@@ -27,6 +27,19 @@ export const IPC_CHANNELS = {
   TASK_UPDATE: 'task:update',
   TASK_START: 'task:start',
   TASK_STOP: 'task:stop',
+  QUEUE_PAUSED_GET: 'queue:pausedGet',
+  QUEUE_PAUSED_SET: 'queue:pausedSet',
+  QUEUE_PAUSED_CHANGED: 'queue:pausedChanged',  // Event: the queue was paused or resumed (main -> renderer)
+
+  // Telegram bot (Settings → Telegram)
+  TELEGRAM_STATUS: 'telegram:status',
+  TELEGRAM_SAVE_TOKEN: 'telegram:saveToken',
+  TELEGRAM_TEST_TOKEN: 'telegram:testToken',
+  TELEGRAM_REMOVE_TOKEN: 'telegram:removeToken',
+  TELEGRAM_NEW_PAIRING_CODE: 'telegram:newPairingCode',
+  TELEGRAM_UNPAIR: 'telegram:unpair',
+  TELEGRAM_SET_NOTIFICATIONS: 'telegram:setNotifications',
+  TELEGRAM_STATUS_CHANGED: 'telegram:statusChanged',  // Event: the bot's status changed (main -> renderer)
   TASK_REVIEW: 'task:review',
   TASK_UPDATE_STATUS: 'task:updateStatus',
   TASK_RECOVER_STUCK: 'task:recoverStuck',

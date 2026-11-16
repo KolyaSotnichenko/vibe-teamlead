@@ -10,6 +10,12 @@ import { toolsMock } from './mocks/tools-mock';
 import { briefMock } from './mocks/brief-mock';
 import { designMock } from './mocks/design-mock';
 import { usageMock } from './mocks/usage-mock';
+import type { TelegramStatus } from '../../shared/types/telegram';
+
+const telegramMockStatus: TelegramStatus = {
+  connection: 'not_set',
+  notifications: { agentQuestion: true, reviewWaiting: true, taskFailed: true, ciFailed: true, taskMerged: true, regression: true },
+};
 import type { ElectronAPI } from '../../shared/types';
 import {
   projectMock,
@@ -240,6 +246,23 @@ const browserMockAPI: ElectronAPI = {
     onReadinessUpdate: () => () => {},
   },
   usage: usageMock,
+
+  // Telegram bot: no token in the browser preview
+  telegram: {
+    getStatus: async () => telegramMockStatus,
+    saveToken: async () => ({ success: false, error: 'unknown' as const }),
+    testToken: async () => ({ success: false, error: 'unknown' as const }),
+    removeToken: async () => telegramMockStatus,
+    newPairingCode: async () => telegramMockStatus,
+    unpair: async () => telegramMockStatus,
+    setNotifications: async () => telegramMockStatus,
+    onStatus: () => () => undefined,
+  },
+  queue: {
+    getPaused: async () => false,
+    setPaused: async () => false,
+    onPausedChange: () => () => undefined,
+  },
 
   // External tools check
   tools: toolsMock,

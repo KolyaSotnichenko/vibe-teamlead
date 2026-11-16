@@ -33,6 +33,9 @@ export interface BoardColumnProps {
   slotsInUse?: number;
   /** Queue column: who holds the slots */
   slotHolderNames?: string;
+  /** Queue column: the queue is paused (Telegram /stop_all) */
+  queuePaused?: boolean;
+  onResumeQueue?: () => void;
   archivedCount?: number;
   showArchived?: boolean;
   onToggleArchived?: () => void;
@@ -75,7 +78,7 @@ function tasksAreEquivalent(prevTasks: Task[], nextTasks: Task[]): boolean {
 
 const SHALLOW_KEYS: Array<keyof BoardColumnProps> = [
   'status', 'isOver', 'onTaskClick', 'onStatusChange', 'onAddClick', 'onImportBrief', 'onArchiveAll', 'onQueueSettings', 'onQueueAll',
-  'maxParallelTasks', 'slotsInUse', 'slotHolderNames', 'archivedCount', 'showArchived', 'onToggleArchived', 'onSelectAll', 'onDeselectAll', 'onToggleSelect',
+  'maxParallelTasks', 'slotsInUse', 'slotHolderNames', 'queuePaused', 'onResumeQueue', 'archivedCount', 'showArchived', 'onToggleArchived', 'onSelectAll', 'onDeselectAll', 'onToggleSelect',
   'isCollapsed', 'onToggleCollapsed', 'columnWidth', 'isResizing', 'onResizeStart', 'onResizeEnd', 'isLocked', 'onToggleLocked',
 ];
 
@@ -118,6 +121,8 @@ export const BoardColumn = memo(function BoardColumn({
   maxParallelTasks,
   slotsInUse,
   slotHolderNames,
+  queuePaused,
+  onResumeQueue,
   archivedCount,
   showArchived,
   onToggleArchived,
@@ -240,6 +245,17 @@ export const BoardColumn = memo(function BoardColumn({
             <span className="font-mono text-[11px] text-foreground">{t('board.selectedInColumn', { count: columnSelectedCount })}</span>
           )}
           <span className="flex-1" />
+          {queuePaused && onResumeQueue && (
+            <button
+              type="button"
+              onClick={onResumeQueue}
+              title={t('board.queuePausedHint')}
+              className="flex h-11 items-center gap-2 px-2 text-[11px] font-medium text-foreground hover:bg-accent"
+            >
+              <span className="bg-accent px-1 py-0.5">{t('board.queuePaused')}</span>
+              <span className="underline underline-offset-2">{t('board.resumeQueue')}</span>
+            </button>
+          )}
           {status === 'backlog' && onAddClick && (
             <button
               type="button"
