@@ -121,6 +121,65 @@ describe('telegram service', () => {
     await service.stop();
   });
 
+  it('wires review, design approval and /task: a review status gets the review message, a design its album, /task a task', async () => {
+    const bot = longPollBot();
+    type Listener = (taskId: string, status: never, reason?: never) => void;
+    const listeners: Listener[] = [];
+    const create = vi.fn(async () => ({ taskId: 'n1', title: 'Dark mode' }));
+    const albums: number[] = [];
+    bot.fake.api.sendMediaGroup = async (_c, photos) => {
+      albums.push(photos.length);
+      return [];
+    };
+    const { service, settings, tokens } = setup(bot, {
+      notifierSources: {
+        onStatusChange: (l) => {
+          listeners.push(l as Listener);
+          return () => undefined;
+        },
+        onAppEvent: () => () => undefined,
+        onBaseFailures: () => () => undefined,
+      },
+      review: {
+        details: async () => ({ criteria: { passed: 1, total: 1 } }),
+        screenshots: async () => [],
+        state: () => ({ status: 'human_review', reviewReason: 'completed' }),
+        merge: async () => ({ kind: 'merged' }),
+        sendBack: async () => ({ success: true }),
+      },
+      design: {
+        waiting: () => ({ stage: 'design' }),
+        frames: async () => [Buffer.from('a'), Buffer.from('b')],
+        approve: async () => ({ success: true }),
+        comment: async () => ({ success: true }),
+      },
+      taskActions: { create, start: async () => undefined, analyseBrief: vi.fn(), createBriefTasks: vi.fn() },
+      commands: {
+        projects: () => [{ id: 'p1', name: 'Shop' }],
+        tasks: () => [],
+        runningTaskIds: () => [],
+        stopTask: vi.fn(),
+        queuePause: createQueuePause(),
+        pendingQuestions: () => 0,
+        usageToday: async () => ({ usd: 0, tokens: 0 }),
+      },
+    });
+    tokens.save('good:token');
+    settings.update({ owner: OWNER });
+    await service.start();
+    await vi.waitFor(() => expect(service.status().connection).toBe('connected'));
+    for (const l of listeners) l('t1', 'human_review' as never, 'completed' as never);
+    await vi.waitFor(() => expect(bot.fake.sent.some((m) => m.text.includes('Acceptance criteria: 1 of 1 pass'))).toBe(true));
+    const review = bot.fake.sent.find((m) => m.text.includes('Acceptance criteria'));
+    expect(review?.options?.buttons?.flat().map((b) => b.text)).toContain('Merge');
+    for (const l of listeners) l('t2', 'human_review' as never, 'design_review' as never);
+    await vi.waitFor(() => expect(bot.fake.sent.some((m) => m.text.includes('The design waits for your approval'))).toBe(true));
+    expect(albums).toEqual([2]);
+    bot.push(textUpdate('/task Dark mode', { from: OWNER.userId }));
+    await vi.waitFor(() => expect(create).toHaveBeenCalledWith('p1', 'Dark mode'));
+    await service.stop();
+  });
+
   it('does not poll and talks to nobody without a token', async () => {
     const { service, bot } = setup();
     await service.start();

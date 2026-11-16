@@ -11,14 +11,17 @@ import type { TelegramDigestSettings, TelegramErrorReason, TelegramNotificationS
 import { type BotApi, TelegramApiError } from './bot-api';
 import { registerCommands, type CommandDeps } from './commands';
 import { createDigest } from './digest';
+import { createDesignFlow, type DesignActions } from './design';
 import { translatorFor } from './i18n';
 import { createNotifier, type NotifierSources } from './notifier';
 import { createPairing, type Pairing } from './pairing';
 import { createPoller, type Poller, type PollerState } from './poller';
 import { createQuestionFlow } from './questions';
+import { createReviewFlow, type ReviewActions } from './review';
 import { safeApi } from './redact';
 import { createRouter, type Router } from './router';
 import type { TelegramSettingsStore } from './settings-store';
+import { registerTaskCommands, type TaskActions } from './tasks';
 import type { TokenStore } from './token-store';
 
 export interface QuestionSource {
@@ -43,6 +46,12 @@ export interface TelegramServiceDeps {
   task: (taskId: string, projectId?: string) => { title: string; projectName?: string; projectId?: string } | undefined;
   projectName: (projectId: string) => string | undefined;
   commands: Omit<CommandDeps, 'api' | 'router' | 't' | 'settings'>;
+  /** Review from the chat: Merge, Send back (plain notifications without them) */
+  review?: ReviewActions;
+  /** Design approval from the chat (nothing is sent for designs without them) */
+  design?: DesignActions;
+  /** /task, a task from a message, a brief (off without them) */
+  taskActions?: TaskActions;
   /** The morning digest's sources (off without them) */
   digest?: {
     tasks: (projectId: string) => Task[];
@@ -111,6 +120,22 @@ export function createTelegramService(deps: TelegramServiceDeps) {
     enabled: () => deps.settings.get().notifications.agentQuestion,
   });
 
+  const ownerChat = () => deps.settings.get().owner?.chatId;
+  const reviews = deps.review ? createReviewFlow({ api: currentApi, router, t, actions: deps.review, onError: warn }) : undefined;
+  const designs = deps.design
+    ? createDesignFlow({
+        api: currentApi,
+        router,
+        t,
+        chatId: ownerChat,
+        enabled: () => deps.settings.get().notifications.reviewWaiting,
+        taskTitle: (taskId, projectId) => deps.task(taskId, projectId)?.title ?? taskId,
+        projectName: (taskId, projectId) => deps.task(taskId, projectId)?.projectName,
+        actions: deps.design,
+        onError: warn,
+      })
+    : undefined;
+
   const notifier = createNotifier({
     api: currentApi,
     chatId: () => deps.settings.get().owner?.chatId,
@@ -118,10 +143,26 @@ export function createTelegramService(deps: TelegramServiceDeps) {
     notifications: () => deps.settings.get().notifications,
     task: deps.task,
     projectName: deps.projectName,
+    deliver: reviews
+      ? async (notification, chatId) => {
+          if (notification.kind !== 'reviewWaiting' || !notification.taskId) return false;
+          await reviews.present(notification, chatId);
+          return true;
+        }
+      : undefined,
     onError: warn,
   });
 
   registerCommands({ ...deps.commands, api: currentApi, router, t, settings: deps.settings });
+
+  if (deps.taskActions) registerTaskCommands({ api: currentApi, router, t, settings: deps.settings, projects: deps.commands.projects, actions: deps.taskActions, onError: warn });
+
+  const resetFlows = () => {
+    router.reset();
+    questions.reset();
+    reviews?.reset();
+    designs?.reset();
+  };
 
   const digest = deps.digest
     ? createDigest({ api: currentApi, settings: deps.settings, t, now: deps.now, projects: deps.commands.projects, tasks: deps.digest.tasks, usageSince: deps.digest.usageSince, onError: warn })
@@ -175,6 +216,19 @@ export function createTelegramService(deps: TelegramServiceDeps) {
         }),
       );
       notifier.start(deps.notifierSources);
+      if (reviews || designs) {
+        offs.push(
+          deps.notifierSources.onStatusChange((taskId, status, reason) => {
+            if (!api) return;
+            try {
+              reviews?.statusChanged(taskId, status, reason);
+              designs?.statusChanged(taskId, status, reason);
+            } catch (error) {
+              warn(error);
+            }
+          }),
+        );
+      }
       await startPolling();
       broadcast();
       if (digest) {
@@ -217,8 +271,7 @@ export function createTelegramService(deps: TelegramServiceDeps) {
       botUsername = username;
       if (changed) {
         // Another bot: buttons and asks of the old one mean nothing here
-        router.reset();
-        questions.reset();
+        resetFlows();
       }
       await startPolling();
       broadcast();
@@ -232,8 +285,7 @@ export function createTelegramService(deps: TelegramServiceDeps) {
       botUsername = undefined;
       pollerState = undefined;
       pairing.clear();
-      router.reset();
-      questions.reset();
+      resetFlows();
       broadcast();
       return status();
     },
@@ -244,8 +296,7 @@ export function createTelegramService(deps: TelegramServiceDeps) {
     },
     unpair(): TelegramStatus {
       deps.settings.update({ owner: undefined });
-      router.reset();
-      questions.reset();
+      resetFlows();
       broadcast();
       return status();
     },
