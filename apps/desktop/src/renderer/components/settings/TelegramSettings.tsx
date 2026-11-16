@@ -1,7 +1,8 @@
 /**
  * Settings → Telegram: the user's own bot. The token is write-only from here (the main process
  * keeps it encrypted and reports only a status); pairing shows a one-time `/start` code; the
- * switches choose which notifications go to the chat. Off until a token is saved.
+ * switches choose which notifications go to the chat, and when the morning digest comes. Off until
+ * a token is saved.
  */
 
 import { useEffect, useState } from 'react';
@@ -13,7 +14,7 @@ import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { cn } from '../../lib/utils';
 import { SettingsSection } from './SettingsSection';
-import type { TelegramErrorReason, TelegramNotificationKind, TelegramStatus } from '../../../shared/types/telegram';
+import type { TelegramDigestSettings, TelegramErrorReason, TelegramNotificationKind, TelegramStatus } from '../../../shared/types/telegram';
 
 const NOTIFICATION_KINDS: TelegramNotificationKind[] = ['agentQuestion', 'reviewWaiting', 'taskFailed', 'ciFailed', 'taskMerged', 'regression'];
 
@@ -98,6 +99,13 @@ export function TelegramSettings() {
     const next = { ...status.notifications, [kind]: on };
     setStatus({ ...status, notifications: next });
     setStatus(await api().setNotifications(next));
+  };
+
+  const changeDigest = async (patch: Partial<TelegramDigestSettings>) => {
+    if (!status) return;
+    const next = { ...status.digest, ...patch };
+    setStatus({ ...status, digest: next });
+    setStatus(await api().setDigest(next));
   };
 
   const hasToken = !!status && status.connection !== 'not_set';
@@ -270,6 +278,42 @@ export function TelegramSettings() {
                 />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Morning digest */}
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-medium text-foreground">{t('settings.digest.title')}</h4>
+            <p className="text-sm text-muted-foreground">{t('settings.digest.description')}</p>
+          </div>
+          <div className="divide-y divide-border border border-border">
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <Label htmlFor="telegram-digest" className="text-sm text-foreground">
+                {t('settings.digest.enabled')}
+              </Label>
+              <Switch
+                id="telegram-digest"
+                checked={status?.digest.enabled ?? true}
+                disabled={!status}
+                onCheckedChange={(on) => void changeDigest({ enabled: on })}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <Label htmlFor="telegram-digest-time" className="text-sm text-foreground">
+                {t('settings.digest.time')}
+              </Label>
+              <Input
+                id="telegram-digest-time"
+                type="time"
+                className="w-32 font-mono"
+                value={status?.digest.time ?? '09:00'}
+                disabled={!status}
+                onChange={(event) => {
+                  if (/^\d{2}:\d{2}$/.test(event.target.value)) void changeDigest({ time: event.target.value });
+                }}
+              />
+            </div>
           </div>
         </div>
 

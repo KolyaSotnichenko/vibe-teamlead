@@ -21,6 +21,7 @@ function mockApi(initial: TelegramStatus) {
     newPairingCode: vi.fn(async () => ({ ...initial, pairingCode: 'ABCD2345', pairingExpiresAt: Date.now() + 600_000 })),
     unpair: vi.fn(async () => ({ ...initial, owner: undefined })),
     setNotifications: vi.fn(async (n: typeof notifications) => ({ ...initial, notifications: n })),
+    setDigest: vi.fn(async (d: typeof digest) => ({ ...initial, digest: d })),
     onStatus: vi.fn((cb: (s: TelegramStatus) => void) => {
       push = cb;
       return () => undefined;
@@ -80,5 +81,14 @@ describe('Settings → Telegram', () => {
     render(<TelegramSettings />);
     fireEvent.click(await screen.findByRole('switch', { name: 'A task was merged' }));
     await waitFor(() => expect(api.setNotifications).toHaveBeenCalledWith({ ...notifications, taskMerged: false }));
+  });
+
+  it('the morning digest: a switch and a time, saved at once', async () => {
+    const { api } = mockApi({ connection: 'connected', notifications, digest });
+    render(<TelegramSettings />);
+    fireEvent.click(await screen.findByRole('switch', { name: 'Send a morning digest' }));
+    await waitFor(() => expect(api.setDigest).toHaveBeenCalledWith({ enabled: false, time: '09:00' }));
+    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '07:30' } });
+    await waitFor(() => expect(api.setDigest).toHaveBeenLastCalledWith({ enabled: false, time: '07:30' }));
   });
 });

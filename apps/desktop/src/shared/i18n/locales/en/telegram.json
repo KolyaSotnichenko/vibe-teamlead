@@ -53,7 +53,7 @@
       "title": "Notifications",
       "description": "What the bot sends you",
       "agentQuestion": "An agent asks a question",
-      "reviewWaiting": "A task waits for your review",
+      "reviewWaiting": "A task or a design waits for your review",
       "taskFailed": "A task failed, got stuck or errored",
       "ciFailed": "CI failed on main",
       "taskMerged": "A task was merged",
@@ -62,6 +62,12 @@
     "privacy": {
       "title": "Privacy",
       "body": "Bot chats are not end-to-end encrypted: Telegram sees task titles, questions and summaries sent to the chat. No secrets, keys or environment values are ever sent. The bot works only while the app is open; Telegram keeps messages for 24 hours, and on start the app skips commands and button presses older than 15 minutes."
+    },
+    "digest": {
+      "title": "Morning digest",
+      "description": "Once a day: what merged, what waits for you, what runs, what failed, and the spend. If the app is closed at that time, it comes when the app starts the same day.",
+      "enabled": "Send a morning digest",
+      "time": "Time"
     }
   },
   "bot": {
