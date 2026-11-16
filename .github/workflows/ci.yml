@@ -36,3 +36,20 @@ jobs:
       - name: Unit tests
         working-directory: apps/desktop
         run: npm run test:unit
+
+  # Informational for now: many tests still assume POSIX paths and shells (Windows port, stage 2).
+  test-windows:
+    name: Unit tests (Windows)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node-frontend
+        with:
+          ignore-scripts: 'true'
+
+      - name: Unit tests
+        working-directory: apps/desktop
+        run: npm run test:unit

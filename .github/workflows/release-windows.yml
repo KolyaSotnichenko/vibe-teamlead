@@ -1,0 +1,90 @@
+name: Release (Windows)
+
+# Builds the Windows x64 installer (NSIS, unsigned) on windows-latest.
+#
+# - By hand (workflow_dispatch): build and keep the installer as a workflow artifact.
+# - When a release is published (the macOS build is made and published by hand): also
+#   upload the installer, its blockmap, latest.yml and a copy named beta.yml to that
+#   release. Pre-releases follow the updater's beta channel, which reads beta.yml.
+#
+# The installer is not signed: Windows SmartScreen warns on the first run.
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-windows-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node-frontend
+
+      # npm run build is electron-vite build + check-main-bundle + build-preview-assets
+      - name: Build
+        working-directory: apps/desktop
+        run: npm run build
+
+      - name: Check the main bundle and the preview assets
+        working-directory: apps/desktop
+        run: |
+          node scripts/check-main-bundle.mjs
+          test -f out/preview/overlay.js
+
+      - name: Fetch security scanners (gitleaks, OSV-Scanner)
+        working-directory: apps/desktop
+        run: node scripts/fetch-scanners.cjs --platform win32
+
+      - name: Package
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Check the packaged app
+        working-directory: apps/desktop
+        run: node scripts/verify-win.cjs dist/win-unpacked
+
+      - name: Update files for the beta channel
+        working-directory: apps/desktop/dist
+        run: |
+          test -f latest.yml || { echo "::error::electron-builder made no latest.yml"; exit 1; }
+          cp latest.yml beta.yml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vibe-teamlead-win-x64
+          path: |
+            apps/desktop/dist/Vibe-Teamlead-*-win-x64.exe
+            apps/desktop/dist/Vibe-Teamlead-*-win-x64.exe.blockmap
+            apps/desktop/dist/latest.yml
+            apps/desktop/dist/beta.yml
+          if-no-files-found: error
+
+      - name: Upload to the release
+        if: github.event_name == 'release'
+        working-directory: apps/desktop/dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$TAG" \
+            Vibe-Teamlead-*-win-x64.exe \
+            Vibe-Teamlead-*-win-x64.exe.blockmap \
+            latest.yml \
+            beta.yml \
+            --repo "$GITHUB_REPOSITORY" --clobber
