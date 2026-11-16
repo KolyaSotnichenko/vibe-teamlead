@@ -27,9 +27,11 @@ import { saveDeployPatch } from "../deploy/setup";
 import { projectStore } from "../project-store";
 import { branchHead } from "../deploy/push-after-merge";
 import { taskStateManager } from "../task-state-manager";
-import { answerPendingQuestion, listPendingQuestions } from "../agent/agent-questions";
+import { listPendingQuestions } from "../agent/agent-questions";
+import { answerQuestion, setSharedAnswerer } from "../agent/answer-question";
 import { recordBriefAnswers } from "../ai/runners/brief-import";
 import { isMacOS } from "../platform";
+import { appEvents } from "../app-events";
 import type { AgentAnswers } from "../../shared/types/agent-questions";
 
 // Timeout for fallback safety net to check if task is still stuck after process exit
@@ -172,6 +174,7 @@ export function registerAgenteventsHandlers(
               `${STUCK_TASK_FALLBACK_TIMEOUT_MS}ms after exit (code ${code}), forcing USER_STOPPED (hasPlan: ${hasPlan})`
             );
             taskStateManager.handleUiEvent(taskId, { type: 'USER_STOPPED', hasPlan }, checkTask, checkProject);
+            appEvents.emit('task-stuck', { taskId, projectId: checkProject.id });
           }
         }
       }
@@ -297,18 +300,22 @@ export function registerAgenteventsHandlers(
 
   ipcMain.handle(IPC_CHANNELS.AGENT_QUESTION_PENDING, () => listPendingQuestions());
 
+  // The window and the Telegram bot answer through the same path
+  const answer = (questionId: string, answers: AgentAnswers | null) =>
+    answerQuestion(questionId, answers, {
+      findTaskAndProject,
+      // A task made from a brief: the answer is shared with the brief's other tasks
+      recordBriefAnswers,
+      onResolved: (id, taskId) => {
+        safeSendToRenderer(getMainWindow, IPC_CHANNELS.AGENT_QUESTION_RESOLVED, id, taskId);
+        updateQuestionBadge();
+      },
+    });
+  setSharedAnswerer(answer);
+
   ipcMain.handle(
     IPC_CHANNELS.AGENT_QUESTION_ANSWER,
-    (_event, questionId: string, answers: AgentAnswers | null) => {
-      const question = answerPendingQuestion(questionId, answers);
-      if (!question) return { success: false, error: "This question is no longer waiting for an answer." };
-      // A task made from a brief: the answer is shared with the brief's other tasks
-      const { task, project } = findTaskAndProject(question.taskId, question.projectId);
-      if (task && project) recordBriefAnswers(project, task, question, answers);
-      safeSendToRenderer(getMainWindow, IPC_CHANNELS.AGENT_QUESTION_RESOLVED, questionId, question.taskId);
-      updateQuestionBadge();
-      return { success: true };
-    }
+    (_event, questionId: string, answers: AgentAnswers | null) => answer(questionId, answers)
   );
 
   agentManager.on("task-event", (taskId: string, event, projectId?: string) => {
