@@ -10,6 +10,7 @@
 | **Agent Settings** | Model profile, phase and feature models, Architect (every task / complex tasks only / never), Format and lint after each edit (the project's own prettier/ESLint, Biome, ruff or gofmt on every file the coder writes; on by default), Language servers for agents (bundled TypeScript and Python servers, gopls/rust-analyzer/clangd when installed; on by default, turn off on very large repositories if memory is a problem), Security QA (Strix). |
 | **Memory** | Enable/disable, embedding model. |
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
+| **Telegram** | Your own Telegram bot: token, pairing, which notifications it sends. See the Telegram page. |
 | **Project → General** | The project's agent model, CLAUDE.md, notifications. |
 | **Project → GitHub / GitLab / Linear** | Repository, token, base branch, branch pushing, issue sync. |
 | **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory, accounts (an optional GitHub sign-in; if skipped, connect it later in Project → GitHub, or from the CI tab; leaving the step cancels a sign-in in progress). GitHub takes two steps: signing in, then installing the Vibe Teamlead app on GitHub and choosing the repositories it may use; the wizard asks for the second step and checks again when you come back. To add a repository later, open https://github.com/settings/installations, choose the Vibe Teamlead app and add it. You can run it again. |
