@@ -175,6 +175,23 @@
       "sentBack": "Sent back with your instruction: {{comment}}",
       "sendBackFailed": "Could not send it back: {{reason}}",
       "handledOnComputer": "Handled on the computer."
+    },
+    "design": {
+      "waiting": "The design waits for your approval: {{task}}",
+      "stage": {
+        "wireframes": "Stage: wireframes",
+        "design": "Stage: screens"
+      },
+      "approve": "Approve",
+      "comment": "Comment",
+      "approving": "Approving…",
+      "approved": "Approved. The team goes on.",
+      "commentPrompt": "What should the designer change? Reply with your comment.",
+      "commentPlaceholder": "Your comment",
+      "commented": "Comment sent to the designer: {{comment}}",
+      "failed": "That did not work: {{reason}}",
+      "noLongerWaiting": "This design no longer waits for your approval.",
+      "decidedOnComputer": "Decided on the computer."
     }
   }
 }

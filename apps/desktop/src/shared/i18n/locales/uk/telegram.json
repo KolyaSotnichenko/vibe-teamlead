@@ -185,6 +185,23 @@
       "sentBack": "Повернуто з вашою інструкцією: {{comment}}",
       "sendBackFailed": "Не вдалося повернути: {{reason}}",
       "handledOnComputer": "Вирішено на комп'ютері."
+    },
+    "design": {
+      "waiting": "Дизайн чекає на ваше схвалення: {{task}}",
+      "stage": {
+        "wireframes": "Етап: вайрфрейми",
+        "design": "Етап: екрани"
+      },
+      "approve": "Схвалити",
+      "comment": "Коментар",
+      "approving": "Схвалюю…",
+      "approved": "Схвалено. Команда продовжує.",
+      "commentPrompt": "Що дизайнерові змінити? Дайте відповідь зі своїм коментарем.",
+      "commentPlaceholder": "Ваш коментар",
+      "commented": "Коментар надіслано дизайнерові: {{comment}}",
+      "failed": "Не вийшло: {{reason}}",
+      "noLongerWaiting": "Цей дизайн уже не чекає на ваше схвалення.",
+      "decidedOnComputer": "Вирішено на комп'ютері."
     }
   }
 }
