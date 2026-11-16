@@ -905,6 +905,10 @@
       "missing": "Not installed"
     },
     "areas": {
+      "required": {
+        "title": "Required on Windows",
+        "when": "Install once"
+      },
       "bundled": {
         "title": "Bundled with the app",
         "when": "Nothing to install"
@@ -924,6 +928,7 @@
     },
     "purpose": {
       "claude-code": "Runs every agent.",
+      "git-bash": "Gives agents and app checks the bash shell they run commands in.",
       "codegraph": "Gives agents a map of your code, so they find the right files faster.",
       "gitleaks": "Looks for secrets, such as API keys and tokens, in what a task changed.",
       "osv-scanner": "Checks whether a task added dependencies with known vulnerabilities.",
@@ -940,7 +945,8 @@
     },
     "fix": {
       "startDocker": "Start Docker Desktop, then check again. Until then, Security QA is skipped and the report says so.",
-      "reinstall": "Agents can’t run without it. Reinstall Vibe Teamlead to restore it."
+      "reinstall": "Agents can’t run without it. Reinstall Vibe Teamlead to restore it.",
+      "installGitBash": "Agents and app checks can’t run on Windows without it. Install it, then restart Vibe Teamlead."
     },
     "copy": "Copy",
     "copied": "Copied",

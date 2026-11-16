@@ -151,7 +151,9 @@ function ToolRow({ tool }: { tool: ToolCheck }) {
               ? t('tools.fix.startDocker')
               : tool.optional
                 ? t(`tools.skippedWithout.${tool.neededFor}`)
-                : t('tools.fix.reinstall')}
+                : tool.id === 'git-bash'
+                  ? t('tools.fix.installGitBash')
+                  : t('tools.fix.reinstall')}
           </p>
           {(fixCommand || tool.installUrl) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

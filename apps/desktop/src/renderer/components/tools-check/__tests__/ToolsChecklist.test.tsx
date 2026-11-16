@@ -81,6 +81,19 @@ describe('ToolsChecklist', () => {
     expect(within(docker).queryByRole('button', { name: /tools\.guideFor/ })).not.toBeInTheDocument();
   });
 
+  it('on Windows without Git for Windows: a required row that says to install it, with winget', async () => {
+    const gitBash = { id: 'git-bash', status: 'missing', optional: false, neededFor: 'agents', installCommand: 'winget install --id Git.Git -e', installUrl: 'https://git-scm.com/download/win' };
+    check.mockResolvedValue({ success: true, data: [gitBash, ...sampleToolChecks] });
+    render(<ToolsChecklist />);
+    await waitFor(() => expect(screen.getByText('Git for Windows', { selector: 'p' })).toBeInTheDocument());
+    const git = row('Git for Windows');
+    expect(within(git).getByText('tools.purpose.git-bash')).toBeInTheDocument();
+    expect(within(git).getByText('tools.fix.installGitBash')).toBeInTheDocument();
+    expect(within(git).queryByText('tools.fix.reinstall')).not.toBeInTheDocument();
+    expect(within(git).getByText('winget install --id Git.Git -e')).toBeInTheDocument();
+    expect(screen.getByText('tools.areas.required.title')).toBeInTheDocument();
+  });
+
   it('runs the check again on "Check again"', async () => {
     render(<ToolsChecklist />);
     await waitFor(() => expect(screen.getByText('OSV-Scanner')).toBeInTheDocument());

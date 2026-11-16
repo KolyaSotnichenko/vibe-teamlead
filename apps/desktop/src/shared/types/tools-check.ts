@@ -5,7 +5,8 @@
 
 import type { IPCResult } from './common';
 
-export type ToolId = 'claude-code' | 'codegraph' | 'gitleaks' | 'osv-scanner' | 'semgrep' | 'chrome' | 'docker' | 'strix';
+/** git-bash: Git for Windows, listed on Windows only */
+export type ToolId = 'claude-code' | 'git-bash' | 'codegraph' | 'gitleaks' | 'osv-scanner' | 'semgrep' | 'chrome' | 'docker' | 'strix';
 
 /**
  * - bundled: ships inside the app
@@ -21,7 +22,7 @@ export interface ToolCheck {
   /** First line of `--version`, when cheap to get */
   version?: string;
   path?: string;
-  /** Shell command that installs it (macOS / Homebrew), when it can be installed from a terminal */
+  /** Shell command that installs it (Homebrew on macOS, winget on Windows), when it can be installed from a terminal */
   installCommand?: string;
   /** Page with installation instructions */
   installUrl?: string;

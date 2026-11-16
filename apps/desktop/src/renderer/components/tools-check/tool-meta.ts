@@ -8,6 +8,7 @@ import type { ToolCheck, ToolId } from '../../../shared/types';
 
 export const TOOL_NAMES: Record<ToolId, string> = {
   'claude-code': 'Claude Code',
+  'git-bash': 'Git for Windows',
   codegraph: 'CodeGraph',
   gitleaks: 'gitleaks',
   'osv-scanner': 'OSV-Scanner',
@@ -18,11 +19,13 @@ export const TOOL_NAMES: Record<ToolId, string> = {
 };
 
 /** Areas the checklist is grouped by, in display order. */
-export type ToolArea = 'bundled' | 'security_gates' | 'browser_qa' | 'security_qa';
+export type ToolArea = 'required' | 'bundled' | 'security_gates' | 'browser_qa' | 'security_qa';
 
-export const AREA_ORDER: ToolArea[] = ['bundled', 'security_gates', 'browser_qa', 'security_qa'];
+export const AREA_ORDER: ToolArea[] = ['required', 'bundled', 'security_gates', 'browser_qa', 'security_qa'];
 
+/** Git for Windows is the one tool agents need that the user installs: its own area */
 export function areaOf(tool: ToolCheck): ToolArea {
+  if (tool.id === 'git-bash') return 'required';
   return tool.neededFor === 'agents' || tool.neededFor === 'code_graph' ? 'bundled' : tool.neededFor;
 }
 
@@ -48,7 +51,7 @@ export interface AreaSummary {
 
 /** Summary per pipeline feature; the bundled tools are reassurance only and have no summary entry. */
 export function summarize(tools: ToolCheck[]): AreaSummary[] {
-  const areas: AreaSummary['area'][] = ['security_gates', 'browser_qa', 'security_qa'];
+  const areas: AreaSummary['area'][] = ['required', 'security_gates', 'browser_qa', 'security_qa'];
   return areas
     .map((area) => ({
       area,

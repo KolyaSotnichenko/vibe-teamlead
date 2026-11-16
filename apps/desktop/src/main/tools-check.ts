@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { resolveBundledTools } from './ai/claude-code/bundled-tools';
 import { dockerAvailable, strixPath } from './ai/security/strix';
 import { findOnPath, runProcess } from './platform/exec';
-import { isMacOS } from './platform';
+import { getPlatformKey, isMacOS } from './platform';
+import { findGitBash } from './platform/git-bash';
 import type { ToolCheck } from '../shared/types/tools-check';
 
 async function version(bin: string, args = ['--version']): Promise<string | undefined> {
@@ -28,7 +29,29 @@ function findChrome(): string | undefined {
   return findOnPath('google-chrome') ?? findOnPath('google-chrome-stable');
 }
 
-export async function checkTools(): Promise<ToolCheck[]> {
+/** A scanner from the app's Resources/scanners folder, with either path separator. Pure. */
+export function isBundledScanner(path: string | undefined): boolean {
+  return !!path && /[\\/]scanners[\\/]/.test(path);
+}
+
+/** Git for Windows: agents (Claude Code's Bash tool) and app checks run commands with its bash. Windows only. */
+function gitBashRow(platform: 'darwin' | 'win32' | 'linux'): ToolCheck[] {
+  if (platform !== 'win32') return [];
+  const bash = findGitBash({ platform });
+  return [
+    {
+      id: 'git-bash',
+      status: bash ? 'ready' : 'missing',
+      path: bash ?? undefined,
+      installCommand: 'winget install --id Git.Git -e',
+      installUrl: 'https://git-scm.com/download/win',
+      neededFor: 'agents',
+      optional: false,
+    },
+  ];
+}
+
+export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPlatformKey()): Promise<ToolCheck[]> {
   const bundled = resolveBundledTools();
   const installed = async (bin: string | undefined): Promise<Pick<ToolCheck, 'status' | 'path' | 'version'>> =>
     bin ? { status: 'ready', path: bin, version: await version(bin) } : { status: 'missing' };
@@ -53,12 +76,13 @@ export async function checkTools(): Promise<ToolCheck[]> {
       neededFor: 'agents',
       optional: false,
     },
+    ...gitBashRow(platform),
     { id: 'codegraph', status: bundled.codegraphBin ? 'bundled' : 'missing', path: bundled.codegraphBin, neededFor: 'code_graph', optional: true },
     {
       id: 'gitleaks',
       ...gitleaks,
       // Bundled in release builds (Resources/scanners); a Homebrew install works too.
-      status: gitleaks.status === 'ready' && bundled.gitleaksBin?.includes('/scanners/') ? 'bundled' : gitleaks.status,
+      status: gitleaks.status === 'ready' && isBundledScanner(bundled.gitleaksBin) ? 'bundled' : gitleaks.status,
       installCommand: 'brew install gitleaks',
       installUrl: 'https://github.com/gitleaks/gitleaks#installing',
       neededFor: 'security_gates',
@@ -67,7 +91,7 @@ export async function checkTools(): Promise<ToolCheck[]> {
     {
       id: 'osv-scanner',
       ...osv,
-      status: osv.status === 'ready' && bundled.osvScannerBin?.includes('/scanners/') ? 'bundled' : osv.status,
+      status: osv.status === 'ready' && isBundledScanner(bundled.osvScannerBin) ? 'bundled' : osv.status,
       installCommand: 'brew install osv-scanner',
       installUrl: 'https://google.github.io/osv-scanner/installation/',
       neededFor: 'security_gates',

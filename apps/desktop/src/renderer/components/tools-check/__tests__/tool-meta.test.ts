@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sampleToolChecks } from '../../../lib/mocks/tools-mock';
-import { gateSkipFix, pentestSkipFix, summarize } from '../tool-meta';
+import { areaOf, gateSkipFix, pentestSkipFix, summarize, TOOL_NAMES } from '../tool-meta';
 import type { ToolCheck } from '../../../../shared/types';
 
 describe('summarize', () => {
@@ -57,5 +57,16 @@ describe('pentestSkipFix', () => {
   it('gives no fix for an API-key skip or no reason', () => {
     expect(pentestSkipFix('Strix needs an Anthropic API key (a Claude subscription cannot be used for it)')).toBeNull();
     expect(pentestSkipFix(undefined)).toBeNull();
+  });
+});
+
+describe('Git for Windows', () => {
+  const gitBash = { id: 'git-bash', status: 'missing', optional: false, neededFor: 'agents', installCommand: 'winget install --id Git.Git -e' } as const;
+
+  it('has its own area, required, and the summary names it when it is missing', () => {
+    expect(TOOL_NAMES['git-bash']).toBe('Git for Windows');
+    expect(areaOf(gitBash)).toBe('required');
+    expect(summarize([gitBash])).toEqual([{ area: 'required', blockers: [{ id: 'git-bash', notRunning: false }] }]);
+    expect(summarize([{ ...gitBash, status: 'ready' }])).toEqual([{ area: 'required', blockers: [] }]);
   });
 });

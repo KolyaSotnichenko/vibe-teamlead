@@ -23,7 +23,7 @@ vi.mock('../ai/security/strix', async (original) => ({
   strixPath: () => process.env.PATH ?? '',
 }));
 
-import { checkTools } from '../tools-check';
+import { checkTools, isBundledScanner } from '../tools-check';
 
 describe('checkTools', () => {
   const originalPath = process.env.PATH;
@@ -41,5 +41,40 @@ describe('checkTools', () => {
     expect(tools.semgrep).toMatchObject({ status: 'missing', installCommand: 'brew install semgrep', neededFor: 'security_gates', optional: true });
     expect(tools.docker.status).toBe('not_running');
     expect(tools.strix).toMatchObject({ status: 'missing', installCommand: 'uv tool install strix-agent', optional: true });
+  });
+
+  it('has no Git for Windows row on macOS', async () => {
+    process.env.PATH = `${bin}:/usr/bin:/bin`;
+    expect((await checkTools('darwin')).some((t) => t.id === 'git-bash')).toBe(false);
+  });
+
+  it('on Windows, Git for Windows is a required row with its winget command', async () => {
+    process.env.PATH = `${bin}:/usr/bin:/bin`;
+    const before = process.env.CLAUDE_CODE_GIT_BASH_PATH;
+    try {
+      delete process.env.CLAUDE_CODE_GIT_BASH_PATH;
+      const missing = (await checkTools('win32')).find((t) => t.id === 'git-bash');
+      expect(missing).toMatchObject({
+        status: 'missing',
+        optional: false,
+        neededFor: 'agents',
+        installCommand: 'winget install --id Git.Git -e',
+        installUrl: 'https://git-scm.com/download/win',
+      });
+      process.env.CLAUDE_CODE_GIT_BASH_PATH = gitleaks; // any file that exists
+      expect((await checkTools('win32')).find((t) => t.id === 'git-bash')).toMatchObject({ status: 'ready', path: gitleaks });
+    } finally {
+      if (before === undefined) delete process.env.CLAUDE_CODE_GIT_BASH_PATH;
+      else process.env.CLAUDE_CODE_GIT_BASH_PATH = before;
+    }
+  });
+});
+
+describe('isBundledScanner', () => {
+  it('recognises the scanners folder with either separator', () => {
+    expect(isBundledScanner('/Applications/Vibe Teamlead.app/Contents/Resources/scanners/gitleaks')).toBe(true);
+    expect(isBundledScanner('C:\\Users\\me\\AppData\\Local\\Programs\\Vibe Teamlead\\resources\\scanners\\gitleaks.exe')).toBe(true);
+    expect(isBundledScanner('/opt/homebrew/bin/gitleaks')).toBe(false);
+    expect(isBundledScanner(undefined)).toBe(false);
   });
 });
