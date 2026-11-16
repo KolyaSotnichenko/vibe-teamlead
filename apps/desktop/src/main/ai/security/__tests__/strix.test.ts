@@ -368,7 +368,8 @@ exit 0`,
       expect(existsSync(join(specDir, 'security', 'target'))).toBe(false);
     });
 
-    it('reports an error, not a clean scan, when no copy can be made', async () => {
+    // The fake docker is a sh script Windows can't spawn: there the run stops at "Docker is not running"
+    it.skipIf(isWindowsHost)('reports an error, not a clean scan, when no copy can be made', async () => {
       const { specDir, run } = await scan();
       const { result } = await run({ projectDir: join(specDir, 'not-a-repo') });
       expect(result).toMatchObject({ status: 'error', reason: expect.stringMatching(/copy/) });
