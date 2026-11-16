@@ -45,7 +45,7 @@ interface Server {
   /** What was asked for: a different request restarts the server */
   signature: string;
   pid: number;
-  /** Start time (`ps`, or the creation time on Windows): tells this process from a later one with the same pid */
+  /** Start time from `ps` ('' on Windows): tells this process from a later one with the same pid */
   startedAt: string;
   port: number;
   logPath: string;
@@ -97,34 +97,15 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type PlatformKey = 'darwin' | 'win32' | 'linux';
 
-/** Creation time of a Windows process (UTC, ISO), or '' when it can't be read. */
-function windowsStartTime(pid: number): string {
-  const root = process.env.SystemRoot || 'C:\\Windows';
-  try {
-    return execFileSync(
-      `${root}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
-      ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${Math.trunc(pid)} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('o')`],
-      { encoding: 'utf-8', windowsHide: true, timeout: 10_000 },
-    ).trim();
-  } catch {
-    return '';
-  }
-}
-
-export interface DevServerProcessDeps {
-  /** Windows: the creation time of a process, '' when unknown */
-  startTime?: (pid: number) => string;
-}
-
 /**
  * How the servers' processes are told apart and stopped. macOS and Linux: a
  * process group, its start time from `ps`. Windows has neither groups nor ps:
- * the process itself, killTree (taskkill /T /F), its creation time from PowerShell.
+ * the process itself, killTree (taskkill /T /F), no start time.
  */
-export function devServerProcess(platform: PlatformKey, deps: DevServerProcessDeps = {}) {
+export function devServerProcess(platform: PlatformKey) {
   const windows = platform === 'win32';
   const startedAt = (pid: number): string => {
-    if (windows) return (deps.startTime ?? windowsStartTime)(pid);
+    if (windows) return '';
     try {
       return execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf-8' }).trim();
     } catch {
@@ -218,14 +199,13 @@ function taskRoot(specDir: string): string {
 /**
  * Stop servers a killed run left behind. Agents can write to this list and pids
  * get reused, so a listed pid is only signalled if it is still the same process
- * (its start time) and, where lsof can tell, it runs in this task's folder. On
- * Windows a process whose creation time can't be confirmed is left alone and
- * logged. Best effort: never throws.
+ * (ps start time) and lsof shows it runs in this task's folder. Windows has no
+ * such check, so there a leftover is never killed, only logged: an agent could
+ * list any process. Best effort: never throws.
  */
 export function cleanUpLeftovers(
   specDir: string,
   platform: PlatformKey = getPlatformKey(),
-  deps: DevServerProcessDeps = {},
   log: (line: string) => void = (line) => console.warn(`[dev-servers] ${line}`),
 ): void {
   let list: unknown;
@@ -235,17 +215,15 @@ export function cleanUpLeftovers(
     return;
   }
   const root = taskRoot(specDir);
-  const proc = devServerProcess(platform, deps);
+  const proc = devServerProcess(platform);
   for (const entry of Array.isArray(list) ? list.slice(0, MAX_LISTED) : []) {
     const { pid, startedAt } = (entry ?? {}) as { pid?: unknown; startedAt?: unknown };
-    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 1 || typeof startedAt !== 'string' || !startedAt) continue;
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 1) continue;
     if (proc.windows) {
-      // No lsof for the folder: the creation time alone, and nothing when it can't be read
-      const now = proc.startedAt(pid);
-      if (now && now === startedAt) proc.signal(pid, 'SIGKILL');
-      else log(`leftover server pid ${pid} not stopped: ${now ? 'it is another process now' : 'its creation time could not be read'}`);
+      log(`a dev server of an earlier run (pid ${pid}) was left running: on Windows the app can't confirm the pid is still that server`);
       continue;
     }
+    if (typeof startedAt !== 'string' || !startedAt) continue;
     if (proc.startedAt(pid) !== startedAt) continue;
     const cwd = processCwd(pid);
     if (cwd === root || cwd.startsWith(`${root}${sep}`)) proc.signal(pid, 'SIGKILL');

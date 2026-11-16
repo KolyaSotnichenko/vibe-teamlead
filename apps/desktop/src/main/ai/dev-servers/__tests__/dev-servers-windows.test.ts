@@ -13,24 +13,22 @@ const START = '2026-11-16T10:00:00.0000000Z';
 describe('dev server processes on Windows (no process groups, ps or lsof)', () => {
   it('stops a server with killTree (taskkill /T /F), never a negative pid', () => {
     const kill = vi.spyOn(process, 'kill');
-    devServerProcess('win32', { startTime: () => '' }).signal(4242, 'SIGTERM');
+    devServerProcess('win32').signal(4242, 'SIGTERM');
     expect(killTree).toHaveBeenCalledWith(4242, 'SIGTERM', 'win32');
     expect(kill).not.toHaveBeenCalled();
     kill.mockRestore();
   });
 
-  it('checks the process itself, and records its creation time', () => {
-    const startTime = vi.fn(() => START);
-    const win = devServerProcess('win32', { startTime });
+  it('checks the process itself, and has no start time to record', () => {
+    const win = devServerProcess('win32');
     expect(win.alive(process.pid)).toBe(true);
     expect(win.alive(2 ** 22 + 12345)).toBe(false);
-    expect(win.startedAt(4242)).toBe(START);
-    expect(startTime).toHaveBeenCalledWith(4242);
+    expect(win.startedAt(process.pid)).toBe('');
   });
 
   it('a server whose process already exited is not killed: its pid may belong to another process now', async () => {
     killTree.mockClear();
-    const win = devServerProcess('win32', { startTime: () => START });
+    const win = devServerProcess('win32');
     await stopServerProcess({ pid: process.pid, child: { exitCode: 0, signalCode: null } as never }, win);
     await stopServerProcess({ pid: process.pid, child: { exitCode: null, signalCode: 'SIGTERM' } as never }, win);
     expect(killTree).not.toHaveBeenCalled();
@@ -39,7 +37,7 @@ describe('dev server processes on Windows (no process groups, ps or lsof)', () =
   it('a running server is killed with taskkill', async () => {
     killTree.mockClear();
     let running = true;
-    const win = { ...devServerProcess('win32', { startTime: () => START }), alive: () => running };
+    const win = { ...devServerProcess('win32'), alive: () => running };
     killTree.mockImplementationOnce(() => {
       running = false;
       return true;
@@ -56,22 +54,15 @@ describe('dev server processes on Windows (no process groups, ps or lsof)', () =
       return specDir;
     };
 
-    it('kills one whose creation time is the one recorded at its start', () => {
-      killTree.mockClear();
-      const specDir = leftovers([{ pid: 4242, startedAt: START }]);
-      cleanUpLeftovers(specDir, 'win32', { startTime: () => START });
-      expect(killTree).toHaveBeenCalledWith(4242, 'SIGKILL', 'win32');
-      expect(readFileSync(path.join(specDir, 'dev-servers', 'servers.json'), 'utf-8')).toBe('[]');
-    });
-
-    it('leaves alone one with another creation time, or one it cannot tell, and says so', () => {
+    it('never kills one on Windows, even listed with its real start time: an agent can write the list, and there is no lsof to check the folder', () => {
       killTree.mockClear();
       const log = vi.fn();
-      const specDir = leftovers([{ pid: 4242, startedAt: START }, { pid: 4343, startedAt: START }]);
-      cleanUpLeftovers(specDir, 'win32', { startTime: (pid) => (pid === 4242 ? '2026-11-16T11:00:00.0000000Z' : '') }, log);
+      const specDir = leftovers([{ pid: 4242, startedAt: START }, { pid: 4343, startedAt: 'x' }]);
+      cleanUpLeftovers(specDir, 'win32', log);
       expect(killTree).not.toHaveBeenCalled();
       expect(log).toHaveBeenCalledTimes(2);
-      expect(log.mock.calls.join('\n')).toMatch(/4242.*not stopped/);
+      expect(log.mock.calls.join('\n')).toMatch(/4242.*left running/);
+      expect(readFileSync(path.join(specDir, 'dev-servers', 'servers.json'), 'utf-8')).toBe('[]');
     });
   });
 });
