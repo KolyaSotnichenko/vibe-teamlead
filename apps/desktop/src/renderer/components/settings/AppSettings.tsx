@@ -20,7 +20,8 @@ import {
   Bug,
   Terminal,
   KeyRound,
-  Wrench
+  Wrench,
+  Send
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -56,6 +57,7 @@ import { TerminalFontSettings } from './terminal-font-settings/TerminalFontSetti
 import { MemorySettings } from './MemorySettings';
 import { ClaudeSettings } from './ClaudeSettings';
 import { ToolsSettings } from './ToolsSettings';
+import { TelegramSettings } from './TelegramSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -70,7 +72,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'tools' | 'agent' | 'memory' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'terminal-fonts' | 'claude' | 'tools' | 'agent' | 'memory' | 'paths' | 'integrations' | 'updates' | 'notifications' | 'telegram' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -90,6 +92,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'paths', icon: FolderOpen },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
+  { id: 'telegram', icon: Send },
   { id: 'debug', icon: Bug }
 ];
 
@@ -211,6 +214,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="notifications" version={version} />;
+      case 'telegram':
+        return <TelegramSettings />;
       case 'debug':
         return <DebugSettings />;
       default:

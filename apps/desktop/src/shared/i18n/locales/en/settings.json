@@ -42,6 +42,10 @@
       "title": "Notifications",
       "description": "Alert preferences"
     },
+    "telegram": {
+      "title": "Telegram",
+      "description": "Your own bot on the phone"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
