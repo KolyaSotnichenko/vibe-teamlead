@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.46 - 2026-11-16
+
+- Windows: a design package can be chosen as a .zip. The dialog asked for a file or a folder at once, which Windows can't show, so only folders could be picked. Off macOS the step now has two buttons, **Choose a zip** and **Choose a folder**.
+- A chosen folder that holds only .zip files (not an unpacked package) is no longer offered for import: the app asks you to choose one of the zips.
+
 ## 2.0.0-beta.45 - 2026-11-16
 
 - **Windows (beta).** Vibe Teamlead now has a Windows x64 installer next to the macOS builds. It isn't signed yet: Windows SmartScreen warns on first run (More info → Run anyway). Agents need Git for Windows (the tools check offers `winget install --id Git.Git -e`). Claude Code, CodeGraph, gitleaks and OSV-Scanner ship in their Windows builds; checks, previews and dev servers run through Git Bash; tool install hints use winget (Semgrep: pip); `.docx` briefs and design packages are read without macOS tools. Projects inside WSL aren't supported yet and are refused with an explanation. The app updates itself on Windows too.
