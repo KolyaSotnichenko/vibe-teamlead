@@ -12,4 +12,4 @@
 | `~/.vibe-teamlead/claude-code` | Окрема конфігурація Claude Code для агентів. |
 | Папка даних застосунку (Electron `userData` у `~/Library/Application Support/`) | Налаштування застосунку, зашифровані ключі. |
 
-`.vibe-teamlead/` додається в `.gitignore` проєкту.
+`.vibe-teamlead/` виключається з git через власний файл виключень репозиторію (`.git/info/exclude`), тож застосунок не додає в проєкт `.gitignore` і вам нічого не треба комітити.

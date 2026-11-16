@@ -12,4 +12,4 @@
 | `~/.vibe-teamlead/claude-code` | Separate Claude Code configuration for agents. |
 | App data folder (Electron `userData` in `~/Library/Application Support/`) | App settings, encrypted keys. |
 
-`.vibe-teamlead/` is added to the project's `.gitignore`.
+`.vibe-teamlead/` is kept out of git through the repository's own exclude file (`.git/info/exclude`), so the app adds no `.gitignore` to your project and nothing for you to commit.
