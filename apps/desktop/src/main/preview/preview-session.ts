@@ -21,7 +21,7 @@ import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, serviceEnv }
 import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
-import { findOnPath, runProcess, searchPath } from '../platform/exec';
+import { findOnPath, runProcess, runShell, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
 import { type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
@@ -102,7 +102,8 @@ export function previewCommandEnv(env: Record<string, string>): Record<string, s
   return serverEnv(env);
 }
 
-function defaultDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | 'worktreesRoot'> {
+/** The real dependencies; exported for tests. */
+export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | 'worktreesRoot'> {
   return {
     docker: hostDocker(process.env),
     sync: syncPreviewWorktree,
@@ -135,7 +136,7 @@ function defaultDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | 'worktreesRoot'
       writeFileSync(join(root, path), text, 'utf-8');
     },
     runCommand: async (command, cwd, env, signal) => {
-      const result = await runProcess('/bin/sh', ['-c', command], { cwd, env: previewCommandEnv(env), signal, timeoutMs: COMMAND_TIMEOUT_MS, killGroup: true });
+      const result = await runShell(command, { cwd, env: previewCommandEnv(env), signal, timeoutMs: COMMAND_TIMEOUT_MS, killGroup: true });
       return { code: result.code, output: `${result.stdout}${result.stderr}` };
     },
     startServer: startDevServer,
@@ -486,7 +487,7 @@ export async function startPreview(
   }
   const session: Session = {
     project,
-    deps: { ...defaultDeps(), ...deps },
+    deps: { ...defaultPreviewDeps(), ...deps },
     onStatus,
     abort: new AbortController(),
     task: options.task,
