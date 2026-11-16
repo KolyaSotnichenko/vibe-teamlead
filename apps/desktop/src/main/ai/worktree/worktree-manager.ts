@@ -22,6 +22,8 @@ import { dirname, join, resolve } from 'path';
 import { promisify } from 'util';
 
 import { getSpecsDir } from '../../../shared/constants';
+import { getPlatformKey } from '../../platform';
+import { worktreeAddArgs, worktreeConfigCommands } from '../../platform/git-env';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -165,7 +167,7 @@ export async function createOrGetWorktree(
     // Branch already exists — attach the worktree to it without -b
     console.warn(`[WorktreeManager] Reusing existing branch: ${branchName}`);
     await git(
-      ['worktree', 'add', worktreePath, branchName],
+      worktreeAddArgs(['worktree', 'add', worktreePath, branchName], getPlatformKey()),
       projectPath,
     );
   } else {
@@ -197,9 +199,13 @@ export async function createOrGetWorktree(
     }
 
     await git(
-      ['worktree', 'add', '-b', branchName, '--no-track', worktreePath, startPoint],
+      worktreeAddArgs(['worktree', 'add', '-b', branchName, '--no-track', worktreePath, startPoint], getPlatformKey()),
       projectPath,
     );
+  }
+  // Windows: long paths for every later git command in the worktree
+  for (const args of worktreeConfigCommands(getPlatformKey())) {
+    await git(args, worktreePath, /* allowFailure */ true);
   }
 
   console.warn(

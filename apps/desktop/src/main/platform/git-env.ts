@@ -13,3 +13,18 @@ export function withoutGitLocation(env: NodeJS.ProcessEnv = process.env): NodeJS
   for (const name of GIT_LOCATION_VARS) delete clean[name];
   return clean;
 }
+
+/**
+ * `git worktree add` with long paths on Windows: a deep worktree
+ * (<project>\.vibe-teamlead\worktrees\tasks\<spec>\node_modules\…) passes the
+ * 260-character MAX_PATH, and Git for Windows refuses those files unless
+ * core.longpaths is on. `-c` covers the checkout itself. Pure.
+ */
+export function worktreeAddArgs(args: string[], platform: 'darwin' | 'win32' | 'linux'): string[] {
+  return platform === 'win32' ? ['-c', 'core.longpaths=true', ...args] : args;
+}
+
+/** `git config` arguments a new worktree gets afterwards, so later git commands in it (agents, merges) keep long paths. Pure. */
+export function worktreeConfigCommands(platform: 'darwin' | 'win32' | 'linux'): string[][] {
+  return platform === 'win32' ? [['config', 'core.longpaths', 'true']] : [];
+}

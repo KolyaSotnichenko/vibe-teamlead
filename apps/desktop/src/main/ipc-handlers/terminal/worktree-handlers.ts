@@ -16,6 +16,8 @@ import { debugLog, debugError } from '../../../shared/utils/debug-logger';
 import { projectStore } from '../../project-store';
 import { parseEnvFile } from '../utils';
 import { linkIntoWorktree } from '../../platform/link';
+import { getPlatformKey } from '../../platform';
+import { worktreeAddArgs, worktreeConfigCommands } from '../../platform/git-env';
 import {
   getTerminalWorktreeDir,
   getTerminalWorktreePath,
@@ -417,7 +419,7 @@ async function createTerminalWorktree(
       // from the base ref (e.g., origin/main). This ensures users can push with -u
       // to correctly set up tracking to their own remote branch.
       // Use async to avoid blocking the main process on large repos.
-      await execFileAsync(getToolPath('git'), ['worktree', 'add', '-b', branchName, '--no-track', worktreePath, baseRef], {
+      await execFileAsync(getToolPath('git'), worktreeAddArgs(['worktree', 'add', '-b', branchName, '--no-track', worktreePath, baseRef], getPlatformKey()), {
         cwd: projectPath,
         encoding: 'utf-8',
         timeout: 60000,
@@ -466,13 +468,18 @@ async function createTerminalWorktree(
       }
     } else {
       // Use async to avoid blocking the main process on large repos.
-      await execFileAsync(getToolPath('git'), ['worktree', 'add', '--detach', worktreePath, baseRef], {
+      await execFileAsync(getToolPath('git'), worktreeAddArgs(['worktree', 'add', '--detach', worktreePath, baseRef], getPlatformKey()), {
         cwd: projectPath,
         encoding: 'utf-8',
         timeout: 60000,
         env: getIsolatedGitEnv(),
       });
       debugLog('[TerminalWorktree] Created worktree in detached HEAD mode from', baseRef);
+    }
+
+    // Windows: long paths for every later git command in the worktree
+    for (const args of worktreeConfigCommands(getPlatformKey())) {
+      await execFileAsync(getToolPath('git'), args, { cwd: worktreePath, encoding: 'utf-8', timeout: 5000, env: getIsolatedGitEnv() }).catch(() => undefined);
     }
 
     // Set up dependencies (node_modules, venvs, etc.) for tooling support

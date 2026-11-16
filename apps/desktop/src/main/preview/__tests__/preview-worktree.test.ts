@@ -35,6 +35,12 @@ describe('the preview worktree', () => {
     expect(result.lockfileChanged).toBe(true);
   });
 
+  it('on Windows turns core.longpaths on in the new worktree', async () => {
+    const { dir } = repo();
+    const result = await syncPreviewWorktree(dir, 'main', 'git', at(), 'win32');
+    expect(execFileSync('git', ['config', '--get', 'core.longpaths'], { cwd: result.path, encoding: 'utf-8' }).trim()).toBe('true');
+  });
+
   it("moves to main's new commit and reports a changed lockfile", async () => {
     const { dir, git, commit } = repo();
     const wt = at();

@@ -13,6 +13,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { getIsolatedGitEnv } from '../utils/git-isolation';
+import { getPlatformKey } from '../platform';
+import { worktreeAddArgs, worktreeConfigCommands } from '../platform/git-env';
 
 const run = promisify(execFile);
 
@@ -38,12 +40,20 @@ async function git(gitBin: string, cwd: string, args: string[]): Promise<string>
 }
 
 /** Creates the worktree at `path` on mainBranch, or moves it there. lockfileChanged: dependencies need installing. moved: the code changed. */
-export async function syncPreviewWorktree(projectPath: string, mainBranch: string, gitBin: string, path: string): Promise<{ path: string; lockfileChanged: boolean; moved: boolean }> {
+export async function syncPreviewWorktree(
+  projectPath: string,
+  mainBranch: string,
+  gitBin: string,
+  path: string,
+  platform: 'darwin' | 'win32' | 'linux' = getPlatformKey(),
+): Promise<{ path: string; lockfileChanged: boolean; moved: boolean }> {
   const target = await git(gitBin, projectPath, ['rev-parse', '--verify', `${mainBranch}^{commit}`]);
 
   if (!existsSync(join(path, '.git'))) {
     await git(gitBin, projectPath, ['worktree', 'prune']);
-    await git(gitBin, projectPath, ['worktree', 'add', '--detach', '--force', path, target]);
+    await git(gitBin, projectPath, worktreeAddArgs(['worktree', 'add', '--detach', '--force', path, target], platform));
+    // Windows: long paths for the checkouts that move it later
+    for (const args of worktreeConfigCommands(platform)) await git(gitBin, path, args);
     return { path, lockfileChanged: true, moved: true };
   }
 
