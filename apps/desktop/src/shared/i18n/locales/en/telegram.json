@@ -206,6 +206,7 @@
       "createFailed": "Could not create the task: {{reason}}",
       "start": "Start",
       "started": "Started: {{title}}",
+      "queued": "Queued: {{title}}. It starts when a slot frees (or after /resume).",
       "startFailed": "Could not start it: {{reason}}",
       "offer": "Create a task from this message?",
       "longOffer": "This is a long text. Create one task from it, or analyse it as a brief (epics and tasks)?",

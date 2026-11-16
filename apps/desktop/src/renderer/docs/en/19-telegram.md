@@ -40,7 +40,7 @@ When the designer's wireframes or screens wait for you (Settings → project →
 
 ## New tasks from the chat
 
-- `/task <text>` creates a task in the current project (`/project`; the only open project when there is one) in Planning, the same way as the New task dialog, with a **Start** button. A short first line becomes the title; otherwise the app writes one, as for an empty title.
+- `/task <text>` creates a task in the current project (`/project`; the only open project when there is one) in Planning, the same way as the New task dialog, with a **Start** button. Start keeps the board's rules: when the project's parallel-task limit is reached, or the queue is paused by `/stop_all`, the task goes to the queue and starts when a slot frees. A short first line becomes the title; otherwise the app writes one, as for an empty title.
 - A plain message offers **Create a task**.
 - Text longer than about 600 characters also offers **Analyse as a brief**: the brief import runs without asking questions (the open questions are listed instead) and sends back the proposal: epics, tasks and open questions, with **Create N tasks** (in Planning, not queued) or **Discard**. It takes a few minutes and spends Claude tokens, like the brief import in the app.
 

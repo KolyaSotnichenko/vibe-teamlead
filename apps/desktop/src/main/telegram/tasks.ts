@@ -21,8 +21,8 @@ const LISTED_TASKS = 15;
 export interface TaskActions {
   /** The window's create path: a task in Planning */
   create: (projectId: string, text: string) => Promise<{ taskId: string; title: string }>;
-  /** What the Start button does */
-  start: (taskId: string, projectId: string) => Promise<void>;
+  /** What the Start button does: started, or queued (the project's limit reached or the queue paused) */
+  start: (taskId: string, projectId: string) => Promise<'started' | 'queued'>;
   /** The brief import, clarification off */
   analyseBrief: (projectId: string, text: string) => Promise<BriefProposal>;
   /** The brief dialog's create, not queued */
@@ -76,8 +76,8 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
         async ({ chatId: chat, messageId }) => {
           router.forgetGroup(buttons);
           try {
-            await actions.start(created.taskId, target.id);
-            await edit(chat, messageId, t('task.started', { title: created.title }));
+            const outcome = await actions.start(created.taskId, target.id);
+            await edit(chat, messageId, t(outcome === 'queued' ? 'task.queued' : 'task.started', { title: created.title }));
           } catch (error) {
             await edit(chat, messageId, t('task.startFailed', { reason: reasonOf(error) }));
           }

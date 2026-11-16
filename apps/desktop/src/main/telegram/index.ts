@@ -30,6 +30,9 @@ import { reviewTask, startTask } from '../ipc-handlers/task/execution-handlers';
 import { resolveSpecDir } from '../ipc-handlers/task/workspace-handlers';
 import { mergeTaskWorktree } from '../ipc-handlers/task/worktree-handlers';
 import { safeSendToRenderer } from '../ipc-handlers/utils';
+import { getPlanPath, persistPlanStatus } from '../ipc-handlers/task/plan-file-utils';
+import { parallelTaskLimit } from '../../shared/utils/task-slots';
+import { startOrQueue } from './start-or-queue';
 import { getIsolatedGitEnv } from '../utils/git-isolation';
 import { taskDiffBase } from '../utils/task-diff-base';
 import { findTaskWorktree } from '../worktree-paths';
@@ -207,7 +210,21 @@ export function initTelegram(agentManager: AgentManager, getMainWindow: () => Br
         safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_STATUS_CHANGE, task.id, 'backlog', project.id);
         return { taskId: task.id, title: task.title };
       },
-      start: (taskId) => startTask(agentManager, getMainWindow, taskId),
+      start: async (taskId, projectId) => {
+        const project = projectStore.getProject(projectId);
+        const tasks = projectStore.getTasks(projectId);
+        const task = tasks.find((t) => t.id === taskId || t.specId === taskId);
+        if (!project || !task) throw new Error('Task not found');
+        const decision = startOrQueue({ paused: queuePause.isPaused(), tasks, limit: parallelTaskLimit(project.settings?.maxParallelTasks), taskId: task.id });
+        if (decision === 'start') {
+          await startTask(agentManager, getMainWindow, taskId);
+          return 'started';
+        }
+        // Waits for a slot like a task queued on the board: the window starts it when one frees
+        if (!(await persistPlanStatus(getPlanPath(project, task), 'queue', projectId))) throw new Error('Could not queue the task');
+        safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_STATUS_CHANGE, task.id, 'queue', projectId);
+        return 'queued';
+      },
       analyseBrief: async (projectId, text) => {
         const project = projectStore.getProject(projectId);
         if (!project) throw new Error('Project not found');

@@ -153,7 +153,7 @@ describe('telegram service', () => {
         approve: async () => ({ success: true }),
         comment: async () => ({ success: true }),
       },
-      taskActions: { create, start: async () => undefined, analyseBrief: vi.fn(), createBriefTasks: vi.fn() },
+      taskActions: { create, start: async () => 'started' as const, analyseBrief: vi.fn(), createBriefTasks: vi.fn() },
       commands: {
         projects: () => [{ id: 'p1', name: 'Shop' }],
         tasks: () => [],

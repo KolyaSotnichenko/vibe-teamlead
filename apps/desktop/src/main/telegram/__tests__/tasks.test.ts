@@ -36,7 +36,7 @@ function setup(projects = [{ id: 'p1', name: 'Shop' }], over: Partial<TaskAction
   const router = createRouter({ api: () => bot.api, settings, pairing: createPairing(), t });
   const actions: TaskActions = {
     create: vi.fn(async (_p: string, text: string) => ({ taskId: 'id1', title: text.slice(0, 20) })),
-    start: vi.fn(async () => undefined),
+    start: vi.fn(async () => 'started' as const),
     analyseBrief: vi.fn(async () => proposal),
     createBriefTasks: vi.fn(async () => ({ success: true, count: 3 })),
     ...over,
@@ -68,6 +68,13 @@ describe('/task', () => {
     await press(t('task.start'), reply);
     expect(actions.start).toHaveBeenCalledWith('id1', 'p2');
     expect(bot.edits.at(-1)?.text).toContain(t('task.started', { title: 'Add a dark mode' }));
+  });
+
+  it("says when Start put the task in the queue instead (limit reached or queue paused)", async () => {
+    const { say, bot, press } = setup([{ id: 'p1', name: 'Shop' }], { start: vi.fn(async () => 'queued' as const) });
+    await say('/task Add a dark mode');
+    await press(t('task.start'), bot.last());
+    expect(bot.edits.at(-1)?.text).toContain(t('task.queued', { title: 'Add a dark mode' }));
   });
 
   it('one open project is the current one; several without a choice ask for /project', async () => {
