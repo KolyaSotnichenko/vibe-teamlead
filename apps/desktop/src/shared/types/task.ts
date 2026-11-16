@@ -244,6 +244,8 @@ export interface TaskMetadata {
   modelsChosen?: boolean;  // The user picked this task's models; otherwise each run takes them from the settings
   phaseModels?: PhaseModelConfig;  // Per-phase model configuration
   phaseThinking?: PhaseThinkingConfig;  // Per-phase thinking configuration
+  designModel?: string;  // The Designer feature model of the last run (recorded before each run)
+  designThinking?: ThinkingLevel;  // Its thinking level
   fastMode?: boolean;  // Fast Mode — faster Opus 4.6 output, higher cost per token
 
   // Git/Worktree configuration

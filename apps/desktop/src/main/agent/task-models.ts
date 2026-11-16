@@ -15,6 +15,7 @@ import { resolveDefaultTaskModels } from '../../shared/utils/task-models';
 import { isUsableModel } from '../ai/config/phase-config';
 import { writeFileReplacingSync } from '../ai/safe-write';
 import { readSettingsFile } from '../settings-utils';
+import { getFeatureSettings } from '../ipc-handlers/feature-settings-helper';
 
 interface ModelMetadata {
   isAutoProfile?: boolean;
@@ -27,7 +28,7 @@ interface ModelMetadata {
 }
 
 const PHASES = ['spec', 'planning', 'coding', 'qa'] as const;
-const MODEL_FIELDS = ['isAutoProfile', 'modelsChosen', 'model', 'thinkingLevel', 'phaseModels', 'phaseThinking'] as const;
+const MODEL_FIELDS = ['isAutoProfile', 'modelsChosen', 'model', 'thinkingLevel', 'phaseModels', 'phaseThinking', 'designModel', 'designThinking'] as const;
 const METADATA_FILE = 'task_metadata.json';
 
 type ModelSettings = Parameters<typeof resolveDefaultTaskModels>[0];
@@ -61,7 +62,12 @@ export function withDefaultTaskModels(metadata: ModelMetadata, settings: ModelSe
 export function taskModelsForRun(metadata: ModelMetadata): ModelMetadata {
   const settings = readSettingsFile() as ModelSettings;
   if (!settings && hasUsablePhaseModels(metadata)) return metadata;
-  return withDefaultTaskModels(metadata, settings);
+  const next = withDefaultTaskModels(metadata, settings);
+  if (!settings) return next;
+  // The design phase runs on the Designer feature model, read for each run like the phase models:
+  // recorded so the task window can show it
+  const designer = getFeatureSettings('designer');
+  return { ...next, designModel: designer.model, designThinking: designer.thinkingLevel };
 }
 
 /**

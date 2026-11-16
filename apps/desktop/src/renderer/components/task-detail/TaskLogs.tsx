@@ -110,12 +110,17 @@ function resolveModelLabel(model: string): string {
 
 // Helper to get model and thinking info for a log phase.
 // `thinking` is either an i18n key from THINKING_SHORT_LABEL_KEYS or the raw level.
-function getPhaseConfig(
+export function getPhaseConfig(
   metadata: TaskMetadata | undefined,
   logPhase: TaskLogPhase
 ): { model: string; thinking: string } | null {
-  // The designer runs on the Designer feature model, not a phase model of the task
-  if (!metadata || logPhase === 'design') return null;
+  if (!metadata) return null;
+  // The designer runs on the Designer feature model, which each run records in the task
+  if (logPhase === 'design') {
+    if (!metadata.designModel) return null;
+    const thinking = metadata.designThinking;
+    return { model: resolveModelLabel(metadata.designModel), thinking: thinking ? THINKING_SHORT_LABEL_KEYS[thinking] || thinking : '' };
+  }
 
   const configPhase = LOG_PHASE_TO_CONFIG_PHASE[logPhase];
 

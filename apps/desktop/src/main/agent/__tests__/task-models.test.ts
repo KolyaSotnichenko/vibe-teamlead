@@ -59,6 +59,19 @@ describe('task metadata models', () => {
     expect(written.thinkingLevel).toBe('low');
   });
 
+  // The design phase runs on the Designer feature model: the task window shows it like the others
+  it("records the designer's model and effort from the settings for the run", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
+    writeFileSync(join(dir, 'task_metadata.json'), JSON.stringify({ sourceType: 'manual' }));
+    readSettingsFile.mockReturnValue({ customPhaseModels: ollama, featureModels: { designer: 'claude-opus-5-5' }, featureThinking: { designer: 'high' } });
+
+    ensureTaskModels(dir);
+
+    const written = JSON.parse(readFileSync(join(dir, 'task_metadata.json'), 'utf-8'));
+    expect(written.designModel).toBe('claude-opus-5-5');
+    expect(written.designThinking).toBe('high');
+  });
+
   it('leaves the task as it is when the settings cannot be read', () => {
     const dir = mkdtempSync(join(tmpdir(), 'task-models-'));
     const before = JSON.stringify({ isAutoProfile: true, phaseModels: ollama });

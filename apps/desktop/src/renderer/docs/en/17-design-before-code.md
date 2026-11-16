@@ -33,7 +33,7 @@ Context → Design system → Setup → **Design before code**:
 - **Off / Wireframes / Wireframes and design** (default: wireframes and design, for every project).
 - **Who approves:** *I approve each step* (default: the task waits for you at each stage) or *Go on by itself* (the designer checks its own frames; you see them on the Design tab and in review).
 
-The designer's model is **Designer** in Settings → Feature models (it inherits the Design system model). Cost: two designer sessions per UI task, plus one per round of comments.
+The designer's model is **Designer** in Settings → Feature models (it inherits the Design system model). Like the phase models, it is taken from the settings at the start of each run, and the task's Logs show it on the Design phase. Cost: two designer sessions per UI task, plus one per round of comments.
 
 ## Good to know
 
