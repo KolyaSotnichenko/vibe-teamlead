@@ -133,7 +133,7 @@ export function initializeGit(projectPath: string): InitializationResult {
       });
     }
     // Before anything is added: the app's folder never goes into the first commit
-    excludeFromGit(projectPath, VIBE_TEAMLEAD_DIR_ENTRY);
+    excludeFromGit(projectPath, VIBE_TEAMLEAD_DIR_ENTRY, git);
 
     // Step 2: Check if there are files to commit
     const statusOutput = execFileSync(git, ['status', '--porcelain'], {
@@ -147,6 +147,12 @@ export function initializeGit(projectPath: string): InitializationResult {
       debug('Adding files and creating initial commit');
 
       // Add all files
+      // Fail closed: if the exclude file could not be written, `add -A` would commit the app's folder
+      try {
+        execFileSync(git, ['check-ignore', '-q', VIBE_TEAMLEAD_DIR_ENTRY], { cwd: projectPath, stdio: ['pipe', 'pipe', 'pipe'] });
+      } catch {
+        throw new Error(`Could not keep ${VIBE_TEAMLEAD_DIR_ENTRY} out of the first commit (writing .git/info/exclude failed)`);
+      }
       execFileSync(git, ['add', '-A'], {
         cwd: projectPath,
         encoding: 'utf-8',
@@ -249,7 +255,7 @@ export function initializeProject(projectPath: string): InitializationResult {
       const keep = path.join(dirPath, '.gitkeep');
       if (!existsSync(keep)) writeFileSync(keep, '', 'utf-8');
     }
-    excludeFromGit(projectPath, VIBE_TEAMLEAD_DIR_ENTRY);
+    excludeFromGit(projectPath, VIBE_TEAMLEAD_DIR_ENTRY, getToolPath('git'));
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Could not create the .vibe-teamlead folder' };
   }
