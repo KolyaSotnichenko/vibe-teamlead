@@ -90,7 +90,8 @@ export function createPoller(options: PollerOptions): Poller {
     while (!signal.aborted) {
       let updates: TelegramUpdate[];
       try {
-        updates = await options.api.getUpdates(offset, signal);
+        // Until connected, ask without waiting: Settings learns at once that the token works
+        updates = await options.api.getUpdates(offset, signal, lastState === 'connected:' ? undefined : 0);
       } catch (error) {
         if (signal.aborted) break;
         const reason = reasonOf(error);

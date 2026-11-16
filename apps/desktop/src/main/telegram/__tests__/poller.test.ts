@@ -37,6 +37,25 @@ describe('poller', () => {
     expect(offsets.slice(0, 3)).toEqual([undefined, 7, 10]);
   });
 
+  it('asks without waiting until connected, then long-polls', async () => {
+    const timeouts: Array<number | undefined> = [];
+    let calls = 0;
+    let poller: ReturnType<typeof createPoller> | undefined;
+    const api = {
+      getUpdates: async (_o: number | undefined, _s: AbortSignal | undefined, timeout?: number) => {
+        timeouts.push(timeout);
+        if (++calls === 2) throw new TelegramApiError('network', 'x');
+        if (calls === 4) void poller?.stop();
+        return [];
+      },
+    } as unknown as BotApi;
+    poller = createPoller({ api, onBatch: async () => undefined, onState: () => undefined, sleep: async () => undefined });
+    await poller.start();
+    await poller.done();
+    // connect at once, long poll, fails, reconnect at once, long poll
+    expect(timeouts).toEqual([0, undefined, 0, undefined]);
+  });
+
   it('stops on a bad token and reports it', async () => {
     const states: PollerState[] = [];
     const { api } = scripted([new TelegramApiError('unauthorized', 'no')], () => undefined);

@@ -76,7 +76,8 @@ export const ALLOWED_UPDATES = ['message', 'callback_query'] as const;
 
 export interface BotApi {
   getMe(): Promise<TelegramUser>;
-  getUpdates(offset: number | undefined, signal?: AbortSignal): Promise<TelegramUpdate[]>;
+  /** Long poll; `timeoutSeconds` 0 answers at once (the first call, to know the connection works) */
+  getUpdates(offset: number | undefined, signal?: AbortSignal, timeoutSeconds?: number): Promise<TelegramUpdate[]>;
   sendMessage(chatId: number, text: string, options?: SendOptions): Promise<TelegramMessage>;
   /** Replaces the text; the buttons go unless new ones are given */
   editMessageText(chatId: number, messageId: number, text: string, options?: { buttons?: InlineButton[][] }): Promise<void>;
@@ -144,8 +145,8 @@ export function createBotApi(token: string, fetchImpl: FetchLike = fetch as Fetc
 
   return {
     getMe: () => send<TelegramUser>('getMe', {}),
-    getUpdates: (offset, signal) =>
-      send<TelegramUpdate[]>('getUpdates', { ...(offset !== undefined ? { offset } : {}), timeout: LONG_POLL_SECONDS, allowed_updates: [...ALLOWED_UPDATES] }, signal),
+    getUpdates: (offset, signal, timeoutSeconds = LONG_POLL_SECONDS) =>
+      send<TelegramUpdate[]>('getUpdates', { ...(offset !== undefined ? { offset } : {}), timeout: timeoutSeconds, allowed_updates: [...ALLOWED_UPDATES] }, signal),
     sendMessage: (chatId, text, options) => {
       const reply_markup = markup(options);
       return send<TelegramMessage>('sendMessage', { chat_id: chatId, text, ...(reply_markup ? { reply_markup } : {}) });

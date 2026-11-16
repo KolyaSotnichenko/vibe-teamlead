@@ -51,7 +51,7 @@ export function safeApi(api: BotApi, secrets: () => Array<string | undefined>): 
     options ? { ...options, buttons: cleanButtons(options.buttons), placeholder: options.placeholder ? clean(options.placeholder, 64) : undefined } : undefined;
   return {
     getMe: () => api.getMe(),
-    getUpdates: (offset, signal) => api.getUpdates(offset, signal),
+    getUpdates: (offset, signal, timeoutSeconds) => api.getUpdates(offset, signal, timeoutSeconds),
     sendMessage: (chatId, text, options) => api.sendMessage(chatId, clean(text), cleanOptions(options)),
     editMessageText: (chatId, messageId, text, options) => api.editMessageText(chatId, messageId, clean(text), options ? { buttons: cleanButtons(options.buttons) } : undefined),
     answerCallbackQuery: (id, text) => api.answerCallbackQuery(id, text ? clean(text, 200) : undefined),

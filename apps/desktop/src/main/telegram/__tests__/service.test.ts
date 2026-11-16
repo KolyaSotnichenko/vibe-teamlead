@@ -1,0 +1,168 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { PendingAgentQuestion } from '../../../shared/types/agent-questions';
+import type { TelegramStatus } from '../../../shared/types/telegram';
+import { createQueuePause } from '../../ipc-handlers/task/task-control';
+import { type BotApi, TelegramApiError, type TelegramUpdate } from '../bot-api';
+import { createTelegramService } from '../service';
+import { createTelegramSettingsStore } from '../settings-store';
+import { createTokenStore } from '../token-store';
+import { createFakeBot, OWNER, textUpdate } from './fake-bot';
+
+let dir: string;
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'tg-svc-'));
+});
+afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+const plain = { encrypt: (s: string) => `x${s}`, decrypt: (s: string) => s.slice(1) };
+
+/** A fake bot whose getUpdates waits like a long poll until updates are pushed or it is aborted */
+function longPollBot(validToken = 'good:token') {
+  const fake = createFakeBot();
+  const inbox: TelegramUpdate[] = [];
+  let wake: (() => void) | undefined;
+  const tokens: string[] = [];
+  const polls = { count: 0 };
+  const createApi = (token: string): BotApi => {
+    tokens.push(token);
+    return {
+      ...fake.api,
+      getMe: async () => {
+        if (token !== validToken) throw new TelegramApiError('unauthorized', 'Unauthorized');
+        return { id: 1, username: 'my_bot' };
+      },
+      getUpdates: (_offset, signal, timeoutSeconds) => {
+        polls.count++;
+        if (token !== validToken) return Promise.reject(new TelegramApiError('unauthorized', 'Unauthorized'));
+        if (inbox.length) return Promise.resolve(inbox.splice(0));
+        if (timeoutSeconds === 0) return Promise.resolve([]);
+        return new Promise((resolve, reject) => {
+          wake = () => resolve(inbox.splice(0));
+          signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        });
+      },
+    };
+  };
+  return { fake, createApi, tokens, polls, push: (u: TelegramUpdate) => (inbox.push(u), wake?.()) };
+}
+
+function setup(bot = longPollBot()) {
+  let questionListener: ((e: { type: 'asked'; question: PendingAgentQuestion }) => void) | undefined;
+  const statuses: TelegramStatus[] = [];
+  const settings = createTelegramSettingsStore(dir);
+  const tokens = createTokenStore(dir, plain);
+  const service = createTelegramService({
+    tokens,
+    settings,
+    createApi: bot.createApi,
+    language: () => 'en',
+    secrets: () => ['sk-ant-secret-claude-key'],
+    questions: {
+      pending: () => [],
+      onEvent: (l) => {
+        questionListener = l as typeof questionListener;
+        return () => undefined;
+      },
+      answer: () => ({ success: true }),
+    },
+    notifierSources: { onStatusChange: () => () => undefined, onAppEvent: () => () => undefined, onBaseFailures: () => () => undefined },
+    task: () => ({ title: 'Add login' }),
+    projectName: () => 'Shop',
+    commands: {
+      projects: () => [],
+      tasks: () => [],
+      runningTaskIds: () => [],
+      stopTask: vi.fn(),
+      queuePause: createQueuePause(),
+      pendingQuestions: () => 0,
+      usageToday: async () => ({ usd: 0, tokens: 0 }),
+    },
+    onStatus: (s) => void statuses.push(s),
+    pollerSleep: async () => undefined,
+  });
+  return { service, settings, tokens, statuses, bot, ask: (q: PendingAgentQuestion) => questionListener?.({ type: 'asked', question: q }) };
+}
+
+describe('telegram service', () => {
+  it('does not poll and talks to nobody without a token', async () => {
+    const { service, bot } = setup();
+    await service.start();
+    expect(service.status().connection).toBe('not_set');
+    expect(bot.tokens).toEqual([]);
+    expect(bot.polls.count).toBe(0);
+    await service.stop();
+  });
+
+  it('refuses a token Telegram does not accept, without saving it', async () => {
+    const { service, tokens } = setup();
+    await service.start();
+    expect(await service.saveToken('bad:token')).toEqual({ success: false, error: 'bad_token' });
+    expect(tokens.load()).toBeUndefined();
+    expect(await service.saveToken('  ')).toEqual({ success: false, error: 'empty_token' });
+    await service.stop();
+  });
+
+  it('saves a good token, polls, pairs with the code and unpairs', async () => {
+    const { service, settings, bot } = setup();
+    await service.start();
+    const saved = await service.saveToken('good:token');
+    expect(saved.success).toBe(true);
+    expect(saved.data?.botUsername).toBe('my_bot');
+    await vi.waitFor(() => expect(service.status().connection).toBe('connected'));
+    const code = service.newPairingCode().pairingCode ?? '';
+    expect(code).toMatch(/^[A-Z0-9]{8}$/);
+    bot.push(textUpdate(`/start ${code}`, { from: OWNER.userId }));
+    await vi.waitFor(() => expect(settings.get().owner?.userId).toBe(OWNER.userId));
+    expect(service.status().pairingCode).toBeUndefined();
+    expect(service.unpair().owner).toBeUndefined();
+    await service.stop();
+  });
+
+  it('a saved token starts polling on the next start; removing it stops the loop', async () => {
+    const first = setup();
+    await first.service.start();
+    await first.service.saveToken('good:token');
+    await first.service.stop();
+    const second = setup(first.bot);
+    await second.service.start();
+    await vi.waitFor(() => expect(second.service.status().connection).toBe('connected'));
+    const status = await second.service.removeToken();
+    expect(status.connection).toBe('not_set');
+    expect(second.tokens.load()).toBeUndefined();
+    await second.service.stop();
+  });
+
+  it('reports a token revoked later as an error and stops polling', async () => {
+    const bot = longPollBot('good:token');
+    const { service, tokens } = setup(bot);
+    tokens.save('revoked:token');
+    await service.start();
+    await vi.waitFor(() => expect(service.status()).toMatchObject({ connection: 'error', error: 'bad_token' }));
+    const polls = bot.polls.count;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(bot.polls.count).toBe(polls);
+    await service.stop();
+  });
+
+  it('never sends the token or the Claude key to the chat', async () => {
+    const { service, settings, bot, ask } = setup();
+    settings.update({ owner: OWNER });
+    await service.start();
+    await service.saveToken('good:token');
+    ask({
+      questionId: 'q',
+      taskId: 't',
+      agentType: 'coder',
+      askedAt: 1,
+      questions: [{ question: 'Use good:token or sk-ant-secret-claude-key?', header: 'Key', multiSelect: false, options: [] }],
+    });
+    await vi.waitFor(() => expect(bot.fake.sent.length).toBe(1));
+    expect(bot.fake.sent[0].text).not.toContain('good:token');
+    expect(bot.fake.sent[0].text).not.toContain('sk-ant-secret-claude-key');
+    await service.stop();
+  });
+});
