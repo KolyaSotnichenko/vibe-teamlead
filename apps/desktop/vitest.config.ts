@@ -3,6 +3,8 @@ import { resolve } from 'path';
 
 export default defineConfig({
   test: {
+    // Git and file work on the Windows CI runner is several times slower: 5 s timed out there at random
+    testTimeout: process.platform === 'win32' ? 30_000 : 5_000,
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/**/*.spec.ts', 'src/**/*.spec.tsx'],
