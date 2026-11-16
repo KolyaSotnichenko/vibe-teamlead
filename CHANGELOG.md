@@ -2,6 +2,20 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.42 - 2026-11-16
+
+From a full audit of the app.
+
+- Lighter on the laptop: idle CPU drops from 6–10 % of a core to about 1–2 % with the window open, and to almost nothing when it is hidden. The sidebar teamlead no longer runs a CSS animation all the time, a hidden window is throttled, the task log is read only when it changed, the stall watch pauses, and the update banner asks GitHub once an hour instead of every 5 minutes.
+- Smaller download: the app archive shrinks from 391 MB to 90 MB (packages the running app never loads are no longer shipped).
+- Security: the commands an agent runs (project tests, install scripts, dev servers) no longer see the app's Claude key, token or gateway URL.
+- Quitting waits for running agents to stop instead of cutting their Claude Code sessions short.
+- Queue: a task created by the CI check is no longer started on its own once its reason is gone.
+- Settings, projects and the saved Claude key are written whole. A file that can't be read is kept aside (`.corrupt` / `.unreadable`) instead of silently resetting everything to defaults; task plan and metadata files are written whole too.
+- CI: a task's branch is deleted on GitHub when the task is merged or deleted. A selected run GitHub no longer has is not asked for again. The readiness check says which secrets it could not check instead of reporting ready. A run-fix task names the tasks in Planning about the same workflow. Push records are kept per project.
+- PR review: the first review's progress and a review finished elsewhere now reach the window.
+- Removed: the Python path setting (it had no effect), issue sorting for GitHub and GitLab, GitLab auto-fix and GitLab release creation (they had no working interface). Creating a GitHub release from the Changelog page stays.
+
 ## 2.0.0-beta.41 - 2026-11-13
 
 - Board: the ⋮ menu on a task card can now delete the task, not only move it between columns. It asks first and warns about uncommitted work in the task's worktree; a running task is stopped first.
