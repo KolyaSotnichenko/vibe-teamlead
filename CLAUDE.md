@@ -2,7 +2,7 @@
 
 Guidance for Claude Code when working in this repository.
 
-Vibe Teamlead 2.0 is a macOS Electron app in which a team of Claude Code agents builds software from a spec: spec → plan → test-first implementation in isolated git worktrees → QA → merge. The user watches the agents live and answers their questions.
+Vibe Teamlead 2.0 is an Electron app (macOS; Windows in beta) in which a team of Claude Code agents builds software from a spec: spec → plan → test-first implementation in isolated git worktrees → QA → merge. The user watches the agents live and answers their questions.
 
 ## Critical rules
 
@@ -17,7 +17,7 @@ Vibe Teamlead 2.0 is a macOS Electron app in which a team of Claude Code agents 
 - **App checks.** Before every QA review and after a merge, `ai/verification/verify-task.ts` runs the project's typecheck and tests itself, on a clean copy of what is committed, with commands from the task's base and no keys in the environment. A database named in the project's compose file is started as a throwaway container for the run (`verification/test-services.ts`; only the image is taken from the file). A failure blocks only if the check passes on the base. Agents' own reports never count as proof.
 - **Design system.** UI follows `apps/desktop/design/DESIGN-SYSTEM.md` exactly (shared with Meter: ink/ground palette, vermilion only as a signal, radius 0, no shadows, Archivo + Inter Tight + IBM Plex Mono).
 - **i18n.** User-facing UI text uses `react-i18next` keys (`apps/desktop/src/shared/i18n/locales/`). The locales are `en` and `uk` (Ukrainian); add or change every key in both. `uk` needs all four plural forms (`_one`, `_few`, `_many`, `_other`) wherever `en` has `_one`/`_other`; `src/shared/i18n/__tests__/locale-parity.test.ts` enforces key and placeholder parity.
-- **macOS first.** Release targets are macOS arm64 and x64. Use `apps/desktop/src/main/platform/` helpers instead of `process.platform`.
+- **Platforms.** Release targets are macOS arm64 and x64, and Windows x64 (beta). macOS stays the primary platform. Use `apps/desktop/src/main/platform/` helpers instead of `process.platform` (shell: `shellCommand`/`runShell`, Git Bash on Windows; `killTree`; `.cmd` shims through `commandFor`), and pass the platform in so Windows branches are unit-tested on macOS.
 - **No `console.log` in production code.**
 - **User docs.** The in-app Documentation page renders `apps/desktop/src/renderer/docs/{en,uk}/NN-topic.md` (same files in both languages; a test checks parity). When a mechanism changes, update its page in both languages.
 
