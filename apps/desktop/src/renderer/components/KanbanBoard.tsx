@@ -32,6 +32,8 @@ import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
 import { BriefImportDialog } from './brief-import';
+import { MergeWaitingDialog } from './board/MergeWaitingDialog';
+import { getAutoMerge } from '../hooks/useAutoMerge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -126,6 +128,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Delete confirmation dialog state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  // Tasks QA approved that waited in review when auto-merge was turned on
+  const [mergeWaiting, setMergeWaiting] = useState<Task[]>([]);
 
   // Worktree cleanup dialog state
   const [worktreeCleanupDialog, setWorktreeCleanupDialog] = useState<{
@@ -500,12 +504,19 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     const savedProjectId = queueSettingsProjectIdRef.current || projectId;
     if (!savedProjectId) return;
 
+    const wasOn = autoMerge;
     const success = await updateProjectSettings(savedProjectId, { maxParallelTasks: maxParallel, autoMerge: autoMergeOn, previewBeforeAutoMerge: previewHoldOn });
     if (success) {
       toast({
         title: t('queue.settings.saved'),
         variant: 'default'
       });
+      // Only arrival merges by itself: tasks QA approved before the switch was on are offered once
+      if (autoMergeOn && !wasOn) {
+        const waiting = tasks.filter((task) => task.projectId === savedProjectId && task.status === 'human_review');
+        const found = (await getAutoMerge()?.mergeable(waiting)) ?? [];
+        setMergeWaiting(found);
+      }
     } else {
       toast({
         title: t('queue.settings.saveFailed'),
@@ -983,6 +994,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       )}
 
       {/* Delete confirmation dialog */}
+      <MergeWaitingDialog
+        tasks={mergeWaiting}
+        onMerge={(waiting) => void getAutoMerge()?.mergeNow(waiting as Task[])}
+        onClose={() => setMergeWaiting([])}
+      />
+
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent className="sm:max-w-[500px]">
           <AlertDialogHeader>

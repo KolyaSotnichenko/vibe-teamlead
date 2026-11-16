@@ -144,6 +144,14 @@
       "previewHoldHint": "A task that changed UI files stops in Human Review instead of merging, so you can look at it in its Preview tab first. It keeps its slot until you merge it or send notes."
     },
     "autoMergeFailed": "Couldn't merge \"{{title}}\" automatically",
+    "mergeWaiting": {
+      "title_one": "Merge the {{count}} task that already waits?",
+      "title_other": "Merge the {{count}} tasks that already wait?",
+      "description": "QA approved these and their checks are clean, but they reached review before auto-merge was on, so they won't merge by themselves. New ones will.",
+      "merge_one": "Merge {{count}} task",
+      "merge_other": "Merge {{count}} tasks",
+      "notNow": "Not now"
+    },
     "heldForPreview": "{{number}} (waits for your preview)"
   },
   "execution": {

@@ -159,3 +159,32 @@ describe('deploy tasks with the project switch off', () => {
     expect(mergeWorktree).toHaveBeenCalledTimes(1);
   });
 });
+
+// Turning the switch on: tasks that already wait are offered, and merged only on the owner's yes
+describe('tasks that already wait when auto-merge is turned on', () => {
+  const waiting = (id: string, reviewReason = 'completed') => ({ id, projectId: 'p', status: 'human_review', reviewReason }) as never;
+
+  it('lists only those QA approved whose checks are clean', async () => {
+    const getTaskVerification = vi.fn(async (taskId: string) => (taskId === 'b' ? { success: true, data: { status: 'regression' } } : passed));
+    const { auto } = setup({ getTaskVerification } as never);
+    const found = await auto.mergeable([waiting('a'), waiting('b'), waiting('c', 'qa_rejected'), { id: 'd', projectId: 'p', status: 'in_progress' } as never]);
+    expect(found.map((task) => (task as { id: string }).id)).toEqual(['a']);
+  });
+
+  it('merges them one at a time, the way the button does, and not again when they arrive', async () => {
+    const { auto, mergeWorktree } = setup();
+    await auto.mergeNow([waiting('a'), waiting('b')]);
+    expect(mergeWorktree.mock.calls).toEqual([['a', { auto: true, projectId: 'p' }], ['b', { auto: true, projectId: 'p' }]]);
+    await auto.statusChanged('a', 'ai_review', 'human_review');
+    expect(mergeWorktree).toHaveBeenCalledTimes(2);
+  });
+
+  it('says why one could not be merged, and goes on with the rest', async () => {
+    const mergeWorktree = vi.fn(async (taskId: string) => (taskId === 'a' ? { success: false, error: 'conflict' } : { success: true, data: { success: true, message: 'ok' } }));
+    const { auto, onProblem } = setup({ mergeWorktree } as never);
+    await auto.mergeNow([waiting('a'), waiting('b')]);
+    expect(onProblem).toHaveBeenCalledWith('a', 'conflict');
+    expect(mergeWorktree).toHaveBeenCalledTimes(2);
+  });
+});
+

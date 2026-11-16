@@ -22,6 +22,13 @@ export async function autoMergeEnabled(
   return isDeployTask(project.id, task.specId);
 }
 
+let current: ReturnType<typeof createAutoMerge> | undefined;
+
+/** The app's auto-merge, for offering the tasks that already wait when the switch is turned on. */
+export function getAutoMerge(): ReturnType<typeof createAutoMerge> | undefined {
+  return current;
+}
+
 /** At the app's level: a task finishes QA whatever screen is open. */
 export function useAutoMerge(): void {
   const { t } = useTranslation('tasks');
@@ -43,8 +50,13 @@ export function useAutoMerge(): void {
         toast({ title: t('queue.autoMergeFailed', { title }), description: message, variant: 'destructive' });
       },
     });
-    return useTaskStore.getState().registerTaskStatusChangeListener((taskId, oldStatus, newStatus) => {
+    current = auto;
+    const unsubscribe = useTaskStore.getState().registerTaskStatusChangeListener((taskId, oldStatus, newStatus) => {
       void auto.statusChanged(taskId, oldStatus, newStatus);
     });
+    return () => {
+      unsubscribe();
+      if (current === auto) current = undefined;
+    };
   }, [t]);
 }

@@ -39,7 +39,48 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, on
     return merge.success && !merge.data && security.success && !security.data && checks.success && checks.data?.status === 'passed' && !checks.data.source;
   };
 
+  /** Merge a task QA approved, the way the button does. Reports a refusal; never throws. */
+  const tryMerge = async (task: Task): Promise<void> => {
+    try {
+      if (!(await isEnabled(task))) return;
+      if (!(await clean(task))) return;
+      const result = await api.mergeWorktree(task.id, { auto: true, projectId: task.projectId });
+      if (result.data?.heldForPreview) onHeld?.(task.id);
+      else if (!result.success || !result.data?.success) onProblem(task.id, result.data?.message ?? result.error ?? '');
+    } catch (error) {
+      onProblem(task.id, error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const waitsApproved = (task: Task) => task.status === 'human_review' && task.reviewReason === 'completed';
+
   return {
+    /**
+     * Of these tasks, the ones that already wait in review and would merge by themselves now (QA
+     * approved, checks clean): offered when the switch is turned on, since arrival alone triggers it.
+     */
+    async mergeable(tasks: Task[]): Promise<Task[]> {
+      const found: Task[] = [];
+      for (const task of tasks) {
+        if (!waitsApproved(task)) continue;
+        try {
+          if ((await isEnabled(task)) && (await clean(task))) found.push(task);
+        } catch {
+          // left to the owner
+        }
+      }
+      return found;
+    },
+
+    /** Merge waiting tasks the owner said yes to, one at a time. Never throws. */
+    async mergeNow(tasks: Task[]): Promise<void> {
+      for (const task of tasks) {
+        if (!waitsApproved(task) || tried.has(task.id)) continue;
+        tried.add(task.id);
+        await tryMerge(task);
+      }
+    },
+
     async statusChanged(taskId: string, oldStatus: TaskStatus | undefined, newStatus: TaskStatus): Promise<void> {
       if (newStatus !== 'human_review') {
         tried.delete(taskId);
@@ -51,15 +92,7 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, on
       if (!task || task.reviewReason !== 'completed') return;
       // Marked before the first await, so a second arrival in the meantime does not try again
       tried.add(taskId);
-      try {
-        if (!(await isEnabled(task))) return;
-        if (!(await clean(task))) return;
-        const result = await api.mergeWorktree(taskId, { auto: true, projectId: task.projectId });
-        if (result.data?.heldForPreview) onHeld?.(taskId);
-        else if (!result.success || !result.data?.success) onProblem(taskId, result.data?.message ?? result.error ?? '');
-      } catch (error) {
-        onProblem(taskId, error instanceof Error ? error.message : String(error));
-      }
+      await tryMerge(task);
     },
   };
 }
