@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Task, TaskMetadata } from '../../../shared/types';
 import type { DeployJob, DeployRun } from '../../../shared/types/deploy';
 import { type DeployTaskDeps, gaveUpKeys, markRunHandled, wasRunHandled } from '../deploy-tasks';
+import { appEvents } from '../../app-events';
 import { findLastMainRun, handleMainRun, handleMainRuns, isOwnPushOnMain, watchMainRuns, type MainRunDeps } from '../main-runs';
 
 let dir: string;
@@ -561,5 +562,18 @@ describe('no run-fix task while open tasks already work on the failure', () => {
     expect(await handleMainRun(project(), run(10), makeDeps())).toBe('open');
     expect(created).toHaveLength(0);
     expect(wasRunHandled(dir, 10)).toBe(true);
+  });
+});
+
+describe('the main-run-failed event (Telegram)', () => {
+  it('is emitted once per failed own run on main, not for passing runs', async () => {
+    const heard: Array<{ runId: number; url: string }> = [];
+    const off = appEvents.on('main-run-failed', (e) => void heard.push({ runId: e.runId, url: e.url }));
+    const deps = makeDeps();
+    await handleMainRun(project(), run(20), deps);
+    await handleMainRun(project(), run(20), deps);
+    await handleMainRun(project(), run(21, { conclusion: 'success' }), deps);
+    off();
+    expect(heard).toEqual([{ runId: 20, url: 'https://github.com/o/r/actions/runs/20' }]);
   });
 });

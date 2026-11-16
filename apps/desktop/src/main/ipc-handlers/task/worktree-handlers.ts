@@ -1,4 +1,5 @@
 import { isTaskBranch } from '../../../shared/constants/config';
+import { appEvents } from '../../app-events';
 import { ipcMain, BrowserWindow, app } from 'electron';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, DEFAULT_APP_SETTINGS, DEFAULT_FEATURE_MODELS, DEFAULT_FEATURE_THINKING, MODEL_ID_MAP, THINKING_BUDGET_MAP, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult, WorktreeStatus, WorktreeDiff, WorktreeDiffFile, WorktreeMergeResult, WorktreeDiscardResult, WorktreeListResult, WorktreeListItem, WorktreeCreatePROptions, WorktreeCreatePRResult, SupportedIDE, SupportedTerminal, AppSettings } from '../../../shared/types';
@@ -961,6 +962,7 @@ export function registerWorktreeHandlers(
                 emitProgress('validating', 70, 'The app is running the checks itself');
                 const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, git: git.git, hostEnv: git.env });
                 const summary = describeVerification(report);
+                if (report.status === 'regression') appEvents.emit('verification-regression', { taskId, projectId: project.id });
                 return { ok: report.status !== 'regression', summary };
               }
             : undefined,
@@ -1105,6 +1107,7 @@ export function registerWorktreeHandlers(
                 planStatus = 'completed';
                 message = 'Changes merged successfully';
                 staged = false;
+                appEvents.emit('task-merged', { taskId, projectId: project.id });
 
                 // Deploy: send the new main to GitHub (fire and forget; never blocks or fails the merge)
                 void pushMainAfterMerge(

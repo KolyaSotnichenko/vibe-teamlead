@@ -5,6 +5,7 @@
  * Logs come from GitHub, which masks repository secrets; nothing else is added to them.
  */
 import type { Project, Task } from '../../shared/types';
+import { appEvents } from '../app-events';
 import type { DeployRun } from '../../shared/types/deploy';
 import { isCiSetUp } from './ci-setup';
 import { clipLine } from './clip';
@@ -152,6 +153,9 @@ export async function findLastMainRun(
   }
 }
 
+/** Failed runs already announced (app events), by project path and run id */
+const announced = new Set<string>();
+
 export async function handleMainRun(
   project: Project,
   run: DeployRun,
@@ -182,6 +186,11 @@ export async function handleMainRun(
     }
     // Another task is on it already (a base fix, or a task about this workflow): no second one. The
     // run stays unhandled, so it is asked about again and gets its task once that one closes.
+    // Said once per run (a covered run is asked about again later)
+    if (!announced.has(lock)) {
+      announced.add(lock);
+      appEvents.emit('main-run-failed', { projectId: project.id, runId: run.id, name: clipLine(run.name || run.workflowPath, NAME_CHARS), url: run.htmlUrl });
+    }
     const tasks = deps.tasks.getTasks(project.id);
     if (coveredByOpenTask(run, tasks, readReadiness(project.path)?.workflow?.path)) return 'open';
     const jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
