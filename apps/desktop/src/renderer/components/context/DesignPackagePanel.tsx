@@ -6,8 +6,9 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, Loader2 } from 'lucide-react';
+import { FileArchive, FolderOpen, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { isMacOS } from '../../lib/os-detection';
 import { Notice } from '../task-detail/workspace/workspace-ui';
 import type { DesignPackageSummary, DesignSystemInfo, DesignThemes } from '../../../shared/types';
 
@@ -109,10 +110,10 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
 
   const busy = (on: boolean) => onBusy?.(on);
 
-  const choose = async () => {
+  const choose = async (kind?: 'zip' | 'folder') => {
     onError(null);
     try {
-      const picked = await design.pickPackage();
+      const picked = await design.pickPackage(kind);
       if (!picked.success) {
         if (picked.error) onError(picked.error);
         return;
@@ -173,10 +174,29 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
   if (stage === 'choose' || stage === 'reading') {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={disabled || stage === 'reading'} onClick={() => void choose()}>
-          {stage === 'reading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderOpen className="mr-2 h-4 w-4" />}
-          {stage === 'reading' ? t('context.design.package.reading') : t('context.design.package.choose')}
-        </Button>
+        {stage === 'reading' ? (
+          <Button disabled>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {t('context.design.package.reading')}
+          </Button>
+        ) : isMacOS() ? (
+          <Button disabled={disabled} onClick={() => void choose()}>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            {t('context.design.package.choose')}
+          </Button>
+        ) : (
+          // One dialog can't take both a file and a folder off macOS: a zip couldn't be chosen
+          <>
+            <Button disabled={disabled} onClick={() => void choose('zip')}>
+              <FileArchive className="mr-2 h-4 w-4" />
+              {t('context.design.package.chooseZip')}
+            </Button>
+            <Button variant="outline" disabled={disabled} onClick={() => void choose('folder')}>
+              <FolderOpen className="mr-2 h-4 w-4" />
+              {t('context.design.package.chooseFolder')}
+            </Button>
+          </>
+        )}
         <span className="text-xs text-muted-foreground">{t('context.design.package.chooseHint')}</span>
       </div>
     );
@@ -202,6 +222,10 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
 
   if (!summary) return null;
   const skippedCount = summary.skipped.length + (summary.skippedMore ?? 0);
+  // A folder of packages rather than a package (on Windows a zip couldn't be chosen): nothing to import
+  const onlyZips =
+    !summary.components.length && !summary.logos && !summary.fonts && !summary.hasTokens && !summary.references.added &&
+    summary.skipped.some((s) => /\.zip$/i.test(s.path));
   const count = (label: string, n: number) => (
     <li className="flex items-baseline gap-2 border-b border-border py-2 last:border-b-0">
       <span className="text-sm text-foreground">{t(`context.design.package.${label}`, { count: n })}</span>
@@ -270,10 +294,14 @@ function PackagePanel({ projectId, disabled, onImported, onError, onBusy }: Pane
         </div>
       )}
 
+      {onlyZips && <Notice>{t('context.design.package.onlyZips')}</Notice>}
+
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={disabled} onClick={() => void runImport()}>
-          {t('context.design.package.import')}
-        </Button>
+        {!onlyZips && (
+          <Button disabled={disabled} onClick={() => void runImport()}>
+            {t('context.design.package.import')}
+          </Button>
+        )}
         <Button variant="outline" onClick={drop}>
           {t('buttons.cancel')}
         </Button>

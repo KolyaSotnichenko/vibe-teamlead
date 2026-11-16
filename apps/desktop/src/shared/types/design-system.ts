@@ -392,7 +392,8 @@ export interface DesignAPI {
   /** References changed (a digest finished) */
   onReferencesChanged: (callback: (projectId: string) => void) => () => void;
   /** Choose a design package (a .zip or a folder) in the system dialog; null when cancelled */
-  pickPackage: () => Promise<import('./common').IPCResult<string | null>>;
+  /** `kind`: a zip or a folder alone (Windows and Linux can't offer both in one dialog) */
+  pickPackage: (kind?: 'zip' | 'folder') => Promise<import('./common').IPCResult<string | null>>;
   /** Unpack the package into the project's staging folder and summarise it (nothing is imported yet) */
   inspectPackage: (projectId: string, source: string) => Promise<import('./common').IPCResult<DesignPackageSummary>>;
   /** Import the inspected package: write the design system from it; progress arrives as onProgress */

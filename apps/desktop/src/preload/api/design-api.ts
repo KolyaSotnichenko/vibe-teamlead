@@ -41,7 +41,7 @@ export const createDesignAPI = (): DesignAPI => ({
     ipcRenderer.on(IPC_CHANNELS.DESIGN_REFS_CHANGED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DESIGN_REFS_CHANGED, handler);
   },
-  pickPackage: () => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_PICK),
+  pickPackage: (kind?: 'zip' | 'folder') => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_PICK, kind),
   inspectPackage: (projectId, source) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_INSPECT, projectId, source),
   importPackage: (projectId, options) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_IMPORT, projectId, options),
   cancelPackage: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_PACKAGE_CANCEL, projectId),

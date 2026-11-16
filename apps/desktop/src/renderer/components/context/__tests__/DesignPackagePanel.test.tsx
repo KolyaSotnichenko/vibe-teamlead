@@ -12,6 +12,8 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'en' },
   }),
 }));
+const os = vi.hoisted(() => ({ mac: true }));
+vi.mock('../../../lib/os-detection', async (orig) => ({ ...(await orig<typeof import('../../../lib/os-detection')>()), isMacOS: () => os.mac }));
 vi.mock('../../../stores/project-store', () => ({ loadProjects: vi.fn(async () => {}), useProjectStore: (select: (s: { projects: unknown[] }) => unknown) => select({ projects: [{ id: 'p1', settings: {} }] }) }));
 
 import type { DesignPackageSummary, DesignSystemInfo } from '../../../../shared/types';
@@ -65,6 +67,38 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe('DesignPackagePanel', () => {
+  // On Windows a folder of zips was chosen (a zip couldn't be): nothing in it is a package
+  it('a folder holding only zips is not imported: it asks for one of the zips instead', async () => {
+    const zips = { ...summary, name: 'package-staging', components: [], logos: 0, fonts: 0, colors: { light: 0, dark: 0 }, hasTokens: false, references: { added: 0, skipped: 0 },
+      skipped: [{ path: 'mhp-global-design-system-0.4.0.zip', reason: 'type' as const }, { path: 'mhp-global-fonts.zip', reason: 'type' as const }] };
+    api({ inspectPackage: vi.fn(async () => ({ success: true, data: zips })) });
+    render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'context.design.package.choose' }));
+    expect(await screen.findByText('context.design.package.onlyZips')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'context.design.package.import' })).not.toBeInTheDocument();
+  });
+
+  // Windows and Linux can't show one dialog for both a file and a folder: a zip couldn't be chosen
+  it('off macOS offers a zip and a folder as two buttons, each asking for its own kind', async () => {
+    os.mac = false;
+    try {
+      const design = api();
+      render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'context.design.package.choose' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'context.design.package.chooseZip' }));
+      await screen.findByRole('heading', { name: summary.name });
+      expect(design.pickPackage).toHaveBeenCalledWith('zip');
+      cleanup();
+      const again = api();
+      render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'context.design.package.chooseFolder' }));
+      await screen.findByRole('heading', { name: summary.name });
+      expect(again.pickPackage).toHaveBeenCalledWith('folder');
+    } finally {
+      os.mac = true;
+    }
+  });
+
   it('shows what the package holds after it is inspected', async () => {
     const design = api();
     render(<DesignPackagePanel projectId="p1" onImported={vi.fn()} onError={vi.fn()} />);

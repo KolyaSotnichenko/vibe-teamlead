@@ -42,6 +42,7 @@ import { detectStorybook } from '../ai/design/design-system';
 import { findTaskWorktree } from '../worktree-paths';
 import { findTaskAndProject } from './task/shared';
 import { projectStore } from '../project-store';
+import { packagePickerOptions } from '../ai/design/package/picker-options';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -203,12 +204,9 @@ export function registerDesignHandlers(getMainWindow: () => BrowserWindow | null
   // ---- Design package ---------------------------------------------------
   const asThemes = (value: unknown): DesignThemes => (value === 'light-dark' ? 'light-dark' : 'light');
 
-  ipcMain.handle(IPC_CHANNELS.DESIGN_PACKAGE_PICK, async (): Promise<IPCResult<string | null>> => {
+  ipcMain.handle(IPC_CHANNELS.DESIGN_PACKAGE_PICK, async (_e, kind?: unknown): Promise<IPCResult<string | null>> => {
     const win = getMainWindow();
-    const options: Electron.OpenDialogOptions = {
-      properties: ['openFile', 'openDirectory'],
-      filters: [{ name: 'Design package', extensions: ['zip'] }],
-    };
+    const options: Electron.OpenDialogOptions = packagePickerOptions(kind === 'zip' || kind === 'folder' ? kind : undefined);
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     return { success: true, data: result.canceled ? null : (result.filePaths[0] ?? null) };
   });
