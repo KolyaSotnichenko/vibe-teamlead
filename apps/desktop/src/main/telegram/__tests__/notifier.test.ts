@@ -92,8 +92,8 @@ describe('notifier', () => {
     src.app('main-run-failed', { projectId: 'p1', runId: 1, name: 'CI', url: 'https://github.com/o/r/actions/runs/1' });
     src.app('task-merged', { taskId: 't1', projectId: 'p1' });
     src.app('verification-regression', { taskId: 't2', projectId: 'p1' });
-    src.base('t3', { failures: [], baseCommit: 'abc' }, 'p1');
-    src.base('t4', { failures: [], baseCommit: 'abc' }, 'p1');
+    src.base('t3', { baseCommit: 'abc' }, 'p1');
+    src.base('t4', { baseCommit: 'abc' }, 'p1');
     const sent = await texts();
     expect(sent).toHaveLength(4);
     expect(sent[0]).toContain('CI failed on main in Shop: CI');
