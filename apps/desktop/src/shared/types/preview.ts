@@ -22,6 +22,28 @@ export interface PreviewStatus {
   /** A local mail catcher, when the project's settings configure SMTP */
   mail?: 'started' | 'unavailable';
   mailReason?: string;
+  /** Why the page may not reach a service: an address the project hard-codes, or a failed request through the page */
+  addressIssues?: PreviewAddressIssue[];
+}
+
+/**
+ * A service the page can't reach in the preview. With `file`: a config there names the
+ * service's own port (`ownPort`), but the preview runs it on `previewPort` because its own
+ * was taken. With `unreachable`: a request through the page to a proxied path failed.
+ */
+export interface PreviewAddressIssue {
+  /** The service the page can't reach, when known */
+  service?: string;
+  /** The service whose config names the address */
+  from?: string;
+  file?: string;
+  line?: number;
+  /** As written, e.g. `http://localhost:3000` */
+  address?: string;
+  ownPort?: number;
+  previewPort?: number;
+  /** The path requested through the page and what came back: a status or an error code */
+  unreachable?: { path: string; result: string };
 }
 
 export interface PreviewBounds {

@@ -13,12 +13,15 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 
-import type { PreviewStatus } from '../../shared/types/preview';
+import type { PreviewAddressIssue, PreviewStatus } from '../../shared/types/preview';
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
 import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, serviceEnv } from '../ai/verification/detect-checks';
-import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
+import { examplePort, previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
+import { type DisplacedPorts, findHardcodedAddresses, proxiedPaths } from './hardcoded-addresses';
+import { localPortFree } from './preview-ports';
+import { probeThroughPage, type ProbeResult } from './probe';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, runShell, searchPath } from '../platform/exec';
@@ -54,6 +57,10 @@ export interface PreviewDeps {
   writeFile: (root: string, path: string, text: string) => void;
   /** A free local port, picked before any service starts so each can name the others' URLs */
   pickPort: () => Promise<number>;
+  /** Whether nothing listens on this local port (127.0.0.1 and ::1), so a service can have the port it expects */
+  portFree: (port: number) => Promise<boolean>;
+  /** One request through the running page, to see whether what it proxies answers */
+  probe: (url: string) => Promise<ProbeResult>;
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60_000;
@@ -152,6 +159,8 @@ export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | '
           server.close(() => resolvePort(port));
         });
       }),
+    portFree: localPortFree,
+    probe: probeThroughPage,
   };
 }
 
@@ -286,21 +295,42 @@ async function installNode(session: Session, files: string[], lockfileChanged: b
   check(session);
 }
 
-async function startServices(session: Session, files: string[]): Promise<string> {
+interface StartedServices {
+  url: string;
+  /** Addresses the project hard-codes for a service the preview runs on another port */
+  issues: PreviewAddressIssue[];
+}
+
+/**
+ * Each service on the port the project expects it on (its example, its dev script, its
+ * framework's default) when that port is free, so addresses the project hard-codes still
+ * work; a free port of the preview's choosing otherwise.
+ */
+async function choosePort(session: Session, expected: number | undefined, taken: number[]): Promise<number> {
+  if (expected && !taken.includes(expected) && (await session.deps.portFree(expected))) return expected;
+  let port = await session.deps.pickPort();
+  while (taken.includes(port)) port = await session.deps.pickPort();
+  return port;
+}
+
+async function startServices(session: Session, files: string[]): Promise<StartedServices> {
   const services = session.project.settings.previewServices ?? [];
   const ordered = [...services.filter((s) => !s.page), ...services.filter((s) => s.page)];
+  const read = (path: string) => session.deps.read(session.worktree, path);
   // Every port first: a backend may need the page's URL (CORS), and the page starts last
   const ports: Record<string, number> = {};
   const urls: Record<string, string> = {};
+  const expected: Record<string, number | undefined> = {};
   for (const service of ordered) {
-    let port = await session.deps.pickPort();
-    while (Object.values(ports).includes(port)) port = await session.deps.pickPort();
+    expected[service.name] = examplePort(service, read);
+    const port = await choosePort(session, expected[service.name], Object.values(ports));
     ports[service.name] = port;
     urls[service.name] = `http://localhost:${port}`;
   }
   // Local addresses in the examples point at each service's preview port; urlEnv still wins
-  const byExamplePort = previewAddressesByExamplePort(ordered, urls, (path) => session.deps.read(session.worktree, path));
+  const byExamplePort = previewAddressesByExamplePort(ordered, urls, read);
   let pageUrl = '';
+  const displaced: DisplacedPorts = {};
   emit(session, { stage: 'services' });
   for (const service of ordered) {
     check(session);
@@ -333,8 +363,42 @@ async function startServices(session: Session, files: string[]): Promise<string>
     urls[service.name] = started.url;
     session.logs[service.name] = started.logPath;
     if (service.page) pageUrl = started.url;
+    const own = expected[service.name];
+    if (own && started.port !== own) displaced[service.name] = { ownPort: own, previewPort: started.port };
   }
-  return pageUrl;
+  return { url: pageUrl, issues: findHardcodedAddresses(ordered, { files, read }, displaced) };
+}
+
+const UNREACHABLE_STATUS = new Set([502, 504]);
+const UNREACHABLE_ERROR = new Set(['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH']);
+
+/**
+ * When nothing explains it yet: a request through the page to what it proxies. A 502
+ * or a 504, or a refused connection, means the page can't reach a backend, and the owner is
+ * told so instead of looking at a blank page. Runs after "ready", never holds it up.
+ */
+async function checkReachable(session: Session, url: string, files: string[]): Promise<void> {
+  const services = session.project.settings.previewServices ?? [];
+  const page = services.find((s) => s.page);
+  if (!page || !url) return;
+  const backends = services.filter((s) => !s.page);
+  const read = (path: string) => session.deps.read(session.worktree, path);
+  for (const path of proxiedPaths(page, { files, read })) {
+    const result = await session.deps.probe(`${url}${path}`);
+    // A newer start or a stop has taken over
+    if (cancelled(session) || session.status.url !== url || session.status.stage !== 'ready') return;
+    const failure = result.status !== undefined ? (UNREACHABLE_STATUS.has(result.status) ? String(result.status) : '') : UNREACHABLE_ERROR.has(result.error ?? '') ? (result.error ?? '') : '';
+    if (!failure) continue;
+    const issue: PreviewAddressIssue = { ...(backends.length === 1 ? { service: backends[0].name } : {}), unreachable: { path, result: failure } };
+    emit(session, { addressIssues: [issue] });
+    return;
+  }
+}
+
+/** Ready with the page's URL; the reachability check follows when the scan found nothing */
+function ready(session: Session, started: StartedServices, files: string[]): void {
+  emit(session, { stage: 'ready', url: started.url, origins: [new URL(started.url).origin], message: undefined, logTail: undefined, addressIssues: started.issues });
+  if (!started.issues.length) void checkReachable(session, started.url, files).catch(() => {});
 }
 
 async function stopServers(session: Session): Promise<void> {
@@ -418,8 +482,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
         }
       }
 
-      const url = await startServices(session, files);
-      emit(session, { stage: 'ready', url, origins: [new URL(url).origin], message: undefined, logTail: undefined });
+      ready(session, await startServices(session, files), files);
     });
     if (session.mergePending) {
       session.mergePending = false;
@@ -457,8 +520,7 @@ async function afterMerge(session: Session): Promise<void> {
       await installStacks(session, files);
       await buildLibraries(session, files, true);
       await runMigrations(session, files, true);
-      const url = await startServices(session, files);
-      emit(session, { stage: 'ready', url, origins: [new URL(url).origin], message: undefined });
+      ready(session, await startServices(session, files), files);
     } else {
       await buildLibraries(session, files, false);
       await runMigrations(session, files, false);

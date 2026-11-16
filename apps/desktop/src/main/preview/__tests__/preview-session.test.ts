@@ -55,6 +55,8 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     writeFile: vi.fn(),
     startMail: vi.fn(async () => ({ status: 'started' as const, smtpPort: 41025, httpPort: 48025, stop: vi.fn(async () => {}) })),
     pickPort: vi.fn(async () => 6000 + Math.floor(Math.random() * 1000)),
+    portFree: vi.fn(async () => false),
+    probe: vi.fn(async () => ({ status: 404 })),
     ...overrides,
   };
   return { d, order };
@@ -133,6 +135,92 @@ describe('a preview session', () => {
       FILES['apps/api/.env.example'] = 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nJWT_SECRET=dev-secret\n';
       FILES['apps/web/.env.example'] = 'NEXT_PUBLIC_SITE=preview\n';
     }
+  });
+
+  describe("each service on its own port", () => {
+    // planner-mhp: the API's port is only in the root example, the web's vite.config proxies /api to localhost:3000
+    const PLANNER: Record<string, string> = {
+      'pnpm-lock.yaml': '',
+      'package.json': JSON.stringify({ name: 'planner', private: true }),
+      '.env.example': 'HOST=0.0.0.0\nPORT=3000\n',
+      'apps/api/package.json': JSON.stringify({ scripts: { dev: 'tsx watch src/index.ts' } }),
+      'apps/web/package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
+      'apps/web/.env.example': 'VITE_API_BASE_URL=\n',
+      'apps/web/vite.config.ts': 'import { defineConfig } from "vite";\n\nconst apiTarget = "http://localhost:3000";\n\nexport default defineConfig({\n  server: {\n    proxy: {\n      "/api": apiTarget,\n      "/health": apiTarget,\n    },\n  },\n});\n',
+    };
+    const services: PreviewService[] = [
+      { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true },
+      { name: 'api', dir: 'apps/api', command: 'pnpm run dev' },
+    ];
+    const planner = (free: (port: number) => boolean, overrides: Partial<PreviewDeps> = {}) => {
+      const ports = [55819, 55820];
+      return deps({
+        listFiles: () => Object.keys(PLANNER),
+        read: (_root: string, path: string) => PLANNER[path] ?? null,
+        startDatabase: vi.fn(async () => database({ status: 'none', started: [], fresh: false })),
+        pickPort: vi.fn(async () => ports.shift() ?? 0),
+        portFree: vi.fn(async (port: number) => free(port)),
+        startServer: vi.fn(async (o: { port?: number }) => ({ url: `http://localhost:${o.port}`, port: o.port ?? 0, logPath: '/log', reused: false })),
+        ...overrides,
+      }).d;
+    };
+    const portOf = (d: PreviewDeps, name: string) => (vi.mocked(d.startServer).mock.calls.map(([o]) => o).find((o) => o.name === name) as { port?: number }).port;
+
+    it('gives each service the port it expects when that port is free, and shows no notice', async () => {
+      const d = planner(() => true);
+      const status = await startPreview(project('p1', services), () => {}, d);
+      expect(portOf(d, 'preview-api')).toBe(3000);
+      expect(portOf(d, 'preview-web')).toBe(5173);
+      expect(status.url).toBe('http://localhost:5173');
+      expect(d.pickPort).not.toHaveBeenCalled();
+      expect(status.addressIssues ?? []).toEqual([]);
+    });
+
+    it('falls back to a free port when its own is taken, and names the hard-coded address that now points nowhere', async () => {
+      const d = planner((port) => port !== 3000);
+      const statuses: PreviewStatus[] = [];
+      const status = await startPreview(project('p1', services), (s) => statuses.push(s), d);
+      expect(portOf(d, 'preview-api')).toBe(55819);
+      expect(portOf(d, 'preview-web')).toBe(5173);
+      expect(status.stage).toBe('ready');
+      expect(status.addressIssues).toEqual([
+        { service: 'api', from: 'web', file: 'apps/web/vite.config.ts', line: 3, address: 'http://localhost:3000', ownPort: 3000, previewPort: 55819 },
+      ]);
+      expect(statuses.find((s) => s.stage === 'ready')?.addressIssues).toHaveLength(1);
+    });
+
+    it("says the page can't reach a service when a proxied path answers 502, even when the scan found nothing", async () => {
+      const files = { ...PLANNER, 'apps/web/vite.config.ts': 'export default { server: { proxy: { "/rpc": process.env.API } } }\n' };
+      const d = planner(() => true, {
+        listFiles: () => Object.keys(files),
+        read: (_root: string, path: string) => files[path as keyof typeof files] ?? null,
+        probe: vi.fn(async (url: string) => (url.endsWith('/rpc') ? { status: 502 } : { status: 404 })),
+      });
+      const status = await startPreview(project('p1', services), () => {}, d);
+      await vi.waitFor(() => expect(currentPreview()?.addressIssues).toEqual([{ service: 'api', unreachable: { path: '/rpc', result: '502' } }]));
+      expect(vi.mocked(d.probe).mock.calls.map(([url]) => url)).toEqual(['http://localhost:5173/rpc']);
+      expect(status.stage).toBe('ready');
+    });
+
+    it('probes /api when the scan names no proxied path, and leaves a working page alone', async () => {
+      const files = { ...PLANNER, 'apps/web/vite.config.ts': 'export default {}\n' };
+      const d = planner(() => true, {
+        listFiles: () => Object.keys(files),
+        read: (_root: string, path: string) => files[path as keyof typeof files] ?? null,
+        probe: vi.fn(async () => ({ status: 401 })),
+      });
+      await startPreview(project('p1', services), () => {}, d);
+      await vi.waitFor(() => expect(d.probe).toHaveBeenCalledWith('http://localhost:5173/api'));
+      expect(currentPreview()?.addressIssues ?? []).toEqual([]);
+    });
+
+    it('does not probe when the scan already explains it', async () => {
+      const d = planner((port) => port !== 3000, { probe: vi.fn(async () => ({ error: 'ECONNREFUSED' })) });
+      await startPreview(project('p1', services), () => {}, d);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(d.probe).not.toHaveBeenCalled();
+      expect(currentPreview()?.addressIssues).toHaveLength(1);
+    });
   });
 
   describe('a project in Python', () => {
