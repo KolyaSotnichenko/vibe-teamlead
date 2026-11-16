@@ -10,7 +10,7 @@ import type { Task, TaskStatus } from '../../shared/types';
 export interface AutoMergeApi {
   getTaskMergeState: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
-  getTaskVerification: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: { status?: string } | null }>;
+  getTaskVerification: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: { status?: string; source?: string } | null }>;
   mergeWorktree: (taskId: string, options: { auto: true; projectId?: string }) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string; heldForPreview?: boolean } }>;
 }
 
@@ -35,7 +35,8 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, on
       api.getTaskSecurityQaError(task.id, task.projectId),
       api.getTaskVerification(task.id, task.projectId),
     ]);
-    return merge.success && !merge.data && security.success && !security.data && checks.success && checks.data?.status === 'passed';
+    // A pass on checks the task chose itself (main had none yet) is not enough to merge unattended
+    return merge.success && !merge.data && security.success && !security.data && checks.success && checks.data?.status === 'passed' && !checks.data.source;
   };
 
   return {

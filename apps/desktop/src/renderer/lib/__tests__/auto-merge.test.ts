@@ -44,6 +44,7 @@ describe('merging a task by itself', () => {
     ['the checks found a regression', { getTaskVerification: async () => ({ success: true, data: { status: 'regression' } }) }],
     ["the checks couldn't say", { getTaskVerification: async () => ({ success: true, data: { status: 'not_verified' } }) }],
     ['the project has no checks', { getTaskVerification: async () => ({ success: true, data: { status: 'not_configured' } }) }],
+    ["only the task's own checks ran (main had none)", { getTaskVerification: async () => ({ success: true, data: { status: 'passed', source: 'task' } }) }],
     ['nothing says the checks ran', { getTaskVerification: async () => ({ success: true, data: null }) }],
     ['the pentest did not finish', { getTaskSecurityQaError: async () => ({ success: true, data: { reason: 'crashed' } }) }],
     ['a merge already waits for review', { getTaskMergeState: async () => ({ success: true, data: { state: 'review' } }) }],
