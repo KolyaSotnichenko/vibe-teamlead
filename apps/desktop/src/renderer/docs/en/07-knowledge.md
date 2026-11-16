@@ -26,13 +26,13 @@ A symbol graph: functions, classes, who calls whom, what a change will affect.
 
 - **What:** pitfalls, patterns, notes about files, approaches that didn't work.
 - **How it gets there:**
-  - automatically after each subtask: a model extracts takeaways from the changes (git diff) and the coder's conversation, up to 12 entries;
+  - automatically after each subtask: a model (the Coding model) extracts takeaways from the changes (git diff) and the coder's conversation, up to 12 entries. This is an extra model call per subtask; with memory turned off it isn't made;
   - agents can deliberately record something with the `remember` tool.
 - **How it's used:**
   - before the architect, planner, coder and QA start, the most relevant memories go into the prompt as hints to verify against the code;
   - while working, agents search on their own (`search_memory`);
   - the Insights chat sees the memory too.
-- **Where:** locally in `~/.vibe-teamlead/memories`, separately for each project. To view it: Context → Memories. You enable it, and choose the embedding model, in Settings → Memory. Without an embedding model, search is keyword-based.
+- **Where:** locally in `~/.vibe-teamlead/memories`, separately for each project. To view it: Context → Memories. You enable it, and choose the embedding model, in Settings → Memory. Without an embedding model, or when Ollama isn't running, memory still works: entries are saved and search is keyword-based. To stop memory, turn it off in Settings → Memory, not Ollama.
 
 - **Reviewing it:** in Context → Memories, filter by who wrote an entry (agents chose to remember / learned from subtasks), by type, or by any text, file name or task number. A wrong or outdated entry is removed with the bin icon on its card, and agents stop seeing it.
 

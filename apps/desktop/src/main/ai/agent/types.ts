@@ -68,6 +68,8 @@ export interface SerializableSessionConfig {
   architectMode?: import('../../../shared/types/settings').ArchitectMode;
   /** Format and lint after each edit of the coder / QA fixer (resolved in the main process; on unless false) */
   formatOnEdit?: boolean;
+  /** Project memory (Settings → Memory). Off: nothing extracted for it after a coder session, so no model call */
+  agentMemory?: boolean;
   /** Language servers for the coder / QA fixer (resolved in the main process; on unless false) */
   lspEnabled?: boolean;
   /** The project's design system (resolved in the main process; .vibe-teamlead/ is not in worktrees) */

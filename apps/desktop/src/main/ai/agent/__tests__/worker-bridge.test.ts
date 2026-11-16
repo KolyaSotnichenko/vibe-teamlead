@@ -64,7 +64,9 @@ const memoryMocks = vi.hoisted(() => ({
   formatMemories: vi.fn(),
   rememberForAgent: vi.fn(),
   recordSessionInsights: vi.fn(),
+  isMemoryEnabled: vi.fn(() => true),
 }));
+vi.mock('../../memory/memory-setting', () => ({ isMemoryEnabled: memoryMocks.isMemoryEnabled }));
 vi.mock('../../memory/agent-memory', () => ({
   ...memoryMocks,
   AGENT_MEMORY_TYPES: ['gotcha', 'decision', 'pattern', 'module_insight', 'error_pattern', 'requirement'],
@@ -173,6 +175,19 @@ describe('WorkerBridge', () => {
       config.session.formatOnEdit = true;
       bridge.spawn(config);
       expect((getWorker() as unknown as { workerData: { session: { formatOnEdit?: boolean } } }).workerData.session.formatOnEdit).toBe(true);
+    });
+
+    // Off in Settings → Memory: no model call to extract what a coder session learned
+    it('fills the memory switch from the app settings unless the session sets it', () => {
+      memoryMocks.isMemoryEnabled.mockReturnValueOnce(false);
+      bridge.spawn(createConfig());
+      expect((getWorker() as unknown as { workerData: { session: { agentMemory?: boolean } } }).workerData.session.agentMemory).toBe(false);
+
+      bridge = new WorkerBridge();
+      const config = createConfig();
+      config.session.agentMemory = true;
+      bridge.spawn(config);
+      expect((getWorker() as unknown as { workerData: { session: { agentMemory?: boolean } } }).workerData.session.agentMemory).toBe(true);
     });
 
     it('fills the language-servers switch from the app settings unless the session sets it', () => {

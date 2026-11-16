@@ -888,9 +888,10 @@ async function runBuildOrchestrator(
     abortSignal: abortController.signal,
     architectMode: session.architectMode,
 
-    // What each coder session learned goes to the project's memory
+    // What each coder session learned goes to the project's memory. With memory off, nothing is
+    // extracted: the extraction is a model call whose result would be thrown away
     insightModel: await phaseModel(session.specDir, 'coding', session.modelId),
-    onInsights: (_subtask, insights) => {
+    onInsights: session.agentMemory === false ? undefined : (_subtask, insights) => {
       const log = taskLogger(postLog, logWriter, 'coding');
       if (insights.failure) {
         log(insightsLogLine(insights.subtask_id, insights));

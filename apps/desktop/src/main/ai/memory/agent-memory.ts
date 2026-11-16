@@ -12,8 +12,8 @@
  */
 
 import { getMemoryService } from '../../ipc-handlers/context/memory-service-factory';
-import { readSettingsFile } from '../../settings-utils';
 import type { ExtractedInsights } from '../runners/insight-extractor';
+import { isMemoryEnabled } from './memory-setting';
 import type { Memory, MemoryRecordEntry, MemoryType } from './types';
 
 /** Memory entries one session may add (keeps a chatty extraction from flooding the store) */
@@ -30,17 +30,7 @@ export interface MemoryTaskRef {
   specId?: string;
 }
 
-export function isMemoryEnabled(settings: { memoryEnabled?: unknown } | null | undefined = readSettings()): boolean {
-  return settings?.memoryEnabled !== false;
-}
-
-function readSettings(): { memoryEnabled?: unknown } | undefined {
-  try {
-    return readSettingsFile() as { memoryEnabled?: unknown } | undefined;
-  } catch {
-    return undefined;
-  }
-}
+export { isMemoryEnabled };
 
 function clip(text: string): string {
   const trimmed = text.replace(/\s+/g, ' ').trim();
