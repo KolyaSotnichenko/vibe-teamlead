@@ -30,6 +30,7 @@
     "rebuild": "electron-rebuild",
     "package": "npm run build && node scripts/fetch-scanners.cjs && electron-builder",
     "package:mac": "npm run build && node scripts/fetch-scanners.cjs && electron-builder --mac",
+    "package:win": "npm run build && node scripts/fetch-scanners.cjs --platform win32 && electron-builder --win --x64",
     "start:packaged:mac": "open 'dist/mac-arm64/Vibe Teamlead.app' || open 'dist/mac/Vibe Teamlead.app'",
     "test": "vitest run",
     "test:unit": "vitest run --exclude src/__tests__/integration/ --exclude src/__tests__/e2e/",
@@ -179,7 +180,7 @@
       "!**/node_modules/@colbymchenry/codegraph-*/**"
     ],
     "asarUnpack": [
-      "out/main/node_modules/@lydell/node-pty-*/**"
+      "**/node_modules/@lydell/node-pty*/**"
     ],
     "extraResources": [
       {
@@ -238,14 +239,6 @@
         ]
       },
       {
-        "from": "vendor-bin",
-        "to": "scanners",
-        "filter": [
-          "gitleaks",
-          "osv-scanner"
-        ]
-      },
-      {
         "from": "../../node_modules/@playwright/mcp",
         "to": "browser-mcp/node_modules/@playwright/mcp"
       },
@@ -289,21 +282,6 @@
           "package.json",
           "LICENSE.txt"
         ]
-      },
-      {
-        "from": "../../node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/claude",
-        "to": "claude-code/claude"
-      },
-      {
-        "from": "../../node_modules/@colbymchenry/codegraph-darwin-${arch}",
-        "to": "codegraph",
-        "filter": [
-          "bin/**",
-          "lib/**",
-          "node",
-          "package.json",
-          "LICENSE*"
-        ]
       }
     ],
     "afterAllArtifactBuild": "scripts/verify-dmg.cjs",
@@ -320,7 +298,77 @@
       "target": [
         "dmg",
         "zip"
+      ],
+      "extraResources": [
+        {
+          "from": "../../node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/claude",
+          "to": "claude-code/claude"
+        },
+        {
+          "from": "../../node_modules/@colbymchenry/codegraph-darwin-${arch}",
+          "to": "codegraph",
+          "filter": [
+            "bin/**",
+            "lib/**",
+            "node",
+            "package.json",
+            "LICENSE*"
+          ]
+        },
+        {
+          "from": "vendor-bin",
+          "to": "scanners",
+          "filter": [
+            "gitleaks",
+            "osv-scanner"
+          ]
+        }
       ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "artifactName": "Vibe-Teamlead-${version}-win-${arch}.${ext}",
+      "extraResources": [
+        {
+          "from": "../../node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/claude.exe",
+          "to": "claude-code/claude.exe"
+        },
+        {
+          "from": "../../node_modules/@colbymchenry/codegraph-win32-x64",
+          "to": "codegraph",
+          "filter": [
+            "bin/**",
+            "lib/**",
+            "node.exe",
+            "package.json",
+            "LICENSE*"
+          ]
+        },
+        {
+          "from": "vendor-bin",
+          "to": "scanners",
+          "filter": [
+            "gitleaks.exe",
+            "osv-scanner.exe"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Vibe Teamlead"
     }
   },
   "lint-staged": {
