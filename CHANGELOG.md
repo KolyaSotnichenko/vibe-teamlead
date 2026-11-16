@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.43 - 2026-11-16
+
+- Spec documents: the open questions on the review step now reach the tasks they affect. The analyst names the tasks each question is about (the review step shows "Asked in T5, T20"), and each of those tasks gets the question in its description; its spec agent asks it when the task starts unless it is answered already. Every answer you give an agent of a task from the document is saved with the document (`clarifications.md`), so the other tasks read it instead of asking again. Before, the questions stayed on the review step and the agents never saw them.
+
 ## 2.0.0-beta.42 - 2026-11-16
 
 From a full audit of the app.
