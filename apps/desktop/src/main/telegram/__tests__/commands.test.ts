@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Task } from '../../../shared/types';
 import { createQueuePause } from '../../ipc-handlers/task/task-control';
-import { registerCommands, usageToday } from '../commands';
+import { registerCommands, usageBetween, usageToday } from '../commands';
 import { botText } from '../i18n';
 import { createPairing } from '../pairing';
 import { createRouter } from '../router';
@@ -145,5 +145,11 @@ describe('usageToday', () => {
       'garbage',
     ].join('\n');
     expect(usageToday([lines], now)).toEqual({ usd: 1.5, tokens: 150 });
+  });
+
+  it('usageBetween: the sessions between two moments (the digest: since the last one)', () => {
+    const line = (h: number, d: number, cost: number) => JSON.stringify({ at: new Date(2026, 10, d, h).toISOString(), agentType: 'coder', model: 'm', input: 10, output: 0, cacheRead: 0, cacheWrite: 0, costUsd: cost, billing: 'api' });
+    const ledger = [line(8, 15, 1), line(20, 15, 2), line(8, 16, 4)].join('\n');
+    expect(usageBetween([ledger], new Date(2026, 10, 15, 9).getTime(), new Date(2026, 10, 16, 9).getTime())).toEqual({ usd: 6, tokens: 20 });
   });
 });

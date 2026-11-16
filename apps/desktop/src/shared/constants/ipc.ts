@@ -39,6 +39,7 @@ export const IPC_CHANNELS = {
   TELEGRAM_NEW_PAIRING_CODE: 'telegram:newPairingCode',
   TELEGRAM_UNPAIR: 'telegram:unpair',
   TELEGRAM_SET_NOTIFICATIONS: 'telegram:setNotifications',
+  TELEGRAM_SET_DIGEST: 'telegram:setDigest',
   TELEGRAM_STATUS_CHANGED: 'telegram:statusChanged',  // Event: the bot's status changed (main -> renderer)
   TASK_REVIEW: 'task:review',
   TASK_UPDATE_STATUS: 'task:updateStatus',

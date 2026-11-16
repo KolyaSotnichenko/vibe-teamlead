@@ -24,6 +24,7 @@ describe('Settings → Telegram IPC', () => {
       newPairingCode: vi.fn(() => status),
       unpair: vi.fn(() => status),
       setNotifications: vi.fn(() => status),
+      setDigest: vi.fn(() => status),
     };
     registerTelegramHandlers(() => service as never);
     const saved = await invoke(IPC_CHANNELS.TELEGRAM_SAVE_TOKEN, '123:SECRET');
@@ -33,5 +34,9 @@ describe('Settings → Telegram IPC', () => {
     expect(service.saveToken).toHaveBeenLastCalledWith('');
     await invoke(IPC_CHANNELS.TELEGRAM_SET_NOTIFICATIONS, null);
     expect(service.setNotifications).not.toHaveBeenCalled();
+    await invoke(IPC_CHANNELS.TELEGRAM_SET_DIGEST, 'x');
+    expect(service.setDigest).not.toHaveBeenCalled();
+    await invoke(IPC_CHANNELS.TELEGRAM_SET_DIGEST, { enabled: false, time: '08:15' });
+    expect(service.setDigest).toHaveBeenCalledWith({ enabled: false, time: '08:15' });
   });
 });

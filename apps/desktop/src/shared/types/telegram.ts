@@ -15,6 +15,13 @@ export interface TelegramNotificationSettings {
 
 export type TelegramNotificationKind = keyof TelegramNotificationSettings;
 
+/** The morning digest (Settings → Telegram) */
+export interface TelegramDigestSettings {
+  enabled: boolean;
+  /** Local time, HH:MM (default 09:00) */
+  time: string;
+}
+
 export interface TelegramOwner {
   userId: number;
   chatId: number;
@@ -45,6 +52,7 @@ export interface TelegramStatus {
   /** Epoch ms the code stops being valid */
   pairingExpiresAt?: number;
   notifications: TelegramNotificationSettings;
+  digest: TelegramDigestSettings;
 }
 
 export interface TelegramResult<T = undefined> {
@@ -64,5 +72,6 @@ export interface TelegramAPI {
   newPairingCode: () => Promise<TelegramStatus>;
   unpair: () => Promise<TelegramStatus>;
   setNotifications: (notifications: TelegramNotificationSettings) => Promise<TelegramStatus>;
+  setDigest: (digest: TelegramDigestSettings) => Promise<TelegramStatus>;
   onStatus: (callback: (status: TelegramStatus) => void) => () => void;
 }

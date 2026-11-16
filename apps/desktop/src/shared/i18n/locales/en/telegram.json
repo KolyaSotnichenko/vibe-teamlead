@@ -132,6 +132,18 @@
     "resume": {
       "done": "The queue is running again.",
       "notPaused": "The queue was not paused."
+    },
+    "digest": {
+      "title": "Good morning. Since the last digest:",
+      "project": "{{name}}",
+      "merged": "Merged: {{tasks}}",
+      "waiting": "Waiting for you: {{tasks}}",
+      "running": "Running: {{tasks}}",
+      "queued": "Queued: {{tasks}}",
+      "failed": "Failed: {{tasks}}",
+      "quiet": "Nothing new: no task merged, waits for you, runs or failed.",
+      "spend": "Spend since the last digest: ${{amount}}",
+      "spendTokens": "Tokens since the last digest: {{tokens}}"
     }
   }
 }

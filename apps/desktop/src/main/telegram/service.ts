@@ -6,9 +6,11 @@
  */
 
 import type { AgentAnswers, PendingAgentQuestion } from '../../shared/types/agent-questions';
-import type { TelegramErrorReason, TelegramNotificationSettings, TelegramResult, TelegramStatus } from '../../shared/types/telegram';
+import type { Task } from '../../shared/types';
+import type { TelegramDigestSettings, TelegramErrorReason, TelegramNotificationSettings, TelegramResult, TelegramStatus } from '../../shared/types/telegram';
 import { type BotApi, TelegramApiError } from './bot-api';
 import { registerCommands, type CommandDeps } from './commands';
+import { createDigest } from './digest';
 import { translatorFor } from './i18n';
 import { createNotifier, type NotifierSources } from './notifier';
 import { createPairing, type Pairing } from './pairing';
@@ -41,6 +43,13 @@ export interface TelegramServiceDeps {
   task: (taskId: string, projectId?: string) => { title: string; projectName?: string; projectId?: string } | undefined;
   projectName: (projectId: string) => string | undefined;
   commands: Omit<CommandDeps, 'api' | 'router' | 't' | 'settings'>;
+  /** The morning digest's sources (off without them) */
+  digest?: {
+    tasks: (projectId: string) => Task[];
+    usageSince: (from: number, to: number) => Promise<{ usd: number; tokens: number }>;
+  };
+  /** How often the digest timer looks at the clock (a sleeping computer misses ticks; wake calls checkDigest) */
+  digestCheckMs?: number;
   onStatus?: (status: TelegramStatus) => void;
   log?: { warn: (...args: unknown[]) => void };
   now?: () => number;
@@ -77,6 +86,7 @@ export function createTelegramService(deps: TelegramServiceDeps) {
       ...(settings.owner ? { owner: settings.owner } : {}),
       ...(token && code ? { pairingCode: code.code, pairingExpiresAt: code.expiresAt } : {}),
       notifications: settings.notifications,
+      digest: { enabled: settings.digest.enabled, time: settings.digest.time },
     };
   };
   const broadcast = () => deps.onStatus?.(status());
@@ -112,6 +122,12 @@ export function createTelegramService(deps: TelegramServiceDeps) {
   });
 
   registerCommands({ ...deps.commands, api: currentApi, router, t, settings: deps.settings });
+
+  const digest = deps.digest
+    ? createDigest({ api: currentApi, settings: deps.settings, t, now: deps.now, projects: deps.commands.projects, tasks: deps.digest.tasks, usageSince: deps.digest.usageSince, onError: warn })
+    : undefined;
+  let digestTimer: ReturnType<typeof setInterval> | undefined;
+  const checkDigest = () => (api && digest ? digest.check().catch(warn) : Promise.resolve());
 
   const stopPolling = async () => {
     const running = poller;
@@ -161,8 +177,16 @@ export function createTelegramService(deps: TelegramServiceDeps) {
       notifier.start(deps.notifierSources);
       await startPolling();
       broadcast();
+      if (digest) {
+        digestTimer = setInterval(() => void checkDigest(), deps.digestCheckMs ?? 60_000);
+        digestTimer.unref?.();
+        // Not sent at its time because the app was closed: now, the same day
+        void checkDigest();
+      }
     },
     async stop(): Promise<void> {
+      if (digestTimer) clearInterval(digestTimer);
+      digestTimer = undefined;
       for (const off of offs.splice(0)) off();
       notifier.stop();
       await stopPolling();
@@ -225,6 +249,16 @@ export function createTelegramService(deps: TelegramServiceDeps) {
       broadcast();
       return status();
     },
+    setDigest(value: TelegramDigestSettings): TelegramStatus {
+      const current = deps.settings.get().digest;
+      const time = typeof value.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.time) ? value.time : current.time;
+      deps.settings.update({ digest: { ...current, enabled: value.enabled === true, time } });
+      broadcast();
+      void checkDigest();
+      return status();
+    },
+    /** Look at the digest now (the computer woke up) */
+    checkDigest,
     setNotifications(notifications: TelegramNotificationSettings): TelegramStatus {
       deps.settings.update({ notifications });
       broadcast();

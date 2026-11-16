@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createTelegramSettingsStore, DEFAULT_NOTIFICATIONS } from '../settings-store';
+import { createTelegramSettingsStore, DEFAULT_DIGEST, DEFAULT_NOTIFICATIONS } from '../settings-store';
 import { createTokenStore } from '../token-store';
 
 let dir: string;
@@ -47,7 +47,8 @@ describe('token store', () => {
 describe('telegram settings store', () => {
   it('starts with no owner and every notification on', () => {
     const store = createTelegramSettingsStore(dir);
-    expect(store.get()).toEqual({ notifications: DEFAULT_NOTIFICATIONS });
+    expect(store.get()).toEqual({ notifications: DEFAULT_NOTIFICATIONS, digest: DEFAULT_DIGEST });
+    expect(DEFAULT_DIGEST).toEqual({ enabled: true, time: '09:00' });
     expect(Object.values(DEFAULT_NOTIFICATIONS).every(Boolean)).toBe(true);
   });
 
@@ -68,5 +69,13 @@ describe('telegram settings store', () => {
     const got = createTelegramSettingsStore(dir).get();
     expect(got.notifications.agentQuestion).toBe(false);
     expect(got.notifications.ciFailed).toBe(true);
+  });
+
+  it('keeps the morning digest settings and the last sent date; a bad time falls back to 09:00', () => {
+    const store = createTelegramSettingsStore(dir);
+    store.update({ digest: { enabled: false, time: '07:30', lastSentDate: '2026-11-16', lastSentAt: 1000 } });
+    expect(createTelegramSettingsStore(dir).get().digest).toEqual({ enabled: false, time: '07:30', lastSentDate: '2026-11-16', lastSentAt: 1000 });
+    writeFileSync(join(dir, 'telegram.json'), JSON.stringify({ digest: { enabled: 'yes', time: '25:00', lastSentDate: 'x' } }));
+    expect(createTelegramSettingsStore(dir).get().digest).toEqual(DEFAULT_DIGEST);
   });
 });

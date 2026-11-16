@@ -4,11 +4,11 @@
 import { ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { TelegramNotificationSettings, TelegramStatus } from '../../shared/types/telegram';
+import type { TelegramDigestSettings, TelegramNotificationSettings, TelegramStatus } from '../../shared/types/telegram';
 import type { TelegramService } from '../telegram/service';
-import { DEFAULT_NOTIFICATIONS } from '../telegram/settings-store';
+import { DEFAULT_DIGEST, DEFAULT_NOTIFICATIONS } from '../telegram/settings-store';
 
-const OFF: TelegramStatus = { connection: 'not_set', notifications: DEFAULT_NOTIFICATIONS };
+const OFF: TelegramStatus = { connection: 'not_set', notifications: DEFAULT_NOTIFICATIONS, digest: DEFAULT_DIGEST };
 
 export function registerTelegramHandlers(getService: () => TelegramService | undefined): void {
   ipcMain.handle(IPC_CHANNELS.TELEGRAM_STATUS, () => getService()?.status() ?? OFF);
@@ -29,5 +29,10 @@ export function registerTelegramHandlers(getService: () => TelegramService | und
     const service = getService();
     if (!service || !notifications || typeof notifications !== 'object') return getService()?.status() ?? OFF;
     return service.setNotifications(notifications);
+  });
+  ipcMain.handle(IPC_CHANNELS.TELEGRAM_SET_DIGEST, (_e, digest: TelegramDigestSettings) => {
+    const service = getService();
+    if (!service || !digest || typeof digest !== 'object') return getService()?.status() ?? OFF;
+    return service.setDigest(digest);
   });
 }

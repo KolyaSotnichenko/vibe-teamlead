@@ -7,7 +7,7 @@ import type { PendingAgentQuestion } from '../../../shared/types/agent-questions
 import type { TelegramStatus } from '../../../shared/types/telegram';
 import { createQueuePause } from '../../ipc-handlers/task/task-control';
 import { type BotApi, TelegramApiError, type TelegramUpdate } from '../bot-api';
-import { createTelegramService } from '../service';
+import { createTelegramService, type TelegramServiceDeps } from '../service';
 import { createTelegramSettingsStore } from '../settings-store';
 import { createTokenStore } from '../token-store';
 import { createFakeBot, OWNER, textUpdate } from './fake-bot';
@@ -54,7 +54,7 @@ function longPollBot(validToken = 'good:token') {
   };
 }
 
-function setup(bot = longPollBot()) {
+function setup(bot = longPollBot(), extra: Partial<TelegramServiceDeps> = {}) {
   let questionListener: ((e: { type: 'asked'; question: PendingAgentQuestion }) => void) | undefined;
   const statuses: TelegramStatus[] = [];
   const settings = createTelegramSettingsStore(dir);
@@ -87,11 +87,40 @@ function setup(bot = longPollBot()) {
     },
     onStatus: (s) => void statuses.push(s),
     pollerSleep: async () => undefined,
+    ...extra,
   });
   return { service, settings, tokens, statuses, bot, ask: (q: PendingAgentQuestion) => questionListener?.({ type: 'asked', question: q }) };
 }
 
 describe('telegram service', () => {
+  it('reports and saves the morning digest settings; a bad time is refused', async () => {
+    const { service, settings } = setup();
+    await service.start();
+    expect(service.status().digest).toEqual({ enabled: true, time: '09:00' });
+    settings.update({ digest: { enabled: true, time: '09:00', lastSentDate: '2026-11-16' } });
+    expect(service.setDigest({ enabled: false, time: '07:45' }).digest).toEqual({ enabled: false, time: '07:45' });
+    // the date it was last sent stays: changing the time does not send it twice
+    expect(settings.get().digest).toEqual({ enabled: false, time: '07:45', lastSentDate: '2026-11-16' });
+    expect(service.setDigest({ enabled: true, time: '7pm' }).digest).toEqual({ enabled: true, time: '07:45' });
+    await service.stop();
+  });
+
+  it("sends today's digest at start when the app was closed at its time, once", async () => {
+    const bot = longPollBot();
+    const now = new Date(2026, 10, 16, 11, 0).getTime();
+    const usageSince = vi.fn(async () => ({ usd: 2, tokens: 1 }));
+    const { service, settings, tokens } = setup(bot, { now: () => now, digest: { tasks: () => [], usageSince } });
+    tokens.save('good:token');
+    settings.update({ owner: OWNER });
+    await service.start();
+    await service.checkDigest();
+    await service.checkDigest();
+    const digests = bot.fake.sent.filter((m) => m.text.startsWith('Good morning'));
+    expect(digests).toHaveLength(1);
+    expect(settings.get().digest.lastSentAt).toBe(now);
+    await service.stop();
+  });
+
   it('does not poll and talks to nobody without a token', async () => {
     const { service, bot } = setup();
     await service.start();

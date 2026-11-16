@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { TelegramAPI, TelegramNotificationSettings, TelegramStatus } from '../../shared/types/telegram';
+import type { TelegramAPI, TelegramDigestSettings, TelegramNotificationSettings, TelegramStatus } from '../../shared/types/telegram';
 
 export type { TelegramAPI };
 
@@ -15,6 +15,7 @@ export const createTelegramAPI = (): TelegramAPI => ({
   unpair: () => ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_UNPAIR),
   setNotifications: (notifications: TelegramNotificationSettings) =>
     ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_SET_NOTIFICATIONS, notifications),
+  setDigest: (digest: TelegramDigestSettings) => ipcRenderer.invoke(IPC_CHANNELS.TELEGRAM_SET_DIGEST, digest),
   onStatus: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, status: TelegramStatus) => callback(status);
     ipcRenderer.on(IPC_CHANNELS.TELEGRAM_STATUS_CHANGED, handler);

@@ -15,6 +15,7 @@ import type { TelegramStatus } from '../../shared/types/telegram';
 const telegramMockStatus: TelegramStatus = {
   connection: 'not_set',
   notifications: { agentQuestion: true, reviewWaiting: true, taskFailed: true, ciFailed: true, taskMerged: true, regression: true },
+  digest: { enabled: true, time: '09:00' },
 };
 import type { ElectronAPI } from '../../shared/types';
 import {
@@ -256,6 +257,7 @@ const browserMockAPI: ElectronAPI = {
     newPairingCode: async () => telegramMockStatus,
     unpair: async () => telegramMockStatus,
     setNotifications: async () => telegramMockStatus,
+    setDigest: async () => telegramMockStatus,
     onStatus: () => () => undefined,
   },
   queue: {

@@ -32,29 +32,34 @@ export interface CommandDeps {
 const LIST_LIMIT = 5;
 const RUNNING = new Set(['in_progress', 'ai_review']);
 
-/** Today's (local day) sessions of the given ledgers: priced dollars and all tokens. Pure. */
-export function usageToday(ledgers: string[], now: number, prices: GatewayPrices = {}): { usd: number; tokens: number } {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+/** Sessions of the given ledgers between two moments (epoch ms): priced dollars and all tokens. Pure. */
+export function usageBetween(ledgers: string[], from: number, to: number, prices: GatewayPrices = {}): { usd: number; tokens: number } {
   let usd = 0;
   let tokens = 0;
   for (const text of ledgers) {
-    const todays = text
+    const inRange = text
       .split('\n')
       .filter((line) => {
         try {
           const at = Date.parse((JSON.parse(line) as { at?: string }).at ?? '');
-          return at >= start.getTime() && at <= now;
+          return at >= from && at <= to;
         } catch {
           return false;
         }
       })
       .join('\n');
-    const summary = summarizeUsage(todays, prices);
+    const summary = summarizeUsage(inRange, prices);
     usd += summary.costUsd + summary.gatewayCostUsd;
     tokens += summary.totalTokens;
   }
   return { usd: Math.round(usd * 1e6) / 1e6, tokens };
+}
+
+/** Today's (local day) sessions of the given ledgers. Pure. */
+export function usageToday(ledgers: string[], now: number, prices: GatewayPrices = {}): { usd: number; tokens: number } {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  return usageBetween(ledgers, start.getTime(), now, prices);
 }
 
 export function registerCommands(deps: CommandDeps): void {

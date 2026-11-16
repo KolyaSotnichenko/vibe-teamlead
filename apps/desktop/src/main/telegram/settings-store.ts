@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { TelegramNotificationSettings, TelegramOwner } from '../../shared/types/telegram';
+import type { TelegramDigestSettings, TelegramNotificationSettings, TelegramOwner } from '../../shared/types/telegram';
 
 export const SETTINGS_FILE = 'telegram.json';
 
@@ -22,11 +22,35 @@ export const DEFAULT_NOTIFICATIONS: TelegramNotificationSettings = {
   regression: true,
 };
 
+export const DEFAULT_DIGEST: TelegramDigestSettings = { enabled: true, time: '09:00' };
+
+/** The digest switch and time, plus when it was last sent (once a day) */
+export interface DigestState extends TelegramDigestSettings {
+  /** Local date (YYYY-MM-DD) of the last digest */
+  lastSentDate?: string;
+  /** Epoch ms of the last digest: the next one tells what happened since */
+  lastSentAt?: number;
+}
+
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeDigest(raw: unknown): DigestState {
+  const value = (raw && typeof raw === 'object' ? raw : {}) as Partial<DigestState>;
+  return {
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULT_DIGEST.enabled,
+    time: typeof value.time === 'string' && TIME.test(value.time) ? value.time : DEFAULT_DIGEST.time,
+    ...(typeof value.lastSentDate === 'string' && DATE.test(value.lastSentDate) ? { lastSentDate: value.lastSentDate } : {}),
+    ...(typeof value.lastSentAt === 'number' && Number.isFinite(value.lastSentAt) ? { lastSentAt: value.lastSentAt } : {}),
+  };
+}
+
 export interface TelegramSettings {
   owner?: TelegramOwner;
   notifications: TelegramNotificationSettings;
   /** The project `/project` chose for later commands */
   currentProjectId?: string;
+  digest: DigestState;
 }
 
 export interface TelegramSettingsStore {
@@ -46,6 +70,7 @@ function normalize(raw: unknown): TelegramSettings {
   return {
     ...(validOwner ? { owner: validOwner } : {}),
     notifications,
+    digest: normalizeDigest(value.digest),
     ...(typeof value.currentProjectId === 'string' ? { currentProjectId: value.currentProjectId } : {}),
   };
 }
