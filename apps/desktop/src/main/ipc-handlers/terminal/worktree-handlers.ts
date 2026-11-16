@@ -8,14 +8,14 @@ import type {
   OtherWorktreeInfo,
 } from '../../../shared/types';
 import path from 'path';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, symlinkSync, lstatSync, } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, lstatSync, } from 'fs';
 import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import { minimatch } from 'minimatch';
 import { debugLog, debugError } from '../../../shared/utils/debug-logger';
 import { projectStore } from '../../project-store';
 import { parseEnvFile } from '../utils';
-import { isWindows } from '../../platform';
+import { linkIntoWorktree } from '../../platform/link';
 import {
   getTerminalWorktreeDir,
   getTerminalWorktreePath,
@@ -259,14 +259,8 @@ function symlinkClaudeConfigToWorktree(projectPath: string, worktreePath: string
   }
 
   try {
-    if (isWindows()) {
-      symlinkSync(sourcePath, targetPath, 'junction');
-      debugLog('[TerminalWorktree] Created .claude junction (Windows):', sourceRel, '->', sourcePath);
-    } else {
-      const relativePath = path.relative(path.dirname(targetPath), sourcePath);
-      symlinkSync(relativePath, targetPath);
-      debugLog('[TerminalWorktree] Created .claude symlink (Unix):', sourceRel, '->', relativePath);
-    }
+    const how = linkIntoWorktree(sourcePath, targetPath);
+    debugLog('[TerminalWorktree] Linked .claude', `(${how}) ->`, sourcePath);
     symlinked.push(sourceRel);
   } catch (error) {
     debugError('[TerminalWorktree] Could not create symlink for .claude:', error);

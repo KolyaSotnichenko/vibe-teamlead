@@ -4,12 +4,13 @@
  * project index says. Moved here whole from the terminal worktree IPC handlers.
  */
 import { execFile } from 'child_process';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
 import { debugError, debugLog } from '../../shared/utils/debug-logger';
 import { isWindows } from '../platform';
+import { linkIntoWorktree } from '../platform/link';
 
 const execFileAsync = promisify(execFile);
 
@@ -262,14 +263,9 @@ export function applySymlinkStrategy(projectPath: string, worktreePath: string, 
   }
 
   try {
-    if (isWindows()) {
-      symlinkSync(sourcePath, targetPath, 'junction');
-      debugLog('[TerminalWorktree] Created junction (Windows):', config.sourceRelPath, '->', sourcePath);
-    } else {
-      const relativePath = path.relative(path.dirname(targetPath), sourcePath);
-      symlinkSync(relativePath, targetPath);
-      debugLog('[TerminalWorktree] Created symlink (Unix):', config.sourceRelPath, '->', relativePath);
-    }
+    // A junction for a folder on Windows; a file is copied when Windows refuses its symlink (EPERM)
+    const how = linkIntoWorktree(sourcePath, targetPath);
+    debugLog('[TerminalWorktree] Linked', config.sourceRelPath, `(${how}) ->`, sourcePath);
     return true;
   } catch (error) {
     debugError('[TerminalWorktree] Could not create symlink for', config.sourceRelPath, ':', error);
