@@ -1,0 +1,6 @@
+# Shell scripts keep LF on Windows checkouts: bash (Git Bash) refuses CRLF ($'\r': command not found)
+*.sh text eol=lf
+# Superpowers' extensionless hook and skill scripts, and its cmd/bash polyglot (hooks.json runs it with bash)
+apps/desktop/vendor/superpowers/hooks/session-start text eol=lf
+apps/desktop/vendor/superpowers/hooks/run-hook.cmd text eol=lf
+apps/desktop/vendor/superpowers/skills/*/scripts/* text eol=lf
