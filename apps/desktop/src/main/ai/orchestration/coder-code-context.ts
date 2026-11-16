@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type RunOptions, type RunResult, runProcess } from '../../platform/exec';
-import { codegraphEnv, indexProject } from '../claude-code/codegraph';
+import { codegraphEnv, codegraphLaunch, indexProject } from '../claude-code/codegraph';
 import { cleanForMessage, dataBlock } from './message-data';
 import type { PlanSubtaskEntry } from './coder-kickoff';
 
@@ -115,7 +115,8 @@ export async function subtaskCodeContext(input: SubtaskCodeContextInput): Promis
     if (signal?.aborted) return none('cancelled');
     if (!ready || !existsSync(join(projectDir, '.codegraph'))) return none('no index');
 
-    const result = await run(bin, ['explore', '--max-files', MAX_FILES, '--', query], {
+    const launch = codegraphLaunch(bin, ['explore', '--max-files', MAX_FILES, '--', query]);
+    const result = await run(launch.command, launch.args, {
       cwd: projectDir,
       env: codegraphEnv(),
       timeoutMs: TIMEOUT_MS,

@@ -9,7 +9,7 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 
 import type { McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk';
 
@@ -39,11 +39,27 @@ export function codegraphEnv(): Record<string, string> {
   return env;
 }
 
+/**
+ * How to start CodeGraph with these arguments: every launch goes through here.
+ * macOS: the bundle's shell launcher. Windows: the bundle ships bin/codegraph.cmd,
+ * and Node refuses to spawn a .cmd without a shell, so its own node.exe runs the
+ * script with the flags the .cmd passes. Pure.
+ */
+export function codegraphLaunch(bin: string, args: string[]): { command: string; args: string[] } {
+  if (!bin.toLowerCase().endsWith('.cmd')) return { command: bin, args };
+  const root = win32.dirname(win32.dirname(bin));
+  return {
+    command: win32.join(root, 'node.exe'),
+    args: ['--liftoff-only', '--disable-warning=ExperimentalWarning', win32.join(root, 'lib', 'dist', 'bin', 'codegraph.js'), ...args],
+  };
+}
+
 export function codegraphMcpServer(bin: string, projectDir: string): McpStdioServerConfig {
+  const launch = codegraphLaunch(bin, ['serve', '--mcp', '--path', projectDir]);
   return {
     type: 'stdio',
-    command: bin,
-    args: ['serve', '--mcp', '--path', projectDir],
+    command: launch.command,
+    args: launch.args,
     env: codegraphEnv(),
   };
 }
@@ -59,7 +75,8 @@ const indexing = new Map<string, Promise<boolean>>();
 function runInit(bin: string, projectDir: string, log?: (line: string) => void): Promise<boolean> {
   return new Promise((resolve) => {
     log?.(`CodeGraph: indexing ${projectDir}`);
-    const child = spawn(bin, ['init', '-y', projectDir], { cwd: projectDir, env: codegraphEnv(), stdio: ['ignore', 'ignore', 'pipe'] });
+    const launch = codegraphLaunch(bin, ['init', '-y', projectDir]);
+    const child = spawn(launch.command, launch.args, { cwd: projectDir, env: codegraphEnv(), stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
     child.stderr?.on('data', (chunk: Buffer) => {
       if (stderr.length < 4000) stderr += chunk.toString();

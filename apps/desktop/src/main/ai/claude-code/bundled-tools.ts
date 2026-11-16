@@ -9,7 +9,7 @@
  * to workers as plain paths.
  *
  * Packaged layout (electron-builder extraResources, see package.json):
- *   <Resources>/claude-code/claude
+ *   <Resources>/claude-code/claude            (claude.exe on Windows)
  *   <Resources>/plugins/superpowers/
  *   <Resources>/plugins/drawio/
  *   <Resources>/plugins/vibe-teamlead-skills/
@@ -17,12 +17,15 @@
  *   <Resources>/plugins/ux-review/
  *   <Resources>/plugins/gsap-skills/
  *   <Resources>/drawio-viewer/viewer-static.min.js
- *   <Resources>/codegraph/bin/codegraph
- *   <Resources>/scanners/{gitleaks,osv-scanner}
+ *   <Resources>/codegraph/bin/codegraph       (bin/codegraph.cmd on Windows: see codegraphLaunch)
+ *   <Resources>/codegraph/node                (node.exe on Windows)
+ *   <Resources>/scanners/{gitleaks,osv-scanner}  (.exe on Windows)
  *
  * Semgrep is not bundled (a Python package): it is used only when found on PATH.
  *   <Resources>/browser-mcp/node_modules/{@playwright/mcp,playwright,playwright-core,chrome-devtools-mcp}
  *   <Resources>/lsp/node_modules/{typescript-language-server,typescript,pyright}  (run on codegraph/node)
+ *
+ * The platform is a parameter (default: this machine) so both layouts are testable anywhere.
  */
 
 import { existsSync } from 'node:fs';
@@ -31,6 +34,8 @@ import { dirname, join } from 'node:path';
 
 import { findOnPath } from '../../platform/exec';
 import { getPlatformKey } from '../../platform';
+
+type PlatformKey = ReturnType<typeof getPlatformKey>;
 
 export interface BundledTools {
   /** Absolute path to the Claude Code executable */
@@ -80,8 +85,20 @@ const DEVTOOLS_CLI = join('build', 'src', 'bin', 'chrome-devtools-mcp.js');
 const TS_SERVER_CLI = join('lib', 'cli.mjs');
 const PYRIGHT_SERVER = 'langserver.index.js';
 
-function platformTarget(): string {
-  return `${getPlatformKey()}-${process.arch}`;
+function platformTarget(platform: PlatformKey): string {
+  return `${platform}-${process.arch}`;
+}
+
+/** File names of the per-platform binaries. Windows: .exe, and CodeGraph's .cmd launcher (never spawned itself). */
+function binaryNames(platform: PlatformKey) {
+  const exe = platform === 'win32' ? '.exe' : '';
+  return {
+    claude: `claude${exe}`,
+    codegraphLauncher: platform === 'win32' ? 'codegraph.cmd' : 'codegraph',
+    node: `node${exe}`,
+    gitleaks: `gitleaks${exe}`,
+    osvScanner: `osv-scanner${exe}`,
+  };
 }
 
 function firstExisting(paths: string[]): string | undefined {
@@ -98,9 +115,10 @@ function resolveFromPackage(pkg: string, file: string): string | undefined {
 }
 
 /** Packaged app: everything lives under Contents/Resources. */
-export function resolvePackagedTools(resourcesPath: string): BundledTools {
+export function resolvePackagedTools(resourcesPath: string, platform: PlatformKey = getPlatformKey()): BundledTools {
+  const names = binaryNames(platform);
   return {
-    claudeCodeExecutable: firstExisting([join(resourcesPath, 'claude-code', 'claude')]),
+    claudeCodeExecutable: firstExisting([join(resourcesPath, 'claude-code', names.claude)]),
     superpowersDir: firstExisting([join(resourcesPath, 'plugins', 'superpowers')]),
     drawioPluginDir: firstExisting([join(resourcesPath, 'plugins', 'drawio')]),
     vibeSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'vibe-teamlead-skills')]),
@@ -109,14 +127,14 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
     gsapSkillsDir: firstExisting([join(resourcesPath, 'plugins', 'gsap-skills')]),
     drawioViewerScript: firstExisting([join(resourcesPath, 'drawio-viewer', 'viewer-static.min.js')]),
     mermaidScript: firstExisting([join(resourcesPath, 'mermaid', 'mermaid.min.js')]),
-    codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', 'codegraph')]),
+    codegraphBin: firstExisting([join(resourcesPath, 'codegraph', 'bin', names.codegraphLauncher)]),
     playwrightMcpCli: firstExisting([join(resourcesPath, 'browser-mcp', 'node_modules', '@playwright', 'mcp', PLAYWRIGHT_CLI)]),
     chromeDevtoolsMcpCli: firstExisting([join(resourcesPath, 'browser-mcp', 'node_modules', 'chrome-devtools-mcp', DEVTOOLS_CLI)]),
     nodeRuntime: process.execPath,
-    gitleaksBin: firstExisting([join(resourcesPath, 'scanners', 'gitleaks')]),
-    osvScannerBin: firstExisting([join(resourcesPath, 'scanners', 'osv-scanner')]),
+    gitleaksBin: firstExisting([join(resourcesPath, 'scanners', names.gitleaks)]),
+    osvScannerBin: firstExisting([join(resourcesPath, 'scanners', names.osvScanner)]),
     semgrepBin: findOnPath('semgrep'),
-    lspNode: firstExisting([join(resourcesPath, 'codegraph', 'node')]),
+    lspNode: firstExisting([join(resourcesPath, 'codegraph', names.node)]),
     typescriptLanguageServer: firstExisting([join(resourcesPath, 'lsp', 'node_modules', 'typescript-language-server', TS_SERVER_CLI)]),
     typescriptLib: firstExisting([join(resourcesPath, 'lsp', 'node_modules', 'typescript', 'lib')]),
     pyrightLangserver: firstExisting([join(resourcesPath, 'lsp', 'node_modules', 'pyright', PYRIGHT_SERVER)]),
@@ -126,11 +144,12 @@ export function resolvePackagedTools(resourcesPath: string): BundledTools {
 const defined = (p: string | undefined): p is string => !!p;
 
 /** Development: resolve from node_modules and the repo's vendor/ folder. */
-export function resolveDevTools(appRoot: string): BundledTools {
-  const target = platformTarget();
+export function resolveDevTools(appRoot: string, platform: PlatformKey = getPlatformKey()): BundledTools {
+  const target = platformTarget(platform);
+  const names = binaryNames(platform);
   return {
     claudeCodeExecutable: firstExisting(
-      [resolveFromPackage(`@anthropic-ai/claude-agent-sdk-${target}`, 'claude')].filter(
+      [resolveFromPackage(`@anthropic-ai/claude-agent-sdk-${target}`, names.claude)].filter(
         (p): p is string => !!p,
       ),
     ),
@@ -145,7 +164,7 @@ export function resolveDevTools(appRoot: string): BundledTools {
       [resolveFromPackage('mermaid', join('dist', 'mermaid.min.js'))].filter((p): p is string => !!p),
     ),
     codegraphBin: firstExisting(
-      [resolveFromPackage(`@colbymchenry/codegraph-${target}`, join('bin', 'codegraph'))].filter(
+      [resolveFromPackage(`@colbymchenry/codegraph-${target}`, join('bin', names.codegraphLauncher))].filter(
         (p): p is string => !!p,
       ),
     ),
@@ -156,10 +175,10 @@ export function resolveDevTools(appRoot: string): BundledTools {
       [resolveFromPackage('chrome-devtools-mcp', DEVTOOLS_CLI)].filter((p): p is string => !!p),
     ),
     nodeRuntime: process.execPath,
-    gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', 'gitleaks')]) ?? findOnPath('gitleaks'),
-    osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', 'osv-scanner')]) ?? findOnPath('osv-scanner'),
+    gitleaksBin: firstExisting([join(appRoot, 'vendor-bin', names.gitleaks)]) ?? findOnPath('gitleaks'),
+    osvScannerBin: firstExisting([join(appRoot, 'vendor-bin', names.osvScanner)]) ?? findOnPath('osv-scanner'),
     semgrepBin: findOnPath('semgrep'),
-    lspNode: firstExisting([resolveFromPackage(`@colbymchenry/codegraph-${target}`, 'node')].filter(defined)),
+    lspNode: firstExisting([resolveFromPackage(`@colbymchenry/codegraph-${target}`, names.node)].filter(defined)),
     typescriptLanguageServer: firstExisting([resolveFromPackage('typescript-language-server', TS_SERVER_CLI)].filter(defined)),
     typescriptLib: firstExisting([resolveFromPackage('typescript', 'lib')].filter(defined)),
     pyrightLangserver: firstExisting([resolveFromPackage('pyright', PYRIGHT_SERVER)].filter(defined)),
