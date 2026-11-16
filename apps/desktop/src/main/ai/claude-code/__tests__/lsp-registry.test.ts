@@ -171,7 +171,7 @@ describe('bundled LSP tools', () => {
     touch('lsp', 'node_modules', 'typescript-language-server', 'lib', 'cli.mjs');
     touch('lsp', 'node_modules', 'typescript', 'lib', 'tsserver.js');
     touch('lsp', 'node_modules', 'pyright', 'langserver.index.js');
-    const tools = resolvePackagedTools(res);
+    const tools = resolvePackagedTools(res, 'darwin'); // the file names macOS has (node, not node.exe)
     expect(tools.lspNode).toBe(join(res, 'codegraph', 'node'));
     expect(tools.typescriptLanguageServer).toBe(join(res, 'lsp', 'node_modules', 'typescript-language-server', 'lib', 'cli.mjs'));
     expect(tools.typescriptLib).toBe(join(res, 'lsp', 'node_modules', 'typescript', 'lib'));

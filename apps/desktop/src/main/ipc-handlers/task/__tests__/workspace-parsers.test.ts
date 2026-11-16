@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { join } from 'node:path';
 import {
   buildTimeline,
   deriveAcStatus,
@@ -297,7 +298,7 @@ describe('security artifacts', () => {
       '/spec',
     );
     expect(pentest?.findings.map((f) => f.blocking)).toEqual([true, false, true]);
-    expect(pentest?.reportPath).toBe('security/strix_runs/r1/penetration_test_report.md');
+    expect(pentest?.reportPath).toBe(join('security', 'strix_runs', 'r1', 'penetration_test_report.md'));
     expect(parseSecurityQa('nope', '/spec')).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { HookInput } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,23 +20,31 @@ import {
   type ToolLookup,
 } from '../format-lint-hook';
 import { buildQueryOptions } from '../runner';
+import { WINDOWS_HOST_ENV } from '../../../platform/env';
 import type { SessionConfig } from '../../session/types';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 const signal = new AbortController().signal;
 
+// planTools joins with the host's separator: on Windows /p/node_modules/.bin/eslint is \p\node_modules\.bin\eslint
+const posix = (p: string) => p.replaceAll('\\', '/');
+
 function lookup(existing: string[], onPath: Record<string, string> = {}): ToolLookup {
   const set = new Set(existing);
-  return { exists: (p) => set.has(p), onPath: (name) => onPath[name] };
+  return { exists: (p) => set.has(posix(p)), onPath: (name) => onPath[name] };
 }
 
+const cmds = (plan: { cmd: string }[]) => plan.map((t) => posix(t.cmd));
+
+// The macOS file names (prettier, .venv/bin/ruff); Windows has its own tests below
 describe('planTools', () => {
   const project = '/p';
 
   it('runs prettier then eslint from the nearest node_modules of a monorepo package', () => {
     const api = '/p/apps/api/node_modules/.bin';
     const root = '/p/node_modules/.bin';
-    const plan = planTools('/p/apps/api/src/users.ts', project, lookup([`${api}/eslint`, `${root}/eslint`, `${root}/prettier`]));
-    expect(plan.map((t) => [t.name, t.cmd])).toEqual([
+    const plan = planTools('/p/apps/api/src/users.ts', project, lookup([`${api}/eslint`, `${root}/eslint`, `${root}/prettier`]), 'darwin');
+    expect(plan.map((t) => [t.name, posix(t.cmd)])).toEqual([
       ['prettier', `${root}/prettier`],
       ['eslint', `${api}/eslint`],
     ]);
@@ -46,39 +54,39 @@ describe('planTools', () => {
   });
 
   it('falls back to biome for formatting and linting when prettier and eslint are absent', () => {
-    const plan = planTools('/p/src/a.tsx', project, lookup(['/p/node_modules/.bin/biome']));
+    const plan = planTools('/p/src/a.tsx', project, lookup(['/p/node_modules/.bin/biome']), 'darwin');
     expect(plan.map((t) => t.name)).toEqual(['biome format', 'biome lint']);
     expect(plan[0].args).toEqual(['format', '--write', '/p/src/a.tsx']);
     expect(plan[1].args).toEqual(['lint', '--reporter=github', '/p/src/a.tsx']);
   });
 
   it('never uses a globally installed prettier or eslint', () => {
-    expect(planTools('/p/src/a.js', project, lookup([], { prettier: '/usr/local/bin/prettier', eslint: '/usr/local/bin/eslint' }))).toEqual([]);
+    expect(planTools('/p/src/a.js', project, lookup([], { prettier: '/usr/local/bin/prettier', eslint: '/usr/local/bin/eslint' }), 'darwin')).toEqual([]);
   });
 
   it('uses ruff from the project venv, or from PATH, for Python', () => {
-    const venv = planTools('/p/svc/app.py', project, lookup(['/p/svc/.venv/bin/ruff'], { ruff: '/opt/homebrew/bin/ruff' }));
-    expect(venv.map((t) => [t.name, t.cmd])).toEqual([
+    const venv = planTools('/p/svc/app.py', project, lookup(['/p/svc/.venv/bin/ruff'], { ruff: '/opt/homebrew/bin/ruff' }), 'darwin');
+    expect(venv.map((t) => [t.name, posix(t.cmd)])).toEqual([
       ['ruff format', '/p/svc/.venv/bin/ruff'],
       ['ruff check', '/p/svc/.venv/bin/ruff'],
     ]);
     expect(venv[1].args).toEqual(['check', '--output-format', 'json', '/p/svc/app.py']);
-    const path = planTools('/p/svc/app.py', project, lookup([], { ruff: '/opt/homebrew/bin/ruff' }));
+    const path = planTools('/p/svc/app.py', project, lookup([], { ruff: '/opt/homebrew/bin/ruff' }), 'darwin');
     expect(path.map((t) => t.cmd)).toEqual(['/opt/homebrew/bin/ruff', '/opt/homebrew/bin/ruff']);
-    expect(planTools('/p/svc/app.py', project, lookup([]))).toEqual([]);
+    expect(planTools('/p/svc/app.py', project, lookup([]), 'darwin')).toEqual([]);
   });
 
   it('uses gofmt and go vet on the package only when go is on PATH', () => {
-    const plan = planTools('/p/cmd/x/main.go', project, lookup([], { go: '/usr/local/go/bin/go', gofmt: '/usr/local/go/bin/gofmt' }));
+    const plan = planTools('/p/cmd/x/main.go', project, lookup([], { go: '/usr/local/go/bin/go', gofmt: '/usr/local/go/bin/gofmt' }), 'darwin');
     expect(plan.map((t) => t.name)).toEqual(['gofmt', 'go vet']);
     expect(plan[1].args).toEqual(['vet', '.']);
     expect(plan[1].cwd).toBe('/p/cmd/x');
-    expect(planTools('/p/cmd/x/main.go', project, lookup([]))).toEqual([]);
+    expect(planTools('/p/cmd/x/main.go', project, lookup([]), 'darwin')).toEqual([]);
   });
 
   it('has nothing for other file types', () => {
-    expect(planTools('/p/README.md', project, lookup(['/p/node_modules/.bin/eslint', '/p/node_modules/.bin/prettier']))).toEqual([]);
-    expect(planTools('/p/notes.ipynb', project, lookup(['/p/.venv/bin/ruff']))).toEqual([]);
+    expect(planTools('/p/README.md', project, lookup(['/p/node_modules/.bin/eslint', '/p/node_modules/.bin/prettier']), 'darwin')).toEqual([]);
+    expect(planTools('/p/notes.ipynb', project, lookup(['/p/.venv/bin/ruff']), 'darwin')).toEqual([]);
   });
 });
 
@@ -88,25 +96,25 @@ describe('planTools on Windows', () => {
   it('runs the .cmd shims of node_modules/.bin (the extension-less files there are sh scripts)', () => {
     const bin = '/p/node_modules/.bin';
     const plan = planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`, `${bin}/prettier.cmd`, `${bin}/eslint`, `${bin}/eslint.cmd`]), 'win32');
-    expect(plan.map((t) => [t.name, t.cmd])).toEqual([
+    expect(plan.map((t) => [t.name, posix(t.cmd)])).toEqual([
       ['prettier', `${bin}/prettier.cmd`],
       ['eslint', `${bin}/eslint.cmd`],
     ]);
     const biome = planTools('/p/src/a.ts', project, lookup([`${bin}/biome`, `${bin}/biome.cmd`]), 'win32');
-    expect(biome.map((t) => t.cmd)).toEqual([`${bin}/biome.cmd`, `${bin}/biome.cmd`]);
+    expect(cmds(biome)).toEqual([`${bin}/biome.cmd`, `${bin}/biome.cmd`]);
     expect(planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`]), 'win32')).toEqual([]);
   });
 
   it('finds ruff in the venv Scripts folder and gofmt.exe next to go.exe', () => {
     const ruff = planTools('/p/svc/app.py', project, lookup(['/p/svc/.venv/Scripts/ruff.exe']), 'win32');
-    expect(ruff.map((t) => t.cmd)).toEqual(['/p/svc/.venv/Scripts/ruff.exe', '/p/svc/.venv/Scripts/ruff.exe']);
+    expect(cmds(ruff)).toEqual(['/p/svc/.venv/Scripts/ruff.exe', '/p/svc/.venv/Scripts/ruff.exe']);
     const go = planTools('/p/cmd/main.go', project, lookup([], { go: 'C:/Go/bin/go.exe' }), 'win32');
     expect(go.map((t) => t.cmd)).toEqual([join('C:/Go/bin', 'gofmt.exe'), 'C:/Go/bin/go.exe']);
   });
 
   it('keeps the macOS names on macOS', () => {
     const bin = '/p/node_modules/.bin';
-    expect(planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`, `${bin}/prettier.cmd`]), 'darwin').map((t) => t.cmd)).toEqual([`${bin}/prettier`]);
+    expect(planTools('/p/src/a.ts', project, lookup([`${bin}/prettier`, `${bin}/prettier.cmd`]), 'darwin').map((t) => posix(t.cmd))).toEqual([`${bin}/prettier`]);
   });
 });
 
@@ -183,9 +191,9 @@ describe('shouldLintEdit', () => {
   const base = { hookEvent: 'PostToolUse', agentType: 'coder', cwd: '/w', projectDir: '/w' };
 
   it('lints files the coder and QA fixer write inside the worktree', () => {
-    expect(shouldLintEdit({ ...base, toolName: 'Edit', filePath: 'src/a.ts' })).toBe('/w/src/a.ts');
-    expect(shouldLintEdit({ ...base, toolName: 'Write', filePath: '/w/src/b.ts', agentType: 'qa_fixer' })).toBe('/w/src/b.ts');
-    expect(shouldLintEdit({ ...base, toolName: 'NotebookEdit', filePath: undefined, notebookPath: '/w/n.ipynb' })).toBe('/w/n.ipynb');
+    expect(shouldLintEdit({ ...base, toolName: 'Edit', filePath: 'src/a.ts' })).toBe(resolve('/w/src/a.ts'));
+    expect(shouldLintEdit({ ...base, toolName: 'Write', filePath: '/w/src/b.ts', agentType: 'qa_fixer' })).toBe(resolve('/w/src/b.ts'));
+    expect(shouldLintEdit({ ...base, toolName: 'NotebookEdit', filePath: undefined, notebookPath: '/w/n.ipynb' })).toBe(resolve('/w/n.ipynb'));
   });
 
   it('leaves other agents, other tools and other events alone', () => {
@@ -216,7 +224,8 @@ function post(tool_name: string, tool_input: unknown, cwd: string): HookInput {
 }
 
 describe('format-lint hook (integration)', () => {
-  it('reformats with the project prettier, feeds eslint findings back, and is silent when clean', async () => {
+  // The fake prettier and eslint are sh scripts, which Windows can't spawn
+  it.skipIf(isWindowsHost)('reformats with the project prettier, feeds eslint findings back, and is silent when clean', async () => {
     const project = mkdtempSync(join(tmpdir(), 'vtl-lint-'));
     const bin = join(project, 'node_modules', '.bin');
     mkdirSync(join(project, 'src'), { recursive: true });
@@ -253,7 +262,8 @@ describe('format-lint hook (integration)', () => {
     expect(await reviewer.hooks[0](post('Edit', { file_path: 'src/a.ts' }, project), 't', { signal })).toEqual({});
   });
 
-  it('says so in one line when a tool times out', async () => {
+  // The fake prettier and eslint are sh scripts, which Windows can't spawn
+  it.skipIf(isWindowsHost)('says so in one line when a tool times out', async () => {
     const project = mkdtempSync(join(tmpdir(), 'vtl-lint-'));
     mkdirSync(join(project, 'src'), { recursive: true });
     writeFileSync(join(project, 'src', 'a.ts'), 'const x = 1;\n');
@@ -314,7 +324,7 @@ describe('environment of the project tools', () => {
         seen.push(options.env ?? {});
         return { code: 0, stdout: '[]', stderr: '', timedOut: false, aborted: false };
       });
-      const lookup: ToolLookup = { exists: (p) => p.endsWith('/node_modules/.bin/eslint'), onPath: (n) => (n === 'go' ? '/usr/local/go/bin/go' : undefined) };
+      const lookup: ToolLookup = { exists: (p) => /[\\/]node_modules[\\/]\.bin[\\/]eslint(\.cmd)?$/.test(p), onPath: (n) => (n === 'go' ? '/usr/local/go/bin/go' : undefined) };
       await formatAndLint('/p/src/a.ts', '/p', { run, lookup });
       await formatAndLint('/p/cmd/main.go', '/p', { run, lookup });
       expect(seen.length).toBe(3);
@@ -324,7 +334,7 @@ describe('environment of the project tools', () => {
         expect(env.GOFLAGS).toBeUndefined();
         expect(env.PATH).toBeTruthy();
         expect(env.HOME).toBe(process.env.HOME);
-        expect(Object.keys(env).every((k) => ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'GOTOOLCHAIN'].includes(k))).toBe(true);
+        expect(Object.keys(env).every((k) => ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'GOTOOLCHAIN', ...WINDOWS_HOST_ENV].includes(k))).toBe(true);
       }
       expect(seen[2].GOTOOLCHAIN).toBe('local');
     } finally {

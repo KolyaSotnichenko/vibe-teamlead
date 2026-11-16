@@ -75,11 +75,11 @@ describe('the preview worktree', () => {
   });
 
   it('lives outside the project, one per project', () => {
-    expect(previewWorktreePath('/home/u/.vibe-teamlead/worktrees/preview', 'p/1')).toBe('/home/u/.vibe-teamlead/worktrees/preview/p_1');
+    expect(previewWorktreePath('/home/u/.vibe-teamlead/worktrees/preview', 'p/1')).toBe(join('/home/u/.vibe-teamlead/worktrees/preview', 'p_1'));
   });
 
   it('keeps its state under the worktree, where leftover servers are found', () => {
-    expect(previewSpecDir('/p/.vibe-teamlead/worktrees/preview')).toBe('/p/.vibe-teamlead/worktrees/preview/.vibe-teamlead/specs/preview');
+    expect(previewSpecDir('/p/.vibe-teamlead/worktrees/preview')).toBe(join('/p/.vibe-teamlead/worktrees/preview', '.vibe-teamlead', 'specs', 'preview'));
   });
 
   it('at app start, cleans up the leftover servers of every preview worktree', () => {

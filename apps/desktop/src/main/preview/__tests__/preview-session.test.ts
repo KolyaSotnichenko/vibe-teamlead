@@ -1,3 +1,4 @@
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Project, PreviewService } from '../../../shared/types/project';
@@ -47,7 +48,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     needsInstall: () => false,
     install: vi.fn(async () => { order.push('install'); }),
     startDatabase: vi.fn(async () => { order.push('database'); return database(); }),
-    runCommand: vi.fn(async (command: string, cwd: string) => { order.push(command.includes('seed') ? 'seed' : command.endsWith('run build') ? `build:${cwd.split('/').pop()}` : 'migrations'); return { code: 0, output: '' }; }),
+    runCommand: vi.fn(async (command: string, cwd: string) => { order.push(command.includes('seed') ? 'seed' : command.endsWith('run build') ? `build:${cwd.split(/[\\/]/).pop()}` : 'migrations'); return { code: 0, output: '' }; }),
     startServer: vi.fn(async (o: { name: string }) => { order.push(`server:${o.name}`); port += 1; return { url: `http://localhost:${port}`, port, logPath: '/log', reused: false }; }),
     stopServer: vi.fn(async () => true),
     cleanUpLeftovers: vi.fn(),
@@ -82,7 +83,7 @@ describe('a preview session', () => {
     const calls = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string>; cwd: string });
     const api = calls.find((c) => c.name === 'preview-api')!;
     const web = calls.find((c) => c.name === 'preview-web')!;
-    expect(api.cwd).toBe('/home/.vibe-teamlead/worktrees/preview/p1/apps/api');
+    expect(api.cwd).toBe(resolve('/home/.vibe-teamlead/worktrees/preview/p1/apps/api'));
     expect(api.env).toMatchObject({ DATABASE_URL: 'postgresql://verify:pw@127.0.0.1:55001/verify', JWT_SECRET: 'dev-secret', FEATURE_X: 'on' });
     expect(web.env).toMatchObject({ NEXT_PUBLIC_SITE: 'preview', NEXT_PUBLIC_API_URL: 'http://localhost:4101', FEATURE_X: 'on' });
     expect(JSON.stringify(calls)).not.toContain('leak');
@@ -157,7 +158,7 @@ describe('a preview session', () => {
       const first = python(DJANGO, stamps);
       await startPreview(project('p1', services), () => {}, first.d);
       expect(first.d.install).not.toHaveBeenCalled();
-      const ran = () => vi.mocked(first.d.runCommand).mock.calls.map(([command, cwd]) => `${cwd.split('/').pop()}: ${command}`);
+      const ran = () => vi.mocked(first.d.runCommand).mock.calls.map(([command, cwd]) => `${cwd.split(/[\\/]/).pop()}: ${command}`);
       expect(ran()).toContain('backend: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt');
       await stopPreview();
 
@@ -175,7 +176,7 @@ describe('a preview session', () => {
       const { d } = python(DJANGO, new Map());
       await startPreview(project('p1', services), () => {}, d);
       const calls = vi.mocked(d.runCommand).mock.calls.map(([command, cwd]) => ({ command, cwd }));
-      expect(calls).toContainEqual({ command: '.venv/bin/python manage.py migrate', cwd: '/home/.vibe-teamlead/worktrees/preview/p1/backend' });
+      expect(calls).toContainEqual({ command: '.venv/bin/python manage.py migrate', cwd: resolve('/home/.vibe-teamlead/worktrees/preview/p1/backend') });
     });
 
     it('does not migrate a server database the preview did not start', async () => {
@@ -343,8 +344,8 @@ describe('a preview session', () => {
       expect(order).not.toContain('worktree');
       const dbOptions = vi.mocked(d.startDatabase).mock.calls[0][1];
       expect(dbOptions).toMatchObject({ projectId: previewTaskKey(TASK.worktree), copyFrom: 'p1' });
-      const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { cwd: string }).find((o) => o.cwd.endsWith('/apps/api'))!;
-      expect(api.cwd).toBe(`${TASK.worktree}/apps/api`);
+      const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { cwd: string }).find((o) => /[\\/]apps[\\/]api$/.test(o.cwd))!;
+      expect(api.cwd).toBe(resolve(TASK.worktree, 'apps/api'));
       expect(status).toMatchObject({ stage: 'ready', taskId: 't23' });
     });
 
@@ -489,7 +490,7 @@ describe('a preview session', () => {
   it('runs from a worktree under the app folder, outside the project, so nothing walks up into its .env', async () => {
     const { d } = deps();
     await startPreview(project(), () => {}, d);
-    expect(vi.mocked(d.sync).mock.calls[0][3]).toBe('/home/.vibe-teamlead/worktrees/preview/p1');
+    expect(vi.mocked(d.sync).mock.calls[0][3]).toBe(join('/home/.vibe-teamlead/worktrees/preview', 'p1'));
   });
 });
 

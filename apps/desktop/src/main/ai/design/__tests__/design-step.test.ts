@@ -97,7 +97,7 @@ describe('what the planner, the coder and QA are told about the design', () => {
 
   it('the coder builds to the screens, at their widths', () => {
     const text = designReferencePrompt('coder', '/s', frames, { stage: 'design', round: 2, approved: { wireframes: 'a', design: 'b' } });
-    expect(text).toContain('/s/design/screens/roadmap-phone.html');
+    expect(text).toContain(path.join('/s', 'design', 'screens', 'roadmap-phone.html'));
     expect(text).toContain('390');
     expect(text).not.toContain('wireframes/roadmap.html');
     expect(text).toMatch(/build to/i);
@@ -108,7 +108,7 @@ describe('what the planner, the coder and QA are told about the design', () => {
 
   it('with wireframes only, they are the reference for layout and states', () => {
     const text = designReferencePrompt('planner', '/s', frames.slice(0, 1), { stage: 'wireframes', round: 1, approved: { wireframes: 'a' } });
-    expect(text).toContain('/s/design/wireframes/roadmap.html');
+    expect(text).toContain(path.join('/s', 'design', 'wireframes', 'roadmap.html'));
     expect(text).toMatch(/subtask/i);
   });
 

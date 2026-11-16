@@ -208,12 +208,13 @@ describe('isDevServerCommand', () => {
 
 describe('containersOfWorktree', () => {
   it('finds the containers a task worktree started, and only those', () => {
-    const worktree = '/p/.vibe-teamlead/worktrees/tasks/003-x';
-    const ps = [`aaa ${worktree}`, `bbb ${worktree}/apps/api`, 'ccc /p', 'ddd /p/.vibe-teamlead/worktrees/tasks/003-x2', 'eee'].join('\n');
+    // Docker reports the folder in the host's form (C:\…\003-x on Windows)
+    const worktree = path.join('/p', '.vibe-teamlead', 'worktrees', 'tasks', '003-x');
+    const ps = [`aaa ${worktree}`, `bbb ${path.join(worktree, 'apps', 'api')}`, `ccc ${path.join('/p')}`, `ddd ${worktree}2`, 'eee'].join('\n');
     expect(containersOfWorktree(ps, worktree)).toEqual(['aaa', 'bbb']);
   });
 
   it('never touches containers of a folder that is not a task worktree', () => {
-    expect(containersOfWorktree('aaa /p\nbbb /p/apps', '/p')).toEqual([]);
+    expect(containersOfWorktree(`aaa ${path.join('/p')}\nbbb ${path.join('/p', 'apps')}`, path.join('/p'))).toEqual([]);
   });
 });

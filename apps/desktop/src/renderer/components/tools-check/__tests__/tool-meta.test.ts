@@ -28,13 +28,13 @@ describe('summarize', () => {
 
 describe('gateSkipFix', () => {
   it('matches the reasons gates.ts writes for a missing scanner', () => {
-    expect(gateSkipFix('gitleaks', 'gitleaks is not available')).toEqual({ tool: 'gitleaks', kind: 'install', command: 'brew install gitleaks' });
-    expect(gateSkipFix('osv-scanner', 'OSV-Scanner is not available')).toEqual({
+    expect(gateSkipFix('gitleaks', 'gitleaks is not available', 'darwin')).toEqual({ tool: 'gitleaks', kind: 'install', command: 'brew install gitleaks' });
+    expect(gateSkipFix('osv-scanner', 'OSV-Scanner is not available', 'darwin')).toEqual({
       tool: 'osv-scanner',
       kind: 'install',
       command: 'brew install osv-scanner',
     });
-    expect(gateSkipFix('semgrep', 'Semgrep is not installed')).toEqual({ tool: 'semgrep', kind: 'install', command: 'brew install semgrep' });
+    expect(gateSkipFix('semgrep', 'Semgrep is not installed', 'darwin')).toEqual({ tool: 'semgrep', kind: 'install', command: 'brew install semgrep' });
   });
 
   it('gives no fix when the gate was skipped for another reason', () => {
@@ -51,7 +51,7 @@ describe('pentestSkipFix', () => {
       kind: 'install',
       command: 'uv tool install strix-agent',
     });
-    expect(pentestSkipFix('Docker is not running')).toEqual({ tool: 'docker', kind: 'start', command: 'open -a Docker' });
+    expect(pentestSkipFix('Docker is not running', 'darwin')).toEqual({ tool: 'docker', kind: 'start', command: 'open -a Docker' });
   });
 
   it('gives no fix for an API-key skip or no reason', () => {

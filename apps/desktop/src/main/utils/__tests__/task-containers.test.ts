@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { join } from 'node:path';
 
 import { composeProjectName, labelDockerRuns, removeTaskContainers } from '../task-containers';
 
@@ -48,7 +49,7 @@ describe('removeTaskContainers', () => {
   });
 
   it('takes a project started from a folder inside the task', async () => {
-    const { docker, calls } = fakeDocker({ containers: [row('c1', `${WT}/apps/api`)] });
+    const { docker, calls } = fakeDocker({ containers: [row('c1', join(WT, 'apps', 'api'))] });
     await removeTaskContainers(WT, docker);
     expect(calls).toContainEqual(['rm', '-f', '-v', 'c1']);
   });

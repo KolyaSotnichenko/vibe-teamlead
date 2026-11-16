@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { join } from 'node:path';
 
 import type { StreamEvent } from '../../session/types';
 
@@ -385,7 +386,7 @@ describe('runRoadmapGeneration', () => {
     expect(args.allowedWritePaths).toEqual(['/project/.vibe-teamlead/roadmap']);
     expect(args.maxTurns).toBe(30);
     expect(args.abortSignal).toBe(controller.signal);
-    expect(args.systemPrompt).toContain('/project/.vibe-teamlead/roadmap/roadmap_discovery.json');
+    expect(args.systemPrompt).toContain(join('/project/.vibe-teamlead/roadmap', 'roadmap_discovery.json'));
   });
 
   it('retries discovery up to 3 times when the file is not created', async () => {

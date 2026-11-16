@@ -76,7 +76,7 @@ describe('preview IPC', () => {
 
   it('starts previews in the app folder, outside the project', async () => {
     await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
-    expect(vi.mocked(startPreview).mock.calls[0][2].worktreesRoot).toMatch(/\/\.vibe-teamlead\/worktrees\/preview$/);
+    expect(vi.mocked(startPreview).mock.calls[0][2].worktreesRoot).toMatch(/[\\/]\.vibe-teamlead[\\/]worktrees[\\/]preview$/);
   });
 
   it('reset data starts with resetData', async () => {

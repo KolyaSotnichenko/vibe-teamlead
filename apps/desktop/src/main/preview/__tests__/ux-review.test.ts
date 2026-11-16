@@ -31,7 +31,7 @@ describe('runUxReview', () => {
     const runTask = vi.fn(async (_options: Record<string, unknown>) => ({ text: '', output }));
     const result = await runUxReview({ projectId: 'p1', url: 'http://localhost:61073', worktree: '/wt/p1', dataDir, runTask, model: { model: 'sonnet', thinkingLevel: 'medium' } });
     const options = runTask.mock.calls[0][0];
-    expect(options).toMatchObject({ agentType: 'ux_reviewer', cwd: '/wt/p1', specDir: '/wt/p1/.vibe-teamlead/specs/preview', skills: ['ux-review:ux-review'], model: 'sonnet', thinkingLevel: 'medium' });
+    expect(options).toMatchObject({ agentType: 'ux_reviewer', cwd: '/wt/p1', specDir: join('/wt/p1', '.vibe-teamlead', 'specs', 'preview'), skills: ['ux-review:ux-review'], model: 'sonnet', thinkingLevel: 'medium' });
     // Skill too: a tool list replaces the defaults, and the review must load its skill
     expect(options.tools).toEqual(['Read', 'Glob', 'Grep', 'Skill']);
     expect(result.findings).toHaveLength(2);

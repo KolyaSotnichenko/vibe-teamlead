@@ -63,7 +63,7 @@ describe('parseFailedSubtaskDecision', () => {
 
 describe('taskOwnerDecisionsFile', () => {
   it("is in the app's data, and undefined (no decisions trusted) when that folder can't be found", () => {
-    expect(taskOwnerDecisionsFile('/p/specs/023')).toMatch(/\/owner-decisions\/[0-9a-f]{24}\.json$/);
+    expect(taskOwnerDecisionsFile('/p/specs/023')).toMatch(/[\\/]owner-decisions[\\/][0-9a-f]{24}\.json$/);
     getPath.mockImplementationOnce(() => {
       throw new Error('no app');
     });

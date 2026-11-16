@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ownerDecisionsPath, readOwnerDecisions, recordOwnerDecision } from '../owner-decisions';
@@ -11,7 +11,7 @@ describe('owner decisions', () => {
   it('live under the app data, one file per task, outside the project', () => {
     const r = '/data';
     const a = ownerDecisionsPath(r, '/p/roadmaply/.vibe-teamlead/specs/023-x');
-    expect(a.startsWith('/data/owner-decisions/')).toBe(true);
+    expect(a.startsWith(join('/data', 'owner-decisions') + sep)).toBe(true);
     expect(a).not.toContain('roadmaply');
     expect(ownerDecisionsPath(r, '/p/roadmaply/.vibe-teamlead/specs/023-x')).toBe(a);
     expect(ownerDecisionsPath(r, '/p/roadmaply/.vibe-teamlead/specs/024-y')).not.toBe(a);

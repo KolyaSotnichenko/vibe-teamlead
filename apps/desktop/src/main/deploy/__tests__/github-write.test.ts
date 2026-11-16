@@ -308,7 +308,8 @@ describe('push and origin (real local bare remote)', () => {
     writeFileSync(script, `#!/bin/sh\necho "$0 $@" >> "${marker}"\nenv >> "${marker}"\ncat >/dev/null\nexit 1\n`);
     chmodSync(script, 0o755);
     const inc = path.join(root, 'inc.cfg');
-    writeFileSync(inc, `[core]\n\tfsmonitor = ${script}\n`);
+    // A backslash starts an escape in a git config file: a Windows path goes in with forward slashes
+    writeFileSync(inc, `[core]\n\tfsmonitor = ${script.replaceAll('\\', '/')}\n`);
     const set = (...a: string[]) => git(work, 'config', '--local', ...a);
     set('http.proxy', 'http://127.0.0.1:9');
     set('http.sslVerify', 'false');

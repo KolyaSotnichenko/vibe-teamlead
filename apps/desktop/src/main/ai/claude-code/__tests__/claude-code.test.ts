@@ -1,3 +1,4 @@
+import { delimiter, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -7,6 +8,8 @@ import { buildEnv, buildQueryOptions, mcpStartupProblems, sessionSummary, resolv
 import { evaluatePreToolUse } from '../security-hooks';
 import type { SessionConfig, StreamEvent } from '../../session/types';
 import type { ToolContext } from '../../tools/types';
+import { extraPaths } from '../../../platform/exec';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 const toolContext: ToolContext = {
   cwd: '/work/tree',
@@ -148,7 +151,8 @@ describe('buildEnv', () => {
       expect(env.CLAUDE_CONFIG_DIR).toBe('/tmp/vtl');
       // The host PATH first, then the usual install locations a Finder-launched app lacks
       expect(env.PATH?.startsWith(process.env.PATH ?? '')).toBe(true);
-      expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/opt/homebrew/bin', '/usr/local/bin']));
+      expect(env.PATH?.split(delimiter)).toEqual(expect.arrayContaining(extraPaths()));
+      if (!isWindowsHost) expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/opt/homebrew/bin', '/usr/local/bin']));
     } finally {
       delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       delete process.env.ANTHROPIC_AUTH_TOKEN;
@@ -223,7 +227,8 @@ describe('runAgentSession', () => {
 
 describe('evaluatePreToolUse', () => {
   it('confines writes to allowedWritePaths', () => {
-    const ctx = { ...toolContext, allowedWritePaths: [toolContext.specDir] };
+    // Resolved as the app's own paths are (on Windows with a drive letter, as the hook resolves the file)
+    const ctx = { ...toolContext, allowedWritePaths: [resolve(toolContext.specDir)] };
     expect(evaluatePreToolUse('Write', { file_path: `${toolContext.specDir}/spec.md` }, ctx)).toEqual({});
     const denied = evaluatePreToolUse('Edit', { file_path: 'src/index.ts' }, ctx) as {
       hookSpecificOutput: { permissionDecision: string };

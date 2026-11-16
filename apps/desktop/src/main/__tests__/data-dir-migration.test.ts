@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { migrateDataPathSetting, migrateGitignoreText, migrateGlobalData, migrateProjectData } from '../data-dir-migration';
+import { samePath } from '../platform/same-path';
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
@@ -44,7 +45,9 @@ describe('migrateProjectData', () => {
 
     // git knows the worktree at its new place, on the renamed branch
     const worktree = path.join(dir, '.vibe-teamlead', 'worktrees', 'tasks', spec);
-    expect(git(dir, 'worktree', 'list', '--porcelain')).toContain(`worktree ${worktree}`);
+    // git prints C:/Users/name/… where Node may hold C:\Users\NAME~1\…: compare as the folder it names
+    const listed = git(dir, 'worktree', 'list', '--porcelain').split(/\r?\n/).filter((line) => line.startsWith('worktree ')).map((line) => line.slice('worktree '.length));
+    expect(listed.some((p) => samePath(realpathSync(p), realpathSync(worktree)))).toBe(true);
     expect(git(worktree, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe(`vibe-teamlead/${spec}`);
     expect(git(worktree, 'status', '--porcelain')).toBeDefined(); // the worktree works
     expect(readFileSync(path.join(worktree, '.vibe-teamlead', 'specs', spec, 'qa_report.md'), 'utf-8')).toBe('PASSED');

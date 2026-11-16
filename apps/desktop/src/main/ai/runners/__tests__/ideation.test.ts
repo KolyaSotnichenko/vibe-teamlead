@@ -271,7 +271,7 @@ describe('runIdeation', () => {
   it.each(IDEATION_TYPES)('loads the correct prompt file for ideation type: %s', async (type) => {
     await runIdeation(baseConfig({ ideationType: type }));
 
-    expect(mockExistsSync).toHaveBeenCalledWith(expect.stringMatching(/^\/app\/prompts\/ideation_.*\.md$/));
+    expect(mockExistsSync).toHaveBeenCalledWith(expect.stringMatching(/^[\\/]app[\\/]prompts[\\/]ideation_.*\.md$/));
   });
 
   // ---------------------------------------------------------------------------

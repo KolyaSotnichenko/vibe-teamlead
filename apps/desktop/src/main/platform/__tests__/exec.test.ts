@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
+import { isWindowsHost } from './host';
 import { commandFor, extraPaths, findOnPath, GitBashMissingError, killTree, runProcess, runShell, searchPath, shellCommand, UnsafeCmdArgumentError } from '../exec';
 
 describe('runProcess', () => {
@@ -42,10 +43,11 @@ describe('searchPath', () => {
   it('includes the places Docker Desktop and OrbStack put the docker CLI on macOS', async () => {
     const { searchPath: search } = await import('../exec');
     const { homedir } = await import('node:os');
-    const dirs = search([], 'darwin').split(':');
-    expect(dirs).toContain(`${homedir()}/.docker/bin`);
-    expect(dirs).toContain('/Applications/Docker.app/Contents/Resources/bin');
-    expect(dirs).toContain(`${homedir()}/.orbstack/bin`);
+    // A substring check: on a Windows host the home folder itself holds a ':' (C:\Users\…)
+    const joined = search([], 'darwin', { PATH: '/usr/bin' });
+    expect(joined).toContain(`:${homedir()}/.docker/bin`);
+    expect(joined).toContain(':/Applications/Docker.app/Contents/Resources/bin');
+    expect(joined).toContain(`:${homedir()}/.orbstack/bin`);
   });
 });
 
@@ -70,7 +72,8 @@ describe('findOnPath on Windows', () => {
     expect(findOnPath('npm', dir, 'win32', {})).toBe(join(dir, 'npm.cmd'));
   });
 
-  it('is unchanged on macOS: the exact name only', () => {
+  // A Windows temp folder (C:\…) can't be a macOS PATH entry: ':' splits it
+  it.skipIf(isWindowsHost)('is unchanged on macOS: the exact name only', () => {
     expect(findOnPath('npm', dir, 'darwin', env)).toBe(join(dir, 'npm'));
     expect(findOnPath('docker', dir, 'darwin', env)).toBeUndefined();
   });
@@ -106,7 +109,7 @@ describe('extraPaths', () => {
   it('on macOS: Homebrew and friends, no Windows folders', () => {
     const dirs = extraPaths('darwin', { APPDATA: 'C:\\x' });
     expect(dirs).toContain('/opt/homebrew/bin');
-    expect(dirs.some((dir) => dir.includes('\\'))).toBe(false);
+    expect(dirs.some((dir) => dir.startsWith('C:\\x'))).toBe(false);
   });
 
   it('searchPath on Windows joins with ; and reads Path', () => {
