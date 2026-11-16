@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +11,7 @@ vi.mock('../../../ipc-handlers/feature-settings-helper', () => ({ getFeatureSett
 import { runClaudeTask } from '../../claude-code/task';
 import { BriefError, analyzeBrief, appendBriefAnswers, docxText, normalizeProposal, recordBriefAnswers, openQuestionsByTask, readProposalQuestions, storeBrief, taskDescription } from '../brief-import';
 import type { BriefProposalOutput } from '../../schema/brief-proposal';
-import { HOST_BSDTAR } from '../../../platform/__tests__/host-bsdtar';
+import { HOST_BSDTAR, makeZip } from '../../../platform/__tests__/host-bsdtar';
 
 const task = (key: string, dependsOn: string[] = [], epic = 'E1') => ({
   key,
@@ -73,7 +72,7 @@ describe.skipIf(!HOST_BSDTAR)('storeBrief on Windows (no textutil)', () => {
     mkdirSync(join(src, 'word'), { recursive: true });
     writeFileSync(join(src, 'word', 'document.xml'), '<w:document><w:body><w:p><w:r><w:t>Invoicing v1</w:t></w:r></w:p><w:p><w:r><w:t>Customers send invoices.</w:t></w:r></w:p></w:body></w:document>');
     const docx = join(project, 'spec.docx');
-    execFileSync('/usr/bin/zip', ['-qr', docx, 'word'], { cwd: src });
+    makeZip(docx, ['word'], src);
     const stored = await storeBrief(project, undefined, { filePath: docx }, win);
     expect(stored.readPath).toBe(join(stored.dir, 'brief.md'));
     expect(readFileSync(stored.readPath, 'utf-8')).toBe('Invoicing v1\nCustomers send invoices.\n');

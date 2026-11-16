@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { parseTarListing, readZipEntry, windowsTar, zipTool } from '../zip';
-import { HOST_BSDTAR } from './host-bsdtar';
+import { HOST_BSDTAR, makeZip } from './host-bsdtar';
 
 let root: string;
 beforeEach(() => {
@@ -59,7 +59,7 @@ describe('parseTarListing', () => {
     mkdirSync(join(src, 'pkg', 'sub'), { recursive: true });
     writeFileSync(join(src, 'pkg', 'a.css'), 'hello\n');
     writeFileSync(join(src, 'pkg', 'sub', 'b c.md'), 'xxxxxxxxxx');
-    execFileSync('/usr/bin/zip', ['-qr', join(root, 'p.zip'), 'pkg'], { cwd: src });
+    makeZip(join(root, 'p.zip'), ['pkg'], src);
     const listing = execFileSync(HOST_BSDTAR as string, zipTool('win32').listArgs(join(root, 'p.zip')), { encoding: 'utf8' });
     expect(parseTarListing(listing)).toEqual({ bytes: 16, files: 2 });
   });
@@ -71,7 +71,7 @@ describe('readZipEntry', () => {
     mkdirSync(join(src, 'word'), { recursive: true });
     writeFileSync(join(src, 'word', 'document.xml'), '<w:t>Привіт</w:t>');
     const docx = join(root, 'a.docx');
-    execFileSync('/usr/bin/zip', ['-qr', docx, 'word'], { cwd: src });
+    makeZip(docx, ['word'], src);
     expect(await readZipEntry(docx, 'word/document.xml', { tar: HOST_BSDTAR as string })).toBe('<w:t>Привіт</w:t>');
     expect(await readZipEntry(docx, 'word/missing.xml', { tar: HOST_BSDTAR as string })).toBeNull();
     const notZip = join(root, 'b.docx');

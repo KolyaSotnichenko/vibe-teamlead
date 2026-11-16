@@ -5,7 +5,8 @@ import path from 'node:path';
 import { crc32 } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PACKAGE_EXTENSIONS, PACKAGE_LIMITS, parseZipTotals, unpackDesignPackage } from '../unpack';
-import { HOST_BSDTAR } from '../../../../platform/__tests__/host-bsdtar';
+import { HAS_INFO_ZIP, HOST_BSDTAR, makeZip } from '../../../../platform/__tests__/host-bsdtar';
+import { isWindowsHost } from '../../../../platform/__tests__/host';
 
 let root: string;
 beforeEach(() => {
@@ -75,7 +76,7 @@ describe('unpackDesignPackage', () => {
     write(path.join(src, 'pkg', 'README.md'));
     write(path.join(src, 'pkg', 'a.css'));
     const zip = path.join(root, 'pkg.zip');
-    execFileSync('/usr/bin/zip', ['-qr', zip, 'pkg'], { cwd: src });
+    makeZip(zip, ['pkg'], src);
     const dest = path.join(root, 'dest');
     const r = await unpackDesignPackage(zip, dest);
     expect(r.files).toContain('pkg/README.md');
@@ -90,7 +91,10 @@ describe('unpackDesignPackage', () => {
     const r = await unpackDesignPackage(src, dest);
     expect(r.files).toEqual(['ok.md']);
     expect(r.skipped).toEqual([{ path: 'evil.txt', reason: 'unsafe' }]);
+  });
 
+  // Info-ZIP writes the ../ and symlink entries; bsdtar can't (the Windows zip-slip test below uses a hand-made zip)
+  it.skipIf(!HAS_INFO_ZIP)('never writes outside dest from a zip, and skips its symlinks', async () => {
     // zip with a traversal entry and a symlink entry
     const work = path.join(root, 'work');
     write(path.join(work, 'sub', 'keep.md'));
@@ -157,7 +161,7 @@ describe('unpackDesignPackage', () => {
     write(path.join(src, 'a.md'), 'xxxxxxxxxx');
     write(path.join(src, 'b.md'), 'xxxxxxxxxx');
     const zip = path.join(root, 'p.zip');
-    execFileSync('/usr/bin/zip', ['-qr', zip, '.'], { cwd: src });
+    makeZip(zip, ['a.md', 'b.md'], src);
     const dest = path.join(root, 'dest');
     write(path.join(dest, 'keep.md'));
     await expect(unpackDesignPackage(zip, dest, { limits: { totalBytes: 5 } })).rejects.toThrow(/too large/i);
@@ -165,7 +169,8 @@ describe('unpackDesignPackage', () => {
     expect(existsSync(path.join(dest, 'keep.md'))).toBe(true);
   });
 
-  it('runs unzip without a password prompt and with a timeout', async () => {
+  // The fake unzip is a sh script, and unzip is the macOS path: Windows uses tar (below)
+  it.skipIf(isWindowsHost)('runs unzip without a password prompt and with a timeout', async () => {
     const log = path.join(root, 'argv.log');
     const fake = path.join(root, 'fake-unzip.sh');
     writeFileSync(
@@ -209,7 +214,7 @@ describe('unpackDesignPackage', () => {
     expect(parseZipTotals('garbage')).toBeNull();
   });
 
-  it('kills unzip and throws when the bytes actually written exceed totalBytes', async () => {
+  it.skipIf(isWindowsHost)('kills unzip and throws when the bytes actually written exceed totalBytes', async () => {
     const log = path.join(root, 'dir.log');
     const fake = path.join(root, 'bomb.sh');
     writeFileSync(
@@ -243,7 +248,7 @@ while [ $i -lt 40 ]; do head -c 1000 /dev/zero > "$last/f$i.md"; i=$((i+1)); sle
       write(path.join(src, 'pkg', 'fonts', 'A.otf'));
       write(path.join(src, 'pkg', 'run.sh'));
       const zip = path.join(root, 'pkg.zip');
-      execFileSync('/usr/bin/zip', ['-qr', zip, 'pkg'], { cwd: src });
+      makeZip(zip, ['pkg'], src);
       const dest = path.join(root, 'dest');
       const r = await unpackDesignPackage(zip, dest, win);
       expect(r.files).toEqual(['pkg/README.md', 'pkg/fonts/A.otf']);
@@ -256,7 +261,7 @@ while [ $i -lt 40 ]; do head -c 1000 /dev/zero > "$last/f$i.md"; i=$((i+1)); sle
       write(path.join(src, 'a.md'), 'xxxxxxxxxx');
       write(path.join(src, 'b.md'), 'xxxxxxxxxx');
       const zip = path.join(root, 'p.zip');
-      execFileSync('/usr/bin/zip', ['-qr', zip, '.'], { cwd: src });
+      makeZip(zip, ['a.md', 'b.md'], src);
       const dest = path.join(root, 'dest');
       write(path.join(dest, 'keep.md'));
       await expect(unpackDesignPackage(zip, dest, { ...win, limits: { totalBytes: 5 } })).rejects.toThrow(/too large/i);
