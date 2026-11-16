@@ -99,3 +99,23 @@ describe('Storybook tool environment', () => {
     onePathKey(toolEnv());
   });
 });
+
+describe('Git Bash for Claude Code on Windows', () => {
+  const config = { agentType: 'coder', model: 'claude-sonnet-4-6', auth: { apiKey: 'sk-ant-test' }, claudeConfigDir: '/tmp/vtl' } as never;
+
+  it('buildEnv sets CLAUDE_CODE_GIT_BASH_PATH to the detected Git Bash', () => {
+    withHost({ ProgramFiles: 'C:\\Program Files' });
+    const bash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+    expect(buildEnv(config, { platform: 'win32', exists: (file) => file === bash }).CLAUDE_CODE_GIT_BASH_PATH).toBe(bash);
+  });
+
+  it("keeps the user's own value", () => {
+    withHost({ CLAUDE_CODE_GIT_BASH_PATH: 'E:\\msys\\bash.exe' });
+    expect(buildEnv(config, { platform: 'win32', exists: (file) => file === 'E:\\msys\\bash.exe' }).CLAUDE_CODE_GIT_BASH_PATH).toBe('E:\\msys\\bash.exe');
+  });
+
+  it('is not set on macOS, or when Git for Windows is missing', () => {
+    expect(buildEnv(config, { platform: 'darwin', exists: () => true }).CLAUDE_CODE_GIT_BASH_PATH).toBeUndefined();
+    expect(buildEnv(config, { platform: 'win32', exists: () => false }).CLAUDE_CODE_GIT_BASH_PATH).toBeUndefined();
+  });
+});

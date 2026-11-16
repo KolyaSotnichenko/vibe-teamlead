@@ -15,7 +15,9 @@ import { basename, join } from 'node:path';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
+import { getPlatformKey } from '../../platform';
 import { searchPath } from '../../platform/exec';
+import { findGitBash } from '../../platform/git-bash';
 import { billingOf, recordUsage } from '../usage/usage-ledger';
 import { getAgentConfig } from '../config/agent-configs';
 import { MODEL_ID_MAP } from '../config/types';
@@ -146,8 +148,11 @@ export function defaultClaudeConfigDir(): string {
  * host variables is passed through, auth is always the configured key, and
  * Claude Code gets its own config directory.
  */
-export function buildEnv(config: SessionConfig): Record<string, string | undefined> {
+export function buildEnv(config: SessionConfig, host: { platform?: 'darwin' | 'win32' | 'linux'; exists?: (file: string) => boolean } = {}): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = pickHostEnv(SESSION_HOST_ENV);
+  // Windows: Claude Code runs its Bash tool with Git Bash; the user's own setting wins
+  const gitBash = findGitBash({ platform: host.platform ?? getPlatformKey(), env: process.env, exists: host.exists });
+  if (gitBash) env.CLAUDE_CODE_GIT_BASH_PATH = gitBash;
   // An app started from Finder gets a bare PATH: add Homebrew, Docker Desktop,
   // nvm/volta/pnpm and friends so agents' Bash (docker, pnpm, node) and stdio
   // MCP servers (npx) find what the user has installed.
