@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Download the security-gate scanners bundled with the macOS app into
- * vendor-bin/ (packaged as Resources/scanners/ by electron-builder):
+ * Download the security-gate scanners bundled with the app into vendor-bin/
+ * (packaged as Resources/scanners/ by electron-builder):
  *
  *   gitleaks     (MIT)        https://github.com/gitleaks/gitleaks
  *   osv-scanner  (Apache-2.0) https://github.com/google/osv-scanner
@@ -9,7 +9,8 @@
  * Versions are pinned; every download is checked against the release's
  * published SHA-256 checksums before it is used.
  *
- * Usage: node scripts/fetch-scanners.cjs [--arch arm64|x64]
+ * Usage: node scripts/fetch-scanners.cjs [--platform darwin|win32] [--arch arm64|x64]
+ * Both default to the host. Windows is x64 only and gets gitleaks.exe and osv-scanner.exe.
  * In development the app also finds gitleaks / osv-scanner on PATH
  * (brew install gitleaks osv-scanner), so running this is optional.
  */
@@ -23,14 +24,49 @@ const { join } = require('node:path');
 const GITLEAKS_VERSION = '8.28.0';
 const OSV_SCANNER_VERSION = '2.6.0';
 
-const argIndex = process.argv.indexOf('--arch');
-const arch = argIndex !== -1 ? process.argv[argIndex + 1] : process.arch;
-if (!['arm64', 'x64'].includes(arch)) {
-  console.error(`Unsupported arch: ${arch} (expected arm64 or x64)`);
-  process.exit(1);
+const PLATFORMS = ['darwin', 'win32'];
+const ARCHES = ['arm64', 'x64'];
+
+/** --platform / --arch, defaulting to the host. Pure. */
+function parseArgs(argv, host) {
+  const value = (flag) => {
+    const index = argv.indexOf(flag);
+    return index !== -1 ? argv[index + 1] : undefined;
+  };
+  const platform = value('--platform') ?? host.platform;
+  // Windows builds are x64 only, whatever machine fetches them
+  const arch = value('--arch') ?? (platform === 'win32' ? 'x64' : host.arch);
+  if (!PLATFORMS.includes(platform)) throw new Error(`Unsupported platform: ${platform} (expected ${PLATFORMS.join(' or ')})`);
+  if (!ARCHES.includes(arch)) throw new Error(`Unsupported arch: ${arch} (expected ${ARCHES.join(' or ')})`);
+  return { platform, arch };
 }
 
-const outDir = join(__dirname, '..', 'vendor-bin');
+/** The release assets for a platform and architecture, and the names they are saved under. Pure. */
+function scannerAssets(platform, arch) {
+  const gitleaksBase = `https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}`;
+  const osvBase = `https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}`;
+  const gitleaksChecksums = `${gitleaksBase}/gitleaks_${GITLEAKS_VERSION}_checksums.txt`;
+  const osvChecksums = `${osvBase}/osv-scanner_SHA256SUMS`;
+  const osvArch = arch === 'x64' ? 'amd64' : 'arm64';
+
+  if (platform === 'darwin' && ARCHES.includes(arch)) {
+    const gitleaksFile = `gitleaks_${GITLEAKS_VERSION}_darwin_${arch}.tar.gz`;
+    const osvFile = `osv-scanner_darwin_${osvArch}`;
+    return {
+      gitleaks: { url: `${gitleaksBase}/${gitleaksFile}`, checksumsUrl: gitleaksChecksums, file: gitleaksFile, archive: 'tar.gz', member: 'gitleaks', out: 'gitleaks' },
+      osv: { url: `${osvBase}/${osvFile}`, checksumsUrl: osvChecksums, file: osvFile, out: 'osv-scanner' },
+    };
+  }
+  if (platform === 'win32' && arch === 'x64') {
+    const gitleaksFile = `gitleaks_${GITLEAKS_VERSION}_windows_x64.zip`;
+    const osvFile = 'osv-scanner_windows_amd64.exe';
+    return {
+      gitleaks: { url: `${gitleaksBase}/${gitleaksFile}`, checksumsUrl: gitleaksChecksums, file: gitleaksFile, archive: 'zip', member: 'gitleaks.exe', out: 'gitleaks.exe' },
+      osv: { url: `${osvBase}/${osvFile}`, checksumsUrl: osvChecksums, file: osvFile, out: 'osv-scanner.exe' },
+    };
+  }
+  throw new Error(`No scanner builds for ${platform}-${arch}`);
+}
 
 async function download(url) {
   const res = await fetch(url, { redirect: 'follow' });
@@ -52,54 +88,70 @@ function verify(buffer, digest, file) {
   if (actual !== digest) throw new Error(`Checksum mismatch for ${file}: expected ${digest}, got ${actual}`);
 }
 
-async function fetchGitleaks() {
-  const base = `https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}`;
-  const file = `gitleaks_${GITLEAKS_VERSION}_darwin_${arch}.tar.gz`;
-  const checksums = await download(`${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt`);
-  const archive = await download(`${base}/${file}`);
-  verify(archive, expectedDigest(checksums, file), file);
+/**
+ * bsdtar reads both .tar.gz and .zip. On Windows that is System32's tar.exe:
+ * a shell from Git for Windows puts GNU tar (no zip support) first on PATH.
+ */
+function tarCommand() {
+  if (process.platform !== 'win32') return 'tar';
+  return join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+}
+
+async function fetchGitleaks(asset, outDir) {
+  const checksums = await download(asset.checksumsUrl);
+  const archive = await download(asset.url);
+  verify(archive, expectedDigest(checksums, asset.file), asset.file);
 
   const work = mkdtempSync(join(tmpdir(), 'gitleaks-'));
   try {
-    writeFileSync(join(work, file), archive);
-    execFileSync('tar', ['-xzf', join(work, file), '-C', work, 'gitleaks']);
-    copyFileSync(join(work, 'gitleaks'), join(outDir, 'gitleaks'));
-    chmodSync(join(outDir, 'gitleaks'), 0o755);
+    writeFileSync(join(work, asset.file), archive);
+    // -C before the archive, so GNU and BSD tar both read it the same way
+    execFileSync(tarCommand(), ['-xf', join(work, asset.file), '-C', work, asset.member]);
+    copyFileSync(join(work, asset.member), join(outDir, asset.out));
+    chmodSync(join(outDir, asset.out), 0o755);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
 }
 
-async function fetchOsvScanner() {
-  const base = `https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}`;
-  const file = `osv-scanner_darwin_${arch === 'x64' ? 'amd64' : 'arm64'}`;
-  const checksums = await download(`${base}/osv-scanner_SHA256SUMS`);
-  const binary = await download(`${base}/${file}`);
-  verify(binary, expectedDigest(checksums, file), file);
-  writeFileSync(join(outDir, 'osv-scanner'), binary);
-  chmodSync(join(outDir, 'osv-scanner'), 0o755);
+async function fetchOsvScanner(asset, outDir) {
+  const checksums = await download(asset.checksumsUrl);
+  const binary = await download(asset.url);
+  verify(binary, expectedDigest(checksums, asset.file), asset.file);
+  writeFileSync(join(outDir, asset.out), binary);
+  chmodSync(join(outDir, asset.out), 0o755);
 }
 
-const stampPath = join(outDir, 'VERSIONS');
-const stamp = `gitleaks ${GITLEAKS_VERSION}, osv-scanner ${OSV_SCANNER_VERSION}, ${arch}`;
+async function main() {
+  const { platform, arch } = parseArgs(process.argv.slice(2), { platform: process.platform, arch: process.arch });
+  const assets = scannerAssets(platform, arch);
+  const outDir = join(__dirname, '..', 'vendor-bin');
+  // macOS keeps its stamp's old name, so an existing vendor-bin isn't fetched again
+  const stampPath = join(outDir, platform === 'darwin' ? 'VERSIONS' : `VERSIONS-${platform}`);
+  const stamp = `gitleaks ${GITLEAKS_VERSION}, osv-scanner ${OSV_SCANNER_VERSION}, ${platform === 'darwin' ? arch : `${platform}-${arch}`}`;
 
-(async () => {
   mkdirSync(outDir, { recursive: true });
   // Already fetched for this version and architecture (local packaging runs this every time)
   if (
     existsSync(stampPath) &&
     readFileSync(stampPath, 'utf-8').trim() === stamp &&
-    existsSync(join(outDir, 'gitleaks')) &&
-    existsSync(join(outDir, 'osv-scanner'))
+    existsSync(join(outDir, assets.gitleaks.out)) &&
+    existsSync(join(outDir, assets.osv.out))
   ) {
     console.log(`Scanners already in ${outDir} (${stamp})`);
     return;
   }
-  await fetchGitleaks();
-  await fetchOsvScanner();
+  await fetchGitleaks(assets.gitleaks, outDir);
+  await fetchOsvScanner(assets.osv, outDir);
   writeFileSync(stampPath, `${stamp}\n`);
   console.log(`Scanners ready in ${outDir} (${stamp})`);
-})().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { parseArgs, scannerAssets, expectedDigest };
