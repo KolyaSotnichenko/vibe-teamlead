@@ -15,6 +15,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
 
+import { pathValue, WINDOWS_HOST_ENV } from '../../platform/env';
 import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
@@ -98,6 +99,8 @@ const LOCK_STALE_MS = 90 * 60_000;
 
 /** What tools need to run. Everything else, keys included, stays out. */
 const KEPT_ENV = /^(HOME|USER|LOGNAME|SHELL|TERM|TMPDIR|LANG|LC_[A-Z]+|JAVA_HOME|GOPATH|GOROOT|GOMODCACHE|CARGO_HOME|RUSTUP_HOME|DOTNET_ROOT|GEM_HOME|GEM_PATH|BUNDLE_PATH|COMPOSER_HOME|PNPM_HOME|NVM_DIR|VOLTA_HOME|PYENV_ROOT|UV_CACHE_DIR|DEVELOPER_DIR)$/;
+/** Windows' system and user folders, under any spelling (Windows names are case-insensitive) */
+const KEPT_WINDOWS_ENV = new Set<string>(WINDOWS_HOST_ENV.map((name) => name.toLowerCase()));
 
 /** A project's check settings, or nothing when they are off. Pure. */
 export function projectVerification(projectPath: string, settings: { verifyEnabled?: boolean; verifyCommands?: string[]; verifyEnv?: Record<string, string> } | undefined): { commands?: string[]; env: Record<string, string>; lockDir: string } | undefined {
@@ -108,8 +111,8 @@ export function projectVerification(projectPath: string, settings: { verifyEnabl
 /** Pure. */
 export function verificationEnv(host: NodeJS.ProcessEnv, project: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
-  for (const [name, value] of Object.entries(host)) if (KEPT_ENV.test(name)) env[name] = value;
-  return { ...env, PATH: searchPath(host.PATH?.split(delimiter)), CI: 'true', ...project };
+  for (const [name, value] of Object.entries(host)) if (KEPT_ENV.test(name) || KEPT_WINDOWS_ENV.has(name.toLowerCase())) env[name] = value;
+  return { ...env, PATH: searchPath(pathValue(host).split(delimiter).filter(Boolean)), CI: 'true', ...project };
 }
 
 /** One at a time, across the worker threads of a project's tasks. A directory: creating one is atomic. */

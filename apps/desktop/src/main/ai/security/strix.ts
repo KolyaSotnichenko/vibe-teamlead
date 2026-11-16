@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
+import { envValue, WINDOWS_HOST_ENV, withPath } from '../../platform/env';
 import { findOnPath, runProcess, searchPath } from '../../platform/exec';
 import { isSubscriptionToken } from '../claude-code/auth';
 import { writeFileReplacing } from '../safe-write';
@@ -86,11 +87,35 @@ export function strixPath(): string {
   return searchPath([join(homedir(), '.strix', 'bin')]);
 }
 
+/**
+ * What Strix runs with: its PATH, home, temp, locale, Docker, the model and
+ * key it is given, and on Windows the system and user folders. Nothing else of the app's.
+ */
+export function strixEnv(options: Pick<StrixRunOptions, 'model' | 'apiKey' | 'baseURL'>): NodeJS.ProcessEnv {
+  const windows: NodeJS.ProcessEnv = {};
+  for (const name of WINDOWS_HOST_ENV) {
+    const value = envValue(process.env, name);
+    if (value) windows[name] = value;
+  }
+  return {
+    ...windows,
+    PATH: strixPath(),
+    HOME: process.env.HOME ?? homedir(),
+    TMPDIR: process.env.TMPDIR,
+    LANG: process.env.LANG ?? 'en_US.UTF-8',
+    DOCKER_HOST: process.env.DOCKER_HOST,
+    STRIX_LLM: strixModel(options.model),
+    LLM_API_KEY: options.apiKey,
+    ...(options.baseURL ? { LLM_API_BASE: options.baseURL } : {}),
+    STRIX_TELEMETRY: '0',
+  };
+}
+
 export async function dockerAvailable(signal?: AbortSignal): Promise<boolean> {
   const path = strixPath();
   const docker = findOnPath('docker', path);
   if (!docker) return false;
-  const result = await runProcess(docker, ['info'], { env: { ...process.env, PATH: path }, timeoutMs: 15_000, signal });
+  const result = await runProcess(docker, ['info'], { env: withPath(process.env, path), timeoutMs: 15_000, signal });
   return result.code === 0;
 }
 
@@ -288,17 +313,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
 
   mkdirSync(workDir, { recursive: true });
-  const env: NodeJS.ProcessEnv = {
-    PATH: strixPath(),
-    HOME: process.env.HOME ?? homedir(),
-    TMPDIR: process.env.TMPDIR,
-    LANG: process.env.LANG ?? 'en_US.UTF-8',
-    DOCKER_HOST: process.env.DOCKER_HOST,
-    STRIX_LLM: strixModel(options.model),
-    LLM_API_KEY: options.apiKey,
-    ...(options.baseURL ? { LLM_API_BASE: options.baseURL } : {}),
-    STRIX_TELEMETRY: '0',
-  };
+  const env = strixEnv(options);
 
   let target: StrixTarget;
   try {

@@ -14,6 +14,7 @@ import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 
 import { getPlatformKey } from '../../platform';
+import { envValue, WINDOWS_HOST_ENV, withPath } from '../../platform/env';
 import { findOnPath, killTree, runProcess, searchPath, shellCommand } from '../../platform/exec';
 import { writeFileReplacingSync } from '../safe-write';
 
@@ -267,8 +268,8 @@ function logTail(path: string): string {
 /** The server's environment: what tools need, without the session's credentials. */
 export function serverEnv(extra: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = { PATH: searchPath(), HOME: process.env.HOME ?? homedir(), FORCE_COLOR: '0' };
-  for (const key of ['USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'NVM_DIR', 'VOLTA_HOME', 'PNPM_HOME']) {
-    const value = process.env[key];
+  for (const key of ['USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'NVM_DIR', 'VOLTA_HOME', 'PNPM_HOME', ...WINDOWS_HOST_ENV]) {
+    const value = envValue(process.env, key);
     if (value) env[key] = value;
   }
   return { ...env, ...extra };
@@ -386,7 +387,7 @@ export async function stopWorktreeContainers(worktree: string): Promise<void> {
   if (!isTaskWorktree(worktree)) return;
   const docker = findOnPath('docker', searchPath());
   if (!docker || !existsSync(worktree)) return;
-  const env = { ...process.env, PATH: searchPath() };
+  const env = withPath(process.env, searchPath());
   const ps = await runProcess(
     docker,
     ['ps', '--filter', 'label=com.docker.compose.project', '--format', '{{.ID}} {{.Label "com.docker.compose.project.working_dir"}}'],

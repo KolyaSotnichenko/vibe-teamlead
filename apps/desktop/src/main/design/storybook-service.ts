@@ -10,6 +10,7 @@ import path from 'node:path';
 
 import { getAugmentedEnv } from '../env-utils';
 import { isWindows } from '../platform';
+import { pathValue, withPath } from '../platform/env';
 import { commandFor, findOnPath, killTree, searchPath } from '../platform/exec';
 import { isUiFile } from '../ai/design/design-lint';
 
@@ -75,7 +76,7 @@ export function startStorybook(projectPath: string, dir: string, script: string 
     const pm = packageManagerOf(projectPath);
     const env = toolEnv();
     // npm.cmd and friends can't be spawned as they are on Windows
-    const command = commandFor(findOnPath(pm, env.PATH) ?? pm, storybookArgs(pm, script, port));
+    const command = commandFor(findOnPath(pm, pathValue(env)) ?? pm, storybookArgs(pm, script, port));
     const child = spawn(command.file, command.args, {
       cwd: key,
       env: { ...env, BROWSER: 'none', CI: '1' },
@@ -156,9 +157,9 @@ export function stopStorybooksUnder(root: string): void {
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
 /** Environment for package-manager processes: the app's env with the full tool PATH. */
-function toolEnv(): Record<string, string> {
+export function toolEnv(): Record<string, string> {
   const env = getAugmentedEnv();
-  return { ...env, PATH: searchPath(env.PATH ? env.PATH.split(path.delimiter) : []) };
+  return withPath(env, searchPath(pathValue(env).split(path.delimiter).filter(Boolean)));
 }
 
 /**
@@ -210,7 +211,7 @@ export function installDependencies(root: string, onLine?: (line: string) => voi
   const job = new Promise<void>((resolve, reject) => {
     onLine?.(`${pm} install`);
     const env = toolEnv();
-    const command = commandFor(findOnPath(pm, env.PATH) ?? pm, ['install']);
+    const command = commandFor(findOnPath(pm, pathValue(env)) ?? pm, ['install']);
     const child = spawn(command.file, command.args, { cwd: key, env: { ...env, CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let tail = '';
     const timer = setTimeout(() => {

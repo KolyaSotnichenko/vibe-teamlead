@@ -14,6 +14,7 @@ import { join, win32 } from 'node:path';
 import type { McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk';
 
 import { excludeFromGit } from '../../utils/git-exclude';
+import { envValue, WINDOWS_HOST_ENV } from '../../platform/env';
 
 /** MCP key → tools appear as mcp__codegraph__* */
 export const CODEGRAPH_SERVER_KEY = 'codegraph';
@@ -28,8 +29,8 @@ export function codegraphEnv(): Record<string, string> {
     CODEGRAPH_NO_DOWNLOAD: '1',
     CODEGRAPH_NO_PROMPT_HOOK: '1',
   };
-  for (const key of ['PATH', 'HOME', 'TMPDIR', 'LANG']) {
-    const value = process.env[key];
+  for (const key of ['PATH', 'HOME', 'TMPDIR', 'LANG', ...WINDOWS_HOST_ENV]) {
+    const value = envValue(process.env, key);
     if (value) env[key] = value;
   }
   // Claude Code merges its own environment (with the session's credentials) into MCP servers.

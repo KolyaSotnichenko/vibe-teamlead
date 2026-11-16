@@ -16,6 +16,7 @@ import { promises as fsPromises } from 'fs';
 import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSentryEnvForSubprocess } from './sentry';
+import { pathValue, withPath } from './platform/env';
 import { isWindows, isUnix, getPathDelimiter, getNpmCommand, getPlatformKey } from './platform';
 
 const execFileAsync = promisify(execFile);
@@ -254,7 +255,7 @@ function applyGitHubAppToken(env: Record<string, string>): void {
 }
 
 export function getAugmentedEnv(additionalPaths?: string[]): Record<string, string> {
-  const env = { ...process.env } as Record<string, string>;
+  let env = { ...process.env } as Record<string, string>;
   const pathSeparator = getPathDelimiter();
 
   // Get all candidate paths (platform + additional)
@@ -263,7 +264,8 @@ export function getAugmentedEnv(additionalPaths?: string[]): Record<string, stri
   // Ensure PATH has essential system directories when launched from Finder/Dock.
   // When Electron launches from GUI (not terminal), PATH might be empty or minimal.
   // The Claude Agent SDK needs /usr/bin/security to access macOS Keychain.
-  let currentPath = env.PATH || '';
+  // Windows names it Path: read and set it under the key the host uses, never both
+  let currentPath = pathValue(env);
 
   // Ensure basic system paths are always present
   {
@@ -295,7 +297,7 @@ export function getAugmentedEnv(additionalPaths?: string[]): Record<string, stri
   const pathsToAdd = buildPathsToAdd(candidatePaths, currentPathSet, existingPaths, npmPrefix);
 
   // Prepend new paths to PATH (prepend so they take priority)
-  env.PATH = [...pathsToAdd, currentPath].filter(Boolean).join(pathSeparator);
+  env = withPath(env, [...pathsToAdd, currentPath].filter(Boolean).join(pathSeparator));
 
   // Add Sentry environment variables for Python subprocesses
   // These are embedded at build time and need to be passed explicitly
@@ -319,7 +321,7 @@ export function getAugmentedEnv(additionalPaths?: string[]): Record<string, stri
 export function findExecutable(command: string): string | null {
   const env = getAugmentedEnv();
   const pathSeparator = getPathDelimiter();
-  const pathDirs = (env.PATH || '').split(pathSeparator);
+  const pathDirs = pathValue(env).split(pathSeparator);
 
   // On Windows, check Windows-native extensions first (.exe, .cmd) before
   // extensionless files (which are typically bash/sh scripts for Git Bash/Cygwin)
@@ -431,14 +433,15 @@ async function getNpmGlobalPrefixAsync(): Promise<string | null> {
  * @returns Promise resolving to environment object with augmented PATH
  */
 export async function getAugmentedEnvAsync(additionalPaths?: string[]): Promise<Record<string, string>> {
-  const env = { ...process.env } as Record<string, string>;
+  let env = { ...process.env } as Record<string, string>;
   const pathSeparator = getPathDelimiter();
 
   // Get all candidate paths (platform + additional)
   const candidatePaths = getExpandedPlatformPaths(additionalPaths);
 
   // Ensure essential system paths are present (for macOS Keychain access, Windows System32)
-  let currentPath = env.PATH || '';
+  // Windows names it Path: read and set it under the key the host uses, never both
+  let currentPath = pathValue(env);
 
   {
     const essentialPaths = isUnix() ? ESSENTIAL_SYSTEM_PATHS.unix : ESSENTIAL_SYSTEM_PATHS.win32;
@@ -473,7 +476,7 @@ export async function getAugmentedEnvAsync(additionalPaths?: string[]): Promise<
   const pathsToAdd = buildPathsToAdd(candidatePaths, currentPathSet, existingPaths, npmPrefix);
 
   // Prepend new paths to PATH (prepend so they take priority)
-  env.PATH = [...pathsToAdd, currentPath].filter(Boolean).join(pathSeparator);
+  env = withPath(env, [...pathsToAdd, currentPath].filter(Boolean).join(pathSeparator));
 
   // Add Sentry environment variables for Python subprocesses
   // These are embedded at build time and need to be passed explicitly
@@ -496,7 +499,7 @@ export async function getAugmentedEnvAsync(additionalPaths?: string[]): Promise<
 export async function findExecutableAsync(command: string): Promise<string | null> {
   const env = await getAugmentedEnvAsync();
   const pathSeparator = getPathDelimiter();
-  const pathDirs = (env.PATH || '').split(pathSeparator);
+  const pathDirs = pathValue(env).split(pathSeparator);
 
   const extensions = isWindows()
     ? ['.exe', '.cmd', '.bat', '.ps1', '']
