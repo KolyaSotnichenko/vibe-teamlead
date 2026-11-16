@@ -5,6 +5,7 @@ import path from 'node:path';
 import { crc32 } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PACKAGE_EXTENSIONS, PACKAGE_LIMITS, parseZipTotals, unpackDesignPackage } from '../unpack';
+import { HOST_BSDTAR } from '../../../../platform/__tests__/host-bsdtar';
 
 let root: string;
 beforeEach(() => {
@@ -233,8 +234,8 @@ while [ $i -lt 40 ]; do head -c 1000 /dev/zero > "$last/f$i.md"; i=$((i+1)); sle
     expect(existsSync(readFileSync(log, 'utf8').trim())).toBe(false);
   });
 
-  describe('on Windows (bsdtar instead of unzip)', () => {
-    const win = { platform: 'win32' as const, tar: '/usr/bin/tar' };
+  describe.skipIf(!HOST_BSDTAR)('on Windows (bsdtar instead of unzip)', () => {
+    const win = { platform: 'win32' as const, tar: HOST_BSDTAR as string };
 
     it('lists, checks the totals and extracts a zip with tar', async () => {
       const src = path.join(root, 'src');

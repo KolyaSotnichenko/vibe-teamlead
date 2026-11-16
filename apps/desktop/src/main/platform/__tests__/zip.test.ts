@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { parseTarListing, readZipEntry, windowsTar, zipTool } from '../zip';
+import { HOST_BSDTAR } from './host-bsdtar';
 
 let root: string;
 beforeEach(() => {
@@ -53,28 +54,28 @@ describe('parseTarListing', () => {
     expect(parseTarListing('-rw-r--r--  0 0 0 5 16 Nov 14:21 C:\\evil.md')).toBeNull();
   });
 
-  it('reads the real output of bsdtar for a zip', () => {
+  it.skipIf(!HOST_BSDTAR)('reads the real output of bsdtar for a zip', () => {
     const src = join(root, 'src');
     mkdirSync(join(src, 'pkg', 'sub'), { recursive: true });
     writeFileSync(join(src, 'pkg', 'a.css'), 'hello\n');
     writeFileSync(join(src, 'pkg', 'sub', 'b c.md'), 'xxxxxxxxxx');
     execFileSync('/usr/bin/zip', ['-qr', join(root, 'p.zip'), 'pkg'], { cwd: src });
-    const listing = execFileSync('/usr/bin/tar', zipTool('win32').listArgs(join(root, 'p.zip')), { encoding: 'utf8' });
+    const listing = execFileSync(HOST_BSDTAR as string, zipTool('win32').listArgs(join(root, 'p.zip')), { encoding: 'utf8' });
     expect(parseTarListing(listing)).toEqual({ bytes: 16, files: 2 });
   });
 });
 
 describe('readZipEntry', () => {
-  it('reads one entry of a zip as text with tar (Windows), and null when it is missing or not a zip', async () => {
+  it.skipIf(!HOST_BSDTAR)('reads one entry of a zip as text with tar (Windows), and null when it is missing or not a zip', async () => {
     const src = join(root, 'src');
     mkdirSync(join(src, 'word'), { recursive: true });
     writeFileSync(join(src, 'word', 'document.xml'), '<w:t>Привіт</w:t>');
     const docx = join(root, 'a.docx');
     execFileSync('/usr/bin/zip', ['-qr', docx, 'word'], { cwd: src });
-    expect(await readZipEntry(docx, 'word/document.xml', { tar: '/usr/bin/tar' })).toBe('<w:t>Привіт</w:t>');
-    expect(await readZipEntry(docx, 'word/missing.xml', { tar: '/usr/bin/tar' })).toBeNull();
+    expect(await readZipEntry(docx, 'word/document.xml', { tar: HOST_BSDTAR as string })).toBe('<w:t>Привіт</w:t>');
+    expect(await readZipEntry(docx, 'word/missing.xml', { tar: HOST_BSDTAR as string })).toBeNull();
     const notZip = join(root, 'b.docx');
     writeFileSync(notZip, readFileSync(join(src, 'word', 'document.xml')));
-    expect(await readZipEntry(notZip, 'word/document.xml', { tar: '/usr/bin/tar' })).toBeNull();
+    expect(await readZipEntry(notZip, 'word/document.xml', { tar: HOST_BSDTAR as string })).toBeNull();
   });
 });

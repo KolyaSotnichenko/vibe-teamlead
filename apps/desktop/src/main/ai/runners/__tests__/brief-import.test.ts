@@ -12,6 +12,7 @@ vi.mock('../../../ipc-handlers/feature-settings-helper', () => ({ getFeatureSett
 import { runClaudeTask } from '../../claude-code/task';
 import { BriefError, analyzeBrief, appendBriefAnswers, docxText, normalizeProposal, recordBriefAnswers, openQuestionsByTask, readProposalQuestions, storeBrief, taskDescription } from '../brief-import';
 import type { BriefProposalOutput } from '../../schema/brief-proposal';
+import { HOST_BSDTAR } from '../../../platform/__tests__/host-bsdtar';
 
 const task = (key: string, dependsOn: string[] = [], epic = 'E1') => ({
   key,
@@ -63,8 +64,8 @@ describe('docxText', () => {
   });
 });
 
-describe('storeBrief on Windows (no textutil)', () => {
-  const win = { platform: 'win32' as const, tar: '/usr/bin/tar' };
+describe.skipIf(!HOST_BSDTAR)('storeBrief on Windows (no textutil)', () => {
+  const win = { platform: 'win32' as const, tar: HOST_BSDTAR as string };
 
   it('reads the text of a .docx itself', async () => {
     const project = mkdtempSync(join(tmpdir(), 'vtl-brief-'));
