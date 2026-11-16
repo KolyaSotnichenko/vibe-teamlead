@@ -40,7 +40,7 @@ export interface ReplyContext {
 }
 
 /** A press handler may return a short text Telegram shows as a toast */
-export type ButtonAction = (ctx: PressContext) => Promise<string | void> | string | void;
+export type ButtonAction = (ctx: PressContext) => unknown;
 export type CommandHandler = (ctx: CommandContext) => Promise<void> | void;
 export type ReplyHandler = (text: string, ctx: ReplyContext) => Promise<void> | void;
 
@@ -159,11 +159,12 @@ export function createRouter(deps: RouterDeps): Router {
       await api?.answerCallbackQuery(query.id, deps.t('expired'));
       return;
     }
-    let toast: string | void = undefined;
+    let toast: string | undefined;
     try {
-      toast = await entry.action({ chatId: query.message?.chat.id ?? owner.chatId, messageId: query.message?.message_id, callbackId: query.id });
+      const result = await entry.action({ chatId: query.message?.chat.id ?? owner.chatId, messageId: query.message?.message_id, callbackId: query.id });
+      toast = typeof result === 'string' && result ? result : undefined;
     } finally {
-      await api?.answerCallbackQuery(query.id, toast || undefined);
+      await api?.answerCallbackQuery(query.id, toast);
     }
   };
 

@@ -79,6 +79,8 @@ import { mainWindowWebPreferences } from './window-options';
 import { IPC_CHANNELS, DEFAULT_APP_SETTINGS, SPELL_CHECK_LANGUAGE_MAP, DEFAULT_SPELL_CHECK_LANGUAGE, ADD_TO_DICTIONARY_LABELS } from '../shared/constants';
 import { getAppLanguage, initAppLanguage } from './app-language';
 import { createQuitGuard, quitPrompt } from './quit-guard';
+import { getTelegramService, initTelegram, stopTelegram } from './telegram';
+import { registerTelegramHandlers } from './ipc-handlers/telegram-handlers';
 import { readSettingsFile, writeSettingsFile } from './settings-utils';
 import { migrateLegacyClaudeCredential } from './ai/claude-code/credential-migration';
 import { resolveClaudeAuth } from './ai/claude-code/credential';
@@ -599,6 +601,14 @@ app.whenReady().then(() => {
   // Setup IPC handlers
   setupIpcHandlers(agentManager, terminalManager, () => mainWindow);
 
+  // Telegram bot (Settings → Telegram): off until a token is saved
+  registerTelegramHandlers(getTelegramService);
+  try {
+    initTelegram(agentManager, () => mainWindow);
+  } catch (error) {
+    console.warn('[main] Failed to start the Telegram bot:', error);
+  }
+
   // Tasks the last session left running: stopped the way Stop stops them, so their cards offer Resume
   try {
     settleInterruptedTasks({
@@ -704,6 +714,9 @@ app.on('before-quit', (event) => {
     try {
       // The preview's servers and database container; bounded so a hung docker can't hold the quit
       await Promise.race([stopPreview().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 5000))]);
+
+      // The Telegram bot's long poll; bounded like the preview
+      await Promise.race([stopTelegram().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 2000))]);
 
       // Kill all running agent processes
       if (agentManager) {

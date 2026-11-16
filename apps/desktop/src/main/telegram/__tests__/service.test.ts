@@ -47,7 +47,11 @@ function longPollBot(validToken = 'good:token') {
       },
     };
   };
-  return { fake, createApi, tokens, polls, push: (u: TelegramUpdate) => (inbox.push(u), wake?.()) };
+  return { fake, createApi, tokens, polls, push: (u: TelegramUpdate) => {
+      inbox.push(u);
+      wake?.();
+    },
+  };
 }
 
 function setup(bot = longPollBot()) {

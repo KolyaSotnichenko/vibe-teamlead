@@ -113,7 +113,7 @@ export function createQuestionFlow(deps: QuestionFlowDeps) {
     await deps.api()?.sendMessage(ask.chatId, deps.t(result.success ? 'question.answeredHere' : 'question.noLongerWaiting'));
   };
 
-  const choose = async (ask: Ask, label: string): Promise<string | void> => {
+  const choose = async (ask: Ask, label: string): Promise<void> => {
     if (!stillOpen(ask)) return refuse(ask);
     const q = ask.question.questions[ask.index];
     if (!q.multiSelect) return record(ask, label);
