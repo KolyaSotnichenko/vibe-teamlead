@@ -207,11 +207,17 @@ export function openQuestionsByTask(questions: BriefOpenQuestion[], createdKeys:
  * Skipped questions are not recorded.
  */
 export function appendBriefAnswers(briefDir: string, specId: string, items: BriefClarification[]): void {
-  const answered = items.filter((item) => item.question.trim() && item.answer?.trim());
+  // The question is the agent's wording (it can echo project files): one line with no heading marks,
+  // so it can't forge another entry; a heading line in the user's answer is escaped for the same reason
+  const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim().replace(/^#+\s*/, '');
+  const noHeadings = (text: string) => text.trim().replace(/^(\s*)#/gm, '$1\\#');
+  const answered = items
+    .map((item) => ({ question: oneLine(item.question), answer: item.answer?.trim() ? noHeadings(item.answer) : undefined }))
+    .filter((item) => item.question && item.answer);
   if (!answered.length) return;
   const file = join(briefDir, 'clarifications.md');
   const header = existsSync(file) ? '' : '# Clarifications\n\nDecisions the user made about this brief, with the answers.\n\n';
-  const body = answered.map((item) => `## ${item.question.trim()}\n\n${item.answer!.trim()}\n\n_Answered in task ${specId}._\n\n`).join('');
+  const body = answered.map((item) => `## ${item.question}\n\n${item.answer}\n\n_Answered in task ${specId}._\n\n`).join('');
   appendFileSync(file, header + body, 'utf-8');
 }
 
