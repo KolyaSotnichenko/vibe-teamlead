@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,7 +10,7 @@ vi.mock('../../prompts/prompt-loader', () => ({ tryLoadPrompt: () => 'You are th
 vi.mock('../../../ipc-handlers/feature-settings-helper', () => ({ getFeatureSettings: () => ({ model: 'opus', thinkingLevel: 'high' }) }));
 
 import { runClaudeTask } from '../../claude-code/task';
-import { BriefError, analyzeBrief, appendBriefAnswers, normalizeProposal, recordBriefAnswers, openQuestionsByTask, readProposalQuestions, storeBrief, taskDescription } from '../brief-import';
+import { BriefError, analyzeBrief, appendBriefAnswers, docxText, normalizeProposal, recordBriefAnswers, openQuestionsByTask, readProposalQuestions, storeBrief, taskDescription } from '../brief-import';
 import type { BriefProposalOutput } from '../../schema/brief-proposal';
 
 const task = (key: string, dependsOn: string[] = [], epic = 'E1') => ({
@@ -46,6 +47,46 @@ describe('storeBrief', () => {
     await expect(storeBrief(project, undefined, { filePath: odd })).rejects.toBeInstanceOf(BriefError);
     await expect(storeBrief(project, undefined, {})).rejects.toBeInstanceOf(BriefError);
     expect(existsSync(join(stored.dir, 'source.pdf'))).toBe(true);
+  });
+});
+
+describe('docxText', () => {
+  it('keeps the text of a .docx body: one line per paragraph, tabs and breaks, entities decoded', () => {
+    const xml =
+      '<?xml version="1.0"?><w:document xmlns:w="x"><w:body>' +
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Invoicing &amp; billing</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t xml:space="preserve">Customers </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>send</w:t></w:r><w:r><w:tab/><w:t>invoices &lt;PDF&gt;</w:t><w:br/><w:t>Друга лінія</w:t></w:r></w:p>' +
+      '<w:p/>' +
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell &quot;A&quot;</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+      '</w:body></w:document>';
+    expect(docxText(xml)).toBe('Invoicing & billing\nCustomers send\tinvoices <PDF>\nДруга лінія\n\nCell "A"');
+  });
+});
+
+describe('storeBrief on Windows (no textutil)', () => {
+  const win = { platform: 'win32' as const, tar: '/usr/bin/tar' };
+
+  it('reads the text of a .docx itself', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'vtl-brief-'));
+    const src = join(project, 'docx');
+    mkdirSync(join(src, 'word'), { recursive: true });
+    writeFileSync(join(src, 'word', 'document.xml'), '<w:document><w:body><w:p><w:r><w:t>Invoicing v1</w:t></w:r></w:p><w:p><w:r><w:t>Customers send invoices.</w:t></w:r></w:p></w:body></w:document>');
+    const docx = join(project, 'spec.docx');
+    execFileSync('/usr/bin/zip', ['-qr', docx, 'word'], { cwd: src });
+    const stored = await storeBrief(project, undefined, { filePath: docx }, win);
+    expect(stored.readPath).toBe(join(stored.dir, 'brief.md'));
+    expect(readFileSync(stored.readPath, 'utf-8')).toBe('Invoicing v1\nCustomers send invoices.\n');
+    expect(existsSync(join(stored.dir, 'source.docx'))).toBe(true);
+  });
+
+  it('refuses a .docx it cannot open, and an .rtf, asking for PDF, DOCX or Markdown', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'vtl-brief-'));
+    const broken = join(project, 'spec.docx');
+    writeFileSync(broken, 'not a zip');
+    await expect(storeBrief(project, undefined, { filePath: broken }, win)).rejects.toThrow(/PDF, DOCX or Markdown/);
+    const rtf = join(project, 'spec.rtf');
+    writeFileSync(rtf, '{\\rtf1 hi}');
+    await expect(storeBrief(project, undefined, { filePath: rtf }, win)).rejects.toThrow(/\.rtf.*PDF, DOCX or Markdown/);
   });
 });
 

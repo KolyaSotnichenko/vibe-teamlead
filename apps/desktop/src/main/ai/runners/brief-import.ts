@@ -12,8 +12,9 @@ import { basename, extname, join, relative } from 'node:path';
 
 import type { BriefClarification, BriefOpenQuestion, BriefProposal, BriefTaskDraft } from '../../../shared/types/brief';
 import type { AskUserHandler } from '../claude-code/user-questions';
-import { isMacOS } from '../../platform';
+import { getPlatformKey } from '../../platform';
 import { runProcess } from '../../platform/exec';
+import { readZipEntry, windowsTar } from '../../platform/zip';
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import { tryLoadPrompt } from '../prompts/prompt-loader';
 import type { ThinkingLevel } from '../config/types';
@@ -26,7 +27,7 @@ const MAX_BRIEF_BYTES = 20 * 1024 * 1024;
 const MAX_TASKS = 30;
 
 const TEXT_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.text']);
-/** Converted to text with macOS textutil */
+/** Converted to text with macOS textutil; on Windows only .docx is read (docxText) */
 const RICH_EXTENSIONS = new Set(['.docx', '.doc', '.rtf', '.odt', '.html', '.htm']);
 
 export class BriefError extends Error {}
@@ -57,12 +58,51 @@ function stamp(date = new Date()): string {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
+const XML_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+function decodeXml(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (whole, name: string) => {
+    if (name[0] !== '#') return XML_ENTITIES[name.toLowerCase()] ?? whole;
+    const code = name[1] === 'x' || name[1] === 'X' ? Number.parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  });
+}
+
+const DOCX_RUN = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>|<w:(?:br|cr)(?:\s[^>]*)?\/>/g;
+
+/**
+ * The text of a .docx body (word/document.xml): one line per paragraph (table cells included),
+ * with tabs and line breaks kept. Formatting, images and fields are dropped. Pure.
+ */
+export function docxText(xml: string): string {
+  // An empty paragraph (<w:p/>) is still a line
+  const paragraphs = xml.replace(/<w:p(?:\s[^>]*)?\/>/g, '</w:p>').split('</w:p>');
+  paragraphs.pop(); // what follows the last paragraph holds no text
+  const lines = paragraphs.map((para) => {
+    let line = '';
+    for (const m of para.matchAll(DOCX_RUN)) {
+      if (m[1] !== undefined) line += decodeXml(m[1]);
+      else line += m[0].startsWith('<w:tab') ? '\t' : '\n';
+    }
+    return line;
+  });
+  return lines.join('\n').trimEnd();
+}
+
+export interface StoreBriefOptions {
+  platform?: 'darwin' | 'win32' | 'linux';
+  /** bsdtar for reading a .docx off macOS; replaced in tests */
+  tar?: string;
+}
+
 /** Save the brief into the project and return what the analyst should read. */
 export async function storeBrief(
   projectPath: string,
   autoBuildPath: string | undefined,
   input: { text?: string; filePath?: string },
+  opts: StoreBriefOptions = {},
 ): Promise<StoredBrief> {
+  const platform = opts.platform ?? getPlatformKey();
   const text = input.text?.trim();
   const filePath = input.filePath;
   if (!text && !filePath) throw new BriefError('Paste a brief or choose a file.');
@@ -93,13 +133,25 @@ export async function storeBrief(
     // Claude Code reads PDFs directly.
     return { briefId, dir, readPath: original };
   }
-  if (RICH_EXTENSIONS.has(ext) && isMacOS()) {
+  if (RICH_EXTENSIONS.has(ext) && platform === 'darwin') {
     const result = await runProcess('/usr/bin/textutil', ['-convert', 'txt', '-stdout', original], { timeoutMs: 60_000 });
     if (result.code === 0 && result.stdout.trim()) {
       const readPath = join(dir, 'brief.md');
       writeFileSync(readPath, result.stdout, 'utf-8');
       return { briefId, dir, readPath };
     }
+  } else if (ext === '.docx') {
+    // No textutil off macOS: a .docx is a zip, its text is in word/document.xml
+    const xml = await readZipEntry(original, 'word/document.xml', { tar: opts.tar ?? (platform === 'win32' ? windowsTar() : 'tar') });
+    const text = xml ? docxText(xml).trim() : '';
+    if (text) {
+      const readPath = join(dir, 'brief.md');
+      writeFileSync(readPath, `${text}\n`, 'utf-8');
+      return { briefId, dir, readPath };
+    }
+    throw new BriefError("Couldn't read the text of this .docx file. Save the brief as PDF, DOCX or Markdown and try again.");
+  } else if (RICH_EXTENSIONS.has(ext)) {
+    throw new BriefError(`Can't read ${ext} files on this system. Save the brief as PDF, DOCX or Markdown and try again.`);
   }
   throw new BriefError(`Can't read ${ext || 'this'} files. Save the brief as Markdown, text or PDF and try again.`);
 }
