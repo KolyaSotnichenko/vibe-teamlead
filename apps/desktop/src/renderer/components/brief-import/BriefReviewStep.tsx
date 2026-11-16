@@ -109,9 +109,16 @@ export function BriefReviewStep({
               </h3>
               <ol className="mt-2 space-y-2">
                 {proposal.openQuestions.map((q, i) => (
-                  <li key={q} className="flex gap-2 text-sm text-foreground">
+                  <li key={q.question} className="flex gap-2 text-sm text-foreground">
                     <span className="shrink-0 font-mono text-xs leading-5 text-muted-foreground">Q{i + 1}</span>
-                    <span>{q}</span>
+                    <span className="min-w-0">
+                      <span className="block">{q.question}</span>
+                      {q.tasks.length > 0 && (
+                        <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                          {t('tasks:briefImport.review.questionFor', { keys: q.tasks.join(', ') })}
+                        </span>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ol>

@@ -98,7 +98,10 @@ export const sampleBriefProposal: BriefProposal = {
     },
   ],
   assumptions: ['One currency per organisation in v1.', 'Tax is a percentage per line; no compound taxes.'],
-  openQuestions: ['Which email provider should be used?', 'Do credit notes need their own number sequence?'],
+  openQuestions: [
+    { question: 'Which email provider should be used?', tasks: ['T3'] },
+    { question: 'Do credit notes need their own number sequence?', tasks: ['T2', 'T4'] },
+  ],
   clarifications: [{ question: 'Should invoices be sent the moment an order ships, or once a month per customer?', answer: 'When the order ships (Recommended)' }],
 };
 

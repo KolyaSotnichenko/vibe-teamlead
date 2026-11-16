@@ -35,7 +35,12 @@ export const BriefProposalSchema = z.object({
   epics: z.array(z.object({ key: z.string(), title: z.string(), summary: z.string() })),
   tasks: z.array(BriefTaskSchema),
   assumptions: z.array(z.string()),
-  openQuestions: z.array(z.string()),
+  openQuestions: z.array(
+    z.object({
+      question: z.string().describe('One decision only the user can make, phrased to stand on its own'),
+      tasks: z.array(z.string()).describe('Keys of the tasks whose spec depends on the answer'),
+    }),
+  ),
 });
 
 export type BriefProposalOutput = z.infer<typeof BriefProposalSchema>;

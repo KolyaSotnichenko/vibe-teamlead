@@ -55,7 +55,7 @@ const proposal: BriefProposal = {
   epics: [{ key: 'E1', title: 'Invoices' }],
   tasks: TASKS,
   assumptions: ['One currency'],
-  openQuestions: ['Which email provider?'],
+  openQuestions: [{ question: 'Which email provider?', tasks: ['T2', 'T4'] }],
 };
 
 describe('brief review model', () => {
@@ -222,6 +222,8 @@ describe('BriefImportDialog', () => {
     await act(async () => resolve({ success: true, data: proposal }));
     expect(await screen.findByText('Invoicing')).toBeInTheDocument();
     expect(screen.getByText('Which email provider?')).toBeInTheDocument();
+    // Which tasks' spec agents will ask it
+    expect(screen.getByText('tasks:briefImport.review.questionFor {"keys":"T2, T4"}')).toBeInTheDocument();
   });
 
   it("shows the analyst's question, sends the answer, and can stop the questions", async () => {

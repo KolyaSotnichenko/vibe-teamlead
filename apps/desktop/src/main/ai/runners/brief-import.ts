@@ -7,10 +7,10 @@
  * structured output. Creating the tasks is a separate, user-confirmed step.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 
-import type { BriefClarification, BriefProposal, BriefTaskDraft } from '../../../shared/types/brief';
+import type { BriefClarification, BriefOpenQuestion, BriefProposal, BriefTaskDraft } from '../../../shared/types/brief';
 import type { AskUserHandler } from '../claude-code/user-questions';
 import { isMacOS } from '../../platform';
 import { runProcess } from '../../platform/exec';
@@ -142,8 +142,77 @@ export function normalizeProposal(briefId: string, output: BriefProposalOutput):
     epics: output.epics.map((e) => ({ key: e.key, title: e.title, summary: e.summary || undefined })),
     tasks: normalized,
     assumptions: output.assumptions.filter((a) => a.trim()),
-    openQuestions: output.openQuestions.filter((q) => q.trim()),
+    openQuestions: normalizeOpenQuestions(output.openQuestions, normalized.map((t) => t.key)),
   };
+}
+
+const TASK_KEY = /\bT\d+\b/g;
+
+/**
+ * Each open question with the tasks whose spec depends on it. Only known task keys stay (`keys`;
+ * any key when undefined). A question without one goes to the tasks its text names (`T5`), else
+ * to the first task, so some spec agent always asks it. Older proposals hold plain strings.
+ */
+export function normalizeOpenQuestions(raw: unknown, keys?: string[]): BriefOpenQuestion[] {
+  if (!Array.isArray(raw)) return [];
+  const known = keys ? new Set(keys) : undefined;
+  const isKnown = (key: string) => !known || known.has(key);
+  const out: BriefOpenQuestion[] = [];
+  for (const item of raw) {
+    const entry = typeof item === 'string' ? { question: item, tasks: [] as unknown[] } : (item as { question?: unknown; tasks?: unknown });
+    if (!entry || typeof entry.question !== 'string') continue;
+    const question = entry.question.trim();
+    if (!question) continue;
+    const given = Array.isArray(entry.tasks) ? entry.tasks.filter((k): k is string => typeof k === 'string') : [];
+    let tasks = [...new Set(given.filter(isKnown))];
+    if (!tasks.length) tasks = [...new Set((question.match(TASK_KEY) ?? []).filter(isKnown))];
+    if (!tasks.length && keys?.length) tasks = [keys[0]];
+    out.push({ question, tasks });
+  }
+  return out;
+}
+
+/** The open questions saved with a brief's proposal (`proposal.json`); none when missing or unreadable. */
+export function readProposalQuestions(briefDir: string): BriefOpenQuestion[] {
+  try {
+    const proposal = JSON.parse(readFileSync(join(briefDir, 'proposal.json'), 'utf-8')) as { openQuestions?: unknown };
+    return normalizeOpenQuestions(proposal?.openQuestions);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The questions each created task carries, by task key. `createdKeys` in creation order: a
+ * question whose tasks were all left out goes to the first created task, so it is still asked.
+ */
+export function openQuestionsByTask(questions: BriefOpenQuestion[], createdKeys: string[]): Map<string, string[]> {
+  const byTask = new Map<string, string[]>();
+  if (!createdKeys.length) return byTask;
+  const created = new Set(createdKeys);
+  for (const q of questions) {
+    const targets = q.tasks.filter((key) => created.has(key));
+    for (const key of targets.length ? targets : [createdKeys[0]]) {
+      const list = byTask.get(key) ?? [];
+      if (!list.includes(q.question)) list.push(q.question);
+      byTask.set(key, list);
+    }
+  }
+  return byTask;
+}
+
+/**
+ * Answers the user gave to an agent of a task made from this brief: added to the brief's
+ * clarifications.md, which every task of the brief points to, so nobody asks them again.
+ * Skipped questions are not recorded.
+ */
+export function appendBriefAnswers(briefDir: string, specId: string, items: BriefClarification[]): void {
+  const answered = items.filter((item) => item.question.trim() && item.answer?.trim());
+  if (!answered.length) return;
+  const file = join(briefDir, 'clarifications.md');
+  const header = existsSync(file) ? '' : '# Clarifications\n\nDecisions the user made about this brief, with the answers.\n\n';
+  const body = answered.map((item) => `## ${item.question.trim()}\n\n${item.answer!.trim()}\n\n_Answered in task ${specId}._\n\n`).join('');
+  appendFileSync(file, header + body, 'utf-8');
 }
 
 /** One human-readable progress line for an analyst event, or null to skip it. */
@@ -240,13 +309,52 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
   return proposal;
 }
 
+/**
+ * The user answered an agent of a task made from a brief: the answers go into that brief's
+ * clarifications.md. Nothing for a dismissed question, a task not from a brief, or a brief id
+ * that is not a plain folder name of an existing brief. Never throws.
+ */
+export function recordBriefAnswers(
+  project: { path: string; autoBuildPath?: string },
+  task: { specId: string; metadata?: { briefId?: unknown } },
+  asked: { questions: { question: string }[] },
+  answers: Record<string, string> | null,
+): void {
+  try {
+    const briefId = task.metadata?.briefId;
+    if (!answers || typeof briefId !== 'string' || !/^[\w.-]+$/.test(briefId) || briefId.startsWith('.')) return;
+    const dir = join(briefsRoot(project.path, project.autoBuildPath), briefId);
+    if (!existsSync(dir)) return;
+    appendBriefAnswers(dir, task.specId, asked.questions.map((q) => ({ question: q.question, answer: answers[q.question] })));
+  } catch {
+    // The answer still reached the agent; only the shared record is missing
+  }
+}
+
 /** Description written into a task created from a brief. */
-export function taskDescription(task: BriefTaskDraft, briefRelPath: string, clarificationsRelPath?: string): string {
+export function taskDescription(
+  task: BriefTaskDraft,
+  briefRelPath: string,
+  clarificationsRelPath?: string,
+  openQuestions: string[] = [],
+): string {
   const parts = [task.description.trim()];
   if (task.acceptanceCriteria.length) {
     parts.push('', '## Acceptance criteria (draft)', '', ...task.acceptanceCriteria.map((c) => `- ${c}`));
   }
   parts.push('', `Source: ${briefRelPath}${task.sourceSection ? ` — ${task.sourceSection}` : ''}`);
   if (clarificationsRelPath) parts.push(`Decisions from the brief Q&A: ${clarificationsRelPath}`);
+  if (openQuestions.length) {
+    const where = clarificationsRelPath ?? "the brief's clarifications.md";
+    parts.push(
+      '',
+      '## Open questions from the brief',
+      '',
+      `The user has not answered these yet. Before you write the spec, look for each answer in ${where}. ` +
+        'Ask the ones it does not answer with the AskUserQuestion tool; if no answer comes, go on with a clearly stated assumption.',
+      '',
+      ...openQuestions.map((q) => `- ${q}`),
+    );
+  }
   return parts.join('\n');
 }

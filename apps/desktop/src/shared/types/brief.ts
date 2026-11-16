@@ -41,10 +41,17 @@ export interface BriefProposal {
   tasks: BriefTaskDraft[];
   /** Assumptions the analyst made where the brief is silent */
   assumptions: string[];
-  /** Questions for the user; the spec agents ask them again per task */
-  openQuestions: string[];
+  /** Questions for the user; the spec agents of the tasks they affect ask them again */
+  openQuestions: BriefOpenQuestion[];
   /** What the analyst asked before proposing, and the answers (empty when it asked nothing) */
   clarifications?: BriefClarification[];
+}
+
+/** A decision only the user can make, and the tasks whose spec depends on it */
+export interface BriefOpenQuestion {
+  question: string;
+  /** Task keys (T1, T2, …) */
+  tasks: string[];
 }
 
 export interface BriefClarification {

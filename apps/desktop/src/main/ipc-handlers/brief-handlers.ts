@@ -11,7 +11,7 @@ import { type BrowserWindow, dialog, ipcMain } from 'electron';
 
 import { AUTO_BUILD_PATHS, IPC_CHANNELS } from '../../shared/constants';
 import type { BriefAnalyzeInput, BriefCreatedTask, BriefCreateOptions, BriefProposal, BriefTaskDraft, IPCResult } from '../../shared/types';
-import { BriefError, analyzeBrief, briefsRoot, taskDescription } from '../ai/runners/brief-import';
+import { BriefError, analyzeBrief, briefsRoot, openQuestionsByTask, readProposalQuestions, taskDescription } from '../ai/runners/brief-import';
 import type { AskUserHandler } from '../ai/claude-code/user-questions';
 import type { AgentAnswers } from '../../shared/types/agent-questions';
 import { projectStore } from '../project-store';
@@ -143,14 +143,21 @@ export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null)
       const briefFile = existsSync(path.join(briefDir, 'brief.md')) ? 'brief.md' : 'source.pdf';
       const briefRelPath = path.relative(project.path, path.join(briefDir, briefFile));
       const clarificationsFile = path.join(briefDir, 'clarifications.md');
-      const clarificationsRelPath = existsSync(clarificationsFile) ? path.relative(project.path, clarificationsFile) : undefined;
+      const ordered = orderByDependencies(tasks);
+      // Each task carries the brief's open questions that affect it; its spec agent asks the ones
+      // clarifications.md doesn't answer yet, and the answers land there for the other tasks
+      const questionsByTask = openQuestionsByTask(readProposalQuestions(briefDir), ordered.map((draft) => draft.key));
+      const clarificationsAt = path.relative(project.path, clarificationsFile);
+      const clarificationsRelPath = existsSync(clarificationsFile) ? clarificationsAt : undefined;
       const specIdByKey = new Map<string, string>();
       const created: BriefCreatedTask[] = [];
 
       try {
-        for (const draft of orderByDependencies(tasks)) {
+        for (const draft of ordered) {
           const dependencies = draft.dependsOn.map((key) => specIdByKey.get(key)).filter((id): id is string => !!id);
-          const task = await createTaskInProject(project, draft.title, taskDescription(draft, briefRelPath, clarificationsRelPath), {
+          const questions = questionsByTask.get(draft.key) ?? [];
+          const description = taskDescription(draft, briefRelPath, questions.length ? clarificationsAt : clarificationsRelPath, questions);
+          const task = await createTaskInProject(project, draft.title, description, {
             // The user's default models (agent profile + custom phase models), as the task wizard sets them
             ...resolveDefaultTaskModels(readSettingsFile() as never),
             sourceType: 'brief',

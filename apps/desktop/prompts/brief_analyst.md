@@ -77,6 +77,7 @@ Group tasks into 2–6 epics that match how the brief is organised (areas of the
 
 - Where the brief is silent and a reasonable default exists, choose it and list it under `assumptions` (one line each).
 - Where a decision really belongs to the user (scope, a third-party service, a business rule), list it under `openQuestions`. Keep it to the questions that change what gets built. Don't block on them: propose tasks using your stated assumption.
+- Each open question names in `tasks` the keys of the tasks whose spec depends on the answer. The spec agent of each of those tasks asks it, so phrase it to stand on its own, without "as above".
 
 ## SCOPE LIMITS
 

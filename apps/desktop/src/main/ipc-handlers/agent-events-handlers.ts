@@ -28,6 +28,7 @@ import { projectStore } from "../project-store";
 import { branchHead } from "../deploy/push-after-merge";
 import { taskStateManager } from "../task-state-manager";
 import { answerPendingQuestion, listPendingQuestions } from "../agent/agent-questions";
+import { recordBriefAnswers } from "../ai/runners/brief-import";
 import { isMacOS } from "../platform";
 import type { AgentAnswers } from "../../shared/types/agent-questions";
 
@@ -301,6 +302,9 @@ export function registerAgenteventsHandlers(
     (_event, questionId: string, answers: AgentAnswers | null) => {
       const question = answerPendingQuestion(questionId, answers);
       if (!question) return { success: false, error: "This question is no longer waiting for an answer." };
+      // A task made from a brief: the answer is shared with the brief's other tasks
+      const { task, project } = findTaskAndProject(question.taskId, question.projectId);
+      if (task && project) recordBriefAnswers(project, task, question, answers);
       safeSendToRenderer(getMainWindow, IPC_CHANNELS.AGENT_QUESTION_RESOLVED, questionId, question.taskId);
       updateQuestionBadge();
       return { success: true };
