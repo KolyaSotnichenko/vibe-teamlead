@@ -20,6 +20,7 @@ import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preW
 import { stripLegacySettings } from '../ai/claude-code/credential-migration';
 import { debugLog } from '../../shared/utils/debug-logger';
 import { getPlatformKey } from '../platform';
+import { openSystemTerminal } from '../utils/open-terminal';
 
 /**
  * Register all settings-related IPC handlers
@@ -444,50 +445,8 @@ export function registerSettingsHandlers(
           };
         }
 
-        const platform = getPlatformKey();
-
-        if (platform === 'darwin') {
-          // macOS: Use execFileSync with argument array to prevent injection
-          execFileSync('open', ['-a', 'Terminal', resolvedPath], { stdio: 'ignore' });
-        } else if (platform === 'win32') {
-          // Windows: Use cmd.exe directly with argument array
-          // /C tells cmd to execute the command and terminate
-          // /K keeps the window open after executing cd
-          execFileSync('cmd.exe', ['/K', 'cd', '/d', resolvedPath], {
-            stdio: 'ignore',
-            windowsHide: false,
-            shell: false  // Explicitly disable shell to prevent injection
-          });
-        } else {
-          // Linux: Try common terminal emulators with argument arrays
-          // Note: xterm uses cwd option to avoid shell injection vulnerabilities
-          const terminals: Array<{ cmd: string; args: string[]; useCwd?: boolean }> = [
-            { cmd: 'gnome-terminal', args: ['--working-directory', resolvedPath] },
-            { cmd: 'konsole', args: ['--workdir', resolvedPath] },
-            { cmd: 'xfce4-terminal', args: ['--working-directory', resolvedPath] },
-            { cmd: 'xterm', args: ['-e', 'bash'], useCwd: true }
-          ];
-
-          let opened = false;
-          for (const { cmd, args, useCwd } of terminals) {
-            try {
-              execFileSync(cmd, args, {
-                stdio: 'ignore',
-                ...(useCwd ? { cwd: resolvedPath } : {})
-              });
-              opened = true;
-              break;
-            } catch {
-            }
-          }
-
-          if (!opened) {
-            return {
-              success: false,
-              error: 'No supported terminal emulator found. Please install gnome-terminal, konsole, xfce4-terminal, or xterm.'
-            };
-          }
-        }
+        const opened = openSystemTerminal(resolvedPath, getPlatformKey());
+        if (!opened.opened) return { success: false, error: opened.error };
 
         return { success: true };
       } catch (error) {
