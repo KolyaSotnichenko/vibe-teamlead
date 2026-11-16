@@ -322,7 +322,8 @@ These issues have appeared ${RECURRING_ISSUE_THRESHOLD}+ times without being res
  */
 export async function generateManualTestPlan(specDir: string, projectDir: string): Promise<string> {
   const now = new Date().toISOString();
-  const specName = specDir.split('/').pop() ?? specDir;
+  // The folder name, with either separator (path.basename only knows the host's)
+  const specName = specDir.split(/[\\/]/).filter(Boolean).pop() ?? specDir;
 
   // Read spec.md for acceptance criteria if available
   let specContent = '';

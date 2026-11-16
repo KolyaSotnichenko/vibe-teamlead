@@ -237,6 +237,12 @@ describe('generateManualTestPlan', () => {
     expect(plan).toContain('Sign-off');
   });
 
+  it('names the spec by its folder, with Windows separators too', async () => {
+    mockReadFile.mockRejectedValue(new Error('ENOENT'));
+    expect(await generateManualTestPlan(SPEC_DIR, PROJECT_DIR)).toContain('# Manual Test Plan — 001-feature');
+    expect(await generateManualTestPlan('C:\\project\\.vibe-teamlead\\specs\\001-feature', 'C:\\project')).toContain('# Manual Test Plan — 001-feature');
+  });
+
   it('extracts acceptance criteria from spec.md when available', async () => {
     const specContent = `# Feature Spec
 
