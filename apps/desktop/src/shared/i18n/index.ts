@@ -14,6 +14,7 @@ import enTaskReview from './locales/en/taskReview.json';
 import enTerminal from './locales/en/terminal.json';
 import enErrors from './locales/en/errors.json';
 import enDeploy from './locales/en/deploy.json';
+import enTelegram from './locales/en/telegram.json';
 
 // Import Ukrainian translation resources
 import ukCommon from './locales/uk/common.json';
@@ -28,6 +29,7 @@ import ukTaskReview from './locales/uk/taskReview.json';
 import ukTerminal from './locales/uk/terminal.json';
 import ukErrors from './locales/uk/errors.json';
 import ukDeploy from './locales/uk/deploy.json';
+import ukTelegram from './locales/uk/telegram.json';
 
 export const defaultNS = 'common';
 
@@ -44,7 +46,8 @@ export const resources = {
     taskReview: enTaskReview,
     terminal: enTerminal,
     errors: enErrors,
-    deploy: enDeploy
+    deploy: enDeploy,
+    telegram: enTelegram
   },
   uk: {
     common: ukCommon,
@@ -58,7 +61,8 @@ export const resources = {
     taskReview: ukTaskReview,
     terminal: ukTerminal,
     errors: ukErrors,
-    deploy: ukDeploy
+    deploy: ukDeploy,
+    telegram: ukTelegram
   }
 } as const;
 
@@ -70,7 +74,7 @@ i18n
     fallbackLng: 'en',
     supportedLngs: ['en', 'uk'],
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors', 'deploy'],
+    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors', 'deploy', 'telegram'],
     interpolation: {
       escapeValue: false // React already escapes values
     },

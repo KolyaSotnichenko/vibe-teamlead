@@ -1,0 +1,137 @@
+{
+  "settings": {
+    "title": "Telegram",
+    "description": "Answer agents, get notifications and stop the team from your phone, through your own bot",
+    "intro": "The app talks to your own Telegram bot from this computer. There is no server of ours in between: only this computer and Telegram see the messages.",
+    "steps": {
+      "title": "Set it up",
+      "createBot": "In Telegram, open @BotFather, send /newbot and follow its steps. It gives you a token.",
+      "pasteToken": "Paste the token below and save it.",
+      "sendStart": "Send the bot the pairing command shown below (it is valid for 10 minutes)."
+    },
+    "token": {
+      "label": "Bot token",
+      "placeholder": "123456789:AA…",
+      "saved": "A token is saved. It is not shown again; paste a new one to replace it.",
+      "save": "Save",
+      "test": "Test",
+      "remove": "Remove token",
+      "testOk": "The token works: @{{username}}",
+      "show": "Show token",
+      "hide": "Hide token"
+    },
+    "status": {
+      "label": "Status",
+      "not_set": "No token. The bot is off and nothing talks to Telegram.",
+      "connecting": "Connecting…",
+      "connected": "Connected as @{{username}}",
+      "connectedNoName": "Connected",
+      "error": "Not working: {{reason}}"
+    },
+    "errors": {
+      "bad_token": "Telegram does not accept this token. Check it in @BotFather.",
+      "conflict": "Another program is reading this bot's messages. Close it, or create a separate bot for this app.",
+      "network": "Telegram is not reachable. The app keeps trying.",
+      "rate_limited": "Telegram asked to slow down. The app tries again shortly.",
+      "unknown": "Telegram returned an error. The app keeps trying.",
+      "empty_token": "Paste the token first."
+    },
+    "pairing": {
+      "title": "Pairing",
+      "instructions": "Send this to your bot in Telegram:",
+      "openLink": "Open the bot in Telegram",
+      "expires": "Valid until {{time}}",
+      "newCode": "New code",
+      "copy": "Copy",
+      "needToken": "Save a token first to pair.",
+      "paired": "Paired with {{name}}",
+      "pairedNoName": "Paired with Telegram user {{id}}",
+      "unpair": "Unpair",
+      "notPaired": "Not paired yet. Only the person who pairs can use the bot; everyone else is ignored."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "What the bot sends you",
+      "agentQuestion": "An agent asks a question",
+      "reviewWaiting": "A task waits for your review",
+      "taskFailed": "A task failed, got stuck or errored",
+      "ciFailed": "CI failed on main",
+      "taskMerged": "A task was merged",
+      "regression": "App checks found a regression"
+    },
+    "privacy": {
+      "title": "Privacy",
+      "body": "Bot chats are not end-to-end encrypted: Telegram sees task titles, questions and summaries sent to the chat. No secrets, keys or environment values are ever sent. The bot works only while the app is open; Telegram keeps messages for 24 hours, and on start the app skips commands and button presses older than 15 minutes."
+    }
+  },
+  "bot": {
+    "paired": "Paired. This chat now gets Vibe Teamlead notifications. Send /help to see the commands.",
+    "help": "Commands:\n/status: projects, running and queued tasks, what waits for you, today's spend\n/project: choose the project for later commands\n/stop_all: stop every running agent and pause the queue\n/resume: resume the queue\n/help: this list\n\nAgent questions come here with buttons; tap one, or Other… to type an answer.",
+    "unknown": "I don't know that one. Send /help to see the commands.",
+    "expired": "This button has expired.",
+    "skipped": "While the app was not reading the chat, I skipped what was older than 15 minutes: {{items}}. Send it again if it is still needed.",
+    "skippedPress_one": "{{count}} button press",
+    "skippedPress_other": "{{count}} button presses",
+    "notAvailable": "Not available yet.",
+    "question": {
+      "title": "Question from the team: {{task}}",
+      "counter": "Question {{index}} of {{total}}",
+      "other": "Other…",
+      "otherPrompt": "Type your answer to: {{question}}",
+      "done": "Done",
+      "recommended": "★ {{label}}",
+      "answered": "Answered: {{answer}}",
+      "answeredHere": "Answer sent to the agent.",
+      "answeredOnComputer": "Answered on the computer.",
+      "dismissed": "The agent stopped waiting for this answer.",
+      "noLongerWaiting": "This question no longer waits for an answer.",
+      "selected": "✓ {{label}}"
+    },
+    "notify": {
+      "review": "Waiting for your review: {{task}}\nQA approved it.",
+      "reviewRejected": "Waiting for your review: {{task}}\nQA did not approve it.",
+      "failed": "Task failed: {{task}}",
+      "errored": "Task stopped with an error: {{task}}",
+      "stuck": "Task got stuck and was stopped: {{task}}",
+      "ciFailed": "CI failed on main in {{project}}: {{run}}\n{{url}}",
+      "merged": "Merged: {{task}}",
+      "regression": "App checks found a regression: {{task}}\nThe merge was stopped.",
+      "baseBroken": "App checks fail on main in {{project}}. A task to fix main was started.",
+      "inProject": "Project: {{project}}"
+    },
+    "status": {
+      "title": "Status",
+      "noProjects": "No projects are open in the app.",
+      "project": "{{name}}",
+      "running": "Running: {{tasks}}",
+      "queued": "Queued: {{tasks}}",
+      "waiting": "Waiting for you: {{tasks}}",
+      "none": "none",
+      "queuePaused": "The queue is paused. /resume starts it again.",
+      "spend": "Today's spend: ${{amount}}",
+      "spendTokens": "Today's tokens: {{tokens}}",
+      "current": "(current)",
+      "questions_one": "{{count}} question waits for an answer",
+      "questions_other": "{{count}} questions wait for an answer"
+    },
+    "project": {
+      "choose": "Choose the project for later commands:",
+      "chosen": "Current project: {{name}}",
+      "none": "No projects are open in the app."
+    },
+    "stopAll": {
+      "confirm": "Stop every running agent and pause the queue?",
+      "confirmCount_one": "Stop {{count}} running task and pause the queue?",
+      "confirmCount_other": "Stop {{count}} running tasks and pause the queue?",
+      "yes": "Yes, stop all",
+      "no": "Cancel",
+      "done_one": "Stopped {{count}} task. The queue is paused; /resume starts it again.",
+      "done_other": "Stopped {{count}} tasks. The queue is paused; /resume starts it again.",
+      "cancelled": "Nothing was stopped."
+    },
+    "resume": {
+      "done": "The queue is running again.",
+      "notPaused": "The queue was not paused."
+    }
+  }
+}
