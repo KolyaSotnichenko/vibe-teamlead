@@ -9,6 +9,7 @@ vi.mock('../task-containers', () => ({ removeTaskContainers: vi.fn(async () => {
 
 import { cleanupWorktree, makeTreeWritable } from '../worktree-cleanup';
 import { isOwnWorktree } from '../../ipc-handlers/task/worktree-handlers';
+import { isWindowsHost } from '../../platform/__tests__/host';
 
 const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf-8', env }).trim();
@@ -62,7 +63,17 @@ describe('cleanupWorktree', () => {
 });
 
 describe('makeTreeWritable', () => {
-  it('gives the owner write access to a read-only tree like a pnpm store, leaving symlink targets alone', async () => {
+  it('clears the read-only flag of a file, which Windows will not delete otherwise', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-ro-'));
+    const file = path.join(root, 'blob');
+    writeFileSync(file, 'x');
+    chmodSync(file, 0o444);
+    await makeTreeWritable(root);
+    expect(lstatSync(file).mode & 0o200).not.toBe(0);
+  });
+
+  // POSIX mode bits: Windows has only the read-only flag (the test above)
+  it.skipIf(isWindowsHost)('gives the owner write access to a read-only tree like a pnpm store, leaving symlink targets alone', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'vtl-ro-'));
     const store = path.join(root, '.pnpm-store', 'v3', 'files', '00');
     mkdirSync(store, { recursive: true });

@@ -12,7 +12,7 @@ import { serverEnv } from '../ai/dev-servers/dev-servers';
 import { strixEnv } from '../ai/security/strix';
 import { verificationEnv } from '../ai/verification/verify-task';
 import { getAugmentedEnv } from '../env-utils';
-import { WINDOWS_HOST_ENV } from '../platform/env';
+import { envValue, WINDOWS_HOST_ENV } from '../platform/env';
 
 const WINDOWS = {
   SystemRoot: 'C:\\Windows',
@@ -40,8 +40,9 @@ afterEach(() => {
   Object.assign(process.env, saved);
 });
 
-const keepsWindows = (env: Record<string, string | undefined>) => {
-  for (const [name, value] of Object.entries(WINDOWS)) expect(env[name], name).toBe(value);
+/** Each Windows variable as `source` has it: for the host, process.env (a real Windows host kept its own NUMBER_OF_PROCESSORS over the one withHost set) */
+const keepsWindows = (env: Record<string, string | undefined>, source: NodeJS.ProcessEnv = WINDOWS) => {
+  for (const name of Object.keys(WINDOWS)) expect(env[name], name).toBe(envValue(source, name));
 };
 const onePathKey = (env: Record<string, unknown>) => expect(Object.keys(env).filter((key) => key.toLowerCase() === 'path')).toHaveLength(1);
 
@@ -69,15 +70,15 @@ describe('Windows variables in the allowlists', () => {
   it('Claude Code sessions keep them, with one PATH', () => {
     withHost(WINDOWS);
     const env = buildEnv({ agentType: 'coder', model: 'claude-sonnet-4-6', auth: { apiKey: 'sk-ant-test' }, claudeConfigDir: '/tmp/vtl' } as never);
-    keepsWindows(env);
+    keepsWindows(env, process.env);
     onePathKey(env);
   });
 
   it('dev servers, Strix and CodeGraph keep them', () => {
     withHost(WINDOWS);
-    keepsWindows(serverEnv({}));
-    keepsWindows(strixEnv({ model: 'claude-sonnet-4-6', apiKey: 'sk-ant-x' }));
-    keepsWindows(codegraphEnv());
+    keepsWindows(serverEnv({}), process.env);
+    keepsWindows(strixEnv({ model: 'claude-sonnet-4-6', apiKey: 'sk-ant-x' }), process.env);
+    keepsWindows(codegraphEnv(), process.env);
   });
 
   it('getAugmentedEnv sets PATH under the key the host uses, never both Path and PATH', () => {

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { DockerRun } from '../test-services';
 import { describeVerification, failureSummary, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIsConclusive, verificationIssues, verificationSummary, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 describe('verifyTask', () => {
   let repo: string;
@@ -131,17 +132,19 @@ describe('verifyTask', () => {
 
   describe('a slow machine is not a broken task', () => {
     const stallsOnce = (marker: string) => `test -f "${marker}" || { touch "${marker}"; sleep 30; }`;
+    // Git Bash starts slowly on Windows: give the first run time to leave its marker
+    const limitMs = isWindowsHost ? 5000 : 400;
 
     it('runs a check that ran out of time once more before believing it', async () => {
-      const report = await verify({ commands: [stallsOnce(join(repo, 'stalled'))], checkTimeoutMs: 400 });
+      const report = await verify({ commands: [stallsOnce(join(repo, 'stalled'))], checkTimeoutMs: limitMs });
       expect(report.status).toBe('passed');
       expect(report.checks[0]).toMatchObject({ outcome: 'passed', flaky: true });
-    });
+    }, 60_000);
 
     it('runs an install that ran out of time once more before believing it', async () => {
-      const report = await verify({ commands: undefined, installTimeoutMs: 400, detected: { install: [stallsOnce(join(repo, 'stalled'))], checks: [{ name: 'ok', command: 'true' }] } });
+      const report = await verify({ commands: undefined, installTimeoutMs: limitMs, detected: { install: [stallsOnce(join(repo, 'stalled'))], checks: [{ name: 'ok', command: 'true' }] } });
       expect(report.status).toBe('passed');
-    });
+    }, 60_000);
   });
 
   describe("a task can't make a failure look like something else", () => {

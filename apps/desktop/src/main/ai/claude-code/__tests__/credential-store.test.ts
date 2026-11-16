@@ -21,6 +21,7 @@ vi.mock('../subscription-setting', () => ({ isSubscriptionModeEnabled: () => fal
 vi.mock('../../../settings-utils', () => ({ readSettingsFile: () => ({}) }));
 
 import { clearClaudeKey, loadStoredClaudeKey, resolveClaudeCredentialFor, saveClaudeKey } from '../credential';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 const file = () => join(state.userData, 'claude-credential.json');
 const aside = () => `${file()}.unreadable`;
@@ -42,11 +43,16 @@ describe('the stored Claude credential', () => {
     expect(resolveClaudeCredentialFor('subscription').key).toBe('sk-ant-oat01-token');
   });
 
-  it('is never written as readable text, only the owner may read the file, and no temporary file is left', () => {
+  it('is never written as readable text, and no temporary file is left', () => {
     saveClaudeKey('sk-ant-api03-key');
     expect(readFileSync(file(), 'utf-8')).not.toContain('sk-ant-api03-key');
-    expect(statSync(file()).mode & 0o777).toBe(0o600);
     expect(readdirSync(state.userData)).toEqual(['claude-credential.json']);
+  });
+
+  // A POSIX mode: Windows keeps only a read-only flag (the file is in the user's own profile)
+  it.skipIf(isWindowsHost)('only the owner may read the file', () => {
+    saveClaudeKey('sk-ant-api03-key');
+    expect(statSync(file()).mode & 0o777).toBe(0o600);
   });
 
   it('removes the file when the last key is cleared', () => {
