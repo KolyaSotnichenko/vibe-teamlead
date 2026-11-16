@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { WSL_PROJECT_ERROR, isWslPath } from '../../shared/utils/wsl-path';
 import { existsSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { IPC_CHANNELS } from '../../shared/constants';
@@ -231,6 +232,11 @@ export function registerProjectHandlers(
     IPC_CHANNELS.PROJECT_ADD,
     async (_, projectPath: string): Promise<IPCResult<Project>> => {
       try {
+        // A project inside WSL (\\wsl$\…): not supported yet
+        if (typeof projectPath === 'string' && isWslPath(projectPath)) {
+          return { success: false, error: WSL_PROJECT_ERROR };
+        }
+
         // Validate path exists
         if (!existsSync(projectPath)) {
           return { success: false, error: 'Directory does not exist' };

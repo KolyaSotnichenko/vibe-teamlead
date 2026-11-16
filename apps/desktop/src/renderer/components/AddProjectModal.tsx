@@ -14,6 +14,7 @@ import {
 } from './ui/dialog';
 import { cn } from '../lib/utils';
 import { addProject } from '../stores/project-store';
+import { isWslPath } from '../../shared/utils/wsl-path';
 import type { Project } from '../../shared/types';
 
 type ModalStep = 'choose' | 'create-form';
@@ -62,6 +63,10 @@ export function AddProjectModal({ open, onOpenChange, onProjectAdded }: AddProje
   const handleOpenExisting = async () => {
     try {
       const path = await window.electronAPI.selectDirectory();
+      if (path && isWslPath(path)) {
+        setError(t('addProject.wslUnsupported'));
+        return;
+      }
       if (path) {
         const project = await addProject(path);
         if (project) {
@@ -103,6 +108,10 @@ export function AddProjectModal({ open, onOpenChange, onProjectAdded }: AddProje
     }
     if (!projectLocation.trim()) {
       setError(t('addProject.locationRequired'));
+      return;
+    }
+    if (isWslPath(projectLocation)) {
+      setError(t('addProject.wslUnsupported'));
       return;
     }
 

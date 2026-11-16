@@ -220,7 +220,8 @@
     "failedToCreate": "Не вдалося створити проєкт",
     "openExistingAriaLabel": "Відкрити наявну папку проєкту",
     "createNewAriaLabel": "Створити новий проєкт",
-    "createFolderFailed": "Не вдалося створити теку проєкту"
+    "createFolderFailed": "Не вдалося створити теку проєкту",
+    "wslUnsupported": "Проєкти всередині WSL поки не підтримуються. Тримайте проєкт на диску Windows (наприклад, C:\\Users\\you\\projects) і відкрийте його звідти."
   },
   "customModel": {
     "title": "Налаштування моделі",

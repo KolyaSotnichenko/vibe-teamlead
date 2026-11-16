@@ -243,6 +243,19 @@ describe("IPC Handlers", { timeout: 30000 }, () => {
       });
     });
 
+    it("refuses a project inside WSL with a clear message", async () => {
+      const { setupIpcHandlers } = await import("../ipc-handlers");
+      setupIpcHandlers(
+        mockAgentManager as never,
+        mockTerminalManager as never,
+        () => mockMainWindow as never
+      );
+
+      const result = await ipcMain.invokeHandler("project:add", {}, "\\\\wsl.localhost\\Ubuntu\\home\\me\\app");
+
+      expect(result).toMatchObject({ success: false, error: expect.stringMatching(/WSL.*Windows drive/) });
+    });
+
     it("should successfully add an existing project", async () => {
       const { setupIpcHandlers } = await import("../ipc-handlers");
       setupIpcHandlers(

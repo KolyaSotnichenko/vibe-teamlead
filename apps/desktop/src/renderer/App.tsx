@@ -23,6 +23,8 @@ import {
 import { TooltipProvider } from './components/ui/tooltip';
 import { Button } from './components/ui/button';
 import { Toaster } from './components/ui/toaster';
+import { toast } from './hooks/use-toast';
+import { isWslPath } from '../shared/utils/wsl-path';
 import {
   Dialog,
   DialogContent,
@@ -366,6 +368,10 @@ export function App() {
         e.preventDefault();
         try {
           const path = await window.electronAPI.selectDirectory();
+          if (path && isWslPath(path)) {
+            toast({ title: t('addProject.wslUnsupported'), variant: 'destructive' });
+            return;
+          }
           if (path) {
             const project = await addProject(path);
             if (project) {

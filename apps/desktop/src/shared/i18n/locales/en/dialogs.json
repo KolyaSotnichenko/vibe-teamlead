@@ -216,7 +216,8 @@
     "failedToCreate": "Failed to create project",
     "openExistingAriaLabel": "Open existing project folder",
     "createNewAriaLabel": "Create new project",
-    "createFolderFailed": "Failed to create project folder"
+    "createFolderFailed": "Failed to create project folder",
+    "wslUnsupported": "Projects inside WSL aren't supported yet. Keep the project on a Windows drive (for example C:\\Users\\you\\projects) and open it from there."
   },
   "customModel": {
     "title": "Custom Model Configuration",

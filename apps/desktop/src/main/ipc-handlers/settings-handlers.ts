@@ -21,6 +21,7 @@ import { stripLegacySettings } from '../ai/claude-code/credential-migration';
 import { debugLog } from '../../shared/utils/debug-logger';
 import { getPlatformKey } from '../platform';
 import { openSystemTerminal } from '../utils/open-terminal';
+import { WSL_PROJECT_ERROR, isWslPath } from '../../shared/utils/wsl-path';
 
 /**
  * Register all settings-related IPC handlers
@@ -290,6 +291,10 @@ export function registerSettingsHandlers(
         // Validate inputs
         if (!location || !name) {
           return { success: false, error: 'Location and name are required' };
+        }
+        // Not inside WSL (\\wsl$\…): such projects aren't supported yet
+        if (isWslPath(location)) {
+          return { success: false, error: WSL_PROJECT_ERROR };
         }
 
         // Sanitize project name (convert to kebab-case, remove invalid chars)
