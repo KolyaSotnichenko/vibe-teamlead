@@ -27,6 +27,7 @@ import { tryLoadPrompt } from '../ai/prompts/prompt-loader';
 import { qaKickoffContext } from '../ai/orchestration/qa-kickoff';
 import { worktreePushNewBranches } from '../deploy/branch-push';
 import { debugLog } from '../../shared/utils/debug-logger';
+import { specTaskMessage } from './spec-task-message';
 
 /**
  * Main AgentManager - orchestrates agent process lifecycle
@@ -188,7 +189,7 @@ export class AgentManager extends EventEmitter {
       initialMessages: [
         {
           role: 'user',
-          content: `Task: ${taskDescription}\n\nProject directory: ${projectPath}${specDir ? `\nSpec directory: ${specDir}` : ''}${baseBranch ? `\nBase branch: ${baseBranch}` : ''}${metadata?.requireReviewBeforeCoding ? '\nRequire review before coding: true' : '\nAuto-approve: true'}`,
+          content: specTaskMessage({ taskDescription, projectPath, specDir, baseBranch, requireReview: !!metadata?.requireReviewBeforeCoding }),
         },
       ],
       maxSteps: 1000,

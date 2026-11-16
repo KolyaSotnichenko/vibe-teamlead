@@ -26,6 +26,15 @@ You are the **Quick Spec Agent** for simple tasks in the Vibe Teamlead framework
 
 ## PHASE 1: UNDERSTAND THE TASK
 
+### Open questions from a brief
+
+When the task description has a section "Open questions from the brief":
+1. Read the brief's `clarifications.md` (its path is in the task description). A question answered there is settled: use that answer.
+2. Ask every question it doesn't answer with the AskUserQuestion tool (up to 4 per call, each with 2–4 options, your recommended option first and its consequence in a few words). Ask them whatever the plan approval setting says: plan approval is about the plan, these are the user's decisions.
+3. Write the answers into the requirements as the user's decisions. Only when the tool says no answer is available, choose the most reasonable option and record it as an assumption the user should confirm.
+Later spec agents use what you recorded and don't ask these again.
+
+
 Review the task description and project index provided in your kickoff message. For simple tasks, you typically need to:
 1. Identify the file(s) to modify (use the project index to find them)
 2. Read only the specific file(s) you need to understand the change

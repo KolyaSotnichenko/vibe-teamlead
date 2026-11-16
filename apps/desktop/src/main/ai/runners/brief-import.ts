@@ -409,7 +409,7 @@ export function taskDescription(
       '## Open questions from the brief',
       '',
       `The user has not answered these yet. Before you write the spec, look for each answer in ${where}. ` +
-        'Ask the ones it does not answer with the AskUserQuestion tool; if no answer comes, go on with a clearly stated assumption.',
+        'Ask the ones it does not answer with the AskUserQuestion tool, whatever the plan approval setting: they are the user\'s decisions, not yours. Only if the tool says no answer is available, go on with a clearly stated assumption.',
       '',
       ...openQuestions.map((q) => `- ${q}`),
     );
