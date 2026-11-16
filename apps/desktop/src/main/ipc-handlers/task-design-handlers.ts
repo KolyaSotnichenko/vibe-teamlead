@@ -10,7 +10,7 @@ import path from 'node:path';
 import { BrowserWindow, ipcMain, protocol } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { DesignLibrary, IPCResult, TaskDesign, TaskDesignComment } from '../../shared/types';
+import type { DesignLibrary, IPCResult, TaskDesign, TaskDesignComment, TaskDesignFrame } from '../../shared/types';
 import { AgentManager } from '../agent';
 import { readDesignCanvas, readDesignState, writeDesignState } from '../ai/design/design-step';
 import { DESIGN_SCHEME, designAsset, libraryAsset, parseDesignUrl, parseLibraryUrl } from '../design/design-protocol';
@@ -23,7 +23,7 @@ import { resolveSpecDir } from './task/workspace-handlers';
 
 const SHOT_SETTLE_MS = 600;
 
-function taskDesign(taskId: string): TaskDesign | null {
+export function taskDesign(taskId: string): TaskDesign | null {
   const { task, project } = findTaskAndProject(taskId);
   const specDir = resolveSpecDir(taskId);
   if (!task || !project || !specDir) return null;
@@ -47,6 +47,31 @@ function taskDesign(taskId: string): TaskDesign | null {
   };
 }
 
+/** One frame rendered offscreen from vt-design:// (the frame is agent-written: no new windows, no leaving it) */
+async function captureFrame(taskId: string, frame: TaskDesignFrame): Promise<Electron.NativeImage | null> {
+  const win = new BrowserWindow({
+    show: false,
+    width: frame.width,
+    height: frame.height,
+    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'design-shots' },
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  const stay = (event: { preventDefault(): void }, url: string) => {
+    if (!url.startsWith(`${DESIGN_SCHEME}:`)) event.preventDefault();
+  };
+  win.webContents.on('will-navigate', stay);
+  win.webContents.on('will-redirect', stay);
+  try {
+    await win.loadURL(`${DESIGN_SCHEME}://task/${encodeURIComponent(taskId)}/${frame.file.split('/').map(encodeURIComponent).join('/')}`);
+    await new Promise((resolve) => setTimeout(resolve, SHOT_SETTLE_MS));
+    return await win.webContents.capturePage();
+  } catch {
+    return null;
+  } finally {
+    win.destroy();
+  }
+}
+
 /**
  * Pictures of the design's screens for QA to compare with (design/shots/<name>-<width>.png),
  * rendered offscreen from vt-design://. Best effort: QA reads the HTML without them.
@@ -56,31 +81,55 @@ async function renderShots(taskId: string, specDir: string): Promise<void> {
   const shotsDir = path.join(specDir, 'design', 'shots');
   mkdirSync(shotsDir, { recursive: true });
   for (const frame of frames) {
-    const win = new BrowserWindow({
-      show: false,
-      width: frame.width,
-      height: frame.height,
-      webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'design-shots' },
-    });
-    // The frame is agent-written: no new windows, no leaving vt-design://
-    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    const stay = (event: { preventDefault(): void }, url: string) => {
-      if (!url.startsWith(`${DESIGN_SCHEME}:`)) event.preventDefault();
-    };
-    win.webContents.on('will-navigate', stay);
-    win.webContents.on('will-redirect', stay);
-    try {
-      await win.loadURL(`${DESIGN_SCHEME}://task/${encodeURIComponent(taskId)}/${frame.file.split('/').map(encodeURIComponent).join('/')}`);
-      await new Promise((resolve) => setTimeout(resolve, SHOT_SETTLE_MS));
-      const image = await win.webContents.capturePage();
-      const name = path.basename(frame.file, '.html');
-      writeFileSync(path.join(shotsDir, `${name}-${frame.width}.png`), image.toPNG());
-    } catch {
-      // this frame has no picture
-    } finally {
-      win.destroy();
-    }
+    const image = await captureFrame(taskId, frame);
+    // without a picture, this frame has none
+    if (image) writeFileSync(path.join(shotsDir, `${path.basename(frame.file, '.html')}-${frame.width}.png`), image.toPNG());
   }
+}
+
+/**
+ * Pictures of the frames that wait for the owner's approval (the Telegram bot's album): the
+ * screens at the design stage, the wireframes before it. Best effort, at most `limit`.
+ */
+export async function captureWaitingFrames(taskId: string, limit: number): Promise<Array<{ title: string; image: Electron.NativeImage }>> {
+  const design = taskDesign(taskId);
+  if (!design?.waiting) return [];
+  const kind = design.waiting === 'design' ? 'screen' : 'wireframe';
+  const frames = design.frames.filter((f) => f.kind === kind);
+  const out: Array<{ title: string; image: Electron.NativeImage }> = [];
+  for (const frame of (frames.length ? frames : design.frames).slice(0, limit)) {
+    const image = await captureFrame(taskId, frame);
+    if (image && !image.isEmpty()) out.push({ title: frame.title, image });
+  }
+  return out;
+}
+
+/** The owner approves the stage that waits (the Design tab's Approve, and the Telegram bot's) */
+export async function approveTaskDesign(agentManager: AgentManager, getMainWindow: () => BrowserWindow | null, taskId: string, stage: unknown): Promise<IPCResult> {
+  if (stage !== 'wireframes' && stage !== 'design') return { success: false, error: 'Unknown stage' };
+  const specDir = typeof taskId === 'string' ? resolveSpecDir(taskId) : null;
+  if (!specDir) return { success: false, error: 'Task not found' };
+  const next = approvedState(readDesignState(specDir), stage);
+  if (!next) return { success: false, error: 'The task is not waiting for this approval.' };
+  writeDesignState(specDir, next);
+  // The approved design's pictures, for QA (the last stage before the plan)
+  const { project } = findTaskAndProject(taskId);
+  const last = stage === 'design' || project?.settings.designMode === 'wireframes';
+  if (last && stage === 'design') await renderShots(taskId, specDir).catch(() => undefined);
+  await startTask(agentManager, getMainWindow, taskId);
+  return { success: true };
+}
+
+/** The owner's comments go back to the designer (the Design tab, and the Telegram bot's Comment) */
+export async function commentTaskDesign(agentManager: AgentManager, getMainWindow: () => BrowserWindow | null, taskId: string, comments: TaskDesignComment[]): Promise<IPCResult> {
+  const specDir = typeof taskId === 'string' ? resolveSpecDir(taskId) : null;
+  if (!specDir) return { success: false, error: 'Task not found' };
+  const frames = readDesignCanvas(specDir).frames.map((f) => f.file);
+  const next = commentedState(readDesignState(specDir), comments, frames);
+  if (!next) return { success: false, error: 'No comments to send.' };
+  writeDesignState(specDir, next);
+  await startTask(agentManager, getMainWindow, taskId);
+  return { success: true };
 }
 
 /** vt-design:// in the main session (sandboxed iframes on the Design tab, offscreen shots) */
@@ -115,29 +164,11 @@ export function registerTaskDesignHandlers(agentManager: AgentManager, getMainWi
     return { success: true, data: { frames } };
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_APPROVE, async (_e, taskId: string, stage: unknown): Promise<IPCResult> => {
-    if (stage !== 'wireframes' && stage !== 'design') return { success: false, error: 'Unknown stage' };
-    const specDir = typeof taskId === 'string' ? resolveSpecDir(taskId) : null;
-    if (!specDir) return { success: false, error: 'Task not found' };
-    const next = approvedState(readDesignState(specDir), stage);
-    if (!next) return { success: false, error: 'The task is not waiting for this approval.' };
-    writeDesignState(specDir, next);
-    // The approved design's pictures, for QA (the last stage before the plan)
-    const { project } = findTaskAndProject(taskId);
-    const last = stage === 'design' || project?.settings.designMode === 'wireframes';
-    if (last && stage === 'design') await renderShots(taskId, specDir).catch(() => undefined);
-    await startTask(agentManager, getMainWindow, taskId);
-    return { success: true };
-  });
+  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_APPROVE, (_e, taskId: string, stage: unknown): Promise<IPCResult> =>
+    approveTaskDesign(agentManager, getMainWindow, taskId, stage),
+  );
 
-  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_COMMENT, async (_e, taskId: string, comments: TaskDesignComment[]): Promise<IPCResult> => {
-    const specDir = typeof taskId === 'string' ? resolveSpecDir(taskId) : null;
-    if (!specDir) return { success: false, error: 'Task not found' };
-    const frames = readDesignCanvas(specDir).frames.map((f) => f.file);
-    const next = commentedState(readDesignState(specDir), comments, frames);
-    if (!next) return { success: false, error: 'No comments to send.' };
-    writeDesignState(specDir, next);
-    await startTask(agentManager, getMainWindow, taskId);
-    return { success: true };
-  });
+  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_COMMENT, (_e, taskId: string, comments: TaskDesignComment[]): Promise<IPCResult> =>
+    commentTaskDesign(agentManager, getMainWindow, taskId, comments),
+  );
 }
