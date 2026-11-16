@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.48 - 2026-11-16
+
+- Preview: each service runs on the port the project expects when it is free, so a project that hard-codes an address (a Vite proxy to `localhost:3000`, say) works without changes. When the port is taken, the preview says which file and line hard-codes the address and offers **Create a task to fix it**; when the page can't reach a backend for any other reason, it says so instead of showing a blank page.
+- Spec agents ask a brief's open questions instead of deciding them. The run told them "Auto-approve: true", which only meant the plan needs no approval, and they took it as "don't ask the user". Unanswered questions are now asked once, and the answers are kept for the brief's other tasks.
+
 ## 2.0.0-beta.47 - 2026-11-16
 
 - **Telegram bot.** Control Vibe Teamlead from your phone through your own bot (Settings → Telegram: create a bot in @BotFather, paste its token, send the pairing code). It runs inside the app on macOS and Windows, with no server: messages arrive at once (long polling). The bot answers only you.
