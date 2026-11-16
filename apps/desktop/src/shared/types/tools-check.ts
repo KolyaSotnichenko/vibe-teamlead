@@ -1,5 +1,5 @@
 /**
- * External tools Vibe Teamlead uses and whether this Mac has them.
+ * External tools Vibe Teamlead uses and whether this computer has them.
  * Shown in onboarding and Settings → Tools.
  */
 
@@ -26,6 +26,8 @@ export interface ToolCheck {
   installCommand?: string;
   /** Page with installation instructions */
   installUrl?: string;
+  /** Shell command that starts it when it is installed but not running (Docker Desktop) */
+  startCommand?: string;
   /** What stops working without it — the UI explains this */
   neededFor: 'agents' | 'code_graph' | 'security_gates' | 'browser_qa' | 'security_qa';
   /** Optional tools never block anything; the app skips the feature and says so */

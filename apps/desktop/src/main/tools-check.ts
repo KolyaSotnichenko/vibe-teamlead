@@ -13,6 +13,7 @@ import { findOnPath, runProcess } from './platform/exec';
 import { getPlatformKey, isMacOS } from './platform';
 import { findGitBash } from './platform/git-bash';
 import type { ToolCheck } from '../shared/types/tools-check';
+import { startDockerCommand, toolInstallHints } from '../shared/utils/tool-install-hints';
 
 async function version(bin: string, args = ['--version']): Promise<string | undefined> {
   const result = await runProcess(bin, args, { timeoutMs: 5000, maxOutput: 2000 });
@@ -43,12 +44,17 @@ function gitBashRow(platform: 'darwin' | 'win32' | 'linux'): ToolCheck[] {
       id: 'git-bash',
       status: bash ? 'ready' : 'missing',
       path: bash ?? undefined,
-      installCommand: 'winget install --id Git.Git -e',
-      installUrl: 'https://git-scm.com/download/win',
+      ...installHint(platform, 'git-bash'),
       neededFor: 'agents',
       optional: false,
     },
   ];
+}
+
+/** installCommand and installUrl of a tool for this platform */
+function installHint(platform: 'darwin' | 'win32' | 'linux', id: ToolCheck['id']): Pick<ToolCheck, 'installCommand' | 'installUrl'> {
+  const hint = toolInstallHints(platform)[id];
+  return { installCommand: hint?.command, installUrl: hint?.url };
 }
 
 export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPlatformKey()): Promise<ToolCheck[]> {
@@ -81,10 +87,9 @@ export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPla
     {
       id: 'gitleaks',
       ...gitleaks,
-      // Bundled in release builds (Resources/scanners); a Homebrew install works too.
+      // Bundled in release builds (Resources/scanners); an install by the user (Homebrew, winget) works too.
       status: gitleaks.status === 'ready' && isBundledScanner(bundled.gitleaksBin) ? 'bundled' : gitleaks.status,
-      installCommand: 'brew install gitleaks',
-      installUrl: 'https://github.com/gitleaks/gitleaks#installing',
+      ...installHint(platform, 'gitleaks'),
       neededFor: 'security_gates',
       optional: true,
     },
@@ -92,8 +97,7 @@ export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPla
       id: 'osv-scanner',
       ...osv,
       status: osv.status === 'ready' && isBundledScanner(bundled.osvScannerBin) ? 'bundled' : osv.status,
-      installCommand: 'brew install osv-scanner',
-      installUrl: 'https://google.github.io/osv-scanner/installation/',
+      ...installHint(platform, 'osv-scanner'),
       neededFor: 'security_gates',
       optional: true,
     },
@@ -101,8 +105,7 @@ export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPla
       // Never bundled (a Python package): used when installed
       id: 'semgrep',
       ...semgrep,
-      installCommand: 'brew install semgrep',
-      installUrl: 'https://semgrep.dev/docs/getting-started/quickstart',
+      ...installHint(platform, 'semgrep'),
       neededFor: 'security_gates',
       optional: true,
     },
@@ -110,8 +113,7 @@ export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPla
       id: 'chrome',
       status: chrome ? 'ready' : 'missing',
       path: chrome,
-      installCommand: 'brew install --cask google-chrome',
-      installUrl: 'https://www.google.com/chrome/',
+      ...installHint(platform, 'chrome'),
       neededFor: 'browser_qa',
       optional: true,
     },
@@ -119,16 +121,15 @@ export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPla
       id: 'docker',
       status: !dockerBin ? 'missing' : dockerRunning ? 'ready' : 'not_running',
       path: dockerBin,
-      installCommand: 'brew install --cask docker',
-      installUrl: 'https://docs.docker.com/desktop/setup/install/mac-install/',
+      ...installHint(platform, 'docker'),
+      startCommand: startDockerCommand(platform),
       neededFor: 'security_qa',
       optional: true,
     },
     {
       id: 'strix',
       ...strix,
-      installCommand: 'uv tool install strix-agent',
-      installUrl: 'https://github.com/usestrix/strix',
+      ...installHint(platform, 'strix'),
       neededFor: 'security_qa',
       optional: true,
     },

@@ -15,7 +15,6 @@ import { useSettingsStore } from '../../stores/settings-store';
 import type { ToolCheck, ToolStatus } from '../../../shared/types';
 import {
   AREA_ORDER,
-  START_DOCKER_COMMAND,
   TOOL_NAMES,
   areaOf,
   summarize,
@@ -126,7 +125,7 @@ function ToolRow({ tool }: { tool: ToolCheck }) {
   const name = TOOL_NAMES[tool.id];
   const attention = needsAttention(tool);
   const data = [tool.version, tool.path].filter(Boolean).join(' · ');
-  const fixCommand = tool.status === 'not_running' ? START_DOCKER_COMMAND : tool.status === 'missing' ? tool.installCommand : undefined;
+  const fixCommand = tool.status === 'not_running' ? tool.startCommand : tool.status === 'missing' ? tool.installCommand : undefined;
 
   return (
     <li className={cn('border-b border-border px-4 py-3 last:border-b-0', attention && 'border-l-2 border-l-destructive pl-[14px]')}>

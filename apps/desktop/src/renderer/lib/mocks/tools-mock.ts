@@ -9,7 +9,7 @@ export const sampleToolChecks: ToolCheck[] = [
   { id: 'osv-scanner', status: 'missing', installCommand: 'brew install osv-scanner', installUrl: 'https://google.github.io/osv-scanner/installation/', neededFor: 'security_gates', optional: true },
   { id: 'semgrep', status: 'missing', installCommand: 'brew install semgrep', installUrl: 'https://semgrep.dev/docs/getting-started/quickstart', neededFor: 'security_gates', optional: true },
   { id: 'chrome', status: 'ready', path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', installCommand: 'brew install --cask google-chrome', installUrl: 'https://www.google.com/chrome/', neededFor: 'browser_qa', optional: true },
-  { id: 'docker', status: 'not_running', path: '/usr/local/bin/docker', installCommand: 'brew install --cask docker', installUrl: 'https://docs.docker.com/desktop/setup/install/mac-install/', neededFor: 'security_qa', optional: true },
+  { id: 'docker', status: 'not_running', path: '/usr/local/bin/docker', installCommand: 'brew install --cask docker', installUrl: 'https://docs.docker.com/desktop/setup/install/mac-install/', startCommand: 'open -a Docker', neededFor: 'security_qa', optional: true },
   { id: 'strix', status: 'missing', installCommand: 'uv tool install strix-agent', installUrl: 'https://github.com/usestrix/strix', neededFor: 'security_qa', optional: true },
 ];
 

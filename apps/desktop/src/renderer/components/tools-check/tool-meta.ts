@@ -5,6 +5,8 @@
  */
 
 import type { ToolCheck, ToolId } from '../../../shared/types';
+import { type HintPlatform, startDockerCommand, toolInstallHints } from '../../../shared/utils/tool-install-hints';
+import { isWindows } from '../../lib/os-detection';
 
 export const TOOL_NAMES: Record<ToolId, string> = {
   'claude-code': 'Claude Code',
@@ -33,9 +35,6 @@ export function areaOf(tool: ToolCheck): ToolArea {
 export function isAvailable(tool: ToolCheck): boolean {
   return tool.status === 'bundled' || tool.status === 'ready';
 }
-
-/** Command that starts Docker Desktop on macOS. */
-export const START_DOCKER_COMMAND = 'open -a Docker';
 
 /** What blocks an area: tools that are missing, or Docker that is installed but stopped. */
 export interface AreaBlocker {
@@ -66,8 +65,9 @@ export function summarize(tools: ToolCheck[]): AreaSummary[] {
 
 /**
  * The fix for a skipped security check, matched from the report.
- * The install commands mirror `src/main/tools-check.ts` so the hint works
- * without running a check (which takes seconds).
+ * The commands come from the same per-platform table the main process uses
+ * (`shared/utils/tool-install-hints.ts`), so the hint works without running a
+ * check (which takes seconds).
  */
 export interface SkipFix {
   tool: ToolId;
@@ -75,33 +75,34 @@ export interface SkipFix {
   command: string;
 }
 
-const INSTALL_COMMANDS: Partial<Record<ToolId, string>> = {
-  gitleaks: 'brew install gitleaks',
-  'osv-scanner': 'brew install osv-scanner',
-  semgrep: 'brew install semgrep',
-  strix: 'uv tool install strix-agent',
-  docker: 'brew install --cask docker',
-};
+/** The platform the renderer runs on, for install hints (Windows, else the macOS hints). */
+function hostPlatform(): HintPlatform {
+  return isWindows() ? 'win32' : 'darwin';
+}
+
+function installCommand(tool: ToolId, platform: HintPlatform): string {
+  return toolInstallHints(platform)[tool]?.command as string;
+}
 
 const UNAVAILABLE = /not (available|installed|found)/i;
 
-/** A gate (gitleaks / OSV-Scanner / Semgrep) skipped because its scanner is not on this Mac. */
-export function gateSkipFix(gate: string, reason: string): SkipFix | null {
+/** A gate (gitleaks / OSV-Scanner / Semgrep) skipped because its scanner is not on this computer. */
+export function gateSkipFix(gate: string, reason: string, platform: HintPlatform = hostPlatform()): SkipFix | null {
   if ((gate === 'gitleaks' || gate === 'osv-scanner' || gate === 'semgrep') && UNAVAILABLE.test(reason)) {
-    return { tool: gate, kind: 'install', command: INSTALL_COMMANDS[gate] as string };
+    return { tool: gate, kind: 'install', command: installCommand(gate, platform) };
   }
   return null;
 }
 
 /** Security QA (Strix) skipped because Strix is missing or Docker is not running. */
-export function pentestSkipFix(reason: string | undefined): SkipFix | null {
+export function pentestSkipFix(reason: string | undefined, platform: HintPlatform = hostPlatform()): SkipFix | null {
   if (!reason) return null;
   if (/strix/i.test(reason) && UNAVAILABLE.test(reason)) {
-    return { tool: 'strix', kind: 'install', command: INSTALL_COMMANDS.strix as string };
+    return { tool: 'strix', kind: 'install', command: installCommand('strix', platform) };
   }
   if (/docker/i.test(reason)) {
-    if (/not running/i.test(reason)) return { tool: 'docker', kind: 'start', command: START_DOCKER_COMMAND };
-    if (UNAVAILABLE.test(reason)) return { tool: 'docker', kind: 'install', command: INSTALL_COMMANDS.docker as string };
+    if (/not running/i.test(reason)) return { tool: 'docker', kind: 'start', command: startDockerCommand(platform) };
+    if (UNAVAILABLE.test(reason)) return { tool: 'docker', kind: 'install', command: installCommand('docker', platform) };
   }
   return null;
 }

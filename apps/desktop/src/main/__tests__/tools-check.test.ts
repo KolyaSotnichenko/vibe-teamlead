@@ -43,6 +43,26 @@ describe('checkTools', () => {
     expect(tools.strix).toMatchObject({ status: 'missing', installCommand: 'uv tool install strix-agent', optional: true });
   });
 
+  it('gives Windows install commands, URLs and the Docker start command on Windows', async () => {
+    process.env.PATH = `${bin}:/usr/bin:/bin`;
+    const tools = Object.fromEntries((await checkTools('win32')).map((t) => [t.id, t]));
+    expect(tools.gitleaks.installCommand).toBe('winget install --id Gitleaks.Gitleaks -e');
+    expect(tools['osv-scanner'].installCommand).toBe('winget install --id Google.OSVScanner -e');
+    expect(tools.semgrep.installCommand).toBe('pip install semgrep');
+    expect(tools.chrome.installCommand).toBe('winget install --id Google.Chrome -e');
+    expect(tools.docker).toMatchObject({
+      installCommand: 'winget install --id Docker.DockerDesktop -e',
+      installUrl: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+      startCommand: 'start "" "%ProgramFiles%\\Docker\\Docker\\Docker Desktop.exe"',
+    });
+  });
+
+  it('gives Docker its macOS start command on macOS', async () => {
+    process.env.PATH = `${bin}:/usr/bin:/bin`;
+    const docker = (await checkTools('darwin')).find((t) => t.id === 'docker');
+    expect(docker).toMatchObject({ installCommand: 'brew install --cask docker', startCommand: 'open -a Docker' });
+  });
+
   it('has no Git for Windows row on macOS', async () => {
     process.env.PATH = `${bin}:/usr/bin:/bin`;
     expect((await checkTools('darwin')).some((t) => t.id === 'git-bash')).toBe(false);

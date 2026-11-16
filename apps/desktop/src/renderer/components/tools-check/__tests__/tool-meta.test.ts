@@ -60,6 +60,20 @@ describe('pentestSkipFix', () => {
   });
 });
 
+describe('skip fixes on Windows', () => {
+  it('give winget, pip and the Docker Desktop start command instead of Homebrew', () => {
+    expect(gateSkipFix('gitleaks', 'gitleaks is not available', 'win32')?.command).toBe('winget install --id Gitleaks.Gitleaks -e');
+    expect(gateSkipFix('osv-scanner', 'OSV-Scanner is not available', 'win32')?.command).toBe('winget install --id Google.OSVScanner -e');
+    expect(gateSkipFix('semgrep', 'Semgrep is not installed', 'win32')?.command).toBe('pip install semgrep');
+    expect(pentestSkipFix('Docker is not running', 'win32')).toEqual({
+      tool: 'docker',
+      kind: 'start',
+      command: 'start "" "%ProgramFiles%\\Docker\\Docker\\Docker Desktop.exe"',
+    });
+    expect(pentestSkipFix('Docker is not installed', 'win32')?.command).toBe('winget install --id Docker.DockerDesktop -e');
+  });
+});
+
 describe('Git for Windows', () => {
   const gitBash = { id: 'git-bash', status: 'missing', optional: false, neededFor: 'agents', installCommand: 'winget install --id Git.Git -e' } as const;
 

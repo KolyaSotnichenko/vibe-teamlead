@@ -81,6 +81,19 @@ describe('ToolsChecklist', () => {
     expect(within(docker).queryByRole('button', { name: /tools\.guideFor/ })).not.toBeInTheDocument();
   });
 
+  it('shows the start command the main process gives for Docker (Windows)', async () => {
+    const winStart = 'start "" "%ProgramFiles%\\Docker\\Docker\\Docker Desktop.exe"';
+    check.mockResolvedValue({
+      success: true,
+      data: sampleToolChecks.map((t) => (t.id === 'docker' ? { ...t, startCommand: winStart } : t)),
+    });
+    render(<ToolsChecklist />);
+    await waitFor(() => expect(screen.getByText('Docker', { selector: 'p' })).toBeInTheDocument());
+    const docker = row('Docker');
+    expect(within(docker).getByText(winStart)).toBeInTheDocument();
+    expect(within(docker).queryByText('open -a Docker')).not.toBeInTheDocument();
+  });
+
   it('on Windows without Git for Windows: a required row that says to install it, with winget', async () => {
     const gitBash = { id: 'git-bash', status: 'missing', optional: false, neededFor: 'agents', installCommand: 'winget install --id Git.Git -e', installUrl: 'https://git-scm.com/download/win' };
     check.mockResolvedValue({ success: true, data: [gitBash, ...sampleToolChecks] });

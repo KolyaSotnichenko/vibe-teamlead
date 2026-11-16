@@ -892,8 +892,8 @@
   },
   "tools": {
     "title": "Tools",
-    "description": "External tools the pipeline uses and whether this Mac has them. Only Claude Code is required, and it ships with the app.",
-    "checking": "Checking this Mac…",
+    "description": "External tools the pipeline uses and whether this computer has them. Only Claude Code is required, and it ships with the app.",
+    "checking": "Checking this computer…",
     "checkingAgain": "Checking again…",
     "checkFailed": "Couldn’t check the tools.",
     "checkAgain": "Check again",
