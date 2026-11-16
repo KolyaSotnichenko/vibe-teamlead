@@ -75,3 +75,13 @@ export function getOS(): Platform {
   if (isLinux()) return 'linux';
   return 'unknown';
 }
+
+/**
+ * A keyboard shortcut as the user's platform writes it: `⌘T` on macOS, `Ctrl+T` elsewhere.
+ *
+ * @param key - The key pressed with the modifier, e.g. `T`
+ * @param mac - Whether to use the macOS form (detected when omitted)
+ */
+export function shortcutLabel(key: string, mac: boolean = isMacOS()): string {
+  return mac ? `⌘${key}` : `Ctrl+${key}`;
+}

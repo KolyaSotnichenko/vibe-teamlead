@@ -1,6 +1,6 @@
 # What Vibe Teamlead is
 
-Vibe Teamlead is a macOS app in which a team of AI agents on Claude Code builds software from a specification. You describe a task or upload a spec document, and the agents go through the same path a real team would: analyst → architect → planner → developer (test first) → QA → security check → your decision to merge. You watch the work live and answer the agents' questions when the decision is yours.
+Vibe Teamlead is a desktop app for macOS and Windows (beta) in which a team of AI agents on Claude Code builds software from a specification. You describe a task or upload a spec document, and the agents go through the same path a real team would: analyst → architect → planner → developer (test first) → QA → security check → your decision to merge. You watch the work live and answer the agents' questions when the decision is yours.
 
 ## The task path in brief
 

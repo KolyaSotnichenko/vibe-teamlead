@@ -160,4 +160,16 @@ describe('os-detection', () => {
       }
     });
   });
+
+  describe('shortcutLabel', () => {
+    it('writes ⌘ on macOS and Ctrl+ elsewhere', async () => {
+      const { shortcutLabel } = await import('../os-detection');
+      expect(shortcutLabel('T', true)).toBe('⌘T');
+      expect(shortcutLabel('T', false)).toBe('Ctrl+T');
+      Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true });
+      expect(shortcutLabel('T')).toBe('Ctrl+T');
+      Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true });
+      expect(shortcutLabel('T')).toBe('⌘T');
+    });
+  });
 });

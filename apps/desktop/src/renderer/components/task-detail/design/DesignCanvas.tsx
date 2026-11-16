@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Maximize2 } from 'lucide-react';
 
 import type { TaskDesignComment, TaskDesignFrame } from '../../../../shared/types';
+import { isMacOS } from '../../../lib/os-detection';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/button';
 import { Dialog, DialogContent, DialogTitle } from '../../ui/dialog';
@@ -286,7 +287,7 @@ export function DesignCanvas({
       <div className="absolute bottom-3 left-3 flex items-center gap-2 border border-foreground bg-card px-3 py-1.5 text-xs">
         <span className="font-mono">{t('design.frames', { count: frames.length })}</span>
         <span className="text-muted-foreground">·</span>
-        <span>{commenting ? t('design.clickToComment') : t('design.dragToMove')}</span>
+        <span>{commenting ? t('design.clickToComment') : t('design.dragToMove', { modifier: isMacOS() ? '⌘' : 'Ctrl' })}</span>
         {!commenting && allArrows.length > 0 && (
           <button type="button" aria-pressed={showAll} onClick={() => setShowAll(!showAll)} className="ml-1 underline-offset-4 hover:underline">
             {showAll ? t('design.hideFlows') : t('design.showFlows')}

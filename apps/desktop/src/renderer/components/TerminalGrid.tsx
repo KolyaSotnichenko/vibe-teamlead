@@ -29,6 +29,7 @@ import {
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
 import { cn } from '../lib/utils';
+import { shortcutLabel } from '../lib/os-detection';
 import { useTerminalStore } from '../stores/terminal-store';
 import { useTaskStore } from '../stores/task-store';
 import { useFileExplorerStore } from '../stores/file-explorer-store';
@@ -450,6 +451,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
             <p className="mt-1 text-sm text-muted-foreground max-w-md">
               <Trans
                 i18nKey="terminal:grid.emptyBody"
+                values={{ shortcut: shortcutLabel('T') }}
                 components={{ kbd: <kbd className="px-1.5 py-0.5 text-xs bg-card border border-border rounded" /> }}
               />
             </p>

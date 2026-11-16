@@ -1188,7 +1188,7 @@
     "mail": {
       "none": "This app doesn't send mail through SMTP in its example settings, so nothing is caught here. A console mail provider prints its messages, with their links, in the API's log: open Logs and search for the address.",
       "unavailable": "The mail catcher could not start, so the app's mail goes nowhere.",
-      "empty": "Nothing sent yet. Mail the app sends while you use it shows up here; nothing leaves your Mac."
+      "empty": "Nothing sent yet. Mail the app sends while you use it shows up here; nothing leaves your computer."
     }
   },
   "looseEnds": {
@@ -1248,7 +1248,7 @@
     "frames_one": "{{count}} frame",
     "frames_other": "{{count}} frames",
     "clickToComment": "Click a spot to comment",
-    "dragToMove": "Drag to move, ⌘ + scroll to zoom, point at a frame to see its flows",
+    "dragToMove": "Drag to move, {{modifier}} + scroll to zoom, point at a frame to see its flows",
     "fit": "Fit",
     "playFrame": "Run {{frame}} as a prototype",
     "empty": {

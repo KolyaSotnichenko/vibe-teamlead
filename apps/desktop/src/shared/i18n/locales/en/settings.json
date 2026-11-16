@@ -66,14 +66,14 @@
       "none": "No key yet — agents cannot run until you add one.",
       "apiKey": "Anthropic API key",
       "token": "Claude subscription token",
-      "stored": "saved in the app (Keychain)",
+      "stored": "saved in the app (encrypted)",
       "fromEnvironment": "from the environment"
     },
     "apiKey": {
       "label": "Anthropic API key",
       "replaceLabel": "Replace the API key",
       "placeholder": "sk-ant-api03-…",
-      "help": "Create one at console.anthropic.com → API keys. It is stored encrypted in the macOS Keychain and never shown again.",
+      "help": "Create one at console.anthropic.com → API keys. It is stored encrypted by your operating system and never shown again.",
       "show": "Show key",
       "hide": "Hide key",
       "save": "Save key",
@@ -103,7 +103,7 @@
       "label": "Claude subscription token",
       "replaceLabel": "Replace the subscription token",
       "placeholder": "sk-ant-oat01-…",
-      "help": "Run `claude setup-token` in a terminal and paste the token. Stored encrypted in the macOS Keychain.",
+      "help": "Run `claude setup-token` in a terminal and paste the token. Stored encrypted by your operating system.",
       "remove": "Remove saved token"
     },
     "mode": {
