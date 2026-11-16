@@ -167,7 +167,24 @@
       "files_few": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
       "files_many": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
       "files_other": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
-      "diff": "Різниця: {{url}}"
+      "diff": "Різниця: {{url}}",
+      "merge": "Злити",
+      "sendBack": "Повернути",
+      "later": "Пізніше",
+      "confirmMerge": "Злити це завдання в проєкт?",
+      "confirmYes": "Так, злити",
+      "confirmNo": "Скасувати",
+      "merging": "Зливаю… Результат прийде сюди.",
+      "merged": "Злито.",
+      "mergeNeedsReview": "Агент змінив файли, щоб підтягнути останні зміни. У проєкт ще нічого не потрапило: перегляньте їх на комп'ютері й підтвердьте.",
+      "mergeFailed": "Злиття не вдалося: {{reason}}",
+      "unknownReason": "причину не вказано",
+      "noLongerWaiting": "Це завдання вже не чекає на перегляд.",
+      "commentPrompt": "Що команді змінити? Дайте відповідь зі своєю інструкцією.",
+      "commentPlaceholder": "Ваша інструкція",
+      "sentBack": "Повернуто з вашою інструкцією: {{comment}}",
+      "sendBackFailed": "Не вдалося повернути: {{reason}}",
+      "handledOnComputer": "Вирішено на комп'ютері."
     }
   }
 }

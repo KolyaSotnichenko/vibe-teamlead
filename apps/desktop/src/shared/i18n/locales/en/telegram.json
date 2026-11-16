@@ -157,7 +157,24 @@
       },
       "files_one": "Files changed: {{count}} (+{{additions}} −{{deletions}})",
       "files_other": "Files changed: {{count}} (+{{additions}} −{{deletions}})",
-      "diff": "Diff: {{url}}"
+      "diff": "Diff: {{url}}",
+      "merge": "Merge",
+      "sendBack": "Send back",
+      "later": "Later",
+      "confirmMerge": "Merge this task into the project?",
+      "confirmYes": "Yes, merge",
+      "confirmNo": "Cancel",
+      "merging": "Merging… The result comes here.",
+      "merged": "Merged.",
+      "mergeNeedsReview": "An agent changed files to bring in the latest changes. Nothing reached the project yet: check them on the computer and confirm.",
+      "mergeFailed": "The merge failed: {{reason}}",
+      "unknownReason": "no reason given",
+      "noLongerWaiting": "This task no longer waits for review.",
+      "commentPrompt": "What should the team change? Reply with your instruction.",
+      "commentPlaceholder": "Your instruction",
+      "sentBack": "Sent back with your instruction: {{comment}}",
+      "sendBackFailed": "Could not send it back: {{reason}}",
+      "handledOnComputer": "Handled on the computer."
     }
   }
 }

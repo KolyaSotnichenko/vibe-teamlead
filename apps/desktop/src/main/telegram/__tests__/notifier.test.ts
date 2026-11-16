@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { TelegramNotificationSettings } from '../../../shared/types/telegram';
 import { botText } from '../i18n';
-import { createNotifier, type NotifierSources } from '../notifier';
+import { createNotifier, type NotifierDeps, type NotifierSources } from '../notifier';
 import { DEFAULT_NOTIFICATIONS } from '../settings-store';
 import { createFakeBot } from './fake-bot';
 
@@ -35,7 +35,7 @@ function fakeSources() {
   };
 }
 
-function setup(notifications: Partial<TelegramNotificationSettings> = {}, chatId: number | null = 5) {
+function setup(notifications: Partial<TelegramNotificationSettings> = {}, chatId: number | null = 5, deliver?: NotifierDeps['deliver']) {
   const bot = createFakeBot();
   const src = fakeSources();
   const buttonsFor = vi.fn(() => undefined);
@@ -47,6 +47,7 @@ function setup(notifications: Partial<TelegramNotificationSettings> = {}, chatId
     task: (taskId) => ({ title: `Task ${taskId}`, projectName: 'Shop' }),
     projectName: () => 'Shop',
     buttonsFor,
+    deliver,
   });
   notifier.start(src.sources);
   const texts = async () => {
@@ -132,5 +133,14 @@ describe('notifier', () => {
     src.status('t2', 'human_review', 'design_review');
     src.status('t3', 'human_review', 'stopped');
     expect(await texts()).toEqual([]);
+  });
+
+  it('a deliverer can take a notification over (the review message), with the title and the reason', async () => {
+    const deliver = vi.fn(async (n: { kind: string }) => n.kind === 'reviewWaiting');
+    const { src, texts } = setup({}, 5, deliver as never);
+    src.status('t1', 'human_review', 'qa_rejected');
+    src.app('task-merged', { taskId: 't2', projectId: 'p1' });
+    expect(await texts()).toEqual([expect.stringContaining('Merged: Task t2')]);
+    expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reviewWaiting', taskId: 't1', title: 'Task t1', reviewReason: 'qa_rejected' }), 5);
   });
 });

@@ -30,6 +30,10 @@ export interface Notification {
   text: string;
   taskId?: string;
   projectId?: string;
+  /** The task's title, when it is about a task */
+  title?: string;
+  /** For a task in Human Review: why it is there */
+  reviewReason?: ReviewReason;
 }
 
 export interface NotifierDeps {
@@ -41,6 +45,8 @@ export interface NotifierDeps {
   projectName: (projectId: string) => string | undefined;
   /** Stage 2: buttons for a notification (review actions, Start/Stop) */
   buttonsFor?: (notification: Notification) => InlineButton[][] | undefined;
+  /** Sends a notification its own way (the review message); true when it did */
+  deliver?: (notification: Notification, chatId: number) => Promise<boolean>;
   onError?: (error: unknown) => void;
 }
 
@@ -59,6 +65,7 @@ export function createNotifier(deps: NotifierDeps) {
     // In order, one after another; a failure is reported, never thrown
     queue = queue.then(async () => {
       try {
+        if (deps.deliver && (await deps.deliver(notification, chatId))) return;
         const buttons = deps.buttonsFor?.(notification);
         await api.sendMessage(chatId, notification.text, buttons ? { buttons } : undefined);
       } catch (error) {
@@ -74,8 +81,17 @@ export function createNotifier(deps: NotifierDeps) {
     return lines.join('\n');
   };
 
-  const taskNotification = (kind: TelegramNotificationKind, key: string, taskId: string, projectId?: string) =>
-    send({ kind, text: taskText(key, taskId, projectId), taskId, projectId: projectId ?? deps.task(taskId)?.projectId });
+  const taskNotification = (kind: TelegramNotificationKind, key: string, taskId: string, projectId?: string, reviewReason?: ReviewReason) => {
+    const info = deps.task(taskId, projectId);
+    send({
+      kind,
+      text: taskText(key, taskId, projectId),
+      taskId,
+      projectId: projectId ?? info?.projectId,
+      title: info?.title ?? taskId,
+      ...(reviewReason ? { reviewReason } : {}),
+    });
+  };
 
   const onStatus = (taskId: string, status: TaskStatus, reason?: ReviewReason) => {
     let kind: TelegramNotificationKind | undefined;
@@ -91,7 +107,7 @@ export function createNotifier(deps: NotifierDeps) {
     }
     if (said.get(taskId) === state) return;
     said.set(taskId, state);
-    taskNotification(kind, key, taskId);
+    taskNotification(kind, key, taskId, undefined, reason);
   };
 
   return {
