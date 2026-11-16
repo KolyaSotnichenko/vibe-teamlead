@@ -144,6 +144,20 @@
       "quiet": "Nothing new: no task merged, waits for you, runs or failed.",
       "spend": "Spend since the last digest: ${{amount}}",
       "spendTokens": "Tokens since the last digest: {{tokens}}"
+    },
+    "review": {
+      "criteria": "Acceptance criteria: {{passed}} of {{total}} pass",
+      "checksLine": "App checks: {{status}}",
+      "checksFromTask": "App checks: {{status}} (the commands came from the task itself: the base had no checks)",
+      "checks": {
+        "passed": "passed",
+        "regression": "regression",
+        "not_verified": "not verified",
+        "not_configured": "not set up"
+      },
+      "files_one": "Files changed: {{count}} (+{{additions}} −{{deletions}})",
+      "files_other": "Files changed: {{count}} (+{{additions}} −{{deletions}})",
+      "diff": "Diff: {{url}}"
     }
   }
 }

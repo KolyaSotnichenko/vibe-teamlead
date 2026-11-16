@@ -152,6 +152,22 @@
       "quiet": "Нічого нового: жодне завдання не злито, не чекає на вас, не виконується й не впало.",
       "spend": "Витрати від минулого підсумку: ${{amount}}",
       "spendTokens": "Токенів від минулого підсумку: {{tokens}}"
+    },
+    "review": {
+      "criteria": "Критерії приймання: пройдено {{passed}} з {{total}}",
+      "checksLine": "Перевірки застосунку: {{status}}",
+      "checksFromTask": "Перевірки застосунку: {{status}} (команди взято із самого завдання: на базі перевірок не було)",
+      "checks": {
+        "passed": "пройдено",
+        "regression": "регресія",
+        "not_verified": "не перевірено",
+        "not_configured": "не налаштовано"
+      },
+      "files_one": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
+      "files_few": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
+      "files_many": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
+      "files_other": "Змінено файлів: {{count}} (+{{additions}} −{{deletions}})",
+      "diff": "Різниця: {{url}}"
     }
   }
 }
