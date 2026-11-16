@@ -270,7 +270,7 @@ exit 0`,
         writeFileSync(join(project, 'file'), 'written\n');
         await run();
         expect(readFileSync(join(away, 'victim'), 'utf-8')).toBe('untouched\n');
-      });
+      }, 20_000); // copying and git on a Windows runner can take longer than the default 5 s
 
       it('do not carry a deletion out of the copy', async () => {
         const { project, run } = await scan();
@@ -284,7 +284,7 @@ exit 0`,
         symlinkSync(away, join(project, 'link'));
         await run();
         expect(readFileSync(join(away, 'victim'), 'utf-8')).toBe('untouched\n');
-      });
+      }, 20_000); // copying and git on a Windows runner can take longer than the default 5 s
 
       // The fake Strix is a sh script, which Windows can't spawn
       it.skipIf(isWindowsHost)('do not redirect the task documents', async () => {

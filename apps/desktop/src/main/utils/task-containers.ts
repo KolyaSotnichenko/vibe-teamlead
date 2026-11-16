@@ -6,9 +6,10 @@
  * throws: a task must still get cleaned up when Docker is off. No Electron imports.
  */
 
-import { basename, sep } from 'node:path';
+import { basename } from 'node:path';
 
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
+import { isSameOrInside } from '../platform/same-path';
 
 const PROJECT_LABEL = 'com.docker.compose.project';
 const FOLDER_LABEL = 'com.docker.compose.project.working_dir';
@@ -57,7 +58,7 @@ export async function removeTaskContainers(worktreePath: string, docker: DockerR
     if (!listed.ok) return;
     const ours = lines(listed.stdout)
       .map((line) => line.split('\t'))
-      .filter(([, folder, task]) => [folder, task].some((from) => from === worktreePath || from?.startsWith(`${worktreePath}${sep}`)));
+      .filter(([, folder, task]) => [folder, task].some((from) => !!from && isSameOrInside(from, worktreePath)));
     for (const [id] of ours) await docker(['rm', '-f', '-v', id]);
 
     // By the name compose gives this folder: spec ids are unique, and these outlive their containers

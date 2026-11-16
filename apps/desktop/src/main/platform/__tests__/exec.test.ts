@@ -45,9 +45,9 @@ describe('searchPath', () => {
     const { homedir } = await import('node:os');
     // A substring check: on a Windows host the home folder itself holds a ':' (C:\Users\…)
     const joined = search([], 'darwin', { PATH: '/usr/bin' });
-    expect(joined).toContain(`:${homedir()}/.docker/bin`);
+    expect(joined).toContain(`:${join(homedir(), '.docker', 'bin')}`);
     expect(joined).toContain(':/Applications/Docker.app/Contents/Resources/bin');
-    expect(joined).toContain(`:${homedir()}/.orbstack/bin`);
+    expect(joined).toContain(`:${join(homedir(), '.orbstack', 'bin')}`);
   });
 });
 

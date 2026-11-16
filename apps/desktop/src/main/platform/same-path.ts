@@ -28,3 +28,21 @@ export function samePath(
   };
   return comparable(a) === comparable(b);
 }
+
+/**
+ * Whether `path` is `root` or inside it (a whole folder name, never `root-2`). On Windows case
+ * and slash direction don't count (Docker and git may print either); the paths aren't resolved
+ * on disk, since they may be gone. Elsewhere the strings are compared as given.
+ */
+export function isSameOrInside(
+  path: string,
+  root: string,
+  platform: 'darwin' | 'win32' | 'linux' = getPlatformKey(),
+): boolean {
+  if (!path) return false;
+  if (platform !== 'win32') return path === root || path.startsWith(`${root}/`);
+  const norm = (p: string) => win32.resolve(p).replace(/\\+$/, '').toLowerCase();
+  const a = norm(path);
+  const b = norm(root);
+  return a === b || a.startsWith(`${b}\\`);
+}

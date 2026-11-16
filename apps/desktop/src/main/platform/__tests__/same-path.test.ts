@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { samePath } from '../same-path';
+import { isSameOrInside, samePath } from '../same-path';
 
 describe('samePath', () => {
   // What Windows' realpath gives: the long name of an 8.3 short one (RUNNER~1), in the case on disk
@@ -24,5 +24,22 @@ describe('samePath', () => {
     expect(samePath('/p/a', '/p/a', 'darwin')).toBe(true);
     expect(samePath('/p/A', '/p/a', 'darwin')).toBe(false);
     expect(samePath('/p/a/', '/p/a', 'linux')).toBe(false);
+  });
+});
+
+describe('isSameOrInside', () => {
+  it('on Windows ignores case and slash direction, and needs a whole folder name', () => {
+    const root = 'C:\\Users\\n\\p\\.vibe-teamlead\\worktrees\\tasks\\014-x';
+    expect(isSameOrInside('c:/users/N/p/.vibe-teamlead/worktrees/tasks/014-x/apps/api', root, 'win32')).toBe(true);
+    expect(isSameOrInside(root, root.toUpperCase(), 'win32')).toBe(true);
+    expect(isSameOrInside(`${root}-2\\apps`, root, 'win32')).toBe(false);
+    expect(isSameOrInside('', root, 'win32')).toBe(false);
+  });
+
+  it('elsewhere compares as given', () => {
+    expect(isSameOrInside('/p/t/apps', '/p/t', 'darwin')).toBe(true);
+    expect(isSameOrInside('/p/t', '/p/t', 'darwin')).toBe(true);
+    expect(isSameOrInside('/p/t-2', '/p/t', 'darwin')).toBe(false);
+    expect(isSameOrInside('/P/t/apps', '/p/t', 'darwin')).toBe(false);
   });
 });
