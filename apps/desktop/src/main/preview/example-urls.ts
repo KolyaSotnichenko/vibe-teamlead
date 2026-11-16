@@ -66,7 +66,10 @@ export function examplePort(service: PreviewService, read: (path: string) => str
   if (asPort(named)) return asPort(named);
   const fromScript = FRAMEWORK_PORTS[script.trim().split(/\s+/)[0] ?? ''];
   if (fromScript) return fromScript;
-  return BACKEND_PORTS.find(([pattern]) => pattern.test(service.command))?.[1];
+  const fromCommand = BACKEND_PORTS.find(([pattern]) => pattern.test(service.command))?.[1];
+  if (fromCommand) return fromCommand;
+  // The service also gets the root's example settings: its port variable there, last
+  return service.dir ? asPort(exampleValue(read('.env.example'), service.portEnv ?? 'PORT')) : undefined;
 }
 
 /** The env with local addresses on a known example port pointed at that service's preview address. Pure. */

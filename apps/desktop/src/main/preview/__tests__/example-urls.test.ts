@@ -28,6 +28,18 @@ describe('examplePort: where a service listens when run as its example says', ()
     expect(examplePort({ name: 'b', dir: 'b', command: 'php artisan serve --port={port}' }, none)).toBe(8000);
   });
 
+  it("takes the root .env.example's port last, when the service's folder says nothing", () => {
+    // planner-mhp: the API's PORT=3000 is only in the root example; the web's vite default still wins for the web
+    const files = {
+      '.env.example': 'HOST=0.0.0.0\nPORT=3000\n',
+      'apps/api/package.json': JSON.stringify({ scripts: { dev: 'tsx watch src/index.ts' } }),
+      'apps/web/package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
+    };
+    expect(examplePort({ name: 'api', dir: 'apps/api', command: 'pnpm run dev' }, read(files))).toBe(3000);
+    expect(examplePort({ name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}' }, read(files))).toBe(5173);
+    expect(examplePort({ name: 'b', dir: 'b', command: 'uv run flask run --port {port}' }, read(files))).toBe(5000);
+  });
+
   it('knows nothing when nothing says', () => {
     expect(examplePort({ name: 'api', dir: 'api', command: 'x' }, read({ 'api/package.json': JSON.stringify({ scripts: { dev: 'node server.js' } }) }))).toBeUndefined();
     expect(examplePort({ name: 'api', dir: 'api', command: 'x' }, read({ 'api/.env.example': 'PORT=abc' }))).toBeUndefined();
