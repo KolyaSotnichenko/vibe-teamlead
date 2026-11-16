@@ -40,6 +40,7 @@ import { watchMainRuns } from '../../deploy/main-runs';
 import { branchHead, pushMainAfterMerge } from '../../deploy/push-after-merge';
 import { pushWithAppToken } from '../../deploy/github-write';
 import type { MergeWorktreeOptions } from '../../../shared/types/task';
+import { samePath } from '../../platform/same-path';
 
 // Regex pattern for validating git branch names
 export const GIT_BRANCH_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
@@ -72,7 +73,7 @@ export function isOwnWorktree(dir: string): boolean {
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 10_000,
     }).trim();
-    return realpathSync(top) === realpathSync(dir);
+    return samePath(realpathSync(top), realpathSync(dir));
   } catch {
     return false;
   }

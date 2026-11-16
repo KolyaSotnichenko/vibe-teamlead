@@ -33,6 +33,7 @@ import { getIsolatedGitEnv } from './git-isolation';
 import { withoutGitHooks } from '../ai/merge/git-merge';
 import { getTaskWorktreeDir, getTerminalWorktreeDir, isPathWithinBase } from '../worktree-paths';
 import { isMacOS, isWindows } from '../platform';
+import { samePath } from '../platform/same-path';
 
 /**
  * Options for worktree cleanup operation
@@ -94,7 +95,7 @@ function getWorktreeBranch(worktreePath: string, specId: string, timeout: number
         timeout
       }).trim();
 
-      if (branch && branch !== 'HEAD' && realpathSync(top) === realpathSync(worktreePath)) {
+      if (branch && branch !== 'HEAD' && samePath(realpathSync(top), realpathSync(worktreePath))) {
         return branch;
       }
     } catch {

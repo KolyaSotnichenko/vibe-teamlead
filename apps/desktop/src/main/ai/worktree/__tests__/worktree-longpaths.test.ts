@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ vi.mock('../../../platform', async (original) => ({
   getPlatformKey: () => platform.key,
 }));
 
-import { createOrGetWorktree } from '../worktree-manager';
+import { createOrGetWorktree, gitSubcommand } from '../worktree-manager';
 
 let project: string;
 const longpaths = (cwd: string) => {
@@ -49,5 +49,19 @@ describe('task worktrees and long paths', () => {
   it('on macOS the git config is left alone', async () => {
     const { worktreePath } = await createOrGetWorktree(project, '002-task', 'main', true, false);
     expect(longpaths(worktreePath)).toBe('');
+  });
+
+  it('on Windows reuses the worktree on the next call instead of adding it again', async () => {
+    platform.key = 'win32';
+    const first = await createOrGetWorktree(project, '003-task', 'main', true, false);
+    writeFileSync(path.join(first.worktreePath, 'work.txt'), 'uncommitted\n');
+    const again = await createOrGetWorktree(project, '003-task', 'main', true, false);
+    expect(again.worktreePath).toBe(first.worktreePath);
+    expect(readFileSync(path.join(again.worktreePath, 'work.txt'), 'utf-8')).toBe('uncommitted\n');
+  });
+
+  it('names the git sub-command in errors, past the -c options Windows adds', () => {
+    expect(gitSubcommand(['-c', 'core.longpaths=true', 'worktree', 'add', 'w'])).toBe('worktree');
+    expect(gitSubcommand(['worktree', 'prune'])).toBe('worktree');
   });
 });

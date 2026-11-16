@@ -24,12 +24,20 @@ import { promisify } from 'util';
 import { getSpecsDir } from '../../../shared/constants';
 import { getPlatformKey } from '../../platform';
 import { worktreeAddArgs, worktreeConfigCommands } from '../../platform/git-env';
+import { samePath } from '../../platform/same-path';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
 const execFileAsync = promisify(execFile);
+
+/** The git sub-command of `args`, past leading `-c name=value` options (Windows adds core.longpaths). */
+export function gitSubcommand(args: string[]): string | undefined {
+  let i = 0;
+  while (args[i] === '-c') i += 2;
+  return args[i];
+}
 
 /**
  * Run a git sub-command in the given working directory.
@@ -49,7 +57,7 @@ async function git(
       return '';
     }
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`git ${args[0]} failed: ${message}`);
+    throw new Error(`git ${gitSubcommand(args)} failed: ${message}`);
   }
 }
 
@@ -371,6 +379,7 @@ async function isWorktreeRegistered(
     .some((line) => {
       if (!line.startsWith('worktree ')) return false;
       const listed = line.slice('worktree '.length).trim();
-      return resolve(listed) === normalizedTarget;
+      // Windows: git prints C:/Users/name/…, Node may hold C:\Users\NAME~1\…
+      return samePath(resolve(listed), normalizedTarget);
     });
 }
