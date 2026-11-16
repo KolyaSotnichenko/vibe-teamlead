@@ -20,6 +20,7 @@ vi.mock('../../platform/exec', async (importActual) => {
 
 import { commandFor, killTree } from '../../platform/exec';
 import { freePort, installDependencies, needsInstall, packageManagerOf, startStorybook, stopAllStorybooks, stopStorybook, stopStorybooksUnder, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
+import { isWindowsHost } from '../../platform/__tests__/host';
 
 const dir = () => mkdtempSync(path.join(tmpdir(), 'vtl-sb-'));
 
@@ -81,7 +82,8 @@ describe('stopping a Storybook', () => {
     return { project, pid: Number(readFileSync(pidFile, 'utf-8')) };
   };
 
-  it.each([
+  // The fake package manager is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost).each([
     ['the Stop button', (project: string) => stopStorybook(project, '.')],
     ['quitting the app', () => stopAllStorybooks()],
     ['removing the worktree', (project: string) => stopStorybooksUnder(project)],
@@ -92,7 +94,8 @@ describe('stopping a Storybook', () => {
     await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 3000 });
   });
 
-  it('starts the package manager through commandFor and stops it with killTree', async () => {
+  // The fake package manager is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('starts the package manager through commandFor and stops it with killTree', async () => {
     vi.mocked(killTree).mockClear();
     const { project } = await started();
     expect(commandFor).toHaveBeenCalledWith(fakePm.path, expect.arrayContaining(['storybook']));

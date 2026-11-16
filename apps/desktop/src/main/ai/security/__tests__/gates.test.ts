@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { changedFiles, formatGateReport, isLockfile, parseGitleaks, parseOsv, parseSemgrep, resolveBaseRef, runSecurityGates, semgrepPacks } from '../gates';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 function repo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'vtl-gates-'));
@@ -119,7 +120,8 @@ describe('runSecurityGates', () => {
     expect((await changedFiles(dir, base)).sort()).toEqual(['config.ts', 'new.ts', 'package-lock.json']);
   });
 
-  it('reports secrets and only newly introduced vulnerabilities, and writes the report', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('reports secrets and only newly introduced vulnerabilities, and writes the report', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     // dir mode: report config.ts if it is in the scanned tree; git mode: nothing.
@@ -149,7 +151,8 @@ echo "{\\"results\\":[{\\"packages\\":[$pkg}]}]}"`,
     expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('BLOCKED');
   });
 
-  it("ignores the app's own folder (task logs quote the agents' test tokens)", async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)("ignores the app's own folder (task logs quote the agents' test tokens)", async () => {
     const dir = repo();
     // The project doesn't ignore .vibe-teamlead/, so its task logs show as untracked
     mkdirSync(join(dir, '.vibe-teamlead', 'specs', '003-auth'), { recursive: true });
@@ -187,7 +190,8 @@ else echo '[{"RuleID":"generic-api-key","File":".vibe-teamlead/specs/003-auth/ta
 });
 
 describe('Semgrep gate', () => {
-  it('scans only the changed files and blocks on ERROR findings', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('scans only the changed files and blocks on ERROR findings', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const semgrep = fakeScanner(
@@ -208,7 +212,8 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('[semgrep] js.sqli: SQL built from input');
   });
 
-  it('is skipped, not failed, when the rules cannot be fetched', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('is skipped, not failed, when the rules cannot be fetched', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const semgrep = fakeScanner(bin, 'semgrep', 'echo "Failed to download configuration. HINT: check your network connection" >&2; exit 2');
@@ -219,7 +224,8 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(report.skipped).toContainEqual({ gate: 'semgrep', reason: 'Semgrep could not fetch its rules (network or registry): Failed to download configuration. HINT: check your network connection' });
   });
 
-  it('is skipped when it times out or crashes', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('is skipped when it times out or crashes', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const slow = fakeScanner(bin, 'semgrep-slow', 'exec sleep 5');
@@ -231,7 +237,8 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(crashed.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep exited with code 7: invalid rule' });
   });
 
-  it('fails closed on output it cannot read', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('fails closed on output it cannot read', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
@@ -247,7 +254,8 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(report3.skipped).toContainEqual({ gate: 'semgrep', reason: 'failed — Semgrep output exceeded the size limit' });
   });
 
-  it('reports a partial scan when Semgrep could not parse some files, and still surfaces findings', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('reports a partial scan when Semgrep could not parse some files, and still surfaces findings', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
@@ -263,7 +271,8 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
     expect(readFileSync(join(specDir, 'security_gates.md'), 'utf-8')).toContain('Partial semgrep: could not scan 1 file: new.ts');
   });
 
-  it('counts errors without a path, cleans file names, lists only scanned files, and fails when every file errored', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('counts errors without a path, cleans file names, lists only scanned files, and fails when every file errored', async () => {
     const dir = repo();
     writeFileSync(join(dir, 'odd<x>.ts'), 'x');
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
@@ -334,7 +343,8 @@ echo '{"results":[{"check_id":"js.sqli","path":"config.ts","start":{"line":1,"co
 });
 
 describe('scanner failures', () => {
-  it('records a crashing scanner as failed instead of reporting it clean', async () => {
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('records a crashing scanner as failed instead of reporting it clean', async () => {
     const dir = repo();
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const broken = fakeScanner(bin, 'gitleaks', 'echo "config error" >&2; exit 2');

@@ -23,7 +23,15 @@ vi.mock('../ai/security/strix', async (original) => ({
   strixPath: () => process.env.PATH ?? '',
 }));
 
+// The real lookup finds the Git for Windows a Windows machine has: a test can say it is missing
+const gitBash = vi.hoisted(() => ({ missing: false }));
+vi.mock('../platform/git-bash', async (original) => {
+  const real = await original<typeof import('../platform/git-bash')>();
+  return { ...real, findGitBash: (options: Parameters<typeof real.findGitBash>[0]) => (gitBash.missing ? null : real.findGitBash(options)) };
+});
+
 import { checkTools, findChrome, isBundledScanner } from '../tools-check';
+import { isWindowsHost } from '../platform/__tests__/host';
 
 describe('checkTools', () => {
   const originalPath = process.env.PATH;
@@ -31,7 +39,8 @@ describe('checkTools', () => {
     process.env.PATH = originalPath;
   });
 
-  it('reports bundled, installed, stopped and missing tools with install hints', async () => {
+  // The fake gitleaks is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('reports bundled, installed, stopped and missing tools with install hints', async () => {
     fake('docker', 'exit 1'); // installed but the daemon is not running
     process.env.PATH = `${bin}:/usr/bin:/bin`;
     const tools = Object.fromEntries((await checkTools()).map((t) => [t.id, t]));
@@ -73,7 +82,9 @@ describe('checkTools', () => {
     const before = process.env.CLAUDE_CODE_GIT_BASH_PATH;
     try {
       delete process.env.CLAUDE_CODE_GIT_BASH_PATH;
+      gitBash.missing = true;
       const missing = (await checkTools('win32')).find((t) => t.id === 'git-bash');
+      gitBash.missing = false;
       expect(missing).toMatchObject({
         status: 'missing',
         optional: false,
@@ -84,6 +95,7 @@ describe('checkTools', () => {
       process.env.CLAUDE_CODE_GIT_BASH_PATH = gitleaks; // any file that exists
       expect((await checkTools('win32')).find((t) => t.id === 'git-bash')).toMatchObject({ status: 'ready', path: gitleaks });
     } finally {
+      gitBash.missing = false;
       if (before === undefined) delete process.env.CLAUDE_CODE_GIT_BASH_PATH;
       else process.env.CLAUDE_CODE_GIT_BASH_PATH = before;
     }

@@ -21,6 +21,7 @@ import {
   runStrix,
   strixModel,
 } from '../strix';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 const SARIF = JSON.stringify({
   version: '2.1.0',
@@ -183,7 +184,8 @@ exit 0`,
       return { ...task, run };
     }
 
-    it('leaves the task folder as it was: no edits, no stray files, no foreign dependencies', async () => {
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)('leaves the task folder as it was: no edits, no stray files, no foreign dependencies', async () => {
       const { project, run } = await scan();
       mkdirSync(join(project, 'node_modules'));
       writeFileSync(join(project, 'node_modules', 'native'), 'macos\n');
@@ -196,7 +198,8 @@ exit 0`,
       expect(readFileSync(join(project, 'node_modules', 'native'), 'utf-8')).toBe('macos\n');
     });
 
-    it('sees the task as QA approved it, with its diff, spec and folder name', async () => {
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)('sees the task as QA approved it, with its diff, spec and folder name', async () => {
       const { seen } = await (await scan()).run();
       expect(seen('name')).toBe('my-task');
       expect(seen('changed')).toBe('feature.txt,');
@@ -205,7 +208,8 @@ exit 0`,
       expect(seen('told')).toBe('yes');
     });
 
-    it('sees uncommitted work too, but not ignored files such as .env', async () => {
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)('sees uncommitted work too, but not ignored files such as .env', async () => {
       const { project, run } = await scan();
       writeFileSync(join(project, 'tracked.txt'), 'edited\n');
       writeFileSync(join(project, 'new.txt'), 'brand new\n');
@@ -216,14 +220,16 @@ exit 0`,
       expect(seen('secret')).toBe('');
     });
 
-    it("finds a base that only exists as the project's remote branch", async () => {
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)("finds a base that only exists as the project's remote branch", async () => {
       const { project, run } = await scan();
       git(project, 'update-ref', 'refs/remotes/origin/main', 'main');
       const { seen } = await run({ diffBase: 'origin/main' });
       expect(seen('changed')).toBe('feature.txt,');
     });
 
-    it('works from a task worktree, the way tasks really run', async () => {
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)('works from a task worktree, the way tasks really run', async () => {
       const { project, run } = await scan();
       const worktree = join(project, '.vibe-teamlead', 'worktrees', 'my-worktree');
       git(project, 'worktree', 'add', '-q', '-b', 'task-2', worktree, 'task');
@@ -242,7 +248,8 @@ exit 0`,
         git(project, 'commit', '-q', '-m', 'link');
       };
 
-      it('do not carry a new file out of the copy through a linked folder', async () => {
+      // The fake Strix is a sh script, which Windows can't spawn
+      it.skipIf(isWindowsHost)('do not carry a new file out of the copy through a linked folder', async () => {
         const { project, run } = await scan();
         const away = outside();
         commitLink(project, 'link', away);
@@ -279,7 +286,8 @@ exit 0`,
         expect(readFileSync(join(away, 'victim'), 'utf-8')).toBe('untouched\n');
       });
 
-      it('do not redirect the task documents', async () => {
+      // The fake Strix is a sh script, which Windows can't spawn
+      it.skipIf(isWindowsHost)('do not redirect the task documents', async () => {
         const { project, run } = await scan();
         const away = outside();
         commitLink(project, '.vibe-teamlead-task', away);
@@ -288,7 +296,8 @@ exit 0`,
         expect(seen('spec')).toBe('the spec');
       });
 
-      it('do not bring a file from outside the task into the sandbox', async () => {
+      // The fake Strix is a sh script, which Windows can't spawn
+      it.skipIf(isWindowsHost)('do not bring a file from outside the task into the sandbox', async () => {
         const { project, specDir, run } = await scan();
         const away = outside();
         writeFileSync(join(away, 'x'), 'private\n');
@@ -310,7 +319,8 @@ exit 0`,
     });
 
     describe('when the worktree differs from its last commit in kind', () => {
-      it('takes a file where the commit has a folder', async () => {
+      // The fake Strix is a sh script, which Windows can't spawn
+      it.skipIf(isWindowsHost)('takes a file where the commit has a folder', async () => {
         const { project, run } = await scan();
         mkdirSync(join(project, 'dir'));
         writeFileSync(join(project, 'dir', 'x'), 'tracked\n');
@@ -322,7 +332,8 @@ exit 0`,
         expect(result.status).toBe('clear');
       });
 
-      it('takes a folder where the commit has a file', async () => {
+      // The fake Strix is a sh script, which Windows can't spawn
+      it.skipIf(isWindowsHost)('takes a folder where the commit has a file', async () => {
         const { project, run } = await scan();
         writeFileSync(join(project, 'dir'), 'a file\n');
         git(project, 'add', '-A');
@@ -335,7 +346,8 @@ exit 0`,
         expect(seen('through')).toBe('in the folder');
       });
 
-      it('skips a named pipe in the spec folder instead of hanging on it', async () => {
+      // The fake Strix is a sh script, which Windows can't spawn
+      it.skipIf(isWindowsHost)('skips a named pipe in the spec folder instead of hanging on it', async () => {
         const { specDir, run } = await scan();
         rmSync(join(specDir, 'spec.md'));
         execFileSync('mkfifo', [join(specDir, 'spec.md')]);
@@ -347,7 +359,8 @@ exit 0`,
       }, 10_000);
     });
 
-    it('removes the copy afterwards', async () => {
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)('removes the copy afterwards', async () => {
       const { specDir, run } = await scan();
       const { seen } = await run();
       expect(seen('target')).toBeTruthy();
@@ -362,7 +375,8 @@ exit 0`,
     });
   });
 
-  it('runs Strix and reports blocking findings from its SARIF', async () => {
+  // The fake Strix is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('runs Strix and reports blocking findings from its SARIF', async () => {
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
     const sarifFile = join(bin, 'findings.sarif');
@@ -390,7 +404,8 @@ echo "found 2"; exit 2`,
     expect(md).toContain('spent $1.25');
   });
 
-  it('treats a clean exit as clear and other exits as a non-blocking error', async () => {
+  // The fake Strix is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('treats a clean exit as clear and other exits as a non-blocking error', async () => {
     const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
     fakeBin('docker', 'exit 0', bin);
     process.env.PATH = `${bin}:${originalPath}`;

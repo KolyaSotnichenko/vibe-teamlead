@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ensureCodegraphIndex, resetCodegraphIndexCache } from '../codegraph';
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 function fakeCodegraph(script: string): { bin: string; calls: string } {
   const dir = mkdtempSync(join(tmpdir(), 'vtl-cgbin-'));
@@ -26,7 +27,8 @@ const count = (file: string) => {
 describe('CodeGraph indexing', () => {
   beforeEach(() => resetCodegraphIndexCache());
 
-  it('indexes once and shares the result between sessions', async () => {
+  // The fake CodeGraph is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('indexes once and shares the result between sessions', async () => {
     const { bin, calls } = fakeCodegraph('mkdir -p "$3/.codegraph"; exit 0');
     const project = mkdtempSync(join(tmpdir(), 'vtl-cgp-'));
     const [a, b] = await Promise.all([
@@ -37,7 +39,8 @@ describe('CodeGraph indexing', () => {
     expect(count(calls)).toBe(1);
   });
 
-  it('remembers a failure instead of retrying every session', async () => {
+  // The fake CodeGraph is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('remembers a failure instead of retrying every session', async () => {
     const { bin, calls } = fakeCodegraph('exit 3');
     const project = mkdtempSync(join(tmpdir(), 'vtl-cgp-'));
     expect(await ensureCodegraphIndex(bin, project, { wait: true })).toBe(false);
