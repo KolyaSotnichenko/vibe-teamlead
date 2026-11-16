@@ -15,7 +15,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
 
-import { runProcess, searchPath } from '../../platform/exec';
+import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
@@ -324,7 +324,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const redact = (line: string) => secrets.reduce((text, value) => (value.length >= 4 ? text.split(value).join('***') : text), line);
   const shell = async (command: string, cwd: string, timeoutMs: number): Promise<Omit<CheckResult, keyof Check>> => {
     let tail = '';
-    const result = await runProcess('/bin/sh', ['-c', command], {
+    const result = await runShell(command, {
       cwd, env, timeoutMs, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024,
       // Line by line, before the cut: a cut through a value would leave a part no match can find.
       // Best effort, not a boundary: code that means to leak a value can encode it.
