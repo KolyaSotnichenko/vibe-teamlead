@@ -59,6 +59,11 @@ export interface VerificationReport {
   services?: { status: 'started' | 'unavailable'; images: string[]; reason?: string };
   /** The project has migrations and they weren't run: no temporary database to run them on */
   migrationsSkipped?: boolean;
+  /**
+   * 'task': the base had no checks at all (a new project's first task), so the commands, installs
+   * and database came from the task itself. A pass shows less than usual; a failure is the task's.
+   */
+  source?: 'task';
 }
 
 export interface VerifyTaskOptions {
@@ -287,7 +292,18 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   if (!commit || !baseCommit) throw new Error(`The task's commit or its base "${baseRef}" was not found.`);
 
   const base = await detectAt(run, baseCommit);
-  const detected = options.detected ?? base.detected;
+  // A base with nothing to check (a new project's first task): rather than verify nothing, run what
+  // the task itself sets up, and say so. The project's settings and the base still come first.
+  let source: 'task' | undefined;
+  let from = base;
+  if (!options.commands?.length && !options.detected && !base.detected.checks.length) {
+    const own = await detectAt(run, commit);
+    if (own.detected.checks.length) {
+      source = 'task';
+      from = { ...own, images: base.images.length ? base.images : own.images };
+    }
+  }
+  const detected = options.detected ?? from.detected;
   const checks: Check[] = options.commands?.length
     ? options.commands.map((command) => ({ name: command, command }))
     : detected.checks;
@@ -329,20 +345,20 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       if (!cloned.ok) throw new Error(cloned.output || 'git clone failed');
       const checkedOut = await run(['checkout', '-q', '--detach', at], cwd);
       if (!checkedOut.ok) throw new Error(checkedOut.output || 'git checkout failed');
-      if (base.images.length) say(`starting ${base.images.map((image) => image.image).join(', ')} for this copy`);
-      const started = await startTestServices(base.images, { docker, label: serviceLabel });
+      if (from.images.length) say(`starting ${from.images.map((image) => image.image).join(', ')} for this copy`);
+      const started = await startTestServices(from.images, { docker, label: serviceLabel });
       if (started.status === 'started') say('database up');
       else if (started.status === 'unavailable') say(`no database: ${started.reason ?? 'it could not start'}`);
       try {
         if (started.status !== 'none') {
-          services ??= { status: started.status, images: base.images.map((image) => image.image), ...(started.reason ? { reason: started.reason } : {}) };
+          services ??= { status: started.status, images: from.images.map((image) => image.image), ...(started.reason ? { reason: started.reason } : {}) };
         }
-        const variables = { ...serviceEnv(base.example, started.started), ...options.env };
+        const variables = { ...serviceEnv(from.example, started.started), ...options.env };
         env = verificationEnv(hostEnv, variables);
         // Set by the project's settings, an address may be anything, so migrations stay away from it
         const ownDatabase = Object.keys(options.env).some((name) => /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i.test(name));
         // The migration tools here are for SQL databases
-        migratable = !ownDatabase && !base.committedDatabase && started.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
+        migratable = !ownDatabase && !from.committedDatabase && started.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
         // Example values aren't secrets, the project's own values and the database addresses are
         secrets = [...Object.values(options.env), ...started.started.flatMap((service) => [service.url, new URL(service.url).password])];
         return await work(cwd);
@@ -405,7 +421,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   // Exit codes come from the task's code, so "tool missing" or a timeout proves nothing by itself: only the base can tell
   const failed = results.filter((result) => result.outcome !== 'passed');
   const baseTails = new Map<string, string>();
-  const unknown = failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
+  // With the task's own commands there is nothing on the base to compare with
+  const unknown = source ? [] : failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
   if (unknown.length) {
     for (const result of unknown) say(`${result.command} ${result.outcome.replace('_', ' ')}: running it on ${baseRef} to see whether the task broke it`);
     await inCopy(baseCommit, async (cwd) => {
@@ -433,9 +450,17 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     if (result.onBase !== 'passed' && baseTails.has(key)) result.tailOnBase = baseTails.get(key);
   }
 
-  const broke = failed.some((result) => result.onBase === 'passed');
+  const broke = failed.some((result) => (source ? blocksOnItsOwn(result) : result.onBase === 'passed'));
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
-  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}) };
+  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
+}
+
+/**
+ * A check of the task's own that says the task is broken. A missing tool says nothing about it;
+ * a failure or a timeout does, since no base exists to blame. Pure.
+ */
+function blocksOnItsOwn(check: CheckResult): boolean {
+  return check.outcome === 'failed' || check.outcome === 'timed_out';
 }
 
 /**
@@ -443,7 +468,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
  * what decides how checks run, or part of it didn't run. Pure.
  */
 export function verificationIsConclusive(report: VerificationReport): boolean {
-  return report.status === 'passed' && !report.runnerConfigChanged.length && !report.migrationsSkipped && report.services?.status !== 'unavailable';
+  return report.status === 'passed' && !report.source && !report.runnerConfigChanged.length && !report.migrationsSkipped && report.services?.status !== 'unavailable';
 }
 
 /** What the task window shows. Pure. */
@@ -454,6 +479,7 @@ export function verificationSummary(report: VerificationReport): VerificationSum
     checks: report.checks.map(({ command, outcome, onBase }) => ({ command, outcome, ...(onBase ? { onBase } : {}) })),
     ...(report.services ? { services: { status: report.services.status, images: report.services.images } } : {}),
     ...(report.migrationsSkipped ? { migrationsSkipped: true } : {}),
+    ...(report.source ? { source: report.source } : {}),
   };
 }
 
@@ -471,7 +497,10 @@ export function describeVerification(report: VerificationReport): string {
   const databases = report.services?.status === 'started'
     ? [`Against a temporary, empty database: ${report.services.images.join(', ')}`]
     : report.services?.reason ? [report.services.reason] : [];
-  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...databases, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
+  const origin = report.source === 'task'
+    ? ['The base branch has no checks yet, so these commands come from this task itself: a pass shows less than usual (the task chose what checks it), a failure is the task\'s own.']
+    : [];
+  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...origin, ...databases, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
 }
 
 /** What must be fixed before a review can pass. Keys ignore the wording, to compare rounds. Pure. */
@@ -504,10 +533,12 @@ export function failureSummary(tail: string): string {
 
 export function verificationIssues(report: VerificationReport): { key: string; type: 'critical'; title: string; description: string; location?: string; fix_required: string }[] {
   return [
-    ...report.checks.filter((check) => check.outcome !== 'passed' && check.onBase === 'passed').map((check) => ({
+    ...report.checks.filter((check) => (report.source ? blocksOnItsOwn(check) : check.outcome !== 'passed' && check.onBase === 'passed')).map((check) => ({
       key: `check:${check.command}`,
       type: 'critical' as const,
-      title: `\`${check.command}\` ${check.outcome === 'timed_out' ? 'runs out of time' : 'fails'} on this task and passes on the commit it started from`,
+      title: report.source
+        ? `\`${check.command}\` ${check.outcome === 'timed_out' ? 'runs out of time' : 'fails'} on this task (its own check: the base has none yet)`
+        : `\`${check.command}\` ${check.outcome === 'timed_out' ? 'runs out of time' : 'fails'} on this task and passes on the commit it started from`,
       description: (() => {
         const summary = failureSummary(check.tail ?? '');
         return `Exit code ${check.exitCode}.${summary ? `\n\nWhat failed:\n${summary}\n` : ''}\nThe end of its output:\n${check.tail ?? ''}`;

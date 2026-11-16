@@ -1054,6 +1054,7 @@
     "notVerifiedTitle": "App checks couldn't say everything",
     "notConfiguredTitle": "No app checks ran",
     "notConfiguredBody": "The app found no typecheck or tests to run for this project. You can set commands in the project's settings.",
+    "fromTask": "Main has no checks yet, so the app ran the ones this task sets up. That shows less than usual: the task chose what checks it.",
     "dockerNeeded": "This project's tests need a database, and Docker isn't running. Start Docker Desktop for a full check.",
     "temporaryDatabase": "Run on a clean copy of the code, with an empty temporary database.",
     "migrationsSkipped": "Migrations weren't run: there was no temporary database to run them on.",

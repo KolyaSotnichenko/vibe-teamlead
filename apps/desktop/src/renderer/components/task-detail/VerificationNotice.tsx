@@ -30,6 +30,7 @@ export function VerificationNotice({ task }: { task: Task }) {
     <section aria-labelledby="verification" className={`border-l-2 py-1 pl-4 ${passed ? 'border-l-border' : 'border-l-[var(--vt-signal)]'}`}>
       <h3 id="verification" className="text-sm font-semibold text-foreground">{t(title)}</h3>
       {summary.status === 'not_configured' && <p className="mt-0.5 text-sm text-muted-foreground">{t('verification.notConfiguredBody')}</p>}
+      {summary.source === 'task' && <p className="mt-0.5 text-sm text-muted-foreground">{t('verification.fromTask')}</p>}
       {summary.services?.status === 'unavailable' && <p className="mt-0.5 text-sm text-muted-foreground">{t('verification.dockerNeeded')}</p>}
       {summary.services?.status === 'started' && <p className="mt-0.5 text-sm text-muted-foreground">{t('verification.temporaryDatabase')}</p>}
       {summary.migrationsSkipped && <p className="mt-0.5 text-sm text-muted-foreground">{t('verification.migrationsSkipped')}</p>}

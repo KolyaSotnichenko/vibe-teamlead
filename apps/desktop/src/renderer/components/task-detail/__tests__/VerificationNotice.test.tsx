@@ -38,6 +38,12 @@ describe('VerificationNotice', () => {
     expect(await screen.findByText('verification.notConfiguredTitle')).toBeInTheDocument();
   });
 
+  it("says when the commands came from the task, because main had none yet", async () => {
+    setup({ status: 'passed', source: 'task', checks: [{ command: 'pnpm run test', outcome: 'passed' }] });
+    expect(await screen.findByText('verification.passedTitle')).toBeInTheDocument();
+    expect(screen.getByText('verification.fromTask')).toBeInTheDocument();
+  });
+
   it('says when migrations were left out', async () => {
     setup({ status: 'passed', checks: [], migrationsSkipped: true });
     expect(await screen.findByText('verification.migrationsSkipped')).toBeInTheDocument();

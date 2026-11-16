@@ -12,6 +12,8 @@ export interface VerificationSummary {
   checks: { command: string; outcome: VerificationOutcome; onBase?: VerificationOutcome }[];
   services?: { status: 'started' | 'unavailable'; images: string[] };
   migrationsSkipped?: boolean;
+  /** 'task': the base had no checks, so the commands came from the task itself */
+  source?: 'task';
 }
 
 const STATUSES = ['passed', 'regression', 'not_verified', 'not_configured'];
@@ -44,5 +46,6 @@ export function parseVerificationSummary(text: string): VerificationSummary | nu
     checks,
     ...(validServices ? { services: { status: services.status as 'started' | 'unavailable', images: (services.images as unknown[]).filter((image): image is string => typeof image === 'string') } } : {}),
     ...(raw.migrationsSkipped === true ? { migrationsSkipped: true } : {}),
+    ...(raw.source === 'task' ? { source: 'task' as const } : {}),
   };
 }

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { DockerRun } from '../test-services';
-import { describeVerification, failureSummary, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIssues, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
+import { describeVerification, failureSummary, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIsConclusive, verificationIssues, verificationSummary, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
 
 describe('verifyTask', () => {
   let repo: string;
@@ -261,6 +261,21 @@ describe('verifyTask', () => {
       expect(describeVerification(report)).toMatch(/Docker/);
     });
 
+    it("with no checks on the base, the task's database comes with its own commands", async () => {
+      const { docker, calls } = fakeDocker();
+      git(repo, 'rm', '-q', 'docker-compose.yml', 'apps/api/.env.example');
+      commit(repo, 'base without compose');
+      const empty = join(repo, '.vibe-teamlead', 'worktrees', 'tasks', 'first');
+      git(repo, 'worktree', 'add', '-q', '-b', 'vibe-teamlead/first', empty);
+      writeFileSync(join(empty, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres:17-alpine\n');
+      writeFileSync(join(empty, 'package.json'), JSON.stringify({ name: 'app', version: '1.0.0', scripts: { test: 'test -n "$DATABASE_URL"' } }));
+      commit(empty, 'first task');
+      const report = await verify({ worktreePath: empty, commands: undefined, docker });
+      expect(report.source).toBe('task');
+      expect(calls.find((call) => call[0] === 'run')?.at(-1)).toBe('postgres:17-alpine');
+      expect(report.status).toBe('passed');
+    });
+
     it('a task cannot choose the image: it comes from the base', async () => {
       const { docker, calls } = fakeDocker();
       writeFileSync(join(wt, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres-evil:1\n');
@@ -352,10 +367,50 @@ describe('verifyTask', () => {
   });
 
   it('takes detected commands from the base: a task cannot choose what checks it', async () => {
-    writeFileSync(join(wt, 'package.json'), JSON.stringify({ scripts: { test: 'exit 0' } }));
-    commit(wt, 'task adds its own test script');
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({ scripts: { test: 'test -f good.txt' } }));
+    commit(repo, 'base has a test');
+    git(wt, 'merge', '-q', '--no-edit', 'main');
+    writeFileSync(join(wt, 'checks.json'), '{}');
+    commit(wt, 'task');
     const report = await verify({ commands: undefined });
-    expect(report.status).toBe('not_configured');
+    expect(report.source).toBeUndefined();
+    expect(report.checks.map((c) => c.command)).toEqual(['npm run test']);
+  });
+
+  // A new project's first task: main has nothing to check with yet
+  describe("when the base has no checks, the task's own", () => {
+    const own = (test: string) => {
+      writeFileSync(join(wt, 'package.json'), JSON.stringify({ name: 'app', version: '1.0.0', scripts: { test } }));
+      commit(wt, 'task sets up the project with its tests');
+    };
+
+    it('run, and a pass says the commands came from the task: not conclusive', async () => {
+      own('test -f task.txt');
+      const report = await verify({ commands: undefined });
+      expect(report.status).toBe('passed');
+      expect(report.source).toBe('task');
+      expect(report.checks.map((c) => [c.command, c.outcome])).toEqual([['npm run test', 'passed']]);
+      expect(verificationIsConclusive(report)).toBe(false);
+      expect(verificationSummary(report).source).toBe('task');
+      expect(describeVerification(report)).toContain('come from this task');
+    });
+
+    it('a failure blocks: there is no base to blame it on', async () => {
+      own('exit 3');
+      const report = await verify({ commands: undefined });
+      expect(report.status).toBe('regression');
+      expect(report.checks[0].onBase).toBeUndefined();
+      const issues = verificationIssues(report);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].title).toContain('npm run test');
+    });
+
+    it("the project's own commands in its settings still come first", async () => {
+      own('exit 3');
+      const report = await verify({ commands: ['test -f task.txt'] });
+      expect(report.source).toBeUndefined();
+      expect(report.status).toBe('passed');
+    });
   });
 
   it('detects commands and installs on the base project', async () => {
