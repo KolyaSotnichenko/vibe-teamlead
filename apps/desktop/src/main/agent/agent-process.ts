@@ -21,6 +21,7 @@ import { projectStore } from '../project-store';
 import { getAugmentedEnv } from '../env-utils';
 import { getToolInfo, getClaudeCliPathForSdk } from '../cli-tool-manager';
 import { killProcessGracefully, isWindows } from '../platform';
+import { deriveGitBashPath } from '../platform/git-bash';
 import { debugLog } from '../../shared/utils/debug-logger';
 
 /**
@@ -38,60 +39,6 @@ const CLI_TOOL_ENV_MAP: Readonly<Record<CliTool, string>> = {
   glab: 'GITLAB_CLI_PATH'
 } as const;
 
-
-function deriveGitBashPath(gitExePath: string): string | null {
-  if (!isWindows()) {
-    return null;
-  }
-
-  try {
-    const gitDir = path.dirname(gitExePath);  // e.g., D:\...\Git\mingw64\bin
-    const gitDirName = path.basename(gitDir).toLowerCase();
-
-    // Find Git installation root
-    let gitRoot: string;
-
-    if (gitDirName === 'cmd') {
-      // .../Git/cmd/git.exe -> .../Git
-      gitRoot = path.dirname(gitDir);
-    } else if (gitDirName === 'bin') {
-      // Could be .../Git/bin/git.exe OR .../Git/mingw64/bin/git.exe
-      const parent = path.dirname(gitDir);
-      const parentName = path.basename(parent).toLowerCase();
-      if (parentName === 'mingw64' || parentName === 'mingw32') {
-        // .../Git/mingw64/bin/git.exe -> .../Git
-        gitRoot = path.dirname(parent);
-      } else {
-        // .../Git/bin/git.exe -> .../Git
-        gitRoot = parent;
-      }
-    } else {
-      // Unknown structure - try to find 'bin' sibling
-      gitRoot = path.dirname(gitDir);
-    }
-
-    // Bash.exe is in Git/bin/bash.exe
-    const bashPath = path.join(gitRoot, 'bin', 'bash.exe');
-
-    if (existsSync(bashPath)) {
-      debugLog('[AgentProcess] Derived git-bash path:', bashPath);
-      return bashPath;
-    }
-
-    // Fallback: check one level up if gitRoot didn't work
-    const altBashPath = path.join(path.dirname(gitRoot), 'bin', 'bash.exe');
-    if (existsSync(altBashPath)) {
-      debugLog('[AgentProcess] Found git-bash at alternate path:', altBashPath);
-      return altBashPath;
-    }
-
-    console.warn('[AgentProcess] Could not find bash.exe from git path:', gitExePath);
-    return null;
-  } catch (error) {
-    console.error('[AgentProcess] Error deriving git-bash path:', error);
-    return null;
-  }
-}
 
 /**
  * Process spawning and lifecycle management
