@@ -5,12 +5,13 @@
 
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 
 import { resolveBundledTools } from './ai/claude-code/bundled-tools';
 import { dockerAvailable, strixPath } from './ai/security/strix';
 import { findOnPath, runProcess } from './platform/exec';
-import { getPlatformKey, isMacOS } from './platform';
+import { getPlatformKey } from './platform';
+import { envValue } from './platform/env';
 import { findGitBash } from './platform/git-bash';
 import type { ToolCheck } from '../shared/types/tools-check';
 import { startDockerCommand, toolInstallHints } from '../shared/utils/tool-install-hints';
@@ -22,10 +23,23 @@ async function version(bin: string, args = ['--version']): Promise<string | unde
   return line ? line.slice(0, 80) : undefined;
 }
 
-function findChrome(): string | undefined {
-  if (isMacOS()) {
+/** Where Google Chrome is installed: the app on macOS, chrome.exe in its install folders on Windows, PATH elsewhere. */
+export function findChrome(
+  platform: 'darwin' | 'win32' | 'linux' = getPlatformKey(),
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync
+): string | undefined {
+  if (platform === 'darwin') {
     const app = 'Google Chrome.app/Contents/MacOS/Google Chrome';
-    return [join('/Applications', app), join(homedir(), 'Applications', app)].find((p) => existsSync(p));
+    return [join('/Applications', app), join(homedir(), 'Applications', app)].find((p) => exists(p));
+  }
+  if (platform === 'win32') {
+    const exe = win32.join('Google', 'Chrome', 'Application', 'chrome.exe');
+    return ['ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA']
+      .map((name) => envValue(env, name))
+      .filter((dir): dir is string => !!dir)
+      .map((dir) => win32.join(dir, exe))
+      .find((p) => exists(p));
   }
   return findOnPath('google-chrome') ?? findOnPath('google-chrome-stable');
 }
@@ -64,7 +78,7 @@ export async function checkTools(platform: 'darwin' | 'win32' | 'linux' = getPla
 
   const strixBin = findOnPath('strix', strixPath());
   const dockerBin = findOnPath('docker', strixPath());
-  const chrome = findChrome();
+  const chrome = findChrome(platform);
 
   const [gitleaks, osv, semgrep, strix, dockerRunning] = await Promise.all([
     installed(bundled.gitleaksBin),

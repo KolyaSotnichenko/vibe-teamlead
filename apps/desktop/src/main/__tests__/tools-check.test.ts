@@ -23,7 +23,7 @@ vi.mock('../ai/security/strix', async (original) => ({
   strixPath: () => process.env.PATH ?? '',
 }));
 
-import { checkTools, isBundledScanner } from '../tools-check';
+import { checkTools, findChrome, isBundledScanner } from '../tools-check';
 
 describe('checkTools', () => {
   const originalPath = process.env.PATH;
@@ -96,5 +96,33 @@ describe('isBundledScanner', () => {
     expect(isBundledScanner('C:\\Users\\me\\AppData\\Local\\Programs\\Vibe Teamlead\\resources\\scanners\\gitleaks.exe')).toBe(true);
     expect(isBundledScanner('/opt/homebrew/bin/gitleaks')).toBe(false);
     expect(isBundledScanner(undefined)).toBe(false);
+  });
+});
+
+describe('findChrome on Windows', () => {
+  const env = {
+    ProgramFiles: 'C:\\Program Files',
+    'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+    LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local',
+  };
+  const only = (path: string) => (p: string) => p === path;
+
+  it('finds Chrome in Program Files, Program Files (x86) or the user’s LocalAppData', () => {
+    for (const path of [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Users\\me\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe',
+    ]) {
+      expect(findChrome('win32', env, only(path))).toBe(path);
+    }
+  });
+
+  it('reports none when Chrome is not installed, and never looks for the macOS app', () => {
+    const seen: string[] = [];
+    expect(findChrome('win32', env, (p) => {
+          seen.push(p);
+          return false;
+        })).toBeUndefined();
+    expect(seen.some((p) => p.includes('.app'))).toBe(false);
   });
 });
