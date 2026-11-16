@@ -8,7 +8,7 @@ import { botText } from '../i18n';
 import { createPairing } from '../pairing';
 import { createRouter } from '../router';
 import { createTelegramSettingsStore } from '../settings-store';
-import { LONG_TEXT, registerTaskCommands, type TaskActions } from '../tasks';
+import { LONG_TEXT, registerTaskCommands, type TaskActions, titleFromText } from '../tasks';
 import { createFakeBot, OWNER, pressUpdate, textUpdate } from './fake-bot';
 
 const t = (k: string, v?: Record<string, string | number>) => botText('en', k, v);
@@ -135,5 +135,12 @@ describe('a plain message', () => {
     await say('z'.repeat(LONG_TEXT + 1));
     await press(t('task.analyse'));
     expect(bot.last().text).toBe(t('brief.failed', { reason: 'No API key' }));
+  });
+});
+
+describe('titleFromText', () => {
+  it('a short first line is the title; otherwise the app writes one, as for an empty title in the window', () => {
+    expect(titleFromText('  Add a dark mode \nwith a switch')).toBe('Add a dark mode');
+    expect(titleFromText('x'.repeat(81))).toBe('');
   });
 });

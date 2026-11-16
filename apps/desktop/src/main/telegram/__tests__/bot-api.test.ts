@@ -69,6 +69,19 @@ describe('bot-api', () => {
     expect(calls[3].url).toMatch(/\/sendMediaGroup$/);
   });
 
+  it('sends a JPEG as a JPEG and a PNG as a PNG', async () => {
+    const { fn, calls } = fakeFetch([{ json: { ok: true, result: { message_id: 1 } } }, { json: { ok: true, result: [] } }]);
+    const api = createBotApi('1:A', fn as never);
+    await api.sendPhoto(5, Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    const photo = (calls[0].body as FormData).get('photo') as File;
+    expect(photo.type).toBe('image/jpeg');
+    expect(photo.name).toBe('photo.jpg');
+    await api.sendMediaGroup(5, [Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from([0xff, 0xd8, 0xff])]);
+    const form = calls[1].body as FormData;
+    expect((form.get('p0') as File).type).toBe('image/png');
+    expect((form.get('p1') as File).name).toBe('p1.jpg');
+  });
+
   it('classifies errors: 401, 409, 429 with retry_after, network', async () => {
     const { fn } = fakeFetch([
       { status: 401, json: { ok: false, error_code: 401, description: 'Unauthorized' } },

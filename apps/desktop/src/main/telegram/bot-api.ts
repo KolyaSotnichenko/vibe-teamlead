@@ -139,7 +139,10 @@ export function createBotApi(token: string, fetchImpl: FetchLike = fetch as Fetc
     const form = new FormData();
     form.append('chat_id', String(chatId));
     for (const [key, value] of Object.entries(fields)) form.append(key, value);
-    for (const file of files) form.append(file.name, new Blob([new Uint8Array(file.data)], { type: 'image/png' }), `${file.name}.png`);
+    for (const file of files) {
+      const jpeg = file.data[0] === 0xff && file.data[1] === 0xd8;
+      form.append(file.name, new Blob([new Uint8Array(file.data)], { type: jpeg ? 'image/jpeg' : 'image/png' }), `${file.name}.${jpeg ? 'jpg' : 'png'}`);
+    }
     return form;
   };
 

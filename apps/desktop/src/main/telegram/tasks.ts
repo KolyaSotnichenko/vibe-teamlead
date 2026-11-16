@@ -192,3 +192,11 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
     return true;
   });
 }
+
+const TITLE_MAX = 80;
+
+/** The title for a task from a message: its first line when short; '' lets the app write one */
+export function titleFromText(text: string): string {
+  const first = text.trim().split('\n')[0]?.trim() ?? '';
+  return first.length <= TITLE_MAX ? first : '';
+}
