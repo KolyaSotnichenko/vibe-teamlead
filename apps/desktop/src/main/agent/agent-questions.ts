@@ -15,8 +15,35 @@ interface Answerable {
 
 const pending = new Map<string, { question: PendingAgentQuestion; target: Answerable }>();
 
+/**
+ * How a question stopped waiting: answered or dismissed by the user (from any client), cancelled
+ * by the agent, or dropped because its worker ended.
+ */
+export type QuestionEvent =
+  | { type: 'asked'; question: PendingAgentQuestion }
+  | { type: 'resolved'; question: PendingAgentQuestion; how: 'answered' | 'dismissed' | 'cancelled' | 'dropped' };
+
+const listeners = new Set<(event: QuestionEvent) => void>();
+
+/** Listen to questions being asked and resolved (the Telegram bot). Returns the unsubscribe. */
+export function onQuestionEvent(listener: (event: QuestionEvent) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function emit(event: QuestionEvent): void {
+  for (const listener of listeners) {
+    try {
+      listener(event);
+    } catch {
+      // A listener never breaks asking or answering
+    }
+  }
+}
+
 export function addPendingQuestion(question: PendingAgentQuestion, target: Answerable): void {
   pending.set(question.questionId, { question, target });
+  emit({ type: 'asked', question });
 }
 
 export function listPendingQuestions(): PendingAgentQuestion[] {
@@ -29,6 +56,7 @@ export function answerPendingQuestion(questionId: string, answers: AgentAnswers 
   if (!entry) return null;
   pending.delete(questionId);
   entry.target.answerQuestion(questionId, answers);
+  emit({ type: 'resolved', question: entry.question, how: answers ? 'answered' : 'dismissed' });
   return entry.question;
 }
 
@@ -37,6 +65,7 @@ export function cancelPendingQuestion(questionId: string): PendingAgentQuestion 
   const entry = pending.get(questionId);
   if (!entry) return null;
   pending.delete(questionId);
+  emit({ type: 'resolved', question: entry.question, how: 'cancelled' });
   return entry.question;
 }
 
@@ -52,6 +81,7 @@ export function dropQuestionsFrom(target: Answerable): PendingAgentQuestion[] {
       dropped.push(entry.question);
     }
   }
+  for (const question of dropped) emit({ type: 'resolved', question, how: 'dropped' });
   return dropped;
 }
 
