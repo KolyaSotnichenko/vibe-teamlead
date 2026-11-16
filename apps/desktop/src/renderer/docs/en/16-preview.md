@@ -21,7 +21,7 @@ Anything else that serves HTTP works too: add it under **Services** with a comma
 - **Folder:** where the command runs, relative to the project.
 - **Command:** the command itself. `{port}` becomes the port the app picked; the port is also in `PORT`.
 - **Page:** the service whose page the preview shows. Exactly one.
-- **Variables with another service's URL:** usually none. A local address in `.env.example`, such as `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`, is pointed at the preview's own port for the service that listens on 3001 in the project: the port from its `.env.example`, its `dev` script, or its framework's default. Name one here only when that can't be worked out, for example `NEXT_PUBLIC_API_URL=api`.
+- **Variables with another service's URL:** usually none. A local address in `.env.example`, such as `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`, is pointed at the preview's own port for the service that listens on 3001 in the project: the port from its `.env.example` (its folder's, then the root's), its `dev` script, or its framework's default. Name one here only when that can't be worked out, for example `NEXT_PUBLIC_API_URL=api`.
 
 Change the list later with **Services** in the toolbar. The list is kept in the project's settings in the app, not in the repository.
 
@@ -44,6 +44,14 @@ The page runs in a view of its own, separate from the app: no access to your fil
 ## When it does not start
 
 The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped. Fix the command under **Services** and open Preview again.
+
+## Ports, and a page that can't reach its API
+
+Each service runs on the port the project expects it on, worked out as for the variables above: its `.env.example` (its folder's, then the root's), its `dev` script, or its framework's default. So an address the project hard-codes, such as a Vite proxy to `http://localhost:3000`, still works. Only when that port is taken, for example by your own dev server, or can't be worked out, does the service get another free port.
+
+When a service had to move, the preview reads the config files that commonly hard-code a dev address (`vite.config`, `next.config`, `nuxt.config`, `astro.config`, `svelte.config`, `angular.json`, `proxy.conf.json`, webpack configs, the `proxy` field of `package.json`) for `localhost` addresses on that service's own port. When it finds one, a notice above the page says which file and line sends where, and that in the preview the service runs on another port because its own is taken. When nothing is found, the preview sends one request through the page to a path it proxies (or `/api`); when that comes back 502 or 504, or the connection is refused, the notice says the page can't reach the service, instead of leaving a blank page.
+
+**Create a task to fix it** makes a task in Planning with the fix written out: read the address from a variable, with the current value as the default, and add that variable to `.env.example`, so the preview can point it at the right port.
 
 ## Logs and mail
 
