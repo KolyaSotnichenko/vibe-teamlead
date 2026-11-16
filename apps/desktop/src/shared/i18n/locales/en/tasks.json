@@ -1200,6 +1200,13 @@
       "none": "This app doesn't send mail through SMTP in its example settings, so nothing is caught here. A console mail provider prints its messages, with their links, in the API's log: open Logs and search for the address.",
       "unavailable": "The mail catcher could not start, so the app's mail goes nowhere.",
       "empty": "Nothing sent yet. Mail the app sends while you use it shows up here; nothing leaves your computer."
+    },
+    "address": {
+      "hardcoded": "{{file}}, line {{line}}, sends to {{address}}, the port {{service}} uses in development. In the preview {{service}} runs on port {{previewPort}} because {{ownPort}} is taken, so the page can't reach it and may stay blank. Read the address from a variable in .env.example and the preview points it at the right port.",
+      "unreachable": "The page can't reach {{service}}: a request to {{path}} came back {{result}}. Most often the project names {{service}}'s address as a fixed localhost port; read it from a variable in .env.example and the preview points it at the right port.",
+      "unreachableAny": "The page can't reach its backend: a request to {{path}} came back {{result}}. Most often the project names the backend's address as a fixed localhost port; read it from a variable in .env.example and the preview points it at the right port.",
+      "createTask": "Create a task to fix it",
+      "taskCreated": "Task created, in Planning"
     }
   },
   "looseEnds": {

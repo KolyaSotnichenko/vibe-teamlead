@@ -13,6 +13,7 @@ import { EmptyState, Notice } from '../task-detail/workspace/workspace-ui';
 import { PreviewServicesForm } from './PreviewServicesForm';
 import { PreviewToolbar, type PreviewSide, type PreviewWidth } from './PreviewToolbar';
 import { UxReviewPanel } from './UxReviewPanel';
+import { AddressNotice } from './AddressNotice';
 import { NotesPanel } from './NotesPanel';
 import { LogsPanel } from './LogsPanel';
 import { MailPanel } from './MailPanel';
@@ -91,6 +92,9 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       />
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
+      )}
+      {ready && status.addressIssues && status.addressIssues.length > 0 && (
+        <div className="px-4 pt-2"><AddressNotice projectId={project.id} issues={status.addressIssues} services={saved} /></div>
       )}
       <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 justify-center bg-muted">
