@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.45 - 2026-11-16
+
+- **Windows (beta).** Vibe Teamlead now has a Windows x64 installer next to the macOS builds. It isn't signed yet: Windows SmartScreen warns on first run (More info → Run anyway). Agents need Git for Windows (the tools check offers `winget install --id Git.Git -e`). Claude Code, CodeGraph, gitleaks and OSV-Scanner ship in their Windows builds; checks, previews and dev servers run through Git Bash; tool install hints use winget (Semgrep: pip); `.docx` briefs and design packages are read without macOS tools. Projects inside WSL aren't supported yet and are refused with an explanation. The app updates itself on Windows too.
+- A second launch of the app brings the open window to the front instead of starting another copy.
+- On Windows, a resuming task no longer loses its worktree (and the agent's uncommitted work) when git and Node spell the same folder differently; a removed task's Docker containers are found whatever the case or slashes.
+- Texts no longer assume macOS: keys are "encrypted by your operating system", and shortcuts show Ctrl on Windows.
+
 ## 2.0.0-beta.44 - 2026-11-16
 
 - App checks: a new project's first task is checked too. Main has nothing to check with yet, so the app now runs the typecheck, tests and database the task itself sets up, and the task window says so. A failure blocks; a pass counts for less, since the task chose what checks it. Before, the task that sets up the whole project went through with "No app checks ran".
