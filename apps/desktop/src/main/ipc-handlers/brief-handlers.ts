@@ -41,6 +41,70 @@ export function orderByDependencies(tasks: BriefTaskDraft[]): BriefTaskDraft[] {
   return ordered;
 }
 
+/**
+ * Create the confirmed tasks of an analysed brief: what the brief dialog's Create runs
+ * (BRIEF_CREATE_TASKS), and the Telegram bot's "Create N tasks".
+ */
+export async function createBriefTasks(
+  projectId: string,
+  briefId: string,
+  tasks: BriefTaskDraft[],
+  options: BriefCreateOptions,
+): Promise<IPCResult<BriefCreatedTask[]>> {
+  const project = projectStore.getProject(projectId);
+  if (!project) return { success: false, error: 'Project not found' };
+  if (typeof briefId !== 'string' || !/^[\w.-]+$/.test(briefId)) return { success: false, error: 'Invalid brief' };
+  const briefDir = path.join(briefsRoot(project.path, project.autoBuildPath), briefId);
+  if (!existsSync(briefDir)) return { success: false, error: 'The brief was not found in this project.' };
+  if (!Array.isArray(tasks) || tasks.length === 0) return { success: false, error: 'No tasks to create.' };
+
+  const briefFile = existsSync(path.join(briefDir, 'brief.md')) ? 'brief.md' : 'source.pdf';
+  const briefRelPath = path.relative(project.path, path.join(briefDir, briefFile));
+  const clarificationsFile = path.join(briefDir, 'clarifications.md');
+  const ordered = orderByDependencies(tasks);
+  // Each task carries the brief's open questions that affect it; its spec agent asks the ones
+  // clarifications.md doesn't answer yet, and the answers land there for the other tasks
+  const questionsByTask = openQuestionsByTask(readProposalQuestions(briefDir), ordered.map((draft) => draft.key));
+  const clarificationsAt = path.relative(project.path, clarificationsFile);
+  const clarificationsRelPath = existsSync(clarificationsFile) ? clarificationsAt : undefined;
+  const specIdByKey = new Map<string, string>();
+  const created: BriefCreatedTask[] = [];
+
+  try {
+    for (const draft of ordered) {
+      const dependencies = draft.dependsOn.map((key) => specIdByKey.get(key)).filter((id): id is string => !!id);
+      const questions = questionsByTask.get(draft.key) ?? [];
+      const description = taskDescription(draft, briefRelPath, questions.length ? clarificationsAt : clarificationsRelPath, questions);
+      const task = await createTaskInProject(project, draft.title, description, {
+        // The user's default models (agent profile + custom phase models), as the task wizard sets them
+        ...resolveDefaultTaskModels(readSettingsFile() as never),
+        sourceType: 'brief',
+        briefId,
+        briefTaskKey: draft.key,
+        category: draft.category,
+        complexity: draft.complexity,
+        priority: draft.priority,
+        acceptanceCriteria: draft.acceptanceCriteria,
+        ...(dependencies.length ? { dependencies } : {}),
+      });
+      specIdByKey.set(draft.key, task.specId);
+      if (options?.queue && task.specsPath) {
+        await persistPlanStatus(path.join(task.specsPath, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), 'queue', projectId);
+      }
+      created.push({ key: draft.key, taskId: task.id, specId: task.specId });
+    }
+    projectStore.invalidateTasksCache(projectId);
+    return { success: true, data: created };
+  } catch (error) {
+    projectStore.invalidateTasksCache(projectId);
+    const message = error instanceof Error ? error.message : 'Failed to create tasks';
+    return {
+      success: false,
+      error: created.length ? `${message} (${created.length} of ${tasks.length} tasks were created)` : message,
+    };
+  }
+}
+
 export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null): void {
   const running = new Map<string, AbortController>();
   // The analyst's open question per project, and whether the user said "stop asking"
@@ -126,65 +190,7 @@ export function registerBriefHandlers(getMainWindow: () => BrowserWindow | null)
 
   ipcMain.handle(
     IPC_CHANNELS.BRIEF_CREATE_TASKS,
-    async (
-      _event,
-      projectId: string,
-      briefId: string,
-      tasks: BriefTaskDraft[],
-      options: BriefCreateOptions,
-    ): Promise<IPCResult<BriefCreatedTask[]>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) return { success: false, error: 'Project not found' };
-      if (typeof briefId !== 'string' || !/^[\w.-]+$/.test(briefId)) return { success: false, error: 'Invalid brief' };
-      const briefDir = path.join(briefsRoot(project.path, project.autoBuildPath), briefId);
-      if (!existsSync(briefDir)) return { success: false, error: 'The brief was not found in this project.' };
-      if (!Array.isArray(tasks) || tasks.length === 0) return { success: false, error: 'No tasks to create.' };
-
-      const briefFile = existsSync(path.join(briefDir, 'brief.md')) ? 'brief.md' : 'source.pdf';
-      const briefRelPath = path.relative(project.path, path.join(briefDir, briefFile));
-      const clarificationsFile = path.join(briefDir, 'clarifications.md');
-      const ordered = orderByDependencies(tasks);
-      // Each task carries the brief's open questions that affect it; its spec agent asks the ones
-      // clarifications.md doesn't answer yet, and the answers land there for the other tasks
-      const questionsByTask = openQuestionsByTask(readProposalQuestions(briefDir), ordered.map((draft) => draft.key));
-      const clarificationsAt = path.relative(project.path, clarificationsFile);
-      const clarificationsRelPath = existsSync(clarificationsFile) ? clarificationsAt : undefined;
-      const specIdByKey = new Map<string, string>();
-      const created: BriefCreatedTask[] = [];
-
-      try {
-        for (const draft of ordered) {
-          const dependencies = draft.dependsOn.map((key) => specIdByKey.get(key)).filter((id): id is string => !!id);
-          const questions = questionsByTask.get(draft.key) ?? [];
-          const description = taskDescription(draft, briefRelPath, questions.length ? clarificationsAt : clarificationsRelPath, questions);
-          const task = await createTaskInProject(project, draft.title, description, {
-            // The user's default models (agent profile + custom phase models), as the task wizard sets them
-            ...resolveDefaultTaskModels(readSettingsFile() as never),
-            sourceType: 'brief',
-            briefId,
-            briefTaskKey: draft.key,
-            category: draft.category,
-            complexity: draft.complexity,
-            priority: draft.priority,
-            acceptanceCriteria: draft.acceptanceCriteria,
-            ...(dependencies.length ? { dependencies } : {}),
-          });
-          specIdByKey.set(draft.key, task.specId);
-          if (options?.queue && task.specsPath) {
-            await persistPlanStatus(path.join(task.specsPath, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), 'queue', projectId);
-          }
-          created.push({ key: draft.key, taskId: task.id, specId: task.specId });
-        }
-        projectStore.invalidateTasksCache(projectId);
-        return { success: true, data: created };
-      } catch (error) {
-        projectStore.invalidateTasksCache(projectId);
-        const message = error instanceof Error ? error.message : 'Failed to create tasks';
-        return {
-          success: false,
-          error: created.length ? `${message} (${created.length} of ${tasks.length} tasks were created)` : message,
-        };
-      }
-    },
+    (_event, projectId: string, briefId: string, tasks: BriefTaskDraft[], options: BriefCreateOptions): Promise<IPCResult<BriefCreatedTask[]>> =>
+      createBriefTasks(projectId, briefId, tasks, options),
   );
 }
