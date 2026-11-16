@@ -1,5 +1,5 @@
 /**
- * The preview runs every service on a port of its own choosing, so the local addresses
+ * The preview runs a service on another port when its own is taken, so the local addresses
  * in `.env.example` (`NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`) would point at
  * nothing, or at the owner's own dev servers. Each service's example port is worked out
  * from the project's files, and those addresses are pointed at the preview's ports, so
