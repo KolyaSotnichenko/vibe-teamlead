@@ -66,7 +66,7 @@
   },
   "bot": {
     "paired": "Paired. This chat now gets Vibe Teamlead notifications. Send /help to see the commands.",
-    "help": "Commands:\n/status: projects, running and queued tasks, what waits for you, today's spend\n/project: choose the project for later commands\n/stop_all: stop every running agent and pause the queue\n/resume: resume the queue\n/help: this list\n\nAgent questions come here with buttons; tap one, or Other… to type an answer.",
+    "help": "Commands:\n/status: projects, running and queued tasks, what waits for you, today's spend\n/project: choose the project for later commands\n/task <text>: a new task in the current project (Planning)\n/stop_all: stop every running agent and pause the queue\n/resume: resume the queue\n/help: this list\n\nAgent questions come here with buttons; tap one, or Other… to type an answer.\nA plain message offers to create a task from it; a long one can be analysed as a brief.",
     "unknown": "I don't know that one. Send /help to see the commands.",
     "expired": "This button has expired.",
     "skipped": "While the app was not reading the chat, I skipped what was older than 15 minutes: {{items}}. Send it again if it is still needed.",
@@ -192,6 +192,34 @@
       "failed": "That did not work: {{reason}}",
       "noLongerWaiting": "This design no longer waits for your approval.",
       "decidedOnComputer": "Decided on the computer."
+    },
+    "task": {
+      "usage": "Send /task and what to do, for example: /task Add a dark mode to the settings page",
+      "chooseProject": "Several projects are open. Choose one with /project first.",
+      "created": "Task created in {{project}}: {{title}}\nIt is in Planning.",
+      "createFailed": "Could not create the task: {{reason}}",
+      "start": "Start",
+      "started": "Started: {{title}}",
+      "startFailed": "Could not start it: {{reason}}",
+      "offer": "Create a task from this message?",
+      "longOffer": "This is a long text. Create one task from it, or analyse it as a brief (epics and tasks)?",
+      "createFromText": "Create a task",
+      "analyse": "Analyse as a brief"
+    },
+    "brief": {
+      "analysing": "Analysing the brief. It takes a few minutes; the proposal comes here. The analyst asks no questions: open questions are listed in the proposal.",
+      "busy": "A brief is being analysed already. Wait for its proposal.",
+      "failed": "The brief analysis failed: {{reason}}",
+      "title": "Brief: {{title}} ({{project}})",
+      "counts": "Epics: {{epics}}, tasks: {{tasks}}, open questions: {{questions}}",
+      "create_one": "Create {{count}} task",
+      "create_other": "Create {{count}} tasks",
+      "discard": "Discard",
+      "creating": "Creating the tasks…",
+      "created_one": "Created {{count}} task in Planning.",
+      "created_other": "Created {{count}} tasks in Planning.",
+      "createFailed": "Could not create the tasks: {{reason}}",
+      "discarded": "Discarded."
     }
   }
 }
