@@ -30,7 +30,7 @@ import { IPC_CHANNELS } from '../../../../shared/constants';
 import { INTEGRATION_FILE } from '../../../ai/merge/integrate-task';
 import { inMergeQueue } from '../../../ai/merge/merge-queue';
 import { requestQaRerun } from '../../../ai/orchestration/qa-rerun';
-import { registerTaskExecutionHandlers } from '../execution-handlers';
+import { registerTaskExecutionHandlers, reviewTask } from '../execution-handlers';
 
 const agent = { isRunning: vi.fn(), startQAProcess: vi.fn(), killTask: vi.fn(), on: vi.fn() };
 const review = () => handlers.get(IPC_CHANNELS.TASK_REVIEW)!({}, 't', false, undefined, undefined, { rerunOnly: true });
@@ -92,6 +92,16 @@ describe('review of a task with a worktree', () => {
     expect(existsSync(join(repo, 'new.txt'))).toBe(true);
     expect(git('diff', '--cached', '--name-only').trim()).toBe('staged.txt');
     expect(agent.startQAProcess).toHaveBeenCalled();
+  });
+
+  // The Telegram bot's "Send back" is the window's "send back with an instruction"
+  it('reviewTask sends the task back with the instruction, as the IPC handler does', async () => {
+    const result = await reviewTask(agent as never, 't', false, 'Make the button blue');
+    expect(result.success).toBe(true);
+    const request = readFileSync(join(worktree.path ?? '', '.vibe-teamlead/specs/s/QA_FIX_REQUEST.md'), 'utf-8');
+    expect(request).toContain('Status: REJECTED');
+    expect(request).toContain('Make the button blue');
+    expect(agent.startQAProcess).toHaveBeenCalledWith('t', worktree.path, 's', 'p');
   });
 
   describe('and a merge', () => {
