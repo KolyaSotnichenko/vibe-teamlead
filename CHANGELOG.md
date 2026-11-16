@@ -2,6 +2,18 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.47 - 2026-11-16
+
+- **Telegram bot.** Control Vibe Teamlead from your phone through your own bot (Settings → Telegram: create a bot in @BotFather, paste its token, send the pairing code). It runs inside the app on macOS and Windows, with no server: messages arrive at once (long polling). The bot answers only you.
+  - Notifications, each with its own switch: an agent asks a question, a task waits for your review, a task failed or stopped, CI failed on main, a task merged, app checks found a regression.
+  - Answer agents' questions with buttons or text.
+  - Review in the chat: QA result, criteria covered, app checks, files changed, a link to the diff on GitHub, screenshots; **Merge** (with confirmation), **Send back** with a comment, **Later**.
+  - The designer's screens come as an album to **Approve** or **Comment**.
+  - A morning digest at a time you choose: merged, waiting for you, running, failed, spend.
+  - `/task <text>` creates a task (long text can be analysed as a brief), `/status`, `/project`, `/stop_all` (with confirmation; pauses the queue) and `/resume`.
+  - Buttons pressed long ago are ignored, so yesterday's "Merge" never fires. The token is encrypted by the operating system. Bot chats aren't end-to-end encrypted: Telegram sees what is sent to the chat; secrets never are.
+- The queue can be paused (Queue column → Paused / Resume).
+
 ## 2.0.0-beta.46 - 2026-11-16
 
 - Windows: a design package can be chosen as a .zip. The dialog asked for a file or a folder at once, which Windows can't show, so only folders could be picked. Off macOS the step now has two buttons, **Choose a zip** and **Choose a folder**.
