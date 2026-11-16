@@ -7,7 +7,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { extname, join, win32 } from 'node:path';
 
@@ -171,13 +171,65 @@ export function shellCommand(command: string, platform: PlatformKey = getPlatfor
 
 const bashQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
+/** Characters cmd.exe re-parses even inside quotes: a .cmd never gets an argument with one. */
+const CMD_META = /[&|<>^%!"()\r\n]/;
+
+/** An argument that a .cmd/.bat on Windows would hand to cmd.exe to re-parse. */
+export class UnsafeCmdArgumentError extends Error {
+  constructor(file: string, arg: string) {
+    super(`Refusing to run ${win32.basename(file)} with the argument ${JSON.stringify(arg)}: cmd.exe would read its special characters (& | < > ^ % ! " ( )) as commands.`);
+    this.name = 'UnsafeCmdArgumentError';
+  }
+}
+
+/**
+ * The Node script behind a .cmd shim, so it runs as `node <script>` and cmd.exe
+ * never parses the arguments: npm and npx (npm-cli.js / npx-cli.js next to
+ * Node), and the shims npm writes for global packages (pnpm, yarn), which name
+ * their script as "%dp0%\…". Null when the shim is something else.
+ */
+function nodeScriptOf(file: string, env: NodeJS.ProcessEnv, exists: Exists, readText: (file: string) => string): { node: string; script: string } | null {
+  const dir = win32.dirname(file);
+  const name = win32.basename(file).toLowerCase();
+  let script: string | undefined;
+  if (name === 'npm.cmd' || name === 'npx.cmd') {
+    script = win32.join(dir, 'node_modules', 'npm', 'bin', `${name.slice(0, 3)}-cli.js`);
+  } else {
+    let text = '';
+    try {
+      text = readText(file);
+    } catch {
+      return null;
+    }
+    const named = /"%(?:~dp0|dp0%)\\?([^"%]+\.[cm]?js)"/i.exec(text)?.[1];
+    if (named) script = win32.join(dir, named);
+  }
+  if (!script || !exists(script)) return null;
+  const candidates = [dir, ...(envValue(env, 'PATH') ?? '').split(';').filter(Boolean)].map((d) => win32.join(d, 'node.exe'));
+  const node = candidates.find(exists);
+  return node ? { node, script } : null;
+}
+
 /**
  * How to spawn `file`: as is, except a .cmd or .bat shim on Windows (npm, pnpm,
- * yarn, npx), which Node refuses to spawn without a shell (EINVAL) and which
- * runs through shellCommand instead.
+ * yarn, npx), which Node refuses to spawn without a shell (EINVAL). A shim of
+ * a Node script runs as `node <script>`; any other runs through shellCommand,
+ * and only with arguments cmd.exe can't re-parse (UnsafeCmdArgumentError).
  */
-export function commandFor(file: string, args: string[], platform: PlatformKey = getPlatformKey(), env: NodeJS.ProcessEnv = process.env, exists: Exists = existsSync): { file: string; args: string[] } {
+export function commandFor(
+  file: string,
+  args: string[],
+  platform: PlatformKey = getPlatformKey(),
+  env: NodeJS.ProcessEnv = process.env,
+  exists: Exists = existsSync,
+  readText: (file: string) => string = (f) => readFileSync(f, 'utf-8'),
+): { file: string; args: string[] } {
   if (platform !== 'win32' || !/\.(cmd|bat)$/i.test(file)) return { file, args };
+  const viaNode = nodeScriptOf(file, env, exists, readText);
+  if (viaNode) return { file: viaNode.node, args: [viaNode.script, ...args] };
+  // The path itself may hold parentheses (Program Files (x86)): it is quoted whole
+  if (/[&|<>^%!"\r\n]/.test(file)) throw new UnsafeCmdArgumentError(file, file);
+  for (const arg of args) if (CMD_META.test(arg)) throw new UnsafeCmdArgumentError(file, arg);
   return shellCommand([file.replaceAll('\\', '/'), ...args].map(bashQuote).join(' '), platform, env, exists);
 }
 
@@ -297,4 +349,21 @@ export function runProcess(cmd: string, args: string[], options: RunOptions = {}
     child.on('error', (error) => finish(-1, error.message));
     child.on('close', (code) => finish(code ?? -1));
   });
+}
+
+/**
+ * Run a shell command line (shellCommand) with runProcess. Never throws: on
+ * Windows without Git for Windows it ends with exit 127, like a missing
+ * command, and the reason in `error` and `stderr`.
+ */
+export function runShell(command: string, options: RunOptions, platform: PlatformKey = getPlatformKey(), hostEnv: NodeJS.ProcessEnv = process.env, exists: Exists = existsSync): Promise<RunResult> {
+  let shell: { file: string; args: string[] };
+  try {
+    shell = shellCommand(command, platform, hostEnv, exists);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    options.onLine?.(message);
+    return Promise.resolve({ code: 127, stdout: '', stderr: message, timedOut: false, aborted: false, error: message });
+  }
+  return runProcess(shell.file, shell.args, options);
 }

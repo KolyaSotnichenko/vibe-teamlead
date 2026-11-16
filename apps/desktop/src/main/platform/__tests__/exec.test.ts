@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { commandFor, extraPaths, findOnPath, GitBashMissingError, killTree, runProcess, searchPath, shellCommand } from '../exec';
+import { commandFor, extraPaths, findOnPath, GitBashMissingError, killTree, runProcess, runShell, searchPath, shellCommand, UnsafeCmdArgumentError } from '../exec';
 
 describe('runProcess', () => {
   it('returns output and exit code without throwing', async () => {
@@ -136,19 +136,52 @@ describe('shellCommand', () => {
 
 describe('commandFor', () => {
   const bash = 'C:\\Git\\bin\\bash.exe';
-  const exists = (file: string) => file === bash;
   const env = { CLAUDE_CODE_GIT_BASH_PATH: bash };
+  const nodejs = 'C:\\Program Files\\nodejs';
+  const roaming = 'C:\\Users\\me\\AppData\\Roaming\\npm';
+  const real = new Set([
+    bash,
+    `${nodejs}\\node.exe`,
+    `${nodejs}\\node_modules\\npm\\bin\\npm-cli.js`,
+    `${nodejs}\\node_modules\\npm\\bin\\npx-cli.js`,
+    `${roaming}\\node_modules\\pnpm\\bin\\pnpm.cjs`,
+  ]);
+  const exists = (file: string) => real.has(file);
+  // What npm's cmd-shim writes for a global package
+  const pnpmShim = '@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n) ELSE (\r\n  SET "_prog=node"\r\n  SET PATHEXT=%PATHEXT:;.JS;=;%\r\n)\r\n\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pnpm\\bin\\pnpm.cjs" %*\r\n';
+  const read = (file: string) => (file === `${roaming}\\pnpm.cmd` ? pnpmShim : '@echo off\r\nrun.exe %*\r\n');
+  const path = { Path: `${nodejs};${roaming}` };
 
-  it('spawns a .cmd or .bat shim through the shell on Windows (Node refuses them: EINVAL)', () => {
-    expect(commandFor('C:\\Program Files\\nodejs\\npm.cmd', ['install', "it's"], 'win32', env, exists)).toEqual({
-      file: bash,
-      args: ['-c', `'C:/Program Files/nodejs/npm.cmd' 'install' 'it'\\''s'`],
+  it("runs npm and npx as node with npm's own script: no .cmd, so cmd.exe never parses the arguments", () => {
+    expect(commandFor(`${nodejs}\\npm.cmd`, ['install', 'a&calc'], 'win32', env, exists, read)).toEqual({
+      file: `${nodejs}\\node.exe`,
+      args: [`${nodejs}\\node_modules\\npm\\bin\\npm-cli.js`, 'install', 'a&calc'],
     });
-    expect(commandFor('C:\\x\\RUN.BAT', [], 'win32', env, exists).file).toBe(bash);
+    expect(commandFor(`${nodejs}\\npx.cmd`, ['prisma'], 'win32', env, exists, read).args[0]).toBe(`${nodejs}\\node_modules\\npm\\bin\\npx-cli.js`);
+  });
+
+  it("runs a cmd-shim (pnpm, yarn installed with npm) as node with the script the shim names", () => {
+    expect(commandFor(`${roaming}\\pnpm.cmd`, ['install', 'x|y'], 'win32', { ...env, ...path }, exists, read)).toEqual({
+      file: `${nodejs}\\node.exe`,
+      args: [`${roaming}\\node_modules\\pnpm\\bin\\pnpm.cjs`, 'install', 'x|y'],
+    });
+  });
+
+  it('runs any other .cmd or .bat through the shell, with plain arguments only', () => {
+    expect(commandFor('C:\\x\\RUN.BAT', ['install', "it's"], 'win32', env, exists, read)).toEqual({
+      file: bash,
+      args: ['-c', `'C:/x/RUN.BAT' 'install' 'it'\\''s'`],
+    });
+  });
+
+  it('refuses an argument cmd.exe would re-parse (a&calc and friends) instead of passing it to cmd', () => {
+    for (const arg of ['a&calc', 'a|b', 'a>b', 'a<b', 'a^b', '%PATH%', '!x!', 'a"b', '(a)', 'a\nb']) {
+      expect(() => commandFor('C:\\x\\run.cmd', [arg], 'win32', env, exists, read)).toThrow(UnsafeCmdArgumentError);
+    }
   });
 
   it('leaves .exe files and every other platform alone', () => {
-    expect(commandFor('C:\\x\\docker.exe', ['ps'], 'win32', env, exists)).toEqual({ file: 'C:\\x\\docker.exe', args: ['ps'] });
+    expect(commandFor('C:\\x\\docker.exe', ['ps', 'a&b'], 'win32', env, exists, read)).toEqual({ file: 'C:\\x\\docker.exe', args: ['ps', 'a&b'] });
     expect(commandFor('/usr/local/bin/npm.cmd', ['i'], 'darwin')).toEqual({ file: '/usr/local/bin/npm.cmd', args: ['i'] });
   });
 });
@@ -175,5 +208,19 @@ describe('killTree', () => {
       throw new Error('ESRCH');
     });
     expect(killTree(4242, 'SIGTERM', 'linux', { spawn: vi.fn() as never, kill })).toBe(false);
+  });
+});
+
+describe('runShell', () => {
+  it('runs a command line through the shell of the platform', async () => {
+    const result = await runShell('echo "$((1 + 2))"; exit 4', {});
+    expect(result).toMatchObject({ code: 4, stdout: '3\n' });
+  });
+
+  it('on Windows without Git for Windows: exit 127 (a missing tool) and the reason, nothing started', async () => {
+    const result = await runShell('npm test', {}, 'win32', {}, () => false);
+    expect(result.code).toBe(127);
+    expect(result.error).toMatch(/Git for Windows/);
+    expect(result.stderr).toMatch(/Git for Windows/);
   });
 });
