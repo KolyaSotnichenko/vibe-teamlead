@@ -110,6 +110,7 @@ vi.mock('../../main/platform', () => ({
   isWindows: vi.fn(() => false),
   isMacOS: vi.fn(() => false),
   isLinux: vi.fn(() => true),
+  getPlatformKey: vi.fn(() => 'linux'),
   getPathDelimiter: vi.fn(() => ':'),
   killProcessGracefully: vi.fn(),
   findExecutable: vi.fn(() => null),
