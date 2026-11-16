@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import { getAugmentedEnv } from '../env-utils';
 import { isWindows } from '../platform';
-import { findOnPath, searchPath } from '../platform/exec';
+import { commandFor, findOnPath, killTree, searchPath } from '../platform/exec';
 import { isUiFile } from '../ai/design/design-lint';
 
 interface Running {
@@ -29,8 +29,8 @@ const START_TIMEOUT_MS = 180_000;
 function stopTree(child: ChildProcess | undefined): void {
   if (!child) return;
   try {
-    if (child.pid && !isWindows()) process.kill(-child.pid, 'SIGTERM');
-    else child.kill('SIGTERM');
+    // The group elsewhere, taskkill /T on Windows; the process alone when the group is gone
+    if (!child.pid || !killTree(child.pid, 'SIGTERM')) child.kill('SIGTERM');
   } catch {
     // Already gone
   }
@@ -74,11 +74,14 @@ export function startStorybook(projectPath: string, dir: string, script: string 
     // see it (nvm, Homebrew, pnpm's home): a bare PATH gave "spawn npm ENOENT"
     const pm = packageManagerOf(projectPath);
     const env = toolEnv();
-    const child = spawn(findOnPath(pm, env.PATH) ?? pm, storybookArgs(pm, script, port), {
+    // npm.cmd and friends can't be spawned as they are on Windows
+    const command = commandFor(findOnPath(pm, env.PATH) ?? pm, storybookArgs(pm, script, port));
+    const child = spawn(command.file, command.args, {
       cwd: key,
       env: { ...env, BROWSER: 'none', CI: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: !isWindows(),
+      windowsHide: true,
     });
     entry.child = child;
     entry.url = url;
@@ -207,7 +210,8 @@ export function installDependencies(root: string, onLine?: (line: string) => voi
   const job = new Promise<void>((resolve, reject) => {
     onLine?.(`${pm} install`);
     const env = toolEnv();
-    const child = spawn(findOnPath(pm, env.PATH) ?? pm, ['install'], { cwd: key, env: { ...env, CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const command = commandFor(findOnPath(pm, env.PATH) ?? pm, ['install']);
+    const child = spawn(command.file, command.args, { cwd: key, env: { ...env, CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let tail = '';
     const timer = setTimeout(() => {
       child.kill('SIGTERM');

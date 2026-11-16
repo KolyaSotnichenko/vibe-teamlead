@@ -9,9 +9,16 @@ vi.mock('../../env-utils', () => ({ getAugmentedEnv: () => ({ ...process.env }) 
 const fakePm = vi.hoisted(() => ({ path: undefined as string | undefined }));
 vi.mock('../../platform/exec', async (importActual) => {
   const actual = await importActual<typeof import('../../platform/exec')>();
-  return { ...actual, findOnPath: (name: string, searched?: string) => fakePm.path ?? actual.findOnPath(name, searched) };
+  return {
+    ...actual,
+    findOnPath: (name: string, searched?: string) => fakePm.path ?? actual.findOnPath(name, searched),
+    // Spies over the real ones: npm.cmd needs commandFor on Windows, and a stop is killTree (taskkill /T there)
+    commandFor: vi.fn(actual.commandFor),
+    killTree: vi.fn(actual.killTree),
+  };
 });
 
+import { commandFor, killTree } from '../../platform/exec';
 import { freePort, installDependencies, needsInstall, packageManagerOf, startStorybook, stopAllStorybooks, stopStorybook, stopStorybooksUnder, storybookArgs, storybookUrlFromOutput, touchesStorybook } from '../storybook-service';
 
 const dir = () => mkdtempSync(path.join(tmpdir(), 'vtl-sb-'));
@@ -83,6 +90,14 @@ describe('stopping a Storybook', () => {
     expect(alive(pid)).toBe(true);
     stop(project);
     await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 3000 });
+  });
+
+  it('starts the package manager through commandFor and stops it with killTree', async () => {
+    vi.mocked(killTree).mockClear();
+    const { project } = await started();
+    expect(commandFor).toHaveBeenCalledWith(fakePm.path, expect.arrayContaining(['storybook']));
+    stopStorybook(project, '.');
+    expect(killTree).toHaveBeenCalledWith(expect.any(Number), 'SIGTERM');
   });
 });
 
