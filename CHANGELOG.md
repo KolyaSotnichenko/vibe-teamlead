@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.52 - 2026-11-17
+
+- Agent prompts rewritten for current models and much shorter: planner 34K to 12K characters, coder 21K to 14K, QA reviewer 24K to 15K, QA fixer 17K to 11K, QA validation guides 12K to 5K; stale references removed from the designer, architect and follow-up planner prompts. Fewer tokens on every turn, same rules (spec ACs, test first, QA coverage).
+- The saved plan keeps each subtask's verification, service, patterns and dependencies.
+- Agents start dev servers with the app's tool, not with Bash.
+- A secret found by the security gates no longer asks to rewrite git history.
+
 ## 2.0.0-beta.51 - 2026-11-17
 
 - RUNNING.md: how to run the project by hand, kept up to date by the agents (the coder updates it when a change affects how the project is installed, configured or started; QA checks it). When the preview can't start a project, or a service stops after it was running, the preview shows RUNNING.md and **Open a terminal here**; without it, **Create a task: write RUNNING.md**.
