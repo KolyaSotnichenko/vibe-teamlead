@@ -14,7 +14,7 @@ The status line says whether the bot is connected, and why not when it isn't: a 
 
 ## What it sends
 
-Each kind has a switch in Settings → Telegram; all are on by default.
+Each kind has a switch in Settings → Telegram; all are on by default. Messages are formatted (bold headings, emoji markers, long details folded into quotes you can expand), and the main buttons are coloured: green to merge or approve, red to stop all, blue for the recommended answer.
 
 - **An agent asks a question.** The question comes with its options as buttons, the recommended one first and marked ★. **Other…** asks you to type an answer. A question with several choices lets you tick them and press **Done**. When an agent asks several questions at once, they come one after another and go back to the agent together, the same way as an answer in the app (a task made from a brief shares it with the brief's other tasks). If you answer on the computer first, the chat message says "Answered on the computer" and its buttons stop working. An answer to a question that no longer waits is refused.
 - **A task waits for your review**: see "Review from the chat" below.
