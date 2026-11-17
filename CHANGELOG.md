@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.51 - 2026-11-17
+
+- RUNNING.md: how to run the project by hand, kept up to date by the agents (the coder updates it when a change affects how the project is installed, configured or started; QA checks it). When the preview can't start a project, or a service stops after it was running, the preview shows RUNNING.md and **Open a terminal here**; without it, **Create a task: write RUNNING.md**.
+- Fewer tokens per turn: long test, build, install and lint output is saved to a log and the agent gets the exit code, the failing lines and the end; the coder runs tests as they are instead of cutting them to the last 30 lines; the designer, coder and QA fixer compact their history at about 170K tokens with a summary that keeps what each role needs; QA of tasks without UI changes and the designer in projects without GSAP load less.
+- Prompts name only the CodeGraph tool agents really have (codegraph_explore).
+- Documentation: tables no longer break words letter by letter, and long table cells became sections with lists.
+
 ## 2.0.0-beta.50 - 2026-11-17
 
 - Design pictures were never taken: the offscreen window that pictures a frame couldn't load it, so design approvals reached Telegram without screens or wireframes, and QA compared the build with the design without pictures. They're taken now, and a failed picture is logged.
