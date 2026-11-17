@@ -107,7 +107,10 @@ const PROSE =
   'prose-code:font-mono prose-code:text-[12.5px] prose-code:font-normal prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none ' +
   'prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-pre:rounded-none ' +
   'prose-table:text-[13px] prose-th:border-b prose-th:border-foreground prose-th:text-foreground prose-td:border-b prose-td:border-border prose-hr:border-border ' +
-  '[overflow-wrap:anywhere]';
+  '[overflow-wrap:anywhere] ' +
+  // In a table, "anywhere" lets a column shrink to one letter (words broken letter by letter);
+  // there long words wrap only when they can't fit, and the first column keeps a readable width
+  '[&_th]:[overflow-wrap:break-word] [&_td]:[overflow-wrap:break-word] [&_th:first-child]:min-w-[8rem] [&_td:first-child]:min-w-[8rem]';
 
 /**
  * Where relative image paths in a spec-dir markdown file point: the task, and the
