@@ -57,6 +57,35 @@ describe('ImplementationPlanOutputSchema', () => {
     expect(result.phases[0].subtasks).toHaveLength(1);
   });
 
+  it('keeps what the coder reads: the app saves this output over the plan file, and zod drops unknown keys', () => {
+    const subtask = {
+      id: '1.1',
+      title: 'Add the events endpoint',
+      description: '[AC-2] Add POST /events. Test first: api/tests/test_events.py::test_stores_valid_event',
+      status: 'pending',
+      files_to_create: ['api/routes/analytics.py'],
+      files_to_modify: [],
+      service: 'backend',
+      patterns_from: ['api/routes/users.py'],
+      verification: { type: 'command', run: 'pytest api/tests/test_events.py' },
+    };
+    const result = ImplementationPlanOutputSchema.parse({
+      feature: 'Analytics',
+      workflow_type: 'feature',
+      phases: [
+        { id: 'phase-1', name: 'Backend', depends_on: [], subtasks: [subtask] },
+        { id: 'phase-2', name: 'Frontend', depends_on: ['phase-1'], subtasks: [{ ...subtask, id: '2.1', verification: { type: 'manual', scenario: 'Open the page' } }] },
+      ],
+    });
+    expect(result.phases[0].subtasks[0]).toMatchObject({
+      service: 'backend',
+      patterns_from: ['api/routes/users.py'],
+      verification: { type: 'command', run: 'pytest api/tests/test_events.py' },
+    });
+    expect(result.phases[1].depends_on).toEqual(['phase-1']);
+    expect(result.phases[1].subtasks[0].verification).toEqual({ type: 'manual', scenario: 'Open the page' });
+  });
+
   it('should reject plan with no phases', () => {
     expect(() => ImplementationPlanOutputSchema.parse({
       feature: 'test',

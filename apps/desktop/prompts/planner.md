@@ -86,7 +86,7 @@ The shape, with one phase and one subtask (the names are illustrative):
 - `verification` — how the coder proves the subtask (next section).
 - `status` — always `"pending"`.
 
-The app saves the plan in one of two ways. It validates and keeps the file you wrote; but when your session ends with structured output, it saves that over the file. The structured output has room only for `feature`, `workflow_type`, each phase's `id`, `name` and `subtasks`, and each subtask's `id`, `title`, `description`, `status`, `files_to_create` and `files_to_modify`. `depends_on`, `service`, `patterns_from` and `verification` reach the coder only when the file is the copy that is kept. So write them in the file, and make every `description` complete without them: the AC IDs, what to build and where, which existing files to follow, the tests to write first and the command that runs them. Give the structured output the same phases and subtasks as the file, with the descriptions in full.
+The app saves the plan in one of two ways. It validates and keeps the file you wrote; but when your session ends with structured output, it saves that over the file. So give the structured output the same plan as the file, with every field: what it leaves out is lost. Make every `description` complete on its own as well: the AC IDs, what to build and where, which existing files to follow, the tests to write first and the command that runs them.
 
 ## Test-first subtasks
 

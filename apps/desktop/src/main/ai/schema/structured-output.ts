@@ -368,20 +368,23 @@ export async function repairJsonWithLLM<T>(
 export const IMPLEMENTATION_PLAN_SCHEMA_HINT = `\`\`\`
 {
   "feature": "string (feature name)",
-  "workflow_type": "string (feature|refactor|bugfix|migration|simple|investigation)",
+  "workflow_type": "string (feature|refactor|investigation|migration|simple)",
   "phases": [
     {
       "id": "string or number",
       "name": "string (phase name)",
+      "depends_on": ["string (optional: ids of phases that come first)"],
       "subtasks": [
         {
           "id": "string (unique subtask identifier)",
-          "title": "string (REQUIRED — short 3-10 word summary)",
-          "description": "string (REQUIRED — detailed implementation instructions)",
+          "title": "string (required: short 3-10 word summary)",
+          "description": "string (required: detailed implementation instructions)",
           "status": "pending",
+          "service": "string (optional)",
           "files_to_modify": ["string (optional)"],
           "files_to_create": ["string (optional)"],
-          "verification": { "type": "command|manual", "run": "string (optional)" }
+          "patterns_from": ["string (optional)"],
+          "verification": { "type": "command|manual", "run": "string (for command)", "scenario": "string (for manual)" }
         }
       ]
     }
@@ -389,5 +392,4 @@ export const IMPLEMENTATION_PLAN_SCHEMA_HINT = `\`\`\`
 }
 \`\`\`
 
-IMPORTANT: Each subtask MUST be an object with at least "id", "title", and "status" fields.
-Do NOT write subtasks as plain strings — they must be objects.`;
+Each subtask is an object with at least "id", "title" and "status" fields, not a plain string.`;
