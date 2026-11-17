@@ -55,6 +55,7 @@ import { Worktrees } from './components/Worktrees';
 import { PreviewPage } from './components/preview/PreviewPage';
 import { DeployPage } from './components/deploy/DeployPage';
 import { listenOpenDeploy } from './lib/open-deploy';
+import { listenOpenTerminal } from './lib/open-terminal';
 import type { DeployTarget } from '../shared/types/deploy';
 import { AgentTools } from './components/AgentTools';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -324,6 +325,18 @@ export function App() {
         setActiveView('deploy');
       }),
     []
+  );
+
+  // A new terminal in a folder (Preview's "Open a terminal here"): nothing is typed into it
+  const selectedProjectPath = selectedProject?.path;
+  useEffect(
+    () =>
+      listenOpenTerminal((cwd) => {
+        setSelectedTask(null);
+        setActiveView('terminals');
+        useTerminalStore.getState().addTerminal(cwd, selectedProjectPath);
+      }),
+    [selectedProjectPath]
   );
 
   // Reset init success flag when selected project changes
