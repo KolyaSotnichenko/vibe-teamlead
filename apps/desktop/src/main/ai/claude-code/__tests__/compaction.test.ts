@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
-import { AUTO_COMPACT_WINDOW, autoCompactWindow, compactInstructions, compactSettings, echoCommand } from '../compaction';
+import { AUTO_COMPACT_WINDOW, autoCompactWindow, compactInstructions, compactionLogLine, compactSettings, echoCommand } from '../compaction';
 import { buildEnv, buildQueryOptions } from '../runner';
 import type { SessionConfig } from '../../session/types';
 import type { ToolContext } from '../../tools/types';
@@ -132,5 +132,14 @@ describe('PreCompact hook command', () => {
     const text = compactInstructions('designer')!;
     const run = spawnSync('zsh', ['-c', echoCommand(text)], { encoding: 'utf-8' });
     expect(run.stdout).toBe(`${text}\n`);
+  });
+});
+
+describe('task log line when a session compacts', () => {
+  it('says when and how much', () => {
+    expect(compactionLogLine('designer', { trigger: 'auto', pre_tokens: 168_400, post_tokens: 52_100 })).toBe(
+      'designer session compacted (auto): context 168K → 52K tokens',
+    );
+    expect(compactionLogLine('coder', { trigger: 'manual', pre_tokens: 90_000 })).toBe('coder session compacted (manual): context 90K tokens');
   });
 });

@@ -71,3 +71,11 @@ export function compactSettings(agentType: AgentType, subtaskId?: string): Setti
   if (!text) return undefined;
   return { hooks: { PreCompact: [{ hooks: [{ type: 'command', command: echoCommand(text) }] }] } };
 }
+
+const k = (n: number) => `${Math.round(n / 1000)}K`;
+
+/** One task-log line per compaction, so its effect on a session is visible. Pure. */
+export function compactionLogLine(agentType: string, meta: { trigger: 'manual' | 'auto'; pre_tokens: number; post_tokens?: number }): string {
+  const after = meta.post_tokens !== undefined ? ` → ${k(meta.post_tokens)}` : '';
+  return `${agentType} session compacted (${meta.trigger}): context ${k(meta.pre_tokens)}${after} tokens`;
+}

@@ -29,7 +29,7 @@ import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { removeBrokenBrowserServers } from './browser-servers';
 import { recordTurnLimit } from './turn-limits';
-import { autoCompactWindow, compactSettings } from './compaction';
+import { autoCompactWindow, compactionLogLine, compactSettings } from './compaction';
 import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
@@ -450,6 +450,9 @@ export async function runAgentSession(
       acc.handle(message);
       if (message.type === 'system' && message.subtype === 'init') {
         for (const line of mcpStartupProblems(message.mcp_servers)) options.onLog?.(line);
+      }
+      if (message.type === 'system' && message.subtype === 'compact_boundary') {
+        options.onLog?.(compactionLogLine(config.agentType, message.compact_metadata));
       }
     }
   } catch (error) {
