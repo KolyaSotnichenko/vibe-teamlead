@@ -18,6 +18,8 @@ export interface TerminalCreateOptions {
   projectPath?: string;
   /** Custom environment variables to add to the terminal (merged with defaults) */
   env?: Record<string, string>;
+  /** Something main runs in the new shell; main resolves and quotes it (renderer never sends a command) */
+  launch?: 'claude-setup-token';
 }
 
 export interface TerminalResizeOptions {

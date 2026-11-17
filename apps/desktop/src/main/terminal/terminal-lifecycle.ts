@@ -15,7 +15,10 @@ import type {
   WindowGetter,
   TerminalOperationResult
 } from './types';
-import { isWindows } from '../platform';
+import { getPlatformKey, isWindows } from '../platform';
+import { resolveBundledTools } from '../ai/claude-code/bundled-tools';
+import { defaultClaudeConfigDir } from '../ai/claude-code/runner';
+import { isSetupTokenLaunch, setupTokenCommand, setupTokenEnv } from '../ai/claude-code/setup-token';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
 import { safeSendToRenderer } from '../ipc-handlers/utils';
 import { getClaudeCodeEnv } from '../claude-code-settings';
@@ -61,9 +64,16 @@ export async function createTerminal(
   // new terminal, causing it to be invisible to the session store.
   SessionHandler.clearPendingDelete(id);
 
+  // Settings → Claude → "Get a token": the bundled binary, resolved here, never from the renderer
+  const setupTokenBinary = isSetupTokenLaunch(options.launch) ? resolveBundledTools().claudeCodeExecutable : undefined;
+  if (isSetupTokenLaunch(options.launch) && !setupTokenBinary) {
+    return { success: false, error: 'The bundled Claude Code binary was not found' };
+  }
+
   try {
-    // Read env vars from Claude Code CLI settings files (.claude/settings.json hierarchy)
-    const claudeCodeEnv = getClaudeCodeEnv(projectPath);
+    // Read env vars from Claude Code CLI settings files (.claude/settings.json hierarchy).
+    // Not for setup-token: they could carry a key or a gateway URL.
+    const claudeCodeEnv = setupTokenBinary ? {} : getClaudeCodeEnv(projectPath);
     if (Object.keys(claudeCodeEnv).length > 0) {
       debugLog('[TerminalLifecycle] Injecting Claude Code settings env vars:', Object.keys(claudeCodeEnv));
     }
@@ -71,7 +81,7 @@ export async function createTerminal(
     // Merge environment variables (lowest to highest precedence):
     // 1. Claude Code settings env (from settings.json hierarchy)
     // 2. Custom env from TerminalCreateOptions
-    const mergedEnv = { ...claudeCodeEnv, ...(customEnv || {}) };
+    const mergedEnv = setupTokenBinary ? {} : { ...claudeCodeEnv, ...(customEnv || {}) };
 
     // Validate cwd exists - if the directory doesn't exist (e.g., worktree removed),
     // fall back to project path to prevent shell exit with code 1
@@ -81,12 +91,15 @@ export async function createTerminal(
       effectiveCwd = projectPath || os.homedir();
     }
 
-    const { pty: ptyProcess, shellType } = PtyManager.spawnPtyProcess(
+    const { pty: ptyProcess, shellType, shell } = PtyManager.spawnPtyProcess(
       effectiveCwd || os.homedir(),
       cols,
       rows,
-      mergedEnv
+      mergedEnv,
+      setupTokenBinary ? (env) => setupTokenEnv(env, defaultClaudeConfigDir()) : undefined
     );
+    // The shell reads typed-ahead input once it starts; the token stays in the terminal
+    if (setupTokenBinary) ptyProcess.write(`${setupTokenCommand(setupTokenBinary, getPlatformKey(), shell)}\r`);
 
     debugLog('[TerminalLifecycle] PTY process spawned, pid:', ptyProcess.pid, 'shellType:', shellType);
 

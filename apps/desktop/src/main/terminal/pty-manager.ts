@@ -48,6 +48,8 @@ export interface SpawnPtyResult {
   pty: pty.IPty;
   /** Shell type for Windows (affects command chaining syntax) */
   shellType?: WindowsShellType;
+  /** The shell executable that was spawned */
+  shell: string;
 }
 
 /**
@@ -146,7 +148,9 @@ export function spawnPtyProcess(
   cwd: string,
   cols: number,
   rows: number,
-  extraEnv?: Record<string, string>
+  extraEnv?: Record<string, string>,
+  /** Last word on the environment (e.g. drop credentials for `claude setup-token`) */
+  transformEnv?: (env: Record<string, string | undefined>) => Record<string, string>
 ): SpawnPtyResult {
   // Read user's preferred terminal setting
   const settings = readSettingsFile();
@@ -177,23 +181,25 @@ export function spawnPtyProcess(
   // without this, inherited CLAUDECODE triggers the nested session guard.
   const { DEBUG: _DEBUG, ANTHROPIC_API_KEY: _ANTHROPIC_API_KEY, CLAUDECODE: _CLAUDECODE, ...cleanEnv } = process.env;
 
+  const env = {
+    ...cleanEnv,
+    ...extraEnv,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    // Suppress zsh's partial line indicator (%) that appears when output
+    // doesn't end with a newline. This prevents rendering artifacts in the terminal.
+    PROMPT_EOL_MARK: '',
+  };
+
   const ptyProcess = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
     cols,
     rows,
     cwd: cwd || os.homedir(),
-    env: {
-      ...cleanEnv,
-      ...extraEnv,
-      TERM: 'xterm-256color',
-      COLORTERM: 'truecolor',
-      // Suppress zsh's partial line indicator (%) that appears when output
-      // doesn't end with a newline. This prevents rendering artifacts in the terminal.
-      PROMPT_EOL_MARK: '',
-    },
+    env: transformEnv ? transformEnv(env) : env,
   });
 
-  return { pty: ptyProcess, shellType };
+  return { pty: ptyProcess, shellType, shell };
 }
 
 /**
