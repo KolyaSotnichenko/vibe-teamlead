@@ -258,7 +258,8 @@ export function gateIssues(findings: GateFinding[]): QAIssue[] {
         title: `Secrets: ${list.length} finding${list.length === 1 ? '' : 's'} in ${file || 'the working tree'}`,
         description: list.map((x) => (x.line ? `line ${x.line}: ${x.title}` : x.title)).join('\n'),
         location: f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : undefined,
-        fix_required: 'Remove the secret from code and history; load it from configuration; tell the user to rotate it.',
+        // Not "from history": the branch may already be pushed, and a rewrite doesn't un-leak the value
+        fix_required: 'Remove the secret from the code; load it from configuration; tell the user to rotate it. Do not rewrite git history.',
       });
       continue;
     }

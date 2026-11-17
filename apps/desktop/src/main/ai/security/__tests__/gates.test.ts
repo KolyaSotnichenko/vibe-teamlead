@@ -109,6 +109,9 @@ describe('gate parsers', () => {
     expect(md).toContain('Status: BLOCKED');
     expect(md).toContain('`a.ts:2`');
     expect(md).toContain('Skipped osv-scanner');
+    // The fixer's prompt forbids rewriting history; the guidance must not ask for it
+    expect(md).toContain('Do not rewrite git history');
+    expect(md).not.toMatch(/from (the )?code and history/);
   });
 });
 

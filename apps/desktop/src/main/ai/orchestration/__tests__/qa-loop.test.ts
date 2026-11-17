@@ -1158,6 +1158,9 @@ describe('QALoop', () => {
     const issues = gateIssues([leak(1), leak(2), leak(3, 'b.json'), osv]);
     expect(issues.map((i) => i.title)).toEqual(['Secrets: 2 findings in a.json', 'Secrets: 1 finding in b.json', 'Vulnerable dependency: glob']);
     expect(issues[0].location).toBe('a.json:1');
+    // The fixer's prompt forbids rewriting history; the finding must not ask for it
+    expect(issues[0].fix_required).toContain('Do not rewrite git history');
+    expect(issues[0].fix_required).not.toMatch(/from (the )?code and history/);
   });
 
   it('logs a partial gate run next to the result', async () => {

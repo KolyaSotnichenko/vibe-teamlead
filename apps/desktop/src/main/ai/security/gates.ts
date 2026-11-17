@@ -519,7 +519,7 @@ export function formatGateReport(report: GateReport): string {
       '',
       '## How to fix',
       '',
-      '- Secrets: remove the value from code and history, load it from configuration or the environment, and treat it as leaked (tell the user to rotate it).',
+      '- Secrets: remove the value from the code, load it from configuration or the environment, and treat it as leaked (tell the user to rotate it). Do not rewrite git history: the branch may already be pushed, and the value stays leaked either way.',
       '- Vulnerable dependencies: upgrade to a fixed version, or pick a different package. Re-run the tests after changing dependencies.',
       '- Semgrep findings: fix the code the rule points at (the rule id says what it is: injection, unsafe deserialization, …); do not silence the rule. Re-run the tests.',
     );
