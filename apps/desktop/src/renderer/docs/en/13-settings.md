@@ -1,5 +1,7 @@
 # Settings — cheat sheet
 
+Settings save by themselves when you leave a section or close Settings (×, Escape or a click outside); there is no Save button. The header shows "Saving…" and "Saved". If a save fails, Settings stays open with the error; closing it again discards the changes that weren't saved.
+
 | Section | What's there |
 |---|---|
 | **Appearance / Display / Language** | Theme (light/dark/system), scale, language (Ukrainian/English). |

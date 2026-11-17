@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Settings,
-  Save,
-  Loader2,
   Palette,
   Bot,
   FolderOpen,
@@ -38,11 +36,9 @@ import {
   FullScreenDialogContent,
   FullScreenDialogHeader,
   FullScreenDialogBody,
-  FullScreenDialogFooter,
   FullScreenDialogTitle,
   FullScreenDialogDescription
 } from '../ui/full-screen-dialog';
-import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '../../lib/utils';
 import { useSettings } from './hooks/useSettings';
@@ -112,13 +108,27 @@ const projectNavItemsConfig: NavItemConfig<ProjectSettingsSection>[] = [
  */
 export function AppSettingsDialog({ open, onOpenChange, initialSection, initialProjectSection, onRerunWizard }: AppSettingsDialogProps) {
   const { t } = useTranslation('settings');
-  const { settings, setSettings, isSaving, error, saveSettings, revertTheme, commitTheme } = useSettings();
+  const {
+    settings,
+    setSettings,
+    error,
+    saveSettings,
+    hasUnsavedChanges,
+    commitTheme,
+    discardChanges
+  } = useSettings();
   const [version, setVersion] = useState<string>('');
 
   // Track which top-level section is active
   const [activeTopLevel, setActiveTopLevel] = useState<'app' | 'project'>('app');
   const [appSection, setAppSection] = useState<AppSection>(initialSection || 'appearance');
   const [projectSection, setProjectSection] = useState<ProjectSettingsSection>('general');
+
+  // Autosave: what the header shows, and whether the last close was stopped by a failed save
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [closeBlocked, setCloseBlocked] = useState(false);
+  const savingRef = useRef(false);
 
   // Navigate to initial section when dialog opens with a specific section
   useEffect(() => {
@@ -133,6 +143,15 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
     }
   }, [open, initialSection, initialProjectSection]);
 
+  // A fresh open starts with a quiet header
+  useEffect(() => {
+    if (open) {
+      setSaveStatus('idle');
+      setProjectError(null);
+      setCloseBlocked(false);
+    }
+  }, [open]);
+
   // Project state
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
@@ -141,7 +160,6 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
 
   // Project settings hook state (lifted from child)
   const [projectSettingsHook, setProjectSettingsHook] = useState<UseProjectSettingsReturn | null>(null);
-  const [projectError, setProjectError] = useState<string | null>(null);
 
   // Load app version on mount
   useEffect(() => {
@@ -151,41 +169,72 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
   // Memoize the callback to avoid infinite loops
   const handleProjectHookReady = useCallback((hook: UseProjectSettingsReturn | null) => {
     setProjectSettingsHook(hook);
-    if (hook) {
-      setProjectError(hook.error || hook.envError || null);
-    } else {
-      setProjectError(null);
-    }
   }, []);
 
-  const handleSave = async () => {
-    // Save app settings first
-    const appSaveSuccess = await saveSettings();
+  /**
+   * Saves the pending changes: the app settings, and the project settings when the project
+   * section is open. Writes nothing when nothing changed. Resolves false when a save failed.
+   */
+  const savePending = async (): Promise<boolean> => {
+    const project = activeTopLevel === 'project' && selectedProject ? projectSettingsHook : null;
+    const appChanged = hasUnsavedChanges();
+    const projectChanged = project?.hasUnsavedChanges() ?? false;
+    if (!appChanged && !projectChanged) return true;
 
-    // If on project section with a project selected, save project settings too
-    if (activeTopLevel === 'project' && selectedProject && projectSettingsHook) {
-      await projectSettingsHook.handleSave(() => {});
-      // Check for project errors
-      if (projectSettingsHook.error || projectSettingsHook.envError) {
-        setProjectError(projectSettingsHook.error || projectSettingsHook.envError);
-        return; // Don't close dialog on error
+    savingRef.current = true;
+    setSaveStatus('saving');
+    setProjectError(null);
+    let ok = true;
+    try {
+      if (appChanged) {
+        if (await saveSettings()) {
+          commitTheme();
+        } else {
+          ok = false;
+        }
       }
+      if (projectChanged && project) {
+        const result = await project.handleSave();
+        if (!result.ok) {
+          ok = false;
+          setProjectError(result.error);
+        }
+      }
+    } finally {
+      savingRef.current = false;
     }
-
-    if (appSaveSuccess) {
-      // Commit the theme so future cancels won't revert to old values
-      commitTheme();
-      onOpenChange(false);
-    }
+    setSaveStatus(ok ? 'saved' : 'idle');
+    if (ok) setCloseBlocked(false);
+    return ok;
   };
 
-  const handleCancel = () => {
-    // onOpenChange handler will revert theme changes
-    onOpenChange(false);
+  /** Leaves the current section once its changes are saved (stays on it when the save fails). */
+  const leaveSection = async (next: () => void) => {
+    if (savingRef.current) return;
+    if (await savePending()) next();
+  };
+
+  /**
+   * Closing saves. When the save fails the dialog stays open with the error; closing again
+   * discards the changes that could not be saved.
+   */
+  const requestClose = async (): Promise<boolean> => {
+    if (savingRef.current) return false;
+    if (closeBlocked) {
+      discardChanges();
+      onOpenChange(false);
+      return true;
+    }
+    if (await savePending()) {
+      onOpenChange(false);
+      return true;
+    }
+    setCloseBlocked(true);
+    return false;
   };
 
   const handleProjectChange = (projectId: string | null) => {
-    selectProject(projectId);
+    void leaveSection(() => selectProject(projectId));
   };
 
   const renderAppSection = () => {
@@ -242,22 +291,42 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
 
   return (
     <FullScreenDialog open={open} onOpenChange={(newOpen) => {
-      if (!newOpen) {
-        // Dialog is being closed (via X, escape, or overlay click)
-        // Revert any unsaved theme changes
-        revertTheme();
+      if (newOpen) {
+        onOpenChange(true);
+      } else {
+        // X, Escape or a click outside: save, then close
+        void requestClose();
       }
-      onOpenChange(newOpen);
     }}>
       <FullScreenDialogContent>
         <FullScreenDialogHeader>
-          <FullScreenDialogTitle className="flex items-center gap-3">
-            <Settings className="h-6 w-6" />
-            {t('title')}
-          </FullScreenDialogTitle>
-          <FullScreenDialogDescription>
-            {t('tabs.subtitle')}
-          </FullScreenDialogDescription>
+          <div className="flex items-start gap-4 pr-14">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <FullScreenDialogTitle className="flex items-center gap-3">
+                <Settings className="h-6 w-6" />
+                {t('title')}
+              </FullScreenDialogTitle>
+              <FullScreenDialogDescription>
+                {t('tabs.subtitle')}
+              </FullScreenDialogDescription>
+            </div>
+            {/* Autosave state, next to the close control */}
+            <div
+              role="status"
+              aria-live="polite"
+              aria-busy={saveStatus === 'saving'}
+              className="pt-1 font-mono text-xs text-muted-foreground whitespace-nowrap"
+            >
+              {saveStatus === 'saving' && t('autosave.saving')}
+              {saveStatus === 'saved' && !(error || projectError) && t('autosave.saved')}
+            </div>
+          </div>
+          {(error || projectError) && (
+            <div role="alert" className="border-l-2 border-destructive pl-3 text-sm text-destructive">
+              <p>{t('autosave.failed', { error: error || projectError })}</p>
+              {closeBlocked && <p>{t('autosave.closeAgainToDiscard')}</p>}
+            </div>
+          )}
         </FullScreenDialogHeader>
 
         <FullScreenDialogBody>
@@ -279,8 +348,10 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
                           <button
                             key={item.id}
                             onClick={() => {
-                              setActiveTopLevel('app');
-                              setAppSection(item.id);
+                              void leaveSection(() => {
+                                setActiveTopLevel('app');
+                                setAppSection(item.id);
+                              });
                             }}
                             className={cn(
                               'w-full flex items-start gap-3 p-3 rounded-lg text-left transition-all',
@@ -302,8 +373,9 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
                       {onRerunWizard && (
                         <button
                           onClick={() => {
-                            onOpenChange(false);
-                            onRerunWizard();
+                            void requestClose().then((closed) => {
+                              if (closed) onRerunWizard();
+                            });
                           }}
                           className={cn(
                             'w-full flex items-start gap-3 p-3 rounded-lg text-left transition-all mt-2',
@@ -344,8 +416,10 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
                           <button
                             key={item.id}
                             onClick={() => {
-                              setActiveTopLevel('project');
-                              setProjectSection(item.id);
+                              void leaveSection(() => {
+                                setActiveTopLevel('project');
+                                setProjectSection(item.id);
+                              });
                             }}
                             disabled={projectNavDisabled}
                             className={cn(
@@ -391,32 +465,6 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
           </div>
         </FullScreenDialogBody>
 
-        <FullScreenDialogFooter>
-          {(error || projectError) && (
-            <div className="flex-1 rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-2 text-sm text-destructive">
-              {error || projectError}
-            </div>
-          )}
-          <Button variant="outline" onClick={handleCancel}>
-            {t('common:buttons.cancel', 'Cancel')}
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isSaving || (activeTopLevel === 'project' && projectSettingsHook?.isSaving)}
-          >
-            {(isSaving || (activeTopLevel === 'project' && projectSettingsHook?.isSaving)) ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('common:buttons.saving', 'Saving...')}
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                {t('actions.save')}
-              </>
-            )}
-          </Button>
-        </FullScreenDialogFooter>
       </FullScreenDialogContent>
     </FullScreenDialog>
   );

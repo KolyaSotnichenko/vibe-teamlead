@@ -411,9 +411,14 @@
     "teamleadVoiceDescription": "The sidebar teamlead chirps when an agent asks a question, a task is ready or fails, and after a merge"
   },
   "actions": {
-    "save": "Save Settings",
     "rerunWizard": "Re-run Wizard",
     "rerunWizardDescription": "Start the setup wizard again"
+  },
+  "autosave": {
+    "saving": "Saving…",
+    "saved": "Saved",
+    "failed": "Couldn't save the settings: {{error}}",
+    "closeAgainToDiscard": "Close Settings again to discard the changes that weren't saved."
   },
   "projectSections": {
     "general": {
