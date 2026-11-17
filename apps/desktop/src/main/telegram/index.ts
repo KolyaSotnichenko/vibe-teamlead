@@ -49,7 +49,7 @@ import { taskStateManager } from '../task-state-manager';
 import { createBotApi } from './bot-api';
 import { usageBetween, usageToday } from './commands';
 import type { MergeOutcome } from './review';
-import { criteriaCoverage, diffUrl, latestScreenshots, parseNumstat, type ReviewDetails } from './review-details';
+import { criteriaCoverage, diffUrl, latestScreenshots, parseNumstat, qaSummary, type ReviewDetails } from './review-details';
 import { toTelegramPhoto } from './photos';
 import { titleFromText } from './tasks';
 import { createTelegramService, type TelegramService } from './service';
@@ -95,6 +95,8 @@ async function reviewDetails(taskId: string, projectId?: string): Promise<Review
   const details: ReviewDetails = {};
   const criteria = criteriaCoverage(spec, qa);
   if (criteria) details.criteria = criteria;
+  const summary = qaSummary(qa);
+  if (summary) details.summary = summary;
   const checks = parseVerificationSummary(verification);
   if (checks) details.checks = { status: checks.status, ...(checks.source ? { source: checks.source } : {}) };
   const base = task.metadata?.baseBranch || project.settings?.mainBranch || 'main';
@@ -160,7 +162,7 @@ export function initTelegram(agentManager: AgentManager, getMainWindow: () => Br
     task: (taskId, projectId) => {
       const { task, project } = findTaskAndProject(taskId, projectId);
       if (!task) return undefined;
-      return { title: task.title || task.specId, projectName: project?.name, projectId: project?.id };
+      return { title: task.title || task.specId, specId: task.specId, projectName: project?.name, projectId: project?.id };
     },
     projectName: (projectId) => projectStore.getProject(projectId)?.name,
     commands: {

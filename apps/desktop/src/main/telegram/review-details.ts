@@ -10,6 +10,7 @@ import path from 'node:path';
 
 import type { VerificationSummary } from '../../shared/utils/verification-summary';
 import { mergeCriteria, parseAcceptanceCriteria, parseQaCoverage } from '../ipc-handlers/task/workspace-parsers';
+import { type Html, htmlText, link, quote } from './format';
 import type { Translate } from './i18n';
 
 export interface ReviewDetails {
@@ -17,6 +18,18 @@ export interface ReviewDetails {
   checks?: Pick<VerificationSummary, 'status' | 'source'>;
   files?: { files: number; additions: number; deletions: number };
   diffUrl?: string;
+  /** The QA verdict's reason (qa_report.md), for an expandable quote */
+  summary?: string;
+}
+
+const SUMMARY_CHARS = 1500;
+
+/** The reason QA gave for its verdict: the text after "**Reason**:" in the report (that paragraph). Pure. */
+export function qaSummary(qaMarkdown: string): string | undefined {
+  const match = qaMarkdown.match(/\*\*Reason\*\*:?\s*([\s\S]*?)(?:\n\s*\n|\n\s*\*\*|\n#|$)/);
+  const reason = match?.[1]?.trim();
+  if (!reason) return undefined;
+  return reason.length > SUMMARY_CHARS ? `${reason.slice(0, SUMMARY_CHARS - 1)}…` : reason;
 }
 
 /** `git diff --numstat` output → files, lines added and removed (binary files count as files) */
@@ -46,16 +59,21 @@ export function diffUrl(repo: { owner: string; repo: string }, base: string, spe
   return `https://github.com/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}/compare/${part(base)}...${part(`vibe-teamlead/${specId}`)}`;
 }
 
-/** The detail lines of the review message, in the app language */
-export function reviewLines(details: ReviewDetails, t: Translate): string[] {
-  const lines: string[] = [];
-  if (details.criteria) lines.push(t('review.criteria', { passed: details.criteria.passed, total: details.criteria.total }));
-  if (details.checks) {
-    const status = t(`review.checks.${details.checks.status}`);
-    lines.push(details.checks.source === 'task' ? t('review.checksFromTask', { status }) : t('review.checksLine', { status }));
+/** The detail lines of the review message (HTML), in the app language; the QA summary last, as an expandable quote */
+export function reviewLines(details: ReviewDetails, t: Translate): Html[] {
+  const h = htmlText(t);
+  const lines: Html[] = [];
+  if (details.criteria) {
+    const { passed, total } = details.criteria;
+    lines.push(h(passed >= total ? 'review.criteria' : 'review.criteriaMissing', { passed, total }));
   }
-  if (details.files) lines.push(t('review.files', { count: details.files.files, additions: details.files.additions, deletions: details.files.deletions }));
-  if (details.diffUrl) lines.push(t('review.diff', { url: details.diffUrl }));
+  if (details.checks) {
+    const line = h(`review.checks.${details.checks.status}`);
+    lines.push(details.checks.source === 'task' ? h('review.checksFromTask', { line }) : line);
+  }
+  if (details.files) lines.push(h('review.files', { count: details.files.files, additions: details.files.additions, deletions: details.files.deletions }));
+  if (details.diffUrl) lines.push(h('review.diff', { link: link(details.diffUrl, t('review.diffLink')) }));
+  if (details.summary) lines.push(quote(details.summary, { expandable: true }));
   return lines;
 }
 

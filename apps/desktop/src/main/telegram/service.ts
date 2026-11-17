@@ -43,7 +43,7 @@ export interface TelegramServiceDeps {
   secrets?: () => Array<string | undefined>;
   questions: QuestionSource;
   notifierSources: NotifierSources;
-  task: (taskId: string, projectId?: string) => { title: string; projectName?: string; projectId?: string } | undefined;
+  task: (taskId: string, projectId?: string) => { title: string; specId?: string; projectName?: string; projectId?: string } | undefined;
   projectName: (projectId: string) => string | undefined;
   commands: Omit<CommandDeps, 'api' | 'router' | 't' | 'settings'>;
   /** Review from the chat: Merge, Send back (plain notifications without them) */

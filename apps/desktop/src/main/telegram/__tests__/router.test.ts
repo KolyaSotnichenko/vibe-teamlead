@@ -111,6 +111,12 @@ describe('buttons', () => {
     expect(bot.callbackAnswers).toEqual([{ id: expect.any(String), text: 'ok!' }]);
   });
 
+  it('a button can carry a colour style', () => {
+    const { router } = setup();
+    expect(router.button('Stop', vi.fn(), 'g', 'danger').style).toBe('danger');
+    expect(router.button('Go', vi.fn())).not.toHaveProperty('style');
+  });
+
   it('expires buttons after 12 hours, and unknown ids (from before a restart)', async () => {
     const { bot, router } = setup();
     const action = vi.fn();

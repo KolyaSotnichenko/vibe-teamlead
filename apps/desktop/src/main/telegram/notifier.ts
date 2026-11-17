@@ -11,13 +11,23 @@
  * Agent questions are sent by the question flow (questions.ts). A task's state is said once;
  * it is said again only after the task moved on. Stage 2 adds buttons through `buttonsFor`.
  * Sending never throws into the event source.
+ *
+ * Layout (HTML): an emoji header with the project, the task title in bold (its spec id in code),
+ * a detail line. A merge comes with the 🎉 message effect; a failed CI run lists its failed jobs
+ * and the end of the log in an expandable quote.
  */
 
 import type { ReviewReason, TaskStatus } from '../../shared/types';
 import type { TelegramNotificationKind, TelegramNotificationSettings } from '../../shared/types/telegram';
 import type { AppEventMap } from '../app-events';
 import type { BotApi, InlineButton } from './bot-api';
+import { b, code, type Html, html, htmlText, joinHtml, link, quote } from './format';
 import type { Translate } from './i18n';
+
+/** Telegram's 🎉 message effect */
+export const CELEBRATE_EFFECT = '5046509860389126442';
+/** The end of a failed CI log shown in the chat */
+const LOG_TAIL_CHARS = 1500;
 
 export interface NotifierSources {
   onStatusChange: (listener: (taskId: string, status: TaskStatus, reviewReason?: ReviewReason) => void) => () => void;
@@ -27,7 +37,9 @@ export interface NotifierSources {
 
 export interface Notification {
   kind: TelegramNotificationKind;
-  text: string;
+  text: Html;
+  /** A message effect (private chats) */
+  effect?: string;
   taskId?: string;
   projectId?: string;
   /** The task's title, when it is about a task */
@@ -41,7 +53,7 @@ export interface NotifierDeps {
   chatId: () => number | undefined;
   t: Translate;
   notifications: () => TelegramNotificationSettings;
-  task: (taskId: string, projectId?: string) => { title: string; projectName?: string; projectId?: string } | undefined;
+  task: (taskId: string, projectId?: string) => { title: string; specId?: string; projectName?: string; projectId?: string } | undefined;
   projectName: (projectId: string) => string | undefined;
   /** Stage 2: buttons for a notification (review actions, Start/Stop) */
   buttonsFor?: (notification: Notification) => InlineButton[][] | undefined;
@@ -67,37 +79,58 @@ export function createNotifier(deps: NotifierDeps) {
       try {
         if (deps.deliver && (await deps.deliver(notification, chatId))) return;
         const buttons = deps.buttonsFor?.(notification);
-        await api.sendMessage(chatId, notification.text, buttons ? { buttons } : undefined);
+        const options = { ...(buttons ? { buttons } : {}), ...(notification.effect ? { effect: notification.effect } : {}) };
+        await api.sendMessage(chatId, notification.text, Object.keys(options).length ? options : undefined);
       } catch (error) {
         deps.onError?.(error);
       }
     });
   };
 
-  const taskText = (key: string, taskId: string, projectId?: string): string => {
+  const h = htmlText(deps.t);
+  const header = (key: string, project: string | undefined) => (project ? html`${h(key)} · ${project}` : h(key));
+
+  const taskText = (key: string, taskId: string, projectId?: string, detail?: string): Html => {
     const info = deps.task(taskId, projectId);
-    const lines = [deps.t(key, { task: info?.title ?? taskId })];
-    if (info?.projectName) lines.push(deps.t('notify.inProject', { project: info.projectName }));
-    return lines.join('\n');
+    const title = info?.title ?? taskId;
+    const titleLine = info?.specId && info.specId !== title ? html`${b(title)} · ${code(info.specId)}` : b(title);
+    return joinHtml([header(key, info?.projectName), titleLine, ...(detail ? [h(detail)] : [])]);
   };
 
-  const taskNotification = (kind: TelegramNotificationKind, key: string, taskId: string, projectId?: string, reviewReason?: ReviewReason) => {
+  const taskNotification = (
+    kind: TelegramNotificationKind,
+    key: string,
+    taskId: string,
+    projectId?: string,
+    extra: { detail?: string; reviewReason?: ReviewReason; effect?: string } = {},
+  ) => {
     const info = deps.task(taskId, projectId);
     send({
       kind,
-      text: taskText(key, taskId, projectId),
+      text: taskText(key, taskId, projectId, extra.detail),
       taskId,
       projectId: projectId ?? info?.projectId,
       title: info?.title ?? taskId,
-      ...(reviewReason ? { reviewReason } : {}),
+      ...(extra.reviewReason ? { reviewReason: extra.reviewReason } : {}),
+      ...(extra.effect ? { effect: extra.effect } : {}),
     });
+  };
+
+  const ciText = (payload: AppEventMap['main-run-failed']): Html => {
+    const lines = [header('notify.ciFailed', deps.projectName(payload.projectId))];
+    if (payload.failedJobs?.length) lines.push(h('notify.ciJobs', { jobs: joinHtml(payload.failedJobs.map(code), ', ') }));
+    const tail = payload.logTail?.trim();
+    if (tail) lines.push(quote(tail.length > LOG_TAIL_CHARS ? `…${tail.slice(-LOG_TAIL_CHARS)}` : tail, { expandable: true }));
+    lines.push(h('notify.ciRun', { run: link(payload.url, payload.name) }));
+    return joinHtml(lines);
   };
 
   const onStatus = (taskId: string, status: TaskStatus, reason?: ReviewReason) => {
     let kind: TelegramNotificationKind | undefined;
     let key: string | undefined;
-    if (status === 'human_review' && reason === 'completed') [kind, key] = ['reviewWaiting', 'notify.review'];
-    else if (status === 'human_review' && reason === 'qa_rejected') [kind, key] = ['reviewWaiting', 'notify.reviewRejected'];
+    let detail: string | undefined;
+    if (status === 'human_review' && reason === 'completed') [kind, key, detail] = ['reviewWaiting', 'notify.review', 'notify.qaApproved'];
+    else if (status === 'human_review' && reason === 'qa_rejected') [kind, key, detail] = ['reviewWaiting', 'notify.review', 'notify.qaRejected'];
     else if (status === 'human_review' && reason === 'errors') [kind, key] = ['taskFailed', 'notify.failed'];
     else if (status === 'error') [kind, key] = ['taskFailed', 'notify.errored'];
     const state = `${status}:${reason ?? ''}`;
@@ -107,7 +140,7 @@ export function createNotifier(deps: NotifierDeps) {
     }
     if (said.get(taskId) === state) return;
     said.set(taskId, state);
-    taskNotification(kind, key, taskId, undefined, reason);
+    taskNotification(kind, key, taskId, undefined, { detail, reviewReason: reason });
   };
 
   return {
@@ -122,16 +155,17 @@ export function createNotifier(deps: NotifierDeps) {
           }
         }),
         sources.onAppEvent('task-stuck', ({ taskId, projectId }) => taskNotification('taskFailed', 'notify.stuck', taskId, projectId)),
-        sources.onAppEvent('task-merged', ({ taskId, projectId }) => taskNotification('taskMerged', 'notify.merged', taskId, projectId)),
-        sources.onAppEvent('verification-regression', ({ taskId, projectId }) => taskNotification('regression', 'notify.regression', taskId, projectId)),
-        sources.onAppEvent('main-run-failed', ({ projectId, name, url }) =>
-          send({ kind: 'ciFailed', projectId, text: deps.t('notify.ciFailed', { project: deps.projectName(projectId) ?? '', run: name, url }) }),
+        sources.onAppEvent('task-merged', ({ taskId, projectId }) => taskNotification('taskMerged', 'notify.merged', taskId, projectId, { effect: CELEBRATE_EFFECT })),
+        sources.onAppEvent('verification-regression', ({ taskId, projectId }) =>
+          taskNotification('regression', 'notify.regression', taskId, projectId, { detail: 'notify.regressionDetail' }),
         ),
+        sources.onAppEvent('main-run-failed', (payload) => send({ kind: 'ciFailed', projectId: payload.projectId, text: ciText(payload) })),
         sources.onBaseFailures((_taskId, data, projectId) => {
           const key = `${projectId ?? ''}|${data.baseCommit}`;
           if (brokenMains.has(key)) return;
           brokenMains.add(key);
-          send({ kind: 'regression', projectId, text: deps.t('notify.baseBroken', { project: (projectId && deps.projectName(projectId)) || '' }) });
+          const project = (projectId && deps.projectName(projectId)) || undefined;
+          send({ kind: 'regression', projectId, text: joinHtml([header('notify.baseBroken', project), h('notify.baseBrokenDetail')]) });
         }),
       );
     },

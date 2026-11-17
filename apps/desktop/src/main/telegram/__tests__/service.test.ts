@@ -115,7 +115,7 @@ describe('telegram service', () => {
     await service.start();
     await service.checkDigest();
     await service.checkDigest();
-    const digests = bot.fake.sent.filter((m) => m.text.startsWith('Good morning'));
+    const digests = bot.fake.sent.filter((m) => m.text.startsWith('☀️ <b>Good morning'));
     expect(digests).toHaveLength(1);
     expect(settings.get().digest.lastSentAt).toBe(now);
     await service.stop();

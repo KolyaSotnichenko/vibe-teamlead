@@ -7,7 +7,8 @@
 import type { GatewayPrices, Task } from '../../shared/types';
 import { summarizeUsage } from '../ai/usage/usage-ledger';
 import { type QueuePause, stopAllTasks } from '../ipc-handlers/task/task-control';
-import type { BotApi } from './bot-api';
+import type { BotApi, MessageText } from './bot-api';
+import { type Html, html, htmlText, joinHtml } from './format';
 import type { Translate } from './i18n';
 import type { Router } from './router';
 import type { TelegramSettingsStore } from './settings-store';
@@ -64,8 +65,9 @@ export function usageToday(ledgers: string[], now: number, prices: GatewayPrices
 
 export function registerCommands(deps: CommandDeps): void {
   const { router, t } = deps;
-  const send = async (chatId: number, text: string, buttons?: Parameters<BotApi['sendMessage']>[2]) => deps.api()?.sendMessage(chatId, text, buttons);
-  const edit = async (chatId: number, messageId: number | undefined, text: string) => {
+  const h = htmlText(t);
+  const send = async (chatId: number, text: MessageText, buttons?: Parameters<BotApi['sendMessage']>[2]) => deps.api()?.sendMessage(chatId, text, buttons);
+  const edit = async (chatId: number, messageId: number | undefined, text: MessageText) => {
     if (messageId !== undefined) await deps.api()?.editMessageText(chatId, messageId, text);
   };
 
@@ -75,44 +77,47 @@ export function registerCommands(deps: CommandDeps): void {
     return tasks.length > LIST_LIMIT ? `${names.join(', ')}, +${tasks.length - LIST_LIMIT}` : names.join(', ');
   };
 
-  router.command('help', ({ chatId }) => void send(chatId, t('help')));
+  router.command('help', ({ chatId }) => void send(chatId, h('help')));
 
   router.command('status', async ({ chatId }) => {
     const projects = deps.projects();
     if (!projects.length) {
-      await send(chatId, t('status.noProjects'));
+      await send(chatId, h('status.noProjects'));
       return;
     }
+    // Reading the ledgers can take a moment
+    await deps.api()?.sendChatAction(chatId, 'typing').catch(() => undefined);
     const current = deps.settings.get().currentProjectId;
-    const blocks: string[] = [];
+    const blocks: Html[] = [];
     for (const project of projects) {
       const tasks = deps.tasks(project.id).filter((task) => !task.metadata?.archivedAt);
+      const name = h('status.project', { name: project.name });
       blocks.push(
-        [
-          `${t('status.project', { name: project.name })}${project.id === current ? ` ${t('status.current')}` : ''}`,
-          t('status.running', { tasks: list(tasks.filter((task) => RUNNING.has(task.status))) }),
-          t('status.queued', { tasks: list(tasks.filter((task) => task.status === 'queue')) }),
-          t('status.waiting', { tasks: list(tasks.filter((task) => task.status === 'human_review' && task.reviewReason !== 'stopped')) }),
-        ].join('\n'),
+        joinHtml([
+          project.id === current ? html`${name} ${t('status.current')}` : name,
+          h('status.running', { tasks: list(tasks.filter((task) => RUNNING.has(task.status))) }),
+          h('status.queued', { tasks: list(tasks.filter((task) => task.status === 'queue')) }),
+          h('status.waiting', { tasks: list(tasks.filter((task) => task.status === 'human_review' && task.reviewReason !== 'stopped')) }),
+        ]),
       );
     }
-    const footer: string[] = [];
+    const footer: Html[] = [];
     const questions = deps.pendingQuestions();
-    if (questions) footer.push(t('status.questions', { count: questions }));
-    if (deps.queuePause.isPaused()) footer.push(t('status.queuePaused'));
+    if (questions) footer.push(h('status.questions', { count: questions }));
+    if (deps.queuePause.isPaused()) footer.push(h('status.queuePaused'));
     try {
       const usage = await deps.usageToday();
-      footer.push(usage.usd > 0 ? t('status.spend', { amount: usage.usd.toFixed(2) }) : t('status.spendTokens', { tokens: usage.tokens.toLocaleString('en-US') }));
+      footer.push(usage.usd > 0 ? h('status.spend', { amount: usage.usd.toFixed(2) }) : h('status.spendTokens', { tokens: usage.tokens.toLocaleString('en-US') }));
     } catch {
       // the spend is informational
     }
-    await send(chatId, [...blocks, ...(footer.length ? [footer.join('\n')] : [])].join('\n\n'));
+    await send(chatId, joinHtml([h('status.title'), ...blocks, ...(footer.length ? [joinHtml(footer)] : [])], '\n\n'));
   });
 
   router.command('project', async ({ chatId }) => {
     const projects = deps.projects();
     if (!projects.length) {
-      await send(chatId, t('project.none'));
+      await send(chatId, h('project.none'));
       return;
     }
     const group = `project:${Date.now()}:${Math.random()}`;
@@ -120,10 +125,10 @@ export function registerCommands(deps: CommandDeps): void {
       router.button(project.name, async ({ chatId: chat, messageId }) => {
         deps.settings.update({ currentProjectId: project.id });
         router.forgetGroup(group);
-        await edit(chat, messageId, t('project.chosen', { name: project.name }));
+        await edit(chat, messageId, h('project.chosen', { name: project.name }));
       }, group),
     ]);
-    await send(chatId, t('project.choose'), { buttons });
+    await send(chatId, h('project.choose'), { buttons });
   });
 
   router.command('stop_all', async ({ chatId }) => {
@@ -132,16 +137,16 @@ export function registerCommands(deps: CommandDeps): void {
     const yes = router.button(t('stopAll.yes'), async ({ chatId: chat, messageId }) => {
       router.forgetGroup(group);
       const ids = stopAllTasks({ running: deps.runningTaskIds, stop: deps.stopTask, pause: deps.queuePause });
-      await edit(chat, messageId, t('stopAll.done', { count: ids.length }));
-    }, group);
+      await edit(chat, messageId, h('stopAll.done', { count: ids.length }));
+    }, group, 'danger');
     const no = router.button(t('stopAll.no'), async ({ chatId: chat, messageId }) => {
       router.forgetGroup(group);
-      await edit(chat, messageId, t('stopAll.cancelled'));
+      await edit(chat, messageId, h('stopAll.cancelled'));
     }, group);
-    await send(chatId, count ? t('stopAll.confirmCount', { count }) : t('stopAll.confirm'), { buttons: [[yes, no]] });
+    await send(chatId, count ? h('stopAll.confirmCount', { count }) : h('stopAll.confirm'), { buttons: [[yes, no]] });
   });
 
   router.command('resume', async ({ chatId }) => {
-    await send(chatId, t(deps.queuePause.set(false) ? 'resume.done' : 'resume.notPaused'));
+    await send(chatId, h(deps.queuePause.set(false) ? 'resume.done' : 'resume.notPaused'));
   });
 }

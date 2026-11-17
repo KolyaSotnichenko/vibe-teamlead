@@ -23,11 +23,11 @@ function setup(over: Partial<DesignActions> = {}, enabled = true) {
   const bot = createFakeBot();
   const albums: Array<{ count: number; caption?: string }> = [];
   bot.api.sendMediaGroup = async (_c, list, caption) => {
-    albums.push({ count: list.length, caption });
+    albums.push({ count: list.length, caption: caption && String(caption) });
     return [];
   };
   bot.api.sendPhoto = async (chatId, _p, caption) => {
-    albums.push({ count: 1, caption });
+    albums.push({ count: 1, caption: caption && String(caption) });
     return { message_id: 900, date: 0, chat: { id: chatId } };
   };
   const settings = createTelegramSettingsStore(dir);
@@ -71,9 +71,11 @@ describe('design approval in the chat', () => {
     const { waitsNow, albums } = setup();
     const message = await waitsNow();
     expect(albums).toEqual([{ count: 2, caption: 'Checkout page' }]);
-    expect(message.text).toContain(t('design.waiting', { task: 'Checkout page' }));
-    expect(message.text).toContain(t('design.stage.wireframes'));
-    expect(message.options?.buttons?.flat().map((b) => b.text)).toEqual([t('design.approve'), t('design.comment')]);
+    expect(message.text).toBe('🎨 <b>The design waits for your approval</b>\n<b>Checkout page</b>\nStage: wireframes');
+    expect(message.options?.buttons?.flat().map((b) => [b.text, b.style])).toEqual([
+      [t('design.approve'), 'success'],
+      [t('design.comment'), undefined],
+    ]);
   });
 
   it('is sent once per stage, and not at all when switched off', async () => {

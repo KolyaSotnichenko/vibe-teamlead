@@ -9,6 +9,7 @@
 import type { Task } from '../../shared/types';
 import type { TelegramDigestSettings } from '../../shared/types/telegram';
 import type { BotApi } from './bot-api';
+import { type Html, htmlText, joinHtml } from './format';
 import type { Translate } from './i18n';
 import type { DigestState, TelegramSettingsStore } from './settings-store';
 
@@ -45,9 +46,10 @@ const names = (tasks: Task[]) => {
 
 const time = (value: Date | string | undefined) => (value ? new Date(value).getTime() : 0);
 
-/** The digest text. Pure. */
-export function buildDigest(input: DigestInput, t: Translate): string {
-  const blocks: string[] = [];
+/** The digest (HTML): a bold header per project, a line per kind, the spend. Pure. */
+export function buildDigest(input: DigestInput, t: Translate): Html {
+  const h = htmlText(t);
+  const blocks: Html[] = [];
   for (const project of input.projects) {
     const tasks = input.tasks(project.id).filter((task) => !task.metadata?.archivedAt);
     const lines: Array<[string, Task[]]> = [
@@ -57,11 +59,11 @@ export function buildDigest(input: DigestInput, t: Translate): string {
       ['digest.queued', tasks.filter((task) => task.status === 'queue')],
       ['digest.failed', tasks.filter((task) => task.status === 'error' || (task.status === 'human_review' && task.reviewReason === 'errors'))],
     ];
-    const filled = lines.filter(([, list]) => list.length).map(([key, list]) => t(key, { tasks: names(list) }));
-    if (filled.length) blocks.push([t('digest.project', { name: project.name }), ...filled].join('\n'));
+    const filled = lines.filter(([, list]) => list.length).map(([key, list]) => h(key, { tasks: names(list) }));
+    if (filled.length) blocks.push(joinHtml([h('digest.project', { name: project.name }), ...filled]));
   }
-  const spend = input.usage.usd > 0 ? t('digest.spend', { amount: input.usage.usd.toFixed(2) }) : t('digest.spendTokens', { tokens: input.usage.tokens.toLocaleString('en-US') });
-  return [t('digest.title'), ...(blocks.length ? blocks : [t('digest.quiet')]), spend].join('\n\n');
+  const spend = input.usage.usd > 0 ? h('digest.spend', { amount: input.usage.usd.toFixed(2) }) : h('digest.spendTokens', { tokens: input.usage.tokens.toLocaleString('en-US') });
+  return joinHtml([h('digest.title'), ...(blocks.length ? blocks : [h('digest.quiet')]), spend], '\n\n');
 }
 
 export interface DigestDeps {

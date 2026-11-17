@@ -38,7 +38,7 @@ describe('buildDigest', () => {
   it('tells what merged, waits, runs, failed and what it cost since the last digest', () => {
     const text = buildDigest(
       {
-        projects: [{ id: 'p1', name: 'Shop' }],
+        projects: [{ id: 'p1', name: 'Shop & <Co>' }],
         tasks: () => [
           task('m1', 'done', { updatedAt: new Date(at(7)) }),
           task('m0', 'done', { updatedAt: new Date(at(1, 0, 14)) }),
@@ -55,20 +55,19 @@ describe('buildDigest', () => {
         usage: { usd: 4.5, tokens: 10 },
       },
       t,
-    );
-    expect(text).toContain(t('digest.title'));
-    expect(text).toContain('Merged: Task m1');
+    ).value;
+    expect(text).toMatch(/^☀️ <b>Good morning\.<\/b> Since the last digest:\n\n<b>Shop &amp; &lt;Co&gt;<\/b>\n✅ Merged: Task m1\n/);
     expect(text).not.toContain('Task m0');
     expect(text).toContain('Waiting for you: Task w1, Task w2');
     expect(text).toContain('Running: Task r1');
     expect(text).toContain('Queued: Task q1');
     expect(text).toContain('Failed: Task f1, Task f2');
-    expect(text).toContain('Spend since the last digest: $4.50');
+    expect(text).toMatch(/\n\n💰 Spend since the last digest: <b>\$4\.50<\/b>$/);
     expect(text).not.toContain('Task a1');
   });
 
   it('says when nothing happened', () => {
-    const text = buildDigest({ projects: [{ id: 'p1', name: 'Shop' }], tasks: () => [], since: 0, usage: { usd: 0, tokens: 0 } }, t);
+    const text = buildDigest({ projects: [{ id: 'p1', name: 'Shop' }], tasks: () => [], since: 0, usage: { usd: 0, tokens: 0 } }, t).value;
     expect(text).toContain(t('digest.quiet'));
   });
 });

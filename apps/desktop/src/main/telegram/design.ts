@@ -12,6 +12,7 @@
 
 import type { ReviewReason, TaskStatus } from '../../shared/types';
 import type { BotApi, InlineButton } from './bot-api';
+import { b, type Html, html, htmlText, joinHtml } from './format';
 import type { Translate } from './i18n';
 import { MAX_ALBUM } from './review';
 import type { Router } from './router';
@@ -46,20 +47,21 @@ interface Entry {
   stage: DesignStage;
   chatId: number;
   messageId?: number;
-  text: string;
+  text: Html;
   group: string;
   handledHere: boolean;
 }
 
 export function createDesignFlow(deps: DesignFlowDeps) {
   const { router, t } = deps;
+  const h = htmlText(t);
   const entries = new Map<string, Entry>();
   let queue: Promise<void> = Promise.resolve();
   let counter = 0;
 
-  const edit = async (entry: Entry, note: string, buttons?: InlineButton[][]) => {
+  const edit = async (entry: Entry, note: Html, buttons?: InlineButton[][]) => {
     if (entry.messageId === undefined) return;
-    await deps.api()?.editMessageText(entry.chatId, entry.messageId, `${entry.text}\n\n${note}`, buttons ? { buttons } : undefined);
+    await deps.api()?.editMessageText(entry.chatId, entry.messageId, html`${entry.text}\n\n${note}`, buttons ? { buttons } : undefined);
   };
 
   const close = (entry: Entry) => {
@@ -71,18 +73,18 @@ export function createDesignFlow(deps: DesignFlowDeps) {
 
   const refuse = async (entry: Entry) => {
     close(entry);
-    await edit(entry, t('design.noLongerWaiting'));
+    await edit(entry, h('design.noLongerWaiting'));
   };
 
   const buttons = (entry: Entry): InlineButton[][] => [
-    [router.button(t('design.approve'), () => approve(entry), entry.group), router.button(t('design.comment'), () => askComment(entry), entry.group)],
+    [router.button(t('design.approve'), () => approve(entry), entry.group, 'success'), router.button(t('design.comment'), () => askComment(entry), entry.group)],
   ];
 
   const approve = async (entry: Entry) => {
     router.forgetGroup(entry.group);
     if (!stillWaits(entry)) return refuse(entry);
     entry.handledHere = true;
-    await edit(entry, t('design.approving'));
+    await edit(entry, h('design.approving'));
     // In the background: the approval renders QA's pictures and starts the task again
     void (async () => {
       let result: { success: boolean; error?: string };
@@ -94,10 +96,10 @@ export function createDesignFlow(deps: DesignFlowDeps) {
       try {
         if (result.success) {
           close(entry);
-          await edit(entry, t('design.approved'));
+          await edit(entry, h('design.approved'));
         } else {
           entry.handledHere = false;
-          await edit(entry, t('design.failed', { reason: result.error || t('review.unknownReason') }), buttons(entry));
+          await edit(entry, h('design.failed', { reason: result.error || t('review.unknownReason') }), buttons(entry));
         }
       } catch (error) {
         deps.onError?.(error);
@@ -109,7 +111,7 @@ export function createDesignFlow(deps: DesignFlowDeps) {
     if (!stillWaits(entry)) return refuse(entry);
     const api = deps.api();
     if (!api) return;
-    const prompt = await api.sendMessage(entry.chatId, t('design.commentPrompt'), { forceReply: true, placeholder: t('design.commentPlaceholder') });
+    const prompt = await api.sendMessage(entry.chatId, h('design.commentPrompt'), { forceReply: true, placeholder: t('design.commentPlaceholder') });
     router.awaitReply(prompt.message_id, async (text) => {
       const comment = text.trim();
       if (!comment) return;
@@ -119,10 +121,10 @@ export function createDesignFlow(deps: DesignFlowDeps) {
       const result = await deps.actions.comment(entry.taskId, comment, entry.projectId);
       if (result.success) {
         close(entry);
-        await edit(entry, t('design.commented', { comment }));
+        await edit(entry, h('design.commented', { comment }));
       } else {
         entry.handledHere = false;
-        await edit(entry, t('design.failed', { reason: result.error || t('review.unknownReason') }), buttons(entry));
+        await edit(entry, h('design.failed', { reason: result.error || t('review.unknownReason') }), buttons(entry));
       }
     });
   };
@@ -159,11 +161,11 @@ export function createDesignFlow(deps: DesignFlowDeps) {
         if (!waiting || (entry && entry.stage === waiting.stage) || !deps.enabled() || chatId === undefined) return;
         if (entry) close(entry);
         const project = deps.projectName?.(taskId, projectId);
-        const text = [
-          t('design.waiting', { task: deps.taskTitle(taskId, projectId) }),
-          t(`design.stage.${waiting.stage}`),
-          ...(project ? [t('notify.inProject', { project })] : []),
-        ].join('\n');
+        const text = joinHtml([
+          project ? html`${h('design.waiting')} · ${project}` : h('design.waiting'),
+          b(deps.taskTitle(taskId, projectId)),
+          h(`design.stage.${waiting.stage}`),
+        ]);
         const next: Entry = { taskId, projectId, stage: waiting.stage, chatId, text, group: `design:${taskId}:${++counter}`, handledHere: false };
         entries.set(taskId, next);
         queue = queue.then(() => present(next)).catch((error) => deps.onError?.(error));
@@ -171,7 +173,7 @@ export function createDesignFlow(deps: DesignFlowDeps) {
       }
       if (!entry) return;
       close(entry);
-      if (!entry.handledHere) void edit(entry, t('design.decidedOnComputer')).catch((error) => deps.onError?.(error));
+      if (!entry.handledHere) void edit(entry, h('design.decidedOnComputer')).catch((error) => deps.onError?.(error));
     },
     /** Resolves when every queued album and message was sent (tests) */
     idle: () => queue,

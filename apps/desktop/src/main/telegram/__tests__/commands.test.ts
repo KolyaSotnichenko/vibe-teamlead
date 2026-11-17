@@ -57,7 +57,8 @@ describe('/status', () => {
     const { bot, router } = setup();
     await router.handleBatch([textUpdate('/status')]);
     const text = bot.last().text;
-    expect(text).toContain('Shop');
+    expect(text).toMatch(/^📊 <b>Status<\/b>\n\n<b>Shop<\/b>/);
+    expect(bot.chatActions).toEqual([{ chatId: 11, action: 'typing' }]);
     expect(text).toContain('Running: Task a1');
     expect(text).toContain('Queued: Task a2');
     expect(text).toContain('Waiting for you: Task a3');
@@ -66,7 +67,7 @@ describe('/status', () => {
     // archived tasks are left out
     expect(text).not.toContain('Task b2');
     expect(text).toContain('2 questions wait for an answer');
-    expect(text).toContain("Today's spend: $3.46");
+    expect(text).toContain("💰 Today's spend: <b>$3.46</b>");
   });
 
   it('says when the queue is paused', async () => {
@@ -96,7 +97,9 @@ describe('/stop_all and /resume', () => {
     expect(stopTask).not.toHaveBeenCalled();
     const confirm = bot.last();
     expect(confirm.text).toBe(t('stopAll.confirmCount', { count: 2 }));
-    const [yes] = confirm.options?.buttons?.flat() ?? [];
+    expect(confirm.html).toBe(true);
+    const [yes, no] = confirm.options?.buttons?.flat() ?? [];
+    expect([yes.style, no.style]).toEqual(['danger', undefined]);
     await router.handleBatch([pressUpdate(yes.data, { messageId: confirm.messageId })]);
     expect(stopTask.mock.calls.map((c) => c[0])).toEqual(['a1', 'b1']);
     expect(queuePause.isPaused()).toBe(true);

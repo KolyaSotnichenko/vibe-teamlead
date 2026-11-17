@@ -14,6 +14,7 @@
 
 import type { ReviewReason, TaskStatus } from '../../shared/types';
 import type { BotApi, InlineButton } from './bot-api';
+import { type Html, html, htmlText, joinHtml } from './format';
 import type { Translate } from './i18n';
 import type { Notification } from './notifier';
 import { type ReviewDetails, reviewLines } from './review-details';
@@ -46,7 +47,7 @@ interface Entry {
   projectId?: string;
   chatId: number;
   messageId: number;
-  text: string;
+  text: Html;
   group: string;
   /** A Merge or Send back from the chat is under way or done: no "handled on the computer" */
   handledHere: boolean;
@@ -56,6 +57,7 @@ const WAITING = new Set<ReviewReason | undefined>(['completed', 'qa_rejected']);
 
 export function createReviewFlow(deps: ReviewFlowDeps) {
   const { router, t } = deps;
+  const h = htmlText(t);
   const entries = new Map<string, Entry>();
   let counter = 0;
 
@@ -66,8 +68,8 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
 
   const current = (entry: Entry) => entries.get(entry.taskId) === entry;
 
-  const edit = async (entry: Entry, note: string | undefined, buttons?: InlineButton[][]) => {
-    await deps.api()?.editMessageText(entry.chatId, entry.messageId, note ? `${entry.text}\n\n${note}` : entry.text, buttons ? { buttons } : undefined);
+  const edit = async (entry: Entry, note: Html | undefined, buttons?: InlineButton[][]) => {
+    await deps.api()?.editMessageText(entry.chatId, entry.messageId, note ? html`${entry.text}\n\n${note}` : entry.text, buttons ? { buttons } : undefined);
   };
 
   const close = (entry: Entry) => {
@@ -77,19 +79,19 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
 
   const noLongerWaiting = async (entry: Entry) => {
     close(entry);
-    await edit(entry, t('review.noLongerWaiting'));
+    await edit(entry, h('review.noLongerWaiting'));
   };
 
   const mainButtons = (entry: Entry): InlineButton[][] => [
-    [router.button(t('review.merge'), () => askMerge(entry), entry.group), router.button(t('review.sendBack'), () => askComment(entry), entry.group)],
+    [router.button(t('review.merge'), () => askMerge(entry), entry.group, 'success'), router.button(t('review.sendBack'), () => askComment(entry), entry.group)],
     [router.button(t('review.later'), () => later(entry), entry.group)],
   ];
 
   const askMerge = async (entry: Entry) => {
     router.forgetGroup(entry.group);
     if (!waits(entry)) return noLongerWaiting(entry);
-    await edit(entry, t('review.confirmMerge'), [
-      [router.button(t('review.confirmYes'), () => merge(entry), entry.group), router.button(t('review.confirmNo'), () => cancel(entry), entry.group)],
+    await edit(entry, h('review.confirmMerge'), [
+      [router.button(t('review.confirmYes'), () => merge(entry), entry.group, 'success'), router.button(t('review.confirmNo'), () => cancel(entry), entry.group)],
     ]);
   };
 
@@ -102,7 +104,8 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
     router.forgetGroup(entry.group);
     if (!waits(entry)) return noLongerWaiting(entry);
     entry.handledHere = true;
-    await edit(entry, t('review.merging'));
+    await deps.api()?.sendChatAction(entry.chatId, 'typing').catch(() => undefined);
+    await edit(entry, h('review.merging'));
     // In the background: a merge can take minutes, and the chat must keep working meanwhile
     void (async () => {
       let outcome: MergeOutcome;
@@ -114,13 +117,13 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
       try {
         if (outcome.kind === 'merged') {
           close(entry);
-          await edit(entry, t('review.merged'));
+          await edit(entry, h('review.merged'));
         } else if (outcome.kind === 'needs_review') {
           close(entry);
-          await edit(entry, t('review.mergeNeedsReview'));
+          await edit(entry, h('review.mergeNeedsReview'));
         } else {
           entry.handledHere = false;
-          await edit(entry, t('review.mergeFailed', { reason: outcome.message || t('review.unknownReason') }), mainButtons(entry));
+          await edit(entry, h('review.mergeFailed', { reason: outcome.message || t('review.unknownReason') }), mainButtons(entry));
         }
       } catch (error) {
         deps.onError?.(error);
@@ -132,7 +135,7 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
     if (!waits(entry)) return noLongerWaiting(entry);
     const api = deps.api();
     if (!api) return;
-    const prompt = await api.sendMessage(entry.chatId, t('review.commentPrompt'), { forceReply: true, placeholder: t('review.commentPlaceholder') });
+    const prompt = await api.sendMessage(entry.chatId, h('review.commentPrompt'), { forceReply: true, placeholder: t('review.commentPlaceholder') });
     router.awaitReply(prompt.message_id, async (text) => {
       const comment = text.trim();
       if (!comment) return;
@@ -142,10 +145,10 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
       const result = await deps.actions.sendBack(entry.taskId, comment, entry.projectId);
       if (result.success) {
         close(entry);
-        await edit(entry, t('review.sentBack', { comment }));
+        await edit(entry, h('review.sentBack', { comment }));
       } else {
         entry.handledHere = false;
-        await edit(entry, t('review.sendBackFailed', { reason: result.error || t('review.unknownReason') }), mainButtons(entry));
+        await edit(entry, h('review.sendBackFailed', { reason: result.error || t('review.unknownReason') }), mainButtons(entry));
       }
     });
   };
@@ -178,7 +181,7 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
       ]);
       await sendPhotos(api, chatId, photos, notification.title);
       const lines = reviewLines(details, t);
-      const text = lines.length ? `${notification.text}\n\n${lines.join('\n')}` : notification.text;
+      const text = lines.length ? html`${notification.text}\n\n${joinHtml(lines)}` : notification.text;
       const previous = entries.get(taskId);
       if (previous) router.forgetGroup(previous.group);
       const entry: Entry = { taskId, projectId: notification.projectId, chatId, messageId: 0, text, group: `review:${taskId}:${++counter}`, handledHere: false };
@@ -192,7 +195,7 @@ export function createReviewFlow(deps: ReviewFlowDeps) {
       if (!entry || (status === 'human_review' && WAITING.has(reason))) return;
       close(entry);
       if (entry.handledHere) return;
-      void edit(entry, t('review.handledOnComputer')).catch((error) => deps.onError?.(error));
+      void edit(entry, h('review.handledOnComputer')).catch((error) => deps.onError?.(error));
     },
     reset(): void {
       for (const entry of entries.values()) router.forgetGroup(entry.group);

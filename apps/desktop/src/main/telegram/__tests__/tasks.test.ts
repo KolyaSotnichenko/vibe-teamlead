@@ -70,6 +70,13 @@ describe('/task', () => {
     expect(bot.edits.at(-1)?.text).toContain(t('task.started', { title: 'Add a dark mode' }));
   });
 
+  it('the reply is HTML with the title escaped', async () => {
+    const { bot, say } = setup();
+    await say('/task <b>x</b> & y');
+    expect(bot.last().text).toBe('🆕 <b>Task created</b> · Shop\n<b>&lt;b&gt;x&lt;/b&gt; &amp; y</b>\nIt is in Planning.');
+    expect(bot.last().html).toBe(true);
+  });
+
   it("says when Start put the task in the queue instead (limit reached or queue paused)", async () => {
     const { say, bot, press } = setup([{ id: 'p1', name: 'Shop' }], { start: vi.fn(async () => 'queued' as const) });
     await say('/task Add a dark mode');

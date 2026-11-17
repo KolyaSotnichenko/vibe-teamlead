@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { botText } from '../i18n';
-import { criteriaCoverage, diffUrl, fitPhoto, latestScreenshots, parseNumstat, reviewLines } from '../review-details';
+import { criteriaCoverage, diffUrl, fitPhoto, latestScreenshots, parseNumstat, qaSummary, reviewLines } from '../review-details';
 
 const t = (k: string, v?: Record<string, string | number>) => botText('en', k, v);
 
@@ -27,17 +27,32 @@ describe('review details', () => {
 
   it('the lines of the review message', () => {
     const lines = reviewLines(
-      { criteria: { passed: 4, total: 5 }, checks: { status: 'passed', source: 'task' }, files: { files: 7, additions: 120, deletions: 30 }, diffUrl: 'https://github.com/me/shop/compare/main...vibe-teamlead/1' },
+      {
+        criteria: { passed: 4, total: 5 },
+        checks: { status: 'passed', source: 'task' },
+        files: { files: 7, additions: 120, deletions: 30 },
+        diffUrl: 'https://github.com/me/shop/compare/main...vibe-teamlead/1',
+        summary: 'All <criteria> pass & the UI matches.',
+      },
       t,
-    );
+    ).map(String);
     expect(lines).toEqual([
-      'Acceptance criteria: 4 of 5 pass',
-      'App checks: passed (the commands came from the task itself: the base had no checks)',
-      'Files changed: 7 (+120 −30)',
-      'Diff: https://github.com/me/shop/compare/main...vibe-teamlead/1',
+      '⚠️ Acceptance criteria: 4 of 5 pass',
+      '✅ App checks: passed (the commands came from the task itself: the base had no checks)',
+      '📝 Files changed: 7 (+120 −30)',
+      '🔗 <a href="https://github.com/me/shop/compare/main...vibe-teamlead/1">Diff on GitHub</a>',
+      '<blockquote expandable>All &lt;criteria&gt; pass &amp; the UI matches.</blockquote>',
     ]);
-    expect(reviewLines({ checks: { status: 'not_verified' } }, t)).toEqual(['App checks: not verified']);
+    expect(reviewLines({ criteria: { passed: 2, total: 2 } }, t).map(String)).toEqual(['✅ Acceptance criteria: 2 of 2 pass']);
+    expect(reviewLines({ checks: { status: 'not_verified' } }, t).map(String)).toEqual(['⚠️ App checks: not verified']);
+    expect(reviewLines({ checks: { status: 'regression' } }, t).map(String)).toEqual(['❌ App checks: regression']);
     expect(reviewLines({}, t)).toEqual([]);
+  });
+
+  it("the QA summary: the verdict's reason paragraph", () => {
+    const report = '## Verdict\n\n**SIGN-OFF**: APPROVED\n\n**Reason**: All five criteria have tests that pass.\nThe UI matches the design.\n\n**Next Steps**:\n- Ready for merge\n';
+    expect(qaSummary(report)).toBe('All five criteria have tests that pass.\nThe UI matches the design.');
+    expect(qaSummary('no verdict')).toBeUndefined();
   });
 
   it('photos fit what Telegram takes: at most 1600 wide, sides under 10000, ratio under 20', () => {

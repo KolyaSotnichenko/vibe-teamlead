@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ReviewReason, TaskStatus } from '../../../shared/types';
 import type { BotApi } from '../bot-api';
+import { htmlText } from '../format';
 import { botText } from '../i18n';
 import { createPairing } from '../pairing';
 import { createReviewFlow, type ReviewActions } from '../review';
@@ -13,6 +14,8 @@ import { createTelegramSettingsStore } from '../settings-store';
 import { createFakeBot, OWNER, pressUpdate, textUpdate } from './fake-bot';
 
 const t = (k: string, v?: Record<string, string | number>) => botText('en', k, v);
+const h = htmlText(t);
+const s = (k: string, v?: Record<string, string>) => String(h(k, v));
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'tg-review-'));
@@ -25,11 +28,11 @@ function setup(over: Partial<ReviewActions> = {}) {
   const bot = createFakeBot();
   const photos: Array<{ kind: 'photo' | 'album'; count: number; caption?: string }> = [];
   bot.api.sendPhoto = async (chatId, _photo, caption) => {
-    photos.push({ kind: 'photo', count: 1, caption });
+    photos.push({ kind: 'photo', count: 1, caption: caption && String(caption) });
     return { message_id: 900, date: 0, chat: { id: chatId } };
   };
   bot.api.sendMediaGroup = async (_chatId, list, caption) => {
-    photos.push({ kind: 'album', count: list.length, caption });
+    photos.push({ kind: 'album', count: list.length, caption: caption && String(caption) });
     return [];
   };
   const settings = createTelegramSettingsStore(dir);
@@ -46,7 +49,7 @@ function setup(over: Partial<ReviewActions> = {}) {
   };
   const errors: unknown[] = [];
   const flow = createReviewFlow({ api: () => bot.api as BotApi, router, t, actions, onError: (e) => void errors.push(e) });
-  const notification = { kind: 'reviewWaiting' as const, text: t('notify.review', { task: 'Add login' }), taskId: 't1', projectId: 'p1', title: 'Add login', reviewReason: 'completed' as const };
+  const notification = { kind: 'reviewWaiting' as const, text: h('notify.review'), taskId: 't1', projectId: 'p1', title: 'Add login', reviewReason: 'completed' as const };
   const present = async () => {
     await flow.present(notification, OWNER.chatId);
     return bot.last();
@@ -66,11 +69,13 @@ describe('review in the chat', () => {
   it('the review message: title, QA result, details and Merge / Send back / Later', async () => {
     const { present } = setup();
     const message = await present();
-    expect(message.text).toContain('Waiting for your review: Add login');
-    expect(message.text).toContain('QA approved it.');
-    expect(message.text).toContain('Acceptance criteria: 2 of 2 pass');
-    expect(message.text).toContain('Files changed: 3 (+10 −1)');
-    expect(message.options?.buttons?.flat().map((b) => b.text)).toEqual([t('review.merge'), t('review.sendBack'), t('review.later')]);
+    expect(message.html).toBe(true);
+    expect(message.text).toBe('👀 <b>Waits for your review</b>\n\n✅ Acceptance criteria: 2 of 2 pass\n📝 Files changed: 3 (+10 −1)');
+    expect(message.options?.buttons?.flat().map((b) => [b.text, b.style])).toEqual([
+      [t('review.merge'), 'success'],
+      [t('review.sendBack'), undefined],
+      [t('review.later'), undefined],
+    ]);
   });
 
   it('Merge asks first, then runs the same merge as the app and says it merged', async () => {
@@ -78,10 +83,12 @@ describe('review in the chat', () => {
     const message = await present();
     await press(message.messageId, t('review.merge'));
     expect(actions.merge).not.toHaveBeenCalled();
-    expect(bot.edits.at(-1)?.text).toContain(t('review.confirmMerge'));
+    expect(bot.edits.at(-1)?.text).toContain(s('review.confirmMerge'));
+    expect(bot.edits.at(-1)?.buttons?.[0][0].style).toBe('success');
     await press(message.messageId, t('review.confirmYes'));
+    expect(bot.chatActions).toEqual([{ chatId: OWNER.chatId, action: 'typing' }]);
     expect(actions.merge).toHaveBeenCalledWith('t1', 'p1');
-    expect(bot.edits.at(-1)?.text).toContain(t('review.merged'));
+    expect(bot.edits.at(-1)?.text).toContain(s('review.merged'));
     expect(bot.edits.at(-1)?.buttons ?? []).toEqual([]);
   });
 
@@ -99,14 +106,14 @@ describe('review in the chat', () => {
     let message = await needs.present();
     await needs.press(message.messageId, t('review.merge'));
     await needs.press(message.messageId, t('review.confirmYes'));
-    expect(needs.bot.edits.at(-1)?.text).toContain(t('review.mergeNeedsReview'));
+    expect(needs.bot.edits.at(-1)?.text).toContain(s('review.mergeNeedsReview'));
 
     const failed = setup({ merge: vi.fn(async () => ({ kind: 'failed' as const, message: 'Could not merge: a.ts' })) });
     message = await failed.present();
     await failed.press(message.messageId, t('review.merge'));
     await failed.press(message.messageId, t('review.confirmYes'));
     const edit = failed.bot.edits.at(-1);
-    expect(edit?.text).toContain(t('review.mergeFailed', { reason: 'Could not merge: a.ts' }));
+    expect(edit?.text).toContain(s('review.mergeFailed', { reason: 'Could not merge: a.ts' }));
     // it can be tried again
     expect(edit?.buttons?.flat().map((b) => b.text)).toContain(t('review.merge'));
   });
@@ -119,7 +126,7 @@ describe('review in the chat', () => {
     state.reviewReason = undefined;
     await press(message.messageId, t('review.confirmYes'));
     expect(actions.merge).not.toHaveBeenCalled();
-    expect(bot.edits.at(-1)?.text).toContain(t('review.noLongerWaiting'));
+    expect(bot.edits.at(-1)?.text).toContain(s('review.noLongerWaiting'));
   });
 
   it('Send back asks for a comment and sends it the way the app does', async () => {
@@ -128,9 +135,9 @@ describe('review in the chat', () => {
     await press(message.messageId, t('review.sendBack'));
     const prompt = bot.last();
     expect(prompt.options?.forceReply).toBe(true);
-    await router.handleBatch([textUpdate('Make the button blue', { replyTo: prompt.messageId })]);
-    expect(actions.sendBack).toHaveBeenCalledWith('t1', 'Make the button blue', 'p1');
-    expect(bot.edits.at(-1)?.text).toContain(t('review.sentBack', { comment: 'Make the button blue' }));
+    await router.handleBatch([textUpdate('Make the <b>button</b> blue', { replyTo: prompt.messageId })]);
+    expect(actions.sendBack).toHaveBeenCalledWith('t1', 'Make the <b>button</b> blue', 'p1');
+    expect(bot.edits.at(-1)?.text).toContain('↩️ Sent back with your instruction: <i>Make the &lt;b&gt;button&lt;/b&gt; blue</i>');
   });
 
   it('Later removes the buttons', async () => {
@@ -145,7 +152,7 @@ describe('review in the chat', () => {
     const { present, flow, bot, router } = setup();
     const message = await present();
     flow.statusChanged('t1', 'done');
-    expect(bot.edits.at(-1)?.text).toContain(t('review.handledOnComputer'));
+    expect(bot.edits.at(-1)?.text).toContain(s('review.handledOnComputer'));
     const merge = message.options?.buttons?.flat()[0];
     await router.handleBatch([pressUpdate(merge?.data ?? '', { messageId: message.messageId })]);
     expect(bot.callbackAnswers.at(-1)?.text).toBe(t('expired'));
@@ -159,7 +166,7 @@ describe('review in the chat', () => {
     await many.present();
     expect(many.photos).toEqual([{ kind: 'album', count: 10, caption: 'Add login' }]);
     // the review message still comes after them
-    expect(many.bot.last().text).toContain('Waiting for your review');
+    expect(many.bot.last().text).toContain('Waits for your review');
   });
 
   it('screenshots that fail to send are skipped quietly', async () => {
@@ -170,6 +177,6 @@ describe('review in the chat', () => {
     const message = await present();
     expect(photos).toEqual([]);
     expect(errors).toHaveLength(1);
-    expect(message.text).toContain('Waiting for your review');
+    expect(message.text).toContain('Waits for your review');
   });
 });

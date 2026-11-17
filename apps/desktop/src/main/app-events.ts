@@ -10,7 +10,7 @@ export interface AppEventMap {
   /** An agent process exited while its task was still active; the task was stopped */
   'task-stuck': { taskId: string; projectId: string };
   /** A failed GitHub Actions run of the app's own push on main */
-  'main-run-failed': { projectId: string; runId: number; name: string; url: string };
+  'main-run-failed': { projectId: string; runId: number; name: string; url: string; failedJobs?: string[]; logTail?: string };
   /** The app's checks found a regression when merging a task (the merge was stopped) */
   'verification-regression': { taskId: string; projectId: string };
 }

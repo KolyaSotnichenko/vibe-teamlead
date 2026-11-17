@@ -44,7 +44,7 @@ function setup(notifications: Partial<TelegramNotificationSettings> = {}, chatId
     chatId: () => chatId ?? undefined,
     t,
     notifications: () => ({ ...DEFAULT_NOTIFICATIONS, ...notifications }),
-    task: (taskId) => ({ title: `Task ${taskId}`, projectName: 'Shop' }),
+    task: (taskId) => ({ title: taskId === 'evil' ? '<b>x</b> & <a href=javascript:alert(1)>y</a>' : `Task ${taskId}`, specId: `001-${taskId}`, projectName: 'Shop' }),
     projectName: () => 'Shop',
     buttonsFor,
     deliver,
@@ -63,9 +63,16 @@ describe('notifier', () => {
     src.status('t1', 'human_review', 'completed');
     src.status('t2', 'human_review', 'qa_rejected');
     const sent = await texts();
-    expect(sent[0]).toContain(t('notify.review', { task: 'Task t1' }));
-    expect(sent[0]).toContain('Project: Shop');
-    expect(sent[1]).toContain(t('notify.reviewRejected', { task: 'Task t2' }));
+    expect(sent[0]).toBe('👀 <b>Waits for your review</b> · Shop\n<b>Task t1</b> · <code>001-t1</code>\n✅ QA approved it');
+    expect(sent[1]).toContain('⚠️ QA did not approve it');
+  });
+
+  it('a hostile task title stays inert', async () => {
+    const { src, bot, texts } = setup();
+    src.status('evil', 'error');
+    const sent = await texts();
+    expect(bot.sent[0].html).toBe(true);
+    expect(sent[0]).toContain('<b>&lt;b&gt;x&lt;/b&gt; &amp; &lt;a href=javascript:alert(1)&gt;y&lt;/a&gt;</b>');
   });
 
   it('says a state once, and again after the task moved on', async () => {
@@ -83,25 +90,43 @@ describe('notifier', () => {
     src.status('t2', 'error');
     src.app('task-stuck', { taskId: 't3', projectId: 'p1' });
     const sent = await texts();
-    expect(sent[0]).toContain(t('notify.failed', { task: 'Task t1' }));
-    expect(sent[1]).toContain(t('notify.errored', { task: 'Task t2' }));
-    expect(sent[2]).toContain(t('notify.stuck', { task: 'Task t3' }));
+    expect(sent[0]).toMatch(/^❌ <b>Task failed<\/b> · Shop\n<b>Task t1<\/b>/);
+    expect(sent[1]).toMatch(/^❌ <b>Task stopped with an error<\/b>/);
+    expect(sent[2]).toMatch(/^⚠️ <b>Task got stuck and was stopped<\/b> · Shop\n<b>Task t3<\/b>/);
   });
 
   it('CI failed on main, merged, regression and broken main', async () => {
     const { src, texts } = setup();
-    src.app('main-run-failed', { projectId: 'p1', runId: 1, name: 'CI', url: 'https://github.com/o/r/actions/runs/1' });
+    src.app('main-run-failed', {
+      projectId: 'p1',
+      runId: 1,
+      name: 'CI',
+      url: 'https://github.com/o/r/actions/runs/1',
+      failedJobs: ['test', 'lint'],
+      logTail: 'Error: expected <div> & got null',
+    });
     src.app('task-merged', { taskId: 't1', projectId: 'p1' });
     src.app('verification-regression', { taskId: 't2', projectId: 'p1' });
     src.base('t3', { baseCommit: 'abc' }, 'p1');
     src.base('t4', { baseCommit: 'abc' }, 'p1');
     const sent = await texts();
     expect(sent).toHaveLength(4);
-    expect(sent[0]).toContain('CI failed on main in Shop: CI');
-    expect(sent[0]).toContain('https://github.com/o/r/actions/runs/1');
-    expect(sent[1]).toContain(t('notify.merged', { task: 'Task t1' }));
-    expect(sent[2]).toContain(t('notify.regression', { task: 'Task t2' }));
-    expect(sent[3]).toBe(t('notify.baseBroken', { project: 'Shop' }));
+    expect(sent[0]).toBe(
+      '🔴 <b>CI failed on main</b> · Shop\nFailed jobs: <code>test</code>, <code>lint</code>\n' +
+        '<blockquote expandable>Error: expected &lt;div&gt; &amp; got null</blockquote>\n🔗 <a href="https://github.com/o/r/actions/runs/1">CI</a>',
+    );
+    expect(sent[1]).toMatch(/^✅ <b>Merged<\/b> · Shop\n<b>Task t1<\/b>/);
+    expect(sent[2]).toMatch(/^⚠️ <b>App checks found a regression<\/b>[\s\S]*\nThe merge was stopped\.$/);
+    expect(sent[3]).toBe('⚠️ <b>App checks fail on main</b> · Shop\nA task to fix main was started.');
+  });
+
+  it('a merge comes with the 🎉 effect; other notifications without one', async () => {
+    const { src, bot, texts } = setup();
+    src.app('task-merged', { taskId: 't1', projectId: 'p1' });
+    src.status('t2', 'error');
+    await texts();
+    expect(bot.sent[0].options?.effect).toBe('5046509860389126442');
+    expect(bot.sent[1].options).toBeUndefined();
   });
 
   it('respects each switch', async () => {
@@ -140,7 +165,7 @@ describe('notifier', () => {
     const { src, texts } = setup({}, 5, deliver as never);
     src.status('t1', 'human_review', 'qa_rejected');
     src.app('task-merged', { taskId: 't2', projectId: 'p1' });
-    expect(await texts()).toEqual([expect.stringContaining('Merged: Task t2')]);
+    expect(await texts()).toEqual([expect.stringContaining('<b>Task t2</b>')]);
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reviewWaiting', taskId: 't1', title: 'Task t1', reviewReason: 'qa_rejected' }), 5);
   });
 });

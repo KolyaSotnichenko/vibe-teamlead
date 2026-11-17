@@ -14,7 +14,8 @@
 
 import { randomBytes } from 'node:crypto';
 
-import type { BotApi, InlineButton, TelegramCallbackQuery, TelegramMessage, TelegramUpdate } from './bot-api';
+import { htmlText } from './format';
+import type { BotApi, ButtonStyle, InlineButton, TelegramCallbackQuery, TelegramMessage, TelegramUpdate } from './bot-api';
 import type { Translate } from './i18n';
 import type { Pairing } from './pairing';
 import type { TelegramSettingsStore } from './settings-store';
@@ -58,8 +59,8 @@ export interface RouterDeps {
 export interface Router {
   handleBatch(updates: TelegramUpdate[], options?: { offlineForMs?: number }): Promise<void>;
   command(name: string, handler: CommandHandler): void;
-  /** A button whose press runs the action; `group` lets related buttons be forgotten together */
-  button(text: string, action: ButtonAction, group?: string): InlineButton;
+  /** A button whose press runs the action; `group` lets related buttons be forgotten together; `style` colours it */
+  button(text: string, action: ButtonAction, group?: string, style?: ButtonStyle): InlineButton;
   forgetGroup(group: string): void;
   /** The next reply to this bot message goes to the handler (once) */
   awaitReply(messageId: number, handler: ReplyHandler): void;
@@ -87,8 +88,9 @@ export function createRouter(deps: RouterDeps): Router {
     return !!owner && message.from?.id === owner.userId && message.chat.id === owner.chatId && message.chat.type !== 'group' && message.chat.type !== 'supergroup' && message.chat.type !== 'channel';
   };
 
-  const send = async (chatId: number, text: string) => {
-    await deps.api()?.sendMessage(chatId, text);
+  const h = htmlText(deps.t);
+  const send = async (chatId: number, key: string, vars?: Record<string, string>) => {
+    await deps.api()?.sendMessage(chatId, h(key, vars));
   };
 
   const prune = () => {
@@ -112,7 +114,7 @@ export function createRouter(deps: RouterDeps): Router {
     deps.settings.update({ owner: { userId: message.from.id, chatId: message.chat.id, ...(name ? { name } : {}) } });
     buttons.clear();
     replies.clear();
-    await send(message.chat.id, deps.t('paired'));
+    await send(message.chat.id, 'paired');
     deps.onPaired?.();
     return true;
   };
@@ -136,12 +138,12 @@ export function createRouter(deps: RouterDeps): Router {
       }
       const handler = commands.get(command.name);
       if (handler) await handler({ chatId, args: command.args, message });
-      else if (command.name !== 'start') await send(chatId, deps.t('unknown'));
-      else await send(chatId, deps.t('help'));
+      else if (command.name !== 'start') await send(chatId, 'unknown');
+      else await send(chatId, 'help');
       return;
     }
     if (textHandler && (await textHandler(message.text, { chatId, message }))) return;
-    await send(chatId, deps.t('unknown'));
+    await send(chatId, 'unknown');
   };
 
   const handlePress = async (query: TelegramCallbackQuery, stale: boolean, skippedPresses: { count: number }) => {
@@ -186,7 +188,7 @@ export function createRouter(deps: RouterDeps): Router {
       if (owner && (skipped.length || skippedPresses.count)) {
         const items = [...skipped, ...(skippedPresses.count ? [deps.t('skippedPress', { count: skippedPresses.count })] : [])];
         try {
-          await send(owner.chatId, deps.t('skipped', { items: items.join(', ') }));
+          await send(owner.chatId, 'skipped', { items: items.join(', ') });
         } catch (error) {
           deps.onError?.(error);
         }
@@ -195,12 +197,12 @@ export function createRouter(deps: RouterDeps): Router {
     command(name, handler) {
       commands.set(name.toLowerCase(), handler);
     },
-    button(text, action, group) {
+    button(text, action, group, style) {
       prune();
       let id = randomBytes(9).toString('base64url');
       while (buttons.has(id)) id = randomBytes(9).toString('base64url');
       buttons.set(id, { action, createdAt: now(), group });
-      return { text, data: id };
+      return { text, data: id, ...(style ? { style } : {}) };
     },
     forgetGroup(group) {
       for (const [id, entry] of buttons) if (entry.group === group) buttons.delete(id);

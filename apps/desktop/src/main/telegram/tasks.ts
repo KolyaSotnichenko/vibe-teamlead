@@ -9,7 +9,8 @@
  */
 
 import type { BriefProposal } from '../../shared/types';
-import type { BotApi } from './bot-api';
+import type { BotApi, MessageText } from './bot-api';
+import { type Html, html, htmlText, joinHtml, quote, text as plainHtml } from './format';
 import type { Translate } from './i18n';
 import type { Router } from './router';
 import type { TelegramSettingsStore } from './settings-store';
@@ -43,11 +44,12 @@ const reasonOf = (error: unknown) => (error instanceof Error ? error.message : S
 
 export function registerTaskCommands(deps: TaskCommandDeps): void {
   const { router, t, actions } = deps;
+  const h = htmlText(t);
   let counter = 0;
   let analysing = false;
   const group = (kind: string) => `${kind}:${++counter}`;
-  const send = async (chatId: number, text: string, options?: Parameters<BotApi['sendMessage']>[2]) => deps.api()?.sendMessage(chatId, text, options);
-  const edit = async (chatId: number, messageId: number | undefined, text: string) => {
+  const send = async (chatId: number, text: MessageText, options?: Parameters<BotApi['sendMessage']>[2]) => deps.api()?.sendMessage(chatId, text, options);
+  const edit = async (chatId: number, messageId: number | undefined, text: MessageText) => {
     if (messageId !== undefined) await deps.api()?.editMessageText(chatId, messageId, text);
   };
   const background = (work: () => Promise<void>) => {
@@ -67,7 +69,7 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
       try {
         created = await actions.create(target.id, text);
       } catch (error) {
-        await send(chatId, t('task.createFailed', { reason: reasonOf(error) }));
+        await send(chatId, h('task.createFailed', { reason: reasonOf(error) }));
         return;
       }
       const buttons = group('task');
@@ -77,26 +79,27 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
           router.forgetGroup(buttons);
           try {
             const outcome = await actions.start(created.taskId, target.id);
-            await edit(chat, messageId, t(outcome === 'queued' ? 'task.queued' : 'task.started', { title: created.title }));
+            await edit(chat, messageId, h(outcome === 'queued' ? 'task.queued' : 'task.started', { title: created.title }));
           } catch (error) {
-            await edit(chat, messageId, t('task.startFailed', { reason: reasonOf(error) }));
+            await edit(chat, messageId, h('task.startFailed', { reason: reasonOf(error) }));
           }
         },
         buttons,
       );
-      await send(chatId, t('task.created', { project: target.name, title: created.title }), { buttons: [[start]] });
+      await send(chatId, h('task.created', { project: target.name, title: created.title }), { buttons: [[start]] });
     });
 
   const showProposal = async (chatId: number, target: { id: string; name: string }, proposal: BriefProposal) => {
-    const titles = proposal.tasks.slice(0, LISTED_TASKS).map((task) => `• ${task.title}`);
-    if (proposal.tasks.length > LISTED_TASKS) titles.push(`+${proposal.tasks.length - LISTED_TASKS}`);
-    const text = [
-      t('brief.title', { title: proposal.title, project: target.name }),
-      ...(proposal.summary ? [proposal.summary] : []),
-      '',
-      t('brief.counts', { epics: proposal.epics.length, tasks: proposal.tasks.length, questions: proposal.openQuestions.length }),
+    const titles = proposal.tasks.slice(0, LISTED_TASKS).map((task) => html`• ${task.title}`);
+    if (proposal.tasks.length > LISTED_TASKS) titles.push(html`+${proposal.tasks.length - LISTED_TASKS}`);
+    const text = joinHtml([
+      h('brief.title', { title: proposal.title, project: target.name }),
+      ...(proposal.summary ? [quote(proposal.summary, { expandable: true })] : []),
+      plainHtml(''),
+      h('brief.counts', { epics: proposal.epics.length, tasks: proposal.tasks.length, questions: proposal.openQuestions.length }),
       ...titles,
-    ].join('\n');
+    ]);
+    const withNote = (note: Html) => html`${text}\n\n${note}`;
     if (!proposal.tasks.length) {
       await send(chatId, text);
       return;
@@ -106,13 +109,13 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
       t('brief.create', { count: proposal.tasks.length }),
       async ({ chatId: chat, messageId }) => {
         router.forgetGroup(buttons);
-        await edit(chat, messageId, `${text}\n\n${t('brief.creating')}`);
+        await edit(chat, messageId, withNote(h('brief.creating')));
         background(async () => {
           const result = await actions.createBriefTasks(target.id, proposal.briefId, proposal.tasks).catch((error) => ({ success: false, error: reasonOf(error), count: 0 }));
           await edit(
             chat,
             messageId,
-            `${text}\n\n${result.success ? t('brief.created', { count: result.count ?? proposal.tasks.length }) : t('brief.createFailed', { reason: result.error ?? '' })}`,
+            withNote(result.success ? h('brief.created', { count: result.count ?? proposal.tasks.length }) : h('brief.createFailed', { reason: result.error ?? '' })),
           );
         });
       },
@@ -122,7 +125,7 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
       t('brief.discard'),
       async ({ chatId: chat, messageId }) => {
         router.forgetGroup(buttons);
-        await edit(chat, messageId, `${text}\n\n${t('brief.discarded')}`);
+        await edit(chat, messageId, withNote(h('brief.discarded')));
       },
       buttons,
     );
@@ -130,16 +133,17 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
   };
 
   const analyse = (chatId: number, target: { id: string; name: string }, text: string) => {
-    if (analysing) return send(chatId, t('brief.busy'));
+    if (analysing) return send(chatId, h('brief.busy'));
     analysing = true;
     background(async () => {
       try {
-        await send(chatId, t('brief.analysing'));
+        await deps.api()?.sendChatAction(chatId, 'typing').catch(() => undefined);
+        await send(chatId, h('brief.analysing'));
         let proposal: BriefProposal;
         try {
           proposal = await actions.analyseBrief(target.id, text);
         } catch (error) {
-          await send(chatId, t('brief.failed', { reason: reasonOf(error) }));
+          await send(chatId, h('brief.failed', { reason: reasonOf(error) }));
           return;
         }
         await showProposal(chatId, target, proposal);
@@ -150,14 +154,14 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
   };
 
   /** The choice for a text: create a task, and for a long one analyse it as a brief */
-  const offer = async (chatId: number, text: string, prompt: string) => {
+  const offer = async (chatId: number, text: string, prompt: Html) => {
     const buttons = group('offer');
     const pick = (action: (chat: number, target: { id: string; name: string }) => unknown) =>
       async ({ chatId: chat, messageId }: { chatId: number; messageId?: number }) => {
         router.forgetGroup(buttons);
         const target = project();
         if (!target) {
-          await edit(chat, messageId, t('task.chooseProject'));
+          await edit(chat, messageId, h('task.chooseProject'));
           return;
         }
         await edit(chat, messageId, prompt);
@@ -170,16 +174,16 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
 
   router.command('task', async ({ chatId, args }) => {
     if (!args) {
-      await send(chatId, t('task.usage'));
+      await send(chatId, h('task.usage'));
       return;
     }
     const target = project();
     if (!target) {
-      await send(chatId, t('task.chooseProject'));
+      await send(chatId, h('task.chooseProject'));
       return;
     }
     if (args.length > LONG_TEXT) {
-      await offer(chatId, args, t('task.longOffer'));
+      await offer(chatId, args, h('task.longOffer'));
       return;
     }
     createTask(chatId, target, args);
@@ -188,7 +192,7 @@ export function registerTaskCommands(deps: TaskCommandDeps): void {
   router.onText(async (text, { chatId }) => {
     const trimmed = text.trim();
     if (!trimmed) return false;
-    await offer(chatId, trimmed, trimmed.length > LONG_TEXT ? t('task.longOffer') : t('task.offer'));
+    await offer(chatId, trimmed, trimmed.length > LONG_TEXT ? h('task.longOffer') : h('task.offer'));
     return true;
   });
 }

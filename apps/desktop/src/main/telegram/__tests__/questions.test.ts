@@ -66,10 +66,16 @@ describe('agent questions in Telegram', () => {
     const { bot, flow, buttonsOf } = setup();
     await flow.asked(pending());
     expect(bot.sent).toHaveLength(1);
-    expect(bot.sent[0].text).toContain('Add login');
-    expect(bot.sent[0].text).toContain('Which database?');
-    expect(bot.sent[0].text).toContain('SQLite: Simple');
-    expect(buttonsOf().map((row) => row[0].text)).toEqual(['★ Postgres (Recommended)', 'SQLite', 'Other…']);
+    expect(bot.sent[0].html).toBe(true);
+    expect(bot.sent[0].text).toBe(
+      '❓ <b>Agent asks</b> · Add login\n\n<b>Which database?</b>\n' +
+        '<blockquote expandable><b>Postgres (Recommended)</b>: Scales\n<b>SQLite</b>: Simple</blockquote>',
+    );
+    expect(buttonsOf().map((row) => [row[0].text, row[0].style])).toEqual([
+      ['★ Postgres (Recommended)', 'primary'],
+      ['SQLite', undefined],
+      ['Other…', undefined],
+    ]);
   });
 
   it('a press answers through the shared path and edits the message', async () => {
@@ -78,7 +84,7 @@ describe('agent questions in Telegram', () => {
     const sqlite = buttonsOf()[1][0];
     await router.handleBatch([pressUpdate(sqlite.data, { messageId: bot.sent[0].messageId })]);
     expect(answer).toHaveBeenCalledWith('q1', { 'Which database?': 'SQLite' });
-    expect(bot.edits[0]).toMatchObject({ messageId: bot.sent[0].messageId, text: expect.stringContaining('Answered: SQLite') });
+    expect(bot.edits[0]).toMatchObject({ messageId: bot.sent[0].messageId, text: expect.stringContaining('✅ Answered: <b>SQLite</b>') });
     expect(bot.last().text).toBe(t('question.answeredHere'));
   });
 
