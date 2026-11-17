@@ -15,6 +15,7 @@ import type {
 import type { IPCResult } from '../../shared/types';
 import { isSubscriptionToken, toClaudeAuth } from '../ai/claude-code/auth';
 import {
+  cleanCredential,
   clearClaudeKey,
   getClaudeCredentialStatus,
   resolveClaudeCredential,
@@ -35,7 +36,7 @@ function errorMessage(error: unknown): string {
 async function testConnection(input: ClaudeConnectionTestInput = {}): Promise<ClaudeConnectionTestResult> {
   const slot = input.slot ?? (isSubscriptionModeEnabled() ? 'subscription' : 'api');
   const stored = resolveClaudeCredentialFor(slot);
-  const key = input.apiKey?.trim() || stored.key;
+  const key = (input.apiKey && cleanCredential(input.apiKey)) || stored.key;
   const subscription = slot === 'subscription';
   if (key && subscription !== isSubscriptionToken(key)) {
     return { ok: false, error: subscription ? 'This is not a subscription token (sk-ant-oat…)' : 'This is a subscription token; choose "Claude subscription" to use it' };

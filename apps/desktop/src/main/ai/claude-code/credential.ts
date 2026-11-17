@@ -114,8 +114,16 @@ export function loadStoredClaudeKey(): string | undefined {
 }
 
 /** Save a key into its slot (a subscription token goes to the subscription slot); the other slot is kept. */
+/**
+ * A key or token as pasted, without the spaces and line breaks a terminal can put inside it
+ * (PowerShell wraps the long `claude setup-token` output): keys never contain whitespace.
+ */
+export function cleanCredential(key: string): string {
+  return key.replace(/\s+/g, '');
+}
+
 export function saveClaudeKey(key: string): ClaudeCredentialSlot {
-  const value = key.trim();
+  const value = cleanCredential(key);
   if (!value) throw new Error('The key is empty');
   const { stored, unreadable } = readStored();
   const slot: ClaudeCredentialSlot = isSubscriptionToken(value) ? 'subscription' : 'api';
@@ -169,8 +177,9 @@ function readBaseUrlSetting(): string | undefined {
 function resolveFor(subscriptionMode: boolean): ResolvedClaudeCredential {
   const stored = loadStored();
   return pickClaudeCredential({
-    storedKey: stored.apiKey,
-    storedSubscriptionToken: stored.subscriptionToken,
+    // Cleaned here too: a token saved before cleanCredential existed may hold line breaks
+    storedKey: stored.apiKey && cleanCredential(stored.apiKey),
+    storedSubscriptionToken: stored.subscriptionToken && cleanCredential(stored.subscriptionToken),
     baseUrlSetting: readBaseUrlSetting(),
     env: process.env,
     subscriptionMode,

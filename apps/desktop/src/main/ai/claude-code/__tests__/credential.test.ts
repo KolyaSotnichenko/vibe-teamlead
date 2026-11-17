@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeStoredCredential, pickClaudeCredential } from '../credential';
+import { cleanCredential, normalizeStoredCredential, pickClaudeCredential } from '../credential';
 import { pickLegacyClaudeCredential, stripLegacySettings } from '../credential-migration';
 
 describe('pickClaudeCredential', () => {
@@ -128,5 +128,16 @@ describe('stripLegacySettings', () => {
 
   it('reports no change for clean settings', () => {
     expect(stripLegacySettings({ theme: 'dark' }).changed).toBe(false);
+  });
+});
+
+describe('cleanCredential', () => {
+  it('drops line breaks and spaces a terminal put inside a long token (Windows PowerShell wraps it)', () => {
+    expect(cleanCredential('  sk-ant-oat01-abc\r\ndef\n ghi \t')).toBe('sk-ant-oat01-abcdefghi');
+  });
+
+  it('leaves a clean key as it is, and an empty one empty', () => {
+    expect(cleanCredential('sk-ant-api03-xyz')).toBe('sk-ant-api03-xyz');
+    expect(cleanCredential(' \n ')).toBe('');
   });
 });
