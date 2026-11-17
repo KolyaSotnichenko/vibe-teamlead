@@ -19,7 +19,7 @@ This file is written when you press the button in Context → Project Index (to 
 
 A symbol graph: functions, classes, who calls whom, what a change will affect.
 - **Indexing:** automatic before an agent starts, separately for each worktree (`.codegraph/`, not committed to git). The graph updates while the agent edits code.
-- **Usage:** agents query it (`codegraph_search`, `callers`, `impact`…) instead of grep and reading files blindly. This is faster and cheaper.
+- **Usage:** agents ask it with one tool, `codegraph_explore`: name the symbols, files or the question, and it returns their source with line numbers, who calls them, what they call and what a change would affect. This replaces grep and reading files blindly, so it is faster and cheaper.
 - **Where to see it:** in the task logs, the lines "CodeGraph: index ready / attached" and calls to its tools.
 
 ## Memory — the agents' experience

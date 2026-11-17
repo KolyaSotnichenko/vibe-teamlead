@@ -3,7 +3,7 @@
 | Що | Для чого |
 |---|---|
 | **Інструменти Vibe Teamlead** (`mcp__vibe-teamlead__*`) | Статус підзадач, прогрес збірки, запис відкриттів і підводних каменів, статус QA, пам'ять (`search_memory`, `remember`), рендер діаграм (`render_diagram`: draw.io/Mermaid → PNG). |
-| **CodeGraph** (`mcp__codegraph__*`) | Карта коду . |
+| **CodeGraph** (`mcp__codegraph__*`) | Карта коду. |
 | **Context7** | Актуальна документація бібліотек (хостований HTTP-сервер). Допомагає не писати за застарілим API. Опційно з ключем `CONTEXT7_API_KEY`. |
 | **Браузер** (Playwright / Chrome DevTools MCP) | QA перевіряє UI. Запускається лише тоді, коли задача змінила UI-файли. |
 | **Electron MCP** | QA для Electron-застосунків. |
