@@ -17,3 +17,20 @@ export function listenOpenTerminal(handler: (cwd: string) => void): () => void {
   window.addEventListener('open-terminal', onEvent);
   return () => window.removeEventListener('open-terminal', onEvent);
 }
+
+interface TerminalStoreLike {
+  terminals: Array<{ id: string; status: string; projectPath?: string }>;
+  addTerminal: (cwd?: string, projectPath?: string) => unknown;
+  setActiveTerminal: (id: string | null) => void;
+}
+
+/**
+ * Opens the terminal; the store refuses past the project's limit. Then the project's latest
+ * live terminal is selected instead, and the caller tells the owner why nothing new opened.
+ */
+export function openProjectTerminal(cwd: string, projectPath: string | undefined, store: TerminalStoreLike): 'opened' | 'limit' {
+  if (store.addTerminal(cwd, projectPath)) return 'opened';
+  const latest = store.terminals.filter((t) => t.projectPath === projectPath && t.status !== 'exited').at(-1);
+  if (latest) store.setActiveTerminal(latest.id);
+  return 'limit';
+}

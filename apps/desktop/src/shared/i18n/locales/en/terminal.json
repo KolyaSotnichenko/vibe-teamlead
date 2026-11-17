@@ -98,5 +98,6 @@
   "dropToInsertPath": "Drop to insert path",
   "openIdeFailed": "Failed to open IDE",
   "couldNotLaunchIde": "Could not launch IDE",
+  "limitReached": "Terminal limit reached ({{max}} per project). Close one to open another; your latest terminal is selected.",
   "defaultTitle": "Terminal"
 }
