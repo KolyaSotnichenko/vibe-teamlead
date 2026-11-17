@@ -62,6 +62,8 @@ export interface SerializableSessionConfig {
   allowSubscriptionLogin?: boolean;
   /** Security QA (Strix) settings, resolved in the main process */
   securityQa?: import('../security/strix').StrixSettings;
+  /** Strix's own model and credentials (resolved in the main process); absent: same as agents */
+  securityQaLlm?: import('../security/strix-llm').StrixLlmChoice;
   /** Helper subagents: on/off and their model (resolved in the main process) */
   subagents?: import('../claude-code/subagents').SubagentSettings;
   /** When the architect runs (resolved in the main process from the app settings) */

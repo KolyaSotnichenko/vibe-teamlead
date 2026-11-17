@@ -6,6 +6,7 @@ import type { GatewayPrices } from './usage';
 import type { NotificationSettings, MemoryEmbeddingProvider } from './project';
 import type { ChangelogFormat, ChangelogAudience, ChangelogEmojiLevel } from './changelog';
 import type { SupportedLanguage } from '../constants/i18n';
+import type { StrixProviderFields, StrixProviderId } from '../constants/strix-providers';
 
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
@@ -292,6 +293,12 @@ export interface AppSettings {
   securityQaFailOn?: 'critical' | 'high' | 'medium' | 'low';
   /** Spend cap per scan, USD */
   securityQaMaxBudgetUsd?: number;
+  /** Model for Strix: its provider (default "agents": the agents' Claude key and QA model) */
+  securityQaProvider?: StrixProviderId;
+  /** LiteLLM model id for Strix, `provider/model` (not used with "agents") */
+  securityQaModel?: string;
+  /** The provider's non-secret fields (endpoint, region, project...); secrets are stored encrypted elsewhere */
+  securityQaProviderFields?: StrixProviderFields;
   /**
    * When the architect designs before the planner: for every task, only for
    * tasks the complexity assessment rates complex (default), or never.

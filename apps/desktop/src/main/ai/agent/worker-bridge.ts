@@ -32,7 +32,7 @@ import { isFormatOnEditEnabled } from '../claude-code/format-setting';
 import { isMemoryEnabled } from '../memory/memory-setting';
 import { isLspEnabled } from '../claude-code/lsp-setting';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
-import { readStrixSettings } from '../security/strix-setting';
+import { readStrixLlmChoice, readStrixSettings } from '../security/strix-setting';
 import { readSubagentSettings } from '../claude-code/subagent-setting';
 import { readArchitectMode } from '../orchestration/architect-setting';
 import { loadDesignSystem } from '../design/design-system';
@@ -162,6 +162,7 @@ export class WorkerBridge extends EventEmitter {
         bundled,
         allowSubscriptionLogin: config.session.allowSubscriptionLogin ?? isSubscriptionModeEnabled(),
         securityQa: config.session.securityQa ?? readStrixSettings(),
+        securityQaLlm: config.session.securityQaLlm ?? readStrixLlmChoice(),
         subagents: config.session.subagents ?? readSubagentSettings(),
         architectMode: config.session.architectMode ?? readArchitectMode(),
         formatOnEdit: config.session.formatOnEdit ?? isFormatOnEditEnabled(),

@@ -78,6 +78,9 @@ vi.mock('../../../project-store', () => ({ projectStore: { getProject: () => und
 // The architect setting is read from the app settings file
 const { readArchitectMode } = vi.hoisted(() => ({ readArchitectMode: vi.fn(() => 'never') }));
 vi.mock('../../orchestration/architect-setting', () => ({ readArchitectMode }));
+const strixChoice = { provider: 'openrouter', model: 'openrouter/z-ai/glm-5.3', fields: {}, secrets: { apiKey: 'k' } };
+const { readStrixLlmChoice } = vi.hoisted(() => ({ readStrixLlmChoice: vi.fn(() => strixChoice) }));
+vi.mock('../../security/strix-setting', () => ({ readStrixLlmChoice, readStrixSettings: () => ({ enabled: false, scanMode: 'quick', failOn: 'high', maxBudgetUsd: 5 }) }));
 
 // The format-and-lint switch is read from the app settings file
 const { isFormatOnEditEnabled } = vi.hoisted(() => ({ isFormatOnEditEnabled: vi.fn(() => false) }));
@@ -163,6 +166,12 @@ describe('WorkerBridge', () => {
       config.session.architectMode = 'always';
       bridge.spawn(config);
       expect((getWorker() as unknown as { workerData: { session: { architectMode?: string } } }).workerData.session.architectMode).toBe('always');
+    });
+
+    it("fills Strix's model and credentials from Settings → Security QA", () => {
+      bridge.spawn(createConfig());
+      expect((getWorker() as unknown as { workerData: { session: { securityQaLlm?: unknown } } }).workerData.session.securityQaLlm).toEqual(strixChoice);
+      expect(readStrixLlmChoice).toHaveBeenCalled();
     });
 
     it('fills the format-and-lint switch from the app settings unless the session sets it', () => {

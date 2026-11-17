@@ -1267,6 +1267,8 @@ async function runSecurityQa(
       model: await phaseModel(session.specDir, 'qa', session.modelId),
       apiKey: session.apiKey,
       baseURL: session.baseURL,
+      // Or its own model and credentials (Settings → Security QA)
+      llm: session.securityQaLlm,
       diffBase,
       signal: abortController.signal,
       // Into the task's Validation log too: the phase view reads the log file
