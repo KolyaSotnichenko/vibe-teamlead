@@ -43,7 +43,7 @@ The document and tokens can be edited right in the tab. The model for this agent
 - Files are kept in `.vibe-teamlead/design/references/`. Each digest is a small design-agent session, counted in the token usage.
 
 **How agents use it:**
-- **Builders** (spec writer, architect, planner, coder, QA fixer) get the design system and the "anti-slop" rules in their prompt.
+- **Builders** (spec writer, architect, planner, coder, QA fixer) get the design system and the "anti-slop" rules in their prompt. A coder subtask that touches no UI file, and QA of a task that changed no UI file, get only the path to the document (to read if they do change UI): every turn re-sends the prompt.
 - **UI projects without a design system** still get the "anti-slop" rules and an instruction to follow the styles already in the code.
 
 **The check in QA:**
