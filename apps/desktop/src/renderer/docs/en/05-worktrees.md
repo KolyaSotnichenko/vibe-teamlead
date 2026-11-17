@@ -2,8 +2,45 @@
 
 - **A separate copy for each task.** Each task works in its own git worktree in `.vibe-teamlead/worktrees/tasks/<spec-id>/`, on the branch `vibe-teamlead/<spec-id>`. Your working copy is not touched until you decide to merge.
 - **Protection in the agents themselves.** Agents are confined to their copy: path checks and the list of forbidden bash commands run as Claude Code hooks, so an agent cannot write outside the worktree or run dangerous commands.
-- **Merge** moves the changes into the main branch (the one selected in the project settings, otherwise detected automatically). It is a real git merge: a merge commit in the main branch with the task's whole history. Merges of one project go one at a time, so with several tasks each waits its turn and builds on the one before. Before merging, the app brings the latest main branch into the task, in the task's folder, so your project stays as it was. If the main branch moved, an agent checks the result with the project's own typecheck and tests, even when git merged it without a conflict, and resolves any conflicts with the whole project to read. It uses the model from Settings → Agent Settings → Utility (feature models). If it changed nothing, the merge goes ahead. If it changed code, you see the listed files and its report in the task first: open a file to see what changes in the project and how the result differs from the task, then merge or cancel. Cancelling puts the task back as it was. If the agent gives up, for example because two tasks want things that can't both be true, the task goes back as it was, nothing reaches the project, and the app says why. An agent that runs for 30 minutes without finishing is stopped, so it can't hold up the tasks behind it. You can close the task's window at any time: the card shows that the task is merging, that the merge needs checking, or that it failed, and the task says why. The app then runs the project's checks itself, and a failure the merge brought puts the task back, whatever the agent reported. The app also refuses if your uncommitted changes are in the way. The same happens when the task's folder has uncommitted changes QA didn't review: the app names them, and you commit them on the task branch or discard them. The project's git hooks don't run for this commit, because the branch could bring its own. The task's worktree and branch are deleted only after the commit.
+- **Merge** moves the changes into the main branch (the one selected in the project settings, otherwise detected automatically). It is a real git merge: a merge commit in the main branch with the task's whole history. See "Merge in detail" below.
 - **Stage-only merge.** There is a mode where the changes are only staged in the index, so you can commit them manually.
 - **Create PR** pushes the task branch and opens a PR through `gh`. It needs a GitHub remote (`origin`); without one the button is disabled.
 - **Cleanup is safe.** It never deletes a branch that is not a task branch. A leftover folder whose subfolders deny deletion through an access control list (macOS) is cleared of those entries and removed.
 - **Dependencies.** A new worktree gets the project's dependency folders (`node_modules`, a Python venv and the like): linked, recreated or copied from the main checkout, as the project index says. On Windows links are junctions, and a file that can't be linked is copied; long paths are enabled for worktrees.
+
+## Merge in detail
+
+### Order and preparation
+
+- Merges of one project go one at a time, so with several tasks each waits its turn and builds on the one before.
+- Before merging, the app brings the latest main branch into the task, in the task's folder, so your project stays as it was.
+
+### If the main branch moved
+
+- An agent checks the result with the project's own typecheck and tests, even when git merged it without a conflict.
+- It resolves any conflicts with the whole project to read.
+- It uses the model from Settings → Agent Settings → Utility (feature models).
+- If it changed nothing, the merge goes ahead.
+- If it changed code, you see the listed files and its report in the task first. Open a file to see what changes in the project and how the result differs from the task, then merge or cancel.
+- Cancelling puts the task back as it was.
+- If the agent gives up, for example because two tasks want things that can't both be true, the task goes back as it was, nothing reaches the project, and the app says why.
+- An agent that runs for 30 minutes without finishing is stopped, so it can't hold up the tasks behind it.
+
+### While it runs
+
+- You can close the task's window at any time.
+- The card shows that the task is merging, that the merge needs checking, or that it failed, and the task says why.
+
+### After the merge
+
+- The app runs the project's checks itself, and a failure the merge brought puts the task back, whatever the agent reported.
+
+### When the app refuses
+
+- The app refuses if your uncommitted changes are in the way.
+- The same happens when the task's folder has uncommitted changes QA didn't review. The app names them, and you commit them on the task branch or discard them.
+
+### Hooks and cleanup
+
+- The project's git hooks don't run for this commit, because the branch could bring its own.
+- The task's worktree and branch are deleted only after the commit.
