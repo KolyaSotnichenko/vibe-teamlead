@@ -576,4 +576,23 @@ describe('the main-run-failed event (Telegram)', () => {
     off();
     expect(heard).toEqual([{ runId: 20, url: 'https://github.com/o/r/actions/runs/20' }]);
   });
+
+  it('names the failed jobs and carries the end of the first failed log', async () => {
+    const heard: Array<{ failedJobs?: string[]; logTail?: string }> = [];
+    const off = appEvents.on('main-run-failed', (e) => void heard.push({ failedJobs: e.failedJobs, logTail: e.logTail }));
+    await handleMainRun(project(), run(30), makeDeps());
+    off();
+    expect(heard[0].failedJobs).toEqual(['build']);
+    expect(heard[0].logTail?.split('\n')).toEqual(Array.from({ length: 20 }, (_, i) => `line ${281 + i}`));
+  });
+
+  it('is still emitted, without jobs, when GitHub fails to list them', async () => {
+    const heard: Array<{ failedJobs?: string[] }> = [];
+    const off = appEvents.on('main-run-failed', (e) => void heard.push({ failedJobs: e.failedJobs }));
+    const deps = makeDeps();
+    deps.client.jobs.mockRejectedValueOnce(new Error('GitHub down'));
+    await handleMainRun(project(), run(31), deps).catch(() => undefined);
+    off();
+    expect(heard).toEqual([{ failedJobs: undefined }]);
+  });
 });

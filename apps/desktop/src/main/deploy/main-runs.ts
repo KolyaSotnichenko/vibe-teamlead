@@ -31,6 +31,8 @@ export interface MainRunDeps {
 export const WATCH_INTERVAL_MS = 60_000;
 export const WATCH_LIMIT_MS = 60 * 60_000;
 const LOG_TAIL_LINES = 200;
+/** The end of a failed log the app event carries (a chat message, not a task) */
+const EVENT_LOG_LINES = 20;
 /** Job and run names in headings and the title: one line, capped */
 const NAME_CHARS = 100;
 const RUNS_PER_POLL = 30;
@@ -186,25 +188,49 @@ export async function handleMainRun(
     }
     // Another task is on it already (a base fix, or a task about this workflow): no second one. The
     // run stays unhandled, so it is asked about again and gets its task once that one closes.
-    // Said once per run (a covered run is asked about again later)
-    if (!announced.has(lock)) {
+    // The app event (Telegram) is said once per run, with the failed jobs and the end of a log.
+    const announce = (failedJobs?: string[], logTail?: string) => {
+      if (announced.has(lock)) return;
       announced.add(lock);
-      appEvents.emit('main-run-failed', { projectId: project.id, runId: run.id, name: clipLine(run.name || run.workflowPath, NAME_CHARS), url: run.htmlUrl });
-    }
+      appEvents.emit('main-run-failed', {
+        projectId: project.id,
+        runId: run.id,
+        name: clipLine(run.name || run.workflowPath, NAME_CHARS),
+        url: run.htmlUrl,
+        ...(failedJobs ? { failedJobs } : {}),
+        ...(logTail ? { logTail } : {}),
+      });
+    };
     const tasks = deps.tasks.getTasks(project.id);
-    if (coveredByOpenTask(run, tasks, readReadiness(project.path)?.workflow?.path)) return 'open';
-    const jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
+    const covered = coveredByOpenTask(run, tasks, readReadiness(project.path)?.workflow?.path);
+    if (covered && announced.has(lock)) return 'open';
+    let jobs: Awaited<ReturnType<MainRunDeps['client']['jobs']>>;
+    try {
+      jobs = (await deps.client.jobs(repo.owner, repo.repo, run.id)).filter((j) => j.conclusion && FAILED_JOB.has(j.conclusion));
+    } catch (error) {
+      announce();
+      throw error;
+    }
     const sections: string[] = [];
+    let firstTail: string | undefined;
     for (const job of jobs) {
       let tail = '(the log is not available)';
       try {
         const text = await deps.client.jobLog(repo.owner, repo.repo, job.id);
-        if (text) tail = prepareLog(text, LOG_TAIL_LINES);
+        if (text) {
+          tail = prepareLog(text, LOG_TAIL_LINES);
+          firstTail ??= prepareLog(text, EVENT_LOG_LINES);
+        }
       } catch {
         // keep the placeholder
       }
       sections.push(`### ${clipLine(job.name, NAME_CHARS)}\n\n\`\`\`\n${defuse(tail)}\n\`\`\``);
     }
+    announce(
+      jobs.map((j) => clipLine(j.name, NAME_CHARS)),
+      firstTail,
+    );
+    if (covered) return 'open';
     const name = clipLine(run.name || run.workflowPath, NAME_CHARS);
     const description = [
       `The ${name} run on main failed.`,
