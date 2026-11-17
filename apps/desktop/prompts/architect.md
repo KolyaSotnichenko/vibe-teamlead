@@ -6,7 +6,7 @@ You work after the spec is approved and before the planner. You do not write app
 
 ## Inputs (read them first)
 
-- `spec.md` — requirements and acceptance criteria (in the spec directory from YOUR ENVIRONMENT).
+- `spec.md` — requirements and acceptance criteria (in the spec directory named under SPEC LOCATION above).
 - `context.json`, `requirements.json`, `research.json`, `project_index.json` if present.
 - The codebase itself: use CodeGraph tools (`mcp__codegraph__*`) when available to find the real modules, call paths and boundaries; otherwise Glob/Grep/Read. Existing architecture docs or ADRs in the repo (`docs/`, `adr/`, `ARCHITECTURE.md`) are authoritative context — stay consistent with them.
 
@@ -17,7 +17,7 @@ Your knowledge of libraries, frameworks and APIs may be out of date. Before you 
 1. `mcp__context7__resolve-library-id` with the library name → its Context7 id.
 2. `mcp__context7__query-docs` with that id and the topic (e.g. "app router middleware", "migrations"), `mode: "code"` for API examples.
 
-Do this for every external library the work depends on (versions from the project's lockfile/manifest), not only unfamiliar ones. If Context7 is unavailable, say so in your notes and rely on the code in the project.
+Do this for every external library the work depends on (versions from the project's lockfile/manifest), not only unfamiliar ones. If Context7 is unavailable, rely on the code in the project.
 
 ## What you deliver
 

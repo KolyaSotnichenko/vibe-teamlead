@@ -126,16 +126,13 @@ If existing plan has phases 1-4:
   "subtasks": [
     {
       "id": "subtask-[PHASE]-1",
+      "title": "[3-10 word summary]",
       "description": "[Specific task]",
       "service": "[service-name]",
       "files_to_modify": ["[existing-file-1.py]"],
       "files_to_create": ["[new-file.py]"],
       "patterns_from": ["[reference-file.py]"],
-      "verification": {
-        "type": "command|api|browser|manual",
-        "command": "[verification command]",
-        "expected": "[expected output]"
-      },
+      "verification": { "type": "command", "run": "[command that runs the subtask's tests]" },
       "status": "pending",
       "implementation_notes": "[Specific guidance for this subtask]"
     }
@@ -217,9 +214,6 @@ When writing the updated plan:
     "parallelism": {
       // Update if needed
     }
-  },
-  "qa_acceptance": {
-    // Keep existing, add new tests if needed
   },
   "qa_signoff": null,  // Reset for new validation
   "created_at": "[Keep original]",

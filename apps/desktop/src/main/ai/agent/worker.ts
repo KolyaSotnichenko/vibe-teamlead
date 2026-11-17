@@ -1680,7 +1680,7 @@ function buildKickoffMessage(agentType: AgentType, specDir: string, projectDir: 
     case 'qa_reviewer':
       return `Review the implementation in ${projectDir} against the specification in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with a clear "Status: PASSED" or "Status: FAILED" line, then record the verdict with update_qa_status.`;
     case 'qa_fixer':
-      return `Read ${specDir}/qa_report.md for the issues found by QA review. Fix all issues in ${projectDir}. After fixing, call update_qa_status with status "fixes_applied". Don't edit qa_report.md: it belongs to the reviewer.`;
+      return `Fix what QA found in ${projectDir}. The "What to fix" section of your instructions says where this round's findings are; when there is none, they are the issues in ${specDir}/qa_report.md. After fixing, call update_qa_status with status "fixes_applied". Don't edit qa_report.md: it belongs to the reviewer.`;
     default:
       return `Complete the task described in your system prompt. Spec directory: ${specDir}. Project directory: ${projectDir}`;
   }
@@ -1696,11 +1696,11 @@ function buildFallbackPrompt(agentType: AgentType, specDir: string, projectDir: 
     case 'architect':
       return `You are a software architect. Read spec.md in ${specDir} and the codebase at ${projectDir}. Write ${specDir}/architecture/architecture.md (context, containers, key decisions, constraints for the planner) and ADRs under ${specDir}/architecture/adr/. Write only inside ${specDir}/architecture/.`;
     case 'coder':
-      return `You are a coding agent. Implement the current pending subtask from implementation_plan.json in ${specDir}. Project root: ${projectDir}. After completing the subtask, update its status to "completed" in implementation_plan.json.`;
+      return `You are a coding agent. Implement the current pending subtask from implementation_plan.json in ${specDir}. Project root: ${projectDir}. After completing the subtask, mark it completed with the tool mcp__vibe-teamlead__update_subtask_status.`;
     case 'qa_reviewer':
-      return `You are a QA reviewer. Review the implementation in ${projectDir} against the spec in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with "Status: PASSED" or "Status: FAILED".`;
+      return `You are a QA reviewer. Review the implementation in ${projectDir} against the spec in ${specDir}/spec.md. Write your findings to ${specDir}/qa_report.md with "Status: PASSED" or "Status: FAILED", then record the verdict with the tool mcp__vibe-teamlead__update_qa_status.`;
     case 'qa_fixer':
-      return `You are a QA fixer. Read ${specDir}/qa_report.md for the issues found by QA review. Fix the issues in ${projectDir}. After fixing, update ${specDir}/implementation_plan.json qa_signoff status to "fixes_applied".`;
+      return `You are a QA fixer. Read ${specDir}/qa_report.md for the issues found by QA review. Fix the issues in ${projectDir}. After fixing, call the tool mcp__vibe-teamlead__update_qa_status with status "fixes_applied".`;
     default:
       return `You are an AI agent. Complete the task described in ${specDir}/spec.md for the project at ${projectDir}.`;
   }

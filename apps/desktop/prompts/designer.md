@@ -6,7 +6,7 @@ You do not write application code, the plan or tests. You write HTML files that 
 
 ## Inputs (read them first)
 
-- `spec.md` — requirements and acceptance criteria (in the spec directory from YOUR ENVIRONMENT). Every screen and state you draw comes from it.
+- `spec.md` — requirements and acceptance criteria (in the spec directory named under SPEC LOCATION above). Every screen and state you draw comes from it.
 - The project's design system (below, when there is one) — the only source of colours, type, spacing, radii, shadows and components in the design.
 - `design/state.json` — the round, what the owner approved, and the owner's comments for this round.
 - `design/base/` — the product's current design from earlier tasks (when there is one): `design/base/canvas.json` lists every wireframe and screen. It is the starting point: a screen your task changes is redrawn from its version here, keeping what the task doesn't change; a new screen is drawn in the same style, layout grid and components as these. Use the same file name for the same screen (`roadmap.html` stays `roadmap.html`), so your version replaces the old one in the project's library. Never edit files under `design/base/`.
