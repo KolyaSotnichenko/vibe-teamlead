@@ -29,6 +29,7 @@ import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
 import { removeBrokenBrowserServers } from './browser-servers';
 import { recordTurnLimit } from './turn-limits';
+import { autoCompactWindow, compactSettings } from './compaction';
 import { buildSecurityHooks } from './security-hooks';
 import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-tasks';
 import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
@@ -183,6 +184,9 @@ export function buildEnv(config: SessionConfig, host: { platform?: 'darwin' | 'w
   // One MCP result (a page snapshot, a docs page) is re-sent on every later turn: Claude Code's
   // default allows 25K tokens; a larger result is saved to a file the agent can read in parts
   env.MAX_MCP_OUTPUT_TOKENS = String(MAX_MCP_OUTPUT_TOKENS);
+  // Long designer / coder / QA-fixer runs compact well before the 1M window (compaction.ts)
+  const compactWindow = autoCompactWindow(config.agentType);
+  if (compactWindow) env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(compactWindow);
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
   env.DISABLE_TELEMETRY = '1';
   return env;
@@ -318,6 +322,9 @@ export function buildQueryOptions(
     env: buildEnv(config),
   };
 
+  // What the summary keeps when that session compacts (a PreCompact hook prints it)
+  const compaction = compactSettings(config.agentType, config.subtaskId);
+  if (compaction) options.settings = compaction;
   if (config.thinkingLevel) options.effort = config.thinkingLevel;
   if (hasSubagents) options.agents = config.agents;
   if (plugins.length) options.plugins = plugins;
