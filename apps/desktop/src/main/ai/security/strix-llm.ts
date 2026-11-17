@@ -50,7 +50,7 @@ const LABELS: Record<StrixProviderId, string> = {
   chatgpt: 'ChatGPT subscription',
 };
 
-const WHERE = 'Settings → Security QA';
+const WHERE = 'Settings → Agent Settings → Security QA';
 
 /** LiteLLM model id for an Anthropic model. */
 export function strixModel(model: string): string {

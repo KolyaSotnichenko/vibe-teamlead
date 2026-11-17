@@ -27,7 +27,7 @@ describe('resolveStrixLlm', () => {
   it('same as agents: skipped without a key or with a subscription token, pointing to another provider', () => {
     for (const apiKey of [undefined, 'sk-ant-oat01-x']) {
       const r = resolveStrixLlm(choice({}), { model: 'm', apiKey });
-      expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/Anthropic API key.*Settings → Security QA/) });
+      expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/Anthropic API key.*Settings → Agent Settings → Security QA/) });
     }
   });
 
@@ -122,7 +122,7 @@ describe('resolveStrixLlm', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toMatch(reason);
-      expect(r.reason).toMatch(/Settings → Security QA/);
+      expect(r.reason).toMatch(/Settings → Agent Settings → Security QA/);
     }
   });
 });
