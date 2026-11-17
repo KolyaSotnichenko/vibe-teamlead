@@ -33,7 +33,8 @@ import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
 import { languagesFromIndex, lspLogLine, lspServersFor, scanProjectLanguages } from '../claude-code/lsp-registry';
 import { defaultClaudeConfigDir } from '../claude-code/runner';
 import { findOnPath } from '../../platform/exec';
-import { qaSkills, subtaskSkills, FRONTEND_DESIGN_SKILL, GSAP_SKILLS } from '../claude-code/skills';
+import { designerSkills, qaSkills, subtaskSkills } from '../claude-code/skills';
+import { designPointer, designScope } from '../design/design-scope';
 import type { ToolContext } from '../tools/types';
 import type { SecurityProfile } from '../security/bash-validator';
 import type {
@@ -270,7 +271,8 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
             message,
             true,
             undefined,
-            [FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS],
+            // GSAP's skills only when the project animates with it (the prompt says CSS otherwise)
+            designerSkills(animatesWithGsap(session.projectDir)),
             { model: design.model, thinking: design.thinking, logPhase: 'design' },
           );
           const ok = result.outcome === 'completed' || result.outcome === 'max_steps';
@@ -588,6 +590,8 @@ async function assemblePrompt(
   memoryFocus?: string,
   /** The coder's subtask: a subtask that touches no UI files gets a pointer instead of the whole design system */
   subtask?: { filesToCreate?: string[]; filesToModify?: string[] },
+  /** QA: false when the task changed no UI file, so QA gets a pointer instead of the whole design system */
+  taskTouchesUi?: boolean,
 ): Promise<string> {
   const basePrompt = loadRolePrompt(promptName)
     ?? buildFallbackPrompt(promptName as AgentType, session.specDir, session.projectDir);
@@ -606,14 +610,14 @@ async function assemblePrompt(
 
   // QA agents get the validation guide for this kind of app (browser, Electron, API, DB).
   const qaTools =
-    promptName === 'qa_reviewer' || promptName === 'qa_fixer' ? getQaToolsSection(projectCapabilities(session)) : '';
+    promptName === 'qa_reviewer' || promptName === 'qa_fixer' ? getQaToolsSection(projectCapabilities(session), { taskTouchesUi }) : '';
 
   const prompt = injectContext(qaTools ? `${basePrompt}\n\n${qaTools}` : basePrompt, {
     specDir: session.specDir,
     projectDir: session.projectDir,
     projectInstructions: cachedProjectInstructions,
   });
-  const design = designSection(promptName, session, subtask);
+  const design = designSection(promptName, session, subtask, taskTouchesUi);
   // The task's approved wireframes or screens (design before code), for the roles that build or check to them
   const taskDesign = designReferencePrompt(promptName, session.specDir, readDesignCanvas(session.specDir).frames, readDesignState(session.specDir));
   const memory = await memorySection(session, memoryFocus, phaseOfPrompt(promptName));
@@ -627,17 +631,17 @@ function designSection(
   promptName: string,
   session: SerializableSessionConfig,
   subtask?: { filesToCreate?: string[]; filesToModify?: string[] },
+  taskTouchesUi?: boolean,
 ): string {
   const qa = promptName === 'qa_reviewer';
   if (!qa && !DESIGN_BUILDERS.has(promptName)) return '';
   const info = session.designSystem;
   if (!info) return '';
-  // Every coder turn re-sends the system prompt: an API or data subtask doesn't need the whole UI document
-  const files = [...(subtask?.filesToCreate ?? []), ...(subtask?.filesToModify ?? [])];
-  if (promptName === 'coder' && files.length > 0 && !files.some(isUiFile)) {
-    return info.exists && info.markdownPath
-      ? `## Design system\n\nThis subtask's files are not UI files. If you do change UI, read \`${info.markdownPath}\` first and follow it exactly.`
-      : '';
+  // Every turn re-sends the system prompt: an API or data subtask, or QA of a task that changed
+  // no UI file, doesn't need the whole UI document
+  const subtaskFiles = [...(subtask?.filesToCreate ?? []), ...(subtask?.filesToModify ?? [])];
+  if (designScope(promptName, { subtaskFiles, taskTouchesUi, isUiFile }) === 'pointer') {
+    return designPointer(promptName, info.exists ? info.markdownPath : undefined);
   }
   const caps = projectCapabilities(session);
   const hasUi = caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native;
@@ -1151,7 +1155,9 @@ async function runQualityAssurance(
     committedFiles: (from, to) => listCommittedFiles(session.projectDir, from, to),
 
     generatePrompt: async (agentType, context) => {
-      const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session);
+      // A task that changed no UI file: QA gets a pointer to the design system, not the whole document
+      const touchesUi = await uiChangedSince(() => changedFilesSinceBase(session.projectDir));
+      const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session, undefined, undefined, touchesUi);
       return [prompt, qaRoundSection(agentType, context)].filter(Boolean).join('\n\n');
     },
 

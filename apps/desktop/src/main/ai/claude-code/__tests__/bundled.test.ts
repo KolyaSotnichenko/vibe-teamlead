@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { codegraphMcpServer, excludeIndexFromGit } from '../codegraph';
 import { buildQueryOptions } from '../runner';
-import { FRONTEND_DESIGN_SKILL, GSAP_SKILLS, qaSkills, skillsForAgent, subtaskSkills, UX_REVIEW_SKILL } from '../skills';
+import { designerSkills, FRONTEND_DESIGN_SKILL, GSAP_SKILLS, qaSkills, skillsForAgent, subtaskSkills, UX_REVIEW_SKILL } from '../skills';
 import { PLAYWRIGHT_TOOLS } from '../../config/agent-configs';
 import { isUiFile } from '../../design/design-lint';
 import { type AgentQuestion, buildAskUserHook } from '../user-questions';
@@ -143,6 +143,11 @@ describe('frontend-design for UI subtasks', () => {
     expect(subtaskSkills(['src/api/auth.ts', 'src/api/__tests__/auth.test.ts'], { ...opts, projectHasUi: true })).toEqual([]);
     expect(subtaskSkills([], { ...opts, projectHasUi: true })).toEqual([FRONTEND_DESIGN_SKILL]);
     expect(subtaskSkills([], opts)).toEqual([]);
+  });
+
+  it('gives the designer frontend-design, and the GSAP skills only when the project animates with GSAP', () => {
+    expect(designerSkills(false)).toEqual([FRONTEND_DESIGN_SKILL]);
+    expect(designerSkills(true)).toEqual([FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS]);
   });
 
   it('loads the plugin, adds the skill and says the design system comes first', () => {

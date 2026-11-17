@@ -90,3 +90,12 @@ export function qaSkills(agentType: AgentType, taskTouchesUi: boolean | undefine
 export const UX_REVIEW_INSTRUCTIONS = `
 ## UX review
 This task changed UI. After the acceptance criteria, load the ux-review skill (Skill tool) and follow it: open the pages the task changed in the browser, at 375 and 1280 pixels wide, go through them by keyboard, look at their empty, loading and error states and at how a person reaches them, and check them against its checklists. The project's design system and the spec come first. A problem that stops a person from using the page blocks approval like any other finding; matters of taste go under "UX notes" in qa_report.md.`;
+
+/**
+ * Skills the designer gets: frontend-design, and the GSAP skills only when the project animates
+ * with GSAP. Otherwise their eight listings and the "animation here uses GSAP" section would sit
+ * in every designer turn, and contradict the prompt (CSS transitions when the project has no GSAP). Pure.
+ */
+export function designerSkills(animates: boolean): string[] {
+  return animates ? [FRONTEND_DESIGN_SKILL, ...GSAP_SKILLS] : [FRONTEND_DESIGN_SKILL];
+}

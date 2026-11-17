@@ -255,10 +255,13 @@ function buildSpecLocationHeader(context: PromptContext): string {
  * Mirrors get_mcp_tools_for_project() + tool injection in Python.
  *
  * @param capabilities - Detected project capabilities
+ * @param scope - taskTouchesUi false: the task changed no UI file, so the session has no browser
+ *   tools and the browser, Electron and Tauri guides are left out (every turn re-sends them)
  * @returns Assembled MCP tools documentation string, or empty string
  */
-export function getQaToolsSection(capabilities: ProjectCapabilities): string {
-  const toolFiles = getMcpToolFilesForCapabilities(capabilities);
+export function getQaToolsSection(capabilities: ProjectCapabilities, scope: { taskTouchesUi?: boolean } = {}): string {
+  const uiGuide = (file: string) => /^mcp_tools\/(electron_validation|tauri_validation|playwright_browser)\.md$/.test(file);
+  const toolFiles = getMcpToolFilesForCapabilities(capabilities).filter((file) => scope.taskTouchesUi !== false || !uiGuide(file));
   if (toolFiles.length === 0) return '';
 
   const sections: string[] = [
