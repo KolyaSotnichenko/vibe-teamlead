@@ -56,9 +56,24 @@ const CLAUDE_CODE_TOOLS = new Set([
  * A background command left running keeps the session open until it times
  * out, then wakes the agent for one more full-context turn just to say so.
  */
+const BACKGROUND_STOP = 'Stop each one with TaskStop as soon as you no longer need it, and always before your final report. Killing the process by PID is not enough: the background task stays open, keeps this session alive and wakes you up later for nothing.';
+
 export const BACKGROUND_INSTRUCTIONS = `
 ## Background processes
-Start long-running commands (dev servers, watchers, emulators) with Bash \`run_in_background\` and keep the task id it returns. Stop each one with TaskStop as soon as you no longer need it, and always before your final report. Killing the process by PID is not enough: the background task stays open, keeps this session alive and wakes you up later for nothing.`;
+Start long-running commands (dev servers, watchers, emulators) with Bash \`run_in_background\` and keep the task id it returns. ${BACKGROUND_STOP}`;
+
+/**
+ * For agents that have the app's dev-server tool: a dev server started from
+ * Bash is refused (buildDevServerGuard), so the section must not suggest it.
+ */
+export const BACKGROUND_INSTRUCTIONS_DEV_SERVER_TOOL = `
+## Background processes
+Dev servers go through \`mcp__vibe-teamlead__start_dev_server\`, not Bash: the app keeps them for the task's next sessions and stops them itself, and one started from Bash is refused. Start other long-running commands (watchers, emulators) with Bash \`run_in_background\` and keep the task id it returns. ${BACKGROUND_STOP}`;
+
+/** The background-process section for a session that can run Bash. Pure. */
+export function backgroundInstructions(hasDevServerTool: boolean): string {
+  return hasDevServerTool ? BACKGROUND_INSTRUCTIONS_DEV_SERVER_TOOL : BACKGROUND_INSTRUCTIONS;
+}
 
 /** Every turn re-sends everything so far: fewer turns and smaller results are what make a session cheap. */
 export const CONTEXT_INSTRUCTIONS = `
@@ -215,6 +230,7 @@ export function buildQueryOptions(
   const hasSubagents = !!config.agents && Object.keys(config.agents).length > 0;
   const bundled = config.bundled ?? {};
   const tools = sessionTools(config);
+  const hasDevServerTool = getAgentConfig(config.agentType).appTools?.includes('mcp__vibe-teamlead__start_dev_server') === true;
 
   // Tool-less sessions (plain text generation) get no MCP servers either.
   const mcpServers =
@@ -278,7 +294,7 @@ export function buildQueryOptions(
     skills.includes(FRONTEND_DESIGN_SKILL) ? FRONTEND_DESIGN_INSTRUCTIONS : '',
     skills.includes(UX_REVIEW_SKILL) ? UX_REVIEW_INSTRUCTIONS : '',
     skills.some((s) => s.startsWith('gsap-skills:')) ? GSAP_INSTRUCTIONS : '',
-    tools.includes('Bash') ? BACKGROUND_INSTRUCTIONS : '',
+    tools.includes('Bash') ? backgroundInstructions(hasDevServerTool) : '',
     tools.includes('Bash') ? CONTEXT_INSTRUCTIONS : '',
     browserToolsSection(config.agentType, Object.keys(mcpServers), config.mcpOptions?.projectCapabilities, config.mcpOptions?.taskTouchesUi),
   ]
@@ -308,7 +324,7 @@ export function buildQueryOptions(
       PreToolUse: [
         ...buildSecurityHooks({ ...config.toolContext, agentType: config.agentType }),
         buildAskUserHook(extras.askUser),
-        ...(tools.includes('Bash') && getAgentConfig(config.agentType).appTools?.includes('mcp__vibe-teamlead__start_dev_server') ? [buildDevServerGuard()] : []),
+        ...(tools.includes('Bash') && hasDevServerTool ? [buildDevServerGuard()] : []),
       ],
       ...(postToolUse.length ? { PostToolUse: postToolUse } : {}),
       ...(background ? { PostToolUseFailure: background.PostToolUseFailure, Stop: background.Stop } : {}),

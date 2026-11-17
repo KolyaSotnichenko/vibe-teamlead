@@ -2,7 +2,7 @@ import type { HookInput } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
 
 import { backgroundTaskId, buildBackgroundTaskHooks } from '../background-tasks';
-import { browserToolsSection, buildQueryOptions } from '../runner';
+import { backgroundInstructions, browserToolsSection, buildQueryOptions } from '../runner';
 import type { SessionConfig } from '../../session/types';
 
 const signal = new AbortController().signal;
@@ -114,6 +114,18 @@ describe('dev server guard', () => {
 
   it('leaves other commands alone', async () => {
     expect(await ask('qa_reviewer', 'pnpm test')).not.toContain('start_dev_server');
+  });
+
+  it("doesn't tell an agent to start dev servers with Bash when the guard refuses that", () => {
+    const append = (agentType: string) =>
+      (buildQueryOptions(session(agentType), new AbortController(), { codegraphReady: false }).systemPrompt as { append: string }).append;
+    for (const agentType of ['coder', 'qa_reviewer']) {
+      expect(append(agentType)).toContain('Dev servers go through `mcp__vibe-teamlead__start_dev_server`');
+      expect(append(agentType)).not.toContain('(dev servers, watchers, emulators)');
+      expect(append(agentType)).toContain('TaskStop');
+    }
+    expect(backgroundInstructions(false)).toContain('(dev servers, watchers, emulators)');
+    expect(backgroundInstructions(false)).toContain('TaskStop');
   });
 });
 
