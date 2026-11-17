@@ -40,3 +40,7 @@ Each subagent works in its own context and returns a short report, so the agent'
 While a subagent works, the task card shows how many are working (hover for their names), and in **Logs** the subagent's row has its own tool calls indented under it.
 
 **Settings → Agent Settings → Subagents** turns them off or picks their model, for the helpers and for the agent's own subagents alike. By default they use the agent's own model. A cheaper model is usually enough for searching and running tests, but it must be served by your endpoint (for example, your gateway).
+
+## Long command output
+
+Every turn of an agent re-sends everything before it, so a test run that prints thousands of lines would be paid for again on every later turn. When an agent runs tests, a build, a typecheck, an install or a linter, the whole output is saved to a log in the task's folder (`.vibe-teamlead/specs/<task>/logs/`), and when it is long the agent gets a short version: the exit code, the lines that look like failures with a few lines around them, the last lines, and the log's path, which it reads when it needs more. Short output, and commands the agent filters itself (with `|`, `>` or in the background), are left as they are. The app's own checks before QA and after a merge are not affected.

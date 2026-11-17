@@ -22,9 +22,12 @@ describe("the app's Claude credential in the commands an agent runs", () => {
   });
 
   it('is removed before the command starts: project tests and install scripts never see it', () => {
-    const output = evaluatePreToolUse('Bash', { command: 'npm test', description: 'tests' }, context) as Output;
+    const output = evaluatePreToolUse('Bash', { command: 'node scripts/seed.js', description: 'seed' }, context) as Output;
     expect(output.hookSpecificOutput?.permissionDecision).toBe('allow');
-    expect(output.hookSpecificOutput?.updatedInput).toEqual({ command: `${UNSET}npm test`, description: 'tests' });
+    expect(output.hookSpecificOutput?.updatedInput).toEqual({ command: `${UNSET}node scripts/seed.js`, description: 'seed' });
+    // A test run is also shortened (output-trim.ts), still after the unset
+    const tests = evaluatePreToolUse('Bash', { command: 'npm test' }, context) as Output;
+    expect((tests.hookSpecificOutput?.updatedInput as { command: string }).command.startsWith(UNSET)).toBe(true);
   });
 
   it('leaves the command itself as the agent wrote it, a heredoc included', () => {

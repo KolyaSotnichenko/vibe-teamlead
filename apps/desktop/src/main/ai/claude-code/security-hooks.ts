@@ -35,6 +35,7 @@ import { bashSecurityHook } from '../security/bash-validator';
 import { splitCommandSegments } from '../security/command-parser';
 import { isPathContained } from '../security/path-containment';
 import { labelDockerRuns } from '../../utils/task-containers';
+import { isFloodingCommand, toolLogPath, trimmedCommand } from './output-trim';
 import type { ToolContext } from '../tools/types';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -211,6 +212,9 @@ export function writeRoots(context: ToolContext): string[] {
   return [context.cwd, context.specDir, tmpdir()].filter(Boolean);
 }
 
+/** Numbers the logs of shortened command output within this process */
+let toolLogCount = 0;
+
 /** Exported for unit tests. */
 export function evaluatePreToolUse(
   toolName: string,
@@ -238,7 +242,12 @@ export function evaluatePreToolUse(
     if (context.agentType === 'qa_reviewer' && reviewerBashDenied(command)) {
       return deny(`Only read-only git commands (diff, log, show, status, blame, …) are allowed here, run in the task's folder without -C. ${REVIEWER_RULE}`);
     }
-    const rewritten = withoutClaudeCredentials(labelDockerRuns(command, context.cwd));
+    const labelled = labelDockerRuns(command, context.cwd);
+    // Long test/build/install output goes to a log; the agent gets a bounded summary (output-trim.ts)
+    const shaped = toolInput?.run_in_background !== true && isFloodingCommand(labelled)
+      ? trimmedCommand(labelled, toolLogPath(context.specDir, ++toolLogCount))
+      : labelled;
+    const rewritten = withoutClaudeCredentials(shaped);
     if (rewritten !== command) {
       return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: { ...toolInput, command: rewritten } } };
     }

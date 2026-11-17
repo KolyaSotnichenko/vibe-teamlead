@@ -158,6 +158,12 @@ describe('buildEnv', () => {
       delete process.env.ANTHROPIC_AUTH_TOKEN;
     }
   });
+
+  it('caps what one MCP tool result may put into the context', () => {
+    const env = buildEnv(baseConfig({ claudeConfigDir: '/tmp/vtl' }));
+    expect(Number(env.MAX_MCP_OUTPUT_TOKENS)).toBeGreaterThan(0);
+    expect(Number(env.MAX_MCP_OUTPUT_TOKENS)).toBeLessThan(25_000); // Claude Code's own default
+  });
 });
 
 describe('session summary in the task log', () => {

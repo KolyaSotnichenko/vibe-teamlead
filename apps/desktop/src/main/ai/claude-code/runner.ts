@@ -62,7 +62,7 @@ Start long-running commands (dev servers, watchers, emulators) with Bash \`run_i
 /** Every turn re-sends everything so far: fewer turns and smaller results are what make a session cheap. */
 export const CONTEXT_INSTRUCTIONS = `
 ## Keeping your context small
-Every turn re-sends everything before it. Read files with Read, not cat or sed. Put independent calls (several reads, searches, checks) in one message. Filter what a command prints: never a bare \`ps aux\` or \`lsof\`; pipe test and build logs through \`tail\` or \`grep\`. Leave generated folders (node_modules, dist, .next, build output) out of searches.`;
+Every turn re-sends everything before it. Read files with Read, not cat or sed. Put independent calls (several reads, searches, checks) in one message. Filter what a command prints: never a bare \`ps aux\` or \`lsof\`. Long output of tests, builds, typechecks, installs and linters is saved to a log and shortened for you (exit code, failure lines, the tail, the log's path): run them plainly, and read the log only when the summary is not enough. Leave generated folders (node_modules, dist, .next, build output) out of searches.`;
 
 const QA_AGENTS = new Set(['qa_reviewer', 'qa_fixer']);
 
@@ -134,6 +134,9 @@ const MODEL_ALIAS_ENV = [
   'ANTHROPIC_SMALL_FAST_MODEL',
 ] as const;
 
+/** Tokens one MCP tool result may take (Claude Code's MAX_MCP_OUTPUT_TOKENS) */
+export const MAX_MCP_OUTPUT_TOKENS = 15_000;
+
 /** Claude Code config home owned by Vibe Teamlead (bundled plugins live here, not in ~/.claude). */
 export function defaultClaudeConfigDir(): string {
   return join(homedir(), '.vibe-teamlead', 'claude-code');
@@ -177,6 +180,9 @@ export function buildEnv(config: SessionConfig, host: { platform?: 'darwin' | 'w
   env.CLAUDE_CONFIG_DIR = config.claudeConfigDir ?? defaultClaudeConfigDir();
   // The LSP tool is behind a feature flag in some Claude Code versions; harmless where it isn't
   if (config.lspPluginDir) env.ENABLE_LSP_TOOL = '1';
+  // One MCP result (a page snapshot, a docs page) is re-sent on every later turn: Claude Code's
+  // default allows 25K tokens; a larger result is saved to a file the agent can read in parts
+  env.MAX_MCP_OUTPUT_TOKENS = String(MAX_MCP_OUTPUT_TOKENS);
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
   env.DISABLE_TELEMETRY = '1';
   return env;
