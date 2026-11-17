@@ -42,10 +42,14 @@ export interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery;
 }
 
+/** Telegram colours a button by its style: success green, danger red, primary blue */
+export type ButtonStyle = 'success' | 'danger' | 'primary';
+
 export interface InlineButton {
   text: string;
   /** Callback data (≤ 64 bytes): the router's short id */
   data: string;
+  style?: ButtonStyle;
 }
 
 export interface SendOptions {
@@ -55,7 +59,18 @@ export interface SendOptions {
   forceReply?: boolean;
   /** A short hint shown in the reply field */
   placeholder?: string;
+  /** A message effect (private chats only), e.g. 🎉 */
+  effect?: string;
+  /** Plain text instead of HTML (the fallback when Telegram can't parse it) */
+  plain?: boolean;
 }
+
+export interface EditOptions {
+  buttons?: InlineButton[][];
+  plain?: boolean;
+}
+
+export type ChatAction = 'typing' | 'upload_photo';
 
 export type TelegramErrorKind = 'unauthorized' | 'conflict' | 'rate_limited' | 'network' | 'other';
 
@@ -78,25 +93,31 @@ export interface BotApi {
   getMe(): Promise<TelegramUser>;
   /** Long poll; `timeoutSeconds` 0 answers at once (the first call, to know the connection works) */
   getUpdates(offset: number | undefined, signal?: AbortSignal, timeoutSeconds?: number): Promise<TelegramUpdate[]>;
+  /** Texts and captions are HTML (parse_mode "HTML") unless `plain` */
   sendMessage(chatId: number, text: string, options?: SendOptions): Promise<TelegramMessage>;
   /** Replaces the text; the buttons go unless new ones are given */
-  editMessageText(chatId: number, messageId: number, text: string, options?: { buttons?: InlineButton[][] }): Promise<void>;
+  editMessageText(chatId: number, messageId: number, text: string, options?: EditOptions): Promise<void>;
   answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void>;
   sendPhoto(chatId: number, photo: Buffer, caption?: string, options?: SendOptions): Promise<TelegramMessage>;
-  sendMediaGroup(chatId: number, photos: Buffer[], caption?: string): Promise<TelegramMessage[]>;
+  sendMediaGroup(chatId: number, photos: Buffer[], caption?: string, options?: { plain?: boolean }): Promise<TelegramMessage[]>;
+  /** "typing…" in the chat while a command works (Telegram shows it ≤ 5 s) */
+  sendChatAction(chatId: number, action: ChatAction): Promise<void>;
 }
 
 const API_ROOT = 'https://api.telegram.org';
 
 function markup(options: SendOptions | undefined): Record<string, unknown> | undefined {
   if (options?.buttons) {
-    return { inline_keyboard: options.buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) };
+    return { inline_keyboard: options.buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data, ...(b.style ? { style: b.style } : {}) }))) };
   }
   if (options?.forceReply) {
     return { force_reply: true, ...(options.placeholder ? { input_field_placeholder: options.placeholder } : {}) };
   }
   return undefined;
 }
+
+/** HTML, no link previews */
+const formatting = (plain: boolean | undefined) => ({ ...(plain ? {} : { parse_mode: 'HTML' }), link_preview_options: { is_disabled: true } });
 
 function classify(status: number, body: { error_code?: number; description?: string; parameters?: { retry_after?: number } } | undefined): TelegramApiError {
   const code = body?.error_code ?? status;
@@ -152,13 +173,20 @@ export function createBotApi(token: string, fetchImpl: FetchLike = fetch as Fetc
       send<TelegramUpdate[]>('getUpdates', { ...(offset !== undefined ? { offset } : {}), timeout: timeoutSeconds, allowed_updates: [...ALLOWED_UPDATES] }, signal),
     sendMessage: (chatId, text, options) => {
       const reply_markup = markup(options);
-      return send<TelegramMessage>('sendMessage', { chat_id: chatId, text, ...(reply_markup ? { reply_markup } : {}) });
+      return send<TelegramMessage>('sendMessage', {
+        chat_id: chatId,
+        text,
+        ...formatting(options?.plain),
+        ...(options?.effect ? { message_effect_id: options.effect } : {}),
+        ...(reply_markup ? { reply_markup } : {}),
+      });
     },
     editMessageText: async (chatId, messageId, text, options) => {
       await send('editMessageText', {
         chat_id: chatId,
         message_id: messageId,
         text,
+        ...formatting(options?.plain),
         reply_markup: markup({ buttons: options?.buttons ?? [] }),
       });
     },
@@ -169,12 +197,20 @@ export function createBotApi(token: string, fetchImpl: FetchLike = fetch as Fetc
       const reply_markup = markup(options);
       const fields: Record<string, string> = {};
       if (caption) fields.caption = caption;
+      if (caption && !options?.plain) fields.parse_mode = 'HTML';
       if (reply_markup) fields.reply_markup = JSON.stringify(reply_markup);
       return send<TelegramMessage>('sendPhoto', photoForm(chatId, fields, [{ name: 'photo', data: photo }]));
     },
-    sendMediaGroup: (chatId, photos, caption) => {
-      const media = photos.map((_, i) => ({ type: 'photo', media: `attach://p${i}`, ...(i === 0 && caption ? { caption } : {}) }));
+    sendMediaGroup: (chatId, photos, caption, options) => {
+      const media = photos.map((_, i) => ({
+        type: 'photo',
+        media: `attach://p${i}`,
+        ...(i === 0 && caption ? { caption, ...(options?.plain ? {} : { parse_mode: 'HTML' }) } : {}),
+      }));
       return send<TelegramMessage[]>('sendMediaGroup', photoForm(chatId, { media: JSON.stringify(media) }, photos.map((data, i) => ({ name: `p${i}`, data }))));
+    },
+    sendChatAction: async (chatId, action) => {
+      await send('sendChatAction', { chat_id: chatId, action });
     },
   };
 }

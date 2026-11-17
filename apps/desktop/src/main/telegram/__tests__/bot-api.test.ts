@@ -111,4 +111,33 @@ describe('bot-api', () => {
       ['other', undefined],
     ]);
   });
+  it('sends HTML with previews off, coloured buttons and an effect; plain on request', async () => {
+    const result = { json: { ok: true, result: { message_id: 1, date: 1, chat: { id: 5 } } } };
+    const { fn, calls } = fakeFetch([result, result, { json: { ok: true, result: true } }, { json: { ok: true, result: true } }]);
+    const api = createBotApi('t', fn as never);
+    await api.sendMessage(5, '<b>hi</b>', { buttons: [[{ text: 'Merge', data: 'm', style: 'success' }, { text: 'Later', data: 'l' }]], effect: '5046509860389126442' });
+    expect(calls[0].body).toMatchObject({
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+      message_effect_id: '5046509860389126442',
+      reply_markup: { inline_keyboard: [[{ text: 'Merge', callback_data: 'm', style: 'success' }, { text: 'Later', callback_data: 'l' }]] },
+    });
+    expect((calls[0].body as { reply_markup: { inline_keyboard: Array<Array<Record<string, unknown>>> } }).reply_markup.inline_keyboard[0][1]).not.toHaveProperty('style');
+    await api.sendMessage(5, 'plain', { plain: true });
+    expect(calls[1].body).not.toHaveProperty('parse_mode');
+    await api.editMessageText(5, 1, '<i>x</i>');
+    expect(calls[2].body).toMatchObject({ parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+    await api.sendChatAction(5, 'typing');
+    expect(calls[3].url).toMatch(/\/sendChatAction$/);
+    expect(calls[3].body).toEqual({ chat_id: 5, action: 'typing' });
+  });
+
+  it('captions are HTML too', async () => {
+    const { fn, calls } = fakeFetch([{ json: { ok: true, result: { message_id: 1 } } }, { json: { ok: true, result: [] } }]);
+    const api = createBotApi('t', fn as never);
+    await api.sendPhoto(5, Buffer.from('png'), '<b>t</b>');
+    expect((calls[0].body as FormData).get('parse_mode')).toBe('HTML');
+    await api.sendMediaGroup(5, [Buffer.from('a'), Buffer.from('b')], '<b>t</b>');
+    expect(JSON.parse((calls[1].body as FormData).get('media') as string)[0]).toMatchObject({ caption: '<b>t</b>', parse_mode: 'HTML' });
+  });
 });

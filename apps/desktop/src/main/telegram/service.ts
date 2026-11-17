@@ -179,7 +179,7 @@ export function createTelegramService(deps: TelegramServiceDeps) {
   const startPolling = async () => {
     await stopPolling();
     if (!token) return;
-    api = safeApi(deps.createApi(token), secrets);
+    api = safeApi(deps.createApi(token), secrets, (message) => deps.log?.warn(message));
     pollerState = { connection: 'connecting' };
     const own = createPoller({
       api,
