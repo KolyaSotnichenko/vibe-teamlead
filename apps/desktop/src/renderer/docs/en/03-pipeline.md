@@ -29,9 +29,11 @@ What happens in each phase:
 
 ```mermaid
 flowchart TD
-  G["Gates: gitleaks + OSV-Scanner + Semgrep + design check"] -->|"clear"| R["QA reviewer"]
-  G -->|"findings"| F
-  G -->|"same findings again"| ESC
+  G["Gates: gitleaks + OSV-Scanner + Semgrep"] --> V["App checks: typecheck + tests on a clean copy"]
+  V --> D["Design check"]
+  D -->|"all clear"| R["QA reviewer"]
+  D -->|"findings"| F
+  D -->|"same findings again"| ESC
   R -->|"approved"| OK["Ready for your review"]
   R -->|"issues"| F["QA fixer"]
   F --> G

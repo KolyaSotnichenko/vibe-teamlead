@@ -7,15 +7,19 @@ Vibe Teamlead is a desktop app for macOS and Windows (beta) in which a team of A
 ```mermaid
 flowchart TD
   A["Task or spec document"] --> B["Specification<br/>(AC-1…AC-n)"]
-  B --> C["Architecture<br/>(diagrams, ADR)"]
-  C --> D["Plan<br/>(phases, subtasks)"]
-  D --> E["Code<br/>red → green → refactor"]
-  E --> F["QA<br/>gates + AC check"]
-  F -->|"issues found"| G["QA fixer"]
-  G --> F
-  F -->|"approved"| H["Strix<br/>(pentest, optional)"]
-  H --> I["Your review"]
-  I --> J["Merge or PR"]
+  B --> C["Design<br/>(UI tasks: screens you approve)"]
+  C --> D["Architecture<br/>(complex tasks by default)"]
+  D --> E["Plan<br/>(phases, subtasks)"]
+  E --> F["Code<br/>red → green → refactor"]
+  F --> V["Checks run by the app<br/>(gitleaks, OSV-Scanner, typecheck + tests, design)"]
+  V -->|"clear"| G["QA review<br/>(AC check)"]
+  V -->|"findings"| H
+  G -->|"issues found"| H["QA fixer"]
+  H --> V
+  G -->|"approved"| S["Strix<br/>(pentest, optional)"]
+  S --> R["Your review<br/>(or auto-merge)"]
+  R --> M["Merge or PR"]
+  M --> CI["Push of main → CI"]
 ```
 
 1. **You create a task** (the Create button → New task) or **upload a spec document** (`.docx`, `.md`, `.pdf`, `.txt`; `.rtf` on macOS only). First the spec analyst reads the brief and the project and asks what the brief leaves open, one question at a time, the way the Superpowers brainstorming skill does: each question says what the answer changes, offers a recommended option, and you can always type your own answer, skip, or say "Stop asking and propose". A detailed spec may get one or two questions, a few sentences more. Then it splits the brief into epics and tasks with your answers folded in. The review step shows your answers, its assumptions and the questions left open, and you can edit the tasks before they are created. The switch "Ask me questions first" next to Analyse turns the questions off. Each question left open names the tasks it affects. It goes into those tasks' descriptions, and their spec agent asks it when the task starts, unless it was answered already: every answer you give to an agent of a task from the document is saved with the document (`clarifications.md`), and the other tasks read it there. Questions about a single task come later, from the spec writer, when that task starts.
