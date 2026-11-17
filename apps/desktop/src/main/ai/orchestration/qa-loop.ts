@@ -98,11 +98,11 @@ export function qaRoundSection(agentType: string, context: QAPromptContext): str
     '',
     `A full review already ran at commit ${commit} and its verdict was ${approved ? 'approved' : 'rejected'}. Your first message lists what it found, if anything.`,
     '',
-    `This replaces phases 3 to 7 and the context reading in phase 0. See what changed with \`git diff ${commit} --stat\` and, for new files, \`git status --short\`, then:`,
+    `This narrows the review described above to what changed since then. See what changed with \`git diff ${commit} --stat\` and, for new files, \`git status --short\`, then:`,
     '',
     '- Check that the listed issues are fixed.',
     '- Review the changed code, and re-verify only the acceptance criteria it touches. Keep the other rows of the AC table in `qa_report.md` as they were.',
-    '- Run the whole test command once, plus build and lint if the project has them.',
+    "- The app ran the project's checks again before this session, and your first message has the result: don't run what passed there. Run only what it says it could not check.",
     '- Start a server or a browser only if the changes touch the UI or an API it calls.',
     '- If the diff is empty, run nothing: keep the report and record the same verdict, unless the listed issues say otherwise.',
   ].join('\n');
@@ -680,7 +680,7 @@ export class QALoop extends EventEmitter {
           errorType: 'missing_implementation_plan_update',
           errorMessage: errorMsg,
           consecutiveErrors,
-          expectedAction: 'You MUST update implementation_plan.json with a qa_signoff object containing status: approved or status: rejected',
+          expectedAction: 'Record the verdict with the tool mcp__vibe-teamlead__update_qa_status (status "approved" or "rejected"). It writes qa_signoff into implementation_plan.json; a verdict written only in the report or the reply is not seen.',
         };
 
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {

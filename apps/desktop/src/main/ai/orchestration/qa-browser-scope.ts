@@ -1,7 +1,7 @@
 /**
  * Whether a QA session needs browser tools. The Playwright / Chrome DevTools
  * servers put twenty-odd tool schemas in every turn and start a browser, and
- * the reviewer's own rule (Phase 4.0) is that visual verification applies only
+ * the reviewer's own rule is that visual verification applies only
  * when the task changed UI files. So the servers start only then; when the
  * changed files can't be listed, they stay on as before.
  */

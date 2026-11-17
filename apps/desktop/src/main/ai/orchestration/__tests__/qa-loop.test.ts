@@ -1522,7 +1522,11 @@ describe('QALoop', () => {
       const text = qaRoundSection('qa_reviewer', { ...context, lastReview });
       expect(text).toContain('git diff abc123');
       expect(text).toContain('git status --short');
-      expect(text).toMatch(/whole test/i);
+      // The app re-runs the project's checks before every round: the reviewer doesn't run them a second time
+      expect(text).toContain("don't run what passed there");
+      expect(text).not.toMatch(/whole test/i);
+      // The reviewer's prompt has no numbered phases to refer to
+      expect(text).not.toMatch(/phases? \d/i);
       expect(text).toMatch(/server|browser/i);
       expect(text).not.toContain('Raw hex');
       expect(qaRoundData('qa_reviewer', { ...context, lastReview })).toContain('Raw hex');

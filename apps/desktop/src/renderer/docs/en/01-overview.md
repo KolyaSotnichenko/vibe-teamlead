@@ -28,7 +28,7 @@ flowchart TD
 3. **Architecture** (for complex tasks by default; the **Architect** setting can turn it on for every task or off). The architect writes `architecture.md`, decisions in ADR format, and draw.io and Mermaid diagrams. It renders each diagram and fixes it until it is clean.
 4. **Plan.** The planner splits the work into phases and subtasks. Each subtask states which ACs it covers and which test must fail first.
 5. **Code.** The coder works in an isolated copy of the repository (git worktree) using TDD: a failing test first, then the code, then refactoring. Each subtask ends with a commit.
-6. **QA.** First the hard gates: gitleaks (secrets) and OSV-Scanner (vulnerable dependencies). Then the QA reviewer matches each AC to a test, runs the tests, checks the UI in a browser and writes a report. If there are issues, the QA fixer fixes them and QA runs again.
+6. **QA.** First the hard gates: gitleaks (secrets), OSV-Scanner (vulnerable dependencies) and Semgrep when it is installed. The app also runs the project's typecheck and tests itself. Then the QA reviewer checks that each AC has a test that really proves it, reviews the changed code, checks the UI in a browser and writes a report. It runs only the checks the app could not run. If there are issues, the QA fixer fixes them and QA runs again.
 7. **Strix** (if enabled): a pentest of the changed code in Docker.
 8. **Your review.** You look through the changes in the task's Workspace and decide: merge into the main branch, create a PR, or discard.
 

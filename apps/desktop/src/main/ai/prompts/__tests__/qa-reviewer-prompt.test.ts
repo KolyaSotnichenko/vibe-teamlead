@@ -6,7 +6,9 @@ const reviewer = readFileSync(resolve(__dirname, '../../../../../prompts/qa_revi
 
 describe('QA reviewer prompt', () => {
   it("builds on what the app already ran: reviewers kept starting databases to run the same tests", () => {
-    expect(reviewer).toMatch(/WHAT THE APP ALREADY RAN/);
+    expect(reviewer).toMatch(/## What the app already ran/);
+    // The old prompt also said "Run ALL tests" further down, against this section
+    expect(reviewer).not.toMatch(/Run ALL tests|MUST run available test suites/);
     expect(reviewer).toMatch(/Don't run them again/);
   });
 
@@ -19,7 +21,9 @@ describe('QA reviewer prompt', () => {
   });
 
   it("doesn't loosen what a review is for", () => {
-    expect(reviewer).toMatch(/Acceptance Criteria Coverage \(MANDATORY\)/);
+    expect(reviewer).toMatch(/Every acceptance criterion has a test that proves it/);
+    expect(reviewer).toMatch(/## Acceptance Criteria Coverage/);
+    expect(reviewer).not.toMatch(/\{\{BASE_BRANCH\}\}/);
     expect(reviewer).toMatch(/You are the last line of defense/);
     expect(reviewer).toMatch(/destructive/i);
   });
