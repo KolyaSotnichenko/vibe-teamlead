@@ -47,6 +47,7 @@ export function createHookProxy(
     get linearConnectionStatus() { return hookRef.current.linearConnectionStatus; },
     get isCheckingLinear() { return hookRef.current.isCheckingLinear; },
     get handleInitialize() { return hookRef.current.handleInitialize; },
+    get hasUnsavedChanges() { return hookRef.current.hasUnsavedChanges; },
     get handleSave() { return hookRef.current.handleSave; },
   };
 }

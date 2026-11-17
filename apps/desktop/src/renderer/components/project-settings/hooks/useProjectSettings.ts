@@ -69,7 +69,15 @@ export interface UseProjectSettingsReturn {
 
   // Actions
   handleInitialize: () => Promise<void>;
-  handleSave: (onClose: () => void) => Promise<void>;
+  /** True when project settings or an environment change are not saved yet. */
+  hasUnsavedChanges: () => boolean;
+  /** Saves what changed (nothing when nothing did); onClose runs after a successful save. */
+  handleSave: (onClose?: () => void) => Promise<ProjectSaveResult>;
+}
+
+export interface ProjectSaveResult {
+  ok: boolean;
+  error: string | null;
 }
 
 export function useProjectSettings(
@@ -278,28 +286,49 @@ export function useProjectSettings(
     }
   };
 
-  const handleSave = async (onClose: () => void) => {
+  const settingsChanged = () => JSON.stringify(settings) !== JSON.stringify(project.settings);
+  // An environment change is saved at once; it is still pending only when that save failed
+  const envChanged = () =>
+    committedEnvConfigRef.current !== null &&
+    JSON.stringify(committedEnvConfigRef.current) !== JSON.stringify(envConfig);
+
+  const hasUnsavedChanges = () => settingsChanged() || envChanged();
+
+  const handleSave = async (onClose?: () => void): Promise<ProjectSaveResult> => {
+    const saveSettingsToo = settingsChanged();
+    const saveEnvToo = envChanged();
+    if (!saveSettingsToo && !saveEnvToo) {
+      onClose?.();
+      return { ok: true, error: null };
+    }
+
     setIsSaving(true);
     setError(null);
 
+    const fail = (message: string): ProjectSaveResult => {
+      setError(message);
+      return { ok: false, error: message };
+    };
+
     try {
-      const success = await updateProjectSettings(project.id, settings);
-      if (!success) {
-        setError('Failed to save settings');
-        return;
+      if (saveSettingsToo) {
+        const success = await updateProjectSettings(project.id, settings);
+        if (!success) return fail('Failed to save settings');
       }
 
-      if (envConfig) {
-        const envResult = await window.electronAPI.updateProjectEnv(project.id, envConfig);
-        if (!envResult.success) {
-          setError(envResult.error || 'Failed to save environment config');
-          return;
-        }
+      if (saveEnvToo && committedEnvConfigRef.current) {
+        const pending = committedEnvConfigRef.current;
+        const envResult = await window.electronAPI.updateProjectEnv(project.id, pending);
+        if (!envResult.success) return fail(envResult.error || 'Failed to save environment config');
+        setEnvError(null);
+        setEnvConfig(pending);
+        setProjectEnvConfig(project.id, pending);
       }
 
-      onClose();
+      onClose?.();
+      return { ok: true, error: null };
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      return fail(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsSaving(false);
     }
@@ -380,6 +409,7 @@ export function useProjectSettings(
     linearConnectionStatus,
     isCheckingLinear,
     handleInitialize,
+    hasUnsavedChanges,
     handleSave
   };
 }
