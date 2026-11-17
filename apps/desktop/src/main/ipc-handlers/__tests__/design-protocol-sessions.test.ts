@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({ BrowserWindow: vi.fn(), ipcMain: { handle: vi.fn() }, protocol: { handle: vi.fn() } }));
+vi.mock('../../app-logger', () => ({ appLog: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn() } }));
 vi.mock('../../agent', () => ({ AgentManager: vi.fn() }));
 vi.mock('../task/execution-handlers', () => ({ startTask: vi.fn() }));
 vi.mock('../task/shared', () => ({ findTaskAndProject: vi.fn(() => ({})) }));

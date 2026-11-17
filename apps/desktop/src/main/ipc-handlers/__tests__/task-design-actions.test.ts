@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() }, BrowserWindow: class {}, protocol: { handle: vi.fn() } }));
 const spec = vi.hoisted(() => ({ dir: '' }));
+vi.mock('../../app-logger', () => ({ appLog: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn() } }));
 vi.mock('../task/workspace-handlers', () => ({ resolveSpecDir: () => spec.dir }));
 vi.mock('../task/shared', () => ({
   findTaskAndProject: () => ({ task: { id: 't', status: 'human_review', reviewReason: 'design_review' }, project: { id: 'p', settings: { designMode: 'full', designApproval: 'owner' } } }),
