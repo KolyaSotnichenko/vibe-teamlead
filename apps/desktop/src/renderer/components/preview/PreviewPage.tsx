@@ -17,6 +17,7 @@ import { AddressNotice } from './AddressNotice';
 import { NotesPanel } from './NotesPanel';
 import { LogsPanel } from './LogsPanel';
 import { MailPanel } from './MailPanel';
+import { RunningDoc, useRunningDoc } from './RunningDoc';
 import { notesImages, notesTask } from './notes-task';
 import { createTask, startTaskOrQueue, submitReview } from '../../stores/task-store';
 import { usePreviewSession } from './usePreviewSession';
@@ -45,6 +46,8 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   const [width, setWidth] = useState<PreviewWidth>(null);
   const [side, setSide] = useState<PreviewSide>(null);
   const { status, boxRef } = usePreviewSession(project.id, !editing && saved.length > 0, task?.id);
+  // How to run it by hand: read again when the preview fails or comes up, the moments it is shown
+  const runningDoc = useRunningDoc(project.id, task?.id, status?.stage === 'failed' || status?.stage === 'ready' ? status.stage : null);
 
   useEffect(() => {
     if (!editing || saved.length) return;
@@ -89,12 +92,20 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
         side={side}
         onSide={setSide}
         uxReview={!task}
+        howToRun={runningDoc?.exists === true}
       />
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
       )}
       {ready && status.addressIssues && status.addressIssues.length > 0 && (
-        <div className="px-4 pt-2"><AddressNotice projectId={project.id} issues={status.addressIssues} services={saved} /></div>
+        <div className="px-4 pt-2">
+          <AddressNotice projectId={project.id} issues={status.addressIssues} services={saved} />
+          {side !== 'running' && (
+            <div className="mt-2 max-h-64 overflow-auto border border-border bg-background p-3">
+              <RunningDoc projectId={project.id} doc={runningDoc} />
+            </div>
+          )}
+        </div>
       )}
       <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 justify-center bg-muted">
@@ -105,6 +116,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
                 <div className="space-y-3">
                   <p role="alert" className="text-sm font-semibold text-destructive">{status.message ?? t('preview.failed')}</p>
                   {status.logTail && <pre className="max-h-96 overflow-auto border border-border p-3 font-mono text-xs">{status.logTail}</pre>}
+                  <RunningDoc projectId={project.id} doc={runningDoc} />
                 </div>
               ) : (
                 <EmptyState title={t(`preview.stage.${status?.stage ?? 'worktree'}`)} body={status?.message ?? t('preview.startingBody')} />
@@ -131,6 +143,11 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       {side === 'mail' && (
         <aside aria-label={t('preview.toolbar.mail')} className="w-96 shrink-0 border-l border-border bg-background">
           <MailPanel projectId={project.id} mail={status?.mail} reason={status?.mailReason} />
+        </aside>
+      )}
+      {side === 'running' && runningDoc?.exists && (
+        <aside aria-label={t('preview.toolbar.running')} className="w-96 shrink-0 overflow-auto border-l border-border bg-background p-4">
+          <RunningDoc projectId={project.id} doc={runningDoc} />
         </aside>
       )}
       {side === 'ux' && !task && (

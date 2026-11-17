@@ -12,9 +12,9 @@ export const PREVIEW_WIDTHS = [375, 768, 1280, null] as const;
 export type PreviewWidth = (typeof PREVIEW_WIDTHS)[number];
 
 /** What the side panel shows, or null when it is closed */
-export type PreviewSide = 'notes' | 'ux' | 'logs' | 'mail' | null;
+export type PreviewSide = 'notes' | 'ux' | 'logs' | 'mail' | 'running' | null;
 
-export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide, uxReview = true }: {
+export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide, uxReview = true, howToRun = false }: {
   url?: string;
   width: PreviewWidth;
   onWidth: (width: PreviewWidth) => void;
@@ -26,6 +26,8 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
   onSide: (side: PreviewSide) => void;
   /** The UX review reviews main's preview, so a task's preview has none */
   uxReview?: boolean;
+  /** The project has RUNNING.md: a button shows it */
+  howToRun?: boolean;
 }) {
   const { t } = useTranslation(['tasks']);
   const [address, setAddress] = useState(url ?? '');
@@ -75,6 +77,11 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
       {uxReview && (
         <Button variant={side === 'ux' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'ux'} onClick={() => onSide(side === 'ux' ? null : 'ux')}>
           {t('preview.toolbar.ux')}
+        </Button>
+      )}
+      {howToRun && (
+        <Button variant={side === 'running' ? 'default' : 'outline'} size="sm" aria-pressed={side === 'running'} onClick={() => onSide(side === 'running' ? null : 'running')}>
+          {t('preview.toolbar.running')}
         </Button>
       )}
       <Button variant="ghost" size="sm" onClick={onEditServices}>{t('preview.toolbar.services')}</Button>

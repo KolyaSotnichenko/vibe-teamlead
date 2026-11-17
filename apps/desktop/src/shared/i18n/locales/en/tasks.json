@@ -1129,7 +1129,8 @@
       "ux": "UX review",
       "notes": "Notes",
       "logs": "Logs",
-      "mail": "Mail"
+      "mail": "Mail",
+      "running": "How to run"
     },
     "services": {
       "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's files. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
@@ -1207,6 +1208,15 @@
       "unreachableAny": "The page can't reach its backend: a request to {{path}} came back {{result}}. Most often the project names the backend's address as a fixed localhost port; read it from a variable in .env.example and the preview points it at the right port.",
       "createTask": "Create a task to fix it",
       "taskCreated": "Task created, in Planning"
+    },
+    "running": {
+      "title": "How to run",
+      "intro": "From RUNNING.md in the project. Run the commands yourself in a terminal; the app types nothing for you.",
+      "openTerminal": "Open a terminal here",
+      "truncated": "RUNNING.md is longer than shown here; open it in the project for the rest.",
+      "missing": "The project has no RUNNING.md yet, so nothing says how to run it by hand. An agent can write it: it reads the project, changes no code and checks each command it writes down.",
+      "createTask": "Create a task: write RUNNING.md",
+      "taskCreated": "Task created. It is in Planning."
     }
   },
   "looseEnds": {

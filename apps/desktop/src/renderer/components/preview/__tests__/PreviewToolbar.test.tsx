@@ -18,4 +18,14 @@ describe('PreviewToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.signOut' }));
     expect(onNavigate).toHaveBeenCalledWith({ action: 'signOut' });
   });
+
+  it('has a "How to run" button only when the project has RUNNING.md', () => {
+    const onSide = vi.fn();
+    const props = { width: null, onWidth: vi.fn(), onNavigate: vi.fn(), onReset: vi.fn(), onEditServices: vi.fn(), disabled: true, side: null, onSide };
+    const { rerender } = render(<PreviewToolbar {...props} />);
+    expect(screen.queryByRole('button', { name: 'preview.toolbar.running' })).not.toBeInTheDocument();
+    rerender(<PreviewToolbar {...props} howToRun />);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.running' }));
+    expect(onSide).toHaveBeenCalledWith('running');
+  });
 });
