@@ -22,6 +22,7 @@ import { type UsageAPI, createUsageAPI } from './usage-api';
 import { createToolsCheckAPI } from './tools-check-api';
 import { type TelegramAPI, createTelegramAPI } from './telegram-api';
 import { type QueueAPI, createQueueAPI } from './queue-api';
+import { type StrixAPI, createStrixAPI } from './strix-api';
 import type { ToolsCheckAPI } from '../../shared/types/tools-check';
 
 export interface ElectronAPI extends
@@ -58,6 +59,8 @@ export interface ElectronAPI extends
   telegram: TelegramAPI;
   /** The queue pause */
   queue: QueueAPI;
+  /** Security QA's own secrets (Settings → Security QA) */
+  strix: StrixAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -81,7 +84,8 @@ export const createElectronAPI = (): ElectronAPI => ({
   deploy: createDeployAPI(),
   usage: createUsageAPI(),
   telegram: createTelegramAPI(),
-  queue: createQueueAPI()
+  queue: createQueueAPI(),
+  strix: createStrixAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts

@@ -790,6 +790,8 @@ export interface ElectronAPI {
     setPaused: (paused: boolean) => Promise<boolean>;
     onPausedChange: (callback: (paused: boolean) => void) => () => void;
   };
+  /** Security QA's own secrets (Settings → Security QA) */
+  strix: import('./strix').StrixAPI;
 }
 
 /** Platform information exposed via contextBridge for platform-specific behavior */

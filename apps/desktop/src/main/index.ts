@@ -81,6 +81,8 @@ import { getAppLanguage, initAppLanguage } from './app-language';
 import { createQuitGuard, quitPrompt } from './quit-guard';
 import { getTelegramService, initTelegram, stopTelegram } from './telegram';
 import { registerTelegramHandlers } from './ipc-handlers/telegram-handlers';
+import { registerStrixHandlers } from './ipc-handlers/strix-handlers';
+import { strixSecretStore } from './ai/security/strix-setting';
 import { readSettingsFile, writeSettingsFile } from './settings-utils';
 import { migrateLegacyClaudeCredential } from './ai/claude-code/credential-migration';
 import { resolveClaudeAuth } from './ai/claude-code/credential';
@@ -600,6 +602,9 @@ app.whenReady().then(() => {
 
   // Setup IPC handlers
   setupIpcHandlers(agentManager, terminalManager, () => mainWindow);
+
+  // Security QA: Strix's own secrets (Settings → Security QA)
+  registerStrixHandlers(strixSecretStore, () => mainWindow);
 
   // Telegram bot (Settings → Telegram): off until a token is saved
   registerTelegramHandlers(getTelegramService);

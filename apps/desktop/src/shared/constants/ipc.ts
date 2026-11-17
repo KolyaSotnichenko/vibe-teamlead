@@ -41,6 +41,12 @@ export const IPC_CHANNELS = {
   TELEGRAM_SET_NOTIFICATIONS: 'telegram:setNotifications',
   TELEGRAM_SET_DIGEST: 'telegram:setDigest',
   TELEGRAM_STATUS_CHANGED: 'telegram:statusChanged',  // Event: the bot's status changed (main -> renderer)
+
+  // Security QA: Strix's own secrets (go in, never out: only which are saved)
+  STRIX_SECRETS_STATUS: 'strix:secretsStatus',
+  STRIX_SECRET_SAVE: 'strix:saveSecret',
+  STRIX_SECRET_CLEAR: 'strix:clearSecret',
+  STRIX_PICK_CREDENTIALS_FILE: 'strix:pickCredentialsFile',  // Vertex AI service-account JSON
   TASK_REVIEW: 'task:review',
   TASK_UPDATE_STATUS: 'task:updateStatus',
   TASK_RECOVER_STUCK: 'task:recoverStuck',

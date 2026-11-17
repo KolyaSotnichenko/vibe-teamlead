@@ -265,6 +265,13 @@ const browserMockAPI: ElectronAPI = {
     setPaused: async () => false,
     onPausedChange: () => () => undefined,
   },
+  // Security QA's own secrets: none in the browser preview
+  strix: {
+    getSecretsStatus: async () => ({}),
+    saveSecret: async () => ({ success: false as const, error: 'unavailable' }),
+    clearSecret: async () => ({ success: true as const, data: {} }),
+    pickCredentialsFile: async () => null,
+  },
 
   // External tools check
   tools: toolsMock,
