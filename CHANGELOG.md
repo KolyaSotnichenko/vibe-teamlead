@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.50 - 2026-11-17
+
+- Design pictures were never taken: the offscreen window that pictures a frame couldn't load it, so design approvals reached Telegram without screens or wireframes, and QA compared the build with the design without pictures. They're taken now, and a failed picture is logged.
+- Telegram: formatted messages with emoji markers (❓ question, 👀 review, ✅ merged with 🎉, ❌ failed, ⚠️ stuck, 🔴 CI, 🎨 design, ☀️ digest), coloured buttons (green Merge and Approve, red Stop all, blue for the recommended answer), details in quotes that open with a tap, "typing…" while a command works. Text from tasks is escaped, and secrets are redacted over the whole message.
+
 ## 2.0.0-beta.49 - 2026-11-17
 
 - Security QA (Strix) gets its own model and key (Settings → Agent Settings → Security QA), so it can run while agents use a Claude subscription. Providers: same as agents (default), OpenRouter and Vercel AI Gateway (Strix recommends GLM-5.3 there), Anthropic, OpenAI, DeepSeek, Moonshot (Kimi), Azure OpenAI, AWS Bedrock, Google Vertex AI, local models (Ollama, LM Studio) and a ChatGPT subscription. Each shows only its own fields; frontier OpenAI, Anthropic and Gemini models need the provider's cyber access program, which the settings say. Keys are encrypted by the operating system and kept out of logs.
