@@ -372,6 +372,10 @@ cat context.json | jq '.files_to_reference'
 # Compare new code to patterns: codegraph_explore on the pattern's symbol and on the new one
 ```
 
+### 6.2.1: RUNNING.md
+
+If the change adds or changes how the project is installed, configured or started (a service, env var, port, migration, Docker dependency, sign-in flow), check `RUNNING.md` at the project root against it: new env vars are in `.env.example` and in `RUNNING.md`, and its commands, ports and URLs match the code. Stale or missing (when the task set up something runnable) → a Minor issue; it doesn't block sign-off on its own. A real secret in it is Critical.
+
 ### 6.3: Document Findings
 
 ```

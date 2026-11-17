@@ -23,4 +23,9 @@ describe('QA reviewer prompt', () => {
     expect(reviewer).toMatch(/You are the last line of defense/);
     expect(reviewer).toMatch(/destructive/i);
   });
+
+  it('checks RUNNING.md against the change, as a minor issue: stale run instructions do not block sign-off', () => {
+    expect(reviewer).toMatch(/RUNNING\.md/);
+    expect(reviewer).toMatch(/RUNNING\.md[^\n]*Minor/);
+  });
 });

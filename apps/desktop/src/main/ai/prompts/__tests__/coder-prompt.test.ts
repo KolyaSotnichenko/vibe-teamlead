@@ -18,4 +18,11 @@ describe('coder prompt', () => {
     expect(coder).toMatch(/Test First \(MANDATORY\)/);
     expect(coder).toMatch(/Never edit a test to make it pass/);
   });
+
+  it('keeps RUNNING.md up to date in the same task: the preview falls back to it for projects it cannot run', () => {
+    expect(coder).toMatch(/### RUNNING\.md/);
+    for (const section of ['Prerequisites', 'Setup', 'Database', 'Start', 'Signing in locally', 'Common problems']) expect(coder).toContain(`**${section}**`);
+    expect(coder).toMatch(/never real values/);
+    expect(coder).toMatch(/create it/);
+  });
 });

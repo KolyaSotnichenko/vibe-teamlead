@@ -400,6 +400,7 @@ Use ONLY these values for the `type` field in phases:
 5. **Explicit dependencies** - Phases block until dependencies complete
 6. **Reuse before you add** - Each subtask costs a whole coder session. Before adding one, check whether the code already has what it needs. If so, name it in `patterns_from` and make the subtask smaller, or cover its AC in the subtask next to it. This is never a reason to leave an AC unmapped.
 7. **Merge only what is tiny** - Fold a subtask of a few lines into the subtask next to it when both touch the same file. Don't merge anything bigger: rule 3 stays, because a long session costs more per turn than a short one.
+8. **Keep RUNNING.md true** - `RUNNING.md` at the project root says how to run the project (prerequisites, setup, database, start, signing in locally, common problems); the app's preview shows it when it can't run the project. Put `RUNNING.md` in `files_to_modify` (or `files_to_create` when there is none yet and the task sets up something runnable) of the subtask that changes how the project is installed, configured or started: a new service, env var, port, migration, Docker dependency or sign-in flow. It doesn't count toward rule 3.
 
 ### Verification Types
 

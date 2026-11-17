@@ -18,4 +18,9 @@ describe('planner prompt', () => {
     expect(planner).toMatch(/No AC may be left unmapped/);
     expect(planner).toMatch(/never a reason to leave an AC unmapped/);
   });
+
+  it('puts RUNNING.md in the subtask that changes how the project is installed, configured or started', () => {
+    expect(planner).toMatch(/RUNNING\.md/);
+    expect(planner).toMatch(/files_to_modify/);
+  });
 });

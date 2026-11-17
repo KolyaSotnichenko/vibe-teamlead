@@ -172,10 +172,23 @@ Every turn re-sends the whole conversation, so turns are what this session costs
 ### Implementation Rules
 
 1. **Match patterns exactly** - Use the same style as patterns_from files; use existing utilities, don't reinvent conventions
-2. **Modify only listed files** - Stay within files_to_modify scope; don't wander into unrelated code
+2. **Modify only listed files** - Stay within files_to_modify scope; don't wander into unrelated code. `RUNNING.md` is the one exception (below)
 3. **Create only listed files** - If files_to_create is specified
 4. **One service only** - This subtask is scoped to one service
 5. **No console errors** - Clean implementation
+
+### RUNNING.md
+
+`RUNNING.md` at the project root says how a developer runs the project on their own machine. The app shows it in Preview when it can't start the project itself, so it must stay true. When your subtask changes how the project is installed, configured or started (a new service, env var, port, migration, a dependency on Docker, the sign-in flow), update `RUNNING.md` in the same subtask and commit it with your code. If it doesn't exist and your subtask sets up something runnable, create it. Sections, in this order ("Not needed" for one that doesn't apply):
+
+1. **Prerequisites** - runtimes and versions, Docker, other tools
+2. **Setup** - install; env vars from `.env.example` with what each is for (placeholders, never real values)
+3. **Database** - start it, migrations, seed
+4. **Start** - the command per service, its folder, port and URL
+5. **Signing in locally** - test users, or how to get past SSO in development, if the project has a way
+6. **Common problems** - what goes wrong and the fix
+
+Write only commands you ran or that the tests run. A new env var goes into `.env.example` too.
 
 ### Subtask-Specific Guidance
 
