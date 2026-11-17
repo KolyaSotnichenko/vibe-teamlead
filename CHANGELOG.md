@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.53 - 2026-11-17
+
+- Settings save by themselves when you leave a section, switch between app and project settings, change project or close Settings; the Save and Cancel buttons are gone, and the header says "Saving…" / "Saved" (a failed save shows its error and keeps Settings open).
+- Settings → Claude: choosing API key or Claude subscription is saved at once. Before, it waited for Save while the key and the connection test beside it acted at once, so sessions could still run in the other mode with no key.
+- A subscription token pasted with line breaks (PowerShell wraps the long token) is cleaned, including one already saved.
+- **Get a token** in Settings → Claude (subscription mode) opens a terminal running the bundled Claude Code's `setup-token`, wherever the app is installed; the app never reads the token.
+
 ## 2.0.0-beta.52 - 2026-11-17
 
 - Agent prompts rewritten for current models and much shorter: planner 34K to 12K characters, coder 21K to 14K, QA reviewer 24K to 15K, QA fixer 17K to 11K, QA validation guides 12K to 5K; stale references removed from the designer, architect and follow-up planner prompts. Fewer tokens on every turn, same rules (spec ACs, test first, QA coverage).
