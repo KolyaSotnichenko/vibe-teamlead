@@ -7,6 +7,11 @@ import type { SessionConfig } from '../../session/types';
 import type { ToolContext } from '../../tools/types';
 import { isWindowsHost } from '../../../platform/__tests__/host';
 
+function must<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('expected a value');
+  return value;
+}
+
 const toolContext: ToolContext = {
   cwd: '/work/tree',
   projectDir: '/work/tree',
@@ -38,7 +43,7 @@ describe('auto-compact window per agent type', () => {
       expect(window).toBeLessThanOrEqual(1_000_000);
     }
     // Clears rebuild the cache: the threshold (window - ~33K) stays far above where a session starts (30-40K)
-    expect(autoCompactWindow('designer')! - 33_000).toBeGreaterThan(3 * 40_000);
+    expect(must(autoCompactWindow('designer')) - 33_000).toBeGreaterThan(3 * 40_000);
   });
 
   it('short agents keep Claude Code’s default', () => {
@@ -69,7 +74,7 @@ describe('auto-compact window per agent type', () => {
 
 describe('compaction instructions per role', () => {
   it('coder: subtask, failing test and its file, files changed, what is left', () => {
-    const text = compactInstructions('coder', '2.3')!;
+    const text = must(compactInstructions('coder', '2.3'));
     expect(text).toContain('2.3');
     expect(text).toMatch(/failing test/i);
     expect(text).toMatch(/files? (you )?changed/i);
@@ -77,7 +82,7 @@ describe('compaction instructions per role', () => {
   });
 
   it('designer: frames done and left, the owner’s comments, design-system decisions', () => {
-    const text = compactInstructions('designer')!;
+    const text = must(compactInstructions('designer'));
     expect(text).toMatch(/frames/i);
     expect(text).toMatch(/owner/i);
     expect(text).toMatch(/token/i);
@@ -100,11 +105,11 @@ describe('compaction instructions per role', () => {
 
 describe('PreCompact hook command', () => {
   it('is a command hook in the session’s flag settings that prints the instructions', () => {
-    const settings = compactSettings('designer')!;
-    const hooks = settings.hooks?.PreCompact;
+    const settings = must(compactSettings('designer'));
+    const hooks = must(settings.hooks?.PreCompact);
     expect(hooks).toHaveLength(1);
-    expect(hooks![0].matcher).toBeUndefined(); // manual and auto
-    expect(hooks![0].hooks[0]).toMatchObject({ type: 'command' });
+    expect(hooks[0].matcher).toBeUndefined(); // manual and auto
+    expect(hooks[0].hooks[0]).toMatchObject({ type: 'command' });
     const options = buildQueryOptions(config({ agentType: 'designer' }), new AbortController());
     expect(options.settings).toEqual(settings);
     expect(buildQueryOptions(config({ agentType: 'planner' }), new AbortController()).settings).toBeUndefined();
@@ -112,7 +117,7 @@ describe('PreCompact hook command', () => {
 
   it('is quoted the same way in bash, zsh and PowerShell: one line, single quotes, no backslash', () => {
     for (const agentType of ['designer', 'coder', 'qa_fixer'] as const) {
-      const text = compactInstructions(agentType, '1.1')!;
+      const text = must(compactInstructions(agentType, '1.1'));
       expect(text).not.toMatch(/['\\\n\r]/);
       expect(echoCommand(text)).toBe(`echo '${text}'`);
     }
@@ -122,14 +127,14 @@ describe('PreCompact hook command', () => {
   });
 
   it.skipIf(isWindowsHost)('prints exactly the instructions when bash runs it', () => {
-    const text = compactInstructions('coder', '3.1')!;
+    const text = must(compactInstructions('coder', '3.1'));
     const run = spawnSync('bash', ['-c', echoCommand(text)], { encoding: 'utf-8' });
     expect(run.status).toBe(0);
     expect(run.stdout).toBe(`${text}\n`);
   });
 
   it.skipIf(isWindowsHost || spawnSync('zsh', ['-c', 'true']).status !== 0)('and when zsh runs it (macOS $SHELL)', () => {
-    const text = compactInstructions('designer')!;
+    const text = must(compactInstructions('designer'));
     const run = spawnSync('zsh', ['-c', echoCommand(text)], { encoding: 'utf-8' });
     expect(run.stdout).toBe(`${text}\n`);
   });
