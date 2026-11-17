@@ -12,6 +12,7 @@ import { BrowserWindow, ipcMain, protocol } from 'electron';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { DesignLibrary, IPCResult, TaskDesign, TaskDesignComment, TaskDesignFrame } from '../../shared/types';
 import { AgentManager } from '../agent';
+import { appLog } from '../app-logger';
 import { readDesignCanvas, readDesignState, writeDesignState } from '../ai/design/design-step';
 import { DESIGN_SCHEME, designAsset, libraryAsset, parseDesignUrl, parseLibraryUrl } from '../design/design-protocol';
 import { readLibrary } from '../ai/design/design-library';
@@ -22,6 +23,14 @@ import { findTaskAndProject } from './task/shared';
 import { resolveSpecDir } from './task/workspace-handlers';
 
 const SHOT_SETTLE_MS = 600;
+
+/**
+ * The offscreen window that takes a frame's picture. It runs in the main session, where
+ * vt-design:// is served (the Design tab shows the same frames there, in sandboxed iframes):
+ * on a partition of its own Electron doesn't serve the scheme, so every frame failed to load
+ * and neither the Telegram album nor QA's design/shots ever got a picture.
+ */
+export const SHOT_WEB_PREFERENCES: Electron.WebPreferences = { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false };
 
 export function taskDesign(taskId: string): TaskDesign | null {
   const { task, project } = findTaskAndProject(taskId);
@@ -53,7 +62,7 @@ async function captureFrame(taskId: string, frame: TaskDesignFrame): Promise<Ele
     show: false,
     width: frame.width,
     height: frame.height,
-    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'design-shots' },
+    webPreferences: SHOT_WEB_PREFERENCES,
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const stay = (event: { preventDefault(): void }, url: string) => {
@@ -65,7 +74,8 @@ async function captureFrame(taskId: string, frame: TaskDesignFrame): Promise<Ele
     await win.loadURL(`${DESIGN_SCHEME}://task/${encodeURIComponent(taskId)}/${frame.file.split('/').map(encodeURIComponent).join('/')}`);
     await new Promise((resolve) => setTimeout(resolve, SHOT_SETTLE_MS));
     return await win.webContents.capturePage();
-  } catch {
+  } catch (error) {
+    appLog.warn(`[design] could not take a picture of ${frame.file}: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   } finally {
     win.destroy();
@@ -134,20 +144,22 @@ export async function commentTaskDesign(agentManager: AgentManager, getMainWindo
 
 /** vt-design:// in the main session (sandboxed iframes on the Design tab, offscreen shots) */
 export function registerDesignProtocol(): void {
-  protocol.handle(DESIGN_SCHEME, (request) => {
-    const library = parseLibraryUrl(request.url);
-    if (library) {
-      const project = projectStore.getProject(library.projectId);
-      const asset = project ? libraryAsset(project.path, library.file) : null;
-      if (!asset) return new Response('Not found', { status: 404 });
-      return new Response(asset.body as BodyInit, { headers: { 'Content-Type': asset.mime, ...asset.headers } });
-    }
-    const target = parseDesignUrl(request.url);
-    const specDir = target ? resolveSpecDir(target.taskId) : null;
-    const asset = target && specDir ? designAsset(specDir, target) : null;
+  protocol.handle(DESIGN_SCHEME, serveDesign);
+}
+
+function serveDesign(request: Request): Response {
+  const library = parseLibraryUrl(request.url);
+  if (library) {
+    const project = projectStore.getProject(library.projectId);
+    const asset = project ? libraryAsset(project.path, library.file) : null;
     if (!asset) return new Response('Not found', { status: 404 });
     return new Response(asset.body as BodyInit, { headers: { 'Content-Type': asset.mime, ...asset.headers } });
-  });
+  }
+  const target = parseDesignUrl(request.url);
+  const specDir = target ? resolveSpecDir(target.taskId) : null;
+  const asset = target && specDir ? designAsset(specDir, target) : null;
+  if (!asset) return new Response('Not found', { status: 404 });
+  return new Response(asset.body as BodyInit, { headers: { 'Content-Type': asset.mime, ...asset.headers } });
 }
 
 export function registerTaskDesignHandlers(agentManager: AgentManager, getMainWindow: () => BrowserWindow | null): void {
