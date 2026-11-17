@@ -13,8 +13,8 @@ Each agent is a Claude Code session with its own prompt (`apps/desktop/prompts/`
 | **Designer** | For a task that changes UI: draws wireframes, then the screens in the design system, as HTML in the task's spec folder (see "Design before code"). |
 | **Design system agent** | Extracts the project's design system from the code, or designs a new one from references and a brief. |
 | **Planner** | Writes `implementation_plan.json`: phases, subtasks, test-first, dependencies. |
-| **Coder** | Writes code subtask by subtask (TDD), commits, updates the subtask status. |
-| **QA reviewer** | Checks ACs, tests, UI (browser), security; writes the report; checks off the spec checkboxes. |
+| **Coder** | Writes code subtask by subtask (TDD), commits, updates the subtask status; keeps `RUNNING.md` (how to run the project) up to date when a subtask changes how it is installed, configured or started. |
+| **QA reviewer** | Checks ACs, tests, UI (browser), security, and that `RUNNING.md` matches the change; writes the report; checks off the spec checkboxes. |
 | **QA fixer** | Fixes QA issues. |
 | **UX reviewer** | Goes through the running app in Preview as a person would, and lists what blocks people (see "Preview"). QA runs the same review on the pages a task changed. |
 | **CI readiness** | Reads the project for what keeps its GitHub Actions CI from passing; the blockers become tasks (see "CI"). |

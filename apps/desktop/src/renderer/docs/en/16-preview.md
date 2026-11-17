@@ -43,7 +43,7 @@ The page runs in a view of its own, separate from the app: no access to your fil
 
 ## When it does not start
 
-The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped. Fix the command under **Services** and open Preview again.
+The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped. Fix the command under **Services** and open Preview again. Below the log, the preview shows how to run the project by hand (see "How to run it by hand").
 
 ## Ports, and a page that can't reach its API
 
@@ -52,6 +52,14 @@ Each service runs on the port the project expects it on, worked out as for the v
 When a service had to move, the preview reads the config files that commonly hard-code a dev address (`vite.config`, `next.config`, `nuxt.config`, `astro.config`, `svelte.config`, `angular.json`, `proxy.conf.json`, webpack configs, the `proxy` field of `package.json`) for `localhost` addresses on that service's own port. When it finds one, a notice above the page says which file and line sends where, and that in the preview the service runs on another port because its own is taken. When nothing is found, the preview sends one request through the page to a path it proxies (or `/api`); when that comes back 502 or 504, or the connection is refused, the notice says the page can't reach the service, instead of leaving a blank page.
 
 **Create a task to fix it** makes a task in Planning with the fix written out: read the address from a variable, with the current value as the default, and add that variable to `.env.example`, so the preview can point it at the right port.
+
+## How to run it by hand: RUNNING.md
+
+Some projects don't come up in the preview: several services, a database it can't start, single sign-on such as Entra ID, fixed ports. For those, `RUNNING.md` at the project's root says how to run it on your machine: prerequisites, setup (variables from `.env.example`, never real values), the database, the start commands with their ports and URLs, signing in locally, and common problems. It is part of the project and committed with it. The agents keep it up to date: a coder who changes how the project is installed, configured or started updates it in the same task, and QA checks it against the change (a stale file is a minor issue; it doesn't block approval).
+
+When the preview doesn't start, or the notice about a page that can't reach its API shows, the preview shows `RUNNING.md` under it, with **Open a terminal here**: a new terminal in the project's folder (the task's folder in a task's preview). Nothing is typed into it; you run the commands. While the app runs, **How to run** in the toolbar shows the file at any time.
+
+Without `RUNNING.md` you get **Create a task: write RUNNING.md** instead. It makes a task in Planning: an agent reads the project, changes no code, writes the file and runs every command it documents where that is safe.
 
 ## Logs and mail
 
