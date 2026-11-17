@@ -1,10 +1,14 @@
 /** A fake Bot API for tests: records what the bot sends; never touches the network. */
 import type { BotApi, InlineButton, SendOptions, TelegramMessage, TelegramUpdate } from '../bot-api';
+import { Html } from '../format';
 
 export interface Sent {
   chatId: number;
   messageId: number;
+  /** The text as sent (HTML source when `html`) */
   text: string;
+  /** Sent as HTML (an Html value), not as plain text */
+  html: boolean;
   options?: SendOptions;
 }
 
@@ -13,28 +17,32 @@ export function createFakeBot() {
   const sent: Sent[] = [];
   const chatActions: Array<{ chatId: number; action: string }> = [];
   /** Every attempt to send or edit, failed ones too */
-  const attempts: Array<{ method: string; text: string; options?: unknown }> = [];
+  const attempts: Array<{ method: string; text: string; html: boolean; options?: unknown }> = [];
   /** Return an error to make an attempt fail (as Telegram would answer) */
-  let reject: ((method: string, text: string, options?: unknown) => Error | undefined) | undefined;
-  const edits: Array<{ chatId: number; messageId: number; text: string; buttons?: InlineButton[][] }> = [];
+  let reject: ((method: string, text: string, html: boolean, options?: unknown) => Error | undefined) | undefined;
+  const edits: Array<{ chatId: number; messageId: number; text: string; html: boolean; buttons?: InlineButton[][] }> = [];
   const callbackAnswers: Array<{ id: string; text?: string }> = [];
   const updates: TelegramUpdate[][] = [];
   const api: BotApi = {
     getMe: async () => ({ id: 1, is_bot: true, username: 'test_bot' }),
     getUpdates: async () => updates.shift() ?? [],
-    sendMessage: async (chatId, text, options) => {
-      attempts.push({ method: 'sendMessage', text, options });
-      const error = reject?.('sendMessage', text, options);
+    sendMessage: async (chatId, value, options) => {
+      const text = String(value);
+      const html = value instanceof Html;
+      attempts.push({ method: 'sendMessage', text, html, options });
+      const error = reject?.('sendMessage', text, html, options);
       if (error) throw error;
       const message: TelegramMessage = { message_id: nextId++, date: 0, chat: { id: chatId }, text };
-      sent.push({ chatId, messageId: message.message_id, text, options });
+      sent.push({ chatId, messageId: message.message_id, text, html, options });
       return message;
     },
-    editMessageText: async (chatId, messageId, text, options) => {
-      attempts.push({ method: 'editMessageText', text, options });
-      const error = reject?.('editMessageText', text, options);
+    editMessageText: async (chatId, messageId, value, options) => {
+      const text = String(value);
+      const html = value instanceof Html;
+      attempts.push({ method: 'editMessageText', text, html, options });
+      const error = reject?.('editMessageText', text, html, options);
       if (error) throw error;
-      edits.push({ chatId, messageId, text, buttons: options?.buttons });
+      edits.push({ chatId, messageId, text, html, buttons: options?.buttons });
     },
     answerCallbackQuery: async (id, text) => {
       callbackAnswers.push({ id, text });

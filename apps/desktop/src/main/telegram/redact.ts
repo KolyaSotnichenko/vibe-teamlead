@@ -1,15 +1,17 @@
 /**
  * Nothing secret goes to Telegram: every text the bot sends passes through here. Known key and
  * token shapes, `NAME_WITH_SECRET=value` pairs, private key blocks and the app's own secrets
- * (the bot token, the Claude key) are replaced with [redacted]. Messages and captions are HTML:
- * the redaction runs on their raw text (entities unescaped), then the text is escaped again, so
- * escaping can never split a secret. Texts are clipped to Telegram's limits without breaking a
- * tag. If Telegram can't parse a message it is sent once more as plain text; a rejected message
- * effect is dropped.
+ * (the bot token, the Claude key) are replaced with [redacted]. An HTML message is parsed
+ * strictly (only supported tags with double-quoted attributes survive; anything else becomes
+ * text), each raw text run and attribute value is redacted with its entities decoded, and the
+ * whole message (tags, attributes, entities decoded) is checked again: a secret that markup
+ * splits sends the message as redacted plain text instead. Texts are clipped to Telegram's limits
+ * without breaking a tag. If Telegram can't parse a message it is sent once more as plain text;
+ * a rejected message effect is dropped.
  */
 
-import { type BotApi, type EditOptions, type InlineButton, type SendOptions, TelegramApiError } from './bot-api';
-import { esc, MAX_CAPTION, MAX_MESSAGE, toPlain, truncateHtml } from './format';
+import { type BotApi, type InlineButton, type MessageText, type SendOptions, TelegramApiError } from './bot-api';
+import { decodeEntities, Html, MAX_CAPTION, MAX_MESSAGE, sanitizeHtml, text as textHtml, toPlain, truncateHtml } from './format';
 
 export { MAX_MESSAGE };
 
@@ -30,7 +32,7 @@ const PATTERNS: RegExp[] = [
 ];
 
 /** NAME=value where the name says it is secret: the value goes */
-const SECRET_ASSIGNMENT = /\b([A-Za-z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_KEY|CREDENTIAL)[A-Za-z0-9_]*)\s*[=:]\s*("[^"\n]*"|'[^'\n]*'|[^\s,;]+)/gi;
+const SECRET_ASSIGNMENT = /\b([A-Za-z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_KEY|CREDENTIAL)[A-Za-z0-9_]*)\s*[=:]\s*(?!\[redacted\])("[^"\n]*"|'[^'\n]*'|[^\s,;]+)/gi;
 
 export function redactSecrets(text: string, known: Array<string | undefined> = []): string {
   let out = text;
@@ -46,25 +48,24 @@ export function clipMessage(text: string, max = MAX_MESSAGE): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-/** Redacts the raw text of an HTML message: each text run and each attribute value, unescaped first */
-export function redactHtml(html: string, known: Array<string | undefined> = []): string {
-  const clean = (escaped: string) => esc(redactSecrets(toPlain(escaped), known));
-  const out = html
-    .split(/(<[^>]*>)/)
-    .map((part) => (part.startsWith('<') ? part.replace(/"([^"]*)"/g, (_m, value: string) => `"${clean(value)}"`) : part && clean(part)))
-    .join('');
-  // A secret split by tags: the message goes without its formatting rather than with the secret
-  const text = toPlain(out);
-  const redacted = redactSecrets(text, known);
-  return redacted === text ? out : esc(redacted);
+/** An HTML message redacted: supported tags only, every text run and attribute value redacted raw */
+export function redactHtml(value: Html, known: Array<string | undefined> = []): Html {
+  const out = sanitizeHtml(value.value, (raw) => redactSecrets(raw, known));
+  // The whole message, markup included and entities decoded, and its visible text: a secret
+  // split by a tag or an entity is found here, and the message goes as redacted text
+  const whole = decodeEntities(out.value);
+  const visible = toPlain(out);
+  if (redactSecrets(whole, known) !== whole || redactSecrets(visible, known) !== visible) return textHtml(redactSecrets(visible, known));
+  return out;
 }
 
 const PARSE_ERROR = /can't parse entities/i;
 
 /** The client every part of the bot uses: texts, captions and button labels redacted and clipped */
 export function safeApi(api: BotApi, secrets: () => Array<string | undefined>, warn?: (message: string) => void): BotApi {
-  const plainClean = (text: string, max: number) => clipMessage(redactSecrets(text, secrets()), max);
-  const html = (text: string, max = MAX_MESSAGE) => truncateHtml(redactHtml(text, secrets()), max);
+  const plainClean = (value: string, max: number) => clipMessage(redactSecrets(value, secrets()), max);
+  const clean = (value: MessageText, max = MAX_MESSAGE): MessageText =>
+    value instanceof Html ? truncateHtml(redactHtml(value, secrets()), max) : plainClean(value, max);
   const cleanButtons = (rows: InlineButton[][] | undefined) => rows?.map((row) => row.map((b) => ({ ...b, text: plainClean(b.text, MAX_BUTTON) })));
   const cleanOptions = (options: SendOptions | undefined): SendOptions | undefined =>
     options ? { ...options, buttons: cleanButtons(options.buttons), placeholder: options.placeholder ? plainClean(options.placeholder, 64) : undefined } : undefined;
@@ -73,16 +74,16 @@ export function safeApi(api: BotApi, secrets: () => Array<string | undefined>, w
    * One call, retried: as plain text when Telegram can't parse the HTML (once), without the
    * effect when Telegram rejects it. Any other error goes to the caller.
    */
-  const attempt = async <T>(text: string, effect: boolean, call: (text: string, plain: boolean, effect: boolean) => Promise<T>): Promise<T> => {
-    let plain = false;
+  const attempt = async <T>(value: MessageText, effect: boolean, call: (value: MessageText, effect: boolean) => Promise<T>): Promise<T> => {
+    let current = value;
     let withEffect = effect;
     for (;;) {
       try {
-        return await call(plain ? toPlain(text) : text, plain, withEffect);
+        return await call(current, withEffect);
       } catch (error) {
         if (!(error instanceof TelegramApiError) || error.kind !== 'other') throw error;
-        if (!plain && PARSE_ERROR.test(error.message)) {
-          plain = true;
+        if (current instanceof Html && PARSE_ERROR.test(error.message)) {
+          current = toPlain(current);
           warn?.("[Telegram] Telegram couldn't parse a message's HTML; it was sent as plain text");
           continue;
         }
@@ -98,27 +99,23 @@ export function safeApi(api: BotApi, secrets: () => Array<string | undefined>, w
   return {
     getMe: () => api.getMe(),
     getUpdates: (offset, signal, timeoutSeconds) => api.getUpdates(offset, signal, timeoutSeconds),
-    sendMessage: (chatId, text, options) => {
-      const cleaned = cleanOptions(options);
-      return attempt(html(text), !!options?.effect, (body, plain, effect) => {
-        const { effect: _effect, ...rest } = cleaned ?? {};
-        return api.sendMessage(chatId, body, { ...rest, ...(effect ? { effect: options?.effect } : {}), ...(plain ? { plain } : {}) });
-      });
+    sendMessage: (chatId, value, options) => {
+      const { effect, ...rest } = cleanOptions(options) ?? {};
+      return attempt(clean(value), !!effect, (body, withEffect) =>
+        api.sendMessage(chatId, body, options ? { ...rest, ...(withEffect ? { effect } : {}) } : undefined),
+      );
     },
-    editMessageText: (chatId, messageId, text, options) =>
-      attempt(html(text), false, (body, plain) => {
-        const edit: EditOptions | undefined = options || plain ? { ...(options ? { buttons: cleanButtons(options.buttons) } : {}), ...(plain ? { plain } : {}) } : undefined;
-        return api.editMessageText(chatId, messageId, body, edit);
-      }),
-    answerCallbackQuery: (id, text) => api.answerCallbackQuery(id, text ? plainClean(text, 200) : undefined),
+    editMessageText: (chatId, messageId, value, options) =>
+      attempt(clean(value), false, (body) => api.editMessageText(chatId, messageId, body, options ? { buttons: cleanButtons(options.buttons) } : undefined)),
+    answerCallbackQuery: (id, value) => api.answerCallbackQuery(id, value ? plainClean(value, 200) : undefined),
     sendPhoto: (chatId, photo, caption, options) => {
       const cleaned = cleanOptions(options);
       if (!caption) return api.sendPhoto(chatId, photo, undefined, cleaned);
-      return attempt(html(caption, MAX_CAPTION), false, (body, plain) => api.sendPhoto(chatId, photo, body, { ...cleaned, ...(plain ? { plain } : {}) }));
+      return attempt(clean(caption, MAX_CAPTION), false, (body) => api.sendPhoto(chatId, photo, body, cleaned));
     },
     sendMediaGroup: (chatId, photos, caption) => {
       if (!caption) return api.sendMediaGroup(chatId, photos);
-      return attempt(html(caption, MAX_CAPTION), false, (body, plain) => api.sendMediaGroup(chatId, photos, body, plain ? { plain } : undefined));
+      return attempt(clean(caption, MAX_CAPTION), false, (body) => api.sendMediaGroup(chatId, photos, body));
     },
     sendChatAction: (chatId, action) => api.sendChatAction(chatId, action),
   };
