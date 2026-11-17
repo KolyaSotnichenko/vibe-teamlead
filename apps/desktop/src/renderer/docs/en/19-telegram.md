@@ -36,7 +36,7 @@ If you handle the task on the computer first, the message says "Handled on the c
 
 ## Design approval
 
-When the designer's wireframes or screens wait for you (Settings → project → design approval by the owner), they come as an album, then a message with **Approve** and **Comment**. **Approve** approves the stage that waits, as on the Design tab. **Comment** asks for your comment and sends it to the designer as a comment on the whole set. Decided on the computer first: the message says so and its buttons stop working.
+When the designer's wireframes or screens wait for you (Context → Design system → Setup → Design before code → **I approve each step**), they come as an album, then a message with **Approve** and **Comment**. **Approve** approves the stage that waits, as on the Design tab. **Comment** asks for your comment and sends it to the designer as a comment on the whole set. Decided on the computer first: the message says so and its buttons stop working.
 
 ## New tasks from the chat
 

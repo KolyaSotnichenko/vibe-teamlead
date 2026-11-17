@@ -14,7 +14,7 @@ A phase or feature model is not served by your endpoint. For example, Ollama mod
 
 ## Tasks sit in Queue and don't get picked up
 
-The queue starts tasks when there is a free slot within the limit on parallel tasks. A task holds its slot until it is merged, archived or deleted, also while it waits for your review; the Queue column names them. If all slots are taken, new ones wait. A task that depends on another one (for example, from a spec document) waits until that one finishes.
+The queue starts tasks when there is a free slot within the limit on parallel tasks. A task holds its slot until it is merged, archived or deleted, also while it waits for your review; the Queue column names them. If all slots are taken, new ones wait. A task that depends on another one (for example, from a spec document) waits until that one finishes. If the Queue column says **Paused**, the queue was paused with `/stop_all` from Telegram: press **Resume** (or send `/resume`).
 
 ## An agent is "stuck" on a question
 
@@ -30,7 +30,7 @@ While the pentest runs, the Strix Docker container is busy. This is normal; the 
 
 ## A folder is left in Worktrees after merging
 
-If the task folder couldn't be fully deleted, it is marked as orphaned in Worktrees. You can't merge it or create a PR from it, only delete it with the Delete button. If deletion fails, the app shows an error.
+If the task folder couldn't be fully deleted, it is marked as orphaned in Worktrees. You can't merge it or create a PR from it, only delete it with the Delete button. Folders whose subfolders deny deletion through an access control list (macOS) are cleared of those entries first. If deletion still fails, the app shows an error.
 
 ## After merge the coding logs and the Security tab are empty
 
@@ -58,7 +58,7 @@ Stories render without the app's look when `.storybook/preview` doesn't import t
 
 ## The Create PR button is disabled
 
-A PR needs a GitHub remote (`origin`). Add it in the project (`git remote add origin …`) or connect GitHub in Settings → GitHub. Merging into the main branch works without it.
+A PR needs a GitHub remote (`origin`). Add it in the project (`git remote add origin …`) or connect GitHub in Settings → Project → GitHub. Merging into the main branch works without it.
 
 ## Acceptance criteria are "not verified" after QA
 
@@ -71,6 +71,10 @@ The task logs should contain the line "CodeGraph: index ready / attached". Agent
 ## Closing the app while agents work
 
 Closing the window quits the app, and nothing keeps working in the background. Quitting stops the agents, so while a task runs the app asks first: keep working, or close and stop. A stopped task can be resumed later.
+
+## Windows: agents can't run commands
+
+Agents and the app's checks run commands in the bash of Git for Windows. When Settings → Tools shows Git for Windows as missing, install it (`winget install --id Git.Git -e`) and check again. A project inside WSL is refused; keep it on a Windows drive.
 
 ## Memory is empty
 
@@ -92,13 +96,9 @@ Settings → Debug & Logs. Logs for a single task are in the Logs tab of the tas
 
 The Report a problem button at the top of this page opens the repository's issues.
 
-## "Noted: … process was stopped by the background timeout" in the logs
+## "Noted: … was stopped by the background timeout" in the logs
 
-An agent started a dev server in the background and didn't close its background task when it finished. That task kept the session open until it timed out, and the agent was woken up again just to acknowledge it. Nothing was broken, but the session ended later and spent an extra turn. Agents now stop their background commands with TaskStop before reporting, so these lines shouldn't appear in new runs.
-
-## "Noted: the dev-server process … was stopped by the background timeout"
-
-Agents start dev servers and watchers as background tasks (QA does this to test the API or the UI). A task left running keeps the session open, and when it times out the agent wakes up for one more turn just to say so. That's harmless but costs tokens. Agents are told to stop every background task with TaskStop before finishing. The app also checks: if an agent tries to finish while tasks it started are still running, it is asked once to stop them first.
+Agents start dev servers and watchers as background tasks (QA does this to test the API or the UI). A task left running keeps the session open, and when it times out the agent wakes up for one more turn just to say so. Nothing is broken, but the session ends later and spends an extra turn and tokens. Agents are told to stop every background task with TaskStop before finishing, and the app checks: if an agent tries to finish while tasks it started are still running, it is asked once to stop them first. These lines shouldn't appear in new runs.
 
 ## "No such tool available: mcp__playwright__…"
 
@@ -106,4 +106,4 @@ QA gets browser tools only for a web frontend (Playwright) or an Electron app wi
 
 ## The app hangs for a moment
 
-Each time the app's main process stops answering for 0.2 s or more, a line goes into `~/Library/Logs/Vibe Teamlead/stalls.jsonl`: how long, and what was running. The file stays on your machine and shows names and file paths, never command arguments. Attach it when you report a hang.
+Each time the app's main process stops answering for 0.2 s or more, a line goes into `stalls.jsonl` in the app's logs folder (`~/Library/Logs/Vibe Teamlead/` on macOS; Settings → Debug & Logs shows the location): how long, and what was running. The file stays on your machine and shows names and file paths, never command arguments. Attach it when you report a hang.

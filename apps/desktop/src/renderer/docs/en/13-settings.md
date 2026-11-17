@@ -11,7 +11,7 @@
 | **Memory** | Enable/disable, embedding model. |
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
 | **Telegram** | Your own Telegram bot: token, pairing, which notifications it sends, the morning digest. See the Telegram page. |
-| **Project → General** | The project's agent model, CLAUDE.md, notifications. |
+| **Project → General** | The project's agent model, CLAUDE.md, the app's own checks (commands and variables, see "Quality and security"), notifications. |
 | **Project → GitHub / GitLab / Linear** | Repository, token, base branch, branch pushing, issue sync. |
 | **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory, accounts (an optional GitHub sign-in; if skipped, connect it later in Project → GitHub, or from the CI tab; leaving the step cancels a sign-in in progress). GitHub takes two steps: signing in, then installing the Vibe Teamlead app on GitHub and choosing the repositories it may use; the wizard asks for the second step and checks again when you come back. To add a repository later, open https://github.com/settings/installations, choose the Vibe Teamlead app and add it. You can run it again. |
 
