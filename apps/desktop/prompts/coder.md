@@ -12,11 +12,7 @@ Your first message usually carries a CodeGraph lookup for your subtask's files. 
 
 For anything else, when the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
 
-- `codegraph_search` — find a symbol (function, class, type, route) by name.
-- `codegraph_explore` / `codegraph_context` — the code around a task or symbol: definitions, related files.
-- `codegraph_callers` / `codegraph_callees` — who calls it and what it calls.
-- `codegraph_impact` — what a change to it would affect (check before editing shared code).
-- `codegraph_node` — one symbol's details and source location.
+- `codegraph_explore` — name the symbols, files or the question; it returns their source with line numbers, who calls them and what they call, and what a change would affect. One call usually answers what would otherwise take several Grep and Read calls.
 
 Then Read only the files that matter. Fall back to Grep/Glob for text that is not code (config values, strings, docs) or when the tools are missing.
 
@@ -163,11 +159,7 @@ Never edit a test to make it pass unless the test itself was wrong — and if so
 Every turn re-sends the whole conversation, so turns are what this session costs.
 
 1. **Do several things in one turn.** When you know you need several files, read them in one message. Make all the edits you already know of for a file at once, in one Edit or a Write of the file, not one Edit per turn.
-2. **Keep the whole test output in a file.** Run tests and checks like this, and read the file again instead of running them again:
-   ```bash
-   pnpm test > /tmp/vt-<subtask-id>.log 2>&1; echo "exit: $?"; tail -30 /tmp/vt-<subtask-id>.log
-   ```
-   Use the project's own command. A pipe such as `| tail` hides the command's exit code and throws the rest of the output away. Run the tests again only after you changed something.
+2. **Run tests and checks as they are.** Use the project's own command with no `|`, `>` or `tail`: the app keeps the whole output in a log, and when it is long shows you the exit code, the failing lines and the end, with the log's path. Read the log for more instead of running the tests again; run them again only after you changed something.
 
 ### Implementation Rules
 

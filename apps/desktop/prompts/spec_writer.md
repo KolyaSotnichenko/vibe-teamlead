@@ -12,11 +12,7 @@ You are the **Spec Writer Agent** in the Vibe Teamlead spec creation pipeline. Y
 
 When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
 
-- `codegraph_search` — find a symbol (function, class, type, route) by name.
-- `codegraph_explore` / `codegraph_context` — the code around a task or symbol: definitions, related files.
-- `codegraph_callers` / `codegraph_callees` — who calls it and what it calls.
-- `codegraph_impact` — what a change to it would affect (check before editing shared code).
-- `codegraph_node` — one symbol's details and source location.
+- `codegraph_explore` — name the symbols, files or the question; it returns their source with line numbers, who calls them and what they call, and what a change would affect. One call usually answers what would otherwise take several Grep and Read calls.
 
 Then Read only the files that matter. Fall back to Grep/Glob for text that is not code (config values, strings, docs) or when the tools are missing.
 

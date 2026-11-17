@@ -9,9 +9,15 @@ describe('coder prompt', () => {
     expect(coder).toMatch(/Do several things in one turn/);
   });
 
-  it('keeps the whole test output in a file, with the real exit code: `| tail` hides a failure and forces a re-run', () => {
-    expect(coder).toMatch(/Keep the whole test output/);
-    expect(coder).toMatch(/> \/tmp\/vt-<subtask-id>\.log 2>&1; echo "exit: \$\?"/);
+  it('runs tests as they are, so the app keeps the log and shows the failing lines: `| tail` hides a failure and forces a re-run', () => {
+    expect(coder).toMatch(/Run tests and checks as they are/);
+    expect(coder).toMatch(/no `\|`, `>` or `tail`/);
+    expect(coder).not.toMatch(/\/tmp\/vt-<subtask-id>/);
+  });
+
+  it('names only the CodeGraph tool the bundled server lists (the others are unlisted by default)', () => {
+    expect(coder).toMatch(/`codegraph_explore`/);
+    expect(coder).not.toMatch(/codegraph_(search|node|callers|callees|impact|context)/);
   });
 
   it("doesn't loosen test-first", () => {
