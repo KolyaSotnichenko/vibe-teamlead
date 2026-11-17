@@ -51,6 +51,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     runCommand: vi.fn(async (command: string, cwd: string) => { order.push(command.includes('seed') ? 'seed' : command.endsWith('run build') ? `build:${cwd.split(/[\\/]/).pop()}` : 'migrations'); return { code: 0, output: '' }; }),
     startServer: vi.fn(async (o: { name: string }) => { order.push(`server:${o.name}`); port += 1; return { url: `http://localhost:${port}`, port, logPath: '/log', reused: false }; }),
     stopServer: vi.fn(async () => true),
+    readLog: () => null,
     cleanUpLeftovers: vi.fn(),
     writeFile: vi.fn(),
     startMail: vi.fn(async () => ({ status: 'started' as const, smtpPort: 41025, httpPort: 48025, stop: vi.fn(async () => {}) })),
@@ -288,8 +289,8 @@ describe('a preview session', () => {
       const exits = new Map<string, (code: number | null) => void>();
       const stopServer = vi.fn(async () => true);
       const { d } = deps({
-        startServer: vi.fn(async (o: { name: string; onExit?: (code: number | null) => void }) => {
-          if (o.onExit) exits.set(o.name, o.onExit);
+        startServer: vi.fn(async (o: Parameters<PreviewDeps['startServer']>[0]) => {
+          if (o.onExit) exits.set(o.name, (code) => o.onExit?.(code, null));
           return { url: `http://localhost:${4200 + exits.size}`, port: 4200 + exits.size, logPath: `/logs/${o.name}.log`, reused: false };
         }),
         stopServer,
