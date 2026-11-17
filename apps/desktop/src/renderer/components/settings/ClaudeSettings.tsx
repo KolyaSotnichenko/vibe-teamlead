@@ -4,6 +4,7 @@ import { Label } from '../ui/label';
 import { SettingsSection } from './SettingsSection';
 import { ClaudeCredentialPanel } from './ClaudeCredentialPanel';
 import { useClaudeCredential } from '../../hooks/useClaudeCredential';
+import { saveSettings } from '../../stores/settings-store';
 import { cn } from '../../lib/utils';
 import type { AppSettings } from '../../../shared/types';
 
@@ -29,7 +30,13 @@ export function ClaudeSettings({ settings, onSettingsChange }: ClaudeSettingsPro
       type="button"
       role="radio"
       aria-checked={mode === value}
-      onClick={() => onSettingsChange({ ...settings, useClaudeSubscription: value === 'subscription' })}
+      onClick={() => {
+        const useClaudeSubscription = value === 'subscription';
+        onSettingsChange({ ...settings, useClaudeSubscription });
+        // Saved at once, like the key and the connection test beside it: waiting for the
+        // dialog's Save left sessions in the other mode while the test passed
+        void saveSettings({ useClaudeSubscription });
+      }}
       className={cn(
         'flex min-h-11 flex-1 flex-col items-start gap-1 border px-4 py-3 text-left transition-colors',
         mode === value ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:bg-accent'
