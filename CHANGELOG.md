@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.49 - 2026-11-17
+
+- Security QA (Strix) gets its own model and key (Settings → Agent Settings → Security QA), so it can run while agents use a Claude subscription. Providers: same as agents (default), OpenRouter and Vercel AI Gateway (Strix recommends GLM-5.3 there), Anthropic, OpenAI, DeepSeek, Moonshot (Kimi), Azure OpenAI, AWS Bedrock, Google Vertex AI, local models (Ollama, LM Studio) and a ChatGPT subscription. Each shows only its own fields; frontier OpenAI, Anthropic and Gemini models need the provider's cyber access program, which the settings say. Keys are encrypted by the operating system and kept out of logs.
+- Documentation brought up to date with the app: pipeline diagrams (design, the app's own checks, auto-merge, CI), the agents table, Windows notes and FAQ, settings paths.
+
 ## 2.0.0-beta.48 - 2026-11-16
 
 - Preview: each service runs on the port the project expects when it is free, so a project that hard-codes an address (a Vite proxy to `localhost:3000`, say) works without changes. When the port is taken, the preview says which file and line hard-codes the address and offers **Create a task to fix it**; when the page can't reach a backend for any other reason, it says so instead of showing a blank page.
