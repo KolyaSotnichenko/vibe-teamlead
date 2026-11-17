@@ -2,7 +2,14 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from 'vitest';
-import { listenOpenTerminal, openProjectTerminal, openTerminal } from '../open-terminal';
+import {
+  listenOpenClaudeSetupToken,
+  listenOpenTerminal,
+  openClaudeSetupToken,
+  openProjectTerminal,
+  openSetupTokenTerminal,
+  openTerminal,
+} from '../open-terminal';
 
 describe('openTerminal', () => {
   it('asks the app for a terminal in a folder, until the listener unsubscribes', () => {
@@ -49,5 +56,36 @@ describe('openProjectTerminal', () => {
     const store = { terminals: [], addTerminal: vi.fn(() => null), setActiveTerminal: vi.fn() };
     expect(openProjectTerminal('/p', '/p', store)).toBe('limit');
     expect(store.setActiveTerminal).not.toHaveBeenCalled();
+  });
+});
+
+describe('openClaudeSetupToken', () => {
+  it('asks the app for the setup-token terminal, until the listener unsubscribes', () => {
+    const handler = vi.fn();
+    const off = listenOpenClaudeSetupToken(handler);
+    openClaudeSetupToken();
+    expect(handler).toHaveBeenCalledTimes(1);
+    off();
+    openClaudeSetupToken();
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('openSetupTokenTerminal', () => {
+  it("opens a terminal in the project with the setup-token launch (main picks the command)", () => {
+    const store = { addTerminal: vi.fn(() => ({ id: 'x' })) };
+    expect(openSetupTokenTerminal('/p', store)).toBe('opened');
+    expect(store.addTerminal).toHaveBeenCalledWith('/p', '/p', 'claude-setup-token');
+  });
+
+  it('needs an open project: the terminals live in one', () => {
+    const store = { addTerminal: vi.fn() };
+    expect(openSetupTokenTerminal(undefined, store)).toBe('no-project');
+    expect(store.addTerminal).not.toHaveBeenCalled();
+  });
+
+  it("says so at the project's terminal limit", () => {
+    const store = { addTerminal: vi.fn(() => null) };
+    expect(openSetupTokenTerminal('/p', store)).toBe('limit');
   });
 });

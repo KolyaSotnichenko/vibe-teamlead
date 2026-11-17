@@ -3,7 +3,7 @@ import { createActor } from 'xstate';
 import type { ActorRefFrom } from 'xstate';
 import { v4 as uuid } from 'uuid';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { TerminalSession, TerminalWorktreeConfig } from '../../shared/types';
+import type { TerminalCreateOptions, TerminalSession, TerminalWorktreeConfig } from '../../shared/types';
 import { terminalMachine, type TerminalEvent } from '@shared/state-machines';
 import { terminalBufferManager } from '../lib/terminal-buffer-manager';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
@@ -135,6 +135,7 @@ export interface Terminal {
   pendingCLIResume?: boolean;  // Whether this terminal has a pending Claude resume (deferred until tab activated)
   displayOrder?: number;  // Display order for tab persistence (lower = further left)
   cliNamedOnce?: boolean;  // Whether this Claude terminal has been auto-named based on initial message (prevents repeated naming)
+  launch?: TerminalCreateOptions['launch'];  // What main runs in the new shell (Settings → Claude → "Get a token")
 }
 
 interface TerminalLayout {
@@ -153,7 +154,7 @@ interface TerminalState {
   hasRestoredSessions: boolean;  // Track if we've restored sessions for this project
 
   // Actions
-  addTerminal: (cwd?: string, projectPath?: string) => Terminal | null;
+  addTerminal: (cwd?: string, projectPath?: string, launch?: TerminalCreateOptions['launch']) => Terminal | null;
   addRestoredTerminal: (session: TerminalSession) => Terminal;
   // Add a terminal with a specific ID (for terminals created in main process, like OAuth login terminals)
   addExternalTerminal: (id: string, title: string, cwd?: string, projectPath?: string) => Terminal | null;
@@ -203,7 +204,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   maxTerminals: 12,
   hasRestoredSessions: false,
 
-  addTerminal: (cwd?: string, projectPath?: string) => {
+  addTerminal: (cwd?: string, projectPath?: string, launch?: TerminalCreateOptions['launch']) => {
     const state = get();
     const activeCount = getActiveProjectTerminalCount(state.terminals, projectPath);
     if (activeCount >= state.maxTerminals) {
@@ -221,6 +222,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       // outputBuffer removed - managed by terminalBufferManager
       projectPath,
       displayOrder: state.terminals.length,  // New terminals appear at the end
+      ...(launch ? { launch } : {}),
     };
 
     set((state) => ({

@@ -34,3 +34,27 @@ export function openProjectTerminal(cwd: string, projectPath: string | undefined
   if (latest) store.setActiveTerminal(latest.id);
   return 'limit';
 }
+
+/**
+ * Settings → Claude → "Get a token": the app opens a terminal that runs the bundled Claude Code
+ * with `setup-token`. The page only asks; main resolves the binary and the command line.
+ */
+export function openClaudeSetupToken(): void {
+  window.dispatchEvent(new Event('open-claude-setup-token'));
+}
+
+/** Returns the unsubscribe */
+export function listenOpenClaudeSetupToken(handler: () => void): () => void {
+  window.addEventListener('open-claude-setup-token', handler);
+  return () => window.removeEventListener('open-claude-setup-token', handler);
+}
+
+interface SetupTokenStoreLike {
+  addTerminal: (cwd: string | undefined, projectPath: string | undefined, launch: 'claude-setup-token') => unknown;
+}
+
+/** Terminals live in a project, so one must be open; past the project's limit nothing opens. */
+export function openSetupTokenTerminal(projectPath: string | undefined, store: SetupTokenStoreLike): 'opened' | 'limit' | 'no-project' {
+  if (!projectPath) return 'no-project';
+  return store.addTerminal(projectPath, projectPath, 'claude-setup-token') ? 'opened' : 'limit';
+}

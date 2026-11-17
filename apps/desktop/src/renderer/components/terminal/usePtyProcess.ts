@@ -216,6 +216,7 @@ export function usePtyProcess({
         cols,
         rows,
         projectPath,
+        launch: terminalState?.launch,
       }).then((result) => {
         if (result.success) {
           debugLog(`[usePtyProcess] Successfully created PTY for terminal: ${terminalId}`);
@@ -223,6 +224,8 @@ export function usePtyProcess({
           if (!alreadyRunning) {
             getStore().setTerminalStatus(terminalId, 'running');
           }
+          // Run once: a recreated shell (restart, worktree switch) is a plain one
+          if (terminalState?.launch) getStore().updateTerminal(terminalId, { launch: undefined });
           onCreated?.();
         } else {
           const errorMsg = result.error || i18n.t('common:errors.unknownError');
