@@ -219,7 +219,7 @@
     "lspDescription": "Кодер і QA-фіксер отримують мовний сервер для мов проєкту: TypeScript/JavaScript і Python вбудовані в застосунок; Go, Rust і C/C++ використовуються, якщо встановлено gopls, rust-analyzer або clangd. Помилки типів приходять одразу після правки, а агент переходить до визначень і посилань без повного typecheck.",
     "lspHint": "Вимкніть на дуже великих репозиторіях, якщо бракує пам'яті.",
     "securityQa": "Security QA (Strix)",
-    "securityQaDescription": "Після схвалення QA тест на проникнення Strix намагається зламати код, змінений задачею. Знахідки повертаються виправнику QA. Потрібні Docker, Strix (uv tool install strix-agent) і API-ключ Anthropic; має власний бюджет LLM.",
+    "securityQaDescription": "Після схвалення QA тест на проникнення Strix намагається зламати код, змінений задачею. Знахідки повертаються виправнику QA. Потрібні Docker, Strix (uv tool install strix-agent) і модель: API-ключ Anthropic агентів або власний провайдер і ключ нижче; має власний бюджет LLM.",
     "securityQaScanMode": "Сканування",
     "securityQaFailOn": "Блокувати від",
     "securityQaBudget": "Бюджет на сканування, $",
@@ -233,6 +233,62 @@
       "high": "Високий і вище",
       "medium": "Середній і вище",
       "low": "Низький і вище"
+    },
+    "securityQaLlm": {
+      "title": "Модель для Strix",
+      "description": "Strix може працювати на ключі Claude, як агенти, або на власній моделі й ключі іншого провайдера.",
+      "provider": "Провайдер",
+      "model": "Модель",
+      "awsAuth": "Вхід через",
+      "awsAuthKeys": "Ключі доступу",
+      "awsAuthProfile": "Профіль AWS",
+      "chooseFile": "Вибрати…",
+      "vertexAdcHint": "Залиште порожнім, щоб використати облікові дані gcloud за замовчуванням (ADC).",
+      "optional": "(необов'язково)",
+      "save": "Зберегти",
+      "saved": "Збережено. Введіть нове значення, щоб замінити.",
+      "remove": "Видалити",
+      "saveFailed": "Не вдалося зберегти. Спробуйте ще раз.",
+      "replacePlaceholder": "Збережено — введіть нове значення для заміни",
+      "show": "Показати",
+      "hide": "Сховати",
+      "recommendation": "Strix радить GLM-5.3 через OpenRouter або Vercel AI Gateway.",
+      "providers": {
+        "agents": "Як в агентів",
+        "openrouter": "OpenRouter",
+        "vercel": "Vercel AI Gateway",
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "deepseek": "DeepSeek",
+        "moonshot": "Moonshot (Kimi)",
+        "azure": "Azure OpenAI",
+        "bedrock": "AWS Bedrock",
+        "vertex": "Google Vertex AI",
+        "local": "Локальна / сумісна з OpenAI (Ollama, LM Studio, vLLM)",
+        "chatgpt": "Підписка ChatGPT"
+      },
+      "fields": {
+        "apiBase": "Базова URL-адреса",
+        "azureApiBase": "URL-адреса endpoint",
+        "azureApiVersion": "Версія API",
+        "awsAccessKeyId": "Access key ID",
+        "awsProfile": "Профіль AWS",
+        "awsRegion": "Регіон",
+        "vertexProject": "Проєкт",
+        "vertexLocation": "Розташування",
+        "vertexCredentialsFile": "JSON сервісного акаунта (необов'язково)"
+      },
+      "secrets": {
+        "apiKey": "API-ключ",
+        "azureApiKey": "API-ключ",
+        "awsSecretAccessKey": "Secret access key"
+      },
+      "notes": {
+        "agentsKey": "Використовує API-ключ Claude з Налаштування → Claude і модель QA задачі. Підписка Claude не може запускати Strix: тоді виберіть тут іншого провайдера.",
+        "accessProgram": "Передові моделі OpenAI, Anthropic і Gemini відмовляються від більшості наступальних задач безпеки, якщо ваш акаунт не в програмі кібердоступу провайдера (OpenAI Daybreak, Anthropic Cyber Verification Program, Gemini Fairwind).",
+        "smallLocalModels": "Локальні моделі менші за ~30B параметрів часто видають зламані виклики інструментів.",
+        "chatgptLogin": "Ключ тут не потрібен: один раз виконайте strix auth login chatgpt у терміналі."
+      }
     },
     "detecting": "Визначення..."
   },

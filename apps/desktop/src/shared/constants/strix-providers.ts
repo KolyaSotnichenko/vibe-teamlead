@@ -47,7 +47,7 @@ export interface StrixProviderFields {
 
 export type StrixFieldName = Exclude<keyof StrixProviderFields, 'awsAuth'>;
 
-export type StrixProviderNote = 'accessProgram' | 'recommended' | 'smallLocalModels' | 'chatgptLogin' | 'agentsKey';
+export type StrixProviderNote = 'accessProgram' | 'smallLocalModels' | 'chatgptLogin' | 'agentsKey';
 
 export interface StrixProviderInfo {
   id: StrixProviderId;
@@ -61,14 +61,14 @@ export interface StrixProviderInfo {
 }
 
 export const STRIX_PROVIDERS: Record<StrixProviderId, StrixProviderInfo> = {
-  agents: { id: 'agents', exampleModel: '', modelPlaceholder: '', notes: ['agentsKey'] },
-  openrouter: { id: 'openrouter', prefix: 'openrouter', exampleModel: 'openrouter/z-ai/glm-5.3', modelPlaceholder: 'openrouter/z-ai/glm-5.3', notes: ['recommended'] },
+  agents: { id: 'agents', exampleModel: '', modelPlaceholder: '', notes: ['agentsKey', 'accessProgram'] },
+  openrouter: { id: 'openrouter', prefix: 'openrouter', exampleModel: 'openrouter/z-ai/glm-5.3', modelPlaceholder: 'openrouter/z-ai/glm-5.3', notes: [] },
   vercel: {
     id: 'vercel',
     prefix: 'vercel_ai_gateway',
     exampleModel: 'vercel_ai_gateway/zai/glm-5.3',
     modelPlaceholder: 'vercel_ai_gateway/zai/glm-5.3',
-    notes: ['recommended'],
+    notes: [],
   },
   anthropic: { id: 'anthropic', prefix: 'anthropic', exampleModel: 'anthropic/claude-sonnet-5-5', modelPlaceholder: 'anthropic/claude-sonnet-5-5', notes: ['accessProgram'] },
   openai: { id: 'openai', prefix: 'openai', exampleModel: 'openai/gpt-6.1-sol', modelPlaceholder: 'openai/gpt-6.1-sol', notes: ['accessProgram'] },

@@ -219,7 +219,7 @@
     "lspDescription": "The coder and QA fixer get a language server for the project's languages: TypeScript/JavaScript and Python ship with the app; Go, Rust and C/C++ are used when gopls, rust-analyzer or clangd is installed. Type errors arrive right after an edit and the agent can jump to definitions and references without running the whole typecheck.",
     "lspHint": "Turn off on very large repositories if memory is a problem.",
     "securityQa": "Security QA (Strix)",
-    "securityQaDescription": "After QA approves, a Strix penetration test tries to exploit the code this task changed. Findings go back to the QA fixer. Needs Docker, Strix (uv tool install strix-agent) and an Anthropic API key; uses its own LLM budget.",
+    "securityQaDescription": "After QA approves, a Strix penetration test tries to exploit the code this task changed. Findings go back to the QA fixer. Needs Docker, Strix (uv tool install strix-agent) and a model: the agents' Anthropic API key or its own provider and key below; uses its own LLM budget.",
     "securityQaScanMode": "Scan",
     "securityQaFailOn": "Block at",
     "securityQaBudget": "Budget per scan, $",
@@ -233,6 +233,62 @@
       "high": "High and above",
       "medium": "Medium and above",
       "low": "Low and above"
+    },
+    "securityQaLlm": {
+      "title": "Model for Strix",
+      "description": "Strix can use the agents' Claude key or its own model and key from another provider.",
+      "provider": "Provider",
+      "model": "Model",
+      "awsAuth": "Sign in with",
+      "awsAuthKeys": "Access keys",
+      "awsAuthProfile": "AWS profile",
+      "chooseFile": "Choose…",
+      "vertexAdcHint": "Leave empty to use gcloud application default credentials.",
+      "optional": "(optional)",
+      "save": "Save",
+      "saved": "Saved. Enter a new value to replace it.",
+      "remove": "Remove",
+      "saveFailed": "Could not save it. Try again.",
+      "replacePlaceholder": "Saved — enter a new value to replace",
+      "show": "Show",
+      "hide": "Hide",
+      "recommendation": "Strix recommends GLM-5.3 through OpenRouter or Vercel AI Gateway.",
+      "providers": {
+        "agents": "Same as agents",
+        "openrouter": "OpenRouter",
+        "vercel": "Vercel AI Gateway",
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "deepseek": "DeepSeek",
+        "moonshot": "Moonshot (Kimi)",
+        "azure": "Azure OpenAI",
+        "bedrock": "AWS Bedrock",
+        "vertex": "Google Vertex AI",
+        "local": "Local / OpenAI-compatible (Ollama, LM Studio, vLLM)",
+        "chatgpt": "ChatGPT subscription"
+      },
+      "fields": {
+        "apiBase": "Base URL",
+        "azureApiBase": "Endpoint URL",
+        "azureApiVersion": "API version",
+        "awsAccessKeyId": "Access key ID",
+        "awsProfile": "AWS profile",
+        "awsRegion": "Region",
+        "vertexProject": "Project",
+        "vertexLocation": "Location",
+        "vertexCredentialsFile": "Service-account JSON (optional)"
+      },
+      "secrets": {
+        "apiKey": "API key",
+        "azureApiKey": "API key",
+        "awsSecretAccessKey": "Secret access key"
+      },
+      "notes": {
+        "agentsKey": "Uses the Claude API key from Settings → Claude and the task's QA model. A Claude subscription can't run Strix: then choose another provider here.",
+        "accessProgram": "Frontier OpenAI, Anthropic and Gemini models refuse most offensive security tasks unless your account is in the provider's cyber access program (OpenAI Daybreak, Anthropic Cyber Verification Program, Gemini Fairwind).",
+        "smallLocalModels": "Local models under about 30B parameters often produce malformed tool calls.",
+        "chatgptLogin": "No key here: run strix auth login chatgpt once in a terminal."
+      }
     },
     "detecting": "Detecting..."
   },

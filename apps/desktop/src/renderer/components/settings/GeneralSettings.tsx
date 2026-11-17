@@ -8,6 +8,7 @@ import { SettingsSection } from './SettingsSection';
 import { AgentProfileSettings } from './AgentProfileSettings';
 import { FeatureModelSettings } from './FeatureModelSettings';
 import { ClaudeModelSelect } from './ClaudeModelSelect';
+import { StrixModelSettings } from './StrixModelSettings';
 import type {
   AppSettings,
   ToolDetectionResult
@@ -324,6 +325,7 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                   </div>
                 </div>
               )}
+              {settings.securityQaEnabled === true && <StrixModelSettings settings={settings} onSettingsChange={onSettingsChange} />}
             </div>
           </div>
         </SettingsSection>
