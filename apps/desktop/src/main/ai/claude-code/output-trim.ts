@@ -7,8 +7,8 @@
  * linters) are rewritten in the PreToolUse hook so their whole output goes to
  * a log file in the task's spec directory (`<spec>/logs/tool-<time>-<n>.log`).
  * Short output is printed as it was; long output becomes a bounded summary:
- * the exit code, the lines that look like failures with a little context,
- * the tail, and where the full log is. The command's exit code is kept.
+ * the exit code, after a failing run the lines that look like failures with a
+ * little context, the tail, and where the full log is. The command's exit code is kept.
  *
  * Done on the command side, not with a PostToolUse output rewrite, because a
  * command that exits non-zero (a failing test run, the longest output there
@@ -27,13 +27,17 @@ import { getPlatformKey } from '../../platform';
 
 type PlatformKey = ReturnType<typeof getPlatformKey>;
 
-/** Output up to this size is printed whole */
-export const TRIM_THRESHOLD_BYTES = 12_000;
-/** Budget for the failure lines and for the tail of a shortened output */
-const FAILURE_LINES = 100;
-const FAILURE_BYTES = 7_000;
-const TAIL_LINES = 40;
-const TAIL_BYTES = 4_000;
+/**
+ * Output up to this size is printed whole. Agents used to pipe these commands through `tail`
+ * (a few hundred characters back), so a shortened output stays close to that: the tail after a
+ * passing run, the failures and the tail after a failing one.
+ */
+export const TRIM_THRESHOLD_BYTES = 3_000;
+/** Budget for the failure lines (failing runs only) and for the tail of a shortened output */
+const FAILURE_LINES = 60;
+const FAILURE_BYTES = 4_000;
+const TAIL_LINES = 15;
+const TAIL_BYTES = 1_500;
 const LINE_CHARS = 300;
 
 /** Lines that look like a failure in the usual runners' output (grep -E, case-insensitive) */
@@ -189,7 +193,7 @@ export function trimmedCommand(command: string, logPath: string, platform: Platf
     `__vt_size=$(wc -c < ${log} 2>/dev/null | tr -d ' ');`,
     `if [ "\${__vt_size:-0}" -le ${TRIM_THRESHOLD_BYTES} ]; then cat ${log} 2>/dev/null;`,
     `else echo ${notice};`,
-    `if grep -q -i -E ${pattern} ${log}; then echo '--- Lines that look like failures (with context) ---';`,
+    `if [ "$__vt_status" -ne 0 ] && grep -q -i -E ${pattern} ${log}; then echo '--- Lines that look like failures (with context) ---';`,
     `grep -n -i -E -B 2 -A 3 ${pattern} ${log} | cut -c 1-${LINE_CHARS} | head -n ${FAILURE_LINES} | head -c ${FAILURE_BYTES}; echo; fi;`,
     `echo '--- Last ${TAIL_LINES} lines ---'; tail -n ${TAIL_LINES} ${log} | cut -c 1-${LINE_CHARS} | tail -c ${TAIL_BYTES};`,
     `fi; (exit $__vt_status)`,

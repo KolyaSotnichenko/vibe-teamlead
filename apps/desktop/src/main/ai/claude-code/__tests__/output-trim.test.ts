@@ -139,11 +139,28 @@ describe('trimmedCommand', () => {
     expect(out).toContain('context before');
     expect(out).toContain('Tests  1 failed | 2100 passed');
     expect(out).not.toContain('test number 5 passed');
-    expect(out.length).toBeLessThan(TRIM_THRESHOLD_BYTES + 2000);
+    // About what `| tail` gave before, plus the failures
+    expect(out.length).toBeLessThan(6500);
     // The whole output is in the log
     const full = readFileSync(log, 'utf-8');
     expect(full).toContain('test number 5 passed');
     expect(full).toContain('AssertionError');
+  });
+
+  it.runIf(bashRuns)('after a passing run, only the tail: lines that merely mention errors are noise then', () => {
+    const log = join(scratch, 'pass', 'tool.log');
+    const script = [
+      'for i in $(seq 1 500); do echo "  ✓ src/errors/handler-$i.test.ts > reports the error"; done',
+      'echo "Test Files  500 passed (500)"',
+    ].join('\n');
+    const result = run(trimmedCommand(script, log, 'darwin'));
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('exit code 0');
+    expect(result.stdout).toContain('Test Files  500 passed (500)');
+    expect(result.stdout).not.toContain('Lines that look like failures');
+    expect(result.stdout.length).toBeLessThan(2500);
+    expect(result.stdout.length).toBeGreaterThan(0);
+    expect(TRIM_THRESHOLD_BYTES).toBeLessThanOrEqual(4000);
   });
 
   it.runIf(bashRuns)('keeps a cd in the command for the rest of the shell, like the original', () => {

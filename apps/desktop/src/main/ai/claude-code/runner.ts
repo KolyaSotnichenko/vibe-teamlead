@@ -62,7 +62,7 @@ Start long-running commands (dev servers, watchers, emulators) with Bash \`run_i
 /** Every turn re-sends everything so far: fewer turns and smaller results are what make a session cheap. */
 export const CONTEXT_INSTRUCTIONS = `
 ## Keeping your context small
-Every turn re-sends everything before it. Read files with Read, not cat or sed. Put independent calls (several reads, searches, checks) in one message. Filter what a command prints: never a bare \`ps aux\` or \`lsof\`. Long output of tests, builds, typechecks, installs and linters is saved to a log and shortened for you (exit code, failure lines, the tail, the log's path): run them plainly, and read the log only when the summary is not enough. Leave generated folders (node_modules, dist, .next, build output) out of searches.`;
+Every turn re-sends everything before it. Read files with Read, not cat or sed. Put independent calls (several reads, searches, checks) in one message. Filter what a command prints: never a bare \`ps aux\` or \`lsof\`. Tests, builds, typechecks, installs and linters: run them without \`| tail\` or \`| grep\`. Their output is saved to a log, and when it is long you get the exit code, the failing lines (when it failed), the last lines and the log's path; read the log only when that is not enough. Leave generated folders (node_modules, dist, .next, build output) out of searches.`;
 
 const QA_AGENTS = new Set(['qa_reviewer', 'qa_fixer']);
 
