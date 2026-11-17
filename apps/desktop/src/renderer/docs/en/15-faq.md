@@ -4,7 +4,7 @@
 
 There is no key for the selected access mode. Open Settings → Claude:
 - in API key mode you need a key (and a base URL if it's a gateway);
-- in Claude subscription mode you need a token from `claude setup-token`.
+- in Claude subscription mode you need a token from `claude setup-token`: the **Get a token** button in Settings → Claude runs it for you.
 
 The app does not substitute the key from the other mode.
 

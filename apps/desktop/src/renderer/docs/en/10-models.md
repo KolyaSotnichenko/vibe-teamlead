@@ -8,6 +8,14 @@ Two modes, with a toggle at the top:
 
 The two keys are stored separately, encrypted by your operating system (the Keychain on macOS, DPAPI on Windows). Sessions use only the key of the selected mode, with no silent substitution. The Test connection button tests the key of the selected mode.
 
+### Getting a subscription token
+
+In Claude subscription mode, **Get a token** opens a terminal in the open project that runs `setup-token` with the Claude Code built into the app, so you don't need to know where the app is installed. Sign in in the browser, then copy the token the terminal prints into the token field. The app never reads the token from the terminal. A project must be open (terminals live in a project), and the project's terminal limit applies.
+
+Without the button, run the built-in Claude Code yourself:
+- macOS (Terminal): `"/Applications/Vibe Teamlead.app/Contents/Resources/claude-code/claude" setup-token`
+- Windows (PowerShell): `& "<install folder>\resources\claude-code\claude.exe" setup-token`. To find the install folder, right-click the app's shortcut → Open file location.
+
 ## Models
 
 - **Agent profile** (Settings → Agent Settings): models and "thinking" level for each phase: spec, planning, code, QA. Every current Claude model (Opus, Sonnet and Haiku 5.5) takes a thinking level: it sets how much effort the model puts in, and the model decides how much to think.
