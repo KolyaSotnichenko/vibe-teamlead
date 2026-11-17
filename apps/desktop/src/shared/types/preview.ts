@@ -17,6 +17,8 @@ export interface PreviewStatus {
   origins: string[];
   message?: string;
   logTail?: string;
+  /** A service that exited on its own after the preview was ready */
+  stoppedService?: string;
   database?: 'none' | 'started' | 'unavailable';
   databaseReason?: string;
   /** A local mail catcher, when the project's settings configure SMTP */

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { isWindows } from '../../../platform';
 
@@ -41,6 +41,20 @@ afterEach(async () => {
 });
 
 describe('dev servers', () => {
+  it('reports a server that exits on its own after it started, and not one that is stopped', async () => {
+    const p = project();
+    writeFileSync(path.join(p.cwd, 'dies.js'), `require('http').createServer((q, s) => { s.end('x'); process.exit(3); }).listen(+process.env.PORT)`);
+    const exits: Array<string | number | null> = [];
+    const dying = await startDevServer({ ...p, name: 'dies', command: 'node dies.js', onExit: (code) => exits.push(code) });
+    await fetch(dying.url).catch(() => {});
+    await vi.waitFor(() => expect(exits).toEqual([3]));
+    const stopped: unknown[] = [];
+    await startDevServer({ ...p, name: 'web', command: 'node server.js', onExit: (code) => stopped.push(code) });
+    await stopDevServer('web');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(stopped).toEqual([]);
+  });
+
   it('starts on a free port, waits until it answers and passes the env', async () => {
     const p = project();
     const started = await startDevServer({ ...p, name: 'web', command: 'node server.js', env: { GREETING: 'there' } });

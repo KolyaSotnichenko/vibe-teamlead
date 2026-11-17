@@ -283,6 +283,57 @@ describe('a preview session', () => {
     });
   });
 
+  describe('a service that exits after the preview was ready', () => {
+    function exiting() {
+      const exits = new Map<string, (code: number | null) => void>();
+      const stopServer = vi.fn(async () => true);
+      const { d } = deps({
+        startServer: vi.fn(async (o: { name: string; onExit?: (code: number | null) => void }) => {
+          if (o.onExit) exits.set(o.name, o.onExit);
+          return { url: `http://localhost:${4200 + exits.size}`, port: 4200 + exits.size, logPath: `/logs/${o.name}.log`, reused: false };
+        }),
+        stopServer,
+        readLog: vi.fn(() => `line 1\nError: ECONNRESET\n${'x'.repeat(5000)}end`),
+        portFree: vi.fn(async () => true),
+      });
+      return { d, exits, stopServer };
+    }
+
+    it('fails the preview, naming the service and keeping the end of its log', async () => {
+      const { d, exits, stopServer } = exiting();
+      const statuses: PreviewStatus[] = [];
+      await startPreview(project(), (s) => statuses.push(s), d);
+      exits.get('preview-api')?.(1);
+      await vi.waitFor(() => expect(statuses.at(-1)?.stage).toBe('failed'));
+      expect(statuses.at(-1)).toMatchObject({ stage: 'failed', stoppedService: 'api', url: undefined, origins: [] });
+      expect(statuses.at(-1)?.logTail?.endsWith('end')).toBe(true);
+      expect(statuses.at(-1)?.logTail?.length).toBeLessThanOrEqual(2000);
+      expect(d.readLog).toHaveBeenCalledWith('/logs/preview-api.log');
+      expect(stopServer).toHaveBeenCalledWith('preview-web');
+      expect(currentPreview()).toBeNull();
+    });
+
+    it('ignores an exit while the app is stopping the preview', async () => {
+      const { d, exits } = exiting();
+      const statuses: PreviewStatus[] = [];
+      await startPreview(project(), (s) => statuses.push(s), d);
+      await stopPreview();
+      exits.get('preview-api')?.(0);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(statuses.at(-1)?.stage).toBe('stopped');
+    });
+
+    it('ignores an exit of a wrapper whose service still answers on its port', async () => {
+      const { d, exits } = exiting();
+      vi.mocked(d.portFree).mockResolvedValue(false);
+      const statuses: PreviewStatus[] = [];
+      await startPreview(project(), (s) => statuses.push(s), d);
+      exits.get('preview-api')?.(0);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(statuses.at(-1)?.stage).toBe('ready');
+    });
+  });
+
   it('keeps where each service logs, for the Logs panel', async () => {
     const { d } = deps();
     await startPreview(project(), () => {}, d);

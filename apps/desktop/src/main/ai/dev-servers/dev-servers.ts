@@ -31,6 +31,8 @@ export interface StartOptions {
   portEnv?: string;
   env?: Record<string, string>;
   timeoutMs?: number;
+  /** Called when the server's process exits on its own after it was started; not when it is stopped here */
+  onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
 }
 
 export interface StartResult {
@@ -293,6 +295,9 @@ export async function startDevServer(options: StartOptions): Promise<StartResult
   const server: Server = { name, signature, pid, startedAt: host.startedAt(pid), port, logPath, specDir, child };
   running.set(name, server);
   saveList(specDir);
+  child.once('exit', (code, signal) => {
+    if (running.get(name) === server) options.onExit?.(code, signal);
+  });
 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

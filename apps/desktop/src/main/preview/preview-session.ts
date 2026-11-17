@@ -50,6 +50,8 @@ export interface PreviewDeps {
   runCommand: (command: string, cwd: string, env: Record<string, string>, signal: AbortSignal) => Promise<{ code: number; output: string }>;
   startServer: (options: Parameters<typeof startDevServer>[0]) => ReturnType<typeof startDevServer>;
   stopServer: (name: string) => Promise<boolean>;
+  /** A service's log file as text, or null when it can't be read */
+  readLog: (path: string) => string | null;
   cleanUpLeftovers: (specDir: string) => void;
   /** A local mail catcher, when the project's example settings configure SMTP */
   startMail: (docker: DockerRun, key: string) => Promise<PreviewMail>;
@@ -148,6 +150,13 @@ export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | '
     },
     startServer: startDevServer,
     stopServer: stopDevServer,
+    readLog: (path) => {
+      try {
+        return readFileSync(path, 'utf-8');
+      } catch {
+        return null;
+      }
+    },
     cleanUpLeftovers,
     pickPort: () =>
       new Promise((resolvePort, reject) => {
@@ -339,6 +348,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
     const name = serverName(service);
     session.servers.push(name);
     let started;
+    let actualPort = ports[service.name];
     try {
       started = await session.deps.startServer({
         name,
@@ -349,6 +359,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
         portEnv: service.portEnv ?? 'PORT',
         env,
         timeoutMs: SERVER_START_TIMEOUT_MS,
+        onExit: () => void serviceExited(session, service.name, name, actualPort),
       });
     } catch (error) {
       if (cancelled(session)) throw new Cancelled();
@@ -360,6 +371,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
       await session.deps.stopServer(name);
       throw new Cancelled();
     }
+    actualPort = started.port;
     urls[service.name] = started.url;
     session.logs[service.name] = started.logPath;
     if (service.page) pageUrl = started.url;
@@ -367,6 +379,27 @@ async function startServices(session: Session, files: string[]): Promise<Started
     if (own && started.port !== own) displaced[service.name] = { ownPort: own, previewPort: started.port };
   }
   return { url: pageUrl, issues: findHardcodedAddresses(ordered, { files, read }, displaced) };
+}
+
+const LOG_LINES = 30;
+
+/**
+ * A service's process ended on its own. Before "ready" start-up reports it; after, the preview
+ * fails like a start-up failure does, naming the service with the end of its log. A stop by the
+ * app or the owner is not this (the session is over or its servers are already taken off the list),
+ * and a wrapper that exited while its service still answers on the port is not either.
+ */
+async function serviceExited(session: Session, service: string, name: string, port: number | undefined): Promise<void> {
+  const listening = () => session.servers.includes(name) && session.status.stage === 'ready' && current === session && !cancelled(session);
+  if (!listening()) return;
+  const logPath = session.logs[service];
+  if (port !== undefined && !(await session.deps.portFree(port))) return;
+  // The check took time: a stop or a restart may have happened meanwhile
+  if (!listening()) return;
+  const log = (logPath ? session.deps.readLog(logPath) : null) ?? '';
+  const logTail = tail(log.split('\n').slice(-LOG_LINES).join('\n').trim());
+  await teardown(session);
+  failed(session, Object.assign(new Error(`${service} stopped`), { logTail, stoppedService: service }));
 }
 
 const UNREACHABLE_STATUS = new Set([502, 504]);
@@ -416,7 +449,8 @@ async function teardown(session: Session): Promise<void> {
 
 function failed(session: Session, error: unknown): PreviewStatus {
   const message = error instanceof Error ? error.message : String(error);
-  emit(session, { stage: 'failed', message, logTail: (error as { logTail?: string }).logTail, url: undefined, origins: [] });
+  const { logTail, stoppedService } = error as { logTail?: string; stoppedService?: string };
+  emit(session, { stage: 'failed', message, logTail, stoppedService, url: undefined, origins: [] });
   if (current === session) current = null;
   return session.status;
 }
