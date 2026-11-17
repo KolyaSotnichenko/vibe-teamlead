@@ -15,6 +15,33 @@
 
 The scanners (gitleaks, OSV-Scanner), Claude Code, CodeGraph, Superpowers and Mermaid ship with the app, so you don't need to install anything separately. Semgrep is not bundled (it is a Python package): install it if you want that gate. Docker and Chrome are needed only for Strix and browser checks. The status of all tools is shown in Settings → Tools.
 
+## Strix's model
+
+Strix runs on its own model, chosen in Settings → Agent Settings → Security QA (Strix) → Model for Strix. By default it is **Same as agents**: the Claude API key from Settings → Claude and the task's QA model. A Claude subscription can't run Strix, so with a subscription choose another provider here, or the pentest is skipped.
+
+| Provider | Model (example) | What you enter |
+|---|---|---|
+| Same as agents | the task's QA model | nothing (the Claude API key) |
+| OpenRouter | `openrouter/z-ai/glm-5.3` | API key |
+| Vercel AI Gateway | `vercel_ai_gateway/zai/glm-5.3` | API key |
+| Anthropic | `anthropic/claude-sonnet-5-5` | API key |
+| OpenAI | `openai/gpt-6.1-sol` | API key; a base URL for an OpenAI-compatible server (optional) |
+| DeepSeek | `deepseek/deepseek-v4-pro` | API key |
+| Moonshot (Kimi) | `moonshot/kimi-k3.1-pro` | API key |
+| Azure OpenAI | `azure/<deployment-name>` | API key, endpoint URL, API version (e.g. `2025-11-01-preview`) |
+| AWS Bedrock | `bedrock/us.anthropic.claude-sonnet-5-5` | access key ID, secret access key and region, or an AWS profile and region |
+| Google Vertex AI | `vertex_ai/gemini-4-argon` | project, location (e.g. `global`), a service-account JSON file (optional; otherwise gcloud application default credentials) |
+| Local / OpenAI-compatible (Ollama, LM Studio, vLLM) | `ollama/qwen3-vl` or `openai/local-model` | base URL (e.g. `http://localhost:11434`, `http://localhost:1234/v1`), API key (optional) |
+| ChatGPT subscription | `chatgpt/gpt-5.4` | nothing: run `strix auth login chatgpt` once in a terminal |
+
+The model field is filled with the provider's example when you choose it; you can change it. A model typed without the provider's prefix gets it.
+
+- **Strix's recommendation:** GLM-5.3 through OpenRouter or Vercel AI Gateway.
+- **Cyber access programs:** frontier OpenAI, Anthropic and Gemini models refuse most offensive security tasks unless your account is in the provider's program (OpenAI Daybreak, Anthropic Cyber Verification Program, Gemini Fairwind).
+- **Local models** under about 30B parameters often produce malformed tool calls.
+
+Keys and secrets (API keys, the AWS secret access key, the Azure key) are kept apart from the settings, encrypted by the system (Keychain on macOS), separately for each provider. After saving, the form shows only that a key is saved; you can replace or remove it. Strix gets only the chosen provider's variables, never the Claude key unless you chose Same as agents, and keys are masked in the logs you and the agents see. If something the provider needs is missing, the pentest is skipped and the reason names what is missing; nothing fails.
+
 ## Placeholders left in the product
 
 A task can ship temporary text on purpose: a home page that says it is a placeholder, "coming soon", "lorem ipsum". When no later task replaces it, it stays. The board names such text in the project's pages (any stack: React, Vue, Svelte, Astro, server templates), read again after every merge, with the file and line. **Create a task** adds a task to replace it; **Leave it** keeps it off the list for this project. It is a text search, not a model, so it costs nothing. Inputs' `placeholder` attributes, tests, stories and server code are not counted.

@@ -7,7 +7,7 @@
 | **Terminal Fonts** | Terminal fonts. |
 | **Claude** | Access mode (API key / subscription), keys, base URL, connection test. |
 | **Tools** | Status of bundled and external tools (scanners, Chrome, Docker, Strix, CodeGraph; on Windows also Git for Windows, which agents and app checks need to run commands). |
-| **Agent Settings** | Model profile, phase and feature models, Architect (every task / complex tasks only / never), Format and lint after each edit (the project's own prettier/ESLint, Biome, ruff or gofmt on every file the coder writes; on by default), Language servers for agents (bundled TypeScript and Python servers, gopls/rust-analyzer/clangd when installed; on by default, turn off on very large repositories if memory is a problem), Security QA (Strix). |
+| **Agent Settings** | Model profile, phase and feature models, Architect (every task / complex tasks only / never), Format and lint after each edit (the project's own prettier/ESLint, Biome, ruff or gofmt on every file the coder writes; on by default), Language servers for agents (bundled TypeScript and Python servers, gopls/rust-analyzer/clangd when installed; on by default, turn off on very large repositories if memory is a problem), Security QA (Strix) with its own model and key from a provider of your choice. |
 | **Memory** | Enable/disable, embedding model. |
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
 | **Telegram** | Your own Telegram bot: token, pairing, which notifications it sends, the morning digest. See the Telegram page. |

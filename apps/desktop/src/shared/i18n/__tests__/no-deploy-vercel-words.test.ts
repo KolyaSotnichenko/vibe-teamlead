@@ -2,7 +2,7 @@
  * The Deploy area is called CI and Vercel is gone from the app: no UI string (en, uk)
  * and no documentation page may use "Vercel" or "Deploy"/"Деплой" as a UI word.
  * Exempt: the name of the UX-review guidelines ("Vercel's Web Interface Guidelines",
- * "Web Interface Guidelines від Vercel"), the "Vercel AI Gateway" model provider of Security QA
+ * "Web Interface Guidelines від Vercel"), the "Vercel AI Gateway" model provider of Security QA and its model prefix
  * (Strix), and "deployment" words of other products
  * (Azure embedding deployment), which the whole-word match below does not catch.
  */
@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 const LOCALES_DIR = join(__dirname, '..', 'locales');
 const DOCS_DIR = join(__dirname, '..', '..', '..', 'renderer', 'docs');
 
-const EXEMPT = [/Vercel['’]s Web Interface Guidelines/g, /Web Interface Guidelines від Vercel/g, /Vercel AI Gateway/g];
+const EXEMPT = [/Vercel['’]s Web Interface Guidelines/g, /Web Interface Guidelines від Vercel/g, /Vercel AI Gateway/g, /vercel_ai_gateway\//g];
 const VERCEL = /vercel/i;
 const DEPLOY = /\bdeploy(?:s|ed|ing)?\b|деплой|деплої/i;
 
