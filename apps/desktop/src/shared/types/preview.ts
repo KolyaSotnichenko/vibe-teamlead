@@ -121,6 +121,9 @@ export interface UxReviewResult {
   at: string;
 }
 
+/** The project's RUNNING.md (how to run it) and the folder it was read from */
+export type PreviewRunningDoc = ({ exists: false } | { exists: true; markdown: string; truncated: boolean }) & { dir: string };
+
 export interface PreviewAPI {
   /** `taskId`: that task's worktree instead of main */
   start: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
@@ -147,6 +150,8 @@ export interface PreviewAPI {
   focusPin: (n: number) => Promise<IPCResult>;
   onOverlayEvent: (callback: (event: PreviewOverlayEvent) => void) => () => void;
   loadNotes: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewNote[]>>;
+  /** RUNNING.md from the project's root, or the task's worktree */
+  runningDoc: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewRunningDoc>>;
   /** Replaces the draft; returns what was kept */
   saveNotes: (projectId: string, notes: PreviewNote[], taskId?: string) => Promise<IPCResult<PreviewNote[]>>;
 }

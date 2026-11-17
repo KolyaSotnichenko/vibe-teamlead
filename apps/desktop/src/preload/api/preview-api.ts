@@ -32,5 +32,6 @@ export const createPreviewAPI = (): PreviewAPI => ({
     return () => ipcRenderer.removeListener(IPC_CHANNELS.PREVIEW_OVERLAY_EVENT, handler);
   },
   loadNotes: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_LOAD, projectId, taskId),
+  runningDoc: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RUNNING_DOC, projectId, taskId),
   saveNotes: (projectId, notes, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_SAVE, projectId, notes, taskId),
 });

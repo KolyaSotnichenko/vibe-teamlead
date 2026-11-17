@@ -15,7 +15,7 @@ import path from 'node:path';
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewStatus, UxReviewResult } from '../../shared/types';
+import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
 import { currentPreview, previewLogs, previewMailPort, startPreview, stopPreview } from '../preview/preview-session';
@@ -23,6 +23,7 @@ import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
 import { readNotesDraft, writeNotesDraft } from '../preview/notes-draft';
 import { previewWorktreePath } from '../preview/preview-worktree';
+import { readRunningMd } from '../preview/running-md';
 import { runClaudeTask } from '../ai/claude-code/task';
 import { getFeatureSettings } from './feature-settings-helper';
 import { PreviewView } from '../preview/preview-view';
@@ -219,6 +220,19 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }
+  });
+
+  // How to run the project, for when the preview can't: the task's worktree for a task's preview
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_RUNNING_DOC, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewRunningDoc> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    let dir = project.path;
+    if (typeof taskId === 'string' && taskId) {
+      const found = projectStore.getTasks(projectId).find((t) => t.id === taskId);
+      const worktree = found ? findTaskWorktree(project.path, found.specId) : null;
+      if (worktree) dir = worktree;
+    }
+    return { success: true, data: { ...readRunningMd(dir), dir } };
   });
 
   ipcMain.handle(IPC_CHANNELS.PREVIEW_UX_REVIEW_CANCEL, (): IPCResult => {

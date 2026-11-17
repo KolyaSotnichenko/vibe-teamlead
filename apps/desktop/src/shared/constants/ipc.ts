@@ -151,6 +151,7 @@ export const IPC_CHANNELS = {
   PREVIEW_UX_REVIEW_LAST: 'preview:uxReviewLast',
   PROJECT_LOOSE_ENDS: 'project:looseEnds',  // Placeholders left in the project's UI files
   PREVIEW_RESET_DATA: 'preview:resetData',
+  PREVIEW_RUNNING_DOC: 'preview:runningDoc',  // The project's RUNNING.md, when the preview can't run it
   DESIGN_REFS_LIST: 'design:refsList',
   DESIGN_REFS_PICK: 'design:refsPick',
   DESIGN_REFS_ADD_FILES: 'design:refsAddFiles',
