@@ -1099,6 +1099,7 @@
   "preview": {
     "title": "Preview",
     "startingBody": "The app from main is starting. It stops when you leave this page.",
+    "serviceStopped": "The {{service}} service stopped unexpectedly. The last lines of its log are below.",
     "failed": "The preview did not start.",
     "stage": {
       "worktree": "Updating to main",

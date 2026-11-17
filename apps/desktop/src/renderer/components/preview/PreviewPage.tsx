@@ -114,7 +114,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
             <div className="absolute inset-0 overflow-auto bg-background p-6">
               {status?.stage === 'failed' ? (
                 <div className="space-y-3">
-                  <p role="alert" className="text-sm font-semibold text-destructive">{status.message ?? t('preview.failed')}</p>
+                  <p role="alert" className="text-sm font-semibold text-destructive">{status.stoppedService ? t('preview.serviceStopped', { service: status.stoppedService }) : (status.message ?? t('preview.failed'))}</p>
                   {status.logTail && <pre className="max-h-96 overflow-auto border border-border p-3 font-mono text-xs">{status.logTail}</pre>}
                   <RunningDoc projectId={project.id} doc={runningDoc} />
                 </div>

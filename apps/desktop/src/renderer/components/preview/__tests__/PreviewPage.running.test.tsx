@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type { PreviewRunningDoc, PreviewStatus, Project } from '../../../../shared/types';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { service?: string }) => (o?.service ? `${key}:${o.service}` : key), i18n: { language: 'en' } }) }));
 vi.mock('../../../stores/task-store', () => ({ createTask: vi.fn(), startTaskOrQueue: vi.fn(), submitReview: vi.fn() }));
 vi.mock('../../../stores/project-store', () => ({ updateProjectSettings: vi.fn() }));
 const session = vi.hoisted(() => ({ status: null as PreviewStatus | null }));
@@ -44,6 +44,22 @@ describe('PreviewPage and RUNNING.md', () => {
   it('when it did not start and there is no RUNNING.md, offers the task that writes it', async () => {
     withDoc(NONE);
     session.status = { projectId: 'p1', stage: 'failed', origins: [], message: 'no' };
+    render(<PreviewPage project={PROJECT} />);
+    expect(await screen.findByRole('button', { name: 'preview.running.createTask' })).toBeInTheDocument();
+  });
+
+  it('when a service stopped after the preview was ready, names it with its last log lines and RUNNING.md', async () => {
+    withDoc(HAS);
+    session.status = { projectId: 'p1', stage: 'failed', origins: [], message: 'api stopped', stoppedService: 'api', logTail: 'Error: ECONNRESET' };
+    render(<PreviewPage project={PROJECT} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('preview.serviceStopped:api');
+    expect(screen.getByText('Error: ECONNRESET')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Start' })).toBeInTheDocument();
+  });
+
+  it('when a service stopped and there is no RUNNING.md, offers the task that writes it', async () => {
+    withDoc(NONE);
+    session.status = { projectId: 'p1', stage: 'failed', origins: [], message: 'api stopped', stoppedService: 'api' };
     render(<PreviewPage project={PROJECT} />);
     expect(await screen.findByRole('button', { name: 'preview.running.createTask' })).toBeInTheDocument();
   });
