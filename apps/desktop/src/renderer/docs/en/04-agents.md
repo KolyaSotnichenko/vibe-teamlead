@@ -44,3 +44,7 @@ While a subagent works, the task card shows how many are working (hover for thei
 ## Long command output
 
 Every turn of an agent re-sends everything before it, so a test run that prints thousands of lines would be paid for again on every later turn. When an agent runs tests, a build, a typecheck, an install or a linter, the whole output is saved to a log in the task's folder (`.vibe-teamlead/specs/<task>/logs/`), and when it is long the agent gets a short version: the exit code, when the command failed the lines that look like failures with a few lines around them, the last lines, and the log's path, which it reads when it needs more. Short output, and commands the agent filters itself (with `|`, `>` or in the background), are left as they are. The app's own checks before QA and after a merge are not affected.
+
+## Long sessions
+
+The designer, the coder and the QA fixer compact their conversation once it reaches about 170K tokens (instead of near the model's 1M window): Claude Code replaces the history with a summary, and the summary keeps what the role needs — for the coder the subtask, its failing test and file, the files changed and what is left; for the designer the frames done and left, your comments word for word and the design-system decisions; for the QA fixer the issues fixed and left. Each compaction rebuilds the prompt cache, so it is set high on purpose; the task log shows a line when it happens. Other agents keep Claude Code's default.
