@@ -3,17 +3,86 @@
 | Layer | What it does |
 |---|---|
 | **TDD + AC** | Every requirement has a test; QA checks that the test actually holds it. |
-| **App checks** | The app itself runs the project's typecheck and tests on a clean copy of what is committed, before each QA review and after a merge, and reads the real exit codes. A failure blocks approval only if the same check passes on the commit the task started from. It also blocks a deleted test file, an existing test switched off and a changed `test` or `typecheck` script. A test that runs only when a resource is there doesn't count as switched off. A check or install that runs out of time gets a second try before it counts. If a check can't say anything (it fails on the base too, its tool isn't installed), the task isn't blocked and the log says it wasn't verified. A check that fails on main too gets one task that fixes main: urgent, created and started at once, past the queue; tasks that hit the same failure while it is open don't start another. When main has no checks at all yet (a new project's first task), the app runs the ones the task itself sets up, with its database, and says so in the task's window: a failure then blocks, and a pass counts for less, since the task chose what checks it. Commands are detected for npm, pnpm, yarn, bun, Python, Go, Rust, Maven, Gradle, .NET, Ruby, PHP and Swift at the project's root; others go in the project's settings. If the project's compose file names a database (Postgres, MySQL, Redis, Mongo) and Docker is running, the app starts an empty temporary one for each run, applies the migrations (Prisma, Drizzle, Django, Alembic, Rails, Laravel), takes settings from `.env.example` and removes the database afterwards, so there's nothing to set up. Without Docker the log says the check couldn't be completed, and the task isn't blocked. Migrations only ever run on that temporary database, and settings in `.env.example` that point at any other database are left out. The task's window shows what passed, and its card says when the checks couldn't say everything. These checks run the task's own code with your permissions, without API keys in their environment, and not in a sandbox. |
+| **App checks** | The app runs the project's typecheck and tests itself, on a clean copy of what is committed, before each QA review and after a merge. A failure blocks approval only if the check passes on the base (see "App checks" below). |
 | **gitleaks** | Secrets in the code block approval. |
 | **OSV-Scanner** | Vulnerable dependencies block approval. |
-| **Semgrep** | Static analysis of the changed files (injection, unsafe APIs; its registry rules at ERROR severity) blocks approval. Runs only when Semgrep is installed (`brew install semgrep` on macOS; `pip install semgrep` on Windows, where there is no winget package, or anywhere with Python); otherwise, or when its rules can't be fetched, the gate is skipped and the report says so. When Semgrep could not parse some of the files, or reported an error about the run itself, the report says "CLEAR (PARTIAL: …)" and the Security tab names what was not covered, so you can look at those files yourself; if it could not scan any of the files, the gate counts as failed. |
+| **Semgrep** | Static analysis of the changed files blocks approval. It runs only when Semgrep is installed (see "Semgrep" below). |
 | **Design check** | A static check of added UI lines against the design system tokens + a screenshot review (see "Design system and Storybook"). |
 | **Browser check** | QA opens the app in Chrome (Playwright / DevTools MCP), takes screenshots and reads the console. |
 | **Strix** | Pentest in Docker (optional). Findings at the level you set block the task and go to the QA fixer. Smaller ones don't stop it: the app files them as one new task on the board, without repeats, for you to start when you choose. |
 | **Security hooks** | Path boundaries, a list of forbidden commands (everything else is allowed), a ban on killing the app's own processes. |
-| **Environment isolation** | Agents run with their own Claude Code configuration (`~/.vibe-teamlead/claude-code`), not your `~/.claude`. Environment variables are filtered. The commands an agent runs (tests, installs, dev servers) start without the app's Claude key, so project code can't read or spend it. |
+| **Environment isolation** | Agents use their own Claude Code configuration, not your `~/.claude`, and commands start without the app's Claude key. |
 
 The scanners (gitleaks, OSV-Scanner), Claude Code, CodeGraph, Superpowers and Mermaid ship with the app, so you don't need to install anything separately. Semgrep is not bundled (it is a Python package): install it if you want that gate. Docker and Chrome are needed only for Strix and browser checks. The status of all tools is shown in Settings → Tools.
+
+## Details
+
+### App checks
+
+The app itself runs the project's typecheck and tests on a clean copy of what is committed, before each QA review and after a merge, and reads the real exit codes.
+
+#### What blocks approval
+
+- A failure blocks approval only if the same check passes on the commit the task started from.
+- A deleted test file blocks approval.
+- An existing test switched off blocks approval. A test that runs only when a resource is there doesn't count as switched off.
+- A changed `test` or `typecheck` script blocks approval.
+- A check or install that runs out of time gets a second try before it counts.
+
+#### When a check can't say anything
+
+- If a check can't say anything (it fails on the base too, its tool isn't installed), the task isn't blocked and the log says it wasn't verified.
+- A check that fails on main too gets one task that fixes main. The task is urgent, created and started at once, past the queue.
+- Tasks that hit the same failure while that task is open don't start another.
+
+#### A project's first task
+
+- When main has no checks at all yet (a new project's first task), the app runs the ones the task itself sets up, with its database, and says so in the task's window.
+- A failure then blocks.
+- A pass counts for less, since the task chose what checks it.
+
+#### Which commands run
+
+- Commands are detected for npm, pnpm, yarn, bun, Python, Go, Rust, Maven, Gradle, .NET, Ruby, PHP and Swift at the project's root.
+- Others go in the project's settings.
+
+#### Databases
+
+- If the project's compose file names a database (Postgres, MySQL, Redis, Mongo) and Docker is running, the app starts an empty temporary one for each run.
+- It applies the migrations (Prisma, Drizzle, Django, Alembic, Rails, Laravel), takes settings from `.env.example` and removes the database afterwards. There is nothing to set up.
+- Migrations only ever run on that temporary database.
+- Settings in `.env.example` that point at any other database are left out.
+- Without Docker the log says the check couldn't be completed, and the task isn't blocked.
+
+#### Where you see the result
+
+- The task's window shows what passed.
+- Its card says when the checks couldn't say everything.
+
+#### What isn't isolated
+
+- These checks run the task's own code with your permissions, without API keys in their environment, and not in a sandbox.
+
+### Semgrep
+
+Static analysis of the changed files (injection, unsafe APIs; its registry rules at ERROR severity) blocks approval.
+
+#### When it runs
+
+- It runs only when Semgrep is installed: `brew install semgrep` on macOS; `pip install semgrep` on Windows, where there is no winget package, or anywhere with Python.
+- Otherwise, or when its rules can't be fetched, the gate is skipped and the report says so.
+
+#### Partial scans
+
+- When Semgrep could not parse some of the files, or reported an error about the run itself, the report says "CLEAR (PARTIAL: …)".
+- The Security tab then names what was not covered, so you can look at those files yourself.
+- If it could not scan any of the files, the gate counts as failed.
+
+### Environment isolation
+
+- Agents run with their own Claude Code configuration (`~/.vibe-teamlead/claude-code`), not your `~/.claude`.
+- Environment variables are filtered.
+- The commands an agent runs (tests, installs, dev servers) start without the app's Claude key, so project code can't read or spend it.
 
 ## Strix's model
 
