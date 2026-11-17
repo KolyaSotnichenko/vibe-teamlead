@@ -9,9 +9,10 @@
 
 **Where it lives.** In the project's `.vibe-teamlead/`, or in a repository file (`DESIGN-SYSTEM.md` at the root, `design/` or `docs/`), or at a path you specify.
 
-**The tab has two parts** (Context → Design system):
+**The tab has three parts** (Context → Design system):
 - **Setup** — how the system is made, the QA check and Storybook. It opens first while there is no system or when it needs an update.
 - **Overview** — the system itself: colours, fonts, rules and the document, editable, with **Apply to the project** under the tokens. It opens first otherwise.
+- **Screens** — the library of wireframes and screens the designer drew for tasks (see "Design before code").
 
 The line next to the parts says where things stand: how the system was made and when, and how many differences the code has from it.
 

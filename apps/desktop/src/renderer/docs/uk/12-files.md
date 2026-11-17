@@ -8,8 +8,11 @@
 | `<worktree>/.codegraph/` | Індекс CodeGraph. |
 | `<проєкт>/.vibe-teamlead/design-system.md`, `design-tokens.json` | Дизайн-система (якщо не у файлі репозиторію). |
 | `<проєкт>/.vibe-teamlead/specs/<id>/design_check.md` | Результат дизайн-перевірки задачі. |
+| `<project>/.vibe-teamlead/specs/<id>/design/` | Wireframe і екрани задачі. |
+| `<project>/.vibe-teamlead/design/` | Бібліотека дизайну проєкту, референси та імпортований пакет. |
+| `~/.vibe-teamlead/worktrees/preview` | Власна копія main для Preview, поза проєктом. |
 | `~/.vibe-teamlead/memories` | Пам'ять агентів. |
 | `~/.vibe-teamlead/claude-code` | Окрема конфігурація Claude Code для агентів. |
-| Папка даних застосунку (Electron `userData` у `~/Library/Application Support/`) | Налаштування застосунку, зашифровані ключі. |
+| Папка даних застосунку (Electron `userData`: `~/Library/Application Support/` на macOS, `%APPDATA%` на Windows) | Налаштування застосунку, зашифровані ключі. |
 
 `.vibe-teamlead/` виключається з git через власний файл виключень репозиторію (`.git/info/exclude`), тож застосунок не додає в проєкт `.gitignore` і вам нічого не треба комітити.
