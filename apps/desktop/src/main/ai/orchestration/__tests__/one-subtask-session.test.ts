@@ -47,14 +47,13 @@ describe('one coder session, one subtask', () => {
   it('the coder prompt keeps its verification, commit and test-first rules', () => {
     const prompt = coderPrompt();
     for (const rule of [
-      /Test First \(MANDATORY\)/,
+      /### Test first/,
       /red → green → refactor/,
-      /RUN SELF-CRITIQUE/,
-      /VERIFY THE SUBTASK/,
+      /## Verify the subtask/,
       /':!\.vibe-teamlead'/,
-      /Do NOT run `git push`/,
+      /Don't run `git push`/,
       /git config user\.name/,
-      /\.secretsignore/,
+      /gitleaks/,
       /start_dev_server/,
       /mcp__context7__resolve-library-id/,
       /Modify only listed files/,

@@ -21,7 +21,8 @@ describe('coder prompt', () => {
   });
 
   it("doesn't loosen test-first", () => {
-    expect(coder).toMatch(/Test First \(MANDATORY\)/);
+    expect(coder).toMatch(/### Test first/);
+    expect(coder).toMatch(/red → green → refactor/);
     expect(coder).toMatch(/Never edit a test to make it pass/);
   });
 
