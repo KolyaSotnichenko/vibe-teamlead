@@ -55,7 +55,7 @@ import { Worktrees } from './components/Worktrees';
 import { PreviewPage } from './components/preview/PreviewPage';
 import { DeployPage } from './components/deploy/DeployPage';
 import { listenOpenDeploy } from './lib/open-deploy';
-import { listenOpenTerminal, openProjectTerminal } from './lib/open-terminal';
+import { listenOpenClaudeSetupToken, listenOpenTerminal, openProjectTerminal, openSetupTokenTerminal } from './lib/open-terminal';
 import type { DeployTarget } from '../shared/types/deploy';
 import { AgentTools } from './components/AgentTools';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -338,6 +338,27 @@ export function App() {
         if (openProjectTerminal(cwd, selectedProjectPath, store) === 'limit') {
           toast({ title: t('terminal:limitReached', { max: store.maxTerminals }), variant: 'destructive' });
         }
+      }),
+    [selectedProjectPath, t]
+  );
+
+  // Settings → Claude → "Get a token": a terminal in the open project runs the bundled `claude setup-token`
+  useEffect(
+    () =>
+      listenOpenClaudeSetupToken(() => {
+        const store = useTerminalStore.getState();
+        const result = openSetupTokenTerminal(selectedProjectPath, store);
+        if (result === 'no-project') {
+          toast({ title: t('settings:claude.setupToken.noProject'), variant: 'destructive' });
+          return;
+        }
+        if (result === 'limit') {
+          toast({ title: t('settings:claude.setupToken.limit', { max: store.maxTerminals }), variant: 'destructive' });
+          return;
+        }
+        setIsSettingsDialogOpen(false);
+        setSelectedTask(null);
+        setActiveView('terminals');
       }),
     [selectedProjectPath, t]
   );

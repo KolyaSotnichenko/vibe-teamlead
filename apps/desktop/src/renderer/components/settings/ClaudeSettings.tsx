@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { SettingsSection } from './SettingsSection';
@@ -6,6 +7,7 @@ import { ClaudeCredentialPanel } from './ClaudeCredentialPanel';
 import { useClaudeCredential } from '../../hooks/useClaudeCredential';
 import { saveSettings } from '../../stores/settings-store';
 import { cn } from '../../lib/utils';
+import { openClaudeSetupToken } from '../../lib/open-terminal';
 import type { AppSettings } from '../../../shared/types';
 
 interface ClaudeSettingsProps {
@@ -87,6 +89,13 @@ export function ClaudeSettings({ settings, onSettingsChange }: ClaudeSettingsPro
         ) : (
           <>
             <p className="border-l-2 border-foreground bg-muted px-3 py-2 text-sm text-muted-foreground">{t('claude.mode.personalNote')}</p>
+            {/* The bundled Claude Code prints the token in the app's terminal; the owner pastes it below */}
+            <div className="space-y-2">
+              <Button type="button" variant="outline" onClick={openClaudeSetupToken}>
+                {t('claude.setupToken.button')}
+              </Button>
+              <p className="text-sm text-muted-foreground">{t('claude.setupToken.help')}</p>
+            </div>
             <ClaudeCredentialPanel status={status} onStatusChange={setStatus} slot="subscription" />
           </>
         )}

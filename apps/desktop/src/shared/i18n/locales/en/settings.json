@@ -107,8 +107,14 @@
       "label": "Claude subscription token",
       "replaceLabel": "Replace the subscription token",
       "placeholder": "sk-ant-oat01-…",
-      "help": "Run `claude setup-token` in a terminal and paste the token. Stored encrypted by your operating system.",
+      "help": "Paste the token that `setup-token` printed. Stored encrypted by your operating system.",
       "remove": "Remove saved token"
+    },
+    "setupToken": {
+      "button": "Get a token",
+      "help": "Opens a terminal that runs Claude Code's setup-token. Sign in in the browser, then copy the token it prints into the field below.",
+      "noProject": "Open a project first: the terminal opens inside it. Or run the command shown on the Documentation page.",
+      "limit": "Terminal limit reached ({{max}} per project). Close a terminal and try again."
     },
     "mode": {
       "label": "Agents run on",
