@@ -180,7 +180,8 @@ describe('PreToolUse: Bash output trimming', () => {
     const specDir = join(scratch, 'spec');
     const command = commandOf(evaluatePreToolUse('Bash', { command: 'npm test' }, context(specDir)));
     expect(command?.startsWith('unset ANTHROPIC_API_KEY')).toBe(true);
-    expect(command).toContain(join(specDir, 'logs'));
+    // The command runs in a POSIX shell (Git Bash on Windows): the log path is written with forward slashes
+    expect(command).toContain(join(specDir, 'logs').replace(/\\/g, '/'));
     expect(command).toContain('npm test');
   });
 
