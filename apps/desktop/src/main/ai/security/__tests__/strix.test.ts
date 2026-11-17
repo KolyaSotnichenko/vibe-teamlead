@@ -415,4 +415,78 @@ echo "found 2"; exit 2`,
     expect((await runStrix({ ...opts, strixBin: fakeBin('strix-ok', 'exit 0', bin) })).status).toBe('clear');
     expect((await runStrix({ ...opts, strixBin: fakeBin('strix-bad', 'exit 1', bin) })).status).toBe('error');
   });
+
+  describe('on its own model and credentials', () => {
+    it('skips a provider with missing fields, naming them, before looking for Strix', async () => {
+      const specDir = mkdtempSync(join(tmpdir(), 'vtl-strix-'));
+      const result = await runStrix({
+        projectDir: specDir,
+        specDir,
+        settings,
+        model: 'claude-sonnet-4-6',
+        apiKey: 'sk-ant-api-x',
+        llm: { provider: 'azure', model: 'azure/dep', fields: {}, secrets: { azureApiKey: 'az-SECRET' } },
+      });
+      expect(result).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/Azure OpenAI.*endpoint, API version/) });
+      expect(readFileSync(join(specDir, 'security_qa.json'), 'utf-8')).not.toContain('az-SECRET');
+    });
+
+    it('with a Claude subscription, another provider still runs', async () => {
+      const specDir = mkdtempSync(join(tmpdir(), 'vtl-strix-'));
+      lookup.nothingInstalled = true;
+      const result = await runStrix({
+        projectDir: specDir,
+        specDir,
+        settings,
+        model: 'claude-sonnet-4-6',
+        apiKey: 'sk-ant-oat01-x',
+        llm: { provider: 'openrouter', model: 'openrouter/z-ai/glm-5.3', fields: {}, secrets: { apiKey: 'sk-or-1' } },
+      });
+      expect(result).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/not installed/) });
+    });
+
+    // The fake Strix is a sh script, which Windows can't spawn
+    it.skipIf(isWindowsHost)("gets only that provider's variables, and its secrets never reach the log", async () => {
+      const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+      fakeBin('docker', 'exit 0', bin);
+      process.env.PATH = `${bin}:${originalPath}`;
+      const strix = fakeBin(
+        'strix',
+        `echo "llm=$STRIX_LLM"
+echo "key=$LLM_API_KEY base=$LLM_API_BASE"
+echo "aws=$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY:$AWS_REGION"
+echo "telemetry=$STRIX_TELEMETRY"
+echo "auth failed: $AWS_SECRET_ACCESS_KEY" >&2
+exit 1`,
+        bin,
+      );
+      const logs: string[] = [];
+      const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+      const result = await runStrix({
+        projectDir: gitProject(),
+        specDir,
+        settings,
+        model: 'claude-sonnet-4-6',
+        apiKey: 'sk-ant-api-CLAUDEKEY',
+        baseURL: 'https://claude-gw.example',
+        strixBin: strix,
+        llm: {
+          provider: 'bedrock',
+          model: 'bedrock/us.anthropic.claude-sonnet-5-5',
+          fields: { awsAccessKeyId: 'AKIAEXAMPLE', awsRegion: 'us-east-1' },
+          secrets: { awsSecretAccessKey: 'aws-SECRET-value' },
+        },
+        onLog: (l) => logs.push(l),
+      });
+      expect(result.status).toBe('error');
+      const text = logs.join('\n');
+      expect(text).toContain('[strix] llm=bedrock/us.anthropic.claude-sonnet-5-5');
+      expect(text).toContain('[strix] key= base=');
+      expect(text).toContain('[strix] aws=AKIAEXAMPLE:***:us-east-1');
+      expect(text).toContain('[strix] telemetry=0');
+      expect(text).toContain('on bedrock/us.anthropic.claude-sonnet-5-5');
+      expect(text).not.toContain('aws-SECRET-value');
+      expect(text).not.toContain('CLAUDEKEY');
+    });
+  });
 });

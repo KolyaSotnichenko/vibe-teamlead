@@ -6,9 +6,11 @@
  * headless diff mode (only what this task changed), with a spend cap.
  *
  * Strix is an optional integration, not bundled: it needs Docker and its own
- * install (`uv tool install strix-agent` or the official installer). When
- * either is missing, or no API key is available (a claude.ai subscription
- * token cannot drive Strix), the stage is skipped with a clear reason.
+ * install (`uv tool install strix-agent` or the official installer). It runs
+ * on the model chosen in Settings → Security QA (`strix-llm.ts`): the agents'
+ * Claude key by default (a claude.ai subscription token cannot drive Strix),
+ * or its own provider and credentials. When Docker or Strix is missing, or
+ * the model's credentials are, the stage is skipped with a clear reason.
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -17,8 +19,8 @@ import { join, relative } from 'node:path';
 
 import { envValue, WINDOWS_HOST_ENV, withPath } from '../../platform/env';
 import { findOnPath, runProcess, searchPath } from '../../platform/exec';
-import { isSubscriptionToken } from '../claude-code/auth';
 import { writeFileReplacing } from '../safe-write';
+import { redactStrixSecrets, resolveStrixLlm, type StrixLlmChoice, strixModel } from './strix-llm';
 import { prepareStrixTarget, removeStrixTarget, type StrixTarget, TASK_DOCS_DIR } from './strix-target';
 
 export type StrixScanMode = 'quick' | 'standard' | 'deep';
@@ -71,10 +73,13 @@ export interface StrixRunOptions {
   projectDir: string;
   specDir: string;
   settings: StrixSettings;
-  /** Anthropic model id, e.g. claude-sonnet-4-6 */
+  /** The agents' Anthropic model id, e.g. claude-sonnet-4-6 (for "Same as agents") */
   model: string;
+  /** The app's Claude credential (for "Same as agents") */
   apiKey?: string;
   baseURL?: string;
+  /** Strix's own model and credentials (Settings → Security QA); absent: same as agents */
+  llm?: StrixLlmChoice;
   /** Branch or commit to diff against */
   diffBase?: string;
   strixBin?: string;
@@ -87,11 +92,14 @@ export function strixPath(): string {
   return searchPath([join(homedir(), '.strix', 'bin')]);
 }
 
+export { strixModel };
+
 /**
- * What Strix runs with: its PATH, home, temp, locale, Docker, the model and
- * key it is given, and on Windows the system and user folders. Nothing else of the app's.
+ * What Strix runs with: its PATH, home, temp, locale, Docker, the model and the
+ * chosen provider's variables, and on Windows the system and user folders.
+ * Nothing else of the app's.
  */
-export function strixEnv(options: Pick<StrixRunOptions, 'model' | 'apiKey' | 'baseURL'>): NodeJS.ProcessEnv {
+export function strixEnv(llm: { model: string; env: Record<string, string> }): NodeJS.ProcessEnv {
   const windows: NodeJS.ProcessEnv = {};
   for (const name of WINDOWS_HOST_ENV) {
     const value = envValue(process.env, name);
@@ -104,9 +112,8 @@ export function strixEnv(options: Pick<StrixRunOptions, 'model' | 'apiKey' | 'ba
     TMPDIR: process.env.TMPDIR,
     LANG: process.env.LANG ?? 'en_US.UTF-8',
     DOCKER_HOST: process.env.DOCKER_HOST,
-    STRIX_LLM: strixModel(options.model),
-    LLM_API_KEY: options.apiKey,
-    ...(options.baseURL ? { LLM_API_BASE: options.baseURL } : {}),
+    ...llm.env,
+    STRIX_LLM: llm.model,
     STRIX_TELEMETRY: '0',
   };
 }
@@ -137,11 +144,6 @@ export function buildStrixArgs(options: Pick<StrixRunOptions, 'projectDir' | 'se
   ];
   if (options.diffBase) args.push('--diff-base', options.diffBase);
   return args;
-}
-
-/** LiteLLM model id for an Anthropic model. */
-export function strixModel(model: string): string {
-  return model.includes('/') ? model : `anthropic/${model}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,9 +301,9 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     return result;
   };
 
-  if (!options.apiKey || isSubscriptionToken(options.apiKey)) {
-    return finish({ status: 'skipped', reason: 'Strix needs an Anthropic API key (a Claude subscription cannot be used for it)', findings: [] });
-  }
+  const llm = resolveStrixLlm(options.llm, { model: options.model, apiKey: options.apiKey, baseURL: options.baseURL });
+  if (!llm.ok) return finish({ status: 'skipped', reason: llm.reason, findings: [] });
+  const redact = (text: string) => redactStrixSecrets(text, llm.secrets);
   const strix = options.strixBin ?? findOnPath('strix', strixPath());
   if (!strix) {
     return finish({ status: 'skipped', reason: 'Strix is not installed (uv tool install strix-agent)', findings: [] });
@@ -313,7 +315,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
 
   mkdirSync(workDir, { recursive: true });
-  const env = strixEnv(options);
+  const env = strixEnv(llm);
 
   let target: StrixTarget;
   try {
@@ -321,7 +323,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   } catch (error) {
     removeStrixTarget(workDir);
     if (signal?.aborted) return finish({ status: 'cancelled', findings: [] });
-    return finish({ status: 'error', reason: `Strix did not run: could not make a copy of the task (${error instanceof Error ? error.message : String(error)})`, findings: [] });
+    return finish({ status: 'error', reason: `Strix did not run: could not make a copy of the task (${redact(error instanceof Error ? error.message : String(error))})`, findings: [] });
   }
 
   const instructionFile = join(workDir, 'instructions.md');
@@ -336,7 +338,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
   );
 
   options.onLog?.(
-    `Security QA: Strix ${settings.scanMode} scan of changed code on ${strixModel(options.model)} (budget $${settings.maxBudgetUsd}, ` +
+    `Security QA: Strix ${settings.scanMode} scan of changed code on ${llm.model} (budget $${settings.maxBudgetUsd}, ` +
       `up to ${Math.round(STRIX_TIMEOUT_MS[settings.scanMode] / 60_000)} min). It runs in Docker; its progress follows as [strix] lines.`,
   );
   // Strix prints little while it works: say it is alive once a minute
@@ -353,7 +355,7 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
     timeoutMs: STRIX_TIMEOUT_MS[settings.scanMode],
     maxOutput: 1024 * 1024,
     onLine: (line) => {
-      if (line.trim()) options.onLog?.(`[strix] ${line.trim()}`);
+      if (line.trim()) options.onLog?.(`[strix] ${redact(line.trim())}`);
     },
   }).finally(() => {
     clearInterval(heartbeat);
@@ -379,6 +381,6 @@ export async function runStrix(options: StrixRunOptions): Promise<StrixResult> {
       costUsd,
     });
   }
-  const reason = code === -2 ? 'Strix timed out' : run.error ? `Strix could not start: ${run.error}` : `Strix exited with code ${code}`;
+  const reason = code === -2 ? 'Strix timed out' : run.error ? `Strix could not start: ${redact(run.error)}` : `Strix exited with code ${code}`;
   return finish({ status: 'error', reason, findings, runDir, costUsd });
 }

@@ -77,7 +77,7 @@ describe('Windows variables in the allowlists', () => {
   it('dev servers, Strix and CodeGraph keep them', () => {
     withHost(WINDOWS);
     keepsWindows(serverEnv({}), process.env);
-    keepsWindows(strixEnv({ model: 'claude-sonnet-4-6', apiKey: 'sk-ant-x' }), process.env);
+    keepsWindows(strixEnv({ model: 'anthropic/claude-sonnet-4-6', env: { LLM_API_KEY: 'sk-ant-x' } }), process.env);
     keepsWindows(codegraphEnv(), process.env);
   });
 
