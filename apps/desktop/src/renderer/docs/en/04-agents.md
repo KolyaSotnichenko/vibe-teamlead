@@ -10,10 +10,14 @@ Each agent is a Claude Code session with its own prompt (`apps/desktop/prompts/`
 | **Spec writer** (spec_writer) | Writes `spec.md` with ACs. |
 | **Spec critic** | Looks for holes and contradictions. |
 | **Architect** | Writes `architecture.md`, ADRs and diagrams; renders each diagram and fixes it. |
+| **Designer** | For a task that changes UI: draws wireframes, then the screens in the design system, as HTML in the task's spec folder (see "Design before code"). |
+| **Design system agent** | Extracts the project's design system from the code, or designs a new one from references and a brief. |
 | **Planner** | Writes `implementation_plan.json`: phases, subtasks, test-first, dependencies. |
 | **Coder** | Writes code subtask by subtask (TDD), commits, updates the subtask status. |
 | **QA reviewer** | Checks ACs, tests, UI (browser), security; writes the report; checks off the spec checkboxes. |
 | **QA fixer** | Fixes QA issues. |
+| **UX reviewer** | Goes through the running app in Preview as a person would, and lists what blocks people (see "Preview"). QA runs the same review on the pages a task changed. |
+| **CI readiness** | Reads the project for what keeps its GitHub Actions CI from passing; the blockers become tasks (see "CI"). |
 | **Merge integrator** | Brings the latest main branch into a task before it merges: resolves conflicts, runs the project's checks, fixes what the merge broke. |
 | **Commit message / PR description generators** | Write the commit message and the PR text. |
 | **PR reviewer and specialists** | Review other people's PRs: security, quality, logic, fit with the codebase. |
