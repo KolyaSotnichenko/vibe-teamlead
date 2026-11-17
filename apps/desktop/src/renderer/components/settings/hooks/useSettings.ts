@@ -3,22 +3,32 @@ import { useSettingsStore, saveSettings as saveSettingsToStore, loadSettings as 
 import type { AppSettings } from '../../../../shared/types';
 import { UI_SCALE_DEFAULT } from '../../../../shared/constants';
 
+type SettingsKey = keyof AppSettings;
+
+/** Settings previewed through the store before they are saved. */
+const PREVIEW_KEYS = new Set<SettingsKey>(['theme', 'colorTheme', 'uiScale']);
+
 /**
- * Custom hook for managing application settings
- * Provides state management and save/load functionality
+ * Custom hook for managing application settings in the settings dialog.
  *
- * Theme and UI scale changes are applied immediately for live preview. If the user
- * cancels without saving, call revertTheme() to restore the original values.
+ * Edits stay local until saveSettings() runs (the dialog calls it when a section is left or
+ * the dialog closes). Only the settings that changed are written, and nothing is written when
+ * nothing changed. Theme and UI scale are previewed through the store at once; discardChanges()
+ * drops the pending edits and reverts that preview.
  */
 export function useSettings() {
   const currentSettings = useSettingsStore((state) => state.settings);
   const updateStoreSettings = useSettingsStore((state) => state.updateSettings);
-  const [settings, setSettings] = useState<AppSettings>(currentSettings);
+  const [settings, setLocalSettings] = useState<AppSettings>(currentSettings);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Store the original theme settings when the hook mounts (dialog opens)
-  // This allows us to revert if the user cancels
+  // Latest local settings (callers may save right after an edit, before a re-render)
+  const settingsRef = useRef<AppSettings>(currentSettings);
+  // Settings edited in the dialog and not yet saved
+  const dirtyKeysRef = useRef<Set<SettingsKey>>(new Set());
+
+  // The theme/scale before any preview, restored by discardChanges()
   const originalThemeRef = useRef<{
     theme: AppSettings['theme'];
     colorTheme: AppSettings['colorTheme'];
@@ -29,9 +39,29 @@ export function useSettings() {
     uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
   });
 
-  // Sync with store
+  // Follow the store, keeping the edits that are still pending
   useEffect(() => {
-    setSettings(currentSettings);
+    const merged = { ...currentSettings } as Record<SettingsKey, unknown>;
+    for (const key of dirtyKeysRef.current) {
+      // Saved elsewhere already (the Claude mode is saved when picked); a theme/scale
+      // preview only shows in the store and still needs saving
+      if (!PREVIEW_KEYS.has(key) && currentSettings[key] === settingsRef.current[key]) {
+        dirtyKeysRef.current.delete(key);
+        continue;
+      }
+      merged[key] = settingsRef.current[key];
+    }
+    settingsRef.current = merged as unknown as AppSettings;
+    setLocalSettings(settingsRef.current);
+    // No preview pending: the stored theme is the one to go back to
+    const dirty = dirtyKeysRef.current;
+    if (![...PREVIEW_KEYS].some((key) => dirty.has(key))) {
+      originalThemeRef.current = {
+        theme: currentSettings.theme,
+        colorTheme: currentSettings.colorTheme,
+        uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
+      };
+    }
   }, [currentSettings]);
 
   // Load settings on mount
@@ -39,36 +69,17 @@ export function useSettings() {
     loadSettingsFromStore();
   }, []);
 
-  // Capture original theme/scale when store values change (for revert on cancel)
-  useEffect(() => {
-    originalThemeRef.current = {
-      theme: currentSettings.theme,
-      colorTheme: currentSettings.colorTheme,
-      uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
-    };
-  }, [currentSettings.colorTheme, currentSettings.theme, currentSettings.uiScale]);
-
-  const saveSettings = async () => {
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      const success = await saveSettingsToStore(settings);
-      if (success) {
-        // Apply theme immediately
-        applyTheme(settings.theme);
-        return true;
-      } else {
-        setError('Failed to save settings');
-        return false;
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      return false;
-    } finally {
-      setIsSaving(false);
+  const setSettings = useCallback((next: AppSettings) => {
+    const prev = settingsRef.current;
+    const keys = new Set([...Object.keys(prev), ...Object.keys(next)] as SettingsKey[]);
+    for (const key of keys) {
+      if (prev[key] !== next[key]) dirtyKeysRef.current.add(key);
     }
-  };
+    settingsRef.current = next;
+    setLocalSettings(next);
+  }, []);
+
+  const hasUnsavedChanges = useCallback(() => dirtyKeysRef.current.size > 0, []);
 
   const applyTheme = (theme: 'light' | 'dark' | 'system') => {
     if (theme === 'dark') {
@@ -85,14 +96,43 @@ export function useSettings() {
     }
   };
 
-  const updateSettings = (partial: Partial<AppSettings>) => {
-    setSettings((prev) => ({ ...prev, ...partial }));
+  /** Saves the pending edits; resolves true when they are saved or there were none. */
+  const saveSettings = async (): Promise<boolean> => {
+    const keys = [...dirtyKeysRef.current];
+    if (keys.length === 0) return true;
+    const updates: Partial<AppSettings> = {};
+    for (const key of keys) {
+      (updates as Record<SettingsKey, unknown>)[key] = settingsRef.current[key];
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const success = await saveSettingsToStore(updates);
+      if (success) {
+        // Edits made while the save was in flight stay pending
+        for (const key of keys) {
+          if (settingsRef.current[key] === updates[key]) dirtyKeysRef.current.delete(key);
+        }
+        applyTheme(settingsRef.current.theme);
+        return true;
+      }
+      setError('Failed to save settings');
+      return false;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  /**
-   * Revert theme to the original values (before any preview changes).
-   * Call this when the user cancels the settings dialog without saving.
-   */
+  const updateSettings = (partial: Partial<AppSettings>) => {
+    setSettings({ ...settingsRef.current, ...partial });
+  };
+
+  /** Restores the theme/scale from before the preview. */
   const revertTheme = useCallback(() => {
     const original = originalThemeRef.current;
     updateStoreSettings({
@@ -102,17 +142,25 @@ export function useSettings() {
     });
   }, [updateStoreSettings]);
 
-  /**
-   * Capture the current theme as the new "original" after successful save.
-   * This updates the reference point for future reverts.
-   */
+  /** Makes the current theme the one future reverts go back to (after a save). */
   const commitTheme = useCallback(() => {
+    const current = settingsRef.current;
     originalThemeRef.current = {
-      theme: settings.theme,
-      colorTheme: settings.colorTheme,
-      uiScale: settings.uiScale ?? UI_SCALE_DEFAULT
+      theme: current.theme,
+      colorTheme: current.colorTheme,
+      uiScale: current.uiScale ?? UI_SCALE_DEFAULT
     };
-  }, [settings.theme, settings.colorTheme, settings.uiScale]);
+  }, []);
+
+  /** Drops the pending edits and reverts the theme preview. */
+  const discardChanges = useCallback(() => {
+    dirtyKeysRef.current.clear();
+    setError(null);
+    revertTheme();
+    const stored = useSettingsStore.getState().settings;
+    settingsRef.current = stored;
+    setLocalSettings(stored);
+  }, [revertTheme]);
 
   return {
     settings,
@@ -121,8 +169,10 @@ export function useSettings() {
     isSaving,
     error,
     saveSettings,
+    hasUnsavedChanges,
     applyTheme,
     revertTheme,
-    commitTheme
+    commitTheme,
+    discardChanges
   };
 }
