@@ -135,11 +135,13 @@ describe('verifyTask', () => {
     // Git Bash starts slowly on Windows: give the first run time to leave its marker
     const limitMs = isWindowsHost ? 5000 : 400;
 
-    it('runs a check that ran out of time once more before believing it', async () => {
+    // On the Windows CI runner the first run now and then finishes inside the limit (seen once,
+    // passed on the runs around it); the timeout logic itself marks a fired timer as timed out
+    it('runs a check that ran out of time once more before believing it', { timeout: 60_000, retry: isWindowsHost ? 2 : 0 }, async () => {
       const report = await verify({ commands: [stallsOnce(join(repo, 'stalled'))], checkTimeoutMs: limitMs });
       expect(report.status).toBe('passed');
       expect(report.checks[0]).toMatchObject({ outcome: 'passed', flaky: true });
-    }, 60_000);
+    });
 
     it('runs an install that ran out of time once more before believing it', async () => {
       const report = await verify({ commands: undefined, installTimeoutMs: limitMs, detected: { install: [stallsOnce(join(repo, 'stalled'))], checks: [{ name: 'ok', command: 'true' }] } });
