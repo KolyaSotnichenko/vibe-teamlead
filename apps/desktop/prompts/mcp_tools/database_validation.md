@@ -1,105 +1,11 @@
-## DATABASE VALIDATION
+## Database validation
 
-For applications with database dependencies, verify migrations and schema integrity.
+Before a review the app applies the project's migrations to a temporary database when the project has one, and runs the tests against it. When its checks passed there, the migrations apply cleanly: don't apply them again and don't set up a database for it.
 
-### Validation Steps
+What that run can't tell you, in the migrations this task added:
 
-#### Step 1: Check Migrations Exist
+- A model or schema change has its migration. The migration tool's own check shows drift without touching a database (`python manage.py makemigrations --check --dry-run`, `npx prisma validate`, and the like). A changed model without a migration is a critical issue.
+- A destructive statement (a dropped table or column, a changed type) has a reason in the spec. Migration tools generate these from drift nobody meant to change.
+- Rows that already exist survive: a new column on an existing table has a default or allows null, and a data migration handles the rows already there.
 
-Verify migration files were created for any schema changes:
-
-**Django:**
-```bash
-python manage.py showmigrations
-```
-
-**Rails:**
-```bash
-rails db:migrate:status
-```
-
-**Prisma:**
-```bash
-npx prisma migrate status
-```
-
-**Alembic (SQLAlchemy):**
-```bash
-alembic history
-alembic current
-```
-
-**Drizzle:**
-```bash
-npx drizzle-kit status
-```
-
-#### Step 2: Verify Migrations Apply
-
-Test that migrations can be applied to a fresh database:
-
-**Django:**
-```bash
-python manage.py migrate --plan
-```
-
-**Prisma:**
-```bash
-npx prisma migrate deploy --preview-feature
-```
-
-**Alembic:**
-```bash
-alembic upgrade head
-```
-
-#### Step 3: Verify Schema Matches Models
-
-Check that database schema matches the model definitions:
-
-**Prisma:**
-```bash
-npx prisma validate
-npx prisma db pull --print
-```
-
-**Django:**
-```bash
-python manage.py makemigrations --check --dry-run
-```
-
-#### Step 4: Check for Data Integrity
-
-If the feature modifies existing data:
-1. Verify data migrations handle edge cases
-2. Check for null constraints on new fields
-3. Verify foreign key relationships
-
-### Document Findings
-
-```
-DATABASE VERIFICATION:
-- Migrations exist: YES/NO
-- Migrations applied: YES/NO
-- Schema correct: YES/NO
-- Data integrity: PASS/FAIL
-- Issues: [list or "None"]
-```
-
-### Common Issues
-
-**Missing Migration:**
-If a model changed but no migration file exists:
-1. Flag as CRITICAL issue
-2. Require developer to generate migration
-
-**Migration Fails:**
-If migration cannot be applied:
-1. Check for dependency issues
-2. Verify database connection
-3. Check for conflicting migrations
-
-**Schema Drift:**
-If database schema doesn't match models:
-1. Generate new migration
-2. Review the diff for unexpected changes
+If the app could not run against a database, the migrations are unverified. Apply them to a throwaway database (a container from the project's compose file, never a database that holds data), or say in the report that nobody verified them.
