@@ -62,7 +62,7 @@ export function ArchitectureTab({ workspace, taskId, projectId }: ArchitectureTa
   );
 }
 
-function AdrRow({ adr }: { adr: WorkspaceAdr }) {
+export function AdrRow({ adr }: { adr: WorkspaceAdr }) {
   const { t } = useTranslation(['tasks']);
   const [open, setOpen] = useState(false);
   const number = /^(\d+)/.exec(adr.fileName)?.[1];

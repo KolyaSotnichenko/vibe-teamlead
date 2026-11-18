@@ -116,8 +116,9 @@ export async function cloudArchitectureView(input: ViewInput): Promise<CloudArch
       if (!names.length) continue;
       for (const fileName of names) {
         try {
-          const adr = parseAdr(fileName, await readFile(join(dir, fileName), 'utf-8'));
-          decisions.push({ taskId: task.id, taskTitle: task.title, fileName, title: adr.title, ...(adr.status ? { status: adr.status } : {}), at: await mtime(join(dir, fileName)) });
+          const text = await readFile(join(dir, fileName), 'utf-8');
+          const adr = parseAdr(fileName, text);
+          decisions.push({ taskId: task.id, taskTitle: task.title, fileName, title: adr.title, ...(adr.status ? { status: adr.status } : {}), at: await mtime(join(dir, fileName)), markdown: text });
         } catch {
           // an unreadable ADR is left out
         }

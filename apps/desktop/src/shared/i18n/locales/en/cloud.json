@@ -48,7 +48,8 @@
     "decisions": {
       "title": "Decisions",
       "none": "No decisions (ADRs) from merged tasks yet.",
-      "openTask": "Open “{{task}}”"
+      "openTask": "Open “{{task}}”",
+      "openTaskLink": "Open the task"
     },
     "design": {
       "button": "Design the cloud architecture",

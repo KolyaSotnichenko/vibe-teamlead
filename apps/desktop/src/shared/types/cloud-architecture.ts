@@ -55,6 +55,8 @@ export interface CloudDecision {
   status?: string;
   /** mtime of the ADR, ms */
   at: number;
+  /** The ADR as written, to read it in place */
+  markdown: string;
 }
 
 export interface CloudArchitectureView {

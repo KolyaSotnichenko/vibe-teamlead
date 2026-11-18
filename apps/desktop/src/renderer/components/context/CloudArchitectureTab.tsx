@@ -15,7 +15,8 @@ import { createTask } from '../../stores/task-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useToast } from '../../hooks/use-toast';
 import { openTask } from '../../lib/open-task';
-import { CLOUD_DESIGN_MARKER, type CloudArchitectureFile, type CloudArchitectureView } from '../../../shared/types/cloud-architecture';
+import { AdrRow } from '../task-detail/workspace/ArchitectureTab';
+import { CLOUD_DESIGN_MARKER, type CloudArchitectureFile, type CloudArchitectureView, type CloudDecision } from '../../../shared/types/cloud-architecture';
 
 interface Props {
   projectId: string;
@@ -207,28 +208,45 @@ export function CloudArchitectureTab({ projectId }: Props) {
             {view.decisions.length === 0 ? (
               <EmptyState compact title={t('cloud:tab.decisions.title')} body={t('cloud:tab.decisions.none')} />
             ) : (
-              <ul className="divide-y divide-border border border-border">
-                {view.decisions.map((decision) => (
-                  <li key={`${decision.taskId}:${decision.fileName}`}>
-                    <button
-                      type="button"
-                      onClick={() => openTask(decision.taskId)}
-                      title={t('cloud:tab.decisions.openTask', { task: decision.taskTitle })}
-                      className="flex min-h-11 w-full items-baseline justify-between gap-4 px-4 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-foreground">{decision.title}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{decision.taskTitle}</span>
-                      </span>
-                      {decision.status && <span className="shrink-0 font-mono text-[11px] uppercase text-muted-foreground">{decision.status}</span>}
-                    </button>
-                  </li>
+              <div className="space-y-4">
+                {groupByTask(view.decisions).map((group) => (
+                  <div key={group.taskId} className="border border-border">
+                    <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-2">
+                      <span className="min-w-0 truncate text-sm font-semibold text-foreground">{group.taskTitle}</span>
+                      <button
+                        type="button"
+                        onClick={() => openTask(group.taskId)}
+                        className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {t('cloud:tab.decisions.openTaskLink')}
+                      </button>
+                    </div>
+                    <ul>
+                      {group.decisions.map((decision) => (
+                        <AdrRow key={decision.fileName} adr={decision} />
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </section>
         )}
       </div>
     </ScrollArea>
   );
+}
+
+/** Decisions grouped by task, the task with the newest decision first; within a task in ADR number order */
+function groupByTask(decisions: CloudDecision[]): Array<{ taskId: string; taskTitle: string; decisions: CloudDecision[] }> {
+  const groups = new Map<string, { taskId: string; taskTitle: string; decisions: CloudDecision[]; latest: number }>();
+  for (const decision of decisions) {
+    const group = groups.get(decision.taskId) ?? { taskId: decision.taskId, taskTitle: decision.taskTitle, decisions: [], latest: 0 };
+    group.decisions.push(decision);
+    group.latest = Math.max(group.latest, decision.at);
+    groups.set(decision.taskId, group);
+  }
+  return [...groups.values()]
+    .sort((a, b) => b.latest - a.latest)
+    .map((group) => ({ ...group, decisions: group.decisions.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true })) }));
 }

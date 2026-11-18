@@ -80,10 +80,21 @@ describe('CloudArchitectureTab', () => {
     expect(screen.getByText('cloud:tab.design.missingTools')).toBeInTheDocument();
   });
 
-  it('lists the decisions of merged tasks, each opening its task', async () => {
-    get.mockResolvedValue({ success: true, data: view({ decisions: [{ taskId: 't2', taskTitle: 'Add storage', fileName: '0001-blob.md', title: 'Use Blob Storage', status: 'accepted', at: 2 }] }) });
+  it('opens a decision in place, like in a task, grouped by task in number order; the task opens from its own link', async () => {
+    get.mockResolvedValue({ success: true, data: view({ decisions: [
+      { taskId: 't2', taskTitle: 'Add storage', fileName: '0002-cdn.md', title: 'Use a CDN', status: 'accepted', at: 3, markdown: '# Use a CDN' },
+      { taskId: 't2', taskTitle: 'Add storage', fileName: '0001-blob.md', title: 'Use Blob Storage', status: 'accepted', at: 2, markdown: '# Use Blob Storage\n\nBecause it is cheap.' },
+    ] }) });
     render(<CloudArchitectureTab projectId="p1" />);
-    fireEvent.click(await screen.findByText('Use Blob Storage'));
+    const first = await screen.findByText('Use Blob Storage');
+    const second = screen.getByText('Use a CDN');
+    // 0001 before 0002, under one heading for the task
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByText('Add storage')).toHaveLength(1);
+    fireEvent.click(first);
+    expect(openTask).not.toHaveBeenCalled();
+    expect(await screen.findByText('Because it is cheap.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('cloud:tab.decisions.openTaskLink'));
     expect(openTask).toHaveBeenCalledWith('t2');
   });
 
@@ -111,7 +122,7 @@ describe('CloudArchitectureTab', () => {
   });
 
   it('says when the feature is off, opens Settings at Agents, and keeps the decisions', async () => {
-    get.mockResolvedValue({ success: true, data: view({ enabled: false, decisions: [{ taskId: 't1', taskTitle: 'Auth', fileName: '0001.md', title: 'Use Entra ID', at: 1 }] }) });
+    get.mockResolvedValue({ success: true, data: view({ enabled: false, decisions: [{ taskId: 't1', taskTitle: 'Auth', fileName: '0001.md', title: 'Use Entra ID', at: 1, markdown: '# Use Entra ID' }] }) });
     const opened = vi.fn();
     window.addEventListener('open-app-settings', opened);
     render(<CloudArchitectureTab projectId="p1" />);
