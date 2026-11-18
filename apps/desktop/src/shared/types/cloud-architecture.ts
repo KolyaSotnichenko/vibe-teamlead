@@ -5,6 +5,9 @@
 
 import type { IPCResult } from './common';
 
+/** In the description of the task Context → Architecture creates: always a cloud task for the architect. */
+export const CLOUD_DESIGN_MARKER = '<!-- vibe-teamlead:cloud-architecture-design -->';
+
 export type CloudTool = 'uv' | 'graphviz' | 'git' | 'terraform';
 
 export type CloudDrawStatus = 'drawn' | 'unavailable' | 'needs_cloud_access' | 'refused' | 'failed';

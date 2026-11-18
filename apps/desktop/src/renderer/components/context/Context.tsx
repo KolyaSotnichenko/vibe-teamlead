@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FolderTree, Brain, Palette } from 'lucide-react';
+import { FolderTree, Brain, Palette, Cloud } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useContextStore } from '../../stores/context-store';
@@ -8,10 +8,11 @@ import { useProjectContext, useRefreshIndex, useMemorySearch } from './hooks';
 import { ProjectIndexTab } from './ProjectIndexTab';
 import { MemoriesTab } from './MemoriesTab';
 import { DesignSystemTab } from './DesignSystemTab';
+import { CloudArchitectureTab } from './CloudArchitectureTab';
 import type { ContextProps } from './types';
 
 export function Context({ projectId }: ContextProps) {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'cloud']);
   const {
     projectIndex,
     indexLoading,
@@ -43,7 +44,7 @@ export function Context({ projectId }: ContextProps) {
     <div className="flex h-full flex-col overflow-hidden">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
         <div className="border-b border-border px-6 py-3">
-          <TabsList className="grid w-full max-w-xl grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4">
             <TabsTrigger value="index" className="gap-2">
               <FolderTree className="h-4 w-4" />
               {t('context.tabs.projectIndex')}
@@ -55,6 +56,10 @@ export function Context({ projectId }: ContextProps) {
             <TabsTrigger value="design" className="gap-2">
               <Palette className="h-4 w-4" />
               {t('context.tabs.designSystem')}
+            </TabsTrigger>
+            <TabsTrigger value="architecture" className="gap-2">
+              <Cloud className="h-4 w-4" />
+              {t('cloud:tab.label')}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -87,6 +92,11 @@ export function Context({ projectId }: ContextProps) {
         {/* Design system Tab */}
         <TabsContent value="design" className="flex-1 overflow-hidden m-0">
           {activeTab === 'design' && <DesignSystemTab projectId={projectId} />}
+        </TabsContent>
+
+        {/* Architecture Tab: the cloud architecture, designed and drawn from code (TerraVision) */}
+        <TabsContent value="architecture" className="flex-1 overflow-hidden m-0">
+          {activeTab === 'architecture' && <CloudArchitectureTab projectId={projectId} />}
         </TabsContent>
       </Tabs>
     </div>

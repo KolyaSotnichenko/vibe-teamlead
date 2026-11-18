@@ -56,6 +56,7 @@ import { Worktrees } from './components/Worktrees';
 import { PreviewPage } from './components/preview/PreviewPage';
 import { DeployPage } from './components/deploy/DeployPage';
 import { listenOpenDeploy } from './lib/open-deploy';
+import { listenOpenTask } from './lib/open-task';
 import { listenOpenClaudeSetupToken, listenOpenTerminal, openProjectTerminal, openSetupTokenTerminal } from './lib/open-terminal';
 import type { DeployTarget } from '../shared/types/deploy';
 import { AgentTools } from './components/AgentTools';
@@ -324,6 +325,18 @@ export function App() {
         setDeployNonce((n) => n + 1);
         setSelectedTask(null);
         setActiveView('deploy');
+      }),
+    []
+  );
+
+  // Open a task's detail on the board (Context → Architecture's decisions)
+  useEffect(
+    () =>
+      listenOpenTask((taskId) => {
+        const task = useTaskStore.getState().tasks.find((t) => t.id === taskId || t.specId === taskId);
+        if (!task) return;
+        setActiveView('kanban');
+        setSelectedTask(task);
       }),
     []
   );

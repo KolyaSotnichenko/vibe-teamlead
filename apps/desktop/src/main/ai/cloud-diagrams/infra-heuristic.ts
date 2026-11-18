@@ -8,8 +8,9 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** In the description of the task the Context → Architecture button creates: always a cloud task. */
-export const CLOUD_DESIGN_MARKER = '<!-- vibe-teamlead:cloud-architecture-design -->';
+import { CLOUD_DESIGN_MARKER } from '../../../shared/types/cloud-architecture';
+
+export { CLOUD_DESIGN_MARKER };
 
 /** Names a cloud, Terraform or infrastructure as code: enough on its own. */
 const STRONG = new RegExp(
