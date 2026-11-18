@@ -2,6 +2,15 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.54 - 2026-11-18
+
+- Preview: an **Environment** tab shows, per service, every setting the preview gives it and where it comes from, in plain words, with a summary at the top (what was started, Docker not running, which parts can't work without your own keys). Secrets are masked; you can change a value per service and apply with a restart. **How to run** is always in the toolbar, with a terminal and the task that writes RUNNING.md when the file is missing.
+- Preview and app checks start any infrastructure service from the project's compose files as throwaway containers — queues (RabbitMQ, Kafka, Redpanda), S3 storage (MinIO, LocalStack, buckets created), search (Elasticsearch, OpenSearch, Meilisearch, Typesense) and others — and point the project's example settings at them. Only the image and safe settings are taken from the file; ports open on this computer only.
+- Cloud architecture diagrams with TerraVision (experimental, on by default, Settings → Agents): the architect of a cloud-infrastructure task draws the target cloud architecture; after a merge that changes Terraform the app redraws it from code without a model, after a safety check and without cloud credentials. A new Context → Architecture tab shows both, the architect's decisions from merged tasks, and **Design the cloud architecture**. Needs uv and Graphviz (and Terraform or OpenTofu for drawing from code); without them it is skipped with a note.
+- Settings → Project → Queue: parallel tasks, auto-merge and the preview hold moved here from the board.
+- Claude: the API key or subscription choice (with **Get a token**) is the same in Settings, onboarding and the GitHub setup window.
+- Onboarding: a required Documentation step; Skip Setup no longer skips it.
+
 ## 2.0.0-beta.53 - 2026-11-17
 
 - Settings save by themselves when you leave a section, switch between app and project settings, change project or close Settings; the Save and Cancel buttons are gone, and the header says "Saving…" / "Saved" (a failed save shows its error and keeps Settings open).
