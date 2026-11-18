@@ -9,6 +9,7 @@ vi.mock('../../../settings-utils', () => ({ readSettingsFile: () => settings.val
 
 import { cloudDiagramsLaunch, isCloudDiagramsEnabled } from '../cloud-setting';
 import { architectTaskText } from '../session-input';
+import { CLOUD_DESIGN_MARKER } from '../infra-heuristic';
 
 describe('isCloudDiagramsEnabled', () => {
   beforeEach(() => {
@@ -50,5 +51,11 @@ describe('architectTaskText', () => {
     const text = architectTaskText(spec);
     expect(text).toContain('Host on Azure');
     expect(text).toContain('Use Entra ID');
+  });
+
+  it('marks the task Context → Architecture created, so its architect always gets TerraVision', () => {
+    const spec = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    writeFileSync(join(spec, 'task_metadata.json'), JSON.stringify({ cloudArchitectureDesign: true }));
+    expect(architectTaskText(spec)).toContain(CLOUD_DESIGN_MARKER);
   });
 });

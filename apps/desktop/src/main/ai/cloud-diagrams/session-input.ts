@@ -7,6 +7,8 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { CLOUD_DESIGN_MARKER } from './infra-heuristic';
+
 const MAX_BYTES = 512 * 1024;
 
 function readSmall(file: string): string {
@@ -18,6 +20,15 @@ function readSmall(file: string): string {
   }
 }
 
+/** A task made by Context → Architecture's button: always about cloud architecture */
+function designTaskMarker(specDir: string): string {
+  try {
+    return JSON.parse(readSmall(join(specDir, 'task_metadata.json')) || '{}')?.cloudArchitectureDesign === true ? CLOUD_DESIGN_MARKER : '';
+  } catch {
+    return '';
+  }
+}
+
 export function architectTaskText(specDir: string, description = ''): string {
-  return [description, readSmall(join(specDir, 'spec.md')), readSmall(join(specDir, 'requirements.json'))].filter(Boolean).join('\n');
+  return [description, designTaskMarker(specDir), readSmall(join(specDir, 'spec.md')), readSmall(join(specDir, 'requirements.json'))].filter(Boolean).join('\n');
 }

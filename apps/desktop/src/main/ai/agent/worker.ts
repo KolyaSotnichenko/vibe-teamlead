@@ -63,7 +63,7 @@ import { createSecurityFollowup } from '../security/followup-task';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { projectRootFor } from '../usage/usage-ledger';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
-import { readComplexityOverride } from '../orchestration/quick-fix';
+import { architectModeFor, complexityOverrideFor, readTaskMetadata } from '../orchestration/quick-fix';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
@@ -1383,8 +1383,10 @@ async function runSpecOrchestrator(
     postLog(`Project index generation failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const complexityOverride = await readComplexityOverride(session.specDir);
-  if (complexityOverride) postLog('Quick fix from preview notes: the simple spec path, without the complexity assessment');
+  const taskMetadata = await readTaskMetadata(session.specDir);
+  const complexityOverride = complexityOverrideFor(taskMetadata);
+  if (complexityOverride === 'simple') postLog('Quick fix from preview notes: the simple spec path, without the complexity assessment');
+  if (complexityOverride === 'standard') postLog('Cloud architecture design: the standard spec path with the architect, without the complexity assessment');
   const orchestrator = new SpecOrchestrator({
     specDir: session.specDir,
     projectDir: session.projectDir,
@@ -1392,7 +1394,7 @@ async function runSpecOrchestrator(
     complexityOverride,
     projectIndex: projectIndexContent,
     abortSignal: abortController.signal,
-    architectMode: session.architectMode,
+    architectMode: architectModeFor(taskMetadata, session.architectMode),
     // Design before code: a UI task's plan is made in the build, after its design
     planAfterDesign: () => !!session.design && session.design.mode !== 'off' && specChangesUi(session),
 

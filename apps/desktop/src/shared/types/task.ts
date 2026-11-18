@@ -228,6 +228,7 @@ export interface TaskMetadata {
   // Image attachments (screenshots, mockups, diagrams)
   /** Made from Preview notes with Quick fix: the spec runs its simple path */
   previewQuickFix?: boolean;
+  cloudArchitectureDesign?: boolean;  // Made by Context → Architecture: the architect draws the target cloud architecture
   attachedImages?: ImageAttachment[];
 
   // Referenced files (files/folders from project for context)
