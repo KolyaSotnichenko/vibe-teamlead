@@ -14,8 +14,9 @@ Settings save by themselves when you leave a section or close Settings (×, Esca
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
 | **Telegram** | Your own Telegram bot: token, pairing, which notifications it sends, the morning digest. See the Telegram page. |
 | **Project → General** | The project's agent model, CLAUDE.md, the app's own checks (commands and variables, see "Quality and security"), notifications. |
+| **Project → Queue** | How many tasks may be under way at once (1 by default, up to 3), auto-merge, and UI tasks waiting for your preview (see "How a task goes through the pipeline"). |
 | **Project → GitHub / GitLab / Linear** | Repository, token, base branch, branch pushing, issue sync. |
-| **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory, accounts. You can run it again (see "Setup wizard" below). |
+| **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory, accounts, documentation. You can run it again (see "Setup wizard" below). |
 
 ## Details
 
@@ -31,8 +32,18 @@ Settings save by themselves when you leave a section or close Settings (×, Esca
 
 #### Steps
 
-- First run: Claude, tools, Dev Tools, privacy, memory, accounts.
+- First run: Claude, tools, Dev Tools, privacy, memory, accounts, documentation.
 - You can run it again.
+
+#### Claude step
+
+- The same choice as in Settings → Claude: an API key (the default) or, on your own machine, a Claude subscription token with the Get a token button. The choice is saved at once. The GitHub setup dialog asks the same way.
+
+#### Documentation step
+
+- Before the finish, the wizard asks you to read this documentation: how the pipeline works, what the agents do, the preview and what it can't set up (Docker, outside services with their own keys), the settings and the costs.
+- Open the documentation opens these pages over the wizard; close them to return to the step.
+- To go on, tick "I've read the documentation, or I'll read it before starting work".
 
 #### GitHub step
 
