@@ -56,7 +56,8 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 
 #### Other services
 
-- The compose file's other services (queues, storage, search…: RabbitMQ, Kafka, Redpanda, MinIO, LocalStack, Elasticsearch, OpenSearch, Meilisearch, Typesense, or any service with an `image:` and no `build:`) are started as throwaway containers for each run too, on their own network, each on a local port only, and removed afterwards.
+- The compose file's other services (queues, storage, search…: RabbitMQ, Kafka, Redpanda, MinIO, LocalStack, Elasticsearch, OpenSearch, Meilisearch, Typesense, or any service with an `image:` and no `build:`) are started as throwaway containers for each run too, each on a local port only, and removed afterwards.
+- The database and these services share one network of the run's, created for it and removed with it. On it each container has its compose name, so a service reaches another as it would in compose (Keycloak at `postgres:5432`, an app image at `redis:6379`). It is a network of its own, never the host's.
 - Only the image and safe settings come from the file: environment values, command, ports and healthcheck. Never volumes, privileges, devices, `env_file`, the host's network or a user.
 - Settings in `.env.example` that point at one of them (by its compose name, or localhost with its port) point at its container instead, with the credentials it started with. S3 settings get the stand-in's keys and path style, and the buckets the example names are created.
 - A service that doesn't come up is named in the log, and the settings that point at it stay empty; the checks still run.
