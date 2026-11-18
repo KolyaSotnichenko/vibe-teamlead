@@ -9,6 +9,7 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type { PreviewEnvReport, Project } from '../../../shared/types';
 
+const NO_DOCKER = async () => ({ ok: false, stdout: '' });
 const dirs = vi.hoisted(() => ({ project: '' }));
 const session = vi.hoisted(() => ({
   startPreview: vi.fn(async () => ({ projectId: 'p1', stage: 'ready', origins: [] })),
@@ -57,17 +58,24 @@ describe('preview IPC: Environment', () => {
     expect(JSON.stringify(result.data)).not.toContain('leak');
   });
 
-  it('never reads .env even when git tracks it', () => {
+  it('never reads .env even when git tracks it', async () => {
     const git = (...args: string[]) => execFileSync('git', args, { cwd: dirs.project, stdio: 'ignore' });
     git('init', '-q');
     git('add', '-f', '.');
     writeFileSync(join(dirs.project, '.env.example'), 'ROOT=1\n');
-    const report = previewEnvReport({ id: 'p1', path: dirs.project, settings: SETTINGS } as unknown as Project, dirs.project, undefined, 'git');
+    const report = await previewEnvReport({ id: 'p1', path: dirs.project, settings: SETTINGS } as unknown as Project, dirs.project, undefined, 'git', NO_DOCKER);
     expect(JSON.stringify(report)).not.toContain('leak');
   });
 
+  it('before the start, says when Docker is not running and the project needs a test database', async () => {
+    writeFileSync(join(dirs.project, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres:18\n');
+    const project = { id: 'p1', path: dirs.project, settings: SETTINGS } as unknown as Project;
+    expect(await previewEnvReport(project, dirs.project, undefined, join(dirs.project, 'no-git'), NO_DOCKER)).toMatchObject({ databases: ['postgres'], dockerUnavailable: true });
+    expect(await previewEnvReport(project, dirs.project, undefined, join(dirs.project, 'no-git'), async () => ({ ok: true, stdout: '' }))).toMatchObject({ dockerUnavailable: false });
+  });
+
   it('while running, reports what the services got', async () => {
-    const running: PreviewEnvReport = { running: true, restartNeeded: false, databases: [], mail: false, services: [] };
+    const running: PreviewEnvReport = { running: true, restartNeeded: false, databases: [], mail: false, dockerUnavailable: false, services: [] };
     session.runningPreviewEnv.mockReturnValueOnce(running);
     expect(await invoke(IPC_CHANNELS.PREVIEW_ENV, 'p1')).toEqual({ success: true, data: running });
   });

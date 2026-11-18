@@ -647,7 +647,7 @@ describe('the Environment panel', () => {
     const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
     expect(api.env.JWT_SECRET).toBe('mine');
     const report = runningPreviewEnv(p)!;
-    expect(report).toMatchObject({ running: true, restartNeeded: false, databases: ['postgres'], mail: false });
+    expect(report).toMatchObject({ running: true, restartNeeded: false, databases: ['postgres'], mail: false, dockerUnavailable: false });
     const apiVars = Object.fromEntries(report.services.find((s) => s.service === 'api')!.vars.map((v) => [v.name, v]));
     expect(apiVars.JWT_SECRET).toMatchObject({ value: 'mine', source: 'serviceOverride', automatic: { value: 'dev-secret', source: 'exampleDir' } });
     expect(apiVars.DATABASE_URL).toMatchObject({ source: 'database' });
@@ -670,6 +670,12 @@ describe('the Environment panel', () => {
     const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
     expect(api.env.JWT_SECRET).toBe('changed');
     expect(runningPreviewEnv(withService({ api: { JWT_SECRET: 'changed' } }))?.restartNeeded).toBe(false);
+  });
+
+  it('says when Docker kept the test database from starting', async () => {
+    const { d } = deps({ startDatabase: vi.fn(async () => database({ status: 'unavailable', started: [], fresh: false, reason: 'no docker' })) });
+    await startPreview(project(), () => {}, d);
+    expect(runningPreviewEnv(project())).toMatchObject({ databases: ['postgres'], dockerUnavailable: true });
   });
 
   it('has nothing to restart when no preview is ready', async () => {

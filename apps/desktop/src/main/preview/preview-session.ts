@@ -90,6 +90,10 @@ interface Session {
   /** What each started service got, by service name, for the Environment panel */
   vars: Record<string, PreviewEnvVar[]>;
   database?: PreviewDatabase;
+  /** The database kinds compose names, started or not */
+  databaseKinds: string[];
+  /** Whether the examples configure SMTP */
+  mailWanted: boolean;
   mail?: PreviewMail;
   status: PreviewStatus;
   unsubscribe: () => void;
@@ -487,6 +491,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       emit(session, { stage: 'database', message: undefined });
       // The main compose file first; an override can add a kind the main file doesn't name
       const images = imagesFromComposeFiles(composeFilesInOrder(files).map((file) => deps.read(session.worktree, file) ?? ''));
+      session.databaseKinds = images.map((image) => image.kind);
       const database = await deps.startDatabase(images, {
         docker: deps.docker,
         projectId: session.task ? previewTaskKey(session.task.worktree) : project.id,
@@ -505,7 +510,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
         .filter((path) => files.includes(path))
         .map((path) => deps.read(session.worktree, path) ?? '')
         .join('\n');
-      if (needsMail(examples)) {
+      session.mailWanted = needsMail(examples);
+      if (session.mailWanted) {
         session.mail = await deps.startMail(deps.docker, session.task ? previewTaskKey(session.task.worktree) : project.id);
         check(session);
         emit(session, { mail: session.mail.status, mailReason: session.mail.reason });
@@ -601,6 +607,8 @@ export async function startPreview(
     servers: [],
     logs: {},
     vars: {},
+    databaseKinds: [],
+    mailWanted: false,
     status: { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'worktree', origins: [] },
     unsubscribe: () => {},
     work: Promise.resolve(),
@@ -689,8 +697,9 @@ export function runningPreviewEnv(project: Project, taskId?: string): PreviewEnv
   return {
     running: true,
     restartNeeded: overridesOf(project) !== overridesOf(session.project),
-    databases: session.database?.status === 'started' ? session.database.started.map((s) => s.kind) : [],
-    mail: session.mail?.status === 'started',
+    databases: session.databaseKinds,
+    mail: session.mailWanted,
+    dockerUnavailable: session.database?.status === 'unavailable' || session.mail?.status === 'unavailable',
     services: (session.project.settings.previewServices ?? []).map((service) => ({ service: service.name, dir: service.dir, vars: session.vars[service.name] ?? [] })),
   };
 }

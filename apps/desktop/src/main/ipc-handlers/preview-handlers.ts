@@ -20,6 +20,7 @@ import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
 import { currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
 import { plannedEnv } from '../preview/preview-env';
+import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
 import { readNotesDraft, writeNotesDraft } from '../preview/notes-draft';
@@ -83,7 +84,7 @@ export function previewFiles(dir: string, serviceDirs: string[], git = getToolPa
  * What each service of a preview gets: what the running services got, or what they will get
  * at the next start, worked out from the worktree's files the way the preview does it.
  */
-export function previewEnvReport(project: Project, dir: string, taskId?: string, git?: string): PreviewEnvReport {
+export async function previewEnvReport(project: Project, dir: string, taskId?: string, git?: string, docker: DockerRun = hostDocker(process.env)): Promise<PreviewEnvReport> {
   const running = runningPreviewEnv(project, taskId);
   if (running) return running;
   const files = previewFiles(dir, (project.settings.previewServices ?? []).map((s) => s.dir), git);
@@ -95,7 +96,10 @@ export function previewEnvReport(project: Project, dir: string, taskId?: string,
       return null;
     }
   };
-  return { running: false, restartNeeded: false, ...plannedEnv(project.settings, files, read) };
+  const planned = plannedEnv(project.settings, files, read);
+  // Only asked when the preview would need it: the test database and mail catcher run in Docker
+  const dockerUnavailable = planned.databases.length > 0 || planned.mail ? !(await docker(['info']).catch(() => ({ ok: false }))).ok : false;
+  return { running: false, restartNeeded: false, dockerUnavailable, ...planned };
 }
 
 export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | null, view = new PreviewView(getMainWindow)): void {
@@ -273,11 +277,11 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     const preview = previewWorktreePath(previewWorktreesRoot(), project.id);
     return existsSync(preview) ? preview : project.path;
   };
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_ENV, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewEnvReport> => {
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_ENV, async (_e, projectId: string, taskId?: unknown): Promise<IPCResult<PreviewEnvReport>> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
     try {
-      return { success: true, data: previewEnvReport(project, previewDir(project, taskId), draftTask(taskId)) };
+      return { success: true, data: await previewEnvReport(project, previewDir(project, taskId), draftTask(taskId)) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }

@@ -155,10 +155,12 @@ export interface PreviewEnvReport {
   running: boolean;
   /** The saved values differ from what the running services started with */
   restartNeeded: boolean;
-  /** The database kinds the preview started (or will start), e.g. postgres */
+  /** The database kinds the project's compose file names, which the preview starts for it, e.g. postgres */
   databases: string[];
-  /** Whether the preview catches the app's mail (or will) */
+  /** Whether the project sends mail, which the preview catches */
   mail: boolean;
+  /** Docker isn't running or isn't installed, so the test database and mail catcher can't start */
+  dockerUnavailable: boolean;
   services: PreviewEnvService[];
 }
 
