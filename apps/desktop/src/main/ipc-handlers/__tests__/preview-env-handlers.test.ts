@@ -1,0 +1,86 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ipcMain } from 'electron';
+
+import { IPC_CHANNELS } from '../../../shared/constants';
+import type { PreviewEnvReport, Project } from '../../../shared/types';
+
+const dirs = vi.hoisted(() => ({ project: '' }));
+const session = vi.hoisted(() => ({
+  startPreview: vi.fn(async () => ({ projectId: 'p1', stage: 'ready', origins: [] })),
+  stopPreview: vi.fn(async () => {}),
+  currentPreview: vi.fn(() => null),
+  previewLogs: vi.fn(() => []),
+  previewMailPort: vi.fn(() => undefined),
+  runningPreviewEnv: vi.fn((): PreviewEnvReport | null => null),
+  restartPreviewServices: vi.fn(async (): Promise<unknown> => null),
+}));
+
+vi.mock('../../preview/preview-session', () => session);
+const SETTINGS = { previewServices: [{ name: 'api', dir: 'api', command: 'x', page: true }] };
+vi.mock('../../project-store', () => ({
+  projectStore: {
+    getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: dirs.project, settings: SETTINGS } : undefined)),
+    getTasks: vi.fn(() => []),
+  },
+}));
+vi.mock('../../worktree-paths', () => ({ findTaskWorktree: vi.fn(() => null) }));
+vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
+
+import { previewEnvReport, registerPreviewHandlers } from '../preview-handlers';
+
+type Invoke = (channel: string, event: unknown, ...args: unknown[]) => Promise<unknown>;
+const invoke = (channel: string, ...args: unknown[]) => (ipcMain as unknown as { invokeHandler: Invoke }).invokeHandler(channel, {}, ...args);
+
+describe('preview IPC: Environment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (ipcMain as unknown as { removeAllListeners: () => void }).removeAllListeners();
+    dirs.project = mkdtempSync(join(tmpdir(), 'vt-env-'));
+    mkdirSync(join(dirs.project, 'api'));
+    writeFileSync(join(dirs.project, 'api', '.env.example'), 'AUTH_TEST_IDP_ENABLED=true\nSTRIPE_KEY=\n');
+    writeFileSync(join(dirs.project, 'api', '.env'), 'REAL_SECRET=leak\n');
+    writeFileSync(join(dirs.project, '.env.local'), 'REAL_SECRET=leak\n');
+    registerPreviewHandlers(() => null, { onOverlayEvent: vi.fn(() => () => {}), setWorktree: vi.fn(), destroy: vi.fn(), show: vi.fn(), hide: vi.fn() } as never);
+  });
+
+  it('before the start, shows what each service will get from the example settings and never reads .env', async () => {
+    const result = (await invoke(IPC_CHANNELS.PREVIEW_ENV, 'p1')) as { success: boolean; data: PreviewEnvReport };
+    expect(result.success).toBe(true);
+    expect(result.data.running).toBe(false);
+    const vars = result.data.services[0].vars;
+    expect(vars.find((v) => v.name === 'AUTH_TEST_IDP_ENABLED')).toMatchObject({ value: 'true', source: 'exampleDir' });
+    expect(JSON.stringify(result.data)).not.toContain('leak');
+  });
+
+  it('never reads .env even when git tracks it', () => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: dirs.project, stdio: 'ignore' });
+    git('init', '-q');
+    git('add', '-f', '.');
+    writeFileSync(join(dirs.project, '.env.example'), 'ROOT=1\n');
+    const report = previewEnvReport({ id: 'p1', path: dirs.project, settings: SETTINGS } as unknown as Project, dirs.project, undefined, 'git');
+    expect(JSON.stringify(report)).not.toContain('leak');
+  });
+
+  it('while running, reports what the services got', async () => {
+    const running: PreviewEnvReport = { running: true, restartNeeded: false, databases: [], mail: false, services: [] };
+    session.runningPreviewEnv.mockReturnValueOnce(running);
+    expect(await invoke(IPC_CHANNELS.PREVIEW_ENV, 'p1')).toEqual({ success: true, data: running });
+  });
+
+  it('apply and restart restarts the running services, and starts the preview when it is not running', async () => {
+    session.restartPreviewServices.mockResolvedValueOnce({ projectId: 'p1', stage: 'ready', origins: [] });
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RESTART_SERVICES, 'p1')).toMatchObject({ success: true, data: { stage: 'ready' } });
+    expect(session.startPreview).not.toHaveBeenCalled();
+    await invoke(IPC_CHANNELS.PREVIEW_RESTART_SERVICES, 'p1');
+    expect(session.startPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an unknown project', async () => {
+    expect(await invoke(IPC_CHANNELS.PREVIEW_ENV, 'nope')).toMatchObject({ success: false });
+  });
+});

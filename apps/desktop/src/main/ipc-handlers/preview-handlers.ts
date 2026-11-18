@@ -7,7 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import { cleanUpBrowserOrphansSoon } from '../utils/browser-mcp-orphans';
 import { bundledBrowserServers } from '../ai/claude-code/bundled-tools';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -15,10 +15,11 @@ import path from 'node:path';
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
+import type { IPCResult, PreviewBounds, PreviewEnvReport, Project, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
-import { currentPreview, previewLogs, previewMailPort, startPreview, stopPreview } from '../preview/preview-session';
+import { currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
+import { plannedEnv } from '../preview/preview-env';
 import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
 import { readNotesDraft, writeNotesDraft } from '../preview/notes-draft';
@@ -55,6 +56,46 @@ export async function readTail(file: string, bytes: number): Promise<string> {
   } catch {
     return '';
   }
+}
+
+/** `.env` and its variants are never read; `.env.example` is */
+const SECRET_ENV_FILE = /(^|\/)\.env(\.(?!example$)[^/]*)?$/;
+
+/** A worktree's tracked files, with `/`; what is there when git can't say (the root and the services' example settings) */
+export function previewFiles(dir: string, serviceDirs: string[], git = getToolPath('git')): string[] {
+  try {
+    return execFileSync(git, ['ls-files', '-z'], { cwd: dir, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] })
+      .split('\0')
+      .filter(Boolean);
+  } catch {
+    let root: string[] = [];
+    try {
+      root = readdirSync(dir);
+    } catch {
+      // no folder yet
+    }
+    const examples = serviceDirs.filter(Boolean).map((d) => `${d}/.env.example`).filter((file) => existsSync(path.join(dir, file)));
+    return [...root, ...examples];
+  }
+}
+
+/**
+ * What each service of a preview gets: what the running services got, or what they will get
+ * at the next start, worked out from the worktree's files the way the preview does it.
+ */
+export function previewEnvReport(project: Project, dir: string, taskId?: string, git?: string): PreviewEnvReport {
+  const running = runningPreviewEnv(project, taskId);
+  if (running) return running;
+  const files = previewFiles(dir, (project.settings.previewServices ?? []).map((s) => s.dir), git);
+  const read = (file: string) => {
+    if (SECRET_ENV_FILE.test(file)) return null;
+    try {
+      return readFileSync(path.join(dir, file), 'utf-8');
+    } catch {
+      return null;
+    }
+  };
+  return { running: false, restartNeeded: false, ...plannedEnv(project.settings, files, read) };
 }
 
 export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | null, view = new PreviewView(getMainWindow)): void {
@@ -220,6 +261,33 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }
+  });
+
+  // The Environment panel: the task's worktree for a task's preview; main's preview worktree, or the project before its first start
+  const previewDir = (project: Project, taskId?: unknown): string => {
+    if (typeof taskId === 'string' && taskId) {
+      const found = projectStore.getTasks(project.id).find((t) => t.id === taskId);
+      const worktree = found ? findTaskWorktree(project.path, found.specId) : null;
+      if (worktree) return worktree;
+    }
+    const preview = previewWorktreePath(previewWorktreesRoot(), project.id);
+    return existsSync(preview) ? preview : project.path;
+  };
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_ENV, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewEnvReport> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    try {
+      return { success: true, data: previewEnvReport(project, previewDir(project, taskId), draftTask(taskId)) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+  // Apply and restart: the running services restart with the saved values; a preview that isn't running starts
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_RESTART_SERVICES, async (_e, projectId: string, taskId?: unknown): Promise<IPCResult<PreviewStatus>> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    const restarted = await restartPreviewServices(project, draftTask(taskId));
+    return restarted ? { success: true, data: restarted } : start(projectId, false, taskId);
   });
 
   // How to run the project, for when the preview can't: the task's worktree for a task's preview
