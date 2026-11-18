@@ -19,6 +19,13 @@ describe('PreviewToolbar', () => {
     expect(onNavigate).toHaveBeenCalledWith({ action: 'signOut' });
   });
 
+  it('opens the Environment tab, for the project and a task alike', () => {
+    const onSide = vi.fn();
+    render(<PreviewToolbar width={null} onWidth={vi.fn()} onNavigate={vi.fn()} onReset={vi.fn()} onEditServices={vi.fn()} disabled side={null} onSide={onSide} uxReview={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.env' }));
+    expect(onSide).toHaveBeenCalledWith('env');
+  });
+
   it('has a "How to run" button only when the project has RUNNING.md', () => {
     const onSide = vi.fn();
     const props = { width: null, onWidth: vi.fn(), onNavigate: vi.fn(), onReset: vi.fn(), onEditServices: vi.fn(), disabled: true, side: null, onSide };

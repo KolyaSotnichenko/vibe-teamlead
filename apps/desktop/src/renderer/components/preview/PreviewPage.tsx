@@ -16,6 +16,7 @@ import { UxReviewPanel } from './UxReviewPanel';
 import { AddressNotice } from './AddressNotice';
 import { NotesPanel } from './NotesPanel';
 import { LogsPanel } from './LogsPanel';
+import { EnvPanel } from './EnvPanel';
 import { MailPanel } from './MailPanel';
 import { RunningDoc, useRunningDoc } from './RunningDoc';
 import { notesImages, notesTask } from './notes-task';
@@ -139,6 +140,11 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       {side === 'logs' && (
         <aside aria-label={t('preview.toolbar.logs')} className="w-96 shrink-0 border-l border-border bg-background">
           <LogsPanel projectId={project.id} />
+        </aside>
+      )}
+      {side === 'env' && (
+        <aside aria-label={t('preview.toolbar.env')} className="w-96 shrink-0 border-l border-border bg-background">
+          <EnvPanel projectId={project.id} taskId={task?.id} settings={project.settings} stage={status?.stage} />
         </aside>
       )}
       {side === 'mail' && (
