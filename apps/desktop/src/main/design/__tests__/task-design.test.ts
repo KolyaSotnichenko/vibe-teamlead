@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { approvedState, commentedState, parseCompare } from '../task-design';
+import { approvedState, commentedState, designSkipNote, ownerSkippedState, parseCompare } from '../task-design';
 
 describe("the owner's answer on the Design tab", () => {
   it('approving marks the stage the build stopped at, and clears comments', () => {
@@ -33,5 +33,35 @@ describe("the owner's answer on the Design tab", () => {
     ] }));
     expect(compare).toEqual({ screens: [{ file: 'screens/roadmap-phone.html', width: 390, built: 'qa/roadmap-390.png', differences: [{ severity: 'blocking', text: 'No stage tabs' }, { severity: 'minor', text: 'x' }] }] });
     expect(parseCompare('not json')).toBeNull();
+  });
+});
+
+describe('a design the designer could not make', () => {
+  const now = new Date('2026-11-18T10:00:00Z');
+
+  it("building without it is the owner's decision, recorded with the reason", () => {
+    expect(ownerSkippedState(undefined, 'Rate limit reached', now)).toEqual({
+      stage: 'skipped',
+      round: 0,
+      skipped: { by: 'owner', reason: 'Rate limit reached', at: '2026-11-18T10:00:00.000Z' },
+    });
+    const kept = ownerSkippedState({ stage: 'wireframes', round: 2, approved: { wireframes: 'a' }, comments: [{ n: 1, frame: '', text: 'x' }] }, 'cancelled', now);
+    expect(kept).toMatchObject({ stage: 'skipped', round: 2, approved: { wireframes: 'a' }, skipped: { by: 'owner' } });
+    expect(kept.comments).toBeUndefined();
+  });
+
+  it("says why an older design was skipped: the owner's choice, or the designer stopping (from the task's log)", () => {
+    expect(designSkipNote({ stage: 'skipped', round: 0, skipped: { by: 'owner', reason: 'Rate limit reached', at: 'x' } }, undefined)).toEqual({ by: 'owner', reason: 'Rate limit reached' });
+    const logs = JSON.stringify({
+      phases: {
+        planning: { entries: [{ content: 'Design: starting from the project\'s 273 existing frame(s) (design/base/)' }] },
+        design: { entries: [{ content: 'Design: the designer stopped (Rate limit reached); building from the spec without a design' }] },
+      },
+    });
+    expect(designSkipNote({ stage: 'skipped', round: 1 }, logs)).toEqual({ by: 'designer', reason: 'Rate limit reached' });
+    // A task with no UI, or a design that was not skipped, says nothing
+    expect(designSkipNote({ stage: 'skipped', round: 0 }, JSON.stringify({ phases: {} }))).toBeNull();
+    expect(designSkipNote({ stage: 'design', round: 1 }, logs)).toBeNull();
+    expect(designSkipNote(undefined, '{ not json')).toBeNull();
   });
 });

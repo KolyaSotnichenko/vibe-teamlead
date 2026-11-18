@@ -123,6 +123,9 @@ export const IPC_CHANNELS = {
   // Design before code: a task's wireframes and screens (Design tab)
   TASK_DESIGN_GET: 'taskDesign:get',
   TASK_DESIGN_APPROVE: 'taskDesign:approve',
+  /** The designer could not draw: try again, or build without a design */
+  TASK_DESIGN_RETRY: 'taskDesign:retry',
+  TASK_DESIGN_SKIP: 'taskDesign:skip',
   TASK_DESIGN_COMMENT: 'taskDesign:comment',
   DESIGN_LIBRARY_GET: 'design:library',
   DESIGN_PROGRESS: 'design:progress',  // Event: design agent progress line (main -> renderer)

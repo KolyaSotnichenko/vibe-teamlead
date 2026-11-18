@@ -134,6 +134,15 @@ describe('getTaskStage', () => {
     expect(info.states.qa).toBe('upcoming');
   });
 
+  it("a design that couldn't be made: the designer stage failed, the owner decides", () => {
+    const info = getTaskStage(task({ status: 'human_review', reviewReason: 'design_failed' }));
+    expect(info.current).toBe('designer');
+    expect(info.agent).toBe('you');
+    expect(info.states.spec).toBe('done');
+    expect(info.states.designer).toBe('failed');
+    expect(info.states.coder).toBe('upcoming');
+  });
+
   it('a task waiting on its design: the designer stage is the owner\'s turn, nothing after it ran', () => {
     const info = getTaskStage(task({ status: 'human_review', reviewReason: 'design_review' }));
     expect(info.current).toBe('designer');

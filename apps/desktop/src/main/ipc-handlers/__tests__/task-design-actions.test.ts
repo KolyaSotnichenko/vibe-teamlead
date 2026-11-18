@@ -14,18 +14,18 @@ vi.mock('electron', () => ({
   },
   protocol: { handle: vi.fn() },
 }));
-const spec = vi.hoisted(() => ({ dir: '' }));
+const spec = vi.hoisted(() => ({ dir: '', reviewReason: 'design_review' }));
 vi.mock('../../app-logger', () => ({ appLog: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn() } }));
 vi.mock('../task/workspace-handlers', () => ({ resolveSpecDir: () => spec.dir }));
 vi.mock('../task/shared', () => ({
-  findTaskAndProject: () => ({ task: { id: 't', status: 'human_review', reviewReason: 'design_review' }, project: { id: 'p', settings: { designMode: 'full', designApproval: 'owner' } } }),
+  findTaskAndProject: () => ({ task: { id: 't', status: 'human_review', reviewReason: spec.reviewReason }, project: { id: 'p', settings: { designMode: 'full', designApproval: 'owner' } } }),
 }));
 const startTask = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('../task/execution-handlers', () => ({ startTask }));
 vi.mock('../../agent', () => ({ AgentManager: class {} }));
 vi.mock('../../project-store', () => ({ projectStore: {} }));
 
-import { approveTaskDesign, commentTaskDesign, taskDesign } from '../task-design-handlers';
+import { approveTaskDesign, commentTaskDesign, retryTaskDesign, skipTaskDesign, taskDesign } from '../task-design-handlers';
 
 const state = () => JSON.parse(readFileSync(join(spec.dir, 'design', 'state.json'), 'utf-8'));
 
@@ -36,6 +36,7 @@ beforeEach(() => {
   writeFileSync(join(spec.dir, 'design', 'canvas.json'), JSON.stringify({ frames: [{ file: 'home.html', title: 'Home', kind: 'wireframe' }] }));
   writeFileSync(join(spec.dir, 'design', 'home.html'), '<p>home</p>');
   startTask.mockClear();
+  spec.reviewReason = 'design_review';
 });
 afterEach(() => rmSync(spec.dir, { recursive: true, force: true }));
 
@@ -75,5 +76,41 @@ describe('design approval actions', () => {
     expect(await commentTaskDesign({} as never, () => null, 't', [{ frame: '', text: 'Bigger buttons' }])).toEqual({ success: true });
     expect(state().comments).toEqual([{ n: 1, frame: '', text: 'Bigger buttons' }]);
     expect(startTask).toHaveBeenCalled();
+  });
+});
+
+describe('a design the designer could not make', () => {
+  const failed = () => {
+    spec.reviewReason = 'design_failed';
+    writeFileSync(join(spec.dir, 'design', 'failed.json'), JSON.stringify({ error: 'Rate limit reached', job: 'design', at: '2026-11-18T10:00:00Z' }));
+  };
+
+  it("shows the designer's error while the task waits for the owner", () => {
+    failed();
+    expect(taskDesign('t')).toMatchObject({ waiting: null, failure: { error: 'Rate limit reached' } });
+    spec.reviewReason = 'design_review';
+    expect(taskDesign('t')?.failure).toBeNull();
+  });
+
+  it('trying again keeps the design where it was and starts the task', async () => {
+    failed();
+    expect(await retryTaskDesign({} as never, () => null, 't')).toEqual({ success: true });
+    expect(state()).toEqual({ stage: 'wireframes', round: 1 });
+    expect(startTask).toHaveBeenCalled();
+  });
+
+  it("building without a design is recorded as the owner's decision", async () => {
+    failed();
+    expect(await skipTaskDesign({} as never, () => null, 't')).toEqual({ success: true });
+    expect(state()).toMatchObject({ stage: 'skipped', skipped: { by: 'owner', reason: 'Rate limit reached' } });
+    expect(taskDesign('t')?.skipNote).toEqual({ by: 'owner', reason: 'Rate limit reached' });
+    expect(startTask).toHaveBeenCalled();
+  });
+
+  it('refuses both when the task does not wait for that decision', async () => {
+    expect((await skipTaskDesign({} as never, () => null, 't')).success).toBe(false);
+    expect((await retryTaskDesign({} as never, () => null, 't')).success).toBe(false);
+    expect(state().stage).toBe('wireframes');
+    expect(startTask).not.toHaveBeenCalled();
   });
 });

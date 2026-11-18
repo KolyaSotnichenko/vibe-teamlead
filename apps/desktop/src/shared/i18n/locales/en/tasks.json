@@ -41,7 +41,8 @@
     "approvePlan": "Approve Plan",
     "stopped": "Stopped",
     "approveDesign": "Design: your turn",
-    "architectureReady": "Architecture ready"
+    "architectureReady": "Architecture ready",
+    "designFailed": "Design couldn't be made"
   },
   "tooltips": {
     "archiveTask": "Archive task",
@@ -1359,7 +1360,20 @@
     "showFlows": "Show all flows",
     "hideFlows": "Only the frame under the pointer",
     "back": "← Back",
-    "prototypeHint": "Click through the screens; clicking beside a link shows what is clickable"
+    "prototypeHint": "Click through the screens; clicking beside a link shows what is clickable",
+    "failed": {
+      "kicker": "Design · couldn't be made",
+      "body": "The designer stopped and the app's retries did not help. Nothing was built yet; choose how the task goes on.",
+      "error": "The designer's error: {{error}}",
+      "retry": "Try the design again",
+      "retryHint": "Starts the design again from where it stopped.",
+      "skip": "Build without design",
+      "skipHint": "The coder builds from the spec and the design system, with no screens to follow."
+    },
+    "skipped": {
+      "designer": "Design was skipped because the designer stopped: {{reason}}",
+      "owner": "You chose to build without a design after the designer stopped: {{reason}}"
+    }
   },
   "taskCi": {
     "title": "CI",

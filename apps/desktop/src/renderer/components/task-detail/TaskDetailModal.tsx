@@ -272,6 +272,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
         return { label: t('tasks:reviewReason.approvePlan'), attention: false };
       case 'design_review':
         return { label: t('tasks:reviewReason.approveDesign'), attention: true };
+      case 'design_failed':
+        return { label: t('tasks:reviewReason.designFailed'), attention: true };
       case 'stopped':
         return { label: t('tasks:reviewReason.stopped'), attention: false };
       case 'architecture_ready':
@@ -540,7 +542,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     className={tabTriggerClass}
                   >
                     {t('tasks:design.tab')}
-                    {task.reviewReason === 'design_review' && task.status === 'human_review' && (
+                    {(task.reviewReason === 'design_review' || task.reviewReason === 'design_failed') && task.status === 'human_review' && (
                       <span aria-hidden="true" className="ml-2 inline-block h-1.5 w-1.5 bg-destructive" />
                     )}
                   </TabsTrigger>

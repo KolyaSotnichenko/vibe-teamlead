@@ -17,7 +17,8 @@ import { readDesignCanvas, readDesignState, writeDesignState } from '../ai/desig
 import { DESIGN_SCHEME, designAsset, libraryAsset, parseDesignUrl, parseLibraryUrl } from '../design/design-protocol';
 import { readLibrary } from '../ai/design/design-library';
 import { projectStore } from '../project-store';
-import { approvedState, commentedState, parseCompare } from '../design/task-design';
+import { approvedState, commentedState, designSkipNote, ownerSkippedState, parseCompare } from '../design/task-design';
+import { clearDesignFailure, readDesignFailure } from '../ai/design/design-runner';
 import { startTask } from './task/execution-handlers';
 import { findTaskAndProject } from './task/shared';
 import { resolveSpecDir } from './task/workspace-handlers';
@@ -44,6 +45,16 @@ export function taskDesign(taskId: string): TaskDesign | null {
     // QA hasn't compared yet
   }
   const waitingHere = task.status === 'human_review' && task.reviewReason === 'design_review';
+  const failedHere = task.status === 'human_review' && task.reviewReason === 'design_failed';
+  const failure = failedHere ? readDesignFailure(specDir) : undefined;
+  let taskLogs: string | undefined;
+  if (state?.stage === 'skipped' && !state.skipped) {
+    try {
+      taskLogs = readFileSync(path.join(specDir, 'task_logs.json'), 'utf-8');
+    } catch {
+      // no log
+    }
+  }
   return {
     frames: readDesignCanvas(specDir).frames,
     stage: state?.stage ?? null,
@@ -51,6 +62,8 @@ export function taskDesign(taskId: string): TaskDesign | null {
     approved: state?.approved ?? {},
     waiting: waitingHere && state && state.stage !== 'skipped' ? state.stage : null,
     ...(state?.checkFindings !== undefined ? { checkFindings: state.checkFindings } : {}),
+    failure: failedHere ? { error: failure?.error ?? '', at: failure?.at ?? '' } : null,
+    skipNote: designSkipNote(state, taskLogs),
     compare,
     settings: { mode: project.settings.designMode ?? 'full', approval: project.settings.designApproval ?? 'owner' },
   };
@@ -146,6 +159,34 @@ export async function commentTaskDesign(agentManager: AgentManager, getMainWindo
   return { success: true };
 }
 
+/** Whether the task waits because the designer could not draw (design_failed) */
+function waitsAfterFailure(taskId: string): boolean {
+  const { task } = findTaskAndProject(taskId);
+  return task?.status === 'human_review' && task.reviewReason === 'design_failed';
+}
+
+/** The owner tries the design again: the build restarts the design step from its stage */
+export async function retryTaskDesign(agentManager: AgentManager, getMainWindow: () => BrowserWindow | null, taskId: string): Promise<IPCResult> {
+  const specDir = typeof taskId === 'string' ? resolveSpecDir(taskId) : null;
+  if (!specDir) return { success: false, error: 'Task not found' };
+  if (!waitsAfterFailure(taskId)) return { success: false, error: 'The task is not waiting for this decision.' };
+  clearDesignFailure(specDir);
+  await startTask(agentManager, getMainWindow, taskId);
+  return { success: true };
+}
+
+/** The owner builds without a design: the only way a failed design becomes skipped */
+export async function skipTaskDesign(agentManager: AgentManager, getMainWindow: () => BrowserWindow | null, taskId: string): Promise<IPCResult> {
+  const specDir = typeof taskId === 'string' ? resolveSpecDir(taskId) : null;
+  if (!specDir) return { success: false, error: 'Task not found' };
+  if (!waitsAfterFailure(taskId)) return { success: false, error: 'The task is not waiting for this decision.' };
+  writeDesignState(specDir, ownerSkippedState(readDesignState(specDir), readDesignFailure(specDir)?.error ?? ''));
+  clearDesignFailure(specDir);
+  appLog.info(`[design] ${taskId}: the owner chose to build without a design`);
+  await startTask(agentManager, getMainWindow, taskId);
+  return { success: true };
+}
+
 /** vt-design:// in the main session (sandboxed iframes on the Design tab, offscreen shots) */
 export function registerDesignProtocol(): void {
   protocol.handle(DESIGN_SCHEME, serveDesign);
@@ -183,6 +224,10 @@ export function registerTaskDesignHandlers(agentManager: AgentManager, getMainWi
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_APPROVE, (_e, taskId: string, stage: unknown): Promise<IPCResult> =>
     approveTaskDesign(agentManager, getMainWindow, taskId, stage),
   );
+
+  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_RETRY, (_e, taskId: string): Promise<IPCResult> => retryTaskDesign(agentManager, getMainWindow, taskId));
+
+  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_SKIP, (_e, taskId: string): Promise<IPCResult> => skipTaskDesign(agentManager, getMainWindow, taskId));
 
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_COMMENT, (_e, taskId: string, comments: TaskDesignComment[]): Promise<IPCResult> =>
     commentTaskDesign(agentManager, getMainWindow, taskId, comments),

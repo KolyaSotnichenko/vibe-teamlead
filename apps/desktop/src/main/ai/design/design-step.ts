@@ -36,7 +36,7 @@ export interface DesignComment {
 }
 
 export interface DesignState {
-  /** wireframes / design: drawn and waiting (or going on); skipped: the designer found no UI to draw */
+  /** wireframes / design: drawn and waiting (or going on); skipped: no UI to draw, or the owner chose to build without it */
   stage: 'wireframes' | 'design' | 'skipped';
   /** Designer sessions so far */
   round: number;
@@ -47,6 +47,8 @@ export interface DesignState {
   checkFindings?: number;
   /** The finished design is in the project's library (design-library.ts) */
   published?: boolean;
+  /** Skipped because the owner chose to build without the design the designer could not make */
+  skipped?: { by: 'owner'; reason?: string; at: string };
 }
 
 export interface DesignFrame {

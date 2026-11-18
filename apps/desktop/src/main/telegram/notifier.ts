@@ -132,6 +132,7 @@ export function createNotifier(deps: NotifierDeps) {
     if (status === 'human_review' && reason === 'completed') [kind, key, detail] = ['reviewWaiting', 'notify.review', 'notify.qaApproved'];
     else if (status === 'human_review' && reason === 'qa_rejected') [kind, key, detail] = ['reviewWaiting', 'notify.review', 'notify.qaRejected'];
     else if (status === 'human_review' && reason === 'architecture_ready') [kind, key, detail] = ['reviewWaiting', 'notify.architectureReady', 'notify.architectureReadyDetail'];
+    else if (status === 'human_review' && reason === 'design_failed') [kind, key, detail] = ['reviewWaiting', 'notify.designFailed', 'notify.designFailedDetail'];
     else if (status === 'human_review' && reason === 'errors') [kind, key] = ['taskFailed', 'notify.failed'];
     else if (status === 'error') [kind, key] = ['taskFailed', 'notify.errored'];
     const state = `${status}:${reason ?? ''}`;

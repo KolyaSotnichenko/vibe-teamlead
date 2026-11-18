@@ -76,6 +76,13 @@ describe('notifier', () => {
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reviewWaiting', reviewReason: 'architecture_ready' }), 5);
   });
 
+  it('a design the designer could not make asks the owner to decide in the app', async () => {
+    const { src, texts } = setup();
+    src.status('t1', 'human_review', 'design_failed');
+    const sent = await texts();
+    expect(sent[0]).toBe("🎨 <b>The design couldn't be made</b> · Shop\n<b>Task t1</b> · <code>001-t1</code>\nThe designer stopped. Open the task's Design tab in the app: try the design again, or build without it.");
+  });
+
   it('a hostile task title stays inert', async () => {
     const { src, bot, texts } = setup();
     src.status('evil', 'error');

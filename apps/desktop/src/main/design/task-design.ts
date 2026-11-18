@@ -36,6 +36,35 @@ export function commentedState(state: DesignState | undefined, raw: unknown, fra
   return comments.length ? { ...state, comments } : null;
 }
 
+/** The owner chose to build without the design the designer could not make. Pure. */
+export function ownerSkippedState(state: DesignState | undefined, reason: string, now = new Date()): DesignState {
+  const { comments: _dropped, ...rest } = state ?? { round: 0 };
+  return { ...rest, stage: 'skipped', skipped: { by: 'owner', reason: reason.slice(0, 500), at: now.toISOString() } } as DesignState;
+}
+
+const DESIGNER_STOPPED = /^Design: the designer stopped \((.*)\); building from the spec without a design/;
+
+/**
+ * Why a skipped design was skipped, when it was not for want of UI: the owner's choice, or (tasks
+ * from before the owner was asked) the designer stopping, read from the task's log. Pure.
+ */
+export function designSkipNote(state: DesignState | undefined, taskLogs: string | undefined): { by: 'owner' | 'designer'; reason: string } | null {
+  if (state?.stage !== 'skipped') return null;
+  if (state.skipped?.by === 'owner') return { by: 'owner', reason: state.skipped.reason ?? '' };
+  try {
+    const phases = (JSON.parse(taskLogs ?? '') as { phases?: Record<string, { entries?: Array<{ content?: unknown }> }> }).phases ?? {};
+    for (const phase of Object.values(phases)) {
+      for (const entry of phase?.entries ?? []) {
+        const match = typeof entry?.content === 'string' ? DESIGNER_STOPPED.exec(entry.content) : null;
+        if (match) return { by: 'designer', reason: match[1].slice(0, 500) };
+      }
+    }
+  } catch {
+    // no log
+  }
+  return null;
+}
+
 export interface DesignCompare {
   screens: Array<{ file: string; width: number; built?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }>;
 }

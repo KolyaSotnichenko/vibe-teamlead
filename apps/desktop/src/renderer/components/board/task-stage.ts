@@ -114,6 +114,10 @@ export function getTaskStage(task: Task): TaskStageInfo {
       const states = statesFor('designer');
       return { ...base, current: 'designer', agent: 'you', states };
     }
+    if (task.reviewReason === 'design_failed') {
+      // The designer could not draw: the owner tries again or builds without a design
+      return { ...base, current: 'designer', agent: 'you', states: statesFor('designer', 'designer') };
+    }
     if (task.reviewReason === 'plan_review') {
       // Plan is written and waits for approval before any code
       const states = statesFor('review');

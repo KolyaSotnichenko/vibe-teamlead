@@ -97,6 +97,10 @@ export interface TaskDesign {
   waiting: 'wireframes' | 'design' | null;
   /** Design-check findings left in the screens */
   checkFindings?: number;
+  /** The task waits because the designer could not draw (after its retries): its error */
+  failure?: { error: string; at: string } | null;
+  /** Why a skipped design was skipped, when not for want of UI */
+  skipNote?: { by: 'owner' | 'designer'; reason: string } | null;
   /** QA's comparison of the built pages with the design */
   compare: { screens: Array<{ file: string; width: number; built?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }> } | null;
   settings: { mode: 'off' | 'wireframes' | 'full'; approval: 'owner' | 'auto' };
@@ -356,6 +360,10 @@ export interface DesignAPI {
   taskDesign: (taskId: string) => Promise<import('./common').IPCResult<TaskDesign>>;
   /** Approve the stage the task waits at; the build goes on */
   approveTaskDesign: (taskId: string, stage: 'wireframes' | 'design') => Promise<import('./common').IPCResult>;
+  /** The designer could not draw: try the design again from its stage */
+  retryTaskDesign: (taskId: string) => Promise<import('./common').IPCResult>;
+  /** The designer could not draw: build without a design (the owner's decision) */
+  skipTaskDesign: (taskId: string) => Promise<import('./common').IPCResult>;
   /** Send comments for the designer's next round; the build redraws */
   commentTaskDesign: (taskId: string, comments: TaskDesignComment[]) => Promise<import('./common').IPCResult>;
   save: (projectId: string, content: { markdown?: string; tokens?: DesignTokens }) => Promise<import('./common').IPCResult<DesignSystemInfo>>;

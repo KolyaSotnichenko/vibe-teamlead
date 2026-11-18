@@ -25,7 +25,7 @@ export function DesignTab({ task }: { task: Task }) {
   const { t, i18n } = useTranslation('tasks');
   const [design, setDesign] = useState<TaskDesign | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'approve' | 'send' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'send' | 'retry' | 'skip' | null>(null);
   const [filter, setFilter] = useState<FrameFilter | null>(null);
   const [commenting, setCommenting] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -80,6 +80,38 @@ export function DesignTab({ task }: { task: Task }) {
     void load();
   };
 
+  // The designer could not draw: the owner tries again or builds without a design
+  const decide = async (choice: 'retry' | 'skip') => {
+    setBusy(choice);
+    const result = choice === 'retry' ? await window.electronAPI.design.retryTaskDesign(task.id) : await window.electronAPI.design.skipTaskDesign(task.id);
+    setBusy(null);
+    if (!result.success) return setError(result.error ?? null);
+    void load();
+  };
+
+  const failurePanel = design?.failure ? (
+    <section role="alert" aria-labelledby="design-failed" className="space-y-3 border border-destructive p-4">
+      <p id="design-failed" className="font-mono text-xs uppercase text-destructive">{t('design.failed.kicker')}</p>
+      <p className="text-sm text-foreground">{t('design.failed.body')}</p>
+      {design.failure.error && <p className="break-words font-mono text-xs text-muted-foreground">{t('design.failed.error', { error: design.failure.error })}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex flex-col gap-2">
+        <Button disabled={busy !== null} onClick={() => void decide('retry')}>
+          {busy === 'retry' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          {t('design.failed.retry')}
+        </Button>
+        <p className="text-xs text-muted-foreground">{t('design.failed.retryHint')}</p>
+        <Button variant="outline" disabled={busy !== null} onClick={() => void decide('skip')}>
+          {busy === 'skip' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          {t('design.failed.skip')}
+        </Button>
+        <p className="text-xs text-muted-foreground">{t('design.failed.skipHint')}</p>
+      </div>
+    </section>
+  ) : null;
+
+  const skipNote = design?.skipNote ? <p className="text-sm text-muted-foreground">{t(`design.skipped.${design.skipNote.by}`, { reason: design.skipNote.reason })}</p> : null;
+
   if (!design) {
     return error ? (
       <div className="p-6">
@@ -93,6 +125,8 @@ export function DesignTab({ task }: { task: Task }) {
   }
 
   if (!design.frames.length) {
+    if (failurePanel) return <div className="max-w-xl p-6">{failurePanel}</div>;
+    if (skipNote) return <div className="p-6">{skipNote}</div>;
     const key = design.stage === 'skipped' ? 'noUi' : design.settings.mode === 'off' ? 'off' : task.status === 'in_progress' ? 'drawing' : 'notYet';
     return (
       <div className="p-6">
@@ -157,6 +191,8 @@ export function DesignTab({ task }: { task: Task }) {
       </div>
 
       <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-l border-foreground bg-card p-5" aria-label={t('design.panel')}>
+        {failurePanel}
+        {skipNote}
         <div className="space-y-1.5">
           <p className={cn('font-mono text-xs uppercase', waiting ? 'text-destructive' : 'text-muted-foreground')}>
             {waiting ? t(`design.kicker.${waiting}`) : t(`design.kicker.${design.stage === 'design' ? 'designDone' : 'wireframesDone'}`)}

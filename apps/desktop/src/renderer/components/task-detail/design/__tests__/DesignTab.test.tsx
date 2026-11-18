@@ -31,6 +31,8 @@ function setup(data: TaskDesign) {
     taskDesign: vi.fn(async () => ({ success: true, data })),
     approveTaskDesign: vi.fn(async () => ({ success: true })),
     commentTaskDesign: vi.fn(async () => ({ success: true })),
+    retryTaskDesign: vi.fn(async () => ({ success: true })),
+    skipTaskDesign: vi.fn(async () => ({ success: true })),
   };
   (window as unknown as { electronAPI: unknown }).electronAPI = { design: api };
   render(<DesignTab task={{ id: 't1', status: 'human_review', reviewReason: 'design_review', subtasks: [] } as unknown as Task} />);
@@ -72,5 +74,26 @@ describe('DesignTab', () => {
   it('says why there is nothing to show', async () => {
     setup(design({ frames: [], stage: 'skipped', waiting: null }));
     expect(await screen.findByText('design.empty.noUiTitle')).toBeInTheDocument();
+  });
+
+  it("a design that couldn't be made shows the designer's error and the owner's two choices", async () => {
+    const api = setup(design({ frames: [], stage: null, waiting: null, failure: { error: 'Rate limit reached', at: 'x' } }));
+    expect(await screen.findByText('design.failed.error')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'design.failed.retry' }));
+    await waitFor(() => expect(api.retryTaskDesign).toHaveBeenCalledWith('t1'));
+    fireEvent.click(screen.getByRole('button', { name: 'design.failed.skip' }));
+    await waitFor(() => expect(api.skipTaskDesign).toHaveBeenCalledWith('t1'));
+  });
+
+  it('the choices sit beside the frames already drawn too', async () => {
+    setup(design({ waiting: null, failure: { error: 'Overloaded', at: 'x' } }));
+    expect(await screen.findByRole('button', { name: 'design.failed.retry' })).toBeInTheDocument();
+    expect(screen.getByTitle('Roadmap · desktop')).toBeInTheDocument();
+  });
+
+  it('a design skipped because the designer stopped says so', async () => {
+    setup(design({ frames: [], stage: 'skipped', waiting: null, skipNote: { by: 'designer', reason: 'Rate limit reached' } }));
+    expect(await screen.findByText('design.skipped.designer')).toBeInTheDocument();
+    expect(screen.queryByText('design.empty.noUiTitle')).not.toBeInTheDocument();
   });
 });
