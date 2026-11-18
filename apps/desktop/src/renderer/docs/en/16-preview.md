@@ -67,6 +67,29 @@ The **How to run** button in the preview's toolbar is always there, even when th
 
 **Mail:** the preview never sends real email. When the project's `.env.example` configures SMTP (`SMTP_HOST`, `MAIL_HOST`, `MAILER_DSN` and the like), the preview runs Mailpit, a local mail catcher, in Docker and points those settings at it; what the app sends shows up under **Mail**, and a link in a message opens in the preview. An app whose mail provider prints messages (a `console` provider) puts them, links included, in its API's log: open **Logs** and search for the address.
 
+## Environment: what each service gets
+
+**Environment** in the toolbar shows the settings (environment variables) the preview gives each service, for the project's preview and a task's alike. You don't have to change anything there: the preview fills everything in by itself, and the tab is for seeing what happened, for example when the page stays blank.
+
+At the top it says in plain words what the preview started (a test database such as Postgres, a mail catcher), which settings are empty and which parts of the app that may affect (sign-in, payments, file storage, email, outside APIs, maps, text messages), judged by the settings' names. Before the preview starts it shows what the services will get; once they run, what they got.
+
+Under that, one fold per service lists every setting with where its value came from:
+
+- **from the project's example settings**: the root's `.env.example`, or the service folder's;
+- **test database started by the preview** or **mail catcher started by the preview**;
+- **left empty on purpose**: a connection setting the preview has no test service for, so the app can't reach a real one;
+- **address of another part of this preview** and **port chosen by the preview**;
+- **your value**: for this service, or for all services (the older project-wide setting).
+
+Empty settings come first with an **Empty** mark, and **Empty only** hides the rest. Values whose names look secret (`…_SECRET`, `…_KEY`, `…_TOKEN`, `…_PASSWORD`, `PRIVATE`) and connection addresses with a password are masked; the eye button shows one. The preview never reads `.env` or `.env.local`, and neither does this tab.
+
+To change a value, use the pencil; to add one, **Add a setting** under the service. Your values are saved in the project's preview settings on this computer. **Use the automatic value** removes yours. A setting the preview left empty on purpose can be filled in, with a warning: it points the preview at a real service. **Apply and restart** restarts the services with the saved values (the test database stays); when the preview isn't running, it starts it.
+
+### What the preview can and can't set up
+
+- **Test services need Docker.** The test database and the mail catcher run in Docker. When Docker isn't running or isn't installed, the tab says so first: start Docker Desktop, then restart the preview. Until then, the parts of the app that save data or send email won't work.
+- **Outside services that need your own keys** (payments such as Stripe, AI APIs, a real sign-in such as Microsoft Entra ID, maps, text messages) can't be filled in automatically. The tab says when such settings are empty. You can paste your own *test* keys in the tab, or use the project's test mode if it has one (for example a test sign-in switched on by a setting in `.env.example`).
+
 ## Notes
 
 **Notes** in the toolbar opens the notes panel and turns picking on. Hover the page: the element under the pointer is outlined. Click it, or drag over an area, and write what should change; Enter saves, Escape cancels. Each note is a numbered pin on its page, found again when you come back to that page. While picking is on, your clicks don't reach the app; turn it off to use the app between notes.
