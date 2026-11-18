@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { TaskLogWriter } from '../../logging/task-log-writer';
 import type { StreamEvent } from '../../session/types';
 import { SessionAccumulator } from '../event-mapper';
-import { helperSubagents, helpersPromptSection } from '../subagents';
+import { HELPER_SUBAGENTS, SPEC_SPECIALISTS, helperSubagents, helpersPromptSection } from '../subagents';
 
 const msg = (m: unknown) => m as SDKMessage;
 
@@ -30,6 +30,18 @@ describe('helper subagents', () => {
     expect(helperSubagents('spec_writer', { enabled: true, model: '' })).toEqual({});
     expect(helpersPromptSection({})).toBe('');
     expect(helpersPromptSection(helperSubagents('planner', { enabled: true, model: '' }))).toContain('`explorer`');
+  });
+});
+
+describe('TerraVision and subagents', () => {
+  // In the agentic spec mode the architect is not a subagent: it runs in the build as its
+  // own session (BuildOrchestrator.runArchitecturePhase → runSingleSession), which gets
+  // TerraVision under the same conditions as the phase pipeline. An architect specialist
+  // added here would need the server, the allowlist and the guard wired in too.
+  it('no spec specialist is an architect, and no helper is one either', () => {
+    expect(Object.values(SPEC_SPECIALISTS).map((s) => s.agentType)).not.toContain('architect');
+    expect(helperSubagents('architect', { enabled: true, model: '' })).toEqual({});
+    expect(Object.keys(HELPER_SUBAGENTS)).not.toContain('architect');
   });
 });
 

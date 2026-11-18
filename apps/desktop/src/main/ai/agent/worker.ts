@@ -512,7 +512,7 @@ let lspPluginCache: { dir?: string; line: string } | undefined;
  * project's languages (project_index.json, else a scan of the worktree).
  */
 /**
- * TerraVision for the architect of a cloud-infrastructure task (Settings → Agents, on by
+ * TerraVision for the architect of a cloud-infrastructure task (Settings → Agents, off by
  * default); every other session gets nothing, so ordinary tasks pay no tokens for it.
  */
 function cloudDiagramsFor(agentType: string, session: SerializableSessionConfig, specDir: string, cwd: string, log: (line: string) => void): { cloud: ArchitectCloudDiagrams; home: string } | undefined {
