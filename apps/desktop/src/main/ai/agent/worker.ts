@@ -12,7 +12,8 @@
  */
 
 import { parentPort, workerData } from 'worker_threads';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -33,6 +34,10 @@ import { lspPluginDecision, writeLspPlugin } from '../claude-code/lsp-plugin';
 import { languagesFromIndex, lspLogLine, lspServersFor, scanProjectLanguages } from '../claude-code/lsp-registry';
 import { defaultClaudeConfigDir } from '../claude-code/runner';
 import { findOnPath } from '../../platform/exec';
+import { getPlatformKey } from '../../platform';
+import { architectCloudDiagrams, type ArchitectCloudDiagrams } from '../cloud-diagrams/architect-session';
+import { findTerraformFiles } from '../cloud-diagrams/infra-heuristic';
+import { architectTaskText } from '../cloud-diagrams/session-input';
 import { designerSkills, qaSkills, subtaskSkills } from '../claude-code/skills';
 import { designPointer, designScope } from '../design/design-scope';
 import type { ToolContext } from '../tools/types';
@@ -506,6 +511,33 @@ let lspPluginCache: { dir?: string; line: string } | undefined;
  * Language servers for a coder / QA fixer session: which follows the
  * project's languages (project_index.json, else a scan of the worktree).
  */
+/**
+ * TerraVision for the architect of a cloud-infrastructure task (Settings → Agents, on by
+ * default); every other session gets nothing, so ordinary tasks pay no tokens for it.
+ */
+function cloudDiagramsFor(agentType: string, session: SerializableSessionConfig, specDir: string, cwd: string, log: (line: string) => void): ArchitectCloudDiagrams | undefined {
+  if (agentType !== 'architect' || !session.cloudDiagrams) return undefined;
+  const sandboxHome = join(tmpdir(), `vibe-teamlead-terravision-${process.pid}-${Date.now()}`);
+  const cloud = architectCloudDiagrams({
+    agentType,
+    launch: session.cloudDiagrams,
+    specDir,
+    text: architectTaskText(specDir),
+    terraformFiles: findTerraformFiles(cwd),
+    sandboxHome,
+    platform: getPlatformKey(),
+    hostEnv: process.env,
+  });
+  if (!cloud) return undefined;
+  try {
+    mkdirSync(sandboxHome, { recursive: true });
+  } catch {
+    // TerraVision still runs; it just has no home folder to write to
+  }
+  log(`Cloud architecture: TerraVision for this architect (diagrams in ${cloud.outputDir})`);
+  return cloud;
+}
+
 function lspPluginFor(agentType: string, session: SerializableSessionConfig, projectDir: string, log: (line: string) => void): string | undefined {
   if (!lspPluginDecision(agentType, session.lspEnabled)) return undefined;
   if (!lspPluginCache) {
@@ -700,6 +732,7 @@ async function runSingleSession(
   const helpersSection = helpersPromptSection(helpers);
   if (extraSkills?.length) sessionLog(`Extra skills: ${extraSkills.join(', ')}`);
   const lspPluginDir = lspPluginFor(agentType, baseSession, projectDir, sessionLog);
+  const cloudDiagrams = cloudDiagramsFor(agentType, baseSession, specDir, toolContext.cwd, sessionLog);
 
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
@@ -712,6 +745,7 @@ async function runSingleSession(
     toolContext,
     ...(extraSkills?.length ? { extraSkills } : {}),
     ...(lspPluginDir ? { lspPluginDir } : {}),
+    ...(cloudDiagrams ? { cloudDiagrams } : {}),
     // See TURN_LIMITS: a looping session is cut off and the subtask retried with a fresh context
     maxSteps: Math.min(baseSession.maxSteps, TURN_LIMITS[agentType] ?? baseSession.maxSteps),
     thinkingLevel: phaseThinking as SessionConfig['thinkingLevel'],

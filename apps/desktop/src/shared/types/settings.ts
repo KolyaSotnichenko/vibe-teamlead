@@ -315,6 +315,13 @@ export interface AppSettings {
    * unless false; turn off on very large repositories if memory is a problem.
    */
   lspEnabled?: boolean;
+  /**
+   * Cloud architecture diagrams with TerraVision (experimental): the architect of a
+   * cloud-infrastructure task draws the target cloud architecture, and the app
+   * redraws it from Terraform after merges that change it. On unless false; does
+   * nothing when TerraVision's tools aren't installed.
+   */
+  cloudDiagramsEnabled?: boolean;
   // API keys used by memory embeddings (OpenAI, Google)
   globalOpenAIApiKey?: string;
   globalGoogleApiKey?: string;

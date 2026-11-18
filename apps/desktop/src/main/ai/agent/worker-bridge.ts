@@ -31,6 +31,7 @@ import { resolveBundledTools } from '../claude-code/bundled-tools';
 import { isFormatOnEditEnabled } from '../claude-code/format-setting';
 import { isMemoryEnabled } from '../memory/memory-setting';
 import { isLspEnabled } from '../claude-code/lsp-setting';
+import { cloudDiagramsLaunch } from '../cloud-diagrams/cloud-setting';
 import { isSubscriptionModeEnabled } from '../claude-code/subscription-setting';
 import { readStrixLlmChoice, readStrixSettings } from '../security/strix-setting';
 import { readSubagentSettings } from '../claude-code/subagent-setting';
@@ -168,6 +169,7 @@ export class WorkerBridge extends EventEmitter {
         formatOnEdit: config.session.formatOnEdit ?? isFormatOnEditEnabled(),
         agentMemory: config.session.agentMemory ?? isMemoryEnabled(),
         lspEnabled: config.session.lspEnabled ?? isLspEnabled(),
+        cloudDiagrams: config.session.cloudDiagrams !== undefined ? config.session.cloudDiagrams : (cloudDiagramsLaunch() ?? null),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
         verification: config.session.verification ?? readVerification(config.projectId),
         design: config.session.design ?? readDesignSettings(config.projectId),

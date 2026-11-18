@@ -74,6 +74,8 @@ export interface SerializableSessionConfig {
   agentMemory?: boolean;
   /** Language servers for the coder / QA fixer (resolved in the main process; on unless false) */
   lspEnabled?: boolean;
+  /** TerraVision for the architect of a cloud task (resolved in the main process); null when off or not installed */
+  cloudDiagrams?: import('../cloud-diagrams/architect-session').CloudDiagramsLaunch | null;
   /** The project's design system (resolved in the main process; .vibe-teamlead/ is not in worktrees) */
   designSystem?: import('../../../shared/types').DesignSystemInfo;
   /** Design before code for UI tasks: the project's settings and the Designer model (resolved in the main process) */
