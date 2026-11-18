@@ -9,6 +9,7 @@ import { AgentProfileSettings } from './AgentProfileSettings';
 import { FeatureModelSettings } from './FeatureModelSettings';
 import { ClaudeModelSelect } from './ClaudeModelSelect';
 import { StrixModelSettings } from './StrixModelSettings';
+import { CloudDiagramsSetting } from './CloudDiagramsSetting';
 import type {
   AppSettings,
   ToolDetectionResult
@@ -252,6 +253,7 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
                   onCheckedChange={(checked) => onSettingsChange({ ...settings, lspEnabled: checked })}
                 />
               </div>
+              <CloudDiagramsSetting settings={settings} onSettingsChange={onSettingsChange} />
               <div className="flex items-center justify-between max-w-md">
                 <div className="space-y-1">
                   <Label htmlFor="securityQaEnabled" className="text-sm font-medium text-foreground">

@@ -1,0 +1,63 @@
+{
+  "settings": {
+    "title": "Cloud architecture diagrams (TerraVision, experimental)",
+    "description": "For tasks about cloud infrastructure, the architect also draws the target cloud architecture (AWS, Azure, Google Cloud) with TerraVision, and after a merge that changes Terraform the app redraws it from the code itself, without a model. Ordinary tasks are not affected.",
+    "checking": "Checking what is installed…",
+    "ready": "Ready. The architect can draw, and the app can redraw from Terraform after merges.",
+    "readyNoCode": "The architect can draw. Redrawing from Terraform after merges needs Terraform or OpenTofu.",
+    "notReady": "Not ready: nothing happens until these are installed. Nothing is installed for you.",
+    "missing": "Missing:",
+    "tools": {
+      "uv": "uv (runs TerraVision)",
+      "graphviz": "Graphviz",
+      "git": "Git",
+      "terraform": "Terraform or OpenTofu (only for drawing from code)"
+    }
+  },
+  "tab": {
+    "label": "Architecture",
+    "title": "Cloud architecture",
+    "subtitle": "The target cloud architecture the architect designed, and the one the app drew from the Terraform code after the latest merge that changed it.",
+    "off": "Cloud architecture diagrams are turned off (Settings → Agents).",
+    "refresh": "Refresh",
+    "loadFailed": "Couldn't load the cloud architecture",
+    "designed": {
+      "title": "Designed",
+      "fromTask": "By the architect of “{{task}}”",
+      "none": "No designed cloud architecture yet. The architect draws one for a task about cloud infrastructure, or start one below.",
+      "openDrawio": "Open in draw.io",
+      "openSvg": "Open SVG"
+    },
+    "fromCode": {
+      "title": "From code",
+      "drawnFrom": "Drawn from {{source}} at commit {{commit}}, {{date}}",
+      "afterTask": "after merging “{{task}}”",
+      "none": "Not drawn yet. The app draws it after a merge that changes Terraform files.",
+      "openSvg": "Open SVG",
+      "openDrawio": "Open in draw.io",
+      "openHtml": "Open interactive page",
+      "openFolder": "Show files",
+      "status": {
+        "unavailable": "The last merge that changed Terraform ({{commit}}) wasn't drawn: TerraVision's tools aren't all installed.",
+        "needs_cloud_access": "Couldn't draw from code without cloud access ({{commit}}). The app never gives Terraform credentials.",
+        "refused": "Couldn't draw from code safely ({{commit}}). {{detail}}",
+        "failed": "Drawing from code failed ({{commit}}). {{detail}}"
+      }
+    },
+    "decisions": {
+      "title": "Decisions",
+      "none": "No decisions (ADRs) from merged tasks yet.",
+      "openTask": "Open “{{task}}”"
+    },
+    "design": {
+      "button": "Design the cloud architecture",
+      "hint": "Creates a task in Planning; nothing runs until you start it. Running it starts the spec and architect sessions (model calls) and pauses for your review before any code.",
+      "architectOff": "The architect is turned off (Settings → Agents → Architect), so this task would draw nothing.",
+      "created": "Task created: start it from the board",
+      "failed": "Couldn't create the task",
+      "title": "Design the target cloud architecture",
+      "description": "Design the target cloud architecture of this project. Change no application code.\n\n1. Read the project: the code, compose files, .env.example, README and CI workflows.\n2. Find the cloud it already points at (for example Azure: Entra ID sign-in, Azure Storage through Azurite locally, Application Insights) and keep to it.\n3. Describe the target cloud architecture: where the API and the web app run, the database, storage, sign-in, monitoring and networking.\n4. Draw it with TerraVision as a cloud architecture graph and render it (SVG and draw.io) into the spec's architecture diagrams, next to the other diagrams.\n5. Write an ADR for each main choice.\n\nThe result stays in this task's Architecture tab."
+    },
+    "missingTools": "TerraVision isn't ready, so nothing is drawn. Missing:"
+  }
+}
