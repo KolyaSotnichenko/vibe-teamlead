@@ -281,6 +281,35 @@ describe('verifyTask', () => {
       expect(report.status).toBe('passed');
     });
 
+    it('starts the other compose services too, points the example settings at them, and removes them', async () => {
+      writeFileSync(join(repo, 'docker-compose.yml'), [
+        'services:',
+        '  db:',
+        '    image: postgres:18-alpine',
+        '  rabbitmq:',
+        '    image: rabbitmq:3',
+        '    volumes: ["/:/host"]',
+        '    environment: { RABBITMQ_DEFAULT_USER: app, RABBITMQ_DEFAULT_PASS: s3cretpass }',
+        '    healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "ping"] }',
+        '',
+      ].join('\n'));
+      writeFileSync(join(repo, 'apps', 'api', '.env.example'), 'CSRF_SECRET=from-example\nAMQP_URL=amqp://guest:guest@rabbitmq:5672\n');
+      commit(repo, 'rabbitmq');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      const { docker, calls } = fakeDocker();
+      const lines: string[] = [];
+      const report = await verify({ docker, commands: ['test "$AMQP_URL" = amqp://app:s3cretpass@127.0.0.1:50000 && echo "amqp ok $AMQP_URL"; exit 1'], onLog: (line) => lines.push(line) });
+      const runs = calls.filter((call) => call[0] === 'run');
+      expect(runs.map((call) => call.at(-1))).toContain('rabbitmq:3');
+      expect(runs.find((call) => call.includes('rabbitmq:3'))?.join(' ')).not.toMatch(/-v |\/host/);
+      expect(report.services).toEqual({ status: 'started', images: ['postgres:18-alpine', 'rabbitmq:3'] });
+      expect(lines).toContain('App checks: starting rabbitmq for this copy');
+      expect(lines).toContain('App checks: rabbitmq up');
+      expect(report.checks[0].tail).toContain('amqp ok');
+      expect(report.checks[0].tail).not.toContain('s3cretpass');
+      expect(calls).toContainEqual(['network', 'rm', expect.stringMatching(/^vibe-teamlead-verify-/)]);
+    });
+
     it('a task cannot choose the image: it comes from the base', async () => {
       const { docker, calls } = fakeDocker();
       writeFileSync(join(wt, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres-evil:1\n');

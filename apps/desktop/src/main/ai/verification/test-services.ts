@@ -21,7 +21,8 @@ export interface TestServices {
   stop: () => Promise<void>;
 }
 
-const LABEL = 'vibe-teamlead-verify';
+export const VERIFY_LABEL = 'vibe-teamlead-verify';
+const LABEL = VERIFY_LABEL;
 const USER = 'verify';
 const PULL_TIMEOUT_MS = 10 * 60_000;
 const REASON_CHARS = 200;

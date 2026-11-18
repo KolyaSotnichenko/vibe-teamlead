@@ -20,7 +20,9 @@ import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
-import { type DockerRun, hostDocker, startTestServices } from './test-services';
+import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
+import { startComposeServices } from './compose-runner';
+import { bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
 
@@ -254,7 +256,7 @@ const ENV_EXAMPLE = /^([^/]+\/){0,2}\.env\.(example|sample)$/;
 const COMMITTED_ENV = /(^|\/)\.env(\.[\w-]+)?$/;
 
 /** All this reads from the base, so that a task can't choose what checks it or what it runs against. */
-async function detectAt(run: GitRun, commit: string): Promise<{ detected: DetectedChecks; images: ServiceImage[]; example: string; committedDatabase: boolean }> {
+async function detectAt(run: GitRun, commit: string): Promise<{ detected: DetectedChecks; images: ServiceImage[]; compose: ComposeService[]; example: string; committedDatabase: boolean }> {
   const files = (await run(['ls-tree', '-r', '-z', '--name-only', commit])).raw.split('\0').filter(Boolean);
   const show = async (file: string) => {
     const shown = await run(['show', `${commit}:${file}`]);
@@ -270,6 +272,7 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
   return {
     detected: detectChecks({ files, read: (path) => contents.get(path) ?? null }),
     images: imagesFromComposeFiles(composeContents),
+    compose: composeServices(composeContents),
     example: examples.join('\n'),
     committedDatabase: committed.some(namesDatabase),
   };
@@ -303,7 +306,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     const own = await detectAt(run, commit);
     if (own.detected.checks.length) {
       source = 'task';
-      from = { ...own, images: base.images.length ? base.images : own.images };
+      from = { ...own, images: base.images.length ? base.images : own.images, compose: base.compose.length ? base.compose : own.compose };
     }
   }
   const detected = options.detected ?? from.detected;
@@ -352,20 +355,36 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       const started = await startTestServices(from.images, { docker, label: serviceLabel });
       if (started.status === 'started') say('database up');
       else if (started.status === 'unavailable') say(`no database: ${started.reason ?? 'it could not start'}`);
+      // The compose file's other services (queues, storage, search…), after the database: its start clears the label's leftovers
+      const composeNames = from.compose.map((service) => service.name).join(', ');
+      if (from.compose.length) say(`starting ${composeNames} for this copy`);
+      const compose = await startComposeServices(from.compose, {
+        docker, labelKey: VERIFY_LABEL, labelValue: serviceLabel, buckets: bucketsOf(from.example), signal,
+      });
+      if (compose.started.length) say(`${compose.started.map((service) => service.name).join(', ')} up`);
+      for (const failure of compose.failed) say(`${failure.name}: ${failure.reason}`);
+      if (compose.status === 'unavailable' && compose.reason && !compose.failed.length) say(`no ${composeNames}: ${compose.reason}`);
       try {
-        if (started.status !== 'none') {
-          services ??= { status: started.status, images: from.images.map((image) => image.image), ...(started.reason ? { reason: started.reason } : {}) };
+        const statuses = [started.status, compose.status].filter((status) => status !== 'none');
+        if (statuses.length) {
+          const reason = [started.reason, compose.status === 'unavailable' ? compose.reason : undefined].filter(Boolean).join(' ');
+          services ??= {
+            status: statuses.includes('unavailable') ? 'unavailable' : 'started',
+            images: [...from.images.map((image) => image.image), ...from.compose.map((service) => service.image)],
+            ...(reason ? { reason } : {}),
+          };
         }
-        const variables = { ...serviceEnv(from.example, started.started), ...options.env };
+        const variables = { ...serviceEnv(from.example, started.started, { planned: from.compose, started: compose.started }), ...options.env };
         env = verificationEnv(hostEnv, variables);
         // Set by the project's settings, an address may be anything, so migrations stay away from it
         const ownDatabase = Object.keys(options.env).some((name) => /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i.test(name));
         // The migration tools here are for SQL databases
         migratable = !ownDatabase && !from.committedDatabase && started.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
         // Example values aren't secrets, the project's own values and the database addresses are
-        secrets = [...Object.values(options.env), ...started.started.flatMap((service) => [service.url, new URL(service.url).password])];
+        secrets = [...Object.values(options.env), ...started.started.flatMap((service) => [service.url, new URL(service.url).password]), ...composeSecrets(compose.started)];
         return await work(cwd);
       } finally {
+        await compose.stop();
         await started.stop();
       }
     } finally {
@@ -498,7 +517,7 @@ export function describeVerification(report: VerificationReport): string {
   });
   if (report.migrationsSkipped) runner.push('The migrations were not run: there was no temporary database to run them on, and they could change a real one.');
   const databases = report.services?.status === 'started'
-    ? [`Against a temporary, empty database: ${report.services.images.join(', ')}`]
+    ? [`Against temporary, empty services started for the checks: ${report.services.images.join(', ')}`]
     : report.services?.reason ? [report.services.reason] : [];
   const origin = report.source === 'task'
     ? ['The base branch has no checks yet, so these commands come from this task itself: a pass shows less than usual (the task chose what checks it), a failure is the task\'s own.']
