@@ -39,6 +39,7 @@ import { safeSendToRenderer } from '../utils';
 import { getMainRunDeps, getReadiness } from '../../deploy/readiness-instance';
 import { watchMainRuns } from '../../deploy/main-runs';
 import { branchHead, pushMainAfterMerge } from '../../deploy/push-after-merge';
+import { cloudRedrawAfterMerge, defaultAfterMergeDeps } from '../../ai/cloud-diagrams/after-merge';
 import { pushWithAppToken } from '../../deploy/github-write';
 import type { MergeWorktreeOptions } from '../../../shared/types/task';
 import { samePath } from '../../platform/same-path';
@@ -926,6 +927,14 @@ export async function mergeTaskWorktree(
             } catch {
               // informational
             }
+
+            // Cloud architecture: redraw from Terraform when the merge changed it (Settings → Agents; never blocks or fails the merge)
+            void cloudRedrawAfterMerge(
+              { projectPath: project.path, baseBranch: effectiveBaseBranch, taskId, taskTitle: task.title },
+              defaultAfterMergeDeps(project.path, git.git, git.env),
+            ).then((meta) => {
+              if (meta) safeSendToRenderer(getMainWindow, IPC_CHANNELS.CLOUD_ARCHITECTURE_UPDATED, project.id);
+            });
 
             // Clean up worktree after successful full merge (fixes #243)
             // This allows drag-to-Done workflow since TASK_UPDATE_STATUS blocks 'done' when worktree exists

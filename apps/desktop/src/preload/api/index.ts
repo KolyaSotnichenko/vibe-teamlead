@@ -18,6 +18,7 @@ import { type BriefAPI, createBriefAPI } from './brief-api';
 import { type DesignAPI, createDesignAPI } from './design-api';
 import { type PreviewAPI, createPreviewAPI } from './preview-api';
 import { type DeployAPI, createDeployAPI } from './deploy-api';
+import { type CloudArchitectureAPI, createCloudArchitectureAPI } from './cloud-architecture-api';
 import { type UsageAPI, createUsageAPI } from './usage-api';
 import { createToolsCheckAPI } from './tools-check-api';
 import { type TelegramAPI, createTelegramAPI } from './telegram-api';
@@ -53,6 +54,8 @@ export interface ElectronAPI extends
   preview: PreviewAPI;
   /** GitHub Actions runs for the Deploy view */
   deploy: DeployAPI;
+  /** Cloud architecture diagrams (TerraVision, experimental) */
+  cloudArchitecture: CloudArchitectureAPI;
   /** Token usage per project */
   usage: UsageAPI;
   /** The Telegram bot (Settings → Telegram) */
@@ -82,6 +85,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   design: createDesignAPI(),
   preview: createPreviewAPI(),
   deploy: createDeployAPI(),
+  cloudArchitecture: createCloudArchitectureAPI(),
   usage: createUsageAPI(),
   telegram: createTelegramAPI(),
   queue: createQueueAPI(),

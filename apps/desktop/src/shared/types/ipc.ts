@@ -780,6 +780,8 @@ export interface ElectronAPI {
   preview: import('./preview').PreviewAPI;
   /** GitHub Actions runs for the Deploy view */
   deploy: import('./deploy').DeployAPI;
+  /** Cloud architecture diagrams (TerraVision, experimental) */
+  cloudArchitecture: import('./cloud-architecture').CloudArchitectureAPI;
   /** Token usage per project */
   usage: { get: (projectId: string) => Promise<IPCResult<import('./usage').ProjectUsageSummary>> };
   /** The Telegram bot (Settings → Telegram) */

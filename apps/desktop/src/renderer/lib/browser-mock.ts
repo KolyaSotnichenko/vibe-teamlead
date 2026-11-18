@@ -230,6 +230,12 @@ const browserMockAPI: ElectronAPI = {
     restartServices: async (projectId: string) => ({ success: true, data: { projectId, stage: 'stopped' as const, origins: [] } }),
     saveNotes: async (_projectId: string, notes: unknown[]) => ({ success: true, data: notes as never[] }),
   },
+  cloudArchitecture: {
+    get: async () => ({ success: true, data: { enabled: true, tools: { ready: false, drawFromCode: false, missing: ['uv', 'graphviz', 'git', 'terraform'], hints: { uv: 'brew install uv', graphviz: 'brew install graphviz', git: 'brew install git', terraform: 'brew install opentofu' } }, decisions: [] } }),
+    open: async () => ({ success: true }),
+    tools: async () => ({ success: true, data: { ready: false, drawFromCode: false, missing: ['uv', 'graphviz', 'git', 'terraform'], hints: { uv: 'brew install uv', graphviz: 'brew install graphviz', git: 'brew install git', terraform: 'brew install opentofu' } } }),
+    onUpdated: () => () => {},
+  },
   deploy: {
     startRuns: async () => ({ success: true }),
     selectRun: async () => ({ success: true }),

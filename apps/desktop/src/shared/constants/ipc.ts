@@ -150,6 +150,11 @@ export const IPC_CHANNELS = {
   PREVIEW_UX_REVIEW_CANCEL: 'preview:uxReviewCancel',
   PREVIEW_UX_REVIEW_LAST: 'preview:uxReviewLast',
   PROJECT_LOOSE_ENDS: 'project:looseEnds',  // Placeholders left in the project's UI files
+  // Cloud architecture diagrams (TerraVision, experimental)
+  CLOUD_ARCHITECTURE_GET: 'cloudArchitecture:get',  // The project's Context → Architecture tab
+  CLOUD_ARCHITECTURE_OPEN: 'cloudArchitecture:open',  // Open one of its files
+  CLOUD_ARCHITECTURE_UPDATED: 'cloudArchitecture:updated',  // Event: a merge redrew it (main -> renderer)
+  CLOUD_DIAGRAMS_TOOLS: 'cloudArchitecture:tools',  // What TerraVision needs, installed or not
   PREVIEW_RESET_DATA: 'preview:resetData',
   PREVIEW_ENV: 'preview:env',  // Every variable the preview's services get, with sources
   PREVIEW_RESTART_SERVICES: 'preview:restartServices',

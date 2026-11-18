@@ -11,6 +11,7 @@ import { registerPreviewHandlers } from './preview-handlers';
 import { registerDeployHandlers } from './deploy-handlers';
 import { registerTaskDesignHandlers } from './task-design-handlers';
 import { registerLooseEndsHandlers } from './loose-ends-handlers';
+import { registerCloudArchitectureHandlers } from './cloud-architecture-handlers';
 import { registerUsageHandlers } from './usage-handlers';
 import { registerToolsCheckHandlers } from './tools-check-handlers';
 import type { BrowserWindow } from 'electron';
@@ -126,6 +127,7 @@ export function setupIpcHandlers(
   registerDeployHandlers(getMainWindow, agentManager);
   registerTaskDesignHandlers(agentManager, getMainWindow);
   registerLooseEndsHandlers();
+  registerCloudArchitectureHandlers();
   registerUsageHandlers();
 
   // Debug handlers (logs, debug info, etc.)
