@@ -43,8 +43,8 @@ describe('summarizeEnv', () => {
   const report = (extra: Partial<PreviewEnvReport>): PreviewEnvReport => ({ running: true, restartNeeded: false, databases: [], mail: false, dockerUnavailable: false, services: [], ...extra });
 
   it('says what was started, and that nothing is missing', () => {
-    expect(summarizeEnv(report({ databases: ['postgres'], mail: true, services: [{ service: 'api', dir: '', vars: [v('A', '1')] }] }))).toEqual({
-      dockerUnavailable: false, databases: ['postgres'], mail: true, empty: 0, features: [], outside: [],
+    expect(summarizeEnv(report({ databases: ['postgres'], composeServices: ['rabbitmq'], mail: true, services: [{ service: 'api', dir: '', vars: [v('A', '1')] }] }))).toEqual({
+      dockerUnavailable: false, databases: ['postgres'], composeServices: ['rabbitmq'], mail: true, empty: 0, features: [], outside: [],
     });
   });
 

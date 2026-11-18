@@ -99,6 +99,9 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
       )}
+      {status?.servicesNotices?.map((notice) => (
+        <div key={notice} className="px-4 pt-2"><Notice>{notice}</Notice></div>
+      ))}
       {ready && status.addressIssues && status.addressIssues.length > 0 && (
         <div className="px-4 pt-2">
           <AddressNotice projectId={project.id} issues={status.addressIssues} services={saved} />

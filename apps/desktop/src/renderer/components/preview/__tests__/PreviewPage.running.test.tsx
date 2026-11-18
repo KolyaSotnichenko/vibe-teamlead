@@ -93,3 +93,12 @@ describe('PreviewPage and RUNNING.md', () => {
     expect(screen.getByRole('button', { name: 'preview.running.openTerminal' })).toBeInTheDocument();
   });
 });
+
+describe('PreviewPage and the compose services', () => {
+  it('says which of them did not start, and why', async () => {
+    withDoc(NONE);
+    session.status = { projectId: 'p1', stage: 'ready', url: 'http://localhost:4100', origins: [], services: 'started', servicesNotices: ['search (getmeili/meilisearch) did not get ready in time.'] };
+    render(<PreviewPage project={PROJECT} />);
+    expect(screen.getByText('search (getmeili/meilisearch) did not get ready in time.')).toBeInTheDocument();
+  });
+});

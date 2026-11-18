@@ -48,6 +48,8 @@ export function sortVars(vars: PreviewEnvVar[]): PreviewEnvVar[] {
 export interface EnvSummary {
   dockerUnavailable: boolean;
   databases: string[];
+  /** The compose file's other services the preview starts (queues, storage, search…) */
+  composeServices: string[];
   mail: boolean;
   /** Empty settings across the services */
   empty: number;
@@ -65,6 +67,7 @@ export function summarizeEnv(report: PreviewEnvReport): EnvSummary {
   return {
     dockerUnavailable: report.dockerUnavailable,
     databases: report.databases,
+    composeServices: report.composeServices ?? [],
     mail: report.mail,
     empty: empties.length,
     features,

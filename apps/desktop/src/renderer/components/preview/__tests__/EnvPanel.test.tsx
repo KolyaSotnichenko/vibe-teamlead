@@ -79,6 +79,26 @@ describe('EnvPanel', () => {
     expect(screen.getByText('dev-secret')).toBeInTheDocument();
   });
 
+  it("names the compose services the preview started, and each value's service", async () => {
+    report = {
+      ...REPORT,
+      composeServices: ['rabbitmq', 'minio'],
+      services: [{
+        service: 'api',
+        dir: 'api',
+        vars: [
+          { name: 'AMQP_URL', value: 'amqp://127.0.0.1:50001', source: 'service', service: 'rabbitmq' },
+          { name: 'S3_ENDPOINT', value: '', source: 'blocked', service: 'minio' },
+        ],
+      }],
+    };
+    render(<EnvPanel projectId="p1" settings={{}} stage="ready" />);
+    expect(await screen.findByText(/preview\.env\.ready/)).toHaveTextContent('preview.env.partService{\\"name\\":\\"rabbitmq\\"}');
+    fireEvent.click(await screen.findByText(/preview\.env\.details/));
+    expect(screen.getByText('preview.env.source.service{"service":"rabbitmq"}')).toBeInTheDocument();
+    expect(screen.getByText('preview.env.source.serviceDown{"service":"minio"}')).toBeInTheDocument();
+  });
+
   it('filters to empty values', async () => {
     await open();
     fireEvent.click(screen.getByLabelText('preview.env.emptyOnly'));

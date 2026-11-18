@@ -22,11 +22,19 @@ const KIND_NAMES: Record<string, string> = { postgres: 'Postgres', mysql: 'MySQL
 
 type Overrides = Pick<ProjectSettings, 'previewEnv' | 'previewServiceEnv'>;
 
+/** Where a value came from; a compose service's by its name, also when it didn't start */
+function sourceText(t: (key: string, options?: Record<string, unknown>) => string, v: PreviewEnvVar): string {
+  if (v.service && v.source === 'service') return t('preview.env.source.service', { service: v.service });
+  if (v.service && v.source === 'blocked') return t('preview.env.source.serviceDown', { service: v.service });
+  return t(`preview.env.source.${v.source}`);
+}
+
 function Summary({ report }: { report: PreviewEnvReport }) {
   const { t } = useTranslation(['tasks']);
   const summary = summarizeEnv(report);
   const parts = [
     ...summary.databases.map((kind) => t('preview.env.partDatabase', { kind: KIND_NAMES[kind] ?? kind })),
+    ...summary.composeServices.map((name) => t('preview.env.partService', { name })),
     ...(summary.mail ? [t('preview.env.partMail')] : []),
   ].join(t('preview.env.and'));
   const features = (list: string[]) => list.map((f) => t(`preview.env.feature.${f}`)).join(', ');
@@ -101,7 +109,7 @@ function Row({ service, v, onSave, onClear }: {
           </div>
         </form>
       )}
-      <p className="text-xs text-muted-foreground">{t(`preview.env.source.${v.source}`)}</p>
+      <p className="text-xs text-muted-foreground">{sourceText(t, v)}</p>
       {blocked && (editing !== null || owned) && <p className="text-xs text-[var(--vt-signal-text)]">{t('preview.env.realWarning')}</p>}
       {v.source === 'override' && <p className="text-xs text-muted-foreground">{t('preview.env.allServices')}</p>}
       {owned && (
