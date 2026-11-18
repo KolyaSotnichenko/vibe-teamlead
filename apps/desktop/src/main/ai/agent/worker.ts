@@ -12,7 +12,7 @@
  */
 
 import { parentPort, workerData } from 'worker_threads';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -515,27 +515,33 @@ let lspPluginCache: { dir?: string; line: string } | undefined;
  * TerraVision for the architect of a cloud-infrastructure task (Settings → Agents, on by
  * default); every other session gets nothing, so ordinary tasks pay no tokens for it.
  */
-function cloudDiagramsFor(agentType: string, session: SerializableSessionConfig, specDir: string, cwd: string, log: (line: string) => void): ArchitectCloudDiagrams | undefined {
+function cloudDiagramsFor(agentType: string, session: SerializableSessionConfig, specDir: string, cwd: string, log: (line: string) => void): { cloud: ArchitectCloudDiagrams; home: string } | undefined {
   if (agentType !== 'architect' || !session.cloudDiagrams) return undefined;
-  const sandboxHome = join(tmpdir(), `vibe-teamlead-terravision-${process.pid}-${Date.now()}`);
-  const cloud = architectCloudDiagrams({
+  const input = {
     agentType,
     launch: session.cloudDiagrams,
     specDir,
     text: architectTaskText(specDir),
     terraformFiles: findTerraformFiles(cwd),
-    sandboxHome,
     platform: getPlatformKey(),
     hostEnv: process.env,
-  });
-  if (!cloud) return undefined;
+  };
+  // Decide first (no folder for an ordinary task), then make a private home for TerraVision
+  if (!architectCloudDiagrams({ ...input, sandboxHome: '' })) return undefined;
+  let home: string;
   try {
-    mkdirSync(sandboxHome, { recursive: true });
+    home = mkdtempSync(join(tmpdir(), 'vibe-teamlead-terravision-'));
   } catch {
-    // TerraVision still runs; it just has no home folder to write to
+    log('Cloud architecture: no private folder for TerraVision could be made, so the architect works without it');
+    return undefined;
+  }
+  const cloud = architectCloudDiagrams({ ...input, sandboxHome: home });
+  if (!cloud) {
+    rmSync(home, { recursive: true, force: true });
+    return undefined;
   }
   log(`Cloud architecture: TerraVision for this architect (diagrams in ${cloud.outputDir})`);
-  return cloud;
+  return { cloud, home };
 }
 
 function lspPluginFor(agentType: string, session: SerializableSessionConfig, projectDir: string, log: (line: string) => void): string | undefined {
@@ -732,7 +738,8 @@ async function runSingleSession(
   const helpersSection = helpersPromptSection(helpers);
   if (extraSkills?.length) sessionLog(`Extra skills: ${extraSkills.join(', ')}`);
   const lspPluginDir = lspPluginFor(agentType, baseSession, projectDir, sessionLog);
-  const cloudDiagrams = cloudDiagramsFor(agentType, baseSession, specDir, toolContext.cwd, sessionLog);
+  const cloudSetup = cloudDiagramsFor(agentType, baseSession, specDir, toolContext.cwd, sessionLog);
+  const cloudDiagrams = cloudSetup?.cloud;
 
   const sessionConfig: SessionConfig = {
     ...claudeSessionBase(baseSession),
@@ -778,6 +785,9 @@ async function runSingleSession(
     if (logWriter && !skipPhaseLogging) logWriter.endPhase(phase, false);
     if (logWriter) logWriter.setSubtask(undefined);
     throw error;
+  } finally {
+    // TerraVision's private home folder goes with the session
+    if (cloudSetup) rmSync(cloudSetup.home, { recursive: true, force: true });
   }
 
   // End phase logging — mark as completed or failed based on outcome (skip when orchestrator manages phases)

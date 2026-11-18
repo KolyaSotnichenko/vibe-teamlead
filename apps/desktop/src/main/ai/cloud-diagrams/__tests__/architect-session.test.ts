@@ -62,10 +62,10 @@ describe('cloudDiagramsInstructions', () => {
     expect(text).not.toContain('generate_diagram');
   });
 
-  it("mentions drawing from the task's Terraform only when it exists and Terraform is installed", () => {
+  it("points at the project's Terraform when it exists, and never offers the tools that run Terraform", () => {
     const text = cloudDiagramsInstructions({ outputDir: '/o', terraformFiles: ['infra/main.tf'], drawFromCode: true });
     expect(text).toContain('infra/main.tf');
-    expect(text).toContain('generate_diagram');
+    expect(text).not.toMatch(/generate_diagram|generate_architecture_graph|generate_interactive_html|open_diagram_file/);
   });
 });
 
@@ -89,7 +89,9 @@ describe('runner wiring', () => {
     expect(Object.keys(options.mcpServers ?? {})).toContain(TERRAVISION_SERVER_KEY);
     const append = (options.systemPrompt as { append?: string }).append ?? '';
     expect(append).toContain('## Cloud architecture diagram (TerraVision)');
-    expect(options.disallowedTools).toContain('mcp__terravision__open_diagram_file');
+    for (const tool of ['open_diagram_file', 'generate_diagram', 'generate_architecture_graph', 'generate_interactive_html', 'diagram_file']) {
+      expect(options.disallowedTools).toContain(`mcp__terravision__${tool}`);
+    }
   });
 
   it('adds nothing at all without it', () => {

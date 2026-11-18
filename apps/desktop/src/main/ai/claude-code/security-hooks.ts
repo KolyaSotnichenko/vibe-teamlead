@@ -37,6 +37,7 @@ import { isPathContained } from '../security/path-containment';
 import { labelDockerRuns } from '../../utils/task-containers';
 import { isFloodingCommand, toolLogPath, trimmedCommand } from './output-trim';
 import type { ToolContext } from '../tools/types';
+import { terravisionToolDenied } from '../cloud-diagrams/tool-guard';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
@@ -225,6 +226,10 @@ export function evaluatePreToolUse(
     const scanned = evaluateScanRead(toolName, toolInput, context);
     if (scanned) return scanned;
   }
+
+  // TerraVision (the architect of a cloud task): a JSON graph only, into the spec's diagrams folder
+  const terravision = terravisionToolDenied(toolName, toolInput, context);
+  if (terravision) return deny(terravision);
 
   if (BROWSER_SERVER_CODE.test(toolName)) {
     return deny('Running code in the browser server is not allowed. Use browser_click, browser_type, browser_fill_form and browser_snapshot instead.');

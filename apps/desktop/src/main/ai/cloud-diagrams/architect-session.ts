@@ -17,8 +17,8 @@ import { cloudSafeEnv } from './terravision';
 /** Tool prefix inside Claude Code: mcp__terravision__<tool> */
 export const TERRAVISION_SERVER_KEY = 'terravision';
 
-/** TerraVision tools the architect must not call: this one opens files in the user's desktop apps. */
-export const TERRAVISION_DISALLOWED_TOOLS = [`mcp__${TERRAVISION_SERVER_KEY}__open_diagram_file`];
+/** TerraVision tools the architect must not call (tool-guard.ts refuses them too). */
+export { TERRAVISION_DISALLOWED_TOOLS } from './tool-guard';
 
 /** Resolved in the main process: undefined when the setting is off or TerraVision can't run. */
 export interface CloudDiagramsLaunch {
@@ -70,8 +70,8 @@ export function architectCloudDiagrams(input: {
 /** The architect's prompt section, added by the runner only when the server is there. */
 export function cloudDiagramsInstructions(cloud: { outputDir: string; terraformFiles: string[]; drawFromCode: boolean }): string {
   const t = `mcp__${TERRAVISION_SERVER_KEY}__`;
-  const fromCode = cloud.terraformFiles.length > 0 && cloud.drawFromCode
-    ? `\nThe project already has Terraform (${cloud.terraformFiles.slice(0, 5).join(', ')}${cloud.terraformFiles.length > 5 ? ', …' : ''}). Base the graph on it, changed as this task requires. \`${t}generate_diagram\` draws the current code (it runs \`terraform init\` and \`plan\` without cloud credentials); if it fails for want of credentials or variables, draw from the graph instead and say so.`
+  const fromCode = cloud.terraformFiles.length > 0
+    ? `\nThe project already has Terraform (${cloud.terraformFiles.slice(0, 5).join(', ')}${cloud.terraformFiles.length > 5 ? ', …' : ''}). Read it and base the graph on it, changed as this task requires.`
     : '';
   return `
 ## Cloud architecture diagram (TerraVision)
@@ -79,5 +79,5 @@ This task concerns cloud infrastructure, so you also draw the target cloud archi
 1. Call \`${t}diagram_guide\` once with the provider ("aws", "azure" or "gcp": the cloud the spec and the project point at; one provider per diagram).
 2. Write the target architecture as a graph: \`<resource_type>.<name>\` → what it connects to or contains, where the API and web run, the database, storage, sign-in, monitoring and networking.
 3. Call \`${t}render_graph\` with that graph, \`outfile: "cloud-architecture"\` and \`format: "svg"\`. It saves SVG, PNG, draw.io and the graph as \`.tvg.json\` in ${cloud.outputDir}, next to your other diagrams. Look at the result and fix what reads badly.${fromCode}
-Reference the diagram in architecture.md. Don't call \`${t}open_diagram_file\`.`;
+Reference the diagram in architecture.md. Only these two TerraVision tools are available; the app draws the architecture from the Terraform code itself after merges.`;
 }
