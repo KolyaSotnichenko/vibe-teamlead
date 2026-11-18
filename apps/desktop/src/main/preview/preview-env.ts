@@ -71,6 +71,8 @@ export function baseEnvVars(input: BaseEnvInput): PreviewEnvVar[] {
   }
   for (const name of [...root.keys(), ...own.keys()]) if (!vars.has(name)) set(name, '', 'blocked');
   if (input.mailPort) for (const [name, value] of Object.entries(mailEnv(examples, input.mailPort))) set(name, value, 'mail');
+  // For a service in a folder: what only the root's example names, which every service gets
+  if (input.dir) for (const [name, v] of vars) if (root.has(name) && !own.has(name)) vars.set(name, { ...v, shared: true });
   for (const [name, value] of Object.entries(input.overrides ?? {})) {
     const before = vars.get(name);
     vars.set(name, { name, value, source: 'override', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });

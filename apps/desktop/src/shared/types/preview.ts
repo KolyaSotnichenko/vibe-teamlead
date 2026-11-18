@@ -149,6 +149,8 @@ export interface PreviewEnvVar {
   automatic?: { value: string; source: PreviewEnvSource };
   /** Known only once the preview starts (a database's address, a port) */
   pending?: boolean;
+  /** For a service in a folder: named only by the project root's `.env.example`, so every service gets it */
+  shared?: boolean;
 }
 
 export interface PreviewEnvService {

@@ -21,6 +21,23 @@ describe('baseEnvVars', () => {
     expect(vars.REDIS_URL).toMatchObject({ value: '', source: 'blocked' });
   });
 
+  it('marks what only the root example names as shared, for a service in a folder; never at the root itself', () => {
+    const input = {
+      rootExample: 'APP_NAME=acme\nVITE_AUTH_MODE=prod\nDATABASE_URL=postgresql://u:p@localhost:5432/x\nREDIS_URL=redis://localhost:6379\n',
+      started: PG,
+    };
+    const vars = byName(baseEnvVars({ ...input, dir: 'apps/web', dirExample: 'VITE_AUTH_MODE=test\nVITE_X=1\n', overrides: { APP_NAME: 'mine' } }));
+    expect(vars.APP_NAME.shared).toBeUndefined();
+    expect(vars.DATABASE_URL).toMatchObject({ source: 'database', shared: true });
+    expect(vars.REDIS_URL).toMatchObject({ source: 'blocked', shared: true });
+    expect(vars.VITE_AUTH_MODE.shared).toBeUndefined();
+    expect(vars.VITE_X.shared).toBeUndefined();
+    const plain = byName(baseEnvVars({ ...input, dir: 'apps/web', dirExample: '' }));
+    expect(plain.APP_NAME).toMatchObject({ source: 'example', shared: true });
+    const atRoot = baseEnvVars({ ...input, dir: '', dirExample: null });
+    expect(atRoot.some((v) => v.shared)).toBe(false);
+  });
+
   it('points SMTP at the mail catcher, and the owner wins over everything with the automatic value kept', () => {
     const vars = byName(baseEnvVars({
       dir: '',
