@@ -98,11 +98,14 @@ export interface WorkspaceAdr {
 export interface WorkspaceDiagram {
   /** Base file name without extension */
   name: string;
-  kind: 'drawio' | 'mermaid';
+  /** svg: an SVG with no .drawio of the same name (e.g. a TerraVision render) */
+  kind: 'drawio' | 'mermaid' | 'svg';
   /** Path relative to the spec directory, for "Open in draw.io" */
   drawioPath?: string;
   /** Rendered PNG next to the .drawio file, relative to the spec directory (fetch with getTaskWorkspaceImage) */
   pngPath?: string;
+  /** SVG next to it (TerraVision saves one), relative to the spec directory; preferred over the PNG */
+  svgPath?: string;
   /** Changes when the PNG is re-rendered (mtime); cache key for the fetched image */
   pngVersion?: number;
   /** Mermaid source of a .mmd file */

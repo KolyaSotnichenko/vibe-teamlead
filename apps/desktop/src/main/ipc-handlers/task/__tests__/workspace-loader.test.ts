@@ -60,6 +60,41 @@ describe('loadTaskWorkspace', () => {
   });
 });
 
+describe('loadArchitecture: SVG diagrams (TerraVision)', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'vt-arch-svg-'));
+    mkdirSync(path.join(dir, 'architecture', 'diagrams'), { recursive: true });
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('uses the SVG next to a .drawio as its preview, and keeps the PNG', async () => {
+    const d = path.join(dir, 'architecture', 'diagrams');
+    writeFileSync(path.join(d, 'cloud-architecture-azure.drawio'), '<mxfile/>');
+    writeFileSync(path.join(d, 'cloud-architecture-azure.png'), 'png');
+    writeFileSync(path.join(d, 'cloud-architecture-azure.svg'), '<svg/>');
+    writeFileSync(path.join(d, 'cloud-architecture-azure.tvg.json'), '{}');
+    const ws = await loadTaskWorkspace(dir);
+    expect(ws.architecture.diagrams).toEqual([
+      expect.objectContaining({
+        name: 'cloud-architecture-azure',
+        kind: 'drawio',
+        drawioPath: 'architecture/diagrams/cloud-architecture-azure.drawio',
+        pngPath: 'architecture/diagrams/cloud-architecture-azure.png',
+        svgPath: 'architecture/diagrams/cloud-architecture-azure.svg',
+      }),
+    ]);
+  });
+
+  it('shows an SVG on its own as an image diagram', async () => {
+    writeFileSync(path.join(dir, 'architecture', 'diagrams', 'cloud.svg'), '<svg/>');
+    const ws = await loadTaskWorkspace(dir);
+    expect(ws.architecture.diagrams).toEqual([
+      expect.objectContaining({ name: 'cloud', kind: 'svg', svgPath: 'architecture/diagrams/cloud.svg' }),
+    ]);
+  });
+});
+
 describe('isInside', () => {
   it('rejects paths that escape the root', () => {
     expect(isInside('/a/spec', '/a/spec/architecture/x.drawio')).toBe(true);

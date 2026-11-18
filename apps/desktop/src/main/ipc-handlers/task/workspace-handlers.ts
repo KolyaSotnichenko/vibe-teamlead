@@ -5,7 +5,7 @@
  *                             plan, timeline from real log timestamps, architecture,
  *                             security). Diagram previews are referenced by path and
  *                             version only, so refreshes stay small.
- * TASK_WORKSPACE_GET_IMAGE  → one rendered diagram PNG as a data URL.
+ * TASK_WORKSPACE_GET_IMAGE  → one rendered diagram (PNG or SVG) as a data URL.
  * TASK_WORKSPACE_OPEN_FILE  → open a .drawio file of the spec directory in the
  *                             system's draw.io app.
  */
@@ -110,16 +110,24 @@ export async function loadArchitecture(specDir: string): Promise<WorkspaceArchit
   }
 
   const diagrams: WorkspaceDiagram[] = [];
+  const rel = (fileName: string) => path.posix.join('architecture', 'diagrams', fileName);
+  // An SVG (TerraVision saves one with each diagram): the preview of the .drawio of the same name, or a diagram of its own
+  const svgs = new Map(diagramFiles.filter((f) => /\.svg$/i.test(f)).map((f) => [path.basename(f, path.extname(f)), f]));
+  const drawios = new Set(diagramFiles.filter((f) => /\.drawio$/i.test(f)).map((f) => path.basename(f, path.extname(f))));
   for (const fileName of diagramFiles) {
     const ext = path.extname(fileName).toLowerCase();
     const name = path.basename(fileName, path.extname(fileName));
     if (ext === '.drawio') {
+      const svg = svgs.get(name);
       diagrams.push({
         name,
         kind: 'drawio',
-        drawioPath: path.posix.join('architecture', 'diagrams', fileName),
+        drawioPath: rel(fileName),
         ...(await pngPreview(diagramDir, name)),
+        ...(svg ? { svgPath: rel(svg) } : {}),
       });
+    } else if (ext === '.svg' && !drawios.has(name)) {
+      diagrams.push({ name, kind: 'svg', svgPath: rel(fileName) });
     } else if (ext === '.mmd' || ext === '.mermaid') {
       const source = await readText(path.join(diagramDir, fileName));
       if (source?.trim()) diagrams.push({ name, kind: 'mermaid', mermaidSource: source });
@@ -326,11 +334,13 @@ export function registerTaskWorkspaceHandlers(): void {
     IPC_CHANNELS.TASK_WORKSPACE_GET_IMAGE,
     async (_, taskId: string, relativePath: string, projectId?: string): Promise<IPCResult<string>> => {
       const specDir = resolveSpecDir(taskId, projectId);
-      const target = specDir && /\.png$/i.test(String(relativePath)) ? await resolveSpecFile(specDir, relativePath) : null;
+      const target = specDir && /\.(png|svg)$/i.test(String(relativePath)) ? await resolveSpecFile(specDir, relativePath) : null;
       if (!target) return { success: false, error: 'Image not found' };
       try {
         if ((await stat(target)).size > MAX_PNG_BYTES) return { success: false, error: 'Image too large' };
-        return { success: true, data: `data:image/png;base64,${(await readFile(target)).toString('base64')}` };
+        // An SVG is shown in an <img>, where its scripts never run
+        const mime = /\.svg$/i.test(target) ? 'image/svg+xml' : 'image/png';
+        return { success: true, data: `data:${mime};base64,${(await readFile(target)).toString('base64')}` };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Failed to read image' };
       }

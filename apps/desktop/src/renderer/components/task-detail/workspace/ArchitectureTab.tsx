@@ -130,7 +130,8 @@ function useDiagramImage(taskId: string, projectId: string, pngPath?: string, ve
 function DiagramCard({ diagram, taskId, projectId }: { diagram: WorkspaceDiagram; taskId: string; projectId: string }) {
   const { t } = useTranslation(['tasks']);
   const { toast } = useToast();
-  const image = useDiagramImage(taskId, projectId, diagram.pngPath, diagram.pngVersion);
+  // TerraVision saves an SVG with each diagram: sharper than the PNG
+  const image = useDiagramImage(taskId, projectId, diagram.svgPath ?? diagram.pngPath, diagram.pngVersion);
 
   const openDrawio = async () => {
     if (!diagram.drawioPath) return;
@@ -145,7 +146,7 @@ function DiagramCard({ diagram, taskId, projectId }: { diagram: WorkspaceDiagram
       <figcaption className="flex min-h-11 items-center justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-sm font-semibold text-foreground">{diagram.name}</span>
-          <span className="font-mono text-[11px] text-muted-foreground">{diagram.kind === 'drawio' ? '.drawio' : '.mmd'}</span>
+          <span className="font-mono text-[11px] text-muted-foreground">{diagram.kind === 'drawio' ? '.drawio' : diagram.kind === 'svg' ? '.svg' : '.mmd'}</span>
         </div>
         {diagram.kind === 'drawio' && diagram.drawioPath && (
           <button
@@ -159,13 +160,13 @@ function DiagramCard({ diagram, taskId, projectId }: { diagram: WorkspaceDiagram
         )}
       </figcaption>
 
-      {diagram.kind === 'drawio' ? (
+      {diagram.kind === 'drawio' || diagram.kind === 'svg' ? (
         image ? (
           // draw.io PNGs are drawn on white; keep them on a paper panel in both themes
           <div className="overflow-auto border border-border bg-[var(--vt-paper)] p-4">
             <img src={image} alt={diagram.name} className="mx-auto h-auto max-w-full" />
           </div>
-        ) : diagram.pngPath ? (
+        ) : diagram.pngPath || diagram.svgPath ? (
           <div role="status" className="border border-border px-4 py-6 text-sm text-muted-foreground">
             {t('tasks:workspace.loading')}
           </div>
