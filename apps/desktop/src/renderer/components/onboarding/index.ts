@@ -11,5 +11,6 @@ export { PrivacyStep } from './PrivacyStep';
 export { MemoryStep } from './MemoryStep';
 export { OllamaModelSelector } from './OllamaModelSelector';
 export { FirstSpecStep } from './FirstSpecStep';
+export { DocsStep } from './DocsStep';
 export { CompletionStep } from './CompletionStep';
 export { WizardProgress, type WizardStep } from './WizardProgress';

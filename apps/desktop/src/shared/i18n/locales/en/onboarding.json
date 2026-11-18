@@ -115,6 +115,7 @@
     "privacy": "Privacy",
     "memory": "Memory",
     "accounts": "Accounts",
+    "docs": "Docs",
     "done": "Done"
   },
   "privacy": {
@@ -260,6 +261,22 @@
     "later": "You can skip this and connect your GitHub account later in Settings, or from the CI tab.",
     "back": "Back",
     "skip": "Skip for now",
+    "continue": "Continue"
+  },
+  "docs": {
+    "title": "Read the documentation",
+    "required": "Reading the documentation before you start work is required. The agents work on their own; knowing how they work saves you time, money and surprises.",
+    "coversLabel": "What it covers",
+    "covers": {
+      "pipeline": "How the pipeline works: spec → plan → test-first code → checks and QA → your decision to merge.",
+      "agents": "What each agent does, and when it stops to ask you.",
+      "preview": "The preview: what it starts by itself and what it can't set up for you — Docker, and outside services that need their own keys.",
+      "settings": "The settings: models, Claude credential, checks, integrations.",
+      "costs": "Costs: what spends tokens and how to keep it down."
+    },
+    "open": "Open the documentation",
+    "acknowledge": "I've read the documentation, or I'll read it before starting work",
+    "back": "Back",
     "continue": "Continue"
   }
 }
