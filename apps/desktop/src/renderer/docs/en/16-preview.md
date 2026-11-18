@@ -84,6 +84,8 @@ Under that, one fold per service lists every setting with where its value came f
 
 Empty settings come first with an **Empty** mark, and **Empty only** hides the rest. Values whose names look secret (`…_SECRET`, `…_KEY`, `…_TOKEN`, `…_PASSWORD`, `PRIVATE`) and connection addresses with a password are masked; the eye button shows one. The preview never reads `.env` or `.env.local`, and neither does this tab.
 
+For a service in a folder, the settings are grouped: the service's own first, then a collapsed group **Shared from the project root**, which every service gets (only public values such as `VITE_*` or `NEXT_PUBLIC_*` reach the browser).
+
 To change a value, use the pencil; to add one, **Add a setting** under the service. Your values are saved in the project's preview settings on this computer. **Use the automatic value** removes yours. A setting the preview left empty on purpose can be filled in, with a warning: it points the preview at a real service. **Apply and restart** restarts the services with the saved values (the test database stays); when the preview isn't running, it starts it.
 
 ### What the preview can and can't set up

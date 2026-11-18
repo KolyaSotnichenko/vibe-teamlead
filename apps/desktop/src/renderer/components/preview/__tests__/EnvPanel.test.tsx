@@ -126,4 +126,57 @@ describe('EnvPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'preview.env.apply' }));
     await waitFor(() => expect(api.restartServices).toHaveBeenCalledWith('p1'));
   });
+
+  describe('groups for a service in a folder', () => {
+    const grouped = (dir: string): PreviewEnvReport => ({
+      ...REPORT,
+      services: [{
+        service: 'web',
+        dir,
+        vars: [
+          { name: 'VITE_API_URL', value: 'http://x', source: 'exampleDir' },
+          { name: 'SMTP_HOST', value: '', source: 'blocked', shared: true },
+          { name: 'APP_NAME', value: 'acme', source: 'example', shared: true },
+          { name: 'JWT_SECRET', value: 'root-secret', source: 'example', shared: true },
+        ],
+      }],
+    });
+    const shared = () => screen.getByText('preview.env.sharedTitle{"n":3}').closest('details') as HTMLDetailsElement;
+
+    it("lists the service's own settings first and the root's in a collapsed group with an explanation", async () => {
+      report = grouped('apps/web');
+      render(<EnvPanel projectId="p1" settings={{}} stage="ready" />);
+      fireEvent.click(await screen.findByText(/preview\.env\.details/));
+      expect(screen.getByText('preview.env.ownTitle')).toBeInTheDocument();
+      expect(shared().open).toBe(false);
+      expect(shared()).toHaveTextContent('preview.env.sharedNote');
+      expect(shared()).toHaveTextContent('SMTP_HOST');
+      expect(shared()).not.toHaveTextContent('VITE_API_URL');
+      expect(screen.getByText('VITE_API_URL').closest('details')).not.toBe(shared());
+      // masking and editing work in the group too
+      expect(screen.queryByText('root-secret')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /preview\.env\.reveal.*JWT_SECRET/ }));
+      expect(screen.getByText('root-secret')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /preview\.env\.edit.*APP_NAME/ }));
+      expect(screen.getByLabelText(/preview\.env\.value.*APP_NAME/)).toBeInTheDocument();
+    });
+
+    it('opens the group when only empty settings are shown', async () => {
+      report = grouped('apps/web');
+      render(<EnvPanel projectId="p1" settings={{}} stage="ready" />);
+      await screen.findByText(/preview\.env\.details/);
+      fireEvent.click(screen.getByLabelText('preview.env.emptyOnly'));
+      expect(screen.getByText('preview.env.sharedTitle{"n":1}').closest('details')).toHaveProperty('open', true);
+      expect(screen.queryByText('APP_NAME')).not.toBeInTheDocument();
+    });
+
+    it('shows one list for a service at the project root', async () => {
+      report = { ...grouped(''), services: [{ service: 'api', dir: '', vars: [{ name: 'APP_NAME', value: 'acme', source: 'example' }, { name: 'B', value: 'b', source: 'example' }] }] };
+      render(<EnvPanel projectId="p1" settings={{}} stage="ready" />);
+      fireEvent.click(await screen.findByText(/preview\.env\.details/));
+      expect(screen.queryByText('preview.env.ownTitle')).not.toBeInTheDocument();
+      expect(screen.queryByText(/preview\.env\.sharedTitle/)).not.toBeInTheDocument();
+      expect(screen.getByText('APP_NAME')).toBeInTheDocument();
+    });
+  });
 });

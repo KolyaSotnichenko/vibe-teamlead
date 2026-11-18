@@ -221,21 +221,38 @@ export function EnvPanel({ projectId, taskId, settings, stage }: { projectId: st
         </div>
       </div>
       <div className="space-y-2 p-3">
-        {report.services.map(({ service, vars }) => {
+        {report.services.map(({ service, dir, vars }) => {
           const empty = vars.filter(isEmptyVar).length;
-          const shown = sortVars(emptyOnly ? vars.filter(isEmptyVar) : vars);
+          const visible = emptyOnly ? vars.filter(isEmptyVar) : vars;
+          // A service in a folder: its own settings, then what the project root gives every service
+          const split = Boolean(dir) && vars.some((v) => v.shared);
+          const own = sortVars(split ? visible.filter((v) => !v.shared) : visible);
+          const common = sortVars(split ? visible.filter((v) => v.shared) : []);
+          const rows = (list: PreviewEnvVar[]) => (
+            <ul>
+              {list.map((v) => (
+                <Row key={v.name} service={service} v={v} onSave={setValue(service)} onClear={clear(service)} />
+              ))}
+            </ul>
+          );
           return (
             <details key={service} className="border border-border" open={emptyOnly || undefined}>
               <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
                 {t('preview.env.details', { service, count: vars.length, empty })}
               </summary>
               <div className="px-3 pb-3">
-                {shown.length === 0 && <p className="py-2 text-sm text-muted-foreground">{t('preview.env.none')}</p>}
-                <ul>
-                  {shown.map((v) => (
-                    <Row key={v.name} service={service} v={v} onSave={setValue(service)} onClear={clear(service)} />
-                  ))}
-                </ul>
+                {visible.length === 0 && <p className="py-2 text-sm text-muted-foreground">{t('preview.env.none')}</p>}
+                {split && <p className="pt-2 text-xs font-medium text-foreground">{t('preview.env.ownTitle')}</p>}
+                {rows(own)}
+                {common.length > 0 && (
+                  <details className="mt-2 border border-border" open={emptyOnly || undefined}>
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium">{t('preview.env.sharedTitle', { n: common.length })}</summary>
+                    <div className="px-3 pb-2">
+                      <p className="py-2 text-xs text-muted-foreground">{t('preview.env.sharedNote')}</p>
+                      {rows(common)}
+                    </div>
+                  </details>
+                )}
                 <AddVar onAdd={setValue(service)} />
               </div>
             </details>
