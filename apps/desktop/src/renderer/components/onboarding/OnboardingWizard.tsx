@@ -140,7 +140,8 @@ export function OnboardingWizard({
         return (
           <WelcomeStep
             onGetStarted={goToNextStep}
-            onSkip={completeWizard}
+            // Skips the setup steps, never the required Documentation step
+            onSkip={() => setCurrentStepIndex(WIZARD_STEPS.findIndex((step) => step.id === 'docs'))}
           />
         );
       case 'claude':

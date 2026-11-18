@@ -211,30 +211,14 @@ describe('OnboardingWizard Integration Tests', () => {
   });
 
   describe('Skip and Completion', () => {
-    it('should complete wizard when skip is clicked', async () => {
+    it('Skip Setup skips the setup steps but not the required Documentation step', async () => {
       render(<OnboardingWizard {...defaultProps} />);
 
-      // Click skip on welcome step
-      const skipButton = screen.getByRole('button', { name: /Skip Setup/ });
-      fireEvent.click(skipButton);
+      fireEvent.click(screen.getByRole('button', { name: /Skip Setup/ }));
 
-      // Should call saveSettings
-      await waitFor(() => {
-        expect(mockSaveSettings).toHaveBeenCalledWith({ onboardingCompleted: true });
-      });
-    });
-
-    it('should call onOpenChange when wizard is closed', async () => {
-      const mockOnOpenChange = vi.fn();
-      render(<OnboardingWizard {...defaultProps} onOpenChange={mockOnOpenChange} />);
-
-      // Click skip to close wizard
-      const skipButton = screen.getByRole('button', { name: /Skip Setup/ });
-      fireEvent.click(skipButton);
-
-      await waitFor(() => {
-        expect(mockOnOpenChange).toHaveBeenCalledWith(false);
-      });
+      // Not finished yet: reading the docs is required before work starts
+      expect(mockSaveSettings).not.toHaveBeenCalledWith({ onboardingCompleted: true });
+      expect(await screen.findByRole('checkbox')).toBeInTheDocument();
     });
 
     it('stays open on Escape and has no close button', async () => {
