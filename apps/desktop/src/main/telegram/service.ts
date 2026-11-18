@@ -17,7 +17,7 @@ import { createNotifier, type NotifierSources } from './notifier';
 import { createPairing, type Pairing } from './pairing';
 import { createPoller, type Poller, type PollerState } from './poller';
 import { createQuestionFlow } from './questions';
-import { createReviewFlow, type ReviewActions } from './review';
+import { createReviewFlow, isReviewMessage, type ReviewActions } from './review';
 import { safeApi } from './redact';
 import { createRouter, type Router } from './router';
 import type { TelegramSettingsStore } from './settings-store';
@@ -145,7 +145,7 @@ export function createTelegramService(deps: TelegramServiceDeps) {
     projectName: deps.projectName,
     deliver: reviews
       ? async (notification, chatId) => {
-          if (notification.kind !== 'reviewWaiting' || !notification.taskId) return false;
+          if (!isReviewMessage(notification)) return false;
           await reviews.present(notification, chatId);
           return true;
         }

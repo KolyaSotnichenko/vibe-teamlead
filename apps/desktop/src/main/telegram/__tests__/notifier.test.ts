@@ -67,6 +67,15 @@ describe('notifier', () => {
     expect(sent[1]).toContain('⚠️ QA did not approve it');
   });
 
+  it('an architecture-only task that is ready says so, as its own message (not a review with Merge)', async () => {
+    const deliver = vi.fn(async () => false);
+    const { src, texts } = setup({}, 5, deliver as never);
+    src.status('t1', 'human_review', 'architecture_ready');
+    const sent = await texts();
+    expect(sent[0]).toBe('🏗 <b>Architecture ready</b> · Shop\n<b>Task t1</b> · <code>001-t1</code>\nThe diagrams and decisions are in the task\'s Architecture tab. Look them over in the app and mark the task done.');
+    expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reviewWaiting', reviewReason: 'architecture_ready' }), 5);
+  });
+
   it('a hostile task title stays inert', async () => {
     const { src, bot, texts } = setup();
     src.status('evil', 'error');
@@ -167,5 +176,15 @@ describe('notifier', () => {
     src.app('task-merged', { taskId: 't2', projectId: 'p1' });
     expect(await texts()).toEqual([expect.stringContaining('<b>Task t2</b>')]);
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reviewWaiting', taskId: 't1', title: 'Task t1', reviewReason: 'qa_rejected' }), 5);
+  });
+});
+
+describe('isReviewMessage', () => {
+  it('is the review message (with Merge) only for tasks QA reviewed, not an architecture-only task', async () => {
+    const { isReviewMessage } = await import('../review');
+    expect(isReviewMessage({ kind: 'reviewWaiting', taskId: 't1', reviewReason: 'completed' })).toBe(true);
+    expect(isReviewMessage({ kind: 'reviewWaiting', taskId: 't1', reviewReason: 'qa_rejected' })).toBe(true);
+    expect(isReviewMessage({ kind: 'reviewWaiting', taskId: 't1', reviewReason: 'architecture_ready' })).toBe(false);
+    expect(isReviewMessage({ kind: 'taskFailed', taskId: 't1' })).toBe(false);
   });
 });

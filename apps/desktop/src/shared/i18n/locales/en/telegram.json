@@ -107,7 +107,9 @@
       "ciJobs": "Failed jobs: {{jobs}}",
       "ciRun": "🔗 {{run}}",
       "baseBroken": "⚠️ <b>App checks fail on main</b>",
-      "baseBrokenDetail": "A task to fix main was started."
+      "baseBrokenDetail": "A task to fix main was started.",
+      "architectureReady": "🏗 <b>Architecture ready</b>",
+      "architectureReadyDetail": "The diagrams and decisions are in the task's Architecture tab. Look them over in the app and mark the task done."
     },
     "status": {
       "title": "📊 <b>Status</b>",

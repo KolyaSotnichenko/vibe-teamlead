@@ -55,6 +55,11 @@ interface Entry {
 
 const WAITING = new Set<ReviewReason | undefined>(['completed', 'qa_rejected']);
 
+/** The review message (QA result, Merge / Send back) takes a notification over only for a task QA reviewed */
+export function isReviewMessage(notification: { kind: string; taskId?: string; reviewReason?: ReviewReason }): boolean {
+  return notification.kind === 'reviewWaiting' && !!notification.taskId && WAITING.has(notification.reviewReason);
+}
+
 export function createReviewFlow(deps: ReviewFlowDeps) {
   const { router, t } = deps;
   const h = htmlText(t);

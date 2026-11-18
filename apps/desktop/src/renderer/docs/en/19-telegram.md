@@ -19,6 +19,7 @@ Each kind has a switch in Settings → Telegram; all are on by default. Messages
 - **An agent asks a question.** The question comes with its options as buttons, the recommended one first and marked ★. **Other…** asks you to type an answer. A question with several choices lets you tick them and press **Done**. When an agent asks several questions at once, they come one after another and go back to the agent together, the same way as an answer in the app (a task made from a brief shares it with the brief's other tasks). If you answer on the computer first, the chat message says "Answered on the computer" and its buttons stop working. An answer to a question that no longer waits is refused.
 - **A task waits for your review**: see "Review from the chat" below.
 - **A design waits for your approval**: see "Design approval" below. It comes with the review switch.
+- **Architecture ready**: a task made with **Design the cloud architecture** (Context → Architecture) finished its architect step. Look the diagrams over in the app and mark it done. It comes with the review switch.
 - **A task failed, got stuck or stopped with an error.**
 - **CI failed on main**: a failed GitHub Actions run of the app's own push, with a link to the run.
 - **A task was merged.**
