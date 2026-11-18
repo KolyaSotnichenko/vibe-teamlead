@@ -18,6 +18,7 @@ import { Textarea } from '../../ui/textarea';
 import { EmptyState } from '../workspace/workspace-ui';
 import { type FrameFilter, frameUrl, startFrame, visibleFrames } from './design-canvas';
 import { DesignCanvas, type Draft, PrototypeDialog } from './DesignCanvas';
+import { DesignWaitNotice, designWaitOf } from './DesignWaitNotice';
 
 const POLL_MS = 5000;
 
@@ -124,7 +125,10 @@ export function DesignTab({ task }: { task: Task }) {
     );
   }
 
+  const waitNotice = designWaitOf(task) ? <DesignWaitNotice task={task} variant="tab" /> : null;
+
   if (!design.frames.length) {
+    if (waitNotice) return <div className="max-w-xl p-6">{waitNotice}</div>;
     if (failurePanel) return <div className="max-w-xl p-6">{failurePanel}</div>;
     if (skipNote) return <div className="p-6">{skipNote}</div>;
     const key = design.stage === 'skipped' ? 'noUi' : design.settings.mode === 'off' ? 'off' : task.status === 'in_progress' ? 'drawing' : 'notYet';
@@ -191,6 +195,7 @@ export function DesignTab({ task }: { task: Task }) {
       </div>
 
       <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto border-l border-foreground bg-card p-5" aria-label={t('design.panel')}>
+        {waitNotice}
         {failurePanel}
         {skipNote}
         <div className="space-y-1.5">

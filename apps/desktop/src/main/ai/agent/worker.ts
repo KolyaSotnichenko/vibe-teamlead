@@ -26,7 +26,8 @@ import type { MemoryRequest } from './types';
 import { insightsLogLine, promptMemoryLogLine } from '../memory/memory-log';
 import { animatesWithGsap } from '../design/animation';
 import { designerResultOf, runDesignStep, writeDesignFailure, type DesignStepResult } from '../design/design-runner';
-import { waitForRateLimitResume, writeRateLimitPauseFile } from '../orchestration/pause-handler';
+import { RATE_LIMIT_PAUSE_FILE, removePauseFile, waitForRateLimitResume, writeRateLimitPauseFile } from '../orchestration/pause-handler';
+import { createDesignerWaiter } from '../design/designer-wait';
 import { copyLibraryToBase, publishToLibrary } from '../design/design-library';
 import { designReferencePrompt, lintDesignScreens, readDesignCanvas, readDesignState, specTouchesUi } from '../design/design-step';
 import { isUiFile } from '../design/design-lint';
@@ -163,6 +164,8 @@ function postTaskEvent(eventType: string, extra?: Record<string, unknown>): void
 // =============================================================================
 
 const abortController = new AbortController();
+/** Ends the designer's wait between tries at the owner's Stop waiting (set while the design step runs) */
+let stopDesignerWait: (() => boolean) | undefined;
 abortController.signal.addEventListener('abort', killAllDevServersNow, { once: true });
 
 parentPort.on('message', (msg: MainToWorkerMessage) => {
@@ -175,6 +178,8 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
     pendingRenders.get(msg.requestId)?.(msg);
   } else if (msg.type === 'memory-result') {
     pendingMemory.get(msg.requestId)?.(msg);
+  } else if (msg.type === 'design-stop-wait') {
+    stopDesignerWait?.();
   }
 });
 
@@ -261,6 +266,21 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
     designLogStarted = true;
     logWriter?.startPhase('design', 'Designing the screens');
   };
+  // A rate limit is waited out as the coder's is (the pause file; a RESUME file ends it early)
+  const designerWaiter = createDesignerWaiter({
+    signal: abortController.signal,
+    progress: (designWait) =>
+      postMessage({ type: 'execution-progress', taskId: config.taskId, data: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens', designWait }, projectId: config.projectId }),
+    rateLimitWait: async (ms, error, signal) => {
+      writeRateLimitPauseFile(session.specDir, error, new Date(Date.now() + ms).toISOString());
+      try {
+        await waitForRateLimitResume(session.specDir, ms, session.sourceSpecDir, signal);
+      } finally {
+        removePauseFile(session.specDir, RATE_LIMIT_PAUSE_FILE);
+      }
+    },
+  });
+  stopDesignerWait = designerWaiter.stopWaiting;
   try {
     let designerRound = 0;
     const result = await runDesignStep({
@@ -271,7 +291,7 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
         designerRound++;
         startDesignLog();
         // The card and the pipeline show the designer at work (task-stage.ts planningSubStage)
-        postMessage({ type: 'execution-progress', taskId: config.taskId, data: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens' }, projectId: config.projectId });
+        postMessage({ type: 'execution-progress', taskId: config.taskId, data: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens', designWait: null }, projectId: config.projectId });
         try {
           const prompt = await assemblePrompt('designer', session);
           const result = await runSingleSession(
@@ -297,19 +317,8 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
           return designerResultOf({ outcome: abortController.signal.aborted ? 'cancelled' : 'error', error: { code: 'generic_error', message: error instanceof Error ? error.message : String(error), retryable: false } });
         }
       },
-      // A rate limit is waited out as the coder's is (the pause file; a RESUME file ends it early)
-      wait: async (ms, kind, error) => {
-        if (kind === 'rate_limited') {
-          writeRateLimitPauseFile(session.specDir, error, new Date(Date.now() + ms).toISOString());
-          await waitForRateLimitResume(session.specDir, ms, session.sourceSpecDir, abortController.signal);
-        } else {
-          await new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, ms);
-            abortController.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
-          });
-        }
-        return !abortController.signal.aborted;
-      },
+      // Shown on the card and the Design tab; the owner can stop waiting (designer-wait.ts)
+      wait: designerWaiter.wait,
       checkScreens: () => {
         const tokens = session.designSystem?.tokens;
         return tokens ? lintDesignScreens(session.specDir, tokens).length : 0;

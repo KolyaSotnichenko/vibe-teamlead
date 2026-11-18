@@ -72,6 +72,27 @@ describe('TaskCard', () => {
     expect(screen.getByRole('img', { name: /board\.stage\.position/ })).toBeInTheDocument();
   });
 
+  it('shows the designer waiting out a rate limit, with Stop waiting', async () => {
+    const stopDesignWait = vi.fn(async () => ({ success: true }));
+    (window as unknown as { electronAPI: unknown }).electronAPI = { design: { stopDesignWait } };
+    const onClick = vi.fn();
+    render(
+      <TaskCard
+        task={task({ subtasks: [], executionProgress: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens', designWait: { kind: 'rate_limited', until: '2026-11-18T14:05:00.000Z', attempt: 2, of: 3 } } })}
+        onClick={onClick}
+      />,
+    );
+    expect(screen.getByText(/design\.wait\.rate_limited/)).toHaveTextContent(/"attempt":2,"of":3/);
+    fireEvent.click(screen.getByRole('button', { name: /design\.wait\.stop/ }));
+    await waitFor(() => expect(stopDesignWait).toHaveBeenCalledWith('task-a'));
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('shows no wait line once the designer works again', () => {
+    render(<TaskCard task={task({ subtasks: [], executionProgress: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens', designWait: null } })} onClick={vi.fn()} />);
+    expect(screen.queryByText(/design\.wait\./)).not.toBeInTheDocument();
+  });
+
   describe('a task whose pentest did not finish', () => {
     const inReview = (overrides: Partial<Task> = {}) =>
       task({ status: 'human_review', reviewReason: 'completed', executionProgress: { phase: 'complete', phaseProgress: 100, overallProgress: 100 }, ...overrides });

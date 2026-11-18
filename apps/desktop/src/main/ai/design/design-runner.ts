@@ -3,7 +3,8 @@
  * checks the task's wireframes and screens until the owner has to look (pause) or there is
  * nothing left to design (continue). The designer session itself is injected (worker.ts).
  * A designer that fails never turns into "build without a design" by itself: a rate limit or a
- * passing API error is waited out and tried again (a few times), a cancel leaves the design where
+ * passing API error is waited out and tried again (a few times, at most an hour of waiting in
+ * all, and the owner can stop waiting), a cancel leaves the design where
  * it was, and anything else stops the task for the owner (design/failed.json), who chooses to try
  * again or to build without it.
  */
@@ -31,8 +32,13 @@ export const DESIGNER_RETRIES = 3;
 /** A rate limit without a reset time, and the backoff for passing errors (doubles each try) */
 const RATE_LIMIT_WAIT_MS = 15 * 60_000;
 const TRANSIENT_WAIT_MS = 30_000;
-/** Never wait longer than this for one reset (as the coder's rate-limit wait) */
-const MAX_WAIT_MS = 2 * 60 * 60_000;
+/**
+ * The most the designer waits in all, across its retries, before the owner decides. An API rate
+ * limit resets within a minute or so, and three 15-minute waits without a reset time fit; a limit
+ * that needs longer is a quota (a plan's 5-hour window, a spend limit) the owner should hear about
+ * now, not after hours of a task In Progress.
+ */
+export const DESIGNER_MAX_WAIT_MS = 60 * 60_000;
 
 /**
  * How a designer session ended. `kind` says what a failure was: a rate limit (with the reset
@@ -44,6 +50,13 @@ export interface DesignerResult {
   error?: string;
   kind?: 'rate_limited' | 'transient' | 'cancelled' | 'failed';
   resetAt?: number;
+}
+
+/** The coming try of a waiting designer: `attempt` of `of`, at `until` (ms since epoch) */
+export interface DesignerWaitInfo {
+  attempt: number;
+  of: number;
+  until: number;
 }
 
 /** Why the design stopped, for the owner (design/failed.json) */
@@ -96,7 +109,7 @@ export function designerResultOf(session: { outcome: SessionOutcome; error?: Ses
 export function designerRetryWait(result: DesignerResult, attempt: number, now: number): number {
   if (result.kind === 'rate_limited') {
     const untilReset = result.resetAt ? result.resetAt - now + 5_000 : RATE_LIMIT_WAIT_MS;
-    return Math.min(MAX_WAIT_MS, Math.max(30_000, untilReset));
+    return Math.max(30_000, untilReset);
   }
   return TRANSIENT_WAIT_MS * 2 ** (attempt - 1);
 }
@@ -109,10 +122,11 @@ export interface DesignStepDeps {
   /** One designer session for this job; `message` is its brief */
   runDesigner: (job: DesignJob, message: string) => Promise<DesignerResult>;
   /**
-   * Waits `ms` before the designer is tried again (a rate limit, a passing error). False when
-   * the task was stopped meanwhile. Without it, no retries.
+   * Waits `ms` before the designer is tried again (a rate limit, a passing error); `info` says
+   * which try comes next and when (ms since epoch). True to try again, false when the task was
+   * stopped meanwhile, 'stop' when the owner stopped waiting. Without it, no retries.
    */
-  wait?: (ms: number, kind: 'rate_limited' | 'transient', error: string) => Promise<boolean>;
+  wait?: (ms: number, kind: 'rate_limited' | 'transient', error: string, info: DesignerWaitInfo) => Promise<boolean | 'stop'>;
   /** Design-check findings in design/screens (0 without a design system) */
   checkScreens: () => number;
   log: (line: string) => void;
@@ -192,10 +206,25 @@ export async function runDesignStep(deps: DesignStepDeps): Promise<DesignStepRes
     deps.log(`Design: ${job === 'wireframes' ? 'drawing the wireframes' : job === 'design' ? 'drawing the screens in the design system' : "changing what the owner commented on"}`);
     const message = brief(job, state, specDir);
     let result = await deps.runDesigner(job, message);
+    // Every wait counts as planned (a RESUME file can end one early): the total stays under the cap
+    let waited = 0;
+    let gaveUp: string | undefined;
     for (let attempt = 1; !result.ok && attempt <= DESIGNER_RETRIES && deps.wait && (result.kind === 'rate_limited' || result.kind === 'transient'); attempt++) {
-      const ms = designerRetryWait(result, attempt, Date.now());
-      deps.log(`Design: the designer stopped (${result.error ?? result.kind}); trying again in ${Math.ceil(ms / 60_000)} min (${attempt} of ${DESIGNER_RETRIES})`);
-      if (!(await deps.wait(ms, result.kind, result.error ?? result.kind))) return { cancelled: true };
+      const now = Date.now();
+      const ms = designerRetryWait(result, attempt, now);
+      const reason = result.error ?? result.kind;
+      if (waited + ms > DESIGNER_MAX_WAIT_MS) {
+        gaveUp = `${reason} (trying again would mean waiting until ${new Date(now + ms).toISOString()}, past the designer's ${DESIGNER_MAX_WAIT_MS / 60_000} min of waiting in all)`;
+        break;
+      }
+      deps.log(`Design: the designer stopped (${reason}); trying again in ${Math.ceil(ms / 60_000)} min (${attempt} of ${DESIGNER_RETRIES})`);
+      const go = await deps.wait(ms, result.kind, reason, { attempt, of: DESIGNER_RETRIES, until: now + ms });
+      if (go === 'stop') {
+        gaveUp = `${reason} (the owner stopped waiting)`;
+        break;
+      }
+      if (!go) return { cancelled: true };
+      waited += ms;
       result = await deps.runDesigner(job, message);
     }
     if (!result.ok) {
@@ -203,7 +232,7 @@ export async function runDesignStep(deps: DesignStepDeps): Promise<DesignStepRes
         deps.log('Design: the designer was stopped; the design goes on from here next time');
         return { cancelled: true };
       }
-      const error = result.error ?? 'no reason';
+      const error = gaveUp ?? result.error ?? 'no reason';
       deps.log(`Design: the designer stopped (${error}); waiting for the owner: try the design again or build without it`);
       writeDesignFailure(specDir, { error, job, at: new Date().toISOString() });
       return { failed: error };

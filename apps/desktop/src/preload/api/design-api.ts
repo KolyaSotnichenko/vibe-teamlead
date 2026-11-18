@@ -14,6 +14,7 @@ export const createDesignAPI = (): DesignAPI => ({
   approveTaskDesign: (taskId, stage) => ipcRenderer.invoke(IPC_CHANNELS.TASK_DESIGN_APPROVE, taskId, stage),
   retryTaskDesign: (taskId) => ipcRenderer.invoke(IPC_CHANNELS.TASK_DESIGN_RETRY, taskId),
   skipTaskDesign: (taskId) => ipcRenderer.invoke(IPC_CHANNELS.TASK_DESIGN_SKIP, taskId),
+  stopDesignWait: (taskId) => ipcRenderer.invoke(IPC_CHANNELS.TASK_DESIGN_STOP_WAIT, taskId),
   commentTaskDesign: (taskId, comments) => ipcRenderer.invoke(IPC_CHANNELS.TASK_DESIGN_COMMENT, taskId, comments),
   save: (projectId, content) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_SAVE, projectId, content),
   extract: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.DESIGN_EXTRACT, projectId),

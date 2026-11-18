@@ -26,20 +26,31 @@ const design = (over: Partial<TaskDesign> = {}): TaskDesign => ({
   ...over,
 });
 
-function setup(data: TaskDesign) {
+function setup(data: TaskDesign, task: Partial<Task> = { status: 'human_review', reviewReason: 'design_review' }) {
   const api = {
     taskDesign: vi.fn(async () => ({ success: true, data })),
     approveTaskDesign: vi.fn(async () => ({ success: true })),
     commentTaskDesign: vi.fn(async () => ({ success: true })),
     retryTaskDesign: vi.fn(async () => ({ success: true })),
     skipTaskDesign: vi.fn(async () => ({ success: true })),
+    stopDesignWait: vi.fn(async () => ({ success: true })),
   };
   (window as unknown as { electronAPI: unknown }).electronAPI = { design: api };
-  render(<DesignTab task={{ id: 't1', status: 'human_review', reviewReason: 'design_review', subtasks: [] } as unknown as Task} />);
+  render(<DesignTab task={{ id: 't1', subtasks: [], ...task } as unknown as Task} />);
   return api;
 }
 
 describe('DesignTab', () => {
+  it('shows the designer waiting out a rate limit, and Stop waiting', async () => {
+    const api = setup(design({ frames: [], waiting: null, stage: null }), {
+      status: 'in_progress',
+      executionProgress: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Designing the screens', designWait: { kind: 'transient', until: '2026-11-18T14:05:00.000Z', attempt: 1, of: 3 } },
+    });
+    expect(await screen.findByText('design.wait.transient')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'design.wait.stop' }));
+    await waitFor(() => expect(api.stopDesignWait).toHaveBeenCalledWith('t1'));
+  });
+
   it('approves the wireframes the task waits at', async () => {
     const api = setup(design());
     fireEvent.click(await screen.findByRole('button', { name: 'design.approveWireframes' }));

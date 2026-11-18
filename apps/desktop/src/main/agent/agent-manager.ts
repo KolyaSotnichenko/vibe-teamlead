@@ -473,6 +473,11 @@ export class AgentManager extends EventEmitter {
     await this.processManager.killAllProcesses();
   }
 
+  /** The owner stopped waiting for the task's designer (rate limit); false when it doesn't run */
+  stopDesignWait(taskId: string): boolean {
+    return this.state.getProcess(taskId)?.worker?.stopDesignWait() ?? false;
+  }
+
   /**
    * Check if a task is running
    */

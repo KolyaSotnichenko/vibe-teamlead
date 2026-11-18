@@ -280,6 +280,12 @@ describe('WorkerBridge', () => {
       expect(handler).toHaveBeenCalledWith('task-123', { agentType: 'qa_fixer' }, 'proj-456');
     });
 
+    it("passes the owner's Stop waiting to the worker (a designer waiting out a rate limit)", () => {
+      bridge.spawn(createConfig());
+      expect(bridge.stopDesignWait()).toBe(true);
+      expect(getWorker().postMessage).toHaveBeenCalledWith({ type: 'design-stop-wait' });
+    });
+
     it('emits execution-progress events from worker progress messages', () => {
       const handler = vi.fn();
       bridge.on('execution-progress', handler);

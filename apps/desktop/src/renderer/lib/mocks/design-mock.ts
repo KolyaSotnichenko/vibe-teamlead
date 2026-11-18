@@ -191,6 +191,7 @@ export const designMock: DesignAPI = {
   commentTaskDesign: async () => ({ success: true }),
   retryTaskDesign: async () => ({ success: true }),
   skipTaskDesign: async () => ({ success: true }),
+  stopDesignWait: async () => ({ success: true }),
   audit: async () => ({
     success: true,
     data: info.exists && info.tokens

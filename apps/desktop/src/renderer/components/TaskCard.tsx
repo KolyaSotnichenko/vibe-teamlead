@@ -47,6 +47,7 @@ import { useVerification } from './task-detail/useVerification';
 import { useSecurityQaError } from './task-detail/useSecurityQaError';
 import { useCiState } from './task-detail/useCiState';
 import { DeleteTaskDialog } from './task-detail/DeleteTaskDialog';
+import { DesignWaitNotice } from './task-detail/design/DesignWaitNotice';
 import type { DeployTarget } from '../../shared/types/deploy';
 
 // Catastrophic stuck detection interval (ms).
@@ -105,6 +106,7 @@ function taskCardPropsAreEqual(prevProps: TaskCardProps, nextProps: TaskCardProp
     prevTask.executionProgress?.currentSubtask === nextTask.executionProgress?.currentSubtask &&
     prevTask.executionProgress?.completedPhases?.length === nextTask.executionProgress?.completedPhases?.length &&
     (prevTask.executionProgress?.activeSubagents ?? []).join() === (nextTask.executionProgress?.activeSubagents ?? []).join() &&
+    JSON.stringify(prevTask.executionProgress?.designWait ?? null) === JSON.stringify(nextTask.executionProgress?.designWait ?? null) &&
     prevTask.subtasks.length === nextTask.subtasks.length &&
     prevTask.metadata?.fastMode === nextTask.metadata?.fastMode &&
     prevTask.metadata?.priority === nextTask.metadata?.priority &&
@@ -558,6 +560,9 @@ export const TaskCard = memo(function TaskCard({
           <span className="shrink-0 font-semibold underline underline-offset-2">{t('agentQuestions.openQuestion')}</span>
         </button>
       )}
+
+      {/* The designer waits out a rate limit before its next try */}
+      <DesignWaitNotice task={task} variant="card" />
 
       {/* CI row: its own full-width row, never squeezed into the strip */}
       {showCi && ci && (

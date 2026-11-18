@@ -240,6 +240,8 @@ export interface WorkerTaskEventMessage {
 /** Messages sent from main thread to worker */
 export type MainToWorkerMessage =
   | { type: 'abort' }
+  /** The owner stopped waiting for a designer that waits out a rate limit: it stops for the owner now */
+  | { type: 'design-stop-wait' }
   | { type: 'user-answer'; questionId: string; answers: AgentAnswers | null }
   | {
       type: 'render-result';

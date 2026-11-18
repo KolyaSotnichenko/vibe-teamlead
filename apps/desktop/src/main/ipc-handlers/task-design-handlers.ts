@@ -187,6 +187,16 @@ export async function skipTaskDesign(agentManager: AgentManager, getMainWindow: 
   return { success: true };
 }
 
+/**
+ * The owner stops waiting for a designer that waits out a rate limit (the card's and the Design
+ * tab's Stop waiting): the design stops for the owner now, as design_failed.
+ */
+export function stopDesignWait(agentManager: Pick<AgentManager, 'stopDesignWait'>, taskId: string): IPCResult {
+  const { task } = typeof taskId === 'string' ? findTaskAndProject(taskId) : { task: undefined };
+  if (task?.status !== 'in_progress') return { success: false, error: 'The task is not running.' };
+  return agentManager.stopDesignWait(taskId) ? { success: true } : { success: false, error: 'The task is not running.' };
+}
+
 /** vt-design:// in the main session (sandboxed iframes on the Design tab, offscreen shots) */
 export function registerDesignProtocol(): void {
   protocol.handle(DESIGN_SCHEME, serveDesign);
@@ -228,6 +238,8 @@ export function registerTaskDesignHandlers(agentManager: AgentManager, getMainWi
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_RETRY, (_e, taskId: string): Promise<IPCResult> => retryTaskDesign(agentManager, getMainWindow, taskId));
 
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_SKIP, (_e, taskId: string): Promise<IPCResult> => skipTaskDesign(agentManager, getMainWindow, taskId));
+
+  ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_STOP_WAIT, (_e, taskId: string): IPCResult => stopDesignWait(agentManager, taskId));
 
   ipcMain.handle(IPC_CHANNELS.TASK_DESIGN_COMMENT, (_e, taskId: string, comments: TaskDesignComment[]): Promise<IPCResult> =>
     commentTaskDesign(agentManager, getMainWindow, taskId, comments),

@@ -38,6 +38,16 @@ export interface ExecutionProgress {
   completedPhases?: CompletablePhase[];  // Phases that have successfully completed
   /** Helper subagents working right now (explorer, test_runner, reviewer) */
   activeSubagents?: string[];
+  /** The designer waits out a rate limit or an API error before its next try; null once it works again */
+  designWait?: DesignWait | null;
+}
+
+/** A designer waiting before its next try (design-runner.ts): `attempt` of `of`, at `until` (ISO) */
+export interface DesignWait {
+  kind: 'rate_limited' | 'transient';
+  until: string;
+  attempt: number;
+  of: number;
 }
 
 export interface Subtask {

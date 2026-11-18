@@ -31,6 +31,8 @@ export interface ExecutionProgressData {
   completedPhases?: CompletablePhase[];
   /** Helper subagents working right now (explorer, test_runner, reviewer) */
   activeSubagents?: string[];
+  /** The designer waits before its next try; null once it works again */
+  designWait?: import('../../shared/types/task').DesignWait | null;
 }
 
 export type ProcessType = 'spec-creation' | 'task-execution' | 'qa-process';

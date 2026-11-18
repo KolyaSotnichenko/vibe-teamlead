@@ -380,6 +380,14 @@ export class WorkerBridge extends EventEmitter {
     this.worker?.postMessage(reply);
   }
 
+  /** The owner stopped waiting for the designer (rate limit): false when no worker runs */
+  stopDesignWait(): boolean {
+    if (!this.worker) return false;
+    const message: MainToWorkerMessage = { type: 'design-stop-wait' };
+    this.worker.postMessage(message);
+    return true;
+  }
+
   /** Deliver the user's answers (or null = dismissed) to the waiting agent. */
   answerQuestion(questionId: string, answers: AgentAnswers | null): void {
     const message: MainToWorkerMessage = { type: 'user-answer', questionId, answers };

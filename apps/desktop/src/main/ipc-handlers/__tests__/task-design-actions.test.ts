@@ -14,18 +14,18 @@ vi.mock('electron', () => ({
   },
   protocol: { handle: vi.fn() },
 }));
-const spec = vi.hoisted(() => ({ dir: '', reviewReason: 'design_review' }));
+const spec = vi.hoisted(() => ({ dir: '', reviewReason: 'design_review', status: 'human_review' }));
 vi.mock('../../app-logger', () => ({ appLog: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn() } }));
 vi.mock('../task/workspace-handlers', () => ({ resolveSpecDir: () => spec.dir }));
 vi.mock('../task/shared', () => ({
-  findTaskAndProject: () => ({ task: { id: 't', status: 'human_review', reviewReason: spec.reviewReason }, project: { id: 'p', settings: { designMode: 'full', designApproval: 'owner' } } }),
+  findTaskAndProject: () => ({ task: { id: 't', status: spec.status, reviewReason: spec.reviewReason }, project: { id: 'p', settings: { designMode: 'full', designApproval: 'owner' } } }),
 }));
 const startTask = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('../task/execution-handlers', () => ({ startTask }));
 vi.mock('../../agent', () => ({ AgentManager: class {} }));
 vi.mock('../../project-store', () => ({ projectStore: {} }));
 
-import { approveTaskDesign, commentTaskDesign, retryTaskDesign, skipTaskDesign, taskDesign } from '../task-design-handlers';
+import { approveTaskDesign, commentTaskDesign, retryTaskDesign, skipTaskDesign, stopDesignWait, taskDesign } from '../task-design-handlers';
 
 const state = () => JSON.parse(readFileSync(join(spec.dir, 'design', 'state.json'), 'utf-8'));
 
@@ -37,6 +37,7 @@ beforeEach(() => {
   writeFileSync(join(spec.dir, 'design', 'home.html'), '<p>home</p>');
   startTask.mockClear();
   spec.reviewReason = 'design_review';
+  spec.status = 'human_review';
 });
 afterEach(() => rmSync(spec.dir, { recursive: true, force: true }));
 
@@ -112,5 +113,23 @@ describe('a design the designer could not make', () => {
     expect((await retryTaskDesign({} as never, () => null, 't')).success).toBe(false);
     expect(state().stage).toBe('wireframes');
     expect(startTask).not.toHaveBeenCalled();
+  });
+});
+
+// Stop waiting on the card and the Design tab: the designer waiting out a rate limit stops for the owner now
+describe('stop waiting for the designer', () => {
+  it('tells the running task to stop waiting', () => {
+    spec.status = 'in_progress';
+    const agentManager = { stopDesignWait: vi.fn(() => true) };
+    expect(stopDesignWait(agentManager as never, 't')).toEqual({ success: true });
+    expect(agentManager.stopDesignWait).toHaveBeenCalledWith('t');
+  });
+
+  it('refuses when the task is not running', () => {
+    const agentManager = { stopDesignWait: vi.fn(() => true) };
+    expect(stopDesignWait(agentManager as never, 't').success).toBe(false);
+    expect(agentManager.stopDesignWait).not.toHaveBeenCalled();
+    spec.status = 'in_progress';
+    expect(stopDesignWait({ stopDesignWait: () => false } as never, 't').success).toBe(false);
   });
 });

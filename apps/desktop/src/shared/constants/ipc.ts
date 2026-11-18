@@ -126,6 +126,7 @@ export const IPC_CHANNELS = {
   /** The designer could not draw: try again, or build without a design */
   TASK_DESIGN_RETRY: 'taskDesign:retry',
   TASK_DESIGN_SKIP: 'taskDesign:skip',
+  TASK_DESIGN_STOP_WAIT: 'taskDesign:stopWait',
   TASK_DESIGN_COMMENT: 'taskDesign:comment',
   DESIGN_LIBRARY_GET: 'design:library',
   DESIGN_PROGRESS: 'design:progress',  // Event: design agent progress line (main -> renderer)

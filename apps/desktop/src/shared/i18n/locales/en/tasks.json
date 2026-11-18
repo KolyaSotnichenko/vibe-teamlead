@@ -1373,6 +1373,12 @@
     "skipped": {
       "designer": "Design was skipped because the designer stopped: {{reason}}",
       "owner": "You chose to build without a design after the designer stopped: {{reason}}"
+    },
+    "wait": {
+      "rate_limited": "Designer is waiting for the rate limit — retrying at {{time}} (attempt {{attempt}} of {{of}})",
+      "transient": "Designer is waiting after an API error — retrying at {{time}} (attempt {{attempt}} of {{of}})",
+      "stop": "Stop waiting",
+      "stopHint": "The task stops in Human Review now: try the design again later, or build without it. The designer waits at most an hour in all."
     }
   },
   "taskCi": {

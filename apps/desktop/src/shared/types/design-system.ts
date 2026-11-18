@@ -364,6 +364,8 @@ export interface DesignAPI {
   retryTaskDesign: (taskId: string) => Promise<import('./common').IPCResult>;
   /** The designer could not draw: build without a design (the owner's decision) */
   skipTaskDesign: (taskId: string) => Promise<import('./common').IPCResult>;
+  /** The designer waits out a rate limit: stop waiting, the owner decides now (design_failed) */
+  stopDesignWait: (taskId: string) => Promise<import('./common').IPCResult>;
   /** Send comments for the designer's next round; the build redraws */
   commentTaskDesign: (taskId: string, comments: TaskDesignComment[]) => Promise<import('./common').IPCResult>;
   save: (projectId: string, content: { markdown?: string; tokens?: DesignTokens }) => Promise<import('./common').IPCResult<DesignSystemInfo>>;

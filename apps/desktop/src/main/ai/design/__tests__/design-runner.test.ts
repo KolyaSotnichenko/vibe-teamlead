@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { readDesignState, writeDesignState } from '../design-step';
-import { type DesignerResult, DESIGNER_RETRIES, designerResultOf, readDesignFailure, runDesignStep, writeDesignFailure } from '../design-runner';
+import { type DesignerResult, DESIGNER_MAX_WAIT_MS, DESIGNER_RETRIES, designerResultOf, readDesignFailure, runDesignStep, writeDesignFailure } from '../design-runner';
 
 function setup(over: Partial<Parameters<typeof runDesignStep>[0]> = {}) {
   const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-drun-'));
@@ -136,6 +136,51 @@ describe('the design step of a build', () => {
     const { deps, specDir } = setup({ wait, runDesigner: vi.fn(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited' as const })) });
     expect(await runDesignStep(deps)).toEqual({ cancelled: true });
     expect(readDesignState(specDir)).toBeUndefined();
+  });
+
+  it('waits at most an hour in all: a reset further away stops for the owner at once', async () => {
+    const wait = vi.fn(async () => true);
+    const { deps, specDir } = setup({ wait, runDesigner: vi.fn(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited' as const, resetAt: Date.now() + 2 * 60 * 60_000 })) });
+    const result = await runDesignStep(deps);
+    expect(wait).not.toHaveBeenCalled();
+    expect(result.failed).toMatch(/Rate limit reached/);
+    expect(result.failed).toMatch(/60 min/);
+    expect(readDesignFailure(specDir)?.error).toBe(result.failed);
+  });
+
+  it('stops for the owner when the next wait would go past the hour', async () => {
+    const wait = vi.fn(async () => true);
+    const runDesigner = vi.fn(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited' as const, resetAt: Date.now() + 40 * 60_000 }));
+    const { deps } = setup({ wait, runDesigner });
+    const result = await runDesignStep(deps);
+    // 40 min, then another 40 would make 80
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(runDesigner).toHaveBeenCalledTimes(2);
+    expect(result.failed).toMatch(/60 min/);
+    expect(DESIGNER_MAX_WAIT_MS).toBe(60 * 60_000);
+  });
+
+  it('tells the wait which try comes and when', async () => {
+    const wait = vi.fn(async () => true);
+    const { deps, runDesigner } = setup({ wait });
+    const draw = runDesigner.getMockImplementation()!;
+    runDesigner.mockImplementationOnce(async () => ({ ok: false, error: 'Overloaded', kind: 'transient' })).mockImplementationOnce(draw);
+    const before = Date.now();
+    await runDesignStep(deps);
+    const [ms, kind, error, info] = wait.mock.calls[0] as unknown as [number, string, string, { attempt: number; of: number; until: number }];
+    expect([kind, error, info.attempt, info.of]).toEqual(['transient', 'Overloaded', 1, DESIGNER_RETRIES]);
+    expect(info.until).toBeGreaterThanOrEqual(before + ms);
+  });
+
+  it('the owner stops waiting: the design stops for the owner now', async () => {
+    const wait = vi.fn(async () => 'stop' as const);
+    const runDesigner = vi.fn(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited' as const }));
+    const { deps, specDir } = setup({ wait, runDesigner });
+    const result = await runDesignStep(deps);
+    expect(runDesigner).toHaveBeenCalledTimes(1);
+    expect(result.failed).toMatch(/Rate limit reached/);
+    expect(result.failed).toMatch(/stopped waiting/);
+    expect(readDesignFailure(specDir)?.error).toBe(result.failed);
   });
 
   it('a designer that draws after an earlier failure clears it', async () => {
