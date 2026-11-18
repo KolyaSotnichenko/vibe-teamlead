@@ -3,7 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() }, BrowserWindow: class {}, protocol: { handle: vi.fn() } }));
+const shotWindow = vi.hoisted(() => ({ hang: false }));
+vi.mock('electron', () => ({
+  ipcMain: { handle: vi.fn() },
+  // A shot window whose page never finishes loading, when a test asks for it
+  BrowserWindow: class {
+    webContents = { setWindowOpenHandler: () => undefined, on: () => undefined, capturePage: async () => ({ isEmpty: () => true }) };
+    loadURL() { return shotWindow.hang ? new Promise(() => undefined) : Promise.resolve(); }
+    destroy() {}
+  },
+  protocol: { handle: vi.fn() },
+}));
 const spec = vi.hoisted(() => ({ dir: '' }));
 vi.mock('../../app-logger', () => ({ appLog: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn() } }));
 vi.mock('../task/workspace-handlers', () => ({ resolveSpecDir: () => spec.dir }));
@@ -39,6 +49,21 @@ describe('design approval actions', () => {
     expect(await approveTaskDesign({} as never, () => null, 't', 'wireframes')).toEqual({ success: true });
     expect(state().approved.wireframes).toBeTruthy();
     expect(startTask).toHaveBeenCalledWith({}, expect.any(Function), 't');
+  });
+
+  it("starts the task at once after the design is approved: QA's screen pictures are taken in the background", async () => {
+    writeFileSync(join(spec.dir, 'design', 'state.json'), JSON.stringify({ stage: 'design', round: 1, approved: { wireframes: 'x' } }));
+    mkdirSync(join(spec.dir, 'design', 'screens'), { recursive: true });
+    writeFileSync(join(spec.dir, 'design', 'screens', 'home.html'), '<p>home</p>');
+    writeFileSync(join(spec.dir, 'design', 'canvas.json'), JSON.stringify({ frames: [{ file: 'screens/home.html', title: 'Home', kind: 'screen', width: 1280, height: 800 }] }));
+    shotWindow.hang = true;
+    try {
+      const result = await Promise.race([approveTaskDesign({} as never, () => null, 't', 'design'), new Promise((resolve) => setTimeout(() => resolve('waited'), 1500))]);
+      expect(result).toEqual({ success: true });
+      expect(startTask).toHaveBeenCalled();
+    } finally {
+      shotWindow.hang = false;
+    }
   });
 
   it('refuses a stage that does not wait', async () => {

@@ -125,8 +125,12 @@ export async function approveTaskDesign(agentManager: AgentManager, getMainWindo
   // The approved design's pictures, for QA (the last stage before the plan)
   const { project } = findTaskAndProject(taskId);
   const last = stage === 'design' || project?.settings.designMode === 'wireframes';
-  if (last && stage === 'design') await renderShots(taskId, specDir).catch(() => undefined);
   await startTask(agentManager, getMainWindow, taskId);
+  // QA's pictures of the screens: one offscreen render per frame takes a while with many
+  // screens, and QA needs them only much later, so the task doesn't wait for them
+  if (last && stage === 'design') {
+    void renderShots(taskId, specDir).catch((error) => appLog.warn(`[design] pictures for QA: ${error instanceof Error ? error.message : String(error)}`));
+  }
   return { success: true };
 }
 
