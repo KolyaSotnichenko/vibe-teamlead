@@ -41,6 +41,8 @@ export function NoWorkspaceMessage({ task, onClose }: NoWorkspaceMessageProps) {
   const isPlanReview =
     task?.status === 'human_review' &&
     task.reviewReason === 'plan_review';
+  // Architecture-only: the architect's work lives in the spec folder, nothing to merge
+  const isArchitectureReady = task?.status === 'human_review' && task.reviewReason === 'architecture_ready';
 
   const handleMarkDone = async () => {
     if (!task) return;
@@ -82,12 +84,18 @@ export function NoWorkspaceMessage({ task, onClose }: NoWorkspaceMessageProps) {
     <div className="rounded-xl border border-border bg-secondary/30 p-4">
       <h3 className="font-medium text-sm text-foreground mb-2 flex items-center gap-2">
         <AlertCircle className="h-4 w-4 text-muted-foreground" />
-        {isPlanReview ? t('taskReview:workspace.humanReviewRequired') : t('taskReview:workspace.noWorkspaceTitle')}
+        {isPlanReview
+          ? t('taskReview:workspace.humanReviewRequired')
+          : isArchitectureReady
+            ? t('taskReview:workspace.architectureReadyTitle')
+            : t('taskReview:workspace.noWorkspaceTitle')}
       </h3>
       <p className="text-sm text-muted-foreground mb-3">
         {isPlanReview
           ? t('taskReview:workspace.humanReviewRequiredBody')
-          : t('taskReview:workspace.noWorkspaceBody')}
+          : isArchitectureReady
+            ? t('taskReview:workspace.architectureReadyBody')
+            : t('taskReview:workspace.noWorkspaceBody')}
       </p>
 
       {/* Allow marking as done */}

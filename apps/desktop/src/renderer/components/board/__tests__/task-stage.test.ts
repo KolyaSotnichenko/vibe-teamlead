@@ -117,6 +117,15 @@ describe('getTaskStage', () => {
     expect(bySubtasks.states.coder).toBe('done');
   });
 
+  it('architecture ready: spec and architect done, nothing after them runs', () => {
+    const info = getTaskStage(task({ status: 'human_review', reviewReason: 'architecture_ready' }));
+    expect(info.current).toBe('review');
+    expect(info.agent).toBe('you');
+    expect(info.states.spec).toBe('done');
+    expect(info.states.architect).toBe('done');
+    for (const stage of ['designer', 'planner', 'coder', 'qa'] as const) expect(info.states[stage]).toBe('upcoming');
+  });
+
   it('plan review leaves code and QA ahead', () => {
     const info = getTaskStage(task({ status: 'human_review', reviewReason: 'plan_review' }));
     expect(info.current).toBe('review');

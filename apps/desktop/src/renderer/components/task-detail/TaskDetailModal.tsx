@@ -274,6 +274,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
         return { label: t('tasks:reviewReason.approveDesign'), attention: true };
       case 'stopped':
         return { label: t('tasks:reviewReason.stopped'), attention: false };
+      case 'architecture_ready':
+        return { label: t('tasks:reviewReason.architectureReady'), attention: false };
       default:
         return null;
     }

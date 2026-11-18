@@ -84,7 +84,7 @@ describe('CloudArchitectureTab', () => {
     expect(openTask).toHaveBeenCalledWith('t2');
   });
 
-  it('creates the design task in Planning, marked so its architect draws the cloud', async () => {
+  it('creates the design task in Planning, marked architecture-only so it ends after its architect', async () => {
     get.mockResolvedValue({ success: true, data: view() });
     createTask.mockResolvedValue({ id: 't9' });
     render(<CloudArchitectureTab projectId="p1" />);
@@ -95,7 +95,8 @@ describe('CloudArchitectureTab', () => {
     expect(title).toBe('cloud:tab.design.title');
     expect(description).toContain('cloud:tab.design.description');
     expect(description).toContain('<!-- vibe-teamlead:cloud-architecture-design -->');
-    expect(metadata).toEqual({ sourceType: 'manual', cloudArchitectureDesign: true, requireReviewBeforeCoding: true });
+    // Architecture only: the task ends after the architect, with no planner, code, QA or merge
+    expect(metadata).toEqual({ sourceType: 'manual', cloudArchitectureDesign: true, architectureOnly: true, requireReviewBeforeCoding: true });
   });
 
   it("can't create the design task while the architect is turned off", async () => {

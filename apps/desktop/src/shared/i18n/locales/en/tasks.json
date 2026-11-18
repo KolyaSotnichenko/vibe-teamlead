@@ -40,7 +40,8 @@
     "qaIssues": "QA Issues",
     "approvePlan": "Approve Plan",
     "stopped": "Stopped",
-    "approveDesign": "Design: your turn"
+    "approveDesign": "Design: your turn",
+    "architectureReady": "Architecture ready"
   },
   "tooltips": {
     "archiveTask": "Archive task",

@@ -121,6 +121,12 @@ export function getTaskStage(task: Task): TaskStageInfo {
       states.qa = 'upcoming';
       return { ...base, current: 'review', agent: 'you', states };
     }
+    if (task.reviewReason === 'architecture_ready') {
+      // Architecture-only: the spec and the architect ran, nothing else does
+      const states = statesFor('review');
+      for (const stage of ['designer', 'planner', 'coder', 'qa'] as const) states[stage] = 'upcoming';
+      return { ...base, current: 'review', agent: 'you', states };
+    }
     const states = statesFor('review', failed);
     if (task.reviewReason === 'stopped') {
       // Stopped by the user: only stages the recorded phases prove are passed

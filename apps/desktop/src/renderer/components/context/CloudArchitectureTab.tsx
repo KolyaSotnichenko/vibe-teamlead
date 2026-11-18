@@ -87,6 +87,7 @@ export function CloudArchitectureTab({ projectId }: Props) {
       const task = await createTask(projectId, t('cloud:tab.design.title'), `${t('cloud:tab.design.description')}\n\n${CLOUD_DESIGN_MARKER}`, {
         sourceType: 'manual',
         cloudArchitectureDesign: true,
+        architectureOnly: true,
         requireReviewBeforeCoding: true,
       });
       toast(task ? { title: t('cloud:tab.design.created') } : { title: t('cloud:tab.design.failed'), variant: 'destructive' });

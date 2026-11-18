@@ -216,6 +216,8 @@
     "humanReviewRequiredBody": "Human review required prior to coding. Review your spec.md for any necessary changes.",
     "noWorkspaceTitle": "No Workspace Found",
     "noWorkspaceBody": "No isolated workspace was found for this task. The changes may have been made directly in your project.",
+    "architectureReadyTitle": "Architecture ready",
+    "architectureReadyBody": "The architect has finished: diagrams and decisions (ADRs) are on the task’s Architecture tab, and the designed diagram is in Context → Architecture. This task ends here: no plan, code, QA or merge. Mark it as done when you have looked.",
     "updating": "Updating...",
     "proceedToCoding": "Proceed to Coding",
     "stagedTitle": "Changes Staged in Project",

@@ -59,7 +59,7 @@
 | **Context → Project Index** | The project "passport": services, frameworks, test commands, ports. The Analyze Project button. |
 | **Context → Memories** | What the agents have remembered about this project. |
 | **Context → Design system** | The project's UI rules and tokens, the design check in QA, Storybook (see "Design system and Storybook"). Its Screens part holds the library of wireframes and screens the designer drew (see "Design before code"). |
-| **Context → Architecture** | The project's cloud architecture (TerraVision, experimental): the latest designed by an architect and the latest drawn from the Terraform code after a merge, side by side; the decisions (ADRs) of merged tasks; the Design the cloud architecture button (see "Cloud architecture diagrams"). |
+| **Context → Architecture** | The project's cloud architecture (TerraVision, experimental): the latest designed by an architect and the latest drawn from the Terraform code after a merge, side by side; the decisions (ADRs) of merged tasks; the Design the cloud architecture button, whose task ends after the architect (see "Cloud architecture diagrams"). |
 | **Changelog** | Generate a changelog from completed tasks, git history or a branch comparison. |
 | **MCP Overview** | Which MCP servers and tools each agent has; your own MCP servers; toggles for Context7, Linear and browser tools. |
 

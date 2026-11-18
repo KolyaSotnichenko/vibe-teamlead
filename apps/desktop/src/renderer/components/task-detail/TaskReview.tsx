@@ -171,7 +171,7 @@ export function TaskReview({
         <NoWorkspaceMessage task={task} onClose={onClose} />
       )}
 
-      {!nothingBuilt && (
+      {!nothingBuilt && task.reviewReason !== 'architecture_ready' && (
         <>
           {/* Why QA did not approve (only after QA ended without approval) */}
           <QaOutcomePanel task={task} />

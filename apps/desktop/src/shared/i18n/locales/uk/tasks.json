@@ -40,7 +40,8 @@
     "qaIssues": "Зауваження QA",
     "approvePlan": "Схваліть план",
     "stopped": "Зупинено",
-    "approveDesign": "Дизайн: ваша черга"
+    "approveDesign": "Дизайн: ваша черга",
+    "architectureReady": "Архітектура готова"
   },
   "tooltips": {
     "archiveTask": "Архівувати задачу",
