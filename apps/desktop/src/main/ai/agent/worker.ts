@@ -307,8 +307,14 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
       // The project's design library (in the main project, not this worktree): earlier tasks' screens
       prepareBase: () => {
         const root = projectRootFor(session.projectDir);
-        const count = root ? copyLibraryToBase(root, session.specDir) : 0;
-        if (count) log(`Design: starting from the project's ${count} existing frame(s) (design/base/)`);
+        let specMd = '';
+        try {
+          specMd = readFileSync(join(session.specDir, 'spec.md'), 'utf-8');
+        } catch {
+          // no spec: the shell frames only
+        }
+        const base = root ? copyLibraryToBase(root, session.specDir, specMd) : { copied: 0, listed: 0 };
+        if (base.copied) log(`Design: starting from ${base.listed} frame(s) of the project's design library that this task needs (design/base/canvas.json); all ${base.copied} file(s) are in design/base/, the rest named in index.md`);
       },
       publish: () => {
         const root = projectRootFor(session.projectDir);

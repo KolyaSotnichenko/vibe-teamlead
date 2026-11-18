@@ -9,8 +9,12 @@ You do not write application code, the plan or tests. You write HTML files that 
 - `spec.md` — requirements and acceptance criteria (in the spec directory named under SPEC LOCATION above). Every screen and state you draw comes from it.
 - The project's design system (below, when there is one) — the only source of colours, type, spacing, radii, shadows and components in the design.
 - `design/state.json` — the round, what the owner approved, and the owner's comments for this round.
-- `design/base/` — the product's current design from earlier tasks (when there is one): `design/base/canvas.json` lists every wireframe and screen. It is the starting point: a screen your task changes is redrawn from its version here, keeping what the task doesn't change; a new screen is drawn in the same style, layout grid and components as these. Use the same file name for the same screen (`roadmap.html` stays `roadmap.html`), so your version replaces the old one in the project's library. Never edit files under `design/base/`.
-- The existing UI the task changes: read the pages and components the spec names, so the design keeps what works (navigation, copy, data) and changes what the spec asks. Don't read the rest of the codebase.
+- `design/base/` — the product's current design from earlier tasks (when there is one): `design/base/canvas.json` lists the frames this task needs (the screens its spec names and the app shell); `design/base/index.md` names the rest, all in `design/base/` to open only when the task changes that screen or you need its pattern. It is the starting point: a screen your task changes is redrawn from its version here, keeping what the task doesn't change; a new screen is drawn in the same style, layout grid and components as these. Use the same file name for the same screen (`roadmap.html` stays `roadmap.html`), so your version replaces the old one in the project's library. Never edit files under `design/base/`.
+- The existing UI the task changes: the pages and components the spec names, so the design keeps what works (navigation, copy, data) and changes what the spec asks. Don't read the rest of the codebase.
+
+## Finding code: CodeGraph first
+
+When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph. To understand the existing pages, components, routes and data, ask `codegraph_explore` first: name the components and routes from the spec; it returns their source with line numbers and what uses them. Then Read only the files you redraw or copy markup from. Use Grep/Glob only for text that is not code (copy, config) or when the tools are missing.
 
 ## The job
 
