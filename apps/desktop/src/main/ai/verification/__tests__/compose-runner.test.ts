@@ -1,0 +1,210 @@
+import { createServer, type Server } from 'node:net';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { COMPOSE_LABEL, removeComposeLeftovers, startComposeServices, tcpHolds } from '../compose-runner';
+import { composeServices } from '../compose-services';
+import type { DockerRun } from '../test-services';
+
+/** A docker that answers like the real one, and records what it was asked */
+function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: boolean; exited?: boolean; bucketFails?: boolean } = {}) {
+  const calls: string[][] = [];
+  let next = 0;
+  const docker: DockerRun = vi.fn(async (args: string[]) => {
+    calls.push(args);
+    if (args[0] === 'info') return { ok: over.available !== false, stdout: '' };
+    if (args[0] === 'ps') return { ok: true, stdout: 'old-one\n' };
+    if (args[0] === 'run') {
+      if (over.failImage && args.includes(over.failImage)) return { ok: false, stdout: 'manifest unknown' };
+      return { ok: true, stdout: `c${++next}\n` };
+    }
+    if (args[0] === 'port') return { ok: true, stdout: `127.0.0.1:${50000 + Number(args[2].split('/')[0]) % 1000}\n` };
+    if (args[0] === 'exec') return { ok: !(over.notReady || (over.bucketFails && args.includes('mb'))), stdout: '' };
+    if (args[0] === 'inspect') return { ok: true, stdout: over.exited ? 'false\n' : 'true\n' };
+    return { ok: true, stdout: '' };
+  });
+  return { docker, calls };
+}
+
+const options = (docker: DockerRun, extra: Partial<Parameters<typeof startComposeServices>[1]> = {}) => ({
+  docker, labelKey: 'vibe-teamlead-verify', labelValue: 'proj', readyTimeoutMs: 20, pollMs: 1,
+  portOpen: async () => true, pickPort: async () => 41000, secret: () => 'key', ...extra,
+});
+const runs = (calls: string[][]) => calls.filter((call) => call[0] === 'run');
+
+describe('startComposeServices', () => {
+  it('has nothing to do without services, and asks nothing of Docker', async () => {
+    const { docker, calls } = fakeDocker();
+    expect((await startComposeServices([], options(docker))).status).toBe('none');
+    expect(calls).toEqual([]);
+  });
+
+  it('says why when Docker is not running', async () => {
+    const { docker } = fakeDocker({ available: false });
+    const run = await startComposeServices(composeServices(['services:\n  rabbitmq:\n    image: rabbitmq:3\n']), options(docker));
+    expect(run.status).toBe('unavailable');
+    expect(run.reason).toMatch(/rabbitmq.*Docker/);
+  });
+
+  it('starts each service on its own network, on local ports only, with nothing from the file but safe settings', async () => {
+    const { docker, calls } = fakeDocker();
+    const services = composeServices([`
+services:
+  rabbitmq:
+    image: rabbitmq:3
+    privileged: true
+    volumes: ["/:/host"]
+    network_mode: host
+    environment: { RABBITMQ_DEFAULT_USER: app }
+    ports: ["5672:5672"]
+`]);
+    const run = await startComposeServices(services, options(docker));
+    expect(run.status).toBe('started');
+    expect(run.started).toEqual([{ name: 'rabbitmq', kind: 'rabbitmq', image: 'rabbitmq:3', ports: { 5672: 50672 }, env: { RABBITMQ_DEFAULT_USER: 'app' } }]);
+    const [args] = runs(calls);
+    expect(args).toEqual([
+      'run', '-d', '--rm', '--label', 'vibe-teamlead-verify=proj', '--label', `${COMPOSE_LABEL}=vibe-teamlead-verify-proj`,
+      '--network', 'vibe-teamlead-verify-proj', '--network-alias', 'rabbitmq',
+      '-e', 'RABBITMQ_DEFAULT_USER=app', '-p', '127.0.0.1::5672', 'rabbitmq:3',
+    ]);
+    expect(args.join(' ')).not.toMatch(/--privileged|-v |--volume|--mount|host/);
+    expect(calls).toContainEqual(['network', 'create', '--label', 'vibe-teamlead-verify=proj', '--label', `${COMPOSE_LABEL}=vibe-teamlead-verify-proj`, 'vibe-teamlead-verify-proj']);
+  });
+
+  it('clears what a run that died left behind, only its own, before starting', async () => {
+    const { docker, calls } = fakeDocker();
+    await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n']), options(docker));
+    expect(calls.find((call) => call[0] === 'ps')?.join(' ')).toContain(`label=${COMPOSE_LABEL}=vibe-teamlead-verify-proj`);
+    expect(calls).toContainEqual(['rm', '-f', '-v', 'old-one']);
+    expect(calls).toContainEqual(['network', 'rm', 'vibe-teamlead-verify-proj']);
+  });
+
+  it('starts dependencies first', async () => {
+    const { docker, calls } = fakeDocker();
+    await startComposeServices(composeServices(['services:\n  kafka:\n    image: confluentinc/cp-kafka\n    depends_on: [zookeeper]\n  zookeeper:\n    image: confluentinc/cp-zookeeper\n']), options(docker));
+    expect(runs(calls).map((args) => args.at(-1))).toEqual(['confluentinc/cp-zookeeper', 'confluentinc/cp-kafka']);
+  });
+
+  it('runs Kafka on the host port chosen for it, so it advertises an address clients reach', async () => {
+    const { docker, calls } = fakeDocker();
+    const run = await startComposeServices(composeServices(['services:\n  kafka:\n    image: apache/kafka:3.7.0\n    ports: ["9092:9092"]\n']), options(docker));
+    expect(runs(calls)[0]).toContain('127.0.0.1:41000:41000');
+    expect(run.started[0].ports).toEqual({ 9092: 41000, 41000: 41000 });
+    expect(run.started[0].env.KAFKA_ADVERTISED_LISTENERS).toBe('PLAINTEXT://127.0.0.1:41000');
+  });
+
+  it('waits on the compose healthcheck when there is one, otherwise on the port', async () => {
+    const { docker, calls } = fakeDocker();
+    const portOpen = vi.fn(async () => true);
+    await startComposeServices(composeServices(['services:\n  a:\n    image: nats:2\n    healthcheck: { test: ["CMD", "check"] }\n  b:\n    image: nats:2\n    expose: ["4222"]\n']), options(docker, { portOpen }));
+    expect(calls).toContainEqual(['exec', 'c1', 'check']);
+    expect(portOpen).toHaveBeenCalledWith(50222);
+  });
+
+  it('reports a service that does not come up, empties nothing else, and goes on with the rest', async () => {
+    const { docker, calls } = fakeDocker({ failImage: 'nats:2' });
+    const run = await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n  rabbitmq:\n    image: rabbitmq:3\n']), options(docker));
+    expect(run.status).toBe('started');
+    expect(run.started.map((s) => s.name)).toEqual(['rabbitmq']);
+    expect(run.failed).toEqual([{ name: 'nats', reason: expect.stringMatching(/Docker could not start nats:2: manifest unknown/) }]);
+    expect(runs(calls)).toHaveLength(2);
+  });
+
+  it('gives up on a service that is not ready in time, and removes it', async () => {
+    const { docker, calls } = fakeDocker();
+    const run = await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n    expose: ["4222"]\n']), options(docker, { portOpen: async () => false }));
+    expect(run.status).toBe('unavailable');
+    expect(run.failed[0].reason).toMatch(/nats.*did not get ready in time/);
+    expect(calls).toContainEqual(['rm', '-f', '-v', 'c1']);
+  });
+
+  it('notices a service that stopped right after it started', async () => {
+    const { docker } = fakeDocker({ exited: true });
+    const run = await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n    expose: ["4222"]\n']), options(docker, { portOpen: async () => false, readyTimeoutMs: 10_000 }));
+    expect(run.failed[0].reason).toMatch(/stopped/);
+  });
+
+  it('does not start what depends on a service that failed', async () => {
+    const { docker } = fakeDocker({ failImage: 'confluentinc/cp-zookeeper' });
+    const run = await startComposeServices(composeServices(['services:\n  kafka:\n    image: confluentinc/cp-kafka\n    depends_on: [zookeeper]\n  zookeeper:\n    image: confluentinc/cp-zookeeper\n']), options(docker));
+    expect(run.failed.map((f) => f.name)).toEqual(['zookeeper', 'kafka']);
+    expect(run.failed[1].reason).toMatch(/needs zookeeper/);
+  });
+
+  it('creates the buckets the example names in MinIO, with the container\'s keys', async () => {
+    const { docker, calls } = fakeDocker();
+    await startComposeServices(composeServices(['services:\n  minio:\n    image: minio/minio\n    command: server /data\n    environment:\n      MINIO_ROOT_USER: u\n      MINIO_ROOT_PASSWORD: p@ss\n']), options(docker, { buckets: ['uploads'] }));
+    expect(calls).toContainEqual(['exec', '-e', 'MC_HOST_vt=http://u:p%40ss@127.0.0.1:9000', 'c1', 'mc', 'mb', '--ignore-existing', 'vt/uploads']);
+  });
+
+  it('creates the buckets in LocalStack with its own tool', async () => {
+    const { docker, calls } = fakeDocker();
+    await startComposeServices(composeServices(['services:\n  localstack:\n    image: localstack/localstack\n    ports: ["4566:4566"]\n']), options(docker, { buckets: ['uploads'] }));
+    expect(calls).toContainEqual(['exec', 'c1', 'awslocal', 's3', 'mb', 's3://uploads']);
+  });
+
+  it('reports a bucket it could not create, and keeps the service', async () => {
+    const { docker } = fakeDocker({ bucketFails: true });
+    const run = await startComposeServices(composeServices(['services:\n  minio:\n    image: minio/minio\n']), options(docker, { buckets: ['uploads'] }));
+    expect(run.started.map((s) => s.name)).toEqual(['minio']);
+    expect(run.failed[0].reason).toMatch(/bucket uploads/);
+  });
+
+  it('removes its containers, then its network', async () => {
+    const { docker, calls } = fakeDocker();
+    const run = await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n']), options(docker));
+    calls.length = 0;
+    await run.stop();
+    expect(calls).toEqual([['rm', '-f', '-v', 'c1'], ['network', 'rm', 'vibe-teamlead-verify-proj']]);
+  });
+
+  it('stops starting when the run is stopped, and removes what it started', async () => {
+    const { docker, calls } = fakeDocker();
+    const abort = new AbortController();
+    abort.abort();
+    const run = await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n']), options(docker, { signal: abort.signal }));
+    expect(run.status).toBe('unavailable');
+    expect(runs(calls)).toHaveLength(0);
+  });
+});
+
+describe('removeComposeLeftovers', () => {
+  it('removes every container and network with the label', async () => {
+    const calls: string[][] = [];
+    const docker: DockerRun = async (args) => {
+      calls.push(args);
+      if (args[0] === 'ps') return { ok: true, stdout: 'a\nb\n' };
+      if (args[0] === 'network' && args[1] === 'ls') return { ok: true, stdout: 'n1\n' };
+      return { ok: true, stdout: '' };
+    };
+    await removeComposeLeftovers(docker, 'vibe-teamlead-preview');
+    expect(calls).toEqual([
+      ['ps', '-aq', '--filter', 'label=vibe-teamlead-preview'],
+      ['rm', '-f', '-v', 'a'],
+      ['rm', '-f', '-v', 'b'],
+      ['network', 'ls', '-q', '--filter', 'label=vibe-teamlead-preview'],
+      ['network', 'rm', 'n1'],
+    ]);
+  });
+});
+
+describe('tcpHolds', () => {
+  let server: Server | undefined;
+  afterEach(() => new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve())));
+
+  const listen = (onConnection: (socket: import('node:net').Socket) => void) =>
+    new Promise<number>((resolve) => {
+      server = createServer(onConnection);
+      server.listen(0, '127.0.0.1', () => resolve((server?.address() as { port: number }).port));
+    });
+
+  it('is true for a local port that accepts and keeps the connection', async () => {
+    const port = await listen(() => {});
+    expect(await tcpHolds(port, 50)).toBe(true);
+  });
+
+  it('is false when the connection is closed at once, as Docker\'s proxy does before the service listens', async () => {
+    const port = await listen((socket) => socket.destroy());
+    expect(await tcpHolds(port, 200)).toBe(false);
+  });
+});
