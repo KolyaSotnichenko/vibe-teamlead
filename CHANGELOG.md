@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.55 - 2026-11-18
+
+- Design check: the project's own design-system folder and token files (tokens.css and the like) are no longer checked against themselves. A task that added colours to the palette got a finding for each of them, and running QA again changed nothing.
+- Cloud diagrams (TerraVision, optional): paths are right on Windows, and the Terraform folder is always checked to be inside the project copy before anything runs.
+
 ## 2.0.0-beta.54 - 2026-11-18
 
 - Preview: an **Environment** tab shows, per service, every setting the preview gives it and where it comes from, in plain words, with a summary at the top (what was started, Docker not running, which parts can't work without your own keys). Secrets are masked; you can change a value per service and apply with a restart. **How to run** is always in the toolbar, with a terminal and the task that writes RUNNING.md when the file is missing.
