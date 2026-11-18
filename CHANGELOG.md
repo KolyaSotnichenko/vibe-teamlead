@@ -4,9 +4,9 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.56 - 2026-11-18
 
-- Design is never skipped silently: when the designer hits a rate limit it waits and tries again, a cancelled task continues its design where it stopped, and if the design still can't be made the task waits in Human Review as "Design couldn't be made" with **Try the design again** or **Build without design** (also sent to Telegram). Before, a designer that stopped meant the task was built from the spec with no design.
+- Design is never skipped silently: when the designer hits a rate limit it waits (at most an hour in all, shown on the task card and the Design tab with **Stop waiting**) and tries again, a cancelled task continues its design where it stopped, and if the design still can't be made the task waits in Human Review as "Design couldn't be made" with **Try the design again** or **Build without design** — buttons in Telegram too. Before, a designer that stopped meant the task was built from the spec with no design.
 - Specs no longer ask for unstyled screens: every screen a person sees, a local test sign-in included, follows the design system.
-- The designer starts with the frames its task needs (up to 20, with an index of the rest) instead of every frame of the project, and asks CodeGraph about pages and components before reading files.
+- The designer starts with the frames its task needs — the screens the spec names first, then the app shell (up to 20, with an index of the rest) instead of every frame of the project, and asks CodeGraph about pages and components before reading files.
 - Approving a design starts the task at once; QA's pictures of the screens are taken in the background.
 - A status bar at the bottom of the window: questions waiting for you, tasks running and queued, a paused queue and CI on main on the left; Context, Changelog, MCP Overview, Documentation and Settings on the right. The sidebar keeps Build and Plan.
 - Context → Architecture: decisions open in place, grouped by task in number order.
