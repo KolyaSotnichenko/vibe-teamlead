@@ -36,6 +36,7 @@ import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
 import { pickHostEnv, SESSION_HOST_ENV } from './host-env';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, GSAP_INSTRUCTIONS, skillsForAgent, SUPERPOWERS_INSTRUCTIONS, UX_REVIEW_INSTRUCTIONS, UX_REVIEW_SKILL } from './skills';
 import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
+import { cloudDiagramsInstructions, TERRAVISION_DISALLOWED_TOOLS, TERRAVISION_SERVER_KEY } from '../cloud-diagrams/architect-session';
 
 /** Claude Code built-in tools Vibe Teamlead agents may be given */
 const CLAUDE_CODE_TOOLS = new Set([
@@ -247,6 +248,9 @@ export function buildQueryOptions(
           },
           browserOutputDir: config.specDir ? join(config.specDir, 'qa-browser') : undefined,
         }), extras.onProblem);
+  // TerraVision: only the architect of a cloud-infrastructure task (decided in the worker)
+  const cloudDiagrams = config.agentType === 'architect' && tools.length > 0 ? config.cloudDiagrams : undefined;
+  if (cloudDiagrams) mcpServers[TERRAVISION_SERVER_KEY] = cloudDiagrams.server;
   if (bundled.codegraphBin && extras.codegraphReady && tools.includes('Read')) {
     mcpServers[CODEGRAPH_SERVER_KEY] = codegraphMcpServer(bundled.codegraphBin, config.toolContext.cwd);
   }
@@ -297,6 +301,7 @@ export function buildQueryOptions(
     tools.includes('Bash') ? backgroundInstructions(hasDevServerTool) : '',
     tools.includes('Bash') ? CONTEXT_INSTRUCTIONS : '',
     browserToolsSection(config.agentType, Object.keys(mcpServers), config.mcpOptions?.projectCapabilities, config.mcpOptions?.taskTouchesUi),
+    cloudDiagrams ? cloudDiagramsInstructions(cloudDiagrams) : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -343,6 +348,7 @@ export function buildQueryOptions(
   if (compaction) options.settings = compaction;
   if (config.thinkingLevel) options.effort = config.thinkingLevel;
   if (hasSubagents) options.agents = config.agents;
+  if (cloudDiagrams) options.disallowedTools = [...TERRAVISION_DISALLOWED_TOOLS];
   if (plugins.length) options.plugins = plugins;
   if (bundled.claudeCodeExecutable) options.pathToClaudeCodeExecutable = bundled.claudeCodeExecutable;
   if (config.outputSchema) {

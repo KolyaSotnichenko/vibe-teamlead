@@ -95,6 +95,8 @@ export interface SessionConfig {
   formatOnEdit?: boolean;
   /** Generated LSP plugin directory (lsp-plugin.ts) for sessions that get language servers */
   lspPluginDir?: string;
+  /** TerraVision for the architect of a cloud-infrastructure task (cloud-diagrams/architect-session.ts) */
+  cloudDiagrams?: import('../cloud-diagrams/architect-session').ArchitectCloudDiagrams;
   /** Spec directory for the current task */
   specDir: string;
   /** Project directory root */
