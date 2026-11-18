@@ -16,7 +16,8 @@ export type TaskOrderState = Record<TaskStatus, string[]>;
 // - 'qa_rejected': QA found issues that need fixing
 // - 'plan_review': Spec/plan created and awaiting approval before coding starts
 // - 'design_review': wireframes or design drawn and waiting for the owner (design before code)
-export type ReviewReason = 'completed' | 'errors' | 'qa_rejected' | 'plan_review' | 'design_review' | 'stopped' | 'architecture_ready';
+// - 'design_failed': the designer could not draw (after its retries); the owner tries again or builds without a design
+export type ReviewReason = 'completed' | 'errors' | 'qa_rejected' | 'plan_review' | 'design_review' | 'design_failed' | 'stopped' | 'architecture_ready';
 
 export type SubtaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 

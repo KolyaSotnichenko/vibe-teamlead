@@ -17,6 +17,8 @@ export type TaskEvent =
   | { type: 'PLAN_APPROVED' }
   /** Design before code: the build stopped for the owner at the wireframes or the design */
   | { type: 'DESIGN_REVIEW'; stage: 'wireframes' | 'design' }
+  /** Design before code: the designer could not draw (after its retries); the owner decides */
+  | { type: 'DESIGN_FAILED'; error: string }
   /** The owner approved or commented: the build goes on (or redraws) */
   | { type: 'DESIGN_RESUMED' }
   /** An architecture-only task: the architect finished, nothing else runs */
@@ -60,6 +62,7 @@ export const taskMachine = createMachine(
           CODING_STARTED: 'coding',
           // A task started from the queue keeps its machine here through the spec and the design
           DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
+          DESIGN_FAILED: { target: 'design_review', actions: ['setReviewReasonDesignFailed', 'setError'] },
           ARCHITECTURE_READY: { target: 'human_review', actions: 'setReviewReasonArchitecture' },
           USER_STOPPED: 'backlog'
         }
@@ -75,6 +78,7 @@ export const taskMachine = createMachine(
             { target: 'coding', actions: 'clearReviewReason' }
           ],
           DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
+          DESIGN_FAILED: { target: 'design_review', actions: ['setReviewReasonDesignFailed', 'setError'] },
           ARCHITECTURE_READY: { target: 'human_review', actions: 'setReviewReasonArchitecture' },
           // Fallback: if CODING_STARTED arrives while in planning, transition to coding
           CODING_STARTED: { target: 'coding', actions: 'clearReviewReason' },
@@ -110,6 +114,7 @@ export const taskMachine = createMachine(
         on: {
           // A machine restored as coding (in progress, phase unknown) while the build draws its design
           DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
+          DESIGN_FAILED: { target: 'design_review', actions: ['setReviewReasonDesignFailed', 'setError'] },
           QA_STARTED: 'qa_review',
           // ALL_SUBTASKS_DONE means coder finished but QA hasn't started yet
           // Transition to qa_review - QA will emit QA_PASSED or QA_FAILED
@@ -187,6 +192,7 @@ export const taskMachine = createMachine(
     actions: {
       setReviewReasonPlan: assign({ reviewReason: () => 'plan_review' }),
       setReviewReasonDesign: assign({ reviewReason: () => 'design_review' }),
+      setReviewReasonDesignFailed: assign({ reviewReason: () => 'design_failed' }),
       setReviewReasonArchitecture: assign({ reviewReason: () => 'architecture_ready' }),
       setReviewReasonCompleted: assign({ reviewReason: () => 'completed' }),
       setReviewReasonStopped: assign({ reviewReason: () => 'stopped' }),
@@ -198,7 +204,7 @@ export const taskMachine = createMachine(
           if (event.type === 'PLANNING_FAILED') {
             return event.error;
           }
-          if (event.type === 'CODING_FAILED') {
+          if (event.type === 'CODING_FAILED' || event.type === 'DESIGN_FAILED') {
             return event.error;
           }
           return undefined;

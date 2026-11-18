@@ -286,6 +286,24 @@ describe('TaskStateManager', () => {
       expect(result).toBe(true);
     });
 
+    it('a task the designer could not draw for goes back to planning when the owner decides (also after a restart)', () => {
+      const failed = createMockTask({ status: 'human_review', reviewReason: 'design_failed' });
+      manager.handleManualStatusChange(failed.id, 'in_progress', failed, mockProject);
+      expect(manager.getCurrentState(failed.id)).toBe('planning');
+    });
+
+    it('a design that could not be made shows as Human Review with its reason, and its code-0 exit is expected', () => {
+      const statuses: Array<[string, string | undefined]> = [];
+      manager.onStatusChange((_id, status, reason) => statuses.push([status, reason]));
+      const base = { taskId: mockTask.id, specId: mockTask.specId, projectId: mockProject.id, timestamp: new Date().toISOString() };
+      manager.handleTaskEvent(mockTask.id, { ...base, type: 'PLANNING_STARTED', eventId: 'e1', sequence: 1 }, mockTask, mockProject);
+      manager.handleTaskEvent(mockTask.id, { ...base, type: 'DESIGN_FAILED', error: 'Rate limit reached', eventId: 'e2', sequence: 2 }, mockTask, mockProject);
+      manager.handleProcessExited(mockTask.id, 0, mockTask, mockProject);
+      expect(manager.getCurrentState(mockTask.id)).toBe('design_review');
+      expect(manager.getCurrentReviewReason(mockTask.id)).toBe('design_failed');
+      expect(statuses.at(-1)).toEqual(['human_review', 'design_failed']);
+    });
+
     it('should handle in_progress status without plan_review', () => {
       const stoppedTask = createMockTask({
         status: 'human_review',

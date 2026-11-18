@@ -69,7 +69,7 @@ export function registerAgenteventsHandlers(
   // The last commits of a task (the final subtask's, the QA fixes) reach its preview here
   // (not for a plan or design waiting for approval: no code was written yet)
   taskStateManager.onStatusChange((taskId, status, reviewReason) => {
-    if (reviewReason === "plan_review" || reviewReason === "design_review" || reviewReason === "architecture_ready") return;
+    if (reviewReason === "plan_review" || reviewReason === "design_review" || reviewReason === "design_failed" || reviewReason === "architecture_ready") return;
     if (status === "ai_review" || status === "human_review") requestPreviewPush(taskId);
   });
   agentManager.on("session-ended", (taskId: string) => requestPreviewPush(taskId));
@@ -511,7 +511,7 @@ export function registerAgenteventsHandlers(
     if (currentXState && !planWithStatus.xstateState && task && project) {
       console.debug(`[agent-events-handlers] Re-stamping XState status on plan file for ${taskId} (state: ${currentXState})`);
       const mainPlanPath = getPlanPath(project, task);
-      const { status, reviewReason } = mapStateToLegacy(currentXState);
+      const { status, reviewReason } = mapStateToLegacy(currentXState, taskStateManager.getCurrentReviewReason(taskId));
       const phase = XSTATE_TO_PHASE[currentXState] || 'idle';
       persistPlanStatusAndReasonSync(mainPlanPath, status, reviewReason, project.id, currentXState, phase);
 

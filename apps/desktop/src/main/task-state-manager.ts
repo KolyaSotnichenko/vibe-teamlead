@@ -25,6 +25,8 @@ const TERMINAL_EVENTS = new Set<string>([
   'PLANNING_COMPLETE',
   // The build stops for the owner's design review: the code-0 exit after it is expected
   'DESIGN_REVIEW',
+  // ... or because the designer could not draw: the owner decides
+  'DESIGN_FAILED',
   'ARCHITECTURE_READY',
   'PLANNING_FAILED',
   'CODING_FAILED',
@@ -147,7 +149,7 @@ export class TaskStateManager {
         const currentState = this.getCurrentState(taskId);
         if (currentState === 'plan_review') {
           this.handleUiEvent(taskId, { type: 'PLAN_APPROVED' }, task, project);
-        } else if (currentState === 'design_review' || (!currentState && task.reviewReason === 'design_review')) {
+        } else if (currentState === 'design_review' || (!currentState && (task.reviewReason === 'design_review' || task.reviewReason === 'design_failed'))) {
           this.handleUiEvent(taskId, { type: 'DESIGN_RESUMED' }, task, project);
         } else if (currentState === 'human_review' || currentState === 'error') {
           this.handleUiEvent(taskId, { type: 'USER_RESUMED' }, task, project);
@@ -198,6 +200,11 @@ export class TaskStateManager {
       return undefined;
     }
     return String(actor.getSnapshot().value);
+  }
+
+  /** Why the task waits for the owner (the machine's context), or undefined without an actor */
+  getCurrentReviewReason(taskId: string): ReviewReason | undefined {
+    return this.actors.get(taskId)?.getSnapshot().context.reviewReason;
   }
 
   /**
@@ -425,7 +432,7 @@ export class TaskStateManager {
         stateValue = 'qa_review';
         break;
       case 'human_review':
-        stateValue = reviewReason === 'plan_review' ? 'plan_review' : reviewReason === 'design_review' ? 'design_review' : 'human_review';
+        stateValue = reviewReason === 'plan_review' ? 'plan_review' : reviewReason === 'design_review' || reviewReason === 'design_failed' ? 'design_review' : 'human_review';
         contextReviewReason = reviewReason;
         break;
       case 'pr_created':

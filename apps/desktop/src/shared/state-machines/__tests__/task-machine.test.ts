@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createActor } from 'xstate';
 import { taskMachine, type TaskEvent } from '../task-machine';
+import { mapStateToLegacy } from '../task-state-utils';
 
 /**
  * Helper to run a sequence of events and get the final state
@@ -94,6 +95,29 @@ describe('taskMachine', () => {
     it('a code-0 exit while waiting is expected; stopping goes to the backlog', () => {
       expect(runEvents([{ type: 'PROCESS_EXITED', exitCode: 0 }], 'design_review').value).toBe('design_review');
       expect(runEvents([{ type: 'USER_STOPPED' }], 'design_review').value).toBe('backlog');
+    });
+  });
+
+  describe('design_failed (the designer could not draw)', () => {
+    it('waits for the owner with the reason and the error, from wherever the build was', () => {
+      for (const from of ['planning', 'backlog', 'coding']) {
+        const snapshot = runEvents([{ type: 'DESIGN_FAILED', error: 'Rate limit reached' }], from);
+        expect(snapshot.value).toBe('design_review');
+        expect(snapshot.context.reviewReason).toBe('design_failed');
+        expect(snapshot.context.error).toBe('Rate limit reached');
+      }
+    });
+
+    it('trying again or building without a design goes back to planning', () => {
+      const snapshot = runEvents([{ type: 'DESIGN_FAILED', error: 'x' }, { type: 'DESIGN_RESUMED' }], 'planning');
+      expect(snapshot.value).toBe('planning');
+      expect(snapshot.context.reviewReason).toBeUndefined();
+    });
+
+    it('shows as Human Review with its own reason', () => {
+      expect(mapStateToLegacy('design_review', 'design_failed')).toEqual({ status: 'human_review', reviewReason: 'design_failed' });
+      expect(mapStateToLegacy('design_review')).toEqual({ status: 'human_review', reviewReason: 'design_review' });
+      expect(mapStateToLegacy('design_review', 'completed')).toEqual({ status: 'human_review', reviewReason: 'design_review' });
     });
   });
 

@@ -80,7 +80,8 @@ export function mapStateToLegacy(
     case 'plan_review':
       return { status: 'human_review', reviewReason: 'plan_review' };
     case 'design_review':
-      return { status: 'human_review', reviewReason: 'design_review' };
+      // Waiting at the frames, or because the designer could not draw them
+      return { status: 'human_review', reviewReason: reviewReason === 'design_failed' ? 'design_failed' : 'design_review' };
     case 'qa_review':
     case 'qa_fixing':
       return { status: 'ai_review' };
