@@ -119,7 +119,19 @@ export function CloudArchitectureTab({ projectId }: Props) {
 
         {error !== null && <Notice>{`${t('cloud:tab.loadFailed')}${error ? `: ${error}` : ''}`}</Notice>}
 
-        {view && !view.enabled && <Notice>{t('cloud:tab.off')}</Notice>}
+        {view && !view.enabled && (
+          <Notice>
+            <p>{t('cloud:tab.off')}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-app-settings', { detail: 'agent' }))}
+            >
+              {t('cloud:tab.openSettings')}
+            </Button>
+          </Notice>
+        )}
 
         {view?.enabled && !view.tools.ready && (
           <Notice>
@@ -178,12 +190,14 @@ export function CloudArchitectureTab({ projectId }: Props) {
           </div>
         )}
 
-        {view?.enabled && (
+        {view && (
           <section aria-labelledby="cloud-design" className="space-y-2">
-            <Button onClick={() => void design()} disabled={creating || architectOff}>
+            <Button onClick={() => void design()} disabled={creating || architectOff || !view.enabled}>
               {t('cloud:tab.design.button')}
             </Button>
-            <p className="max-w-prose text-xs text-muted-foreground">{t(architectOff ? 'cloud:tab.design.architectOff' : 'cloud:tab.design.hint')}</p>
+            <p className="max-w-prose text-xs text-muted-foreground">
+              {t(!view.enabled ? 'cloud:tab.design.off' : architectOff ? 'cloud:tab.design.architectOff' : 'cloud:tab.design.hint')}
+            </p>
           </section>
         )}
 

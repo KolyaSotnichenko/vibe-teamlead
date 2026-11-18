@@ -53,7 +53,7 @@ flowchart TD
 
 ## Cloud architecture diagrams (TerraVision, experimental)
 
-An addition to the architect's own diagrams, on by default, that you can turn off in Settings → Agent Settings → **Cloud architecture diagrams**. It uses [TerraVision](https://github.com/patrickchugh/terravision) (AGPL-3.0) to draw AWS, Azure and Google Cloud architecture with their official icons. Ordinary tasks are not affected: no extra tool, prompt text or tokens.
+An optional addition to the architect's own diagrams, off by default: turn it on in Settings → Agents → **Cloud architecture diagrams** and install uv and Graphviz (and Terraform or OpenTofu to draw from code). The app doesn't bundle them. While it is off, Context → **Architecture** says so with a button to that setting, the Design button is disabled, and the decisions list stays. It uses [TerraVision](https://github.com/patrickchugh/terravision) (AGPL-3.0) to draw AWS, Azure and Google Cloud architecture with their official icons. Ordinary tasks are not affected: no extra tool, prompt text or tokens.
 
 **Two moments:**
 

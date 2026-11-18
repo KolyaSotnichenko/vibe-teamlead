@@ -1,7 +1,7 @@
 {
   "settings": {
     "title": "Cloud architecture diagrams (TerraVision, experimental)",
-    "description": "For tasks about cloud infrastructure, the architect also draws the target cloud architecture (AWS, Azure, Google Cloud) with TerraVision, and after a merge that changes Terraform the app redraws it from the code itself, without a model. Ordinary tasks are not affected.",
+    "description": "For tasks about cloud infrastructure, the architect also draws the target cloud architecture (AWS, Azure, Google Cloud) with TerraVision, and after a merge that changes Terraform the app redraws it from the code itself, without a model. Ordinary tasks are not affected. Optional and off by default: turn it on and install uv and Graphviz (and Terraform or OpenTofu to draw from code).",
     "checking": "Checking what is installed…",
     "ready": "Ready. The architect can draw, and the app can redraw from Terraform after merges.",
     "readyNoCode": "The architect can draw. Redrawing from Terraform after merges needs Terraform or OpenTofu.",
@@ -18,7 +18,8 @@
     "label": "Architecture",
     "title": "Cloud architecture",
     "subtitle": "The target cloud architecture the architect designed, and the one the app drew from the Terraform code after the latest merge that changed it.",
-    "off": "Cloud architecture diagrams are turned off (Settings → Agents).",
+    "off": "Cloud architecture diagrams are optional and turned off. Turn them on in Settings → Agents and install uv and Graphviz (and Terraform or OpenTofu to draw from code). Decisions of merged tasks are listed below either way.",
+    "openSettings": "Open Settings → Agents",
     "refresh": "Refresh",
     "loadFailed": "Couldn't load the cloud architecture",
     "designed": {
@@ -51,7 +52,8 @@
     },
     "design": {
       "button": "Design the cloud architecture",
-      "hint": "Creates a task in Planning; nothing runs until you start it. Running it starts the spec and architect sessions (model calls) and pauses for your review before any code.",
+      "hint": "Creates a task in Planning; nothing runs until you start it. Running it starts the spec and architect sessions (model calls), then the task ends: no plan, code, QA or merge. It waits in Human Review as \"Architecture ready\" for you to look and mark it done.",
+      "off": "Turn on cloud architecture diagrams first (Settings → Agents): without them the architect has no TerraVision to draw with.",
       "architectOff": "The architect is turned off (Settings → Agents → Architect), so this task would draw nothing.",
       "created": "Task created: start it from the board",
       "failed": "Couldn't create the task",

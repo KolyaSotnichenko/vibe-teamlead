@@ -107,9 +107,22 @@ describe('CloudArchitectureTab', () => {
     expect(screen.getByText('cloud:tab.design.architectOff')).toBeInTheDocument();
   });
 
-  it('says when the feature is off', async () => {
-    get.mockResolvedValue({ success: true, data: view({ enabled: false }) });
+  it('says when the feature is off, opens Settings at Agents, and keeps the decisions', async () => {
+    get.mockResolvedValue({ success: true, data: view({ enabled: false, decisions: [{ taskId: 't1', taskTitle: 'Auth', fileName: '0001.md', title: 'Use Entra ID', at: 1 }] }) });
+    const opened = vi.fn();
+    window.addEventListener('open-app-settings', opened);
     render(<CloudArchitectureTab projectId="p1" />);
     expect(await screen.findByText('cloud:tab.off')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('cloud:tab.openSettings'));
+    expect((opened.mock.calls[0][0] as CustomEvent).detail).toBe('agent');
+    window.removeEventListener('open-app-settings', opened);
+    expect(screen.getByText('Use Entra ID')).toBeInTheDocument();
+  });
+
+  it("can't create the design task while cloud diagrams are off, and says why", async () => {
+    get.mockResolvedValue({ success: true, data: view({ enabled: false }) });
+    render(<CloudArchitectureTab projectId="p1" />);
+    expect(await screen.findByText('cloud:tab.design.button')).toBeDisabled();
+    expect(screen.getByText('cloud:tab.design.off')).toBeInTheDocument();
   });
 });
