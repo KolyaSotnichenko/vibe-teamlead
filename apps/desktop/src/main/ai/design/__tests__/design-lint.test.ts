@@ -111,3 +111,19 @@ describe('tokens summary for prompts', () => {
     expect(s).toContain('Allowed on purpose (the design check skips it): `repeating-linear-gradient\\(` (Hatched backgrounds)');
   });
 });
+
+describe('isUiFile: the design system itself is not checked against itself', () => {
+  it("skips the project's design-system package and token files, where the palette is defined", () => {
+    expect(isUiFile('packages/design-system/tokens.css')).toBe(false);
+    expect(isUiFile('packages/design-system/src/theme.css')).toBe(false);
+    expect(isUiFile('src/styles/tokens.css')).toBe(false);
+    expect(isUiFile('src/styles/design-tokens.scss')).toBe(false);
+    expect(isUiFile('app/theme.tokens.css')).toBe(false);
+  });
+
+  it('still checks ordinary UI files, including ones merely named like a token', () => {
+    expect(isUiFile('apps/web/src/components/Label.tsx')).toBe(true);
+    expect(isUiFile('apps/web/src/styles/app.css')).toBe(true);
+    expect(isUiFile('apps/web/src/components/TokenList.tsx')).toBe(true);
+  });
+});

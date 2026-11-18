@@ -16,6 +16,12 @@ import type { DesignFinding, DesignTokens } from '../../../shared/types';
 const UI_FILE = /\.(tsx|jsx|vue|svelte|astro|html|css|scss|sass|less|mdx)$/i;
 const SKIP_PATH = /(^|\/)(node_modules|dist|build|out|coverage|\.next|\.vibe-teamlead|\.storybook-static|storybook-static)\//;
 const SKIP_FILE = /(design-tokens\.json|design-system\.md|\.test\.|\.spec\.|__tests__\/)/i;
+/**
+ * Where the project defines its palette: a design-system folder, or a tokens file
+ * (tokens.css, design-tokens.scss, theme.tokens.css). The palette is checked against
+ * itself otherwise, and every colour added to it would be a finding.
+ */
+const DESIGN_SYSTEM_SOURCE = /(^|\/)design-system\/|(^|\/|[.-])tokens\.(css|scss|sass|less)$/i;
 const MAX_FINDINGS = 60;
 
 export interface AddedLines {
@@ -172,7 +178,7 @@ export function parseAddedLines(diff: string): AddedLines[] {
   return [...out.values()];
 }
 
-export const isUiFile = (file: string) => UI_FILE.test(file) && !SKIP_PATH.test(`/${file}`) && !SKIP_FILE.test(file);
+export const isUiFile = (file: string) => UI_FILE.test(file) && !SKIP_PATH.test(`/${file}`) && !SKIP_FILE.test(file) && !DESIGN_SYSTEM_SOURCE.test(file);
 
 function run(args: string[], cwd: string): Promise<string> {
   return new Promise((resolve) => {

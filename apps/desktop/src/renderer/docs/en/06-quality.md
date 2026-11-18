@@ -7,7 +7,7 @@
 | **gitleaks** | Secrets in the code block approval. |
 | **OSV-Scanner** | Vulnerable dependencies block approval. |
 | **Semgrep** | Static analysis of the changed files blocks approval. It runs only when Semgrep is installed (see "Semgrep" below). |
-| **Design check** | A static check of added UI lines against the design system tokens + a screenshot review (see "Design system and Storybook"). |
+| **Design check** | A static check of added UI lines against the design system tokens + a screenshot review (see "Design system and Storybook"). The project's own design-system folder and token files (`tokens.css` and the like) are not checked: that is where the palette is defined. |
 | **Browser check** | QA opens the app in Chrome (Playwright / DevTools MCP), takes screenshots and reads the console. |
 | **Strix** | Pentest in Docker (optional). Findings at the level you set block the task and go to the QA fixer. Smaller ones don't stop it: the app files them as one new task on the board, without repeats, for you to start when you choose. |
 | **Security hooks** | Path boundaries, a list of forbidden commands (everything else is allowed), a ban on killing the app's own processes. |
