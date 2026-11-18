@@ -286,7 +286,7 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
           return designerResultOf({ outcome: abortController.signal.aborted ? 'cancelled' : 'error', error: { code: 'generic_error', message: error instanceof Error ? error.message : String(error), retryable: false } });
         }
       },
-      // A rate limit is waited out as the coder's is (the countdown on the card, Resume ends it early)
+      // A rate limit is waited out as the coder's is (the pause file; a RESUME file ends it early)
       wait: async (ms, kind, error) => {
         if (kind === 'rate_limited') {
           writeRateLimitPauseFile(session.specDir, error, new Date(Date.now() + ms).toISOString());

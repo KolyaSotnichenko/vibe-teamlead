@@ -15,6 +15,18 @@ Right after the spec, for every task whose spec names a UI file (or names no fil
 5. **Plan and code.** The planner names the design files each subtask builds; the coder builds to them at the same widths, with the project's real components and data.
 6. **QA.** The QA reviewer opens the built pages at each screen's width and compares them with the design (a picture of each approved screen is made for it). Missing elements, states or layouts block like any QA issue; small differences within the design system are listed for you under **Built vs design** on the Design tab.
 
+Every screen a person can see gets a design and follows the design system, test or dev-only ones included: a local sign-in (one click per role), seed or stub pages, error and empty states. Specs never ask for an "unstyled" screen.
+
+## When the designer stops
+
+A UI task is never built without a design unless you say so.
+
+- **A rate limit or a busy API:** the app waits (until the limit resets, when the error says when) and tries the designer again, up to three times. The task's log says how long it waits.
+- **You stop the task:** the design stays where it was; the next start goes on from the same step.
+- **Still failing, or another error:** the task stops in Human Review with *Design couldn't be made*. The Design tab shows the designer's error and two buttons: **Try the design again** (starts the design again from where it stopped) and **Build without design** (the coder builds from the spec and the design system; recorded as your decision). Telegram sends a message too.
+
+A design skipped before this (the designer stopped and the task went on) says so on the Design tab, with the reason.
+
 Each screen is one responsive page, shown on the canvas at the widths that matter (phone 390, desktop 1280, tablet 768 when it differs). The designer links the screens like a real flow. On the canvas, point at a frame (or click it) to see arrows from its links to the screens they open, and into it; a frame's title shows how many transitions leave it; **Show all flows** draws the whole map.
 
 **Play prototype** opens the first screen of the flow full size: click through the screens as a person would, **← Back** goes back along them, and 390 / 768 / 1280 resize the page live. Clicking beside a link briefly highlights everything clickable, as in Figma. Animations play too.
@@ -25,7 +37,7 @@ The designer and the UI coders of a project that animates with GSAP get GreenSoc
 
 ## The project's design library
 
-When a task's design is done (approved, or gone on by itself), its wireframes and screens go into the project's library; a frame with the same name replaces the older version. The next task's designer starts from the library: a screen it changes is redrawn from its current version, a new one is drawn in the same style. **Context → Design system → Screens** shows the whole library on one canvas, each frame with the task it came from.
+When a task's design is done (approved, or gone on by itself), its wireframes and screens go into the project's library; a frame with the same name replaces the older version. The next task's designer starts from the library: a screen it changes is redrawn from its current version, a new one is drawn in the same style. It is given the frames its task needs (the screens the spec names and the app shell, at most 20) and a list of the rest, which it opens only when needed. **Context → Design system → Screens** shows the whole library on one canvas, each frame with the task it came from.
 
 ## Settings
 
