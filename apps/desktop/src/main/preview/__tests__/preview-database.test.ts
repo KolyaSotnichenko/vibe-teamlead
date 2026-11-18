@@ -93,8 +93,18 @@ describe('the preview database', () => {
   it('removePreviewLeftovers removes containers with the preview label and keeps volumes', async () => {
     const { docker, calls } = fakeDocker({ leftovers: ['old1', 'old2'] });
     await removePreviewLeftovers(docker);
-    expect(calls[0]).toEqual(['ps', '-aq', '--filter', 'label=vibe-teamlead-preview']);
-    expect(calls.slice(1)).toEqual([['rm', '-f', 'old1'], ['rm', '-f', 'old2']]);
+    const rest = calls.slice(calls.findIndex((c) => c.join(' ') === 'ps -aq --filter label=vibe-teamlead-preview'));
+    expect(rest[0]).toEqual(['ps', '-aq', '--filter', 'label=vibe-teamlead-preview']);
+    expect(rest.slice(1)).toEqual([['rm', '-f', 'old1'], ['rm', '-f', 'old2']]);
+  });
+
+  it("removePreviewLeftovers removes the compose services' containers with their anonymous volumes, and their networks", async () => {
+    const { docker, calls } = fakeDocker({ leftovers: ['old1'] });
+    await removePreviewLeftovers(docker);
+    const both = ['--filter', 'label=vibe-teamlead-preview', '--filter', 'label=vibe-teamlead-compose'];
+    expect(calls[0]).toEqual(['ps', '-aq', ...both]);
+    expect(calls[1]).toEqual(['rm', '-f', '-v', 'old1']);
+    expect(calls[2]).toEqual(['network', 'ls', '-q', ...both]);
   });
 
   it('a reset that cannot remove the volume gives up and keeps the stored password', async () => {

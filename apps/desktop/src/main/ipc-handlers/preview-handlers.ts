@@ -97,8 +97,9 @@ export async function previewEnvReport(project: Project, dir: string, taskId?: s
     }
   };
   const planned = plannedEnv(project.settings, files, read);
-  // Only asked when the preview would need it: the test database and mail catcher run in Docker
-  const dockerUnavailable = planned.databases.length > 0 || planned.mail ? !(await docker(['info']).catch(() => ({ ok: false }))).ok : false;
+  // Only asked when the preview would need it: the test database, the other compose services and the mail catcher run in Docker
+  const needsDocker = planned.databases.length > 0 || planned.composeServices.length > 0 || planned.mail;
+  const dockerUnavailable = needsDocker ? !(await docker(['info']).catch(() => ({ ok: false }))).ok : false;
   return { running: false, restartNeeded: false, dockerUnavailable, ...planned };
 }
 

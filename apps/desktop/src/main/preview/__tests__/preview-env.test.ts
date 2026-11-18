@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { composeServices } from '../../ai/verification/compose-services';
 import { baseEnvVars, envOf, plannedEnv, serviceEnvVars } from '../preview-env';
 
 const PG = [{ kind: 'postgres' as const, url: 'postgresql://verify:pw@127.0.0.1:55001/verify' }];
@@ -42,6 +43,25 @@ describe('baseEnvVars', () => {
     expect(vars.SMTP_HOST).toMatchObject({ value: '', source: 'mail', pending: true });
   });
 
+  it('names the compose service a value comes from, and empties what points at one that did not start', () => {
+    const planned = composeServices(['services:\n  rabbitmq:\n    image: rabbitmq:3\n  minio:\n    image: minio/minio\n    ports: ["9000:9000"]\n']);
+    const vars = byName(baseEnvVars({
+      dir: '',
+      rootExample: 'AMQP_URL=amqp://rabbitmq:5672\nS3_ENDPOINT=http://localhost:9000\n',
+      dirExample: null,
+      started: [],
+      compose: { planned, started: [{ name: 'rabbitmq', kind: 'rabbitmq', image: 'rabbitmq:3', ports: { 5672: 50001 }, env: {} }] },
+    }));
+    expect(vars.AMQP_URL).toEqual({ name: 'AMQP_URL', value: 'amqp://127.0.0.1:50001', source: 'service', service: 'rabbitmq' });
+    expect(vars.S3_ENDPOINT).toEqual({ name: 'S3_ENDPOINT', value: '', source: 'blocked', service: 'minio' });
+  });
+
+  it("before the start, a compose service's values are pending", () => {
+    const planned = composeServices(['services:\n  rabbitmq:\n    image: rabbitmq:3\n']);
+    const vars = byName(baseEnvVars({ dir: '', rootExample: 'AMQP_URL=amqp://rabbitmq\n', dirExample: null, started: [], compose: { planned, started: [] }, pending: true }));
+    expect(vars.AMQP_URL).toEqual({ name: 'AMQP_URL', value: '', source: 'service', service: 'rabbitmq', pending: true });
+  });
+
   it('gives the same values the preview always gave (example + database + mail + previewEnv)', () => {
     const env = envOf(baseEnvVars({ dir: 'a', rootExample: 'A=1\nDATABASE_URL=postgres://h/x\n', dirExample: 'A=2\nB=\n', started: PG, overrides: { C: '3' } }));
     expect(env).toMatchObject({ A: '2', B: '', C: '3', DATABASE_URL: PG[0].url });
@@ -77,8 +97,8 @@ describe('serviceEnvVars', () => {
 
 describe('plannedEnv', () => {
   const FILES: Record<string, string> = {
-    'docker-compose.yml': 'services:\n  db:\n    image: postgres:18-alpine\n',
-    '.env.example': 'VITE_AUTH_MODE=test\n',
+    'docker-compose.yml': 'services:\n  db:\n    image: postgres:18-alpine\n  queue:\n    image: rabbitmq:3\n',
+    '.env.example': 'VITE_AUTH_MODE=test\nAMQP_URL=amqp://queue:5672\n',
     'api/.env.example': 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nAUTH_TEST_IDP_ENABLED=true\nSTRIPE_KEY=\nSMTP_HOST=smtp.x\n',
     'api/.env': 'LEAK=1\n',
   };
@@ -92,6 +112,8 @@ describe('plannedEnv', () => {
       (path) => { seen.push(path); return read(path); },
     );
     expect(planned.databases).toEqual(['postgres']);
+    expect(planned.composeServices).toEqual(['queue']);
+    expect(byName(planned.services[0].vars).AMQP_URL).toMatchObject({ value: '', source: 'service', service: 'queue', pending: true });
     expect(planned.mail).toBe(true);
     const api = byName(planned.services.find((s) => s.service === 'api')!.vars);
     expect(api.VITE_AUTH_MODE).toMatchObject({ value: 'test', source: 'example' });

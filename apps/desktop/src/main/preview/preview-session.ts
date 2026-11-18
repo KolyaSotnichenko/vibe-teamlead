@@ -1,7 +1,8 @@
 /**
  * One preview at a time: the main branch's worktree, its dependencies, the
- * workspace packages the services use, the preview database, migrations, a seed
- * on a fresh database, then the services, backends first and the page last.
+ * workspace packages the services use, the preview database, the compose file's
+ * other services (queues, storage, search…, throwaway for the session), migrations,
+ * a seed on a fresh database, then the services, backends first and the page last.
  * Leaving the view stops all of it. A stop aborts what is running, and the next
  * start waits until the stopped one has finished, so two never share a database
  * volume or a worktree. A stopped session reports nothing after its "stopped".
@@ -17,6 +18,8 @@ import type { PreviewAddressIssue, PreviewEnvReport, PreviewEnvVar, PreviewStatu
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
+import { type ComposeRun, startComposeServices } from '../ai/verification/compose-runner';
+import { bucketsOf, type ComposeService, composeServices } from '../ai/verification/compose-services';
 import { composeFilesInOrder, detectChecks, imagesFromComposeFiles } from '../ai/verification/detect-checks';
 import { examplePort, previewAddressesByExamplePort } from './example-urls';
 import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
@@ -28,7 +31,7 @@ import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, runShell, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
-import { type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
+import { PREVIEW_LABEL, type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
 import { needsMail, type PreviewMail, startPreviewMail } from './preview-mail';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
@@ -48,6 +51,8 @@ export interface PreviewDeps {
   needsInstall: (root: string) => boolean;
   install: (root: string, onLine: (line: string) => void, signal: AbortSignal) => Promise<void>;
   startDatabase: typeof startPreviewDatabase;
+  /** The compose file's other services (queues, storage, search…), throwaway for the session */
+  startCompose: typeof startComposeServices;
   runCommand: (command: string, cwd: string, env: Record<string, string>, signal: AbortSignal) => Promise<{ code: number; output: string }>;
   startServer: (options: Parameters<typeof startDevServer>[0]) => ReturnType<typeof startDevServer>;
   stopServer: (name: string) => Promise<boolean>;
@@ -92,6 +97,9 @@ interface Session {
   database?: PreviewDatabase;
   /** The database kinds compose names, started or not */
   databaseKinds: string[];
+  /** The compose file's other services, started or not */
+  composePlanned: ComposeService[];
+  compose?: ComposeRun;
   /** Whether the examples configure SMTP */
   mailWanted: boolean;
   mail?: PreviewMail;
@@ -146,6 +154,7 @@ export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | '
       if (result.code !== 0) throw Object.assign(new Error(`${pm} install failed`), { logTail: tail(`${result.stdout}${result.stderr}`) });
     },
     startDatabase: startPreviewDatabase,
+    startCompose: startComposeServices,
     startMail: startPreviewMail,
     writeFile: (root, path, text) => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -222,6 +231,7 @@ function varsFor(session: Session, dir: string, files: string[]): PreviewEnvVar[
     dir,
     ...exampleTexts(files, (path) => session.deps.read(session.worktree, path), dir),
     started: session.database?.status === 'started' ? session.database.started : [],
+    compose: { planned: session.composePlanned, started: session.compose?.started ?? [] },
     mailPort: session.mail?.status === 'started' ? session.mail.smtpPort : undefined,
     overrides: session.project.settings.previewEnv,
   });
@@ -456,9 +466,11 @@ async function teardown(session: Session): Promise<void> {
   session.unsubscribe();
   const database = session.database;
   const mail = session.mail;
+  const compose = session.compose;
   session.database = undefined;
   session.mail = undefined;
-  await Promise.all([stopServers(session), database?.stop(), mail?.stop()]);
+  session.compose = undefined;
+  await Promise.all([stopServers(session), database?.stop(), mail?.stop(), compose?.stop()]);
 }
 
 function failed(session: Session, error: unknown): PreviewStatus {
@@ -490,7 +502,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
 
       emit(session, { stage: 'database', message: undefined });
       // The main compose file first; an override can add a kind the main file doesn't name
-      const images = imagesFromComposeFiles(composeFilesInOrder(files).map((file) => deps.read(session.worktree, file) ?? ''));
+      const composeContents = composeFilesInOrder(files).map((file) => deps.read(session.worktree, file) ?? '');
+      const images = imagesFromComposeFiles(composeContents);
       session.databaseKinds = images.map((image) => image.kind);
       const database = await deps.startDatabase(images, {
         docker: deps.docker,
@@ -504,15 +517,30 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       check(session);
       emit(session, { database: database.status, databaseReason: database.reason });
 
-      // The app's mail goes to a local catcher, when its example settings configure SMTP
       const examples = [...new Set(['', ...(project.settings.previewServices ?? []).map((s) => s.dir)])]
         .map((dir) => (dir ? `${dir}/.env.example` : '.env.example'))
         .filter((path) => files.includes(path))
         .map((path) => deps.read(session.worktree, path) ?? '')
         .join('\n');
+      const key = session.task ? previewTaskKey(session.task.worktree) : project.id;
+
+      // The compose file's other services, after the database: its start clears the label's leftovers
+      session.composePlanned = composeServices(composeContents);
+      if (session.composePlanned.length) {
+        emit(session, { stage: 'database', message: session.composePlanned.map((s) => s.name).join(', ') });
+        const compose = await deps.startCompose(session.composePlanned, {
+          docker: deps.docker, labelKey: PREVIEW_LABEL, labelValue: key, buckets: bucketsOf(examples), signal: session.abort.signal, pickPort: deps.pickPort,
+        });
+        session.compose = compose;
+        check(session);
+        const notices = compose.failed.length ? compose.failed.map((f) => f.reason) : compose.status === 'unavailable' && compose.reason ? [compose.reason] : [];
+        emit(session, { message: undefined, ...(compose.status === 'none' ? {} : { services: compose.status }), ...(notices.length ? { servicesNotices: notices } : {}) });
+      }
+
+      // The app's mail goes to a local catcher, when its example settings configure SMTP
       session.mailWanted = needsMail(examples);
       if (session.mailWanted) {
-        session.mail = await deps.startMail(deps.docker, session.task ? previewTaskKey(session.task.worktree) : project.id);
+        session.mail = await deps.startMail(deps.docker, key);
         check(session);
         emit(session, { mail: session.mail.status, mailReason: session.mail.reason });
       }
@@ -608,6 +636,7 @@ export async function startPreview(
     logs: {},
     vars: {},
     databaseKinds: [],
+    composePlanned: [],
     mailWanted: false,
     status: { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'worktree', origins: [] },
     unsubscribe: () => {},
@@ -698,8 +727,10 @@ export function runningPreviewEnv(project: Project, taskId?: string): PreviewEnv
     running: true,
     restartNeeded: overridesOf(project) !== overridesOf(session.project),
     databases: session.databaseKinds,
+    composeServices: session.composePlanned.map((service) => service.name),
     mail: session.mailWanted,
-    dockerUnavailable: session.database?.status === 'unavailable' || session.mail?.status === 'unavailable',
+    // Compose services that all failed for their own reasons aren't Docker's absence
+    dockerUnavailable: session.database?.status === 'unavailable' || session.mail?.status === 'unavailable' || (session.compose?.status === 'unavailable' && !session.compose.failed.length),
     services: (session.project.settings.previewServices ?? []).map((service) => ({ service: service.name, dir: service.dir, vars: session.vars[service.name] ?? [] })),
   };
 }

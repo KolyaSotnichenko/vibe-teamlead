@@ -74,6 +74,12 @@ describe('preview IPC: Environment', () => {
     expect(await previewEnvReport(project, dirs.project, undefined, join(dirs.project, 'no-git'), async () => ({ ok: true, stdout: '' }))).toMatchObject({ dockerUnavailable: false });
   });
 
+  it('before the start, names the other compose services and says when Docker is not running for them', async () => {
+    writeFileSync(join(dirs.project, 'docker-compose.yml'), 'services:\n  rabbitmq:\n    image: rabbitmq:3\n');
+    const project = { id: 'p1', path: dirs.project, settings: SETTINGS } as unknown as Project;
+    expect(await previewEnvReport(project, dirs.project, undefined, join(dirs.project, 'no-git'), NO_DOCKER)).toMatchObject({ databases: [], composeServices: ['rabbitmq'], dockerUnavailable: true });
+  });
+
   it('while running, reports what the services got', async () => {
     const running: PreviewEnvReport = { running: true, restartNeeded: false, databases: [], mail: false, dockerUnavailable: false, services: [] };
     session.runningPreviewEnv.mockReturnValueOnce(running);

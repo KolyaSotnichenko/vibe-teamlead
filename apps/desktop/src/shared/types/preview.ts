@@ -21,6 +21,10 @@ export interface PreviewStatus {
   stoppedService?: string;
   database?: 'none' | 'started' | 'unavailable';
   databaseReason?: string;
+  /** The compose file's other services, when it names any */
+  services?: 'started' | 'unavailable';
+  /** What didn't start among them, and why */
+  servicesNotices?: string[];
   /** A local mail catcher, when the project's settings configure SMTP */
   mail?: 'started' | 'unavailable';
   mailReason?: string;
@@ -128,16 +132,19 @@ export type PreviewRunningDoc = ({ exists: false } | { exists: true; markdown: s
 
 /**
  * Where a preview variable's value came from: the project's example settings (root or the
- * service's folder), the preview's own database or mail catcher, left empty on purpose (it
+ * service's folder), the preview's own database, another compose service it started (a
+ * queue, storage, search: `service` names it) or its mail catcher, left empty on purpose (it
  * would connect to a real service), another service's preview address, the port the
  * preview chose, or the owner's value (for all services or this one).
  */
-export type PreviewEnvSource = 'example' | 'exampleDir' | 'database' | 'mail' | 'blocked' | 'address' | 'port' | 'override' | 'serviceOverride';
+export type PreviewEnvSource = 'example' | 'exampleDir' | 'database' | 'service' | 'mail' | 'blocked' | 'address' | 'port' | 'override' | 'serviceOverride';
 
 export interface PreviewEnvVar {
   name: string;
   value: string;
   source: PreviewEnvSource;
+  /** The compose service the value points at (source `service`, or `blocked` when it didn't start) */
+  service?: string;
   /** What the preview would set without the owner's value, and where that came from */
   automatic?: { value: string; source: PreviewEnvSource };
   /** Known only once the preview starts (a database's address, a port) */
@@ -157,6 +164,8 @@ export interface PreviewEnvReport {
   restartNeeded: boolean;
   /** The database kinds the project's compose file names, which the preview starts for it, e.g. postgres */
   databases: string[];
+  /** The other compose services (queues, storage, search…) the preview starts for it, by compose name */
+  composeServices?: string[];
   /** Whether the project sends mail, which the preview catches */
   mail: boolean;
   /** Docker isn't running or isn't installed, so the test database and mail catcher can't start */

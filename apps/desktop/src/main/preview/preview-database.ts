@@ -12,6 +12,7 @@ import { join } from 'node:path';
 
 import { writeFileReplacingSync } from '../ai/safe-write';
 import type { ServiceImage, StartedService } from '../ai/verification/detect-checks';
+import { COMPOSE_LABEL, removeComposeLeftovers } from '../ai/verification/compose-runner';
 import { type DockerRun, dockerMissingReason, RECIPES } from '../ai/verification/test-services';
 
 export const PREVIEW_LABEL = 'vibe-teamlead-preview';
@@ -161,8 +162,12 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
   return { status: 'started', started, fresh, stop };
 }
 
-/** Containers a crashed preview left behind. Volumes stay: they hold the owner's preview data. */
+/**
+ * Containers a crashed preview left behind. Named volumes stay: they hold the owner's preview
+ * data. The compose services' containers go with their anonymous volumes, and their networks.
+ */
 export async function removePreviewLeftovers(docker: DockerRun): Promise<void> {
+  await removeComposeLeftovers(docker, [PREVIEW_LABEL, COMPOSE_LABEL]);
   const ids = (await docker(['ps', '-aq', '--filter', `label=${PREVIEW_LABEL}`])).stdout.split('\n').map((l) => l.trim()).filter(Boolean);
   for (const id of ids) await docker(['rm', '-f', id]);
 }

@@ -3,13 +3,16 @@
  * starts its services with exactly these (`envOf`), and the Environment panel shows them, so
  * the two never differ. Sources, in the order they apply: the root's and the service folder's
  * `.env.example`, the preview's database (connection settings it has no database for set
- * empty, so the app can't reach a real one), its mail catcher, the owner's values for all
+ * empty, so the app can't reach a real one), the compose file's other services it started
+ * (queues, storage, search: compose-env.ts), its mail catcher, the owner's values for all
  * services, the other services' preview addresses, the owner's values for this service, and
  * the port. Never `.env`. Pure: no file access.
  */
 
 import type { PreviewEnvService, PreviewEnvSource, PreviewEnvVar } from '../../shared/types/preview';
 import type { ProjectSettings } from '../../shared/types/project';
+import { composeEnv, type ComposeWiring } from '../ai/verification/compose-env';
+import { composeServices } from '../ai/verification/compose-services';
 import { composeFilesInOrder, imagesFromComposeFiles, type StartedService, serviceEnv } from '../ai/verification/detect-checks';
 import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
 import { mailEnv, needsMail } from './preview-mail';
@@ -35,6 +38,8 @@ export interface BaseEnvInput {
   dirExample: string | null;
   /** The preview's database services */
   started: StartedService[];
+  /** The compose file's other services, and those of them that started */
+  compose?: ComposeWiring;
   /** The mail catcher's SMTP port, when it runs */
   mailPort?: number;
   /** The owner's values for every service (`previewEnv`) */
@@ -48,14 +53,19 @@ export function baseEnvVars(input: BaseEnvInput): PreviewEnvVar[] {
   const root = exampleValues(input.rootExample);
   const own = input.dir ? exampleValues(input.dirExample) : new Map<string, string>();
   const examples = [input.rootExample, input.dir ? input.dirExample : null].filter((text): text is string => text !== null).join('\n');
-  const env = serviceEnv(examples, input.started);
+  const compose = input.compose ?? { planned: [], started: [] };
+  const env = serviceEnv(examples, input.started, compose);
+  const wired = composeEnv(examples, compose);
   const vars = new Map<string, PreviewEnvVar>();
-  const set = (name: string, value: string, source: PreviewEnvSource) => {
-    const pending = input.pending && (source === 'database' || source === 'mail');
-    vars.set(name, { name, value: pending ? '' : value, source, ...(pending ? { pending: true } : {}) });
+  const set = (name: string, value: string, source: PreviewEnvSource, service?: string) => {
+    const pending = input.pending && (source === 'database' || source === 'mail' || source === 'service');
+    vars.set(name, { name, value: pending ? '' : value, source, ...(service ? { service } : {}), ...(pending ? { pending: true } : {}) });
   };
   for (const [name, value] of Object.entries(env)) {
-    if (own.has(name) && own.get(name) === value) set(name, value, 'exampleDir');
+    const fromCompose = wired.get(name);
+    // A service that didn't start: empty on purpose, so the app can't reach a real one
+    if (fromCompose) set(name, value, fromCompose.started || input.pending ? 'service' : 'blocked', fromCompose.service);
+    else if (own.has(name) && own.get(name) === value) set(name, value, 'exampleDir');
     else if (!own.has(name) && root.has(name) && root.get(name) === value) set(name, value, 'example');
     else set(name, value, 'database');
   }
@@ -127,14 +137,15 @@ const PLACEHOLDER_URLS: Record<StartedService['kind'], string> = {
 
 export interface PlannedEnv {
   databases: string[];
+  composeServices: string[];
   mail: boolean;
   services: PreviewEnvService[];
 }
 
 /**
  * What each service will get at the next start, from the project's files alone: the database
- * kinds compose names, the mail catcher when the examples configure SMTP; their addresses and
- * the ports are pending. Pure.
+ * kinds and the other services compose names, the mail catcher when the examples configure
+ * SMTP; their addresses and the ports are pending. Pure.
  */
 export function plannedEnv(
   settings: Pick<ProjectSettings, 'previewServices' | 'previewEnv' | 'previewServiceEnv'>,
@@ -142,7 +153,9 @@ export function plannedEnv(
   read: (path: string) => string | null,
 ): PlannedEnv {
   const services = settings.previewServices ?? [];
-  const kinds = imagesFromComposeFiles(composeFilesInOrder(files).map((file) => read(file) ?? '')).map((image) => image.kind);
+  const composeContents = composeFilesInOrder(files).map((file) => read(file) ?? '');
+  const kinds = imagesFromComposeFiles(composeContents).map((image) => image.kind);
+  const compose = { planned: composeServices(composeContents), started: [] };
   const started = kinds.map((kind) => ({ kind, url: PLACEHOLDER_URLS[kind] }));
   const allExamples = [...new Set(['', ...services.map((s) => s.dir)])]
     .map((dir) => (dir ? `${dir}/.env.example` : '.env.example'))
@@ -154,12 +167,13 @@ export function plannedEnv(
   const byExamplePort = previewAddressesByExamplePort(services, urls, read);
   return {
     databases: kinds,
+    composeServices: compose.planned.map((service) => service.name),
     mail,
     services: services.map((service) => ({
       service: service.name,
       dir: service.dir,
       vars: serviceEnvVars(
-        baseEnvVars({ dir: service.dir, ...exampleTexts(files, read, service.dir), started, mailPort: mail ? 1 : undefined, overrides: settings.previewEnv, pending: true }),
+        baseEnvVars({ dir: service.dir, ...exampleTexts(files, read, service.dir), started, compose, mailPort: mail ? 1 : undefined, overrides: settings.previewEnv, pending: true }),
         { byExamplePort, urlEnv: service.urlEnv, urls, serviceOverrides: settings.previewServiceEnv?.[service.name], portEnv: service.portEnv ?? 'PORT', pending: true },
       ),
     })),

@@ -48,6 +48,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     needsInstall: () => false,
     install: vi.fn(async () => { order.push('install'); }),
     startDatabase: vi.fn(async () => { order.push('database'); return database(); }),
+    startCompose: vi.fn(async () => ({ status: 'none' as const, started: [], failed: [], stop: async () => {} })),
     runCommand: vi.fn(async (command: string, cwd: string) => { order.push(command.includes('seed') ? 'seed' : command.endsWith('run build') ? `build:${cwd.split(/[\\/]/).pop()}` : 'migrations'); return { code: 0, output: '' }; }),
     startServer: vi.fn(async (o: { name: string }) => { order.push(`server:${o.name}`); port += 1; return { url: `http://localhost:${port}`, port, logPath: '/log', reused: false }; }),
     stopServer: vi.fn(async () => true),
@@ -695,3 +696,62 @@ describe('previewCommandEnv', () => {
   });
 });
 
+
+describe("the compose file's other services", () => {
+  const COMPOSE_FILES: Record<string, string> = {
+    ...FILES,
+    'docker-compose.yml': 'services:\n  db:\n    image: postgres:18-alpine\n  rabbitmq:\n    image: rabbitmq:3\n  search:\n    image: getmeili/meilisearch\n',
+    'apps/api/.env.example': 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nAMQP_URL=amqp://rabbitmq:5672\nMEILI_HOST=http://search:7700\n',
+  };
+  const composeRun = (stop = vi.fn(async () => {})) => ({
+    status: 'started' as const,
+    started: [{ name: 'rabbitmq', kind: 'rabbitmq' as const, image: 'rabbitmq:3', ports: { 5672: 50001 }, env: {} }],
+    failed: [{ name: 'search', reason: 'search (getmeili/meilisearch) did not get ready in time.' }],
+    stop,
+  });
+
+  it('starts them after the database, points the settings at them, says what did not start, and stops them', async () => {
+    const stop = vi.fn(async () => {});
+    const { d, order } = deps({
+      read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,
+      listFiles: () => Object.keys(COMPOSE_FILES),
+      startCompose: vi.fn(async () => { order.push('compose'); return composeRun(stop); }),
+    });
+    const statuses: PreviewStatus[] = [];
+    const status = await startPreview(project(), (s) => statuses.push(s), d);
+    expect(status.stage).toBe('ready');
+    expect(order.indexOf('compose')).toBe(order.indexOf('database') + 1);
+    const [services, options] = vi.mocked(d.startCompose).mock.calls[0];
+    expect(services.map((s) => s.name)).toEqual(['rabbitmq', 'search']);
+    expect(options).toMatchObject({ labelKey: 'vibe-teamlead-preview', labelValue: 'p1' });
+    expect(status).toMatchObject({ services: 'started', servicesNotices: ['search (getmeili/meilisearch) did not get ready in time.'] });
+    const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
+    expect(api.env.AMQP_URL).toBe('amqp://127.0.0.1:50001');
+    expect(api.env.MEILI_HOST).toBe('');
+    const report = runningPreviewEnv(project())!;
+    expect(report.composeServices).toEqual(['rabbitmq', 'search']);
+    const apiVars = Object.fromEntries(report.services.find((s) => s.service === 'api')!.vars.map((v) => [v.name, v]));
+    expect(apiVars.AMQP_URL).toMatchObject({ source: 'service', service: 'rabbitmq' });
+    expect(apiVars.MEILI_HOST).toMatchObject({ value: '', source: 'blocked', service: 'search' });
+    await stopPreview();
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it('says Docker is missing for them too', async () => {
+    const { d } = deps({
+      read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,
+      listFiles: () => Object.keys(COMPOSE_FILES),
+      startCompose: vi.fn(async () => ({ status: 'unavailable' as const, started: [], failed: [], reason: "Docker isn't running.", stop: async () => {} })),
+    });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status).toMatchObject({ services: 'unavailable', servicesNotices: ["Docker isn't running."] });
+    expect(runningPreviewEnv(project())?.dockerUnavailable).toBe(true);
+  });
+
+  it('starts nothing more for a project whose compose file names only databases', async () => {
+    const { d } = deps({ startCompose: vi.fn(async () => composeRun()) });
+    const status = await startPreview(project(), () => {}, d);
+    expect(d.startCompose).not.toHaveBeenCalled();
+    expect(status.services).toBeUndefined();
+  });
+});

@@ -84,10 +84,11 @@ function freePort(): Promise<number> {
 const lines = (text: string) => text.split('\n').map((line) => line.trim()).filter(Boolean);
 const runKey = (labelKey: string, labelValue: string) => `${labelKey}-${labelValue}`.replace(/[^\w.-]/g, '_');
 
-/** Containers and networks of compose runs left behind, by a label (all runs of a kind, or one) */
-export async function removeComposeLeftovers(docker: DockerRun, label: string): Promise<void> {
-  for (const id of lines((await docker(['ps', '-aq', '--filter', `label=${label}`])).stdout)) await docker(['rm', '-f', '-v', id]);
-  for (const id of lines((await docker(['network', 'ls', '-q', '--filter', `label=${label}`])).stdout)) await docker(['network', 'rm', id]);
+/** Containers (with their anonymous volumes) and networks of compose runs left behind, by labels they all have */
+export async function removeComposeLeftovers(docker: DockerRun, labels: string | string[]): Promise<void> {
+  const filters = [labels].flat().flatMap((label) => ['--filter', `label=${label}`]);
+  for (const id of lines((await docker(['ps', '-aq', ...filters])).stdout)) await docker(['rm', '-f', '-v', id]);
+  for (const id of lines((await docker(['network', 'ls', '-q', ...filters])).stdout)) await docker(['network', 'rm', id]);
 }
 
 /** Why the services can't start without Docker, in words a user can act on */
