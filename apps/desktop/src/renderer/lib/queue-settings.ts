@@ -1,9 +1,10 @@
 /**
  * A project's queue settings (Settings → Project → Queue): how many tasks may be under way,
  * and whether tasks QA approved merge by themselves. Writing them is the project settings'
- * save; this holds what else a save means. A larger limit starts queued tasks by itself (the
- * board follows the project's limit). Turning auto-merge on offers the tasks that already wait:
- * only arrival in review merges a task by itself, so those would wait forever.
+ * save; this holds what else a save means. A larger limit starts queued tasks by itself, whatever
+ * screen is open (useQueueProcessor follows the project's limit). Turning auto-merge on offers
+ * the tasks that already wait: only arrival in review merges a task by itself, so those would
+ * wait forever.
  */
 import { create } from 'zustand';
 import type { ProjectSettings, Task } from '../../shared/types';

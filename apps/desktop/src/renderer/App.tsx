@@ -76,6 +76,7 @@ import { initDownloadProgressListener } from './stores/download-store';
 import { GlobalDownloadIndicator } from './components/GlobalDownloadIndicator';
 import { useIpcListeners } from './hooks/useIpc';
 import { useAutoMerge } from './hooks/useAutoMerge';
+import { useQueueProcessor } from './hooks/useQueueProcessor';
 import { useGlobalTerminalListeners } from './hooks/useGlobalTerminalListeners';
 import { COLOR_THEMES, UI_SCALE_MIN, UI_SCALE_MAX, UI_SCALE_DEFAULT } from '../shared/constants';
 import { resolveSupportedLanguage } from '../shared/constants/i18n';
@@ -121,6 +122,8 @@ export function App() {
   // Load IPC listeners for real-time updates
   useIpcListeners();
   useAutoMerge();
+  // Queued tasks start whatever screen is open
+  useQueueProcessor();
 
   // Load global terminal output listeners to buffer output across project switches
   // This ensures terminal output is captured even when the terminal component is not rendered

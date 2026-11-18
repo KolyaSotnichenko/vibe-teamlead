@@ -1,5 +1,4 @@
 import { occupiesSlot, parallelTaskLimit, slotHolderLabels } from '../../shared/utils/task-slots';
-import { isReadyToStart, nextQueuedToStart } from '../lib/task-dependencies';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
@@ -31,7 +30,7 @@ import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
 import { BriefImportDialog } from './brief-import';
-import { syncQueuePause, useQueuePauseStore } from '../stores/queue-pause-store';
+import { useQueuePauseStore } from '../stores/queue-pause-store';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -108,9 +107,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // A merge moves a task to done: the placeholders are read again then
   const mergedCount = tasks.filter((task) => task.status === 'done').length;
   const openBriefImport = useCallback(() => setBriefImportOpen(true), []);
-
-  // Queue processing lock to prevent race conditions
-  const isProcessingQueueRef = useRef(false);
 
   // Selection state for bulk actions (Human Review column)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -394,7 +390,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     // QUEUE SYSTEM: Enforce parallel task limit
     // Called from both the dropdown menu and the drag-and-drop handler.
     // Excludes the task itself from the count to handle re-entry (e.g., redundant
-    // status change or race with auto-promotion). processQueue auto-promotion
+    // status change or race with auto-promotion). The app-level queue processor
     // calls persistTaskStatus directly, never this function.
     // ============================================
     if (newStatus === 'in_progress' && isQueueAtCapacity(taskId)) {
@@ -426,8 +422,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       }
     }
     // Note: queue auto-promotion when a task leaves in_progress is handled by the
-    // useEffect task status change listener (registerTaskStatusChangeListener), so
-    // no explicit processQueue() call is needed here.
+    // app-level queue processor (useQueueProcessor), so
+    // no explicit call is needed here.
   };
 
   /**
@@ -476,8 +472,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       }
     }
 
-    // Auto-promote queued tasks to fill available capacity
-    await processQueue();
+    // The app-level queue processor starts what fits in the free slots
 
     toast({
       title: t('queue.queueAllSuccess', { count: movedCount }),
@@ -485,118 +480,11 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     });
   };
 
-  /**
-   * Automatically move tasks from Queue to In Progress to fill available capacity
-   * Promotes multiple tasks if needed (e.g., after bulk queue)
-   */
-  const processQueue = useCallback(async () => {
-    // Paused (the Telegram bot's /stop_all): no queued task starts until it is resumed
-    if (useQueuePauseStore.getState().paused) {
-      debugLog('[Queue] The queue is paused, not starting queued tasks');
-      return;
-    }
-    // Prevent concurrent executions to avoid race conditions
-    if (isProcessingQueueRef.current) {
-      debugLog('[Queue] Already processing queue, skipping duplicate call');
-      return;
-    }
-
-    isProcessingQueueRef.current = true;
-
-    try {
-      // Track tasks we've already attempted to promote (to avoid infinite retries)
-      const attemptedTaskIds = new Set<string>();
-      let consecutiveFailures = 0;
-      const MAX_CONSECUTIVE_FAILURES = 10; // Safety limit to prevent infinite loop
-
-      // Loop until capacity is full or queue is empty
-      while (true) {
-        // Get CURRENT state from store to ensure accuracy
-        const currentTasks = useTaskStore.getState().tasks;
-        const inProgressCount = currentTasks.filter(occupiesSlot).length;
-        // The oldest queued task that may start (dependencies done), if a slot is free
-        const nextTask = nextQueuedToStart(currentTasks, maxParallelTasks, attemptedTaskIds);
-
-        // Stop if no capacity, no queued tasks, or too many consecutive failures
-        if (!nextTask) {
-          break;
-        }
-
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          console.warn(`[Queue] Stopping queue processing after ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
-          break;
-        }
-
-        debugLog(`[Queue] Auto-promoting task ${nextTask.id} from Queue to In Progress (${inProgressCount + 1}/${maxParallelTasks})`);
-        const result = await persistTaskStatus(nextTask.id, 'in_progress', { fromQueue: true });
-
-        if (result.success) {
-          // Reset consecutive failures on success
-          consecutiveFailures = 0;
-        } else if (result.staleCiTask) {
-          // A task of the CI check whose reason is gone: main put it back in Planning
-          attemptedTaskIds.add(nextTask.id);
-          toast({ title: t('queue.staleCiTask', { title: nextTask.title }) });
-        } else {
-          // If promotion failed, log error, mark as attempted, and skip to next task
-          console.error(`[Queue] Failed to promote task ${nextTask.id} to In Progress:`, result.error);
-          attemptedTaskIds.add(nextTask.id);
-          consecutiveFailures++;
-        }
-      }
-
-      // Log if we had failed tasks
-      if (attemptedTaskIds.size > 0) {
-        console.warn(`[Queue] Skipped ${attemptedTaskIds.size} task(s) that failed to promote`);
-      }
-    } finally {
-      isProcessingQueueRef.current = false;
-    }
-  }, [maxParallelTasks, t, toast]);
-
+  // Queued tasks are started at the app's level (useQueueProcessor), whatever screen is open
   // The queue pause lives in main; resuming fills the free slots
   const queuePaused = useQueuePauseStore((state) => state.paused);
   const resumeQueue = useQueuePauseStore((state) => state.resume);
-  useEffect(() => syncQueuePause(), []);
-  useEffect(() => {
-    if (!queuePaused) void processQueue();
-  }, [queuePaused, processQueue]);
-
-  // Register task status change listener for queue auto-promotion
-  // This ensures processQueue() is called whenever a task leaves in_progress
-  useEffect(() => {
-    const unregister = useTaskStore.getState().registerTaskStatusChangeListener(
-      (taskId, oldStatus, newStatus) => {
-        // When a task leaves in_progress (e.g., goes to human_review), process the queue
-        if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
-          debugLog(`[Queue] Task ${taskId} left in_progress, processing queue to fill slot`);
-          processQueue();
-        } else if (newStatus === 'done' || newStatus === 'queue') {
-          // A finished task may unblock queued tasks that depend on it; a task
-          // that joins the queue starts at once if there is a free slot.
-          processQueue();
-        }
-      }
-    );
-
-    // Cleanup: unregister listener when component unmounts
-    return unregister;
-  }, [processQueue]);
-
-  // Tasks can arrive in the queue without a status change in this window: created
-  // straight into it (spec document import), or queued before the board opened.
-  // Whenever the set of startable queued tasks changes, fill the free slots.
-  const readyQueuedKey = useTaskStore((state) =>
-    state.tasks
-      .filter((t) => t.status === 'queue' && !t.metadata?.archivedAt && isReadyToStart(t, state.tasks))
-      .map((t) => t.id)
-      .join(',')
-  );
-  // A slot also comes free without a status change: a task deleted or archived
   const slotsInUse = useTaskStore((state) => state.tasks.filter(occupiesSlot).length);
-  useEffect(() => {
-    if (readyQueuedKey) void processQueue();
-  }, [readyQueuedKey, slotsInUse, processQueue]);
 
   const holderNames = useTaskStore((state) => slotHolderLabels(state.tasks, (number) => t('queue.heldForPreview', { number })).join(', '));
 
@@ -863,7 +751,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     if (!newStatus || newStatus === oldStatus) return;
 
     // Persist status change via handleStatusChange which enforces queue capacity,
-    // handles worktree cleanup dialogs, and calls processQueue() when a task
+    // handles worktree cleanup dialogs, and the app-level queue processor fills the slot when a task
     // leaves in_progress.
     await handleStatusChange(activeTaskId, newStatus, task);
   };
