@@ -4,6 +4,8 @@
  * stacks with no standard command, take commands from the project's settings. Pure.
  */
 
+import { composeEnv, type ComposeWiring } from './compose-env';
+
 export interface Check {
   name: string;
   command: string;
@@ -183,15 +185,23 @@ function splitConnection(url: string): [string, string][] {
 
 /**
  * The variables the checks get: the project's example file, with database addresses
- * pointing at what was started. Anything else that says where a database or a broker
- * is stays out: it would point at nothing, or at something real. Pure.
+ * pointing at what was started, and the settings that point at another compose service
+ * (a queue, storage, search) pointing at its throwaway container (compose-env.ts). Anything
+ * else that says where a database or a broker is stays out: it would point at nothing, or
+ * at something real. Pure.
  */
-export function serviceEnv(example: string, started: StartedService[]): Record<string, string> {
+export function serviceEnv(example: string, started: StartedService[], compose: ComposeWiring = { planned: [], started: [] }): Record<string, string> {
   const urlOf = (kind: ServiceImage['kind']) => started.find((service) => service.kind === kind)?.url;
+  const wired = composeEnv(example, compose);
   const entries: [string, string][] = [];
   for (const line of example.split('\n')) {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
     if (!match) continue;
+    const fromCompose = wired.get(match[1]);
+    if (fromCompose) {
+      entries.push([match[1], fromCompose.value]);
+      continue;
+    }
     const value = match[2].replace(/\s+#.*$/, '').trim().replace(/^(["'])(.*)\1$/, '$2');
     const scheme = /^(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(value)?.[1]?.toLowerCase();
     if (scheme && scheme !== 'http' && scheme !== 'https') {

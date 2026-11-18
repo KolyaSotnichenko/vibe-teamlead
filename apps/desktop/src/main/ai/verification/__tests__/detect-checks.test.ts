@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { composeServices } from '../compose-services';
 import { composeFilesInOrder, imagesFromComposeFiles, detectChecks, serviceEnv, serviceImages } from '../detect-checks';
 
 const project = (files: Record<string, string>) => detectChecks({ files: Object.keys(files), read: (path) => files[path] ?? null });
@@ -150,6 +151,16 @@ describe('serviceImages', () => {
 
 describe('serviceEnv', () => {
   const started = [{ kind: 'postgres' as const, url: 'postgresql://verify:pw@127.0.0.1:50000/verify' }, { kind: 'redis' as const, url: 'redis://127.0.0.1:50001' }];
+
+  it('points settings at the compose services that started, and empties those at one that did not', () => {
+    const planned = composeServices(['services:\n  rabbitmq:\n    image: rabbitmq:3\n  minio:\n    image: minio/minio\n    ports: ["9000:9000"]\n']);
+    const compose = { planned, started: [{ name: 'rabbitmq', kind: 'rabbitmq' as const, image: 'rabbitmq:3', ports: { 5672: 50002 }, env: {} }] };
+    expect(serviceEnv('AMQP_URL=amqp://rabbitmq:5672\nS3_ENDPOINT=http://localhost:9000\nAPI=http://localhost:3000\n', started, compose)).toMatchObject({
+      AMQP_URL: 'amqp://127.0.0.1:50002',
+      S3_ENDPOINT: '',
+      API: 'http://localhost:3000',
+    });
+  });
 
   it('points the standard names at what it started', () => {
     expect(serviceEnv('', started)).toMatchObject({ DATABASE_URL: started[0].url, POSTGRES_URL: started[0].url, REDIS_URL: started[1].url });
