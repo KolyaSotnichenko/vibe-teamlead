@@ -116,11 +116,18 @@ describe("the designer's start: only the frames the task needs", () => {
   ];
 
   it("takes the frames whose names the spec's screens and routes name, and the app shell", () => {
-    const spec = '## Overview\nThe plan owner names labels in plan settings (`/plans/:id/settings`). Labels show on cards on the plan board.';
+    const spec = '## Overview\nThe plan owner names labels in plan settings (`/plans/:id/settings`), and the `PlanBoard` shows them on its cards.';
     const files = selectBaseFrames(library, spec).map((f) => `${f.file}@${f.width}`);
     expect(files).toEqual(expect.arrayContaining(['screens/app-shell.html@1280', 'screens/app-shell.html@390', 'screens/plan-board.html@1280', 'screens/plan-board.html@390', 'wireframes/plan-board.html@1280', 'screens/plan-settings.html@1280']));
     expect(files).not.toContain('screens/audit-log.html@1280');
     expect(files).not.toContain('screens/other-1.html@1280');
+  });
+
+  it('without an exact signal, the words of the spec fill the list', () => {
+    const spec = '## Overview\nLabels show on cards on the plan board.';
+    const files = selectBaseFrames(library, spec).map((f) => f.file);
+    expect(files).toContain('screens/plan-board.html');
+    expect(files).toContain('screens/app-shell.html');
   });
 
   it('never more than the cap', () => {
@@ -149,3 +156,84 @@ describe("the designer's start: only the frames the task needs", () => {
     expect(existsSync(path.join(spec, 'design', 'base', 'screens', 'audit-log.html'))).toBe(true);
   });
 });
+
+/** A planner-mhp-like library: the admin section, directory sync and the audit log with their states, plans */
+function plannerLibrary(): LibraryFrame[] {
+  const names = [
+    'home', 'admin', 'access-refused', 'not-found',
+    'directory-sync', 'directory-sync-warning', 'directory-sync-failed', 'directory-sync-running', 'directory-sync-empty',
+    'audit-log', 'audit-log-empty', 'audit-log-error', 'audit-log-filtered', 'audit-log-entry',
+    'plans', 'plans-empty', 'plan-board', 'plan-board-member', 'plan-create', 'plan-history', 'plan-settings',
+    'task-card', 'task-card-history', 'my-tasks', 'sign-in-error', 'signed-out',
+  ];
+  return names.flatMap((name) => [frame(`screens/${name}.html`, `${name} · desktop`), frame(`wireframes/${name}.html`, `${name} · desktop`)]);
+}
+
+/** Spec 005 of planner-mhp (RBAC) in short: an admin Roles page, and much about directory sync in its API */
+const RBAC_SPEC = [
+  '# Specification: Introduce role-based access control',
+  '## Overview',
+  'System roles are assigned to users or to directory groups synced by the directory sync (T4). The web app gets an Administration › Roles page. A warning shows when a sync removed a group.',
+  '## Files to Modify',
+  '| File | Service | What |',
+  '|---|---|---|',
+  '| `apps/api/src/directory-sync/routes.ts` | api | `config.authz` on `GET /api/admin/directory-sync/status`, `GET /api/admin/directory-sync/runs` |',
+  '| `apps/web/src/App.tsx` | web | Route `/admin/roles` inside `<RequireRole>` |',
+  '## Files to Create',
+  '- `apps/web/src/pages/admin/RolesPage.tsx`, `RolesPage.test.tsx`',
+  '## Files to Reference',
+  '| `apps/web/src/pages/admin/DirectorySyncPage.tsx` | the directory sync page: api prop, mhp components |',
+  '## Requirements',
+  'Directory sync keeps groups in step; the sync warning names removed groups.',
+].join('\n');
+
+/** Spec 006 (audit log viewer) in short */
+const AUDIT_SPEC = [
+  '# Specification: Record an immutable audit log with a viewer',
+  '## Overview',
+  'Record sign-ins, role changes and directory sync runs. An Administration › Audit log viewer at `/admin/audit`.',
+  '## Files to Create',
+  '| `apps/web/src/pages/admin/AuditLogPage.tsx` | web | the viewer |',
+  '## Files to Reference',
+  '| `apps/web/src/pages/admin/DirectorySyncPage.tsx` | api prop injection, Alert/Button |',
+  '## Requirements',
+  'Directory sync runs are recorded with a warning when the sync failed.',
+].join('\n');
+
+describe("the designer's start: exact signals before words (planner-mhp)", () => {
+  const library = plannerLibrary();
+
+  it('RBAC (005): the admin page its route and files name, the shell; not the directory sync its words match', () => {
+    const files = selectBaseFrames(library, RBAC_SPEC).map((f) => f.file);
+    expect(files).toEqual(expect.arrayContaining(['screens/admin.html', 'wireframes/admin.html', 'screens/home.html']));
+    expect(files.some((f) => f.includes('directory-sync'))).toBe(false);
+    expect(files.length).toBeLessThanOrEqual(BASE_FRAMES_MAX);
+  });
+
+  it('audit log (006): the audit-log screen and its states from the route and the page name; not the directory sync', () => {
+    const files = selectBaseFrames(library, AUDIT_SPEC).map((f) => f.file);
+    expect(files).toEqual(expect.arrayContaining(['screens/audit-log.html', 'wireframes/audit-log.html']));
+    expect(files.filter((f) => f.startsWith('screens/audit-log')).length).toBe(3);
+    expect(files.some((f) => f.includes('directory-sync'))).toBe(false);
+  });
+
+  it('a route like /plans/:id/board and a component name pick the screen itself, before the shell', () => {
+    const spec = '## Overview\nShow plans as a Kanban board at `/plans/:id/board`.\n## Files to Modify\n| `apps/web/src/pages/plans/board/Board.tsx` | web | columns |\n| `apps/web/src/pages/plans/board/BoardCard.tsx` | web | the `TaskCard` summary |';
+    const chosen = selectBaseFrames(library, spec).map((f) => f.file);
+    expect(chosen.indexOf('screens/plan-board.html')).toBeGreaterThanOrEqual(0);
+    expect(chosen.indexOf('screens/plan-board.html')).toBeLessThan(chosen.indexOf('screens/home.html'));
+    expect(chosen).toContain('screens/task-card.html');
+  });
+
+  it('an API route or a file to reference is no signal', () => {
+    const spec = '## Overview\nA health check.\n## Files to Modify\n| `apps/api/src/plans/routes.ts` | api | `GET /api/plans/:id` |\n## Files to Reference\n| `apps/web/src/pages/plans/PlansPage.tsx` | pattern |';
+    const files = selectBaseFrames(library, spec).map((f) => f.file);
+    expect(files.some((f) => /\/plans?[-.]/.test(f))).toBe(false);
+  });
+
+  it('never more than the cap, however many screens the spec names exactly', () => {
+    const spec = library.map((f) => '`/' + path.basename(f.file, '.html') + '`').join(' ');
+    expect(selectBaseFrames(library, spec, 7).length).toBeLessThanOrEqual(7);
+  });
+});
+

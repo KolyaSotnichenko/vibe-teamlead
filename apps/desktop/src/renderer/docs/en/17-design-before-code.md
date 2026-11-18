@@ -37,7 +37,7 @@ The designer and the UI coders of a project that animates with GSAP get GreenSoc
 
 ## The project's design library
 
-When a task's design is done (approved, or gone on by itself), its wireframes and screens go into the project's library; a frame with the same name replaces the older version. The next task's designer starts from the library: a screen it changes is redrawn from its current version, a new one is drawn in the same style. It is given the frames its task needs (the screens the spec names and the app shell, at most 20) and a list of the rest, which it opens only when needed. **Context → Design system → Screens** shows the whole library on one canvas, each frame with the task it came from.
+When a task's design is done (approved, or gone on by itself), its wireframes and screens go into the project's library; a frame with the same name replaces the older version. The next task's designer starts from the library: a screen it changes is redrawn from its current version, a new one is drawn in the same style. It is given the frames its task needs, at most 20: first the screens the spec names exactly (its routes such as `/plans/:id/board` and its page and component names), then the pages of the files the task will change, then the app shell. Only when nothing is named exactly are screens picked by the spec's words. The rest are in a list it opens only when needed. **Context → Design system → Screens** shows the whole library on one canvas, each frame with the task it came from.
 
 ## Settings
 

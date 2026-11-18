@@ -221,6 +221,17 @@ function taskFocusText(session: SerializableSessionConfig): string {
   return typeof first === 'string' ? first.slice(0, 1500) : '';
 }
 
+/** The task's requirements (requirements.json) as text, for picking the designer's start frames; '' without them */
+function requirementsText(specDir: string): string {
+  try {
+    const parsed = JSON.parse(readFileSync(join(specDir, 'requirements.json'), 'utf-8')) as { task_description?: unknown; user_requirements?: unknown };
+    const lines = [parsed.task_description, ...(Array.isArray(parsed.user_requirements) ? parsed.user_requirements : [])];
+    return `## Requirements\n${lines.filter((l): l is string => typeof l === 'string').join('\n')}`;
+  } catch {
+    return '';
+  }
+}
+
 /** Whether the task's spec changes UI (design-step.ts specTouchesUi) */
 function specChangesUi(session: SerializableSessionConfig): boolean {
   const caps = projectCapabilities(session);
@@ -313,7 +324,7 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
         } catch {
           // no spec: the shell frames only
         }
-        const base = root ? copyLibraryToBase(root, session.specDir, specMd) : { copied: 0, listed: 0 };
+        const base = root ? copyLibraryToBase(root, session.specDir, `${specMd}\n${requirementsText(session.specDir)}`) : { copied: 0, listed: 0 };
         if (base.copied) log(`Design: starting from ${base.listed} frame(s) of the project's design library that this task needs (design/base/canvas.json); all ${base.copied} file(s) are in design/base/, the rest named in index.md`);
       },
       publish: () => {
