@@ -8,12 +8,18 @@
  *
  * Decided on the computer first → the message says so and its buttons expire. Said once per
  * stage. Switched with "A task waits for your review".
+ *
+ * A design that couldn't be made (design_failed): the notifier's message comes with the
+ * designer's error and the Design tab's two buttons, Try the design again and Build without
+ * design, which run the same functions (checked again at the press: the task must still wait for
+ * this decision); the message is edited with the result.
  */
 
 import type { ReviewReason, TaskStatus } from '../../shared/types';
 import type { BotApi, InlineButton } from './bot-api';
 import { b, type Html, html, htmlText, joinHtml } from './format';
 import type { Translate } from './i18n';
+import type { Notification } from './notifier';
 import { MAX_ALBUM } from './review';
 import type { Router } from './router';
 
@@ -26,6 +32,17 @@ export interface DesignActions {
   frames: (taskId: string, projectId?: string) => Promise<Buffer[]>;
   approve: (taskId: string, stage: DesignStage, projectId?: string) => Promise<{ success: boolean; error?: string }>;
   comment: (taskId: string, text: string, projectId?: string) => Promise<{ success: boolean; error?: string }>;
+  /** The designer's error while the task waits for the owner's decision (design_failed); undefined otherwise */
+  failure?: (taskId: string, projectId?: string) => { error: string } | undefined;
+  /** The Design tab's Try the design again */
+  retry?: (taskId: string, projectId?: string) => Promise<{ success: boolean; error?: string }>;
+  /** The Design tab's Build without design */
+  skip?: (taskId: string, projectId?: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+/** "Design couldn't be made" gets the design flow's buttons */
+export function isDesignFailureMessage(notification: { kind: string; taskId?: string; reviewReason?: ReviewReason }): boolean {
+  return notification.kind === 'reviewWaiting' && !!notification.taskId && notification.reviewReason === 'design_failed';
 }
 
 export interface DesignFlowDeps {
@@ -44,7 +61,8 @@ export interface DesignFlowDeps {
 interface Entry {
   taskId: string;
   projectId?: string;
-  stage: DesignStage;
+  /** The stage that waits for approval, or 'failed': the owner decides after the designer stopped */
+  stage: DesignStage | 'failed';
   chatId: number;
   messageId?: number;
   text: Html;
@@ -69,11 +87,44 @@ export function createDesignFlow(deps: DesignFlowDeps) {
     if (entries.get(entry.taskId) === entry) entries.delete(entry.taskId);
   };
 
-  const stillWaits = (entry: Entry) => deps.actions.waiting(entry.taskId, entry.projectId)?.stage === entry.stage;
+  const stillWaits = (entry: Entry) =>
+    entry.stage === 'failed' ? !!deps.actions.failure?.(entry.taskId, entry.projectId) : deps.actions.waiting(entry.taskId, entry.projectId)?.stage === entry.stage;
 
   const refuse = async (entry: Entry) => {
     close(entry);
-    await edit(entry, h('design.noLongerWaiting'));
+    await edit(entry, h(entry.stage === 'failed' ? 'design.decisionGone' : 'design.noLongerWaiting'));
+  };
+
+  const failureButtons = (entry: Entry): InlineButton[][] => [
+    [router.button(t('design.retry'), () => decide(entry, 'retry'), entry.group, 'success'), router.button(t('design.skip'), () => decide(entry, 'skip'), entry.group)],
+  ];
+
+  /** Try the design again / Build without design: the Design tab's functions, in the background */
+  const decide = async (entry: Entry, choice: 'retry' | 'skip') => {
+    router.forgetGroup(entry.group);
+    if (!stillWaits(entry)) return refuse(entry);
+    entry.handledHere = true;
+    await edit(entry, h(choice === 'retry' ? 'design.retrying' : 'design.skipping'));
+    void (async () => {
+      let result: { success: boolean; error?: string };
+      try {
+        const action = choice === 'retry' ? deps.actions.retry : deps.actions.skip;
+        result = action ? await action(entry.taskId, entry.projectId) : { success: false };
+      } catch (error) {
+        result = { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+      try {
+        if (result.success) {
+          close(entry);
+          await edit(entry, h(choice === 'retry' ? 'design.retried' : 'design.skippedHere'));
+        } else {
+          entry.handledHere = false;
+          await edit(entry, h('design.failed', { reason: result.error || t('review.unknownReason') }), failureButtons(entry));
+        }
+      } catch (error) {
+        deps.onError?.(error);
+      }
+    })();
   };
 
   const buttons = (entry: Entry): InlineButton[][] => [
@@ -82,14 +133,15 @@ export function createDesignFlow(deps: DesignFlowDeps) {
 
   const approve = async (entry: Entry) => {
     router.forgetGroup(entry.group);
-    if (!stillWaits(entry)) return refuse(entry);
+    const stage = entry.stage;
+    if (stage === 'failed' || !stillWaits(entry)) return refuse(entry);
     entry.handledHere = true;
     await edit(entry, h('design.approving'));
     // In the background: the approval renders QA's pictures and starts the task again
     void (async () => {
       let result: { success: boolean; error?: string };
       try {
-        result = await deps.actions.approve(entry.taskId, entry.stage, entry.projectId);
+        result = await deps.actions.approve(entry.taskId, stage, entry.projectId);
       } catch (error) {
         result = { success: false, error: error instanceof Error ? error.message : String(error) };
       }
@@ -152,9 +204,25 @@ export function createDesignFlow(deps: DesignFlowDeps) {
   };
 
   return {
+    /** The "design couldn't be made" notification, with the designer's error and the two buttons */
+    async presentFailure(notification: Notification, chatId: number): Promise<void> {
+      const api = deps.api();
+      const taskId = notification.taskId;
+      if (!api || !taskId) return;
+      const failure = deps.actions.failure?.(taskId, notification.projectId);
+      const text = failure?.error ? html`${notification.text}\n${h('design.failureError', { error: failure.error })}` : notification.text;
+      const previous = entries.get(taskId);
+      if (previous) close(previous);
+      const entry: Entry = { taskId, projectId: notification.projectId, stage: 'failed', chatId, text, group: `design-failed:${taskId}:${++counter}`, handledHere: false };
+      entries.set(taskId, entry);
+      const sent = await api.sendMessage(chatId, text, { buttons: failureButtons(entry) });
+      entry.messageId = sent.message_id;
+    },
     /** Every status change of a task: a design that starts waiting is sent, one decided elsewhere closed */
     statusChanged(taskId: string, status: TaskStatus, reason?: ReviewReason, projectId?: string): void {
       const entry = entries.get(taskId);
+      // The failure message is sent by the notifier (presentFailure); it stays while the task waits
+      if (status === 'human_review' && reason === 'design_failed' && entry?.stage === 'failed') return;
       if (status === 'human_review' && reason === 'design_review') {
         const waiting = deps.actions.waiting(taskId, projectId);
         const chatId = deps.chatId();

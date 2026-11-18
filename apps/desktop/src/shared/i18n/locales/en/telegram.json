@@ -111,7 +111,7 @@
       "architectureReady": "🏗 <b>Architecture ready</b>",
       "architectureReadyDetail": "The diagrams and decisions are in the task's Architecture tab. Look them over in the app and mark the task done.",
       "designFailed": "🎨 <b>The design couldn't be made</b>",
-      "designFailedDetail": "The designer stopped. Open the task's Design tab in the app: try the design again, or build without it."
+      "designFailedDetail": "The designer stopped. Try the design again, or build without it: here, or on the task's Design tab in the app."
     },
     "status": {
       "title": "📊 <b>Status</b>",
@@ -206,7 +206,15 @@
       "commented": "💬 Comment sent to the designer: <i>{{comment}}</i>",
       "failed": "❌ That did not work: {{reason}}",
       "noLongerWaiting": "This design no longer waits for your approval.",
-      "decidedOnComputer": "💻 Decided on the computer."
+      "decidedOnComputer": "💻 Decided on the computer.",
+      "retry": "Try the design again",
+      "skip": "Build without design",
+      "retrying": "⏳ Starting the designer again…",
+      "skipping": "⏳ Going on without a design…",
+      "retried": "🔁 The designer starts again from where it stopped.",
+      "skippedHere": "⏭ The team builds without a design (your decision).",
+      "decisionGone": "This task no longer waits for this decision.",
+      "failureError": "The designer's error: <i>{{error}}</i>"
     },
     "task": {
       "usage": "Send /task and what to do, for example: <code>/task Add a dark mode to the settings page</code>",

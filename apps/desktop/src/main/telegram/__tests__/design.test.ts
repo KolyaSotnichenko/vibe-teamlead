@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createDesignFlow, type DesignActions } from '../design';
+import { createDesignFlow, type DesignActions, isDesignFailureMessage } from '../design';
+import { html } from '../format';
 import { botText } from '../i18n';
 import { createPairing } from '../pairing';
 import { createRouter } from '../router';
@@ -145,3 +146,80 @@ describe('design approval in the chat', () => {
     expect(message.text).toContain(t('design.waiting', { task: 'Checkout page' }));
   });
 });
+
+// "Design couldn't be made" with the Design tab's two buttons
+describe('a design that could not be made, in the chat', () => {
+  function failing(over: Partial<DesignActions> = {}) {
+    const fails = { now: true };
+    const base = setup({
+      failure: vi.fn(() => (fails.now ? { error: 'Rate limit reached <429>' } : undefined)),
+      retry: vi.fn(async () => ({ success: true })),
+      skip: vi.fn(async () => ({ success: true })),
+      ...over,
+    });
+    const notification = { kind: 'reviewWaiting' as const, text: html`🎨 <b>The design couldn't be made</b>`, taskId: 't1', projectId: 'p1', title: 'Checkout page', reviewReason: 'design_failed' as const };
+    const present = async () => {
+      await base.flow.presentFailure(notification, OWNER.chatId);
+      return base.bot.last();
+    };
+    return { ...base, fails, notification, present };
+  }
+
+  it('takes the notification over: the error and Try the design again / Build without design', async () => {
+    const { present, notification } = failing();
+    expect(isDesignFailureMessage(notification)).toBe(true);
+    expect(isDesignFailureMessage({ ...notification, reviewReason: 'completed' })).toBe(false);
+    const message = await present();
+    expect(message.text).toContain("The design couldn't be made");
+    expect(message.text).toContain('Rate limit reached &lt;429&gt;');
+    expect(message.options?.buttons?.flat().map((b) => [b.text, b.style])).toEqual([
+      [t('design.retry'), 'success'],
+      [t('design.skip'), undefined],
+    ]);
+  });
+
+  it("Try the design again runs the Design tab's retry and says so", async () => {
+    const { present, press, actions, bot } = failing();
+    const message = await present();
+    await press(message.messageId, t('design.retry'));
+    expect(actions.retry).toHaveBeenCalledWith('t1', 'p1');
+    expect(bot.edits.at(-1)?.text).toContain(t('design.retried'));
+    expect(bot.edits.at(-1)?.buttons).toBeUndefined();
+  });
+
+  it("Build without design runs the Design tab's skip and says so", async () => {
+    const { present, press, actions, bot } = failing();
+    const message = await present();
+    await press(message.messageId, t('design.skip'));
+    expect(actions.skip).toHaveBeenCalledWith('t1', 'p1');
+    expect(bot.edits.at(-1)?.text).toContain(t('design.skippedHere'));
+  });
+
+  it('a press after the task stopped waiting for this decision is refused', async () => {
+    const { present, press, actions, bot, fails } = failing();
+    const message = await present();
+    fails.now = false;
+    await press(message.messageId, t('design.retry'));
+    expect(actions.retry).not.toHaveBeenCalled();
+    expect(bot.edits.at(-1)?.text).toContain(t('design.decisionGone'));
+  });
+
+  it('an action that fails says why and keeps the buttons', async () => {
+    const { present, press, bot } = failing({ retry: vi.fn(async () => ({ success: false, error: 'Task not found' })) });
+    const message = await present();
+    await press(message.messageId, t('design.retry'));
+    expect(bot.edits.at(-1)?.text).toContain(t('design.failed', { reason: 'Task not found' }));
+    expect(bot.edits.at(-1)?.buttons?.flat().map((b) => b.text)).toEqual([t('design.retry'), t('design.skip')]);
+  });
+
+  it('decided on the computer: the message says so; the same status again changes nothing', async () => {
+    const { present, flow, bot } = failing();
+    const message = await present();
+    flow.statusChanged('t1', 'human_review', 'design_failed', 'p1');
+    expect(bot.edits).toHaveLength(0);
+    flow.statusChanged('t1', 'in_progress');
+    expect(bot.edits.at(-1)).toMatchObject({ messageId: message.messageId });
+    expect(bot.edits.at(-1)?.text).toContain(t('design.decidedOnComputer'));
+  });
+});
+

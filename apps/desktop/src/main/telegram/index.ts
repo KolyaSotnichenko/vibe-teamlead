@@ -24,7 +24,7 @@ import { analyzeBrief } from '../ai/runners/brief-import';
 import { getToolPath } from '../cli-tool-manager';
 import { lastBranchPush } from '../deploy/branch-push';
 import { createBriefTasks } from '../ipc-handlers/brief-handlers';
-import { approveTaskDesign, captureWaitingFrames, commentTaskDesign, taskDesign } from '../ipc-handlers/task-design-handlers';
+import { approveTaskDesign, captureWaitingFrames, commentTaskDesign, retryTaskDesign, skipTaskDesign, taskDesign } from '../ipc-handlers/task-design-handlers';
 import { createTaskInProject } from '../ipc-handlers/task/crud-handlers';
 import { reviewTask, startTask } from '../ipc-handlers/task/execution-handlers';
 import { resolveSpecDir } from '../ipc-handlers/task/workspace-handlers';
@@ -201,6 +201,13 @@ export function initTelegram(agentManager: AgentManager, getMainWindow: () => Br
         (await captureWaitingFrames(taskId, MAX_PHOTOS)).map(({ image }) => toTelegramPhoto(image)).filter((p): p is Buffer => !!p),
       approve: (taskId, stage) => approveTaskDesign(agentManager, getMainWindow, taskId, stage),
       comment: (taskId, text) => commentTaskDesign(agentManager, getMainWindow, taskId, [{ frame: '', text }]),
+      // The Design tab's two buttons after the designer stopped (they check the task still waits too)
+      failure: (taskId) => {
+        const failure = taskDesign(taskId)?.failure;
+        return failure ? { error: failure.error } : undefined;
+      },
+      retry: (taskId) => retryTaskDesign(agentManager, getMainWindow, taskId),
+      skip: (taskId) => skipTaskDesign(agentManager, getMainWindow, taskId),
     },
     taskActions: {
       create: async (projectId, text) => {

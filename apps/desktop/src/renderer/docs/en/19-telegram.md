@@ -39,6 +39,8 @@ If you handle the task on the computer first, the message says "Handled on the c
 
 When the designer's wireframes or screens wait for you (Context → Design system → Setup → Design before code → **I approve each step**), they come as an album, then a message with **Approve** and **Comment**. **Approve** approves the stage that waits, as on the Design tab. **Comment** asks for your comment and sends it to the designer as a comment on the whole set. Decided on the computer first: the message says so and its buttons stop working.
 
+When the designer stopped and the design couldn't be made, the message shows the designer's error with **Try the design again** and **Build without design**, the same as the Design tab's buttons. At the press the app checks the task still waits for this decision; the message then says what happened.
+
 ## New tasks from the chat
 
 - `/task <text>` creates a task in the current project (`/project`; the only open project when there is one) in Planning, the same way as the New task dialog, with a **Start** button. Start keeps the board's rules: when the project's parallel-task limit is reached, or the queue is paused by `/stop_all`, the task goes to the queue and starts when a slot frees. A short first line becomes the title; otherwise the app writes one, as for an empty title.

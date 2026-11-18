@@ -11,7 +11,7 @@ import type { TelegramDigestSettings, TelegramErrorReason, TelegramNotificationS
 import { type BotApi, TelegramApiError } from './bot-api';
 import { registerCommands, type CommandDeps } from './commands';
 import { createDigest } from './digest';
-import { createDesignFlow, type DesignActions } from './design';
+import { createDesignFlow, type DesignActions, isDesignFailureMessage } from './design';
 import { translatorFor } from './i18n';
 import { createNotifier, type NotifierSources } from './notifier';
 import { createPairing, type Pairing } from './pairing';
@@ -143,13 +143,21 @@ export function createTelegramService(deps: TelegramServiceDeps) {
     notifications: () => deps.settings.get().notifications,
     task: deps.task,
     projectName: deps.projectName,
-    deliver: reviews
-      ? async (notification, chatId) => {
-          if (!isReviewMessage(notification)) return false;
-          await reviews.present(notification, chatId);
-          return true;
-        }
-      : undefined,
+    deliver:
+      reviews || designs
+        ? async (notification, chatId) => {
+            if (reviews && isReviewMessage(notification)) {
+              await reviews.present(notification, chatId);
+              return true;
+            }
+            // "Design couldn't be made" with Try the design again / Build without design
+            if (designs && deps.design?.retry && deps.design.skip && isDesignFailureMessage(notification)) {
+              await designs.presentFailure(notification, chatId);
+              return true;
+            }
+            return false;
+          }
+        : undefined,
     onError: warn,
   });
 

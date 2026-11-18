@@ -152,6 +152,9 @@ describe('telegram service', () => {
         frames: async () => [Buffer.from('a'), Buffer.from('b')],
         approve: async () => ({ success: true }),
         comment: async () => ({ success: true }),
+        failure: () => ({ error: 'Rate limit reached' }),
+        retry: async () => ({ success: true }),
+        skip: async () => ({ success: true }),
       },
       taskActions: { create, start: async () => 'started' as const, analyseBrief: vi.fn(), createBriefTasks: vi.fn() },
       commands: {
@@ -175,6 +178,11 @@ describe('telegram service', () => {
     for (const l of listeners) l('t2', 'human_review' as never, 'design_review' as never);
     await vi.waitFor(() => expect(bot.fake.sent.some((m) => m.text.includes('The design waits for your approval'))).toBe(true));
     expect(albums).toEqual([2]);
+    for (const l of listeners) l('t3', 'human_review' as never, 'design_failed' as never);
+    await vi.waitFor(() => expect(bot.fake.sent.some((m) => m.text.includes("The design couldn't be made"))).toBe(true));
+    const failed = bot.fake.sent.filter((m) => m.text.includes("The design couldn't be made"));
+    expect(failed).toHaveLength(1);
+    expect(failed[0].options?.buttons?.flat().map((b) => b.text)).toEqual(['Try the design again', 'Build without design']);
     bot.push(textUpdate('/task Dark mode', { from: OWNER.userId }));
     await vi.waitFor(() => expect(create).toHaveBeenCalledWith('p1', 'Dark mode'));
     await service.stop();

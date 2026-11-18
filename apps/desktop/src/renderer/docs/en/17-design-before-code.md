@@ -23,7 +23,7 @@ A UI task is never built without a design unless you say so.
 
 - **A rate limit or a busy API:** the app waits (until the limit resets, when the error says when) and tries the designer again, up to three times and at most an hour of waiting in all. A limit that resets later than that stops the task for you at once. While it waits, the task card and the Design tab say so, for example *Designer is waiting for the rate limit — retrying at 14:05 (attempt 2 of 3)*; **Stop waiting** stops the task for you now.
 - **You stop the task:** the design stays where it was; the next start goes on from the same step.
-- **Still failing, or another error:** the task stops in Human Review with *Design couldn't be made*. The Design tab shows the designer's error and two buttons: **Try the design again** (starts the design again from where it stopped) and **Build without design** (the coder builds from the spec and the design system; recorded as your decision). Telegram sends a message too.
+- **Still failing, or another error:** the task stops in Human Review with *Design couldn't be made*. The Design tab shows the designer's error and two buttons: **Try the design again** (starts the design again from where it stopped) and **Build without design** (the coder builds from the spec and the design system; recorded as your decision). Telegram sends a message with the designer's error and the same two buttons; a press is refused if the task no longer waits for this decision, and the message then says what happened.
 
 A design skipped before this (the designer stopped and the task went on) says so on the Design tab, with the reason.
 
