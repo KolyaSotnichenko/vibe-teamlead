@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyRound } from 'lucide-react';
 import { Button } from '../ui/button';
-import { ClaudeCredentialPanel } from '../settings/ClaudeCredentialPanel';
+import { ClaudeCredentialChooser, isModeConfigured } from '../settings/ClaudeCredentialChooser';
 import { useClaudeCredential } from '../../hooks/useClaudeCredential';
+import { useSettingsStore } from '../../stores/settings-store';
 
 interface ClaudeStepProps {
   onNext: () => void;
@@ -11,12 +13,14 @@ interface ClaudeStepProps {
 }
 
 /**
- * Onboarding step: connect Claude. Every agent runs on one Anthropic API key,
- * saved the same way as in Settings → Claude.
+ * Onboarding step: connect Claude — an API key (the default) or, in personal mode,
+ * a Claude subscription token, chosen and saved exactly as in Settings → Claude.
  */
 export function ClaudeStep({ onNext, onBack, onSkip }: ClaudeStepProps) {
   const { t } = useTranslation('onboarding');
   const { status, setStatus } = useClaudeCredential();
+  const saved = useSettingsStore((state) => state.settings.useClaudeSubscription === true);
+  const [subscription, setSubscription] = useState(saved);
 
   return (
     <div className="flex h-full flex-col items-center px-8 py-6">
@@ -32,13 +36,12 @@ export function ClaudeStep({ onNext, onBack, onSkip }: ClaudeStepProps) {
         </div>
 
         <div className="border border-border bg-card p-5">
-          <ClaudeCredentialPanel status={status} onStatusChange={setStatus} />
+          <ClaudeCredentialChooser subscription={subscription} onModeChange={setSubscription} status={status} onStatusChange={setStatus} />
         </div>
 
-        <div className="mt-6 space-y-2 border-l-2 border-foreground bg-muted px-4 py-3 text-sm text-muted-foreground">
-          <p>{t('claude.whereToGetKey')}</p>
-          <p>{t('claude.personalMode')}</p>
-        </div>
+        {!subscription && (
+          <p className="mt-6 border-l-2 border-foreground bg-muted px-4 py-3 text-sm text-muted-foreground">{t('claude.whereToGetKey')}</p>
+        )}
 
         <div className="sticky bottom-0 z-10 mt-10 flex items-center justify-between border-t border-border bg-card py-4">
           <Button variant="ghost" onClick={onBack} className="text-muted-foreground hover:text-foreground">
@@ -48,7 +51,7 @@ export function ClaudeStep({ onNext, onBack, onSkip }: ClaudeStepProps) {
             <Button variant="ghost" onClick={onSkip} className="text-muted-foreground hover:text-foreground">
               {t('claude.buttons.skip')}
             </Button>
-            <Button onClick={onNext} disabled={!status.configured}>
+            <Button onClick={onNext} disabled={!isModeConfigured(status, subscription)}>
               {t('claude.buttons.continue')}
             </Button>
           </div>

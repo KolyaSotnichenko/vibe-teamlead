@@ -32,6 +32,7 @@ const api = {
   getGitHubUser: vi.fn(),
   listGitHubOrgs: vi.fn(),
   openExternal: vi.fn(async () => undefined),
+  saveSettings: vi.fn(async () => ({ success: true })),
 };
 
 const project = { id: 'p1', name: 'app', path: '/tmp/app' } as Project;
@@ -106,5 +107,20 @@ describe('GitHubSetupModal: a repository the app cannot see', () => {
     render(<GitHubSetupModal open onOpenChange={vi.fn()} project={project} onComplete={vi.fn()} onSkip={vi.fn()} />);
     expect(await screen.findByRole('button', { name: 'oauth-flow' })).toBeInTheDocument();
     expect(api.detectGitHubRepo).not.toHaveBeenCalled();
+  });
+});
+
+describe('GitHubSetupModal: the Claude step', () => {
+  it('offers API key (the default) or a Claude subscription, like Settings → Claude', async () => {
+    api.getClaudeCredentialStatus.mockResolvedValue({ success: true, data: { configured: false, source: 'none' } });
+    render(<GitHubSetupModal open onOpenChange={vi.fn()} project={project} onComplete={vi.fn()} onSkip={vi.fn()} />);
+
+    const api_ = await screen.findByRole('radio', { name: /claude\.mode\.api\b/ });
+    expect(api_).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('claude-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'claude.setupToken.button' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /claude\.mode\.subscription\b/ }));
+    expect(await screen.findByRole('button', { name: 'claude.setupToken.button' })).toBeInTheDocument();
   });
 });

@@ -35,7 +35,7 @@
     "claudeTitle": "Connect to Claude AI",
     "claudeDescription": "Vibe Teamlead uses Claude AI for intelligent features like Roadmap generation, Task automation, and Ideation.",
     "aiProviderTitle": "Connect Claude",
-    "aiProviderDescription": "Add your Anthropic API key to power features like Roadmap generation, Task automation, and Ideation.",
+    "aiProviderDescription": "Add an Anthropic API key or, on your own machine, a Claude subscription token to power features like Roadmap generation, Task automation, and Ideation.",
     "skipForNow": "Skip for now",
     "continue": "Continue",
     "selectRepo": "Select Repository",

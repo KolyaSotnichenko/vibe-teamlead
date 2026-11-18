@@ -30,9 +30,8 @@
   },
   "claude": {
     "title": "Підключіть Claude",
-    "description": "Агенти працюють на Claude Code з вашим API-ключем Anthropic. Змінити його можна згодом у Налаштування → Claude.",
+    "description": "Агенти працюють на Claude Code з вашим API-ключем Anthropic або, на власному комп’ютері, з вашою підпискою Claude. Змінити це можна згодом у Налаштування → Claude.",
     "whereToGetKey": "Створіть ключ на console.anthropic.com → API keys. Використання оплачується з цього облікового запису.",
-    "personalMode": "На власному комп’ютері можна натомість використати підписку Claude Pro/Max: вставте токен із `claude setup-token` і ввімкніть особистий режим у Налаштування → Claude.",
     "buttons": {
       "back": "Назад",
       "continue": "Продовжити",

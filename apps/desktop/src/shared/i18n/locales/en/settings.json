@@ -122,7 +122,7 @@
       "apiHint": "Anthropic API or a compatible gateway (base URL)",
       "subscription": "Claude subscription",
       "subscriptionHint": "Your Pro/Max plan — personal use on your own machine",
-      "savedHint": "Both are kept; switching takes effect when you save settings.",
+      "savedHint": "Both are kept; the choice is saved at once.",
       "personalNote": "For your own machine only — never enable it in a build you share. Limits are shared with your regular Claude usage."
     }
   },

@@ -35,8 +35,9 @@ import {
 } from './ui/select';
 import { GitHubOAuthFlow } from './project-settings/GitHubOAuthFlow';
 import { GitHubRepoAccessNotice } from './project-settings/GitHubAppInstallStep';
-import { ClaudeCredentialPanel } from './settings/ClaudeCredentialPanel';
+import { ClaudeCredentialChooser, isModeConfigured } from './settings/ClaudeCredentialChooser';
 import { useClaudeCredential } from '../hooks/useClaudeCredential';
+import { useSettingsStore } from '../stores/settings-store';
 import { GITHUB_REPO_NOT_FOUND_ERROR } from '../../shared/constants/github';
 import type { GitHubAppAccess, Project } from '../../shared/types';
 
@@ -55,7 +56,7 @@ type SetupStep = 'github-auth' | 'claude-auth' | 'repo-confirm' | 'repo' | 'bran
  *
  * Flow:
  * 1. Authenticate with GitHub (via gh CLI OAuth) - for repo operations
- * 2. Add the Anthropic API key - for AI features
+ * 2. Connect Claude (API key or, in personal mode, a subscription token) - for AI features
  * 3. Detect/confirm repository
  * 4. Select base branch for tasks (with recommended default)
  */
@@ -68,6 +69,8 @@ export function GitHubSetupModal({
 }: GitHubSetupModalProps) {
   const { t } = useTranslation('dialogs');
   const { status: claudeStatus, setStatus: setClaudeStatus, refresh: refreshClaudeStatus } = useClaudeCredential();
+  const savedSubscription = useSettingsStore((state) => state.settings.useClaudeSubscription === true);
+  const [claudeSubscription, setClaudeSubscription] = useState(savedSubscription);
   const [step, setStep] = useState<SetupStep>('github-auth');
   const [githubToken, setGithubToken] = useState<string | null>(null);
   const [githubRepo, setGithubRepo] = useState<string | null>(null);
@@ -416,7 +419,12 @@ export function GitHubSetupModal({
             </DialogHeader>
 
             <div className="py-4 space-y-4">
-              <ClaudeCredentialPanel status={claudeStatus} onStatusChange={setClaudeStatus} />
+              <ClaudeCredentialChooser
+                subscription={claudeSubscription}
+                onModeChange={setClaudeSubscription}
+                status={claudeStatus}
+                onStatusChange={setClaudeStatus}
+              />
             </div>
 
             <DialogFooter>
@@ -427,7 +435,7 @@ export function GitHubSetupModal({
               )}
               <Button
                 onClick={handleAIAuthContinue}
-                disabled={!claudeStatus.configured}
+                disabled={!isModeConfigured(claudeStatus, claudeSubscription)}
               >
                 <ChevronRight className="mr-2 h-4 w-4" />
                 {t('githubSetup.continue')}

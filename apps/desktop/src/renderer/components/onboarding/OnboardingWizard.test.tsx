@@ -58,6 +58,7 @@ vi.mock('react-i18next', () => ({
 // Mock the settings store
 const mockUpdateSettings = vi.fn();
 const mockLoadSettings = vi.fn();
+const { mockStoreSaveSettings } = vi.hoisted(() => ({ mockStoreSaveSettings: vi.fn(async () => true) }));
 
 vi.mock('../../stores/settings-store', () => ({
   useSettingsStore: vi.fn((selector) => {
@@ -69,8 +70,12 @@ vi.mock('../../stores/settings-store', () => ({
     };
     if (!selector) return state;
     return selector(state);
-  })
+  }),
+  saveSettings: mockStoreSaveSettings
 }));
+
+// The docs page reads bundled markdown; the wizard only needs to know it opened
+vi.mock('../docs/DocsView', () => ({ DocsView: () => <div>docs-view</div> }));
 
 // Mock electronAPI
 const mockSaveSettings = vi.fn().mockResolvedValue({ success: true });
@@ -145,6 +150,19 @@ describe('OnboardingWizard Integration Tests', () => {
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Continue/ })).not.toBeDisabled();
       });
+    });
+
+    it('offers API key (the default) or a Claude subscription, and saves the choice at once', async () => {
+      render(<OnboardingWizard {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
+      await waitFor(() => expect(screen.getByText(/Connect Claude/)).toBeInTheDocument());
+
+      expect(screen.getByRole('radio', { name: /claude\.mode\.api\b/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.queryByRole('button', { name: 'claude.setupToken.button' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('radio', { name: /claude\.mode\.subscription\b/ }));
+      expect(mockStoreSaveSettings).toHaveBeenCalledWith({ useClaudeSubscription: true });
+      expect(screen.getByRole('button', { name: 'claude.setupToken.button' })).toBeInTheDocument();
     });
 
     it('should navigate back from the Claude step to welcome', async () => {

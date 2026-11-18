@@ -30,9 +30,8 @@
   },
   "claude": {
     "title": "Connect Claude",
-    "description": "Agents run on Claude Code with your Anthropic API key. You can change it later in Settings → Claude.",
+    "description": "Agents run on Claude Code with your Anthropic API key or, on your own machine, your Claude subscription. You can change it later in Settings → Claude.",
     "whereToGetKey": "Create a key at console.anthropic.com → API keys. Usage is billed to that account.",
-    "personalMode": "On your own machine you can use a Claude Pro/Max subscription instead: paste a token from `claude setup-token` and turn on personal mode in Settings → Claude.",
     "buttons": {
       "back": "Back",
       "continue": "Continue",
