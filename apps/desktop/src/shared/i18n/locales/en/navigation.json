@@ -134,5 +134,22 @@
     "search": "Search the docs",
     "nothingFound": "Nothing found",
     "reportProblem": "Report a problem"
+  },
+  "statusBar": {
+    "waiting_one": "{{count}} question for you",
+    "waiting_other": "{{count}} questions for you",
+    "running_one": "{{count}} running",
+    "running_other": "{{count}} running",
+    "queued_one": "{{count}} queued",
+    "queued_other": "{{count}} queued",
+    "paused": "Queue paused",
+    "ci": {
+      "passing": "CI passing on main",
+      "failing": "CI failing on main",
+      "other": "CI on main: no verdict"
+    },
+    "openBoard": "Open the board",
+    "openCi": "Open CI readiness",
+    "openQuestion": "Answer the agent's question"
   }
 }

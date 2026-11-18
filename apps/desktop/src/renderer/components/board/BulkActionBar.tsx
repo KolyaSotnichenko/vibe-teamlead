@@ -21,7 +21,7 @@ export function BulkActionBar({
   const button =
     'inline-flex h-11 items-center gap-2 border-l border-border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2';
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+    <div className="fixed bottom-9 left-1/2 z-50 -translate-x-1/2">
       <div role="toolbar" aria-label={t('kanban.selectedCountOther', { count })} className="flex items-stretch border border-foreground bg-card text-card-foreground">
         <span className="inline-flex h-11 items-center px-4 text-sm text-foreground">
           <span className="mr-1.5 font-mono tabular-nums">{count}</span>

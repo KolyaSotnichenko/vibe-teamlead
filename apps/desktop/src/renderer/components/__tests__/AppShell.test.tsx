@@ -35,4 +35,20 @@ describe('AppShell', () => {
     // The column holding tabs + content may shrink below its content (min-h-0) and never scrolls itself
     expect(content.parentElement).toHaveClass('min-h-0', 'flex-col', 'overflow-hidden');
   });
+
+  it('puts the status bar under both the sidebar and the page, outside the content area', () => {
+    render(
+      <AppShell sidebar={<aside>sidebar</aside>} content={<div>page</div>} statusBar={<footer>status</footer>} />
+    );
+    const frame = screen.getByTestId('app-shell');
+    const status = screen.getByText('status');
+    // The frame stacks a row (sidebar + page) over the bar; the bar is the last child of the frame
+    expect(frame).toHaveClass('flex-col');
+    expect(frame.lastElementChild).toBe(status);
+    const row = frame.firstElementChild as HTMLElement;
+    expect(row).toHaveClass('min-h-0', 'flex-1');
+    expect(row).toContainElement(screen.getByText('sidebar'));
+    expect(row).toContainElement(screen.getByRole('main'));
+    expect(row).not.toContainElement(status);
+  });
 });

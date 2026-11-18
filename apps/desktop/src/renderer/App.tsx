@@ -35,6 +35,7 @@ import {
 } from './components/ui/dialog';
 import { Sidebar, type SidebarView } from './components/Sidebar';
 import { AppShell } from './components/AppShell';
+import { StatusBar } from './components/status-bar/StatusBar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { TaskDetailModal } from './components/task-detail/TaskDetailModal';
 import { TaskCreationWizard } from './components/TaskCreationWizard';
@@ -869,6 +870,13 @@ export function App() {
             onNewTaskClick={() => setIsNewTaskDialogOpen(true)}
             activeView={activeView}
             onViewChange={setActiveView}
+          />
+        }
+        statusBar={
+          <StatusBar
+            activeView={activeView}
+            onViewChange={setActiveView}
+            onSettingsClick={() => setIsSettingsDialogOpen(true)}
           />
         }
         header={

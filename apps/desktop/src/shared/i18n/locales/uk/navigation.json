@@ -146,5 +146,28 @@
     "search": "Пошук у документації",
     "nothingFound": "Нічого не знайдено",
     "reportProblem": "Повідомити про проблему"
+  },
+  "statusBar": {
+    "waiting_one": "{{count}} питання до вас",
+    "waiting_few": "{{count}} питання до вас",
+    "waiting_many": "{{count}} питань до вас",
+    "waiting_other": "{{count}} питання до вас",
+    "running_one": "{{count}} у роботі",
+    "running_few": "{{count}} у роботі",
+    "running_many": "{{count}} у роботі",
+    "running_other": "{{count}} у роботі",
+    "queued_one": "{{count}} у черзі",
+    "queued_few": "{{count}} у черзі",
+    "queued_many": "{{count}} у черзі",
+    "queued_other": "{{count}} у черзі",
+    "paused": "Чергу призупинено",
+    "ci": {
+      "passing": "CI на main проходить",
+      "failing": "CI на main падає",
+      "other": "CI на main: без вердикту"
+    },
+    "openBoard": "Відкрити дошку",
+    "openCi": "Відкрити готовність CI",
+    "openQuestion": "Відповісти на питання агента"
   }
 }

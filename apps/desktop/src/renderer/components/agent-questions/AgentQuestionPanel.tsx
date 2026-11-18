@@ -170,7 +170,7 @@ export function AgentQuestionPanel() {
   return (
     <aside
       aria-labelledby="agent-question-title"
-      className="fixed right-6 bottom-6 z-50 flex max-h-[calc(100vh-48px)] w-[440px] max-w-[calc(100vw-32px)] flex-col border border-foreground bg-card text-card-foreground"
+      className="fixed right-6 bottom-9 z-50 flex max-h-[calc(100vh-60px)] w-[440px] max-w-[calc(100vw-32px)] flex-col border border-foreground bg-card text-card-foreground"
     >
       <header className="flex items-start gap-3 border-b border-l-2 border-b-border border-l-[var(--vt-signal)] px-4 py-3">
         <div className="flex-1">
