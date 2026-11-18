@@ -19,6 +19,8 @@ export type TaskEvent =
   | { type: 'DESIGN_REVIEW'; stage: 'wireframes' | 'design' }
   /** The owner approved or commented: the build goes on (or redraws) */
   | { type: 'DESIGN_RESUMED' }
+  /** An architecture-only task: the architect finished, nothing else runs */
+  | { type: 'ARCHITECTURE_READY' }
   | { type: 'CODING_STARTED'; subtaskId: string; subtaskDescription: string }
   | { type: 'SUBTASK_COMPLETED'; subtaskId: string; completedCount: number; totalCount: number }
   | { type: 'ALL_SUBTASKS_DONE'; totalCount: number }
@@ -58,6 +60,7 @@ export const taskMachine = createMachine(
           CODING_STARTED: 'coding',
           // A task started from the queue keeps its machine here through the spec and the design
           DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
+          ARCHITECTURE_READY: { target: 'human_review', actions: 'setReviewReasonArchitecture' },
           USER_STOPPED: 'backlog'
         }
       },
@@ -72,6 +75,7 @@ export const taskMachine = createMachine(
             { target: 'coding', actions: 'clearReviewReason' }
           ],
           DESIGN_REVIEW: { target: 'design_review', actions: 'setReviewReasonDesign' },
+          ARCHITECTURE_READY: { target: 'human_review', actions: 'setReviewReasonArchitecture' },
           // Fallback: if CODING_STARTED arrives while in planning, transition to coding
           CODING_STARTED: { target: 'coding', actions: 'clearReviewReason' },
           // Fallback: if ALL_SUBTASKS_DONE arrives while in planning, go directly to qa_review
@@ -183,6 +187,7 @@ export const taskMachine = createMachine(
     actions: {
       setReviewReasonPlan: assign({ reviewReason: () => 'plan_review' }),
       setReviewReasonDesign: assign({ reviewReason: () => 'design_review' }),
+      setReviewReasonArchitecture: assign({ reviewReason: () => 'architecture_ready' }),
       setReviewReasonCompleted: assign({ reviewReason: () => 'completed' }),
       setReviewReasonStopped: assign({ reviewReason: () => 'stopped' }),
       setReviewReasonQaRejected: assign({ reviewReason: () => 'qa_rejected' }),

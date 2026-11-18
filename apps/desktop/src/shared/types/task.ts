@@ -16,7 +16,7 @@ export type TaskOrderState = Record<TaskStatus, string[]>;
 // - 'qa_rejected': QA found issues that need fixing
 // - 'plan_review': Spec/plan created and awaiting approval before coding starts
 // - 'design_review': wireframes or design drawn and waiting for the owner (design before code)
-export type ReviewReason = 'completed' | 'errors' | 'qa_rejected' | 'plan_review' | 'design_review' | 'stopped';
+export type ReviewReason = 'completed' | 'errors' | 'qa_rejected' | 'plan_review' | 'design_review' | 'stopped' | 'architecture_ready';
 
 export type SubtaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
@@ -229,6 +229,8 @@ export interface TaskMetadata {
   /** Made from Preview notes with Quick fix: the spec runs its simple path */
   previewQuickFix?: boolean;
   cloudArchitectureDesign?: boolean;  // Made by Context → Architecture: the architect draws the target cloud architecture
+  /** The spec ends after the architect; the task waits in Human Review as "architecture ready" (no plan, code, QA or merge) */
+  architectureOnly?: boolean;
   attachedImages?: ImageAttachment[];
 
   // Referenced files (files/folders from project for context)

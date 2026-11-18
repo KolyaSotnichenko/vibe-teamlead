@@ -63,7 +63,7 @@ import { createSecurityFollowup } from '../security/followup-task';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { projectRootFor } from '../usage/usage-ledger';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
-import { architectModeFor, complexityOverrideFor, readTaskMetadata } from '../orchestration/quick-fix';
+import { architectModeFor, architectureOnlyFor, complexityOverrideFor, readTaskMetadata, agenticSpecFor } from '../orchestration/quick-fix';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
@@ -834,7 +834,7 @@ async function run(): Promise<void> {
 
     // Route to spec orchestrator for spec_orchestrator agent type
     if (session.agentType === 'spec_orchestrator') {
-      if (session.useAgenticOrchestration) {
+      if (agenticSpecFor(session.useAgenticOrchestration, await readTaskMetadata(session.specDir))) {
         await runAgenticSpecOrchestrator(session, toolContext);
       } else {
         await runSpecOrchestrator(session, toolContext);
@@ -1387,6 +1387,8 @@ async function runSpecOrchestrator(
   const complexityOverride = complexityOverrideFor(taskMetadata);
   if (complexityOverride === 'simple') postLog('Quick fix from preview notes: the simple spec path, without the complexity assessment');
   if (complexityOverride === 'standard') postLog('Cloud architecture design: the standard spec path with the architect, without the complexity assessment');
+  const architectureOnly = architectureOnlyFor(taskMetadata);
+  if (architectureOnly) postLog('Architecture only: the task ends after the architect (no planner, code, QA or merge)');
   const orchestrator = new SpecOrchestrator({
     specDir: session.specDir,
     projectDir: session.projectDir,
@@ -1395,6 +1397,7 @@ async function runSpecOrchestrator(
     projectIndex: projectIndexContent,
     abortSignal: abortController.signal,
     architectMode: architectModeFor(taskMetadata, session.architectMode),
+    architectureOnly,
     // Design before code: a UI task's plan is made in the build, after its design
     planAfterDesign: () => !!session.design && session.design.mode !== 'off' && specChangesUi(session),
 

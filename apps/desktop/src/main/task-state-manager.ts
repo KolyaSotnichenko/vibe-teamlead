@@ -25,6 +25,7 @@ const TERMINAL_EVENTS = new Set<string>([
   'PLANNING_COMPLETE',
   // The build stops for the owner's design review: the code-0 exit after it is expected
   'DESIGN_REVIEW',
+  'ARCHITECTURE_READY',
   'PLANNING_FAILED',
   'CODING_FAILED',
   'QA_MAX_ITERATIONS',

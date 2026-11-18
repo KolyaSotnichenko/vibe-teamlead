@@ -32,6 +32,7 @@ import { answerQuestion, setSharedAnswerer } from "../agent/answer-question";
 import { recordBriefAnswers } from "../ai/runners/brief-import";
 import { isMacOS } from "../platform";
 import { appEvents } from "../app-events";
+import { afterSpecCreation } from "../ai/orchestration/quick-fix";
 import type { AgentAnswers } from "../../shared/types/agent-questions";
 
 // Timeout for fallback safety net to check if task is still stuck after process exit
@@ -68,7 +69,7 @@ export function registerAgenteventsHandlers(
   // The last commits of a task (the final subtask's, the QA fixes) reach its preview here
   // (not for a plan or design waiting for approval: no code was written yet)
   taskStateManager.onStatusChange((taskId, status, reviewReason) => {
-    if (reviewReason === "plan_review" || reviewReason === "design_review") return;
+    if (reviewReason === "plan_review" || reviewReason === "design_review" || reviewReason === "architecture_ready") return;
     if (status === "ai_review" || status === "human_review") requestPreviewPush(taskId);
   });
   agentManager.on("session-ended", (taskId: string) => requestPreviewPush(taskId));
@@ -134,7 +135,12 @@ export function registerAgenteventsHandlers(
     // Skip handleProcessExited for successful spec-creation exits — the spec → build
     // transition (line 132+) will start a new agent, and calling handleProcessExited
     // here would mark the task as stuck (no terminal event seen for spec creation).
-    const isSpecToBuildTransition = processType === 'spec-creation' && code === 0;
+    // An architecture-only task (its metadata says so) ends after the architect: no build follows
+    const specNext = processType === 'spec-creation' ? afterSpecCreation(exitTask?.metadata, code) : 'none';
+    const isSpecToBuildTransition = specNext === 'build';
+    if (specNext === 'architecture_ready' && exitTask && exitProject) {
+      taskStateManager.handleUiEvent(taskId, { type: 'ARCHITECTURE_READY' }, exitTask, exitProject);
+    }
     if (!isSpecToBuildTransition) {
       taskStateManager.handleProcessExited(taskId, code, exitTask, exitProject);
     }
@@ -232,6 +238,10 @@ export function registerAgenteventsHandlers(
 
     if (processType === "spec-creation") {
       console.warn(`[Task ${taskId}] Spec creation completed with code ${code}`);
+      if (specNext === 'architecture_ready') {
+        if (exitTask && exitProject) notificationService.notifyReviewNeeded(exitTask.title || exitTask.specId, exitProject.id, taskId);
+        return;
+      }
       // When spec creation succeeds, automatically transition to task execution (build phase)
       if (code === 0) {
         const { task: specTask, project: specProject } = findTaskAndProject(taskId, projectId);

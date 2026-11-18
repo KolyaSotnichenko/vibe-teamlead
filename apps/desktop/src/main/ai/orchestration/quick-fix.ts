@@ -8,6 +8,10 @@
  *   draws the target cloud architecture with TerraVision.
  *
  * Only these tasks: task complexity still means nothing to the pipeline for every other task.
+ *
+ * Architecture-only (architectureOnly in the metadata, set by Context → Architecture's
+ * button): the spec ends after the architect, and the task then waits in Human Review
+ * as "architecture ready" — no planner, coder, QA, app checks or merge.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -28,6 +32,22 @@ export function complexityOverrideFor(metadata: unknown): ComplexityTier | undef
 /** The architect always runs for a cloud architecture design task, unless it is turned off. Pure. */
 export function architectModeFor(metadata: unknown, mode: ArchitectMode | undefined): ArchitectMode | undefined {
   return flag(metadata, 'cloudArchitectureDesign') && mode !== 'never' ? 'always' : mode;
+}
+
+/** Marked by its metadata, never guessed from text. Pure. */
+export function architectureOnlyFor(metadata: unknown): boolean {
+  return flag(metadata, 'architectureOnly');
+}
+
+/** What follows a spec-creation process that exited with this code. Pure. */
+export function afterSpecCreation(metadata: unknown, exitCode: number | null): 'build' | 'architecture_ready' | 'none' {
+  if (exitCode !== 0) return 'none';
+  return architectureOnlyFor(metadata) ? 'architecture_ready' : 'build';
+}
+
+/** The agentic spec mode has no fixed end, so an architecture-only task runs the phase pipeline. Pure. */
+export function agenticSpecFor(agentic: boolean | undefined, metadata: unknown): boolean {
+  return !!agentic && !architectureOnlyFor(metadata);
 }
 
 export async function readTaskMetadata(specDir: string): Promise<unknown> {

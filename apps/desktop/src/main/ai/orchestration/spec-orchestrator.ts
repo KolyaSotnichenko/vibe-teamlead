@@ -165,6 +165,11 @@ export interface SpecOrchestratorConfig {
    * spec then stops before the architecture and the plan, which the build makes after the design.
    */
   planAfterDesign?: () => boolean;
+  /**
+   * Architecture only (a task marked so in its metadata): the spec ends with the architect —
+   * no planner, no validation — and fails when the architect does or is turned off.
+   */
+  architectureOnly?: boolean;
   /** Pre-generated project index JSON content (injected into all phases) */
   projectIndex?: string;
   /** CLI model override */
@@ -359,7 +364,15 @@ export class SpecOrchestrator extends EventEmitter {
       // ===================================================================
       // Step 2: Determine and run phases based on assessed complexity
       // ===================================================================
-      const phasesToRun = specPhasesFor(complexity, this.config.architectMode);
+      let phasesToRun = specPhasesFor(complexity, this.config.architectMode);
+      const architectureOnly = !!this.config.architectureOnly;
+      if (architectureOnly) {
+        const architectureIdx = phasesToRun.indexOf('architecture');
+        if (architectureIdx === -1) {
+          return this.outcome(false, phasesExecuted, Date.now() - startTime, 'Architecture-only task, but the architect is turned off (Settings → Agents → Architect)');
+        }
+        phasesToRun = phasesToRun.slice(0, architectureIdx + 1);
+      }
 
       // Inject research/self-critique if flagged but not already in the tier
       if (this.assessment?.needs_research && !phasesToRun.includes('research')) {
@@ -372,7 +385,7 @@ export class SpecOrchestrator extends EventEmitter {
         }
       }
 
-      if (this.assessment?.needs_self_critique && !phasesToRun.includes('self_critique')) {
+      if (this.assessment?.needs_self_critique && !phasesToRun.includes('self_critique') && !architectureOnly) {
         const planningIdx = phasesToRun.indexOf('planning');
         if (planningIdx !== -1) {
           phasesToRun.splice(planningIdx, 0, 'self_critique');
@@ -387,7 +400,7 @@ export class SpecOrchestrator extends EventEmitter {
         }
 
         // Design before code: the architecture and the plan follow the design, in the build
-        if ((phase === 'architecture' || phase === 'planning') && this.config.planAfterDesign?.()) {
+        if ((phase === 'architecture' || phase === 'planning') && !architectureOnly && this.config.planAfterDesign?.()) {
           this.emitTyped('log', 'Design first: the architecture and the plan come after the design is drawn');
           break;
         }
@@ -397,7 +410,7 @@ export class SpecOrchestrator extends EventEmitter {
 
         if (!result.success) {
           // Architecture is advice for the planner: without it, plan from the spec alone
-          if (phase === 'architecture') {
+          if (phase === 'architecture' && !architectureOnly) {
             this.emitTyped('log', `Architecture phase did not complete (${result.errors.join('; ')}); planning from the spec alone`);
             continue;
           }

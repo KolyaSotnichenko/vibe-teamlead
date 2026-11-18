@@ -97,6 +97,25 @@ describe('taskMachine', () => {
     });
   });
 
+  describe('architecture-only task (architecture ready)', () => {
+    it('goes from planning to human review with "architecture ready", then to done', () => {
+      const ready = runEvents([{ type: 'PLANNING_STARTED' }, { type: 'ARCHITECTURE_READY' }]);
+      expect(ready.value).toBe('human_review');
+      expect(ready.context.reviewReason).toBe('architecture_ready');
+      expect(runEvents([{ type: 'MARK_DONE' }], 'human_review').value).toBe('done');
+    });
+
+    it('also ends there when the task ran its spec from the queue (machine still in backlog)', () => {
+      const ready = runEvents([{ type: 'ARCHITECTURE_READY' }]);
+      expect(ready.value).toBe('human_review');
+      expect(ready.context.reviewReason).toBe('architecture_ready');
+    });
+
+    it('means nothing to a task that is already coding', () => {
+      expect(runEvents([{ type: 'ARCHITECTURE_READY' }], 'coding').value).toBe('coding');
+    });
+  });
+
   describe('plan_review flow (requireReviewBeforeCoding: true)', () => {
     it('should go to plan_review when requireReviewBeforeCoding is true', () => {
       const events: TaskEvent[] = [
