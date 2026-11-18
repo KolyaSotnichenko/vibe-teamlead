@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -92,6 +92,20 @@ describe('classifyFailure', () => {
 });
 
 describe('redrawCloudArchitecture: safety', () => {
+  it('refuses a copy with a symbolic link, without running TerraVision', async () => {
+    const runCalls: { args: string[]; options: RunOptions }[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const git: RedrawDeps['git'] = async (args, cwd) => {
+      const result = await deps.git(args, cwd);
+      if (args[0] === 'clone') symlinkSync(tmpdir(), join(args[args.length - 1], 'infra', 'up'));
+      return result;
+    };
+    const meta = await redrawCloudArchitecture({ projectDir, commit: 'c11', changedFiles: ['infra/main.tf'], storeDir }, { ...deps, git, run: fakeTerravision(runCalls) });
+    expect(runCalls).toEqual([]);
+    expect(meta?.lastAttempt).toMatchObject({ status: 'refused' });
+    expect(meta?.lastAttempt?.detail).toMatch(/^Couldn't draw from code safely: .*symbolic link/);
+  });
+
   it("refuses code that could run programs, without running TerraVision, and says so", async () => {
     const runCalls: { args: string[]; options: RunOptions }[] = [];
     const { projectDir, storeDir, deps } = setup();

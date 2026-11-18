@@ -19,8 +19,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
 import type { RunOptions, RunResult } from '../../platform/exec';
-import { findTerraformFiles } from './infra-heuristic';
-import { terraformUnsafe } from './terraform-safety';
+import { terraformUnsafe, walkTerraformFiles } from './terraform-safety';
 import { cloudSafeEnv, type CloudTool, type CloudToolsReadiness, terravisionCommand } from './terravision';
 
 /** refused: the static check found code that could run programs or fetch it from elsewhere (terraform-safety.ts) */
@@ -61,7 +60,7 @@ const TAIL = 600;
 const MAX_FILES = 1000;
 
 export function terraformChanged(files: string[]): boolean {
-  return files.some((file) => /\.(tf|tf\.json|tfvars)$/i.test(file));
+  return files.some((file) => /\.((tf|tofu)(\.json)?|tfvars)$/i.test(file));
 }
 
 const isModule = (dir: string) => dir.split(/[\\/]/).includes('modules');
@@ -71,7 +70,7 @@ const depth = (dir: string) => (dir === '.' ? 0 : dir.split(/[\\/]/).length);
 export function terraformRoot(tfFiles: string[], changedFiles: string[]): string | undefined {
   const dirs = [...new Set(tfFiles.map((file) => dirname(file)))];
   if (!dirs.length) return undefined;
-  const changedDirs = new Set(changedFiles.filter((f) => /\.(tf|tf\.json|tfvars)$/i.test(f)).map((f) => dirname(f).split('/').join(sep)));
+  const changedDirs = new Set(changedFiles.filter((f) => /\.((tf|tofu)(\.json)?|tfvars)$/i.test(f)).map((f) => dirname(f).split('/').join(sep)));
   const roots = dirs.filter((dir) => !isModule(dir));
   const pool = roots.length ? roots : dirs;
   const changed = pool.filter((dir) => changedDirs.has(dir));
@@ -129,11 +128,16 @@ export async function redrawCloudArchitecture(
     if (!checkedOut.ok) return attempt('failed', { detail: checkedOut.output.slice(-TAIL) });
 
     // Every Terraform file of the commit is checked before anything runs Terraform on it
-    const allFiles = findTerraformFiles(copy, 12, MAX_FILES + 1, /\.tf(\.json)?$/i);
-    if (allFiles.length > MAX_FILES) return attempt('refused', { detail: `More than ${MAX_FILES} Terraform files: too many to check.` });
-    const unsafe = terraformUnsafe(allFiles.map((path) => ({ path: path.split(sep).join('/'), text: readFileSync(join(copy, path), 'utf-8') })));
+    let allFiles: string[];
+    try {
+      allFiles = walkTerraformFiles(copy);
+    } catch (error) {
+      return attempt('refused', { detail: `Couldn't draw from code safely: ${error instanceof Error ? error.message : String(error)}` });
+    }
+    if (allFiles.length > MAX_FILES) return attempt('refused', { detail: `Couldn't draw from code safely: more than ${MAX_FILES} Terraform files to check.` });
+    const unsafe = terraformUnsafe(allFiles.map((path) => ({ path, text: readFileSync(join(copy, path), 'utf-8') })));
     if (unsafe) return attempt('refused', { detail: `Couldn't draw from code safely: ${unsafe}` });
-    const root = terraformRoot(allFiles.filter((file) => /\.tf$/i.test(file)), changedFiles);
+    const root = terraformRoot(allFiles.filter((file) => /\.(tf|tofu)$/i.test(file)).map((file) => file.split('/').join(sep)), changedFiles);
     if (!root) return attempt('failed', { detail: 'No Terraform files in the merged commit.' });
     const source = root === '.' ? copy : join(copy, root);
 
