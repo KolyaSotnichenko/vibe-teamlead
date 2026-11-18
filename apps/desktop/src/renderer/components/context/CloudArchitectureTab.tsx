@@ -192,11 +192,11 @@ export function CloudArchitectureTab({ projectId }: Props) {
 
         {view && (
           <section aria-labelledby="cloud-design" className="space-y-2">
-            <Button onClick={() => void design()} disabled={creating || architectOff || !view.enabled}>
+            <Button onClick={() => void design()} disabled={creating || architectOff || !view.enabled || !view.tools.ready}>
               {t('cloud:tab.design.button')}
             </Button>
             <p className="max-w-prose text-xs text-muted-foreground">
-              {t(!view.enabled ? 'cloud:tab.design.off' : architectOff ? 'cloud:tab.design.architectOff' : 'cloud:tab.design.hint')}
+              {t(!view.enabled ? 'cloud:tab.design.off' : !view.tools.ready ? 'cloud:tab.design.missingTools' : architectOff ? 'cloud:tab.design.architectOff' : 'cloud:tab.design.hint')}
             </p>
           </section>
         )}

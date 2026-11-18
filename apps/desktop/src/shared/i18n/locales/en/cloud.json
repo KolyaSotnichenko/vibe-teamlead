@@ -58,7 +58,8 @@
       "created": "Task created: start it from the board",
       "failed": "Couldn't create the task",
       "title": "Design the target cloud architecture",
-      "description": "Design the target cloud architecture of this project. Change no application code.\n\n1. Read the project: the code, compose files, .env.example, README and CI workflows.\n2. Find the cloud it already points at (for example Azure: Entra ID sign-in, Azure Storage through Azurite locally, Application Insights) and keep to it.\n3. Describe the target cloud architecture: where the API and the web app run, the database, storage, sign-in, monitoring and networking.\n4. Draw it with TerraVision as a cloud architecture graph and render it (SVG and draw.io) into the spec's architecture diagrams, next to the other diagrams.\n5. Write an ADR for each main choice.\n\nThe result stays in this task's Architecture tab."
+      "description": "Design the target cloud architecture of this project. Change no application code.\n\n1. Read the project: the code, compose files, .env.example, README and CI workflows.\n2. Find the cloud it already points at (for example Azure: Entra ID sign-in, Azure Storage through Azurite locally, Application Insights) and keep to it.\n3. Describe the target cloud architecture: where the API and the web app run, the database, storage, sign-in, monitoring and networking.\n4. Draw it with TerraVision as a cloud architecture graph and render it (SVG and draw.io) into the spec's architecture diagrams, next to the other diagrams.\n5. Write an ADR for each main choice.\n\nThe result stays in this task's Architecture tab.",
+      "missingTools": "Install the missing tools above first: without them the architect has nothing to draw with."
     },
     "missingTools": "TerraVision isn't ready, so nothing is drawn. Missing:"
   }

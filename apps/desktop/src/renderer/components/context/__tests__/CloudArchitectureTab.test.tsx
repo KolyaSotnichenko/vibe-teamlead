@@ -75,6 +75,9 @@ describe('CloudArchitectureTab', () => {
     render(<CloudArchitectureTab projectId="p1" />);
     expect(await screen.findByText('cloud:tab.missingTools')).toBeInTheDocument();
     expect(screen.getByText('brew install uv')).toBeInTheDocument();
+    // without the tools the architect has nothing to draw with: the task would draw nothing
+    expect(screen.getByText('cloud:tab.design.button')).toBeDisabled();
+    expect(screen.getByText('cloud:tab.design.missingTools')).toBeInTheDocument();
   });
 
   it('lists the decisions of merged tasks, each opening its task', async () => {
