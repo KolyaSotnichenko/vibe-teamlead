@@ -29,9 +29,10 @@ Change the list later with **Services** in the toolbar. The list is kept in the 
 
 - **The code** is a copy of main of its own, in `~/.vibe-teamlead/worktrees/preview`, outside your project. Your own folder, its branch and its uncommitted changes are never touched.
 - **The database** named in the project's compose file runs in Docker on a volume kept for this project, so an account you registered in the preview is still there next time. Migrations are applied to it (Prisma, Drizzle, Django, Alembic, Rails, Laravel), and on a new, empty database the project's seed script runs (`db:seed`, `seed`, or Prisma's seed). A Django, Rails or Laravel app with no database in compose gets its migrations on its own local file. **Reset preview data** deletes it and starts empty.
+- **Other services** the compose file names (queues such as RabbitMQ or Kafka, storage such as MinIO or LocalStack, search such as Elasticsearch, OpenSearch, Meilisearch or Typesense, and any other service with an `image:` and no `build:`) run in Docker as throwaway containers for the session, emptied every start, each on a local port only. Only the image and safe settings are taken from the file: its environment values, command, ports and healthcheck; never its volumes, privileges, `env_file` or host network. Settings in `.env.example` that point at such a service (by its compose name, or localhost with its port, as in `amqp://guest:guest@rabbitmq:5672` or `http://localhost:9000`) are pointed at the container, with the credentials it started with; S3 settings get the stand-in's keys and path style, and the buckets `.env.example` names are created. A service that doesn't come up is named over the page, and the settings that point at it stay empty; the rest goes on.
 - **Your sign-in in the page** doesn't outlive the preview: stopping it clears the page's cookies and storage, so the next start is signed out. **Reset session** (the exit icon next to Reload) does it on the spot and reloads the page.
 - **Dependencies** are installed with the project's own tool: pnpm, npm, yarn or bun; uv, Poetry or pip; Bundler; Composer; Go modules. A folder is installed again only when its lockfile changes. The tool itself (Python, Ruby, PHP, Go) has to be on your computer; when it isn't, the preview says which install failed and shows its output.
-- **Settings** come from `.env.example` and the preview's own database, never from `.env`. Your real databases and keys are not used.
+- **Settings** come from `.env.example` and the preview's own database and services, never from `.env`. Your real databases and keys are not used.
 
 Without Docker, the services still start, without a database, and the preview says so.
 
@@ -71,13 +72,13 @@ The **How to run** button in the preview's toolbar is always there, even when th
 
 **Environment** in the toolbar shows the settings (environment variables) the preview gives each service, for the project's preview and a task's alike. You don't have to change anything there: the preview fills everything in by itself, and the tab is for seeing what happened, for example when the page stays blank.
 
-At the top it says in plain words what the preview started (a test database such as Postgres, a mail catcher), which settings are empty and which parts of the app that may affect (sign-in, payments, file storage, email, outside APIs, maps, text messages), judged by the settings' names. Before the preview starts it shows what the services will get; once they run, what they got.
+At the top it says in plain words what the preview started (a test database such as Postgres, the compose file's other services such as RabbitMQ, a mail catcher), which settings are empty and which parts of the app that may affect (sign-in, payments, file storage, email, outside APIs, maps, text messages), judged by the settings' names. Before the preview starts it shows what the services will get; once they run, what they got.
 
 Under that, one fold per service lists every setting with where its value came from:
 
 - **from the project's example settings**: the root's `.env.example`, or the service folder's;
-- **test database started by the preview** or **mail catcher started by the preview**;
-- **left empty on purpose**: a connection setting the preview has no test service for, so the app can't reach a real one;
+- **test database started by the preview**, **test rabbitmq started by the preview** (any other compose service, by its name) or **mail catcher started by the preview**;
+- **left empty on purpose**: a connection setting the preview has no test service for, or whose test service didn't start, so the app can't reach a real one;
 - **address of another part of this preview** and **port chosen by the preview**;
 - **your value**: for this service, or for all services (the older project-wide setting).
 
@@ -87,7 +88,7 @@ To change a value, use the pencil; to add one, **Add a setting** under the servi
 
 ### What the preview can and can't set up
 
-- **Test services need Docker.** The test database and the mail catcher run in Docker. When Docker isn't running or isn't installed, the tab says so first: start Docker Desktop, then restart the preview. Until then, the parts of the app that save data or send email won't work.
+- **Test services need Docker.** The test database, the compose file's other services and the mail catcher run in Docker. When Docker isn't running or isn't installed, the tab says so first: start Docker Desktop, then restart the preview. Until then, the parts of the app that save data or send email won't work.
 - **Outside services that need your own keys** (payments such as Stripe, AI APIs, a real sign-in such as Microsoft Entra ID, maps, text messages) can't be filled in automatically. The tab says when such settings are empty. You can paste your own *test* keys in the tab, or use the project's test mode if it has one (for example a test sign-in switched on by a setting in `.env.example`).
 
 ## Notes

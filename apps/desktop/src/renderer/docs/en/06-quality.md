@@ -54,6 +54,13 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 - Settings in `.env.example` that point at any other database are left out.
 - Without Docker the log says the check couldn't be completed, and the task isn't blocked.
 
+#### Other services
+
+- The compose file's other services (queues, storage, search…: RabbitMQ, Kafka, Redpanda, MinIO, LocalStack, Elasticsearch, OpenSearch, Meilisearch, Typesense, or any service with an `image:` and no `build:`) are started as throwaway containers for each run too, on their own network, each on a local port only, and removed afterwards.
+- Only the image and safe settings come from the file: environment values, command, ports and healthcheck. Never volumes, privileges, devices, `env_file`, the host's network or a user.
+- Settings in `.env.example` that point at one of them (by its compose name, or localhost with its port) point at its container instead, with the credentials it started with. S3 settings get the stand-in's keys and path style, and the buckets the example names are created.
+- A service that doesn't come up is named in the log, and the settings that point at it stay empty; the checks still run.
+
 #### Where you see the result
 
 - The task's window shows what passed.
