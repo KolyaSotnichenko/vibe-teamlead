@@ -48,7 +48,7 @@ export const DEFAULT_APP_SETTINGS = {
   architectMode: 'complex' as const,
   formatOnEdit: true,
   lspEnabled: true,
-  cloudDiagramsEnabled: true,
+  cloudDiagramsEnabled: false,
   onboardingCompleted: false,
   notifications: {
     onTaskComplete: true,

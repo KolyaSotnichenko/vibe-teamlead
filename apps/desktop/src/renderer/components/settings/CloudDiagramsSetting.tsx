@@ -1,6 +1,6 @@
 /**
  * Settings → Agents: cloud architecture diagrams with TerraVision (experimental,
- * on by default) and what is installed for it. Nothing is installed for the user.
+ * off by default) and what is installed for it. Nothing is installed for the user.
  */
 
 import { useEffect, useState } from 'react';
@@ -16,7 +16,7 @@ interface Props {
 
 export function CloudDiagramsSetting({ settings, onSettingsChange }: Props) {
   const { t } = useTranslation(['cloud']);
-  const enabled = settings.cloudDiagramsEnabled !== false;
+  const enabled = settings.cloudDiagramsEnabled === true;
   const [tools, setTools] = useState<CloudToolsState | null>(null);
 
   useEffect(() => {

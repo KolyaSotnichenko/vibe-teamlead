@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const settings = vi.hoisted(() => ({ value: {} as Record<string, unknown> | undefined }));
 vi.mock('../../../settings-utils', () => ({ readSettingsFile: () => settings.value }));
 
-import { cloudDiagramsLaunch, isCloudDiagramsEnabled } from '../cloud-setting';
+import { cloudDiagramsLaunch, isCloudDiagramsEnabled, migrateCloudDiagramsOff } from '../cloud-setting';
 import { architectTaskText } from '../session-input';
 import { CLOUD_DESIGN_MARKER } from '../infra-heuristic';
 
@@ -16,12 +16,30 @@ describe('isCloudDiagramsEnabled', () => {
     settings.value = {};
   });
 
-  it('is on by default and off only when turned off', () => {
-    expect(isCloudDiagramsEnabled()).toBe(true);
-    settings.value = { cloudDiagramsEnabled: false };
+  it('is off by default (users install uv and Graphviz themselves) and on only when turned on', () => {
     expect(isCloudDiagramsEnabled()).toBe(false);
     settings.value = undefined;
+    expect(isCloudDiagramsEnabled()).toBe(false);
+    settings.value = { cloudDiagramsEnabled: false, _migratedCloudDiagramsOff: true };
+    expect(isCloudDiagramsEnabled()).toBe(false);
+    settings.value = { cloudDiagramsEnabled: true, _migratedCloudDiagramsOff: true };
     expect(isCloudDiagramsEnabled()).toBe(true);
+  });
+
+  it('counts the "on" saved while it was on by default as off, until the owner turns it on again', () => {
+    settings.value = { cloudDiagramsEnabled: true };
+    expect(isCloudDiagramsEnabled()).toBe(false);
+  });
+});
+
+describe('migrateCloudDiagramsOff', () => {
+  it('turns it off once for everyone, then leaves the choice alone', () => {
+    const saved: Record<string, unknown> = { cloudDiagramsEnabled: true };
+    expect(migrateCloudDiagramsOff(saved)).toBe(true);
+    expect(saved).toEqual({ cloudDiagramsEnabled: false, _migratedCloudDiagramsOff: true });
+    saved.cloudDiagramsEnabled = true;
+    expect(migrateCloudDiagramsOff(saved)).toBe(false);
+    expect(saved.cloudDiagramsEnabled).toBe(true);
   });
 });
 

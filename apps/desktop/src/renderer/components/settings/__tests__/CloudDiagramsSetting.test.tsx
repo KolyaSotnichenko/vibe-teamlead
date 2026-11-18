@@ -20,10 +20,20 @@ beforeEach(() => {
 });
 
 describe('CloudDiagramsSetting', () => {
-  it('is on by default and turns off', () => {
-    tools.mockResolvedValue({ success: true, data: { ready: true, drawFromCode: true, missing: [], hints } });
+  it('is off by default and turns on', () => {
     const onChange = vi.fn();
     render(<CloudDiagramsSetting settings={{} as AppSettings} onSettingsChange={onChange} />);
+    const toggle = screen.getByRole('switch');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(tools).not.toHaveBeenCalled();
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith({ cloudDiagramsEnabled: true });
+  });
+
+  it('is on when turned on, and turns off', () => {
+    tools.mockResolvedValue({ success: true, data: { ready: true, drawFromCode: true, missing: [], hints } });
+    const onChange = vi.fn();
+    render(<CloudDiagramsSetting settings={{ cloudDiagramsEnabled: true } as AppSettings} onSettingsChange={onChange} />);
     const toggle = screen.getByRole('switch');
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(toggle);
@@ -32,7 +42,7 @@ describe('CloudDiagramsSetting', () => {
 
   it("says what's missing with an install line for each, when on", async () => {
     tools.mockResolvedValue({ success: true, data: { ready: false, drawFromCode: false, missing: ['graphviz', 'terraform'], hints } });
-    render(<CloudDiagramsSetting settings={{} as AppSettings} onSettingsChange={vi.fn()} />);
+    render(<CloudDiagramsSetting settings={{ cloudDiagramsEnabled: true } as AppSettings} onSettingsChange={vi.fn()} />);
     expect(await screen.findByText('cloud:settings.notReady')).toBeInTheDocument();
     expect(screen.getByText('brew install graphviz')).toBeInTheDocument();
     expect(screen.getByText('brew install opentofu')).toBeInTheDocument();
@@ -41,7 +51,7 @@ describe('CloudDiagramsSetting', () => {
 
   it('says it is ready', async () => {
     tools.mockResolvedValue({ success: true, data: { ready: true, drawFromCode: true, missing: [], hints } });
-    render(<CloudDiagramsSetting settings={{} as AppSettings} onSettingsChange={vi.fn()} />);
+    render(<CloudDiagramsSetting settings={{ cloudDiagramsEnabled: true } as AppSettings} onSettingsChange={vi.fn()} />);
     expect(await screen.findByText('cloud:settings.ready')).toBeInTheDocument();
   });
 

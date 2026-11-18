@@ -26,7 +26,7 @@ Settings save by themselves when you leave a section or close Settings (×, Esca
 - Architect: every task / complex tasks only / never.
 - Format and lint after each edit: the project's own prettier/ESLint, Biome, ruff or gofmt on every file the coder writes. On by default.
 - Language servers for agents: bundled TypeScript and Python servers, gopls/rust-analyzer/clangd when installed. On by default; turn off on very large repositories if memory is a problem.
-- Cloud architecture diagrams (TerraVision, experimental): on by default; turn off here. For cloud-infrastructure tasks the architect also draws the target cloud architecture, and after merges that change Terraform the app redraws it from the code (see "Cloud architecture diagrams" in the pipeline page). A line under it says what is installed and what is missing (uv, Graphviz, Git, Terraform or OpenTofu) with an install command for each; nothing is installed for you, and without them nothing happens.
+- Cloud architecture diagrams (TerraVision, experimental): optional, off by default; turn it on here and install uv and Graphviz (and Terraform or OpenTofu to draw from code). Everyone starts with it off, including those who had it on as the earlier default. For cloud-infrastructure tasks the architect also draws the target cloud architecture, and after merges that change Terraform the app redraws it from the code (see "Cloud architecture diagrams" in the pipeline page). A line under it says what is installed and what is missing (uv, Graphviz, Git, Terraform or OpenTofu) with an install command for each; nothing is installed for you, and without them nothing happens.
 - Security QA (Strix) with its own model and key from a provider of your choice.
 
 ### Setup wizard

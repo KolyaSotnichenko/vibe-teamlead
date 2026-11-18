@@ -318,8 +318,8 @@ export interface AppSettings {
   /**
    * Cloud architecture diagrams with TerraVision (experimental): the architect of a
    * cloud-infrastructure task draws the target cloud architecture, and the app
-   * redraws it from Terraform after merges that change it. On unless false; does
-   * nothing when TerraVision's tools aren't installed.
+   * redraws it from Terraform after merges that change it. Off unless true (and
+   * set after _migratedCloudDiagramsOff); does nothing when TerraVision's tools aren't installed.
    */
   cloudDiagramsEnabled?: boolean;
   // API keys used by memory embeddings (OpenAI, Google)
@@ -363,6 +363,8 @@ export interface AppSettings {
   _migratedAgentProfileToAuto?: boolean;
   _migratedDefaultModelSync?: boolean;
   _migratedUltrathinkToHigh?: boolean;
+  /** Cloud architecture diagrams became off by default (an earlier release had them on) */
+  _migratedCloudDiagramsOff?: boolean;
   // Language preference for UI (i18n)
   language?: SupportedLanguage;
   // Developer tools preferences

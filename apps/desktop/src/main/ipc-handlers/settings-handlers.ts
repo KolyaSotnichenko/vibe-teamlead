@@ -18,6 +18,7 @@ import { readSettingsFile, writeSettingsFile } from '../settings-utils';
 import { resetMemoryService } from './context/memory-service-factory';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { stripLegacySettings } from '../ai/claude-code/credential-migration';
+import { migrateCloudDiagramsOff } from '../ai/cloud-diagrams/cloud-setting';
 import { debugLog } from '../../shared/utils/debug-logger';
 import { getPlatformKey } from '../platform';
 import { openSystemTerminal } from '../utils/open-terminal';
@@ -101,6 +102,9 @@ export function registerSettingsHandlers(
         settings._migratedUltrathinkToHigh = true;
         needsSave = true;
       }
+
+      // Migration: Cloud architecture diagrams (experimental) are off for everyone once; the owner turns them on
+      if (migrateCloudDiagramsOff(settings as unknown as Record<string, unknown>)) needsSave = true;
 
       // Migration: A UI language that is no longer shipped (French was replaced by
       // Ukrainian) falls back to the OS language when available, otherwise English
