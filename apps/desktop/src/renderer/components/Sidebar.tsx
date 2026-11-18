@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Plus,
-  Settings,
   LayoutGrid,
   MonitorPlay,
   Terminal,
@@ -14,7 +13,6 @@ import {
   GitMerge,
   Sparkles,
   GitBranch,
-  HelpCircle,
   PanelLeft,
   PanelLeftClose,
   FileInput,
@@ -50,7 +48,8 @@ import type { GitStatus } from '../../shared/types';
 export type SidebarView = 'kanban' | 'preview' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs' | 'deploy';
 
 interface SidebarProps {
-  onSettingsClick: () => void;
+  /** Settings opens from the status bar now; kept so callers don't change */
+  onSettingsClick?: () => void;
   onNewTaskClick: () => void;
   activeView?: SidebarView;
   onViewChange?: (view: SidebarView) => void;
@@ -108,7 +107,6 @@ function BrandMark({ className }: { className?: string }) {
 }
 
 export function Sidebar({
-  onSettingsClick,
   onNewTaskClick,
   activeView = 'kanban',
   onViewChange
@@ -423,36 +421,10 @@ export function Sidebar({
         {/* Update Banner - shows when app update is available */}
         <UpdateBanner />
 
-        {/* Create (task or spec document) + settings/help */}
+        {/* Create (task or spec document); Settings and Help live in the status bar */}
         <div className={cn("border-t border-border", isCollapsed ? "space-y-1 p-2" : "space-y-1 p-3")}>
           <div className={cn("flex", isCollapsed ? "flex-col gap-1" : "items-stretch gap-1")}>
             {createMenu}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={onSettingsClick}
-                  aria-label={t('actions.settings')}
-                  className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.settings')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => onViewChange?.('docs')}
-                  aria-label={t('tooltips.help')}
-                  className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  <HelpCircle className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.help')}</TooltipContent>
-            </Tooltip>
           </div>
           {!isCollapsed && selectedProject && !selectedProject.autoBuildPath && (
             <p className="mt-2 text-xs text-muted-foreground">
