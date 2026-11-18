@@ -42,6 +42,16 @@ const started = [
 const values = (example: string, run = started) => Object.fromEntries([...composeEnv(example, { planned, started: run })].map(([name, v]) => [name, v.value]));
 
 describe('composeEnv', () => {
+  it('gives the S3 secret setting the password and the key setting the user, when they differ (found on real Docker)', () => {
+    const minio = startedAs(byName('minio'), { 9000: 50003 }, { MINIO_ROOT_USER: 'minio', MINIO_ROOT_PASSWORD: 'minio12345' });
+    expect(values('AWS_ACCESS_KEY_ID=x\nAWS_SECRET_ACCESS_KEY=y\nS3_ACCESS_KEY=x\nS3_SECRET_KEY=y', [minio])).toMatchObject({
+      AWS_ACCESS_KEY_ID: 'minio',
+      AWS_SECRET_ACCESS_KEY: 'minio12345',
+      S3_ACCESS_KEY: 'minio',
+      S3_SECRET_KEY: 'minio12345',
+    });
+  });
+
   it('points a URL at a service by its compose name to its local port, with the credentials it started with', () => {
     expect(values('AMQP_URL=amqp://guest:guest@rabbitmq:5672/vhost')).toEqual({ AMQP_URL: 'amqp://app:apppass@127.0.0.1:50001/vhost' });
   });

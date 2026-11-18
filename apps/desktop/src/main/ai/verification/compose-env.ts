@@ -141,8 +141,9 @@ const SETTINGS: Partial<Record<ComposeKind, (name: string, value: string) => ((s
   s3: (name, value) => {
     if (!S3_NAMESPACE.test(name)) return undefined;
     const credentials = (started: StartedComposeService) => adapterOf('s3').credentials?.(started.env, started.image);
-    if (/(ACCESS_KEY_ID|ACCESS_KEY)$/.test(name)) return (s) => credentials(s)?.user ?? '';
+    // The secret first: SECRET_ACCESS_KEY also ends in ACCESS_KEY
     if (/(SECRET_ACCESS_KEY|SECRET_KEY)$/.test(name)) return (s) => credentials(s)?.password ?? '';
+    if (/(ACCESS_KEY_ID|ACCESS_KEY)$/.test(name)) return (s) => credentials(s)?.user ?? '';
     if (/SESSION_TOKEN$/.test(name)) return () => '';
     if (/PATH_STYLE/.test(name)) return () => 'true';
     if (/(USE_SSL|_SSL)$/.test(name)) return () => 'false';
