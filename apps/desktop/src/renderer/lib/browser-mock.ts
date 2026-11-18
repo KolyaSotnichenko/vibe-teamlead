@@ -226,6 +226,8 @@ const browserMockAPI: ElectronAPI = {
     onOverlayEvent: () => () => {},
     loadNotes: async () => ({ success: true, data: [] }),
     runningDoc: async () => ({ success: true, data: { exists: false as const, dir: '/mock' } }),
+    env: async () => ({ success: true, data: { running: false, restartNeeded: false, databases: [], mail: false, services: [] } }),
+    restartServices: async (projectId: string) => ({ success: true, data: { projectId, stage: 'stopped' as const, origins: [] } }),
     saveNotes: async (_projectId: string, notes: unknown[]) => ({ success: true, data: notes as never[] }),
   },
   deploy: {

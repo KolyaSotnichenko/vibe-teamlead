@@ -33,5 +33,7 @@ export const createPreviewAPI = (): PreviewAPI => ({
   },
   loadNotes: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_LOAD, projectId, taskId),
   runningDoc: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RUNNING_DOC, projectId, taskId),
+  env: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_ENV, projectId, taskId),
+  restartServices: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RESTART_SERVICES, projectId, taskId),
   saveNotes: (projectId, notes, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_NOTES_SAVE, projectId, notes, taskId),
 });

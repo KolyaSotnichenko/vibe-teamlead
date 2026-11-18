@@ -1,0 +1,167 @@
+/**
+ * The variables a preview service gets, each with where its value came from. The preview
+ * starts its services with exactly these (`envOf`), and the Environment panel shows them, so
+ * the two never differ. Sources, in the order they apply: the root's and the service folder's
+ * `.env.example`, the preview's database (connection settings it has no database for set
+ * empty, so the app can't reach a real one), its mail catcher, the owner's values for all
+ * services, the other services' preview addresses, the owner's values for this service, and
+ * the port. Never `.env`. Pure: no file access.
+ */
+
+import type { PreviewEnvService, PreviewEnvSource, PreviewEnvVar } from '../../shared/types/preview';
+import type { ProjectSettings } from '../../shared/types/project';
+import { composeFilesInOrder, imagesFromComposeFiles, type StartedService, serviceEnv } from '../ai/verification/detect-checks';
+import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
+import { mailEnv, needsMail } from './preview-mail';
+
+const LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+
+/** Each key's value as serviceEnv reads it */
+function exampleValues(text: string | null): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const line of (text ?? '').split('\n')) {
+    const match = LINE.exec(line);
+    if (match) values.set(match[1], match[2].replace(/\s+#.*$/, '').trim().replace(/^(["'])(.*)\1$/, '$2'));
+  }
+  return values;
+}
+
+export interface BaseEnvInput {
+  /** The service's folder, '' for the root */
+  dir: string;
+  /** `.env.example` at the root, null when there is none */
+  rootExample: string | null;
+  /** `.env.example` in the folder (null for the root itself) */
+  dirExample: string | null;
+  /** The preview's database services */
+  started: StartedService[];
+  /** The mail catcher's SMTP port, when it runs */
+  mailPort?: number;
+  /** The owner's values for every service (`previewEnv`) */
+  overrides?: Record<string, string>;
+  /** Before the start: the database's and the mail catcher's values aren't known yet */
+  pending?: boolean;
+}
+
+/** A folder's variables: what libraries, migrations and seeds run with, and what each service starts from. */
+export function baseEnvVars(input: BaseEnvInput): PreviewEnvVar[] {
+  const root = exampleValues(input.rootExample);
+  const own = input.dir ? exampleValues(input.dirExample) : new Map<string, string>();
+  const examples = [input.rootExample, input.dir ? input.dirExample : null].filter((text): text is string => text !== null).join('\n');
+  const env = serviceEnv(examples, input.started);
+  const vars = new Map<string, PreviewEnvVar>();
+  const set = (name: string, value: string, source: PreviewEnvSource) => {
+    const pending = input.pending && (source === 'database' || source === 'mail');
+    vars.set(name, { name, value: pending ? '' : value, source, ...(pending ? { pending: true } : {}) });
+  };
+  for (const [name, value] of Object.entries(env)) {
+    if (own.has(name) && own.get(name) === value) set(name, value, 'exampleDir');
+    else if (!own.has(name) && root.has(name) && root.get(name) === value) set(name, value, 'example');
+    else set(name, value, 'database');
+  }
+  for (const name of [...root.keys(), ...own.keys()]) if (!vars.has(name)) set(name, '', 'blocked');
+  if (input.mailPort) for (const [name, value] of Object.entries(mailEnv(examples, input.mailPort))) set(name, value, 'mail');
+  for (const [name, value] of Object.entries(input.overrides ?? {})) {
+    const before = vars.get(name);
+    vars.set(name, { name, value, source: 'override', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });
+  }
+  return [...vars.values()];
+}
+
+export interface ServiceEnvInput {
+  /** Example port → that service's preview address */
+  byExamplePort: Map<number, string>;
+  urlEnv?: Record<string, string>;
+  /** Each service's preview address */
+  urls: Record<string, string>;
+  /** The owner's values for this service (`previewServiceEnv`) */
+  serviceOverrides?: Record<string, string>;
+  portEnv: string;
+  port?: number;
+  /** Before the start: addresses and the port aren't known yet */
+  pending?: boolean;
+}
+
+/** One service's variables, on top of its folder's. */
+export function serviceEnvVars(base: PreviewEnvVar[], input: ServiceEnvInput): PreviewEnvVar[] {
+  const vars = new Map(base.map((v) => [v.name, { ...v }]));
+  const rewritten = rewriteExampleUrls(Object.fromEntries(base.map((v) => [v.name, v.value])), input.byExamplePort);
+  const address = (name: string, value: string) =>
+    vars.set(name, { name, value: input.pending ? '' : value, source: 'address', ...(input.pending ? { pending: true } : {}) });
+  for (const v of base) {
+    if (rewritten[v.name] === v.value) continue;
+    if (v.source === 'override') vars.set(v.name, { ...v, value: rewritten[v.name] });
+    else address(v.name, rewritten[v.name]);
+  }
+  for (const [name, other] of Object.entries(input.urlEnv ?? {})) if (input.urls[other]) address(name, input.urls[other]);
+  for (const [name, value] of Object.entries(input.serviceOverrides ?? {})) {
+    const before = vars.get(name);
+    vars.set(name, { name, value, source: 'serviceOverride', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });
+  }
+  vars.set(input.portEnv, {
+    name: input.portEnv,
+    value: input.port ? String(input.port) : '',
+    source: 'port',
+    ...(input.port ? {} : { pending: true }),
+  });
+  return [...vars.values()];
+}
+
+/** The variables as a process environment; the port is passed by the dev server itself. */
+export function envOf(vars: PreviewEnvVar[]): Record<string, string> {
+  return Object.fromEntries(vars.filter((v) => v.source !== 'port').map((v) => [v.name, v.value]));
+}
+
+/** The root's and a folder's `.env.example`, when tracked */
+export function exampleTexts(files: string[], read: (path: string) => string | null, dir: string): Pick<BaseEnvInput, 'rootExample' | 'dirExample'> {
+  const text = (path: string) => (files.includes(path) ? (read(path) ?? '') : null);
+  return { rootExample: text('.env.example'), dirExample: dir ? text(`${dir}/.env.example`) : null };
+}
+
+const PLACEHOLDER_URLS: Record<StartedService['kind'], string> = {
+  postgres: 'postgresql://preview:preview@127.0.0.1:1/preview',
+  mysql: 'mysql://preview:preview@127.0.0.1:1/preview',
+  redis: 'redis://127.0.0.1:1',
+  mongo: 'mongodb://preview:preview@127.0.0.1:1/preview',
+};
+
+export interface PlannedEnv {
+  databases: string[];
+  mail: boolean;
+  services: PreviewEnvService[];
+}
+
+/**
+ * What each service will get at the next start, from the project's files alone: the database
+ * kinds compose names, the mail catcher when the examples configure SMTP; their addresses and
+ * the ports are pending. Pure.
+ */
+export function plannedEnv(
+  settings: Pick<ProjectSettings, 'previewServices' | 'previewEnv' | 'previewServiceEnv'>,
+  files: string[],
+  read: (path: string) => string | null,
+): PlannedEnv {
+  const services = settings.previewServices ?? [];
+  const kinds = imagesFromComposeFiles(composeFilesInOrder(files).map((file) => read(file) ?? '')).map((image) => image.kind);
+  const started = kinds.map((kind) => ({ kind, url: PLACEHOLDER_URLS[kind] }));
+  const allExamples = [...new Set(['', ...services.map((s) => s.dir)])]
+    .map((dir) => (dir ? `${dir}/.env.example` : '.env.example'))
+    .filter((path) => files.includes(path))
+    .map((path) => read(path) ?? '')
+    .join('\n');
+  const mail = needsMail(allExamples);
+  const urls = Object.fromEntries(services.map((s) => [s.name, `http://preview-${s.name}.invalid`]));
+  const byExamplePort = previewAddressesByExamplePort(services, urls, read);
+  return {
+    databases: kinds,
+    mail,
+    services: services.map((service) => ({
+      service: service.name,
+      dir: service.dir,
+      vars: serviceEnvVars(
+        baseEnvVars({ dir: service.dir, ...exampleTexts(files, read, service.dir), started, mailPort: mail ? 1 : undefined, overrides: settings.previewEnv, pending: true }),
+        { byExamplePort, urlEnv: service.urlEnv, urls, serviceOverrides: settings.previewServiceEnv?.[service.name], portEnv: service.portEnv ?? 'PORT', pending: true },
+      ),
+    })),
+  };
+}

@@ -126,6 +126,42 @@ export interface UxReviewResult {
 /** The project's RUNNING.md (how to run it) and the folder it was read from */
 export type PreviewRunningDoc = ({ exists: false } | { exists: true; markdown: string; truncated: boolean }) & { dir: string };
 
+/**
+ * Where a preview variable's value came from: the project's example settings (root or the
+ * service's folder), the preview's own database or mail catcher, left empty on purpose (it
+ * would connect to a real service), another service's preview address, the port the
+ * preview chose, or the owner's value (for all services or this one).
+ */
+export type PreviewEnvSource = 'example' | 'exampleDir' | 'database' | 'mail' | 'blocked' | 'address' | 'port' | 'override' | 'serviceOverride';
+
+export interface PreviewEnvVar {
+  name: string;
+  value: string;
+  source: PreviewEnvSource;
+  /** What the preview would set without the owner's value, and where that came from */
+  automatic?: { value: string; source: PreviewEnvSource };
+  /** Known only once the preview starts (a database's address, a port) */
+  pending?: boolean;
+}
+
+export interface PreviewEnvService {
+  service: string;
+  dir: string;
+  vars: PreviewEnvVar[];
+}
+
+export interface PreviewEnvReport {
+  /** Whether the values are what the running services got, or what they will get at the next start */
+  running: boolean;
+  /** The saved values differ from what the running services started with */
+  restartNeeded: boolean;
+  /** The database kinds the preview started (or will start), e.g. postgres */
+  databases: string[];
+  /** Whether the preview catches the app's mail (or will) */
+  mail: boolean;
+  services: PreviewEnvService[];
+}
+
 export interface PreviewAPI {
   /** `taskId`: that task's worktree instead of main */
   start: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
@@ -154,6 +190,10 @@ export interface PreviewAPI {
   loadNotes: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewNote[]>>;
   /** RUNNING.md from the project's root, or the task's worktree */
   runningDoc: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewRunningDoc>>;
+  /** Every variable each service gets (or will get), with where it came from */
+  env: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewEnvReport>>;
+  /** Restarts the services with the saved values; starts the preview when it isn't running */
+  restartServices: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
   /** Replaces the draft; returns what was kept */
   saveNotes: (projectId: string, notes: PreviewNote[], taskId?: string) => Promise<IPCResult<PreviewNote[]>>;
 }

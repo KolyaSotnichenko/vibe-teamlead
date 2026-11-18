@@ -13,12 +13,13 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 
-import type { PreviewAddressIssue, PreviewStatus } from '../../shared/types/preview';
+import type { PreviewAddressIssue, PreviewEnvReport, PreviewEnvVar, PreviewStatus } from '../../shared/types/preview';
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
-import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, serviceEnv } from '../ai/verification/detect-checks';
-import { examplePort, previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
+import { composeFilesInOrder, detectChecks, imagesFromComposeFiles } from '../ai/verification/detect-checks';
+import { examplePort, previewAddressesByExamplePort } from './example-urls';
+import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
 import { type DisplacedPorts, findHardcodedAddresses, proxiedPaths } from './hardcoded-addresses';
 import { localPortFree } from './preview-ports';
 import { probeThroughPage, type ProbeResult } from './probe';
@@ -28,7 +29,7 @@ import { findOnPath, runProcess, runShell, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
 import { type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
-import { mailEnv, needsMail, type PreviewMail, startPreviewMail } from './preview-mail';
+import { needsMail, type PreviewMail, startPreviewMail } from './preview-mail';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
 export type { PreviewStage, PreviewStatus } from '../../shared/types/preview';
@@ -86,6 +87,8 @@ interface Session {
   servers: string[];
   /** Where each running service logs, by service name */
   logs: Record<string, string>;
+  /** What each started service got, by service name, for the Environment panel */
+  vars: Record<string, PreviewEnvVar[]>;
   database?: PreviewDatabase;
   mail?: PreviewMail;
   status: PreviewStatus;
@@ -204,25 +207,24 @@ function check(session: Session): void {
   if (cancelled(session)) throw new Cancelled();
 }
 
-const exampleKeys = (text: string) =>
-  text.split('\n').map((line) => /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=/.exec(line)?.[1]).filter((key): key is string => !!key);
-
 /**
- * The variables of one folder: its and the root's `.env.example`, the database, the
- * owner's preview settings. Never `.env`. An example's connection setting the preview
- * has no database for is set empty, so the app can't fall back to a real one.
+ * The variables of one folder, with their sources (preview-env.ts): its and the root's
+ * `.env.example`, the database, the mail catcher, the owner's preview settings. Never `.env`.
+ * An example's connection setting the preview has no database for is set empty, so the app
+ * can't fall back to a real one.
  */
+function varsFor(session: Session, dir: string, files: string[]): PreviewEnvVar[] {
+  return baseEnvVars({
+    dir,
+    ...exampleTexts(files, (path) => session.deps.read(session.worktree, path), dir),
+    started: session.database?.status === 'started' ? session.database.started : [],
+    mailPort: session.mail?.status === 'started' ? session.mail.smtpPort : undefined,
+    overrides: session.project.settings.previewEnv,
+  });
+}
+
 function envFor(session: Session, dir: string, files: string[]): Record<string, string> {
-  const root = session.worktree;
-  const started = session.database?.status === 'started' ? session.database.started : [];
-  const examples = ['.env.example', ...(dir ? [`${dir}/.env.example`] : [])]
-    .filter((path) => files.includes(path))
-    .map((path) => session.deps.read(root, path) ?? '')
-    .join('\n');
-  const env = serviceEnv(examples, started);
-  for (const key of exampleKeys(examples)) if (!(key in env)) env[key] = '';
-  const mail = session.mail?.status === 'started' && session.mail.smtpPort ? mailEnv(examples, session.mail.smtpPort) : {};
-  return { ...env, ...mail, ...(session.project.settings.previewEnv ?? {}) };
+  return envOf(varsFor(session, dir, files));
 }
 
 /** The workspace packages the services use from built output: a fresh worktree has no dist/ for them. */
@@ -343,8 +345,15 @@ async function startServices(session: Session, files: string[]): Promise<Started
   emit(session, { stage: 'services' });
   for (const service of ordered) {
     check(session);
-    const env = rewriteExampleUrls(envFor(session, service.dir, files), byExamplePort);
-    for (const [variable, other] of Object.entries(service.urlEnv ?? {})) if (urls[other]) env[variable] = urls[other];
+    const vars = serviceEnvVars(varsFor(session, service.dir, files), {
+      byExamplePort,
+      urlEnv: service.urlEnv,
+      urls,
+      serviceOverrides: session.project.settings.previewServiceEnv?.[service.name],
+      portEnv: service.portEnv ?? 'PORT',
+      port: ports[service.name],
+    });
+    const env = envOf(vars);
     const name = serverName(service);
     session.servers.push(name);
     let started;
@@ -372,6 +381,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
       throw new Cancelled();
     }
     actualPort = started.port;
+    session.vars[service.name] = vars.map((v) => (v.source === 'port' ? { ...v, value: String(started.port) } : v));
     urls[service.name] = started.url;
     session.logs[service.name] = started.logPath;
     if (service.page) pageUrl = started.url;
@@ -590,6 +600,7 @@ export async function startPreview(
     worktree: options.task?.worktree ?? previewWorktreePath(deps.worktreesRoot, project.id),
     servers: [],
     logs: {},
+    vars: {},
     status: { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'worktree', origins: [] },
     unsubscribe: () => {},
     work: Promise.resolve(),
@@ -634,6 +645,54 @@ export async function releaseTaskPreview(
     await Promise.allSettled([session.work]);
   }
   await removeVolumes(worktree).catch(() => {});
+}
+
+/**
+ * Restarts the running preview's services with the project's current settings (the owner's
+ * new values); the database, mail catcher and worktree stay. Null when that preview isn't
+ * running and ready, so the caller starts it instead.
+ */
+export async function restartPreviewServices(project: Project, taskId?: string): Promise<PreviewStatus | null> {
+  const session = current;
+  if (!session || session.project.id !== project.id || session.task?.taskId !== taskId || session.status.stage !== 'ready') return null;
+  session.project = project;
+  const work = session.work.then(async () => {
+    if (cancelled(session)) return;
+    try {
+      const files = await session.deps.listFiles(session.worktree);
+      check(session);
+      emit(session, { stage: 'services', url: undefined, origins: [], addressIssues: undefined, message: undefined });
+      await stopServers(session);
+      session.vars = {};
+      ready(session, await startServices(session, files), files);
+    } catch (error) {
+      if (error instanceof Cancelled || cancelled(session)) return;
+      await teardown(session);
+      failed(session, error);
+    }
+  });
+  session.work = work;
+  await work;
+  return session.status;
+}
+
+const overridesOf = (project: Project) => JSON.stringify([project.settings.previewEnv ?? {}, project.settings.previewServiceEnv ?? {}]);
+
+/**
+ * What the running preview's services got, when this preview (the project's, or that task's)
+ * is ready; null otherwise, and the caller works out what they will get. `project` is the
+ * saved one: values saved since the start ask for a restart.
+ */
+export function runningPreviewEnv(project: Project, taskId?: string): PreviewEnvReport | null {
+  const session = current;
+  if (!session || session.project.id !== project.id || session.task?.taskId !== taskId || session.status.stage !== 'ready') return null;
+  return {
+    running: true,
+    restartNeeded: overridesOf(project) !== overridesOf(session.project),
+    databases: session.database?.status === 'started' ? session.database.started.map((s) => s.kind) : [],
+    mail: session.mail?.status === 'started',
+    services: (session.project.settings.previewServices ?? []).map((service) => ({ service: service.name, dir: service.dir, vars: session.vars[service.name] ?? [] })),
+  };
 }
 
 /** Where the running preview's services log, for the Logs panel */

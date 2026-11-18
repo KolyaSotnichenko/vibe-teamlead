@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, PreviewService } from '../../../shared/types/project';
 import { inMergeQueue } from '../../ai/merge/merge-queue';
 import { previewTaskKey, type PreviewDatabase } from '../preview-database';
-import { type PreviewDeps, type PreviewStatus, currentPreview, previewLogs, previewMailPort, releaseTaskPreview, startPreview, stopPreview } from '../preview-session';
+import { type PreviewDeps, type PreviewStatus, currentPreview, previewLogs, previewMailPort, releaseTaskPreview, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview-session';
 
 const SERVICES: PreviewService[] = [
   { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true, urlEnv: { NEXT_PUBLIC_API_URL: 'api' } },
@@ -631,6 +631,49 @@ describe('a preview session', () => {
     const { d } = deps();
     await startPreview(project(), () => {}, d);
     expect(vi.mocked(d.sync).mock.calls[0][3]).toBe(join('/home/.vibe-teamlead/worktrees/preview', 'p1'));
+  });
+});
+
+describe('the Environment panel', () => {
+  const withService = (env: Record<string, Record<string, string>>): Project => {
+    const p = project();
+    return { ...p, settings: { ...p.settings, previewServiceEnv: env } };
+  };
+
+  it("reports what each running service got, with sources, and the owner's per-service values reach only that service", async () => {
+    const { d } = deps();
+    const p = withService({ api: { JWT_SECRET: 'mine' } });
+    await startPreview(p, () => {}, d);
+    const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
+    expect(api.env.JWT_SECRET).toBe('mine');
+    const report = runningPreviewEnv(p)!;
+    expect(report).toMatchObject({ running: true, restartNeeded: false, databases: ['postgres'], mail: false });
+    const apiVars = Object.fromEntries(report.services.find((s) => s.service === 'api')!.vars.map((v) => [v.name, v]));
+    expect(apiVars.JWT_SECRET).toMatchObject({ value: 'mine', source: 'serviceOverride', automatic: { value: 'dev-secret', source: 'exampleDir' } });
+    expect(apiVars.DATABASE_URL).toMatchObject({ source: 'database' });
+    expect(apiVars.FEATURE_X).toMatchObject({ value: 'on', source: 'override' });
+    expect(apiVars.PORT.source).toBe('port');
+    const web = report.services.find((s) => s.service === 'web')!.vars.find((v) => v.name === 'JWT_SECRET');
+    expect(web).toBeUndefined();
+    expect(runningPreviewEnv(p, 'task-1')).toBeNull();
+    expect(runningPreviewEnv(withService({ api: { JWT_SECRET: 'newer' } }))?.restartNeeded).toBe(true);
+  });
+
+  it('restarts only the services with the saved values; the database stays', async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d);
+    vi.mocked(d.startServer).mockClear();
+    const status = await restartPreviewServices(withService({ api: { JWT_SECRET: 'changed' } }));
+    expect(status?.stage).toBe('ready');
+    expect(d.startDatabase).toHaveBeenCalledTimes(1);
+    expect(d.stopServer).toHaveBeenCalledWith('preview-api');
+    const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
+    expect(api.env.JWT_SECRET).toBe('changed');
+    expect(runningPreviewEnv(withService({ api: { JWT_SECRET: 'changed' } }))?.restartNeeded).toBe(false);
+  });
+
+  it('has nothing to restart when no preview is ready', async () => {
+    expect(await restartPreviewServices(project())).toBeNull();
   });
 });
 

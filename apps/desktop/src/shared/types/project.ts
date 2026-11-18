@@ -50,6 +50,8 @@ export interface ProjectSettings {
   previewServices?: PreviewService[];
   /** Variables the preview's services get on top of `.env.example`. Never the project's `.env`. */
   previewEnv?: Record<string, string>;
+  /** The owner's values for one service, by service name; they win over `previewEnv`. Never the project's `.env`. */
+  previewServiceEnv?: Record<string, Record<string, string>>;
   /** Placeholders the owner said to leave, as `file\ntext` (loose-ends.ts) */
   ignoredLooseEnds?: string[];
   /** CI setup: what has been set up (the GitHub repository) */
