@@ -42,11 +42,14 @@ export function RunningDoc({ projectId, doc }: { projectId: string; doc: Preview
     return (
       <div className="space-y-2 text-sm">
         <p className="text-muted-foreground">{t('preview.running.missing')}</p>
-        {created ? (
-          <p className="text-foreground">{t('preview.running.taskCreated')}</p>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => void make()}>{t('preview.running.createTask')}</Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {created ? (
+            <p className="text-foreground">{t('preview.running.taskCreated')}</p>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => void make()}>{t('preview.running.createTask')}</Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => openTerminal(doc.dir)}>{t('preview.running.openTerminal')}</Button>
+        </div>
       </div>
     );
   }

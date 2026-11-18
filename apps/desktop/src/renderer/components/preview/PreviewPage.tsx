@@ -92,7 +92,8 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
         side={side}
         onSide={setSide}
         uxReview={!task}
-        howToRun={runningDoc?.exists === true}
+        // Always there: a blank or broken page is not an error the app can see
+        howToRun={runningDoc !== null}
       />
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
@@ -145,7 +146,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
           <MailPanel projectId={project.id} mail={status?.mail} reason={status?.mailReason} />
         </aside>
       )}
-      {side === 'running' && runningDoc?.exists && (
+      {side === 'running' && runningDoc && (
         <aside aria-label={t('preview.toolbar.running')} className="w-96 shrink-0 overflow-auto border-l border-border bg-background p-4">
           <RunningDoc projectId={project.id} doc={runningDoc} />
         </aside>

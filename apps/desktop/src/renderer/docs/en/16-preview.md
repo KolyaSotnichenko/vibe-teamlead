@@ -59,7 +59,7 @@ Some projects don't come up in the preview: several services, a database it can'
 
 When the preview doesn't start, when a service stops on its own after it was running (the notice names it and shows the last lines of its log), or when the notice about a page that can't reach its API shows, the preview shows `RUNNING.md` under it, with **Open a terminal here**: a new terminal in the project's folder (the task's folder in a task's preview). At the limit of 12 terminals per project it says so and selects your latest terminal instead. Nothing is typed into it; you run the commands. While the app runs, **How to run** in the toolbar shows the file at any time.
 
-Without `RUNNING.md` you get **Create a task: write RUNNING.md** instead. It makes a task in Planning: an agent reads the project, changes no code, writes the file and runs every command it documents where that is safe.
+The **How to run** button in the preview's toolbar is always there, even when the page looks fine to the app but is blank or broken. Without `RUNNING.md` you get **Create a task: write RUNNING.md** and **Open a terminal here** instead. It makes a task in Planning: an agent reads the project, changes no code, writes the file and runs every command it documents where that is safe.
 
 ## Logs and mail
 

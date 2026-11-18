@@ -81,12 +81,15 @@ describe('PreviewPage and RUNNING.md', () => {
     expect(screen.getByRole('heading', { name: 'Start' })).toBeInTheDocument();
   });
 
-  it('has no "How to run" button without RUNNING.md, and no create button while the app runs fine', async () => {
+  it('without RUNNING.md and the app looking fine, still has "How to run": a blank page is not an error the app sees', async () => {
     withDoc(NONE);
     session.status = { projectId: 'p1', stage: 'ready', url: 'http://localhost:4100', origins: [] };
     render(<PreviewPage project={PROJECT} />);
-    await Promise.resolve();
-    expect(screen.queryByRole('button', { name: 'preview.toolbar.running' })).not.toBeInTheDocument();
+    // nothing pushed at the user while the app runs fine...
     expect(screen.queryByRole('button', { name: 'preview.running.createTask' })).not.toBeInTheDocument();
+    // ...but the way in is always there
+    fireEvent.click(await screen.findByRole('button', { name: 'preview.toolbar.running' }));
+    expect(screen.getByRole('button', { name: 'preview.running.createTask' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'preview.running.openTerminal' })).toBeInTheDocument();
   });
 });

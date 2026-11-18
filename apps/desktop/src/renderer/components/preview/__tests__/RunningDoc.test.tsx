@@ -33,9 +33,10 @@ describe('RunningDoc', () => {
     expect(screen.getByText('preview.running.truncated')).toBeInTheDocument();
   });
 
-  it('without RUNNING.md, offers the task that writes it instead of a terminal', async () => {
+  it('without RUNNING.md, offers the task that writes it, and a terminal in the folder', async () => {
     render(<RunningDoc projectId="p1" doc={{ exists: false, dir: '/p' }} />);
-    expect(screen.queryByRole('button', { name: 'preview.running.openTerminal' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'preview.running.openTerminal' }));
+    expect(openTerminal).toHaveBeenCalledWith('/p');
     fireEvent.click(screen.getByRole('button', { name: 'preview.running.createTask' }));
     await waitFor(() => expect(screen.getByText('preview.running.taskCreated')).toBeInTheDocument());
     expect(createTask).toHaveBeenCalledWith('p1', expect.stringContaining('RUNNING.md'), expect.stringContaining('## Acceptance criteria'));
