@@ -39,6 +39,16 @@ describe('startTestServices', () => {
     expect(args.at(-1)).toBe('postgres:18-alpine');
   });
 
+  it("joins the run's network under the compose service's name, still on a local port only", async () => {
+    const { docker, calls } = fakeDocker();
+    await startTestServices([{ kind: 'postgres', image: 'postgres:18-alpine', name: 'pg' }, { kind: 'redis', image: 'redis:7' }], { ...options(docker), network: 'vibe-teamlead-verify-proj' });
+    const [pg, redis] = calls.filter((call) => call[0] === 'run');
+    expect(pg.join(' ')).toContain('--network vibe-teamlead-verify-proj --network-alias pg');
+    expect(redis.join(' ')).toContain('--network vibe-teamlead-verify-proj --network-alias redis');
+    expect(pg).toContain('127.0.0.1::5432');
+    expect(pg.join(' ')).not.toMatch(/--network host|--privileged/);
+  });
+
   it('removes what it started', async () => {
     const { docker, calls } = fakeDocker();
     const services = await startTestServices([{ kind: 'redis', image: 'redis:7' }], options(docker));

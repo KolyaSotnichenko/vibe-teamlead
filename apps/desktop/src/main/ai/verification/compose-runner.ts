@@ -1,7 +1,7 @@
 /**
  * The compose file's infrastructure services as throwaway containers, for one preview session
- * or one check run: on a network of their own (so they find each other by their compose
- * names), each port published on 127.0.0.1 only, nothing mounted, removed afterwards. A
+ * or one check run: on the run's network, with its databases (so they find each other by
+ * their compose names), each port published on 127.0.0.1 only, nothing mounted, removed afterwards. A
  * service is ready when its compose healthcheck passes, or else when its port holds a
  * connection; one that doesn't come up is reported and the rest go on. Buckets the example
  * settings name are created in S3 stand-ins. Leftovers of a run that died are removed by
@@ -37,6 +37,11 @@ export interface ComposeRunOptions {
   /** The label the run's other containers have (`vibe-teamlead-verify`, `vibe-teamlead-preview`) and its value */
   labelKey: string;
   labelValue: string;
+  /**
+   * The run's network (createRunNetwork), which the run's databases are on too: the services
+   * join it and leave it to its owner. Without it they get a network of their own.
+   */
+  network?: string;
   /** Buckets to create in an S3 stand-in */
   buckets?: string[];
   /** A free local port, for a service that must know its host port before it starts (Kafka) */
@@ -91,6 +96,26 @@ export async function removeComposeLeftovers(docker: DockerRun, labels: string |
   for (const id of lines((await docker(['network', 'ls', '-q', ...filters])).stdout)) await docker(['network', 'rm', id]);
 }
 
+export interface RunNetwork {
+  name: string;
+  remove: () => Promise<void>;
+}
+
+/**
+ * One user-defined network for every throwaway container of a run (a preview session or a check
+ * run), named and labelled after the run: each container joins it under its compose service's
+ * name, so they reach each other as in compose. What a run that died left on it goes first.
+ * None when Docker can't create it.
+ */
+export async function createRunNetwork(docker: DockerRun, labelKey: string, labelValue: string): Promise<RunNetwork | undefined> {
+  const name = runKey(labelKey, labelValue);
+  for (const id of lines((await docker(['ps', '-aq', '--filter', `network=${name}`])).stdout)) await docker(['rm', '-f', '-v', id]);
+  await docker(['network', 'rm', name]);
+  const created = await docker(['network', 'create', '--label', `${labelKey}=${labelValue}`, '--label', `${COMPOSE_LABEL}=${name}`, name]);
+  if (!created.ok) return undefined;
+  return { name, remove: async () => { await docker(['network', 'rm', name]); } };
+}
+
 /** Why the services can't start without Docker, in words a user can act on */
 export function composeDockerMissing(services: ComposeService[]): string {
   return `This project's compose file names ${services.map((s) => s.name).join(', ')}, and Docker isn't running. Install or start Docker Desktop to have them started.`;
@@ -120,7 +145,7 @@ async function setUpBuckets(docker: DockerRun, id: string, started: StartedCompo
 
 export async function startComposeServices(services: ComposeService[], options: ComposeRunOptions): Promise<ComposeRun> {
   const {
-    docker, labelKey, labelValue, buckets = [], signal,
+    docker, labelKey, labelValue, network: shared, buckets = [], signal,
     pickPort = freePort, portOpen = (port: number) => tcpHolds(port),
     readyTimeoutMs = READY_TIMEOUT_MS, pollMs = POLL_MS, secret = () => randomBytes(16).toString('hex'),
   } = options;
@@ -130,19 +155,23 @@ export async function startComposeServices(services: ComposeService[], options: 
 
   const key = runKey(labelKey, labelValue);
   const labels = [`${labelKey}=${labelValue}`, `${COMPOSE_LABEL}=${key}`];
-  const network = key;
+  const network = shared ?? key;
   // A run that died can't clean up after itself; only this run's key: other projects' runs go on
-  await removeComposeLeftovers(docker, `${COMPOSE_LABEL}=${key}`);
-  await docker(['network', 'rm', network]);
-  const created = await docker(['network', 'create', ...labels.flatMap((label) => ['--label', label]), network]);
-  if (!created.ok) {
-    return { status: 'unavailable', started: [], failed: [], reason: `Docker could not create a network for the services: ${created.stdout.trim().slice(0, REASON_CHARS)}`, stop: nothing };
+  if (shared) {
+    for (const id of lines((await docker(['ps', '-aq', '--filter', `label=${COMPOSE_LABEL}=${key}`])).stdout)) await docker(['rm', '-f', '-v', id]);
+  } else {
+    await removeComposeLeftovers(docker, `${COMPOSE_LABEL}=${key}`);
+    await docker(['network', 'rm', network]);
+    const created = await docker(['network', 'create', ...labels.flatMap((label) => ['--label', label]), network]);
+    if (!created.ok) {
+      return { status: 'unavailable', started: [], failed: [], reason: `Docker could not create a network for the services: ${created.stdout.trim().slice(0, REASON_CHARS)}`, stop: nothing };
+    }
   }
 
   const ids: string[] = [];
   const stop = async () => {
     for (const id of ids.splice(0)) await docker(['rm', '-f', '-v', id]);
-    await docker(['network', 'rm', network]);
+    if (!shared) await docker(['network', 'rm', network]);
   };
   const started: StartedComposeService[] = [];
   const failed: ComposeRun['failed'] = [];

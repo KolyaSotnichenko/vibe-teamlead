@@ -237,15 +237,23 @@ describe('which compose files name the databases', () => {
   it("finds the database in the main file when an override sorts first and has none (roadmaply's e2e file)", () => {
     const override = 'services:\n  api:\n    environment:\n      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/x\n';
     const main = 'services:\n  postgres:\n    image: postgres:18-alpine\n';
-    expect(imagesFromComposeFiles([main, override])).toEqual([{ kind: 'postgres', image: 'postgres:18-alpine' }]);
+    expect(imagesFromComposeFiles([main, override])).toEqual([{ kind: 'postgres', image: 'postgres:18-alpine', name: 'postgres' }]);
   });
 
   it('keeps the first image of a kind and adds kinds only the overrides name', () => {
     const main = 'services:\n  db:\n    image: postgres:18-alpine\n';
     const extra = 'services:\n  db:\n    image: postgres:17\n  cache:\n    image: redis:7\n';
     expect(imagesFromComposeFiles([main, extra])).toEqual([
-      { kind: 'postgres', image: 'postgres:18-alpine' },
-      { kind: 'redis', image: 'redis:7' },
+      { kind: 'postgres', image: 'postgres:18-alpine', name: 'db' },
+      { kind: 'redis', image: 'redis:7', name: 'cache' },
+    ]);
+  });
+
+  it('names each database by the compose service that declared it: the others reach it by that name', () => {
+    const compose = 'services:\n  keycloak:\n    image: quay.io/keycloak/keycloak:26\n  postgres:\n    image: "postgres:16"\n  cache:\n    image: valkey/valkey:8\n';
+    expect(imagesFromComposeFiles([compose])).toEqual([
+      { kind: 'postgres', image: 'postgres:16', name: 'postgres' },
+      { kind: 'redis', image: 'valkey/valkey:8', name: 'cache' },
     ]);
   });
 });

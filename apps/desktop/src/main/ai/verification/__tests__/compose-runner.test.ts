@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:net';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPOSE_LABEL, removeComposeLeftovers, startComposeServices, tcpHolds } from '../compose-runner';
+import { COMPOSE_LABEL, createRunNetwork, removeComposeLeftovers, startComposeServices, tcpHolds } from '../compose-runner';
 import { composeServices } from '../compose-services';
 import type { DockerRun } from '../test-services';
 
@@ -185,6 +185,37 @@ describe('removeComposeLeftovers', () => {
       ['network', 'ls', '-q', '--filter', 'label=vibe-teamlead-preview'],
       ['network', 'rm', 'n1'],
     ]);
+  });
+});
+
+describe("a run's network", () => {
+  it('is created per run with the run\'s labels, after what a run that died left on it is removed', async () => {
+    const { docker, calls } = fakeDocker();
+    const network = await createRunNetwork(docker, 'vibe-teamlead-verify', 'proj');
+    expect(network?.name).toBe('vibe-teamlead-verify-proj');
+    const create = calls.findIndex((c) => c[0] === 'network' && c[1] === 'create');
+    expect(calls.slice(0, create)).toEqual([
+      ['ps', '-aq', '--filter', 'network=vibe-teamlead-verify-proj'],
+      ['rm', '-f', '-v', 'old-one'],
+      ['network', 'rm', 'vibe-teamlead-verify-proj'],
+    ]);
+    // A user-defined bridge: the containers find each other by name, never the host's network
+    expect(calls[create]).toEqual(['network', 'create', '--label', 'vibe-teamlead-verify=proj', '--label', `${COMPOSE_LABEL}=vibe-teamlead-verify-proj`, 'vibe-teamlead-verify-proj']);
+    await network?.remove();
+    expect(calls.at(-1)).toEqual(['network', 'rm', 'vibe-teamlead-verify-proj']);
+  });
+
+  it('is none when Docker cannot create it', async () => {
+    const docker: DockerRun = async (args) => ({ ok: !(args[0] === 'network' && args[1] === 'create'), stdout: '' });
+    expect(await createRunNetwork(docker, 'vibe-teamlead-preview', 'p1')).toBeUndefined();
+  });
+
+  it('given to the compose services, is joined and left to its owner: not made, not removed', async () => {
+    const { docker, calls } = fakeDocker();
+    const run = await startComposeServices(composeServices(['services:\n  keycloak:\n    image: quay.io/keycloak/keycloak:26\n']), options(docker, { network: 'shared-net' }));
+    expect(runs(calls)[0].join(' ')).toContain('--network shared-net --network-alias keycloak');
+    await run.stop();
+    expect(calls.filter((c) => c[0] === 'network')).toEqual([]);
   });
 });
 

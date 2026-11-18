@@ -90,12 +90,26 @@ describe('the preview database', () => {
     expect(calls.some((c) => c[0] === 'volume' && c[1] === 'rm')).toBe(false);
   });
 
+  it("joins the session's network under the compose service's name", async () => {
+    const { docker, calls } = fakeDocker();
+    await startPreviewDatabase([{ kind: 'postgres', image: 'postgres:18-alpine', name: 'database' }], { docker, projectId: 'p1', secretsDir: secretsDir(), network: 'vibe-teamlead-preview-p1' });
+    expect(runArgs(calls).join(' ')).toContain('--network vibe-teamlead-preview-p1 --network-alias database');
+    expect(runArgs(calls)).toContain('127.0.0.1::5432');
+  });
+
+  it("removePreviewLeftovers removes a session's networks after every container on them", async () => {
+    const { docker, calls } = fakeDocker({ leftovers: ['old1'] });
+    await removePreviewLeftovers(docker);
+    const lastRm = calls.map((c) => c.join(' ')).lastIndexOf('rm -f old1');
+    expect(calls.slice(lastRm + 1)).toContainEqual(['network', 'ls', '-q', '--filter', 'label=vibe-teamlead-preview']);
+  });
+
   it('removePreviewLeftovers removes containers with the preview label and keeps volumes', async () => {
     const { docker, calls } = fakeDocker({ leftovers: ['old1', 'old2'] });
     await removePreviewLeftovers(docker);
     const rest = calls.slice(calls.findIndex((c) => c.join(' ') === 'ps -aq --filter label=vibe-teamlead-preview'));
     expect(rest[0]).toEqual(['ps', '-aq', '--filter', 'label=vibe-teamlead-preview']);
-    expect(rest.slice(1)).toEqual([['rm', '-f', 'old1'], ['rm', '-f', 'old2']]);
+    expect(rest.slice(1, 3)).toEqual([['rm', '-f', 'old1'], ['rm', '-f', 'old2']]);
   });
 
   it("removePreviewLeftovers removes the compose services' containers with their anonymous volumes, and their networks", async () => {

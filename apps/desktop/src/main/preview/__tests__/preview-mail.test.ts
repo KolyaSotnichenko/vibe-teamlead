@@ -52,6 +52,16 @@ describe('startPreviewMail', () => {
     expect(calls.at(-1)).toEqual(['rm', '-f', 'mail123']);
   });
 
+  it("joins the session's network as mailpit, so the compose services can send to it", async () => {
+    const calls: string[][] = [];
+    const docker = async (args: string[]) => {
+      calls.push(args);
+      return args[0] === 'port' ? { ok: true, stdout: '127.0.0.1:50000\n' } : { ok: true, stdout: 'm1\n' };
+    };
+    await startPreviewMail(docker, 'p1', { network: 'vibe-teamlead-preview-p1', alias: 'mail' });
+    expect(calls.find((c) => c[0] === 'run')?.join(' ')).toContain('--network vibe-teamlead-preview-p1 --network-alias mail');
+  });
+
   it('says so without Docker', async () => {
     const { docker } = fakeDocker(false);
     expect((await startPreviewMail(docker, 'p1')).status).toBe('unavailable');

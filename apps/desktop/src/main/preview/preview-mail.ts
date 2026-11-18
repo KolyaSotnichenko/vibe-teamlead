@@ -6,7 +6,7 @@
  * No Electron imports: docker and fetch are passed in.
  */
 
-import type { DockerRun } from '../ai/verification/test-services';
+import { type DockerRun, networkArgs } from '../ai/verification/test-services';
 import type { PreviewMailMessage, PreviewMailSummary } from '../../shared/types/preview';
 
 /** Pinned: a preview never pulls whatever "latest" is that day */
@@ -51,11 +51,11 @@ export interface PreviewMail {
   stop(): Promise<void>;
 }
 
-/** Mailpit on local ports, labelled like the preview's database so the same cleanup removes it */
-export async function startPreviewMail(docker: DockerRun, key: string): Promise<PreviewMail> {
+/** Mailpit on local ports, labelled like the preview's database so the same cleanup removes it; on the session's network when given */
+export async function startPreviewMail(docker: DockerRun, key: string, join?: { network: string; alias: string }): Promise<PreviewMail> {
   const nothing = async () => {};
   if (!(await docker(['info'])).ok) return { status: 'unavailable', reason: 'Docker is not running, so the app\'s mail can\'t be caught.', stop: nothing };
-  const run = await docker(['run', '-d', '--rm', '--label', `${LABEL}=${key}`, '-p', `127.0.0.1::${SMTP_PORT}`, '-p', `127.0.0.1::${HTTP_PORT}`, MAILPIT_IMAGE]);
+  const run = await docker(['run', '-d', '--rm', '--label', `${LABEL}=${key}`, ...networkArgs(join?.network, join?.alias ?? 'mailpit'), '-p', `127.0.0.1::${SMTP_PORT}`, '-p', `127.0.0.1::${HTTP_PORT}`, MAILPIT_IMAGE]);
   const id = run.stdout.trim().split('\n').pop() ?? '';
   if (!run.ok || !id) return { status: 'unavailable', reason: `Docker could not start ${MAILPIT_IMAGE}.`, stop: nothing };
   const stop = async () => {

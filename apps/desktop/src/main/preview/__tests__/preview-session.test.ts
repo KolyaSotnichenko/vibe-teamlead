@@ -737,6 +737,34 @@ describe("the compose file's other services", () => {
     expect(stop).toHaveBeenCalled();
   });
 
+  it("puts the database, the services and the mail catcher on one network of the session's, each under its compose name, and removes it last", async () => {
+    const files: Record<string, string> = {
+      ...COMPOSE_FILES,
+      'docker-compose.yml': `${COMPOSE_FILES['docker-compose.yml']}  mail:\n    image: axllent/mailpit\n`,
+      'apps/api/.env.example': `${COMPOSE_FILES['apps/api/.env.example']}SMTP_HOST=mail\n`,
+    };
+    const calls: string[][] = [];
+    const events: string[] = [];
+    const { d } = deps({
+      docker: async (args: string[]) => { calls.push(args); events.push(args.join(' ')); return { ok: true, stdout: '' }; },
+      read: (_root: string, path: string) => files[path] ?? null,
+      listFiles: () => Object.keys(files),
+      startDatabase: vi.fn(async () => database({ stop: vi.fn(async () => { events.push('database stopped'); }) })),
+      startCompose: vi.fn(async () => composeRun(vi.fn(async () => { events.push('compose stopped'); }))),
+    });
+    await startPreview(project(), () => {}, d);
+    expect(calls).toContainEqual(['network', 'create', '--label', 'vibe-teamlead-preview=p1', '--label', 'vibe-teamlead-compose=vibe-teamlead-preview-p1', 'vibe-teamlead-preview-p1']);
+    const [images, dbOptions] = vi.mocked(d.startDatabase).mock.calls[0];
+    expect(images).toEqual([{ kind: 'postgres', image: 'postgres:18-alpine', name: 'db' }]);
+    expect(dbOptions.network).toBe('vibe-teamlead-preview-p1');
+    expect(vi.mocked(d.startCompose).mock.calls[0][1].network).toBe('vibe-teamlead-preview-p1');
+    expect(vi.mocked(d.startMail).mock.calls[0][2]).toEqual({ network: 'vibe-teamlead-preview-p1', alias: 'mail' });
+    await stopPreview();
+    expect(events.at(-1)).toBe('network rm vibe-teamlead-preview-p1');
+    expect(events).toContain('database stopped');
+    expect(events).toContain('compose stopped');
+  });
+
   it('says Docker is missing for them too', async () => {
     const { d } = deps({
       read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,

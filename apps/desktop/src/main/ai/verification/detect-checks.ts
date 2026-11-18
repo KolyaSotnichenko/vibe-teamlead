@@ -5,6 +5,7 @@
  */
 
 import { composeEnv, type ComposeWiring } from './compose-env';
+import { composeNameOf } from './compose-services';
 
 export interface Check {
   name: string;
@@ -22,6 +23,8 @@ export interface DetectedChecks {
 export interface ServiceImage {
   kind: 'postgres' | 'mysql' | 'redis' | 'mongo';
   image: string;
+  /** The compose service that declared it: its name on the run's network */
+  name?: string;
 }
 
 export interface StartedService {
@@ -233,5 +236,8 @@ export function composeFilesInOrder(files: string[]): string[] {
 export function imagesFromComposeFiles(contents: string[]): ServiceImage[] {
   const found = new Map<ServiceImage['kind'], ServiceImage>();
   for (const content of contents) for (const image of serviceImages(content)) if (!found.has(image.kind)) found.set(image.kind, image);
-  return [...found.values()];
+  return [...found.values()].map((found) => {
+    const name = composeNameOf(contents, (image) => image === found.image);
+    return name ? { ...found, name } : found;
+  });
 }

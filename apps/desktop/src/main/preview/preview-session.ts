@@ -18,8 +18,8 @@ import type { PreviewAddressIssue, PreviewEnvReport, PreviewEnvVar, PreviewStatu
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
-import { type ComposeRun, startComposeServices } from '../ai/verification/compose-runner';
-import { bucketsOf, type ComposeService, composeServices } from '../ai/verification/compose-services';
+import { type ComposeRun, createRunNetwork, type RunNetwork, startComposeServices } from '../ai/verification/compose-runner';
+import { bucketsOf, type ComposeService, composeNameOf, composeServices } from '../ai/verification/compose-services';
 import { composeFilesInOrder, detectChecks, imagesFromComposeFiles } from '../ai/verification/detect-checks';
 import { examplePort, previewAddressesByExamplePort } from './example-urls';
 import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
@@ -60,7 +60,7 @@ export interface PreviewDeps {
   readLog: (path: string) => string | null;
   cleanUpLeftovers: (specDir: string) => void;
   /** A local mail catcher, when the project's example settings configure SMTP */
-  startMail: (docker: DockerRun, key: string) => Promise<PreviewMail>;
+  startMail: (docker: DockerRun, key: string, join?: { network: string; alias: string }) => Promise<PreviewMail>;
   /** Writes a small file in the worktree (what was installed, so it isn't installed again) */
   writeFile: (root: string, path: string, text: string) => void;
   /** A free local port, picked before any service starts so each can name the others' URLs */
@@ -103,6 +103,8 @@ interface Session {
   /** Whether the examples configure SMTP */
   mailWanted: boolean;
   mail?: PreviewMail;
+  /** The session's network: its containers reach each other by their compose names */
+  network?: RunNetwork;
   status: PreviewStatus;
   unsubscribe: () => void;
   /** The start, then each re-sync after a merge, one after another */
@@ -462,15 +464,22 @@ async function stopServers(session: Session): Promise<void> {
   for (const name of session.servers.splice(0).reverse()) await session.deps.stopServer(name);
 }
 
+/** A mail catcher in the compose file: the name the services send mail to */
+const MAIL_CATCHER = /mailpit|mailhog|maildev|smtp4dev/;
+
 async function teardown(session: Session): Promise<void> {
   session.unsubscribe();
   const database = session.database;
   const mail = session.mail;
   const compose = session.compose;
+  const network = session.network;
   session.database = undefined;
   session.mail = undefined;
   session.compose = undefined;
+  session.network = undefined;
   await Promise.all([stopServers(session), database?.stop(), mail?.stop(), compose?.stop()]);
+  // Last: Docker removes a network only once nothing is on it
+  await network?.remove();
 }
 
 function failed(session: Session, error: unknown): PreviewStatus {
@@ -505,7 +514,16 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       const composeContents = composeFilesInOrder(files).map((file) => deps.read(session.worktree, file) ?? '');
       const images = imagesFromComposeFiles(composeContents);
       session.databaseKinds = images.map((image) => image.kind);
+      const key = session.task ? previewTaskKey(session.task.worktree) : project.id;
+      session.composePlanned = composeServices(composeContents);
+      // One network for the session's containers, so they reach each other by their compose names
+      if (images.length || session.composePlanned.length) {
+        session.network = await createRunNetwork(deps.docker, PREVIEW_LABEL, key);
+        check(session);
+      }
+      const network = session.network?.name;
       const database = await deps.startDatabase(images, {
+        network,
         docker: deps.docker,
         projectId: session.task ? previewTaskKey(session.task.worktree) : project.id,
         ...(session.task ? { copyFrom: project.id } : {}),
@@ -522,14 +540,12 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
         .filter((path) => files.includes(path))
         .map((path) => deps.read(session.worktree, path) ?? '')
         .join('\n');
-      const key = session.task ? previewTaskKey(session.task.worktree) : project.id;
 
       // The compose file's other services, after the database: its start clears the label's leftovers
-      session.composePlanned = composeServices(composeContents);
       if (session.composePlanned.length) {
         emit(session, { stage: 'database', message: session.composePlanned.map((s) => s.name).join(', ') });
         const compose = await deps.startCompose(session.composePlanned, {
-          docker: deps.docker, labelKey: PREVIEW_LABEL, labelValue: key, buckets: bucketsOf(examples), signal: session.abort.signal, pickPort: deps.pickPort,
+          docker: deps.docker, labelKey: PREVIEW_LABEL, labelValue: key, network, buckets: bucketsOf(examples), signal: session.abort.signal, pickPort: deps.pickPort,
         });
         session.compose = compose;
         check(session);
@@ -540,7 +556,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       // The app's mail goes to a local catcher, when its example settings configure SMTP
       session.mailWanted = needsMail(examples);
       if (session.mailWanted) {
-        session.mail = await deps.startMail(deps.docker, key);
+        const alias = composeNameOf(composeContents, (image) => MAIL_CATCHER.test(image.toLowerCase())) ?? 'mailpit';
+        session.mail = await deps.startMail(deps.docker, key, network ? { network, alias } : undefined);
         check(session);
         emit(session, { mail: session.mail.status, mailReason: session.mail.reason });
       }

@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { writeFileReplacingSync } from '../ai/safe-write';
 import type { ServiceImage, StartedService } from '../ai/verification/detect-checks';
 import { COMPOSE_LABEL, removeComposeLeftovers } from '../ai/verification/compose-runner';
-import { type DockerRun, dockerMissingReason, RECIPES } from '../ai/verification/test-services';
+import { type DockerRun, dockerMissingReason, networkArgs, RECIPES } from '../ai/verification/test-services';
 
 export const PREVIEW_LABEL = 'vibe-teamlead-preview';
 const READY_TIMEOUT_MS = 120_000;
@@ -43,6 +43,8 @@ export interface PreviewDatabaseOptions {
   copyFrom?: string;
   /** A stop: whatever started is removed and nothing more starts */
   signal?: AbortSignal;
+  /** The session's network: the database joins it under its compose service's name */
+  network?: string;
   readyTimeoutMs?: number;
   pollMs?: number;
 }
@@ -77,7 +79,7 @@ function readSecrets(file: string): Secrets {
 }
 
 export async function startPreviewDatabase(images: ServiceImage[], options: PreviewDatabaseOptions): Promise<PreviewDatabase> {
-  const { docker, projectId, secretsDir, reset = false, copyFrom, signal, readyTimeoutMs = READY_TIMEOUT_MS, pollMs = POLL_MS } = options;
+  const { docker, projectId, secretsDir, reset = false, copyFrom, signal, network, readyTimeoutMs = READY_TIMEOUT_MS, pollMs = POLL_MS } = options;
   const nothing = async () => {};
   if (!images.length) return { status: 'none', started: [], fresh: false, stop: nothing };
   if (!(await docker(['info'])).ok) {
@@ -104,7 +106,7 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
 
   const started: StartedService[] = [];
   let fresh = false;
-  for (const { kind, image } of images) {
+  for (const { kind, image, name } of images) {
     const recipe = RECIPES[kind];
     const volume = previewVolume(projectId, kind);
     if (signal?.aborted) return gaveUp('The preview was stopped.');
@@ -136,6 +138,7 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
 
     const run = await docker([
       'run', '-d', '--rm', '--label', label,
+      ...networkArgs(network, name ?? kind),
       ...recipe.env(password).flatMap((pair) => ['-e', pair]),
       '-v', `${volume}:${recipe.dataDir}`,
       '-p', `127.0.0.1::${recipe.port}`,
@@ -164,10 +167,12 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
 
 /**
  * Containers a crashed preview left behind. Named volumes stay: they hold the owner's preview
- * data. The compose services' containers go with their anonymous volumes, and their networks.
+ * data. The compose services' containers go with their anonymous volumes. The sessions'
+ * networks go last, once nothing is on them.
  */
 export async function removePreviewLeftovers(docker: DockerRun): Promise<void> {
   await removeComposeLeftovers(docker, [PREVIEW_LABEL, COMPOSE_LABEL]);
-  const ids = (await docker(['ps', '-aq', '--filter', `label=${PREVIEW_LABEL}`])).stdout.split('\n').map((l) => l.trim()).filter(Boolean);
-  for (const id of ids) await docker(['rm', '-f', id]);
+  const lines = async (args: string[]) => (await docker(args)).stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (const id of await lines(['ps', '-aq', '--filter', `label=${PREVIEW_LABEL}`])) await docker(['rm', '-f', id]);
+  for (const id of await lines(['network', 'ls', '-q', '--filter', `label=${PREVIEW_LABEL}`])) await docker(['network', 'rm', id]);
 }

@@ -73,6 +73,12 @@ export function dockerMissingReason(images: ServiceImage[], who: string, forWhat
   return `This project's ${who} need ${images.map((image) => image.kind).join(', ')}, and Docker isn't running. Install or start Docker Desktop ${forWhat}.`;
 }
 
+/**
+ * Joining the run's network, under the name the compose file gave the service, so the run's
+ * other containers reach it as they would in compose. A user-defined network only.
+ */
+export const networkArgs = (network: string | undefined, alias: string): string[] => (network ? ['--network', network, '--network-alias', alias] : []);
+
 /** docker as the machine has it. An app started from Finder has a bare PATH. */
 export function hostDocker(env: NodeJS.ProcessEnv, signal?: AbortSignal): DockerRun {
   const bin = findOnPath('docker', searchPath()) ?? 'docker';
@@ -84,9 +90,9 @@ export function hostDocker(env: NodeJS.ProcessEnv, signal?: AbortSignal): Docker
 
 export async function startTestServices(
   images: ServiceImage[],
-  options: { docker: DockerRun; label: string; readyTimeoutMs?: number; pollMs?: number },
+  options: { docker: DockerRun; label: string; network?: string; readyTimeoutMs?: number; pollMs?: number },
 ): Promise<TestServices> {
-  const { docker, label, readyTimeoutMs = 60_000, pollMs = 500 } = options;
+  const { docker, label, network, readyTimeoutMs = 60_000, pollMs = 500 } = options;
   const nothing = async () => {};
   if (!images.length) return { status: 'none', started: [], stop: nothing };
 
@@ -108,10 +114,10 @@ export async function startTestServices(
   };
 
   const started: StartedService[] = [];
-  for (const { kind, image } of images) {
+  for (const { kind, image, name } of images) {
     const recipe = RECIPES[kind];
     const password = randomBytes(16).toString('hex');
-    const run = await docker(['run', '-d', '--rm', '--label', `${LABEL}=${label}`, ...recipe.env(password).flatMap((pair) => ['-e', pair]), '-p', `127.0.0.1::${recipe.port}`, image]);
+    const run = await docker(['run', '-d', '--rm', '--label', `${LABEL}=${label}`, ...networkArgs(network, name ?? kind), ...recipe.env(password).flatMap((pair) => ['-e', pair]), '-p', `127.0.0.1::${recipe.port}`, image]);
     const id = run.stdout.trim().split('\n').pop() ?? '';
     if (!run.ok || !id) return gaveUp(`Docker could not start ${image}: ${run.stdout.trim().slice(0, REASON_CHARS)}`);
     ids.push(id);

@@ -226,6 +226,26 @@ export function composeServices(contents: string[]): ComposeService[] {
   return services;
 }
 
+/**
+ * The name of the compose service whose image passes `matches`, the main file first: the name
+ * the other services reach it by. Only a name safe on a command line. Pure.
+ */
+export function composeNameOf(contents: string[], matches: (image: string) => boolean): string | undefined {
+  for (const content of contents) {
+    let parsed: unknown;
+    try {
+      parsed = load(content);
+    } catch {
+      continue;
+    }
+    for (const [name, raw] of Object.entries(record(record(parsed).services))) {
+      const image = record(raw).image;
+      if (typeof image === 'string' && SERVICE_NAME.test(name) && matches(image.trim())) return name;
+    }
+  }
+  return undefined;
+}
+
 /** What a service depends on starts before it; a cycle or an unknown name doesn't stop the rest. Pure. */
 export function dependencyOrder(services: ComposeService[]): ComposeService[] {
   const byName = new Map(services.map((s) => [s.name, s]));

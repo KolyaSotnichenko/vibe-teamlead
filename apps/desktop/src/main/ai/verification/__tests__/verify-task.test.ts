@@ -310,6 +310,24 @@ describe('verifyTask', () => {
       expect(calls).toContainEqual(['network', 'rm', expect.stringMatching(/^vibe-teamlead-verify-/)]);
     });
 
+    it("puts the database and the other services on one network of the run's, each under its compose name, and removes it", async () => {
+      writeFileSync(join(repo, 'docker-compose.yml'), 'services:\n  postgres:\n    image: postgres:18-alpine\n  keycloak:\n    image: quay.io/keycloak/keycloak:26\n    environment: { KC_DB_URL: "jdbc:postgresql://postgres:5432/kc" }\n');
+      commit(repo, 'keycloak');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      const { docker, calls } = fakeDocker();
+      await verify({ docker, commands: ['true'] });
+      const created = calls.find((call) => call[0] === 'network' && call[1] === 'create');
+      const network = created?.at(-1) ?? '';
+      expect(network).toMatch(/^vibe-teamlead-verify-/);
+      const runs = calls.filter((call) => call[0] === 'run');
+      expect(runs.find((call) => call.includes('postgres:18-alpine'))?.join(' ')).toContain(`--network ${network} --network-alias postgres`);
+      expect(runs.find((call) => call.includes('quay.io/keycloak/keycloak:26'))?.join(' ')).toContain(`--network ${network} --network-alias keycloak`);
+      // One network per run: the services make none of their own
+      expect(new Set(calls.filter((call) => call[0] === 'network' && call[1] === 'create').map((call) => call.at(-1)))).toEqual(new Set([network]));
+      const lastRm = calls.map((call) => call.join(' ')).lastIndexOf(`network rm ${network}`);
+      expect(lastRm).toBeGreaterThan(calls.map((call) => call[0]).lastIndexOf('rm'));
+    });
+
     it('a task cannot choose the image: it comes from the base', async () => {
       const { docker, calls } = fakeDocker();
       writeFileSync(join(wt, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres-evil:1\n');

@@ -21,7 +21,7 @@ import type { VerificationSummary } from '../../../shared/utils/verification-sum
 import { gitRunner, type GitRun } from '../merge/git-merge';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
 import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
-import { startComposeServices } from './compose-runner';
+import { createRunNetwork, startComposeServices } from './compose-runner';
 import { bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
@@ -351,15 +351,17 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       if (!cloned.ok) throw new Error(cloned.output || 'git clone failed');
       const checkedOut = await run(['checkout', '-q', '--detach', at], cwd);
       if (!checkedOut.ok) throw new Error(checkedOut.output || 'git checkout failed');
+      // One network for the copy's containers: they reach each other by their compose names
+      const network = from.images.length || from.compose.length ? await createRunNetwork(docker, VERIFY_LABEL, serviceLabel) : undefined;
       if (from.images.length) say(`starting ${from.images.map((image) => image.image).join(', ')} for this copy`);
-      const started = await startTestServices(from.images, { docker, label: serviceLabel });
+      const started = await startTestServices(from.images, { docker, label: serviceLabel, network: network?.name });
       if (started.status === 'started') say('database up');
       else if (started.status === 'unavailable') say(`no database: ${started.reason ?? 'it could not start'}`);
       // The compose file's other services (queues, storage, search…), after the database: its start clears the label's leftovers
       const composeNames = from.compose.map((service) => service.name).join(', ');
       if (from.compose.length) say(`starting ${composeNames} for this copy`);
       const compose = await startComposeServices(from.compose, {
-        docker, labelKey: VERIFY_LABEL, labelValue: serviceLabel, buckets: bucketsOf(from.example), signal,
+        docker, labelKey: VERIFY_LABEL, labelValue: serviceLabel, network: network?.name, buckets: bucketsOf(from.example), signal,
       });
       if (compose.started.length) say(`${compose.started.map((service) => service.name).join(', ')} up`);
       for (const failure of compose.failed) say(`${failure.name}: ${failure.reason}`);
@@ -386,6 +388,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       } finally {
         await compose.stop();
         await started.stop();
+        await network?.remove();
       }
     } finally {
       // Not the sync call: after a merge this runs in the main process, where
