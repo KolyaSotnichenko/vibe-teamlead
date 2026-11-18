@@ -21,19 +21,16 @@ import { ScrollArea } from './ui/scroll-area';
 import { TaskCard } from './TaskCard';
 import { BoardColumn } from './board/BoardColumn';
 import { BulkActionBar } from './board/BulkActionBar';
-import { QueueSettingsModal } from './QueueSettingsModal';
 import { TASK_STATUS_COLUMNS } from '../../shared/constants';
 import { cn } from '../lib/utils';
 import { persistTaskStatus, forceCompleteTask, archiveTasks, deleteTasks, useTaskStore, isQueueAtCapacity } from '../stores/task-store';
-import { updateProjectSettings, useProjectStore } from '../stores/project-store';
+import { useProjectStore } from '../stores/project-store';
 import { LooseEndsNotice } from './LooseEndsNotice';
 import { useKanbanSettingsStore, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, BASE_FONT_SIZE } from '../stores/kanban-settings-store';
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
 import { BriefImportDialog } from './brief-import';
-import { MergeWaitingDialog } from './board/MergeWaitingDialog';
-import { getAutoMerge } from '../hooks/useAutoMerge';
 import { syncQueuePause, useQueuePauseStore } from '../stores/queue-pause-store';
 import {
   AlertDialog,
@@ -104,18 +101,13 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   const projectId = tasks[0]?.projectId;
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
   const maxParallelTasks = parallelTaskLimit(project?.settings?.maxParallelTasks);
-  const autoMerge = project?.settings?.autoMerge === true;
 
-  // Queue settings modal state
-  const [showQueueSettings, setShowQueueSettings] = useState(false);
   // Brief import from the Planning column menu; same project choice as New Task
   const [briefImportOpen, setBriefImportOpen] = useState(false);
   const briefProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
   // A merge moves a task to done: the placeholders are read again then
   const mergedCount = tasks.filter((task) => task.status === 'done').length;
   const openBriefImport = useCallback(() => setBriefImportOpen(true), []);
-  // Store projectId when modal opens to prevent modal from disappearing if tasks change
-  const queueSettingsProjectIdRef = useRef<string | null>(null);
 
   // Queue processing lock to prevent race conditions
   const isProcessingQueueRef = useRef(false);
@@ -129,8 +121,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Delete confirmation dialog state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  // Tasks QA approved that waited in review when auto-merge was turned on
-  const [mergeWaiting, setMergeWaiting] = useState<Task[]>([]);
 
   // Worktree cleanup dialog state
   const [worktreeCleanupDialog, setWorktreeCleanupDialog] = useState<{
@@ -493,38 +483,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       title: t('queue.queueAllSuccess', { count: movedCount }),
       variant: 'default'
     });
-  };
-
-  /**
-   * Save queue settings (maxParallelTasks, autoMerge)
-   *
-   * Uses the stored ref value to ensure the save works even if tasks
-   * change while the modal is open.
-   */
-  const handleSaveQueueSettings = async (maxParallel: number, autoMergeOn: boolean, previewHoldOn: boolean) => {
-    const savedProjectId = queueSettingsProjectIdRef.current || projectId;
-    if (!savedProjectId) return;
-
-    const wasOn = autoMerge;
-    const success = await updateProjectSettings(savedProjectId, { maxParallelTasks: maxParallel, autoMerge: autoMergeOn, previewBeforeAutoMerge: previewHoldOn });
-    if (success) {
-      toast({
-        title: t('queue.settings.saved'),
-        variant: 'default'
-      });
-      // Only arrival merges by itself: tasks QA approved before the switch was on are offered once
-      if (autoMergeOn && !wasOn) {
-        const waiting = tasks.filter((task) => task.projectId === savedProjectId && task.status === 'human_review');
-        const found = (await getAutoMerge()?.mergeable(waiting)) ?? [];
-        setMergeWaiting(found);
-      }
-    } else {
-      toast({
-        title: t('queue.settings.saveFailed'),
-        description: t('queue.settings.retry'),
-        variant: 'destructive'
-      });
-    }
   };
 
   /**
@@ -959,12 +917,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               onAddClick={status === 'backlog' ? onNewTaskClick : undefined}
               onImportBrief={status === 'backlog' && briefProjectId ? openBriefImport : undefined}
               onQueueAll={status === 'backlog' ? handleQueueAll : undefined}
-              onQueueSettings={status === 'queue' ? () => {
-                // Only open modal if we have a valid projectId
-                if (!projectId) return;
-                queueSettingsProjectIdRef.current = projectId;
-                setShowQueueSettings(true);
-              } : undefined}
               onArchiveAll={status === 'done' ? handleArchiveAll : undefined}
               maxParallelTasks={status === 'in_progress' || status === 'queue' ? maxParallelTasks : undefined}
               slotsInUse={status === 'in_progress' || status === 'queue' ? slotsInUse : undefined}
@@ -1010,12 +962,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       )}
 
       {/* Delete confirmation dialog */}
-      <MergeWaitingDialog
-        tasks={mergeWaiting}
-        onMerge={(waiting) => void getAutoMerge()?.mergeNow(waiting as Task[])}
-        onClose={() => setMergeWaiting([])}
-      />
-
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent className="sm:max-w-[500px]">
           <AlertDialogHeader>
@@ -1087,24 +1033,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         }}
         onConfirm={handleWorktreeCleanupConfirm}
       />
-
-      {/* Queue Settings Modal */}
-      {(queueSettingsProjectIdRef.current || projectId) && (
-        <QueueSettingsModal
-          open={showQueueSettings}
-          onOpenChange={(open) => {
-            setShowQueueSettings(open);
-            if (!open) {
-              queueSettingsProjectIdRef.current = null;
-            }
-          }}
-          projectId={queueSettingsProjectIdRef.current || projectId || ''}
-          currentMaxParallel={maxParallelTasks}
-          currentAutoMerge={autoMerge}
-          currentPreviewBeforeAutoMerge={project?.settings?.previewBeforeAutoMerge === true}
-          onSave={handleSaveQueueSettings}
-        />
-      )}
 
       {briefProjectId && (
         <BriefImportDialog projectId={briefProjectId} open={briefImportOpen} onOpenChange={setBriefImportOpen} />

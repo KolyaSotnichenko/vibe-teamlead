@@ -26,7 +26,6 @@ export interface BoardColumnProps {
   /** Planning column menu: import a brief */
   onImportBrief?: () => void;
   onArchiveAll?: () => void;
-  onQueueSettings?: () => void;
   onQueueAll?: () => void;
   maxParallelTasks?: number;
   /** Tasks holding a slot, wherever they stand, until merged */
@@ -77,7 +76,7 @@ function tasksAreEquivalent(prevTasks: Task[], nextTasks: Task[]): boolean {
 }
 
 const SHALLOW_KEYS: Array<keyof BoardColumnProps> = [
-  'status', 'isOver', 'onTaskClick', 'onStatusChange', 'onAddClick', 'onImportBrief', 'onArchiveAll', 'onQueueSettings', 'onQueueAll',
+  'status', 'isOver', 'onTaskClick', 'onStatusChange', 'onAddClick', 'onImportBrief', 'onArchiveAll', 'onQueueAll',
   'maxParallelTasks', 'slotsInUse', 'slotHolderNames', 'queuePaused', 'onResumeQueue', 'archivedCount', 'showArchived', 'onToggleArchived', 'onSelectAll', 'onDeselectAll', 'onToggleSelect',
   'isCollapsed', 'onToggleCollapsed', 'columnWidth', 'isResizing', 'onResizeStart', 'onResizeEnd', 'isLocked', 'onToggleLocked',
 ];
@@ -116,7 +115,6 @@ export const BoardColumn = memo(function BoardColumn({
   onAddClick,
   onImportBrief,
   onArchiveAll,
-  onQueueSettings,
   onQueueAll,
   maxParallelTasks,
   slotsInUse,
@@ -276,7 +274,6 @@ export const BoardColumn = memo(function BoardColumn({
             onSelectAll={onSelectAll}
             onDeselectAll={handleDeselectColumn}
             onQueueAll={onQueueAll}
-            onQueueSettings={onQueueSettings}
             onArchiveAll={onArchiveAll}
             archivedCount={archivedCount}
             showArchived={showArchived}

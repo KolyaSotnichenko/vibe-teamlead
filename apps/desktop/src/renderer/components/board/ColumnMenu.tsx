@@ -1,6 +1,6 @@
 /**
  * One menu per column for the rarely used column actions (import brief, collapse,
- * width lock, select all, queue all, queue settings, archive). Design system dropdown:
+ * width lock, select all, queue all, archive). Design system dropdown:
  * 1px ink frame, rows ≥44px separated by hairlines, checked rows show a tick.
  */
 
@@ -26,7 +26,6 @@ export interface ColumnMenuProps {
   onSelectAll?: () => void;
   onDeselectAll?: () => void;
   onQueueAll?: () => void;
-  onQueueSettings?: () => void;
   onArchiveAll?: () => void;
   archivedCount?: number;
   showArchived?: boolean;
@@ -45,7 +44,6 @@ export function ColumnMenu({
   onSelectAll,
   onDeselectAll,
   onQueueAll,
-  onQueueSettings,
   onArchiveAll,
   archivedCount,
   showArchived,
@@ -75,11 +73,6 @@ export function ColumnMenu({
         {onQueueAll && taskCount > 0 && (
           <DropdownMenuItem className={ROW} onSelect={onQueueAll}>
             {t('tasks:queue.queueAll')}
-          </DropdownMenuItem>
-        )}
-        {onQueueSettings && (
-          <DropdownMenuItem className={ROW} onSelect={onQueueSettings}>
-            {t('tasks:kanban.queueSettings')}
           </DropdownMenuItem>
         )}
         {onArchiveAll && taskCount > 0 && !showArchived && (
