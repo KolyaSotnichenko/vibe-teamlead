@@ -16,6 +16,12 @@ vi.mock('../../../../stores/project-store', () => ({
 }));
 vi.mock('../../../../stores/github', () => ({ checkGitHubConnection: vi.fn() }));
 vi.mock('../../../../stores/project-env-store', () => ({ setProjectEnvConfig: vi.fn() }));
+const { queueSettingsSaved } = vi.hoisted(() => ({ queueSettingsSaved: vi.fn(async () => undefined) }));
+vi.mock('../../../../lib/queue-settings', async (importActual) => ({
+  ...(await importActual<typeof import('../../../../lib/queue-settings')>()),
+  queueSettingsSaved,
+}));
+vi.mock('../../../../../shared/i18n', () => ({ default: { t: (key: string) => key } }));
 
 import { useProjectSettings } from '../useProjectSettings';
 import type { Project } from '../../../../../shared/types';
@@ -26,6 +32,7 @@ const project = { id: 'p1', autoBuildPath: '.auto', settings: { model: 'a' } } a
 
 beforeEach(() => {
   updateProjectSettings.mockClear();
+  queueSettingsSaved.mockClear();
   updateProjectEnv.mockReset();
   updateProjectEnv.mockResolvedValue({ success: true });
   (window as unknown as { electronAPI: unknown }).electronAPI = {
@@ -81,5 +88,31 @@ describe('useProjectSettings handleSave', () => {
     expect(res).toEqual({ ok: true, error: null });
     expect(updateProjectEnv).toHaveBeenLastCalledWith('p1', expect.objectContaining({ linearEnabled: true }));
     expect(result.current.envError).toBeNull();
+  });
+
+  it('refuses a parallel task limit out of range and writes nothing', async () => {
+    const { result } = await mounted();
+    act(() => result.current.setSettings({ model: 'a', maxParallelTasks: 4 } as never));
+    let res: { ok: boolean; error: string | null } | undefined;
+    await act(async () => { res = await result.current.handleSave(); });
+    expect(res).toEqual({ ok: false, error: 'tasks:queue.settings.maxValueError' });
+    expect(updateProjectSettings).not.toHaveBeenCalled();
+    expect(queueSettingsSaved).not.toHaveBeenCalled();
+  });
+
+  it('applies the queue settings once they are saved (the offer to merge the tasks that wait)', async () => {
+    const { result } = await mounted();
+    act(() => result.current.setSettings({ model: 'a', maxParallelTasks: 2, autoMerge: true } as never));
+    await act(async () => { await result.current.handleSave(); });
+    expect(updateProjectSettings).toHaveBeenCalledWith('p1', { model: 'a', maxParallelTasks: 2, autoMerge: true });
+    expect(queueSettingsSaved).toHaveBeenCalledWith('p1', { model: 'a' }, { model: 'a', maxParallelTasks: 2, autoMerge: true });
+  });
+
+  it('does not apply them when the save failed', async () => {
+    updateProjectSettings.mockResolvedValueOnce(false);
+    const { result } = await mounted();
+    act(() => result.current.setSettings({ model: 'a', autoMerge: true } as never));
+    await act(async () => { await result.current.handleSave(); });
+    expect(queueSettingsSaved).not.toHaveBeenCalled();
   });
 });

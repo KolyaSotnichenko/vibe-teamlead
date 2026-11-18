@@ -440,6 +440,11 @@
       "panelTitle": "General",
       "panelDescription": "Configure Vibe Teamlead, agent model, and notifications for {{projectName}}"
     },
+    "queue": {
+      "title": "Queue",
+      "description": "Parallel tasks, auto-merge",
+      "panelDescription": "How many tasks of this project may be under way at once. A task holds its slot until it is merged."
+    },
     "claude": {
       "title": "Claude Auth",
       "description": "Claude authentication"

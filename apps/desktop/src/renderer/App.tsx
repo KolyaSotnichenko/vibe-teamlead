@@ -39,6 +39,7 @@ import { KanbanBoard } from './components/KanbanBoard';
 import { TaskDetailModal } from './components/task-detail/TaskDetailModal';
 import { TaskCreationWizard } from './components/TaskCreationWizard';
 import { AppSettingsDialog, type AppSection } from './components/settings/AppSettings';
+import { MergeWaitingOffer } from './components/board/MergeWaitingOffer';
 import type { ProjectSettingsSection } from './components/settings/ProjectSettingsContent';
 import { TerminalGrid } from './components/TerminalGrid';
 import { Roadmap } from './components/Roadmap';
@@ -1014,6 +1015,9 @@ export function App() {
             onOpenChange={setIsNewTaskDialogOpen}
           />
         )}
+
+        {/* Turning auto-merge on in Settings offers the tasks that already wait */}
+        <MergeWaitingOffer />
 
         <AppSettingsDialog
           open={isSettingsDialogOpen}

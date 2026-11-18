@@ -440,6 +440,11 @@
       "panelTitle": "Загальні",
       "panelDescription": "Налаштуйте Vibe Teamlead, модель агентів і сповіщення для {{projectName}}"
     },
+    "queue": {
+      "title": "Черга",
+      "description": "Паралельні задачі, автомерж",
+      "panelDescription": "Скільки задач цього проєкту може бути в роботі одночасно. Задача займає місце, поки її не влито."
+    },
     "claude": {
       "title": "Автентифікація Claude",
       "description": "Автентифікація Claude"

@@ -19,7 +19,8 @@ import {
   Terminal,
   KeyRound,
   Wrench,
-  Send
+  Send,
+  ListOrdered
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -97,6 +98,7 @@ export const APP_SECTIONS: readonly AppSection[] = appNavItemsConfig.map((item) 
 
 const projectNavItemsConfig: NavItemConfig<ProjectSettingsSection>[] = [
   { id: 'general', icon: Settings2 },
+  { id: 'queue', icon: ListOrdered },
   { id: 'linear', icon: Zap },
   { id: 'github', icon: Github },
   { id: 'gitlab', icon: GitLabIcon }

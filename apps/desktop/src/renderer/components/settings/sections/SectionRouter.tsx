@@ -3,6 +3,7 @@ import type { Project, ProjectSettings as ProjectSettingsType, AutoBuildVersionI
 import { SettingsSection } from '../SettingsSection';
 import { GeneralSettings } from '../../project-settings/GeneralSettings';
 import { SecuritySettings } from '../../project-settings/SecuritySettings';
+import { QueueSettings } from '../../project-settings/QueueSettings';
 import { LinearIntegration } from '../integrations/LinearIntegration';
 import { GitHubIntegration } from '../integrations/GitHubIntegration';
 import { GitLabIntegration } from '../integrations/GitLabIntegration';
@@ -90,6 +91,16 @@ export function SectionRouter({
             isUpdating={isUpdating}
             handleInitialize={handleInitialize}
           />
+        </SettingsSection>
+      );
+
+    case 'queue':
+      return (
+        <SettingsSection
+          title={t('projectSections.queue.title')}
+          description={t('projectSections.queue.panelDescription')}
+        >
+          <QueueSettings settings={settings} setSettings={setSettings} />
         </SettingsSection>
       );
 

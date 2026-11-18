@@ -6,6 +6,8 @@ import {
 } from '../../../stores/project-store';
 import { checkGitHubConnection as checkGitHubConnectionGlobal } from '../../../stores/github';
 import { setProjectEnvConfig } from '../../../stores/project-env-store';
+import { queueSettingsError, queueSettingsSaved } from '../../../lib/queue-settings';
+import i18n from '../../../../shared/i18n';
 import type {
   Project,
   ProjectSettings as ProjectSettingsType,
@@ -302,18 +304,24 @@ export function useProjectSettings(
       return { ok: true, error: null };
     }
 
-    setIsSaving(true);
-    setError(null);
-
     const fail = (message: string): ProjectSaveResult => {
       setError(message);
       return { ok: false, error: message };
     };
 
+    // The queue's limit as the old Queue Settings dialog checked it: out of range is not saved
+    const invalid = saveSettingsToo ? queueSettingsError(project.settings, settings) : null;
+    if (invalid) return fail(i18n.t(invalid));
+
+    setIsSaving(true);
+    setError(null);
+
     try {
       if (saveSettingsToo) {
+        const saved = project.settings;
         const success = await updateProjectSettings(project.id, settings);
         if (!success) return fail('Failed to save settings');
+        await queueSettingsSaved(project.id, saved, settings);
       }
 
       if (saveEnvToo && committedEnvConfigRef.current) {
