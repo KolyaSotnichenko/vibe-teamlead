@@ -104,6 +104,8 @@ export class SessionAccumulator {
   /** Text of the message that carried the error: Claude Code puts the API's own reason there */
   private assistantErrorText: string | undefined;
   private rateLimited = false;
+  /** When a rejected rate limit resets (ms since epoch), when Claude Code says */
+  private rateLimitResetAt: number | undefined;
   private currentMessageId: string | undefined;
   private currentText = '';
   private readonly toolStarts = new Map<string, { name: string; startedAt: number }>();
@@ -201,7 +203,12 @@ export class SessionAccumulator {
       }
 
       case 'rate_limit_event':
-        if (message.rate_limit_info.status === 'rejected') this.rateLimited = true;
+        if (message.rate_limit_info.status === 'rejected') {
+          this.rateLimited = true;
+          const resets = message.rate_limit_info.resetsAt;
+          // Seconds since epoch (milliseconds tolerated)
+          if (typeof resets === 'number' && resets > 0) this.rateLimitResetAt = resets < 1e12 ? resets * 1000 : resets;
+        }
         return;
 
       case 'result':
@@ -250,7 +257,12 @@ export class SessionAccumulator {
     if (this.rateLimited || this.assistantError === 'rate_limit') {
       return {
         outcome: 'rate_limited',
-        error: { code: ErrorCode.RATE_LIMITED, message: 'Rate limit reached', retryable: true },
+        error: {
+          code: ErrorCode.RATE_LIMITED,
+          message: 'Rate limit reached',
+          retryable: true,
+          ...(this.rateLimitResetAt ? { resetAt: this.rateLimitResetAt } : {}),
+        },
       };
     }
     if (this.assistantError === 'billing_error') {
@@ -269,6 +281,17 @@ export class SessionAccumulator {
       };
     }
 
+    // Only when the session did not end well after it (Claude Code retries these itself)
+    if (this.assistantError === 'overloaded' || this.assistantError === 'server_error') {
+      return {
+        outcome: 'error',
+        error: {
+          code: ErrorCode.OVERLOADED,
+          message: this.assistantErrorText || `The API is unavailable (${this.assistantError})`,
+          retryable: true,
+        },
+      };
+    }
     const message =
       thrown instanceof Error
         ? thrown.message

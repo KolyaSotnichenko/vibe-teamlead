@@ -2,13 +2,18 @@
  * The design step at the start of a build (before architecture and planning): draws, revises and
  * checks the task's wireframes and screens until the owner has to look (pause) or there is
  * nothing left to design (continue). The designer session itself is injected (worker.ts).
- * A designer that fails never stops the build: it goes on without a design and says so.
+ * A designer that fails never turns into "build without a design" by itself: a rate limit or a
+ * passing API error is waited out and tried again (a few times), a cancel leaves the design where
+ * it was, and anything else stops the task for the owner (design/failed.json), who chooses to try
+ * again or to build without it.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
 import { dataBlock } from '../orchestration/message-data';
+import { writeFileReplacingSync } from '../safe-write';
+import type { SessionError, SessionOutcome } from '../session/types';
 import {
   type DesignApproval,
   type DesignJob,
@@ -21,6 +26,80 @@ import {
 
 const MAX_DRAWS = 6;
 const COMMENTS_CHARS = 6000;
+/** Tries after the first one when the designer hits a rate limit or a passing API error */
+export const DESIGNER_RETRIES = 3;
+/** A rate limit without a reset time, and the backoff for passing errors (doubles each try) */
+const RATE_LIMIT_WAIT_MS = 15 * 60_000;
+const TRANSIENT_WAIT_MS = 30_000;
+/** Never wait longer than this for one reset (as the coder's rate-limit wait) */
+const MAX_WAIT_MS = 2 * 60 * 60_000;
+
+/**
+ * How a designer session ended. `kind` says what a failure was: a rate limit (with the reset
+ * time when the error carries one, ms since epoch), a passing API error (overloaded, 5xx,
+ * network), a cancel, or anything else.
+ */
+export interface DesignerResult {
+  ok: boolean;
+  error?: string;
+  kind?: 'rate_limited' | 'transient' | 'cancelled' | 'failed';
+  resetAt?: number;
+}
+
+/** Why the design stopped, for the owner (design/failed.json) */
+export interface DesignFailure {
+  error: string;
+  job: DesignJob;
+  at: string;
+}
+
+const failurePath = (specDir: string) => path.join(specDir, 'design', 'failed.json');
+
+export function readDesignFailure(specDir: string): DesignFailure | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(failurePath(specDir), 'utf-8')) as DesignFailure;
+    return parsed && typeof parsed.error === 'string' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function writeDesignFailure(specDir: string, failure: DesignFailure): void {
+  mkdirSync(path.dirname(failurePath(specDir)), { recursive: true });
+  writeFileReplacingSync(failurePath(specDir), JSON.stringify(failure, null, 2));
+}
+
+export function clearDesignFailure(specDir: string): void {
+  try {
+    rmSync(failurePath(specDir), { force: true });
+  } catch {
+    // nothing to clear
+  }
+}
+
+const PASSING = /\b(overloaded|5\d\d|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|socket hang up|network|timed? ?out)\b/i;
+
+/** A designer session's end as the design step sees it. Pure. */
+export function designerResultOf(session: { outcome: SessionOutcome; error?: SessionError }): DesignerResult {
+  const { outcome, error } = session;
+  if (outcome === 'completed' || outcome === 'max_steps') return { ok: true };
+  const message = error?.message ?? outcome;
+  if (outcome === 'cancelled') return { ok: false, kind: 'cancelled', error: message };
+  if (outcome === 'rate_limited') return { ok: false, kind: 'rate_limited', error: message, ...(error?.resetAt ? { resetAt: error.resetAt } : {}) };
+  if (outcome === 'error' && error?.code !== 'billing_error' && (error?.code === 'api_overloaded' || PASSING.test(message))) {
+    return { ok: false, kind: 'transient', error: message };
+  }
+  return { ok: false, kind: 'failed', error: message };
+}
+
+/** How long to wait before try `attempt` (1-based) of a failed designer. Pure. */
+export function designerRetryWait(result: DesignerResult, attempt: number, now: number): number {
+  if (result.kind === 'rate_limited') {
+    const untilReset = result.resetAt ? result.resetAt - now + 5_000 : RATE_LIMIT_WAIT_MS;
+    return Math.min(MAX_WAIT_MS, Math.max(30_000, untilReset));
+  }
+  return TRANSIENT_WAIT_MS * 2 ** (attempt - 1);
+}
 
 export interface DesignStepDeps {
   specDir: string;
@@ -28,7 +107,12 @@ export interface DesignStepDeps {
   /** Whether the task changes UI at all (read from its spec) */
   touchesUi: () => boolean;
   /** One designer session for this job; `message` is its brief */
-  runDesigner: (job: DesignJob, message: string) => Promise<{ ok: boolean; error?: string }>;
+  runDesigner: (job: DesignJob, message: string) => Promise<DesignerResult>;
+  /**
+   * Waits `ms` before the designer is tried again (a rate limit, a passing error). False when
+   * the task was stopped meanwhile. Without it, no retries.
+   */
+  wait?: (ms: number, kind: 'rate_limited' | 'transient', error: string) => Promise<boolean>;
   /** Design-check findings in design/screens (0 without a design system) */
   checkScreens: () => number;
   log: (line: string) => void;
@@ -38,7 +122,11 @@ export interface DesignStepDeps {
   publish?: () => void;
 }
 
-export type DesignStepResult = { paused?: 'wireframes' | 'design'; error?: string };
+/**
+ * paused: the owner looks at the frames; failed: the designer could not draw, the owner decides
+ * (design/failed.json); cancelled: the task was stopped, the design stays where it was.
+ */
+export type DesignStepResult = { paused?: 'wireframes' | 'design'; error?: string; failed?: string; cancelled?: boolean };
 
 function commentsBlock(state: DesignState): string {
   return dataBlock({
@@ -102,12 +190,25 @@ export async function runDesignStep(deps: DesignStepDeps): Promise<DesignStepRes
     const job = action.job;
     if (!state && job === 'wireframes') deps.prepareBase?.();
     deps.log(`Design: ${job === 'wireframes' ? 'drawing the wireframes' : job === 'design' ? 'drawing the screens in the design system' : "changing what the owner commented on"}`);
-    const result = await deps.runDesigner(job, brief(job, state, specDir));
-    if (!result.ok) {
-      deps.log(`Design: the designer stopped (${result.error ?? 'no reason'}); building from the spec without a design`);
-      writeDesignState(specDir, { ...(state ?? { round: 0 }), stage: 'skipped', comments: undefined } as DesignState);
-      return {};
+    const message = brief(job, state, specDir);
+    let result = await deps.runDesigner(job, message);
+    for (let attempt = 1; !result.ok && attempt <= DESIGNER_RETRIES && deps.wait && (result.kind === 'rate_limited' || result.kind === 'transient'); attempt++) {
+      const ms = designerRetryWait(result, attempt, Date.now());
+      deps.log(`Design: the designer stopped (${result.error ?? result.kind}); trying again in ${Math.ceil(ms / 60_000)} min (${attempt} of ${DESIGNER_RETRIES})`);
+      if (!(await deps.wait(ms, result.kind, result.error ?? result.kind))) return { cancelled: true };
+      result = await deps.runDesigner(job, message);
     }
+    if (!result.ok) {
+      if (result.kind === 'cancelled') {
+        deps.log('Design: the designer was stopped; the design goes on from here next time');
+        return { cancelled: true };
+      }
+      const error = result.error ?? 'no reason';
+      deps.log(`Design: the designer stopped (${error}); waiting for the owner: try the design again or build without it`);
+      writeDesignFailure(specDir, { error, job, at: new Date().toISOString() });
+      return { failed: error };
+    }
+    clearDesignFailure(specDir);
     if (noneWritten(specDir)) {
       deps.log(`Design: no UI to draw (${readFileSync(path.join(specDir, 'design', 'none.md'), 'utf-8').trim().slice(0, 200)})`);
       writeDesignState(specDir, { ...(state ?? { round: 0 }), stage: 'skipped', comments: undefined } as DesignState);

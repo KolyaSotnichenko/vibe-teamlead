@@ -192,6 +192,8 @@ export interface SessionError {
   message: string;
   /** Whether this error is retryable */
   retryable: boolean;
+  /** A rate limit's reset time (ms since epoch), when known */
+  resetAt?: number;
   /** Original error (for logging) */
   cause?: unknown;
 }

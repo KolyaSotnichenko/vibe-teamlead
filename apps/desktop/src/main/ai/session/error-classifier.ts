@@ -28,6 +28,8 @@ export const ErrorCode = {
   ABORTED: 'aborted',
   MAX_STEPS: 'max_steps_reached',
   GENERIC: 'generic_error',
+  /** The API is overloaded or had a server error: passing, worth trying again later */
+  OVERLOADED: 'api_overloaded',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

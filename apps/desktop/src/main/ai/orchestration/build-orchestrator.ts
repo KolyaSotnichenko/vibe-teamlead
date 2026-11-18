@@ -131,7 +131,7 @@ export interface BuildOrchestratorConfig {
    * Design before code (design-runner.ts): draws the task's wireframes and screens before the
    * architecture and the plan. `paused` stops the build for the owner. Never rejects.
    */
-  designStep?: () => Promise<{ paused?: 'wireframes' | 'design'; error?: string }>;
+  designStep?: () => Promise<{ paused?: 'wireframes' | 'design'; error?: string; failed?: string; cancelled?: boolean }>;
   /** The code a coder session starts with, as a block for its first message ('' for none). Never rejects. */
   subtaskCodeContext?: (subtask: PlanSubtaskEntry, log: (line: string) => void) => Promise<string>;
   /** Optional callback for syncing spec to source (worktree mode) */
@@ -219,6 +219,8 @@ export interface BuildOutcome {
   codingCompleted: boolean;
   /** The build stopped for the owner to look at the wireframes or the design (design-runner.ts) */
   paused?: 'wireframes' | 'design';
+  /** The designer could not draw (after its retries): the owner decides (design-runner.ts) */
+  designFailed?: string;
 }
 
 // =============================================================================
@@ -327,6 +329,10 @@ export class BuildOrchestrator extends EventEmitter {
       if (this.config.designStep) {
         const design = await this.config.designStep();
         if (design.paused) return { ...this.buildOutcome(true, Date.now() - startTime), paused: design.paused };
+        if (design.cancelled) return this.buildOutcome(false, Date.now() - startTime, 'Build cancelled');
+        if (design.failed !== undefined) {
+          return { ...this.buildOutcome(false, Date.now() - startTime, `The design could not be made: ${design.failed}`), designFailed: design.failed };
+        }
       }
 
       // Determine starting phase

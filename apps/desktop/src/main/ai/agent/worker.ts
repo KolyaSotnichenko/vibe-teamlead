@@ -25,7 +25,8 @@ import type { AgentAnswers, AskUserHandler } from '../claude-code/user-questions
 import type { MemoryRequest } from './types';
 import { insightsLogLine, promptMemoryLogLine } from '../memory/memory-log';
 import { animatesWithGsap } from '../design/animation';
-import { runDesignStep } from '../design/design-runner';
+import { designerResultOf, runDesignStep, writeDesignFailure, type DesignStepResult } from '../design/design-runner';
+import { waitForRateLimitResume, writeRateLimitPauseFile } from '../orchestration/pause-handler';
 import { copyLibraryToBase, publishToLibrary } from '../design/design-library';
 import { designReferencePrompt, lintDesignScreens, readDesignCanvas, readDesignState, specTouchesUi } from '../design/design-step';
 import { isUiFile } from '../design/design-lint';
@@ -237,7 +238,7 @@ function specChangesUi(session: SerializableSessionConfig): boolean {
  * Design before code (design-runner.ts) for this task: the designer draws its wireframes and
  * screens under <spec>/design/, before the architecture and the plan. Never rejects.
  */
-async function runTaskDesignStep(session: SerializableSessionConfig, toolContext: ToolContext): Promise<{ paused?: 'wireframes' | 'design'; error?: string }> {
+async function runTaskDesignStep(session: SerializableSessionConfig, toolContext: ToolContext): Promise<DesignStepResult> {
   const design = session.design;
   if (!design || design.mode === 'off') return {};
   // The design gets its own part of the task's log, between planning and coding, once something is
@@ -280,11 +281,23 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
             designerSkills(animatesWithGsap(session.projectDir)),
             { model: design.model, thinking: design.thinking, logPhase: 'design' },
           );
-          const ok = result.outcome === 'completed' || result.outcome === 'max_steps';
-          return ok ? { ok } : { ok, error: result.error?.message ?? result.outcome };
+          return designerResultOf(result);
         } catch (error) {
-          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          return designerResultOf({ outcome: abortController.signal.aborted ? 'cancelled' : 'error', error: { code: 'generic_error', message: error instanceof Error ? error.message : String(error), retryable: false } });
         }
+      },
+      // A rate limit is waited out as the coder's is (the countdown on the card, Resume ends it early)
+      wait: async (ms, kind, error) => {
+        if (kind === 'rate_limited') {
+          writeRateLimitPauseFile(session.specDir, error, new Date(Date.now() + ms).toISOString());
+          await waitForRateLimitResume(session.specDir, ms, session.sourceSpecDir, abortController.signal);
+        } else {
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, ms);
+            abortController.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+          });
+        }
+        return !abortController.signal.aborted;
       },
       checkScreens: () => {
         const tokens = session.designSystem?.tokens;
@@ -305,8 +318,15 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
     if (designLogStarted) logWriter?.endPhase('design', !result.error);
     return result;
   } catch (error) {
-    log(`Design: ${error instanceof Error ? error.message : String(error)}; building without a design`);
-    return {};
+    // Never a silent build without a design: the owner decides
+    const message = error instanceof Error ? error.message : String(error);
+    log(`Design: ${message}; waiting for the owner`);
+    try {
+      writeDesignFailure(session.specDir, { error: message, job: 'wireframes', at: new Date().toISOString() });
+    } catch {
+      // the review reason still says it
+    }
+    return { failed: message };
   }
 }
 
@@ -1111,6 +1131,9 @@ async function runBuildOrchestrator(
   if (outcome.paused) {
     // Waiting for the owner on the Design tab; approving starts the task again
     postTaskEvent('DESIGN_REVIEW', { stage: outcome.paused });
+  } else if (outcome.designFailed !== undefined) {
+    // The designer could not draw: the owner tries again or builds without a design
+    postTaskEvent('DESIGN_FAILED', { error: outcome.designFailed });
   } else if (outcome.success) {
     postTaskEvent('QA_PASSED');
     postTaskEvent('BUILD_COMPLETE');

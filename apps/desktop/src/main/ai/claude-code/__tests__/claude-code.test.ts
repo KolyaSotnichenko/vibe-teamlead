@@ -105,6 +105,21 @@ describe('SessionAccumulator', () => {
 
     expect(new SessionAccumulator(() => undefined).resolveOutcome(true).outcome).toBe('cancelled');
   });
+
+  it('keeps the reset time of a rate limit and marks an overloaded API as passing', () => {
+    const limited = new SessionAccumulator(() => undefined);
+    limited.handle(msg({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: 1_800_000_000 } }));
+    expect(limited.resolveOutcome(false).error?.resetAt).toBe(1_800_000_000_000);
+
+    for (const error of ['overloaded', 'server_error']) {
+      const busy = new SessionAccumulator(() => undefined);
+      busy.handle(msg({ type: 'assistant', error, message: { id: 'm', content: [{ type: 'text', text: 'API Error: 529 Overloaded' }] } }));
+      busy.handle(msg({ type: 'result', subtype: 'error_during_execution', is_error: true, errors: ['x'], usage: {} }));
+      const { outcome, error: sessionError } = busy.resolveOutcome(false);
+      expect(outcome).toBe('error');
+      expect(sessionError).toMatchObject({ code: 'api_overloaded', retryable: true, message: 'API Error: 529 Overloaded' });
+    }
+  });
 });
 
 describe('resolveBuiltinTools', () => {

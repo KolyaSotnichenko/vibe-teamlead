@@ -4,12 +4,12 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { readDesignState, writeDesignState } from '../design-step';
-import { runDesignStep } from '../design-runner';
+import { type DesignerResult, DESIGNER_RETRIES, designerResultOf, readDesignFailure, runDesignStep, writeDesignFailure } from '../design-runner';
 
 function setup(over: Partial<Parameters<typeof runDesignStep>[0]> = {}) {
   const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-drun-'));
   const jobs: string[] = [];
-  const runDesigner = vi.fn(async (job: string, _message: string): Promise<{ ok: boolean; error?: string }> => {
+  const runDesigner = vi.fn(async (job: string, _message: string): Promise<DesignerResult> => {
     jobs.push(job);
     const dir = path.join(specDir, 'design', job === 'wireframes' ? 'wireframes' : 'screens');
     mkdirSync(dir, { recursive: true });
@@ -81,12 +81,68 @@ describe('the design step of a build', () => {
     expect(readDesignState(none.specDir)?.stage).toBe('skipped');
   });
 
-  it("a designer that fails doesn't stop the build: it goes on without a design and says so", async () => {
-    const { deps, specDir } = setup({ runDesigner: vi.fn(async () => ({ ok: false, error: 'rate limited' })) });
-    expect(await runDesignStep(deps)).toEqual({});
-    expect(readDesignState(specDir)?.stage).toBe('skipped');
-    expect(deps.log).toHaveBeenCalledWith(expect.stringMatching(/rate limited/));
-    expect(existsSync(path.join(specDir, 'design', 'state.json'))).toBe(true);
+  it('waits and tries the designer again on a rate limit, until it draws', async () => {
+    const wait = vi.fn(async (_ms: number, _kind: string, _error: string) => true);
+    const { deps, specDir, jobs, runDesigner } = setup({ wait });
+    const draw = runDesigner.getMockImplementation()!;
+    runDesigner
+      .mockImplementationOnce(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited', resetAt: Date.now() + 90_000 }))
+      .mockImplementationOnce(async () => ({ ok: false, error: 'Overloaded', kind: 'transient' }))
+      .mockImplementationOnce(draw);
+    expect(await runDesignStep(deps)).toEqual({ paused: 'wireframes' });
+    expect(wait).toHaveBeenCalledTimes(2);
+    // The reset time the error carries, then a short backoff
+    expect(wait.mock.calls[0][0]).toBeGreaterThanOrEqual(85_000);
+    expect(wait.mock.calls[0][0]).toBeLessThanOrEqual(100_000);
+    expect(wait.mock.calls[1][1]).toBe('transient');
+    expect(jobs).toEqual(['wireframes']);
+    expect(readDesignState(specDir)?.stage).toBe('wireframes');
+  });
+
+  it('stops for the owner when the designer still fails after the retries; never skips the design itself', async () => {
+    const wait = vi.fn(async (_ms: number, _kind: string, _error: string) => true);
+    const { deps, specDir, runDesigner } = setup({ wait });
+    writeDesignState(specDir, { stage: 'wireframes', round: 1, approved: { wireframes: 'x' } });
+    runDesigner.mockImplementation(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited' }));
+    const result = await runDesignStep(deps);
+    expect(result).toEqual({ failed: 'Rate limit reached' });
+    expect(wait).toHaveBeenCalledTimes(DESIGNER_RETRIES);
+    expect(runDesigner).toHaveBeenCalledTimes(DESIGNER_RETRIES + 1);
+    // The design stays where it was, so a new start goes on from the same stage
+    expect(readDesignState(specDir)).toMatchObject({ stage: 'wireframes', approved: { wireframes: 'x' } });
+    expect(readDesignFailure(specDir)).toMatchObject({ error: 'Rate limit reached', job: 'design' });
+    expect(deps.log).toHaveBeenCalledWith(expect.stringMatching(/Rate limit reached/));
+  });
+
+  it('stops for the owner at once on an error a retry would not fix', async () => {
+    const wait = vi.fn(async (_ms: number, _kind: string, _error: string) => true);
+    const { deps, specDir } = setup({ wait, runDesigner: vi.fn(async () => ({ ok: false, error: 'Billing error', kind: 'failed' as const })) });
+    expect(await runDesignStep(deps)).toEqual({ failed: 'Billing error' });
+    expect(wait).not.toHaveBeenCalled();
+    expect(readDesignState(specDir)).toBeUndefined();
+    expect(readDesignFailure(specDir)?.error).toBe('Billing error');
+  });
+
+  it('a cancelled designer leaves the design as it was', async () => {
+    const { deps, specDir } = setup({ runDesigner: vi.fn(async () => ({ ok: false, error: 'cancelled', kind: 'cancelled' as const })) });
+    writeDesignState(specDir, { stage: 'wireframes', round: 1, approved: { wireframes: 'x' } });
+    expect(await runDesignStep(deps)).toEqual({ cancelled: true });
+    expect(readDesignState(specDir)).toMatchObject({ stage: 'wireframes', approved: { wireframes: 'x' } });
+    expect(readDesignFailure(specDir)).toBeUndefined();
+  });
+
+  it('a wait that is cancelled stops the step the same way', async () => {
+    const wait = vi.fn(async (_ms: number, _kind: string, _error: string) => false);
+    const { deps, specDir } = setup({ wait, runDesigner: vi.fn(async () => ({ ok: false, error: 'Rate limit reached', kind: 'rate_limited' as const })) });
+    expect(await runDesignStep(deps)).toEqual({ cancelled: true });
+    expect(readDesignState(specDir)).toBeUndefined();
+  });
+
+  it('a designer that draws after an earlier failure clears it', async () => {
+    const { deps, specDir } = setup();
+    writeDesignFailure(specDir, { error: 'Rate limit reached', job: 'wireframes', at: 'x' });
+    await runDesignStep(deps);
+    expect(readDesignFailure(specDir)).toBeUndefined();
   });
 
   it('does nothing when design is off', async () => {
@@ -116,5 +172,22 @@ describe('the design step of a build', () => {
     const noUi = setup({ publish, touchesUi: () => false });
     await runDesignStep(noUi.deps);
     expect(publish).not.toHaveBeenCalled();
+  });
+});
+
+describe('what a designer session ended with', () => {
+  it('tells a rate limit, a passing API error, a cancel and anything else apart', () => {
+    expect(designerResultOf({ outcome: 'completed' })).toEqual({ ok: true });
+    expect(designerResultOf({ outcome: 'max_steps' })).toEqual({ ok: true });
+    expect(designerResultOf({ outcome: 'rate_limited', error: { code: 'rate_limited', message: 'Rate limit reached', retryable: true, resetAt: 5 } }))
+      .toEqual({ ok: false, kind: 'rate_limited', error: 'Rate limit reached', resetAt: 5 });
+    expect(designerResultOf({ outcome: 'cancelled' })).toMatchObject({ ok: false, kind: 'cancelled' });
+    expect(designerResultOf({ outcome: 'error', error: { code: 'api_overloaded', message: 'API Error: 529 Overloaded', retryable: true } }))
+      .toMatchObject({ ok: false, kind: 'transient' });
+    expect(designerResultOf({ outcome: 'error', error: { code: 'generic_error', message: 'socket hang up (ECONNRESET)', retryable: false } }).kind).toBe('transient');
+    expect(designerResultOf({ outcome: 'error', error: { code: 'generic_error', message: 'API Error: 503 Service Unavailable', retryable: false } }).kind).toBe('transient');
+    expect(designerResultOf({ outcome: 'error', error: { code: 'billing_error', message: 'Billing error on the Anthropic account', retryable: false } }))
+      .toEqual({ ok: false, kind: 'failed', error: 'Billing error on the Anthropic account' });
+    expect(designerResultOf({ outcome: 'auth_failure', error: { code: 'auth_failure', message: 'Authentication failed', retryable: false } }).kind).toBe('failed');
   });
 });
