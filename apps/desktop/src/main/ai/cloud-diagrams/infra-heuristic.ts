@@ -36,7 +36,7 @@ export function concernsCloudInfra(input: { text: string; projectHasTerraform: b
 const SKIP = new Set(['node_modules', 'vendor', 'dist', 'build', 'out', 'target', 'coverage', '__pycache__', 'venv']);
 
 /** The project's .tf files (relative paths), a few levels deep; hidden and dependency folders skipped. */
-export function findTerraformFiles(root: string, maxDepth = 4, limit = 50): string[] {
+export function findTerraformFiles(root: string, maxDepth = 4, limit = 50, pattern: RegExp = /\.tf$/i): string[] {
   const found: string[] = [];
   const walk = (dir: string, rel: string, depth: number) => {
     if (found.length >= limit) return;
@@ -49,7 +49,7 @@ export function findTerraformFiles(root: string, maxDepth = 4, limit = 50): stri
     for (const entry of entries) {
       if (found.length >= limit) return;
       const relPath = rel ? join(rel, entry.name) : entry.name;
-      if (entry.isFile() && /\.tf$/i.test(entry.name)) found.push(relPath);
+      if (entry.isFile() && pattern.test(entry.name)) found.push(relPath);
       else if (entry.isDirectory() && depth < maxDepth && !entry.name.startsWith('.') && !SKIP.has(entry.name)) {
         walk(join(dir, entry.name), relPath, depth + 1);
       }

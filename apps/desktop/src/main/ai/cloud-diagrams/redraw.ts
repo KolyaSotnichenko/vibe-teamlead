@@ -6,7 +6,10 @@
  * its providers and modules (`terraform init`), and nothing else.
  *
  * TerraVision runs Terraform once (`graphdata`, plus `visualise` for the HTML page);
- * the SVG and draw.io pictures are drawn from the graph it saved. A failure or
+ * the SVG and draw.io pictures are drawn from the graph it saved. TerraVision has no
+ * static mode: drawing from a folder always runs `terraform init` and `plan`
+ * (never `apply`), so the code is checked first (terraform-safety.ts) and refused
+ * when it could run programs or fetch code from elsewhere. A failure or
  * missing tools is a quiet note in meta.json, never an error: the last drawing stays.
  * No Electron: testable with fakes.
  */
@@ -17,9 +20,11 @@ import { dirname, join, sep } from 'node:path';
 
 import type { RunOptions, RunResult } from '../../platform/exec';
 import { findTerraformFiles } from './infra-heuristic';
+import { terraformUnsafe } from './terraform-safety';
 import { cloudSafeEnv, type CloudTool, type CloudToolsReadiness, terravisionCommand } from './terravision';
 
-export type CloudDrawStatus = 'drawn' | 'unavailable' | 'needs_cloud_access' | 'failed';
+/** refused: the static check found code that could run programs or fetch it from elsewhere (terraform-safety.ts) */
+export type CloudDrawStatus = 'drawn' | 'unavailable' | 'needs_cloud_access' | 'refused' | 'failed';
 
 export interface CloudDrawing {
   commit: string;
@@ -53,6 +58,7 @@ export interface RedrawDeps {
 const STEP_TIMEOUT_MS = 10 * 60_000;
 const META = 'meta.json';
 const TAIL = 600;
+const MAX_FILES = 1000;
 
 export function terraformChanged(files: string[]): boolean {
   return files.some((file) => /\.(tf|tf\.json|tfvars)$/i.test(file));
@@ -122,11 +128,17 @@ export async function redrawCloudArchitecture(
     const checkedOut = await deps.git(['checkout', '-q', '--detach', commit], copy);
     if (!checkedOut.ok) return attempt('failed', { detail: checkedOut.output.slice(-TAIL) });
 
-    const root = terraformRoot(findTerraformFiles(copy, 6, 500), changedFiles);
+    // Every Terraform file of the commit is checked before anything runs Terraform on it
+    const allFiles = findTerraformFiles(copy, 12, MAX_FILES + 1, /\.tf(\.json)?$/i);
+    if (allFiles.length > MAX_FILES) return attempt('refused', { detail: `More than ${MAX_FILES} Terraform files: too many to check.` });
+    const unsafe = terraformUnsafe(allFiles.map((path) => ({ path: path.split(sep).join('/'), text: readFileSync(join(copy, path), 'utf-8') })));
+    if (unsafe) return attempt('refused', { detail: `Couldn't draw from code safely: ${unsafe}` });
+    const root = terraformRoot(allFiles.filter((file) => /\.tf$/i.test(file)), changedFiles);
     if (!root) return attempt('failed', { detail: 'No Terraform files in the merged commit.' });
     const source = root === '.' ? copy : join(copy, root);
 
     const env = cloudSafeEnv(deps.hostEnv, { platform: deps.platform, sandboxHome: home });
+    if (env.TF_PLUGIN_CACHE_DIR) mkdirSync(env.TF_PLUGIN_CACHE_DIR, { recursive: true });
     const engine = deps.tools.engine ? ['--engine', deps.tools.engine] : [];
     const step = (args: string[]) =>
       deps.run(command.file, [...command.args, ...args], { cwd: out, env, timeoutMs: deps.timeoutMs ?? STEP_TIMEOUT_MS, killGroup: true, signal: deps.signal, maxOutput: 256 * 1024 });

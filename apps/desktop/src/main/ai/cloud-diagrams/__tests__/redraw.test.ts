@@ -91,6 +91,33 @@ describe('classifyFailure', () => {
   });
 });
 
+describe('redrawCloudArchitecture: safety', () => {
+  it("refuses code that could run programs, without running TerraVision, and says so", async () => {
+    const runCalls: { args: string[]; options: RunOptions }[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const git: RedrawDeps['git'] = async (args, cwd) => {
+      const result = await deps.git(args, cwd);
+      if (args[0] === 'clone') writeFileSync(join(args[args.length - 1], 'infra', 'hook.tf'), 'data "external" "x" { program = ["id"] }');
+      return result;
+    };
+    const meta = await redrawCloudArchitecture({ projectDir, commit: 'c9', changedFiles: ['infra/hook.tf'], storeDir }, { ...deps, git, run: fakeTerravision(runCalls) });
+    expect(runCalls).toEqual([]);
+    expect(meta?.lastAttempt).toMatchObject({ status: 'refused', commit: 'c9' });
+    expect(meta?.lastAttempt?.detail).toMatch(/external/);
+  });
+
+  it("makes TerraVision's private folders, plugin cache included, before running it", async () => {
+    const seen: string[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const run: RedrawDeps['run'] = async (file, args, options) => {
+      seen.push(String(existsSync(options.env!.HOME!)), String(existsSync(options.env!.TF_PLUGIN_CACHE_DIR!)));
+      return fakeTerravision([])(file, args, options);
+    };
+    await redrawCloudArchitecture({ projectDir, commit: 'c10', changedFiles: ['infra/main.tf'], storeDir }, { ...deps, run });
+    expect(seen.every((v) => v === 'true')).toBe(true);
+  });
+});
+
 describe('redrawCloudArchitecture', () => {
   it('does nothing at all when the merge changed no Terraform', async () => {
     const { projectDir, storeDir, gitCalls, runCalls, deps } = setup();

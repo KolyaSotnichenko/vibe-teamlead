@@ -110,7 +110,8 @@ describe('cloudSafeEnv', () => {
     expect(env.AZURE_CONFIG_DIR).toMatch(/^\/tmp\/tv\/home/);
     expect(env.CLOUDSDK_CONFIG).toMatch(/^\/tmp\/tv\/home/);
     expect(env.TF_CLI_CONFIG_FILE).toMatch(/^\/tmp\/tv\/home/);
-    expect(env.TF_INPUT).toBe('false');
+    expect(env.TF_PLUGIN_CACHE_DIR).toMatch(/^\/tmp\/tv\/home/);
+    expect(env.TF_INPUT).toBe('0');
     expect(env.CHECKPOINT_DISABLE).toBe('1');
     expect(env.UV_CACHE_DIR).toBe('/Users/me/.cache/uv');
     expect(env.UV_PYTHON_INSTALL_DIR).toBe('/Users/me/.local/share/uv/python');

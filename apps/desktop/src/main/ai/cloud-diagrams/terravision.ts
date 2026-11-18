@@ -152,7 +152,8 @@ export function cloudSafeEnv(host: NodeJS.ProcessEnv, options: { platform: Platf
     CLOUDSDK_CONFIG: at('gcloud'),
     KUBECONFIG: at('kube', 'config'),
     TF_CLI_CONFIG_FILE: at('terraformrc'),
-    TF_INPUT: 'false',
+    TF_PLUGIN_CACHE_DIR: at('terraform-plugins'),
+    TF_INPUT: '0',
     TF_IN_AUTOMATION: '1',
     CHECKPOINT_DISABLE: '1',
   });
