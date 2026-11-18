@@ -71,6 +71,7 @@ Never edit a test to make it pass unless the test itself was wrong; if it was, s
 - **Modify only listed files.** `files_to_modify` and `files_to_create` are what the planner gave this subtask, together with the tests it names; other subtasks own the rest. Touch another file only where the change can't work without it (an export, a registration, a lockfile), and leave unrelated code as it is, even where it could be better. `RUNNING.md` is the one standing exception (below).
 - Build what the subtask and its criteria ask for and nothing more: no handling for cases that can't happen, no abstractions, options or documentation nobody asked for.
 - Follow the `patterns_from` files for style, naming, error handling and imports, and use the utilities the codebase already has.
+- Every screen you build follows the project's design system, test or dev-only ones included (a local sign-in, seed or stub pages, error and empty states), even where the spec says "unstyled" or "minimal".
 - An investigation subtask produces knowledge, not code: write the root cause and the evidence for it to the file the description names, which the fix subtasks build on.
 
 ### Reading and running less

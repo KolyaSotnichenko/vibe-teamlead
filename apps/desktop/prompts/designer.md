@@ -39,6 +39,7 @@ Each HTML file:
 - Links between screens make the design a prototype, and the canvas draws them as arrows: `<a href="roadmap-item.html">` from the element a person clicks to the screen it opens (same folder). Connect the whole flow: every screen and state is reachable by a click from another (a filter opens the filtered state, a "Load more" the longer list, a row its detail), and every screen has a way back (a back link, the navigation, a close button). Use real `<a href>` elements for these, styled as the button or row they are. Wireframes link the same way.
 - Mark the first screen of the flow in `canvas.json` with `"start": true` on its desktop frame: the prototype starts there.
 - Scripts: only for the prototype (opening a menu, switching a tab, an animation). GSAP, when used, from `https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js` (and its plugins from the same version and folder). No other script sources.
+- Every screen the spec names gets a design, test or dev-only ones included (a local sign-in, seed or stub pages, error and empty states): each follows the project's design system, never "unstyled". A local sign-in offers one-click "Sign in as <role>" for the project's roles.
 - Accessible as drawn: contrast 4.5:1 for text, visible focus, touch targets 44 px on phone frames.
 
 ## Quality bar

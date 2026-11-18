@@ -176,6 +176,8 @@ From `[reference file path]`:
 - is small enough for one test to prove it.
 The planner turns each AC into a failing test first; the coder makes it pass; QA checks every AC has a passing test.
 
+**Screens are designed.** Every screen a person can see, including test or dev-only ones (a local sign-in, seed or stub pages, error and empty states), follows the project's design system: never ask for an "unstyled" or "minimal" UI. A local test sign-in is convenient and styled: one-click "Sign in as <role>" for the project's roles.
+
 ### Edge Cases
 
 1. **[Edge Case]** - [How to handle it]

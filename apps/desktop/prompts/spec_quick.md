@@ -144,6 +144,7 @@ Ready for implementation.
 4. **USE EXACT SCHEMA** - The implementation_plan.json MUST use `phases[].subtasks[]` structure
 5. **DON'T OVER-ENGINEER** - This is a simple task, treat it simply
 6. **DON'T READ EVERYTHING** - Only read the specific files needed for the change
+7. **STYLED SCREENS** - A screen the change adds or touches, test or dev-only ones included, follows the project's design system; never "unstyled" or "minimal" UI
 
 ---
 

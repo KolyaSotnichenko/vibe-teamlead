@@ -219,6 +219,7 @@ Next phase: Context Discovery
 3. **Include all required fields** - task_description, workflow_type, services_involved
 4. **Ask before assuming** - Don't guess what the user wants
 5. **Confirm before outputting** - Show the user what you understood
+6. **Styled screens** - Every screen a person sees, test or dev-only ones included (a local sign-in, seed or stub pages), follows the project's design system; don't record a requirement for "unstyled" or "minimal" UI
 
 ---
 
