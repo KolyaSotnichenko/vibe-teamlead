@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
 import type { RunOptions, RunResult } from '../../platform/exec';
-import { terraformUnsafe, walkTerraformFiles } from './terraform-safety';
+import { localProviderPath, providerInstallationConfig, terraformUnsafe, walkTerraformFiles } from './terraform-safety';
 import { cloudSafeEnv, type CloudTool, type CloudToolsReadiness, terravisionCommand } from './terravision';
 
 /** refused: the static check found code that could run programs or fetch it from elsewhere (terraform-safety.ts) */
@@ -137,12 +137,18 @@ export async function redrawCloudArchitecture(
     if (allFiles.length > MAX_FILES) return attempt('refused', { detail: `Couldn't draw from code safely: more than ${MAX_FILES} Terraform files to check.` });
     const unsafe = terraformUnsafe(allFiles.map((path) => ({ path, text: readFileSync(join(copy, path), 'utf-8') })));
     if (unsafe) return attempt('refused', { detail: `Couldn't draw from code safely: ${unsafe}` });
+    const ownProviders = localProviderPath(copy);
+    if (ownProviders) return attempt('refused', { detail: `Couldn't draw from code safely: ${ownProviders} brings its own providers or Terraform settings` });
     const root = terraformRoot(allFiles.filter((file) => /\.(tf|tofu)$/i.test(file)).map((file) => file.split('/').join(sep)), changedFiles);
     if (!root) return attempt('failed', { detail: 'No Terraform files in the merged commit.' });
     const source = root === '.' ? copy : join(copy, root);
 
     const env = cloudSafeEnv(deps.hostEnv, { platform: deps.platform, sandboxHome: home });
     if (env.TF_PLUGIN_CACHE_DIR) mkdirSync(env.TF_PLUGIN_CACHE_DIR, { recursive: true });
+    // Only the vetted providers can be installed, whatever the code asks for
+    if (!env.TF_CLI_CONFIG_FILE) return attempt('refused', { detail: "Couldn't draw from code safely: no Terraform settings file to limit providers" });
+    mkdirSync(dirname(env.TF_CLI_CONFIG_FILE), { recursive: true });
+    writeFileSync(env.TF_CLI_CONFIG_FILE, providerInstallationConfig(), { mode: 0o600 });
     const engine = deps.tools.engine ? ['--engine', deps.tools.engine] : [];
     const step = (args: string[]) =>
       deps.run(command.file, [...command.args, ...args], { cwd: out, env, timeoutMs: deps.timeoutMs ?? STEP_TIMEOUT_MS, killGroup: true, signal: deps.signal, maxOutput: 256 * 1024 });

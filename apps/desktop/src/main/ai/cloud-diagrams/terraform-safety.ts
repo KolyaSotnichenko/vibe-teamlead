@@ -303,6 +303,35 @@ export const TERRAFORM_FILE = /\.(tf|tofu)(\.json)?$/i;
  * walked. Throws UnreadableTerraform on a symbolic link anywhere (it could lead the
  * plan out of the copy) or when there are more than `limit` entries to walk.
  */
+/**
+ * Terraform's CLI config for a run on agent-written code: providers install only from the
+ * public registries and only the vetted ones. Terraform itself refuses anything else, however
+ * the code spells its required_providers, so this holds even where the reader above is fooled.
+ */
+export function providerInstallationConfig(): string {
+  const entries = Object.values(VETTED_PROVIDERS).flatMap((source) => [`registry.terraform.io/${source}`, `registry.opentofu.org/${source}`]);
+  return `provider_installation {\n  direct {\n    include = [\n${entries.map((entry) => `      "${entry}",`).join('\n')}\n    ]\n  }\n}\n`;
+}
+
+const LOCAL_PROVIDER_DIRS = new Set(['terraform.d', '.terraform']);
+const LOCAL_PROVIDER_FILES = new Set(['.terraformrc', 'terraform.rc']);
+
+/** A provider or CLI config the code brings itself (a local plugin dir, an rc file): the first found, or undefined */
+export function localProviderPath(root: string, relPath = ''): string | undefined {
+  for (const entry of readdirSync(join(root, relPath), { withFileTypes: true })) {
+    if (entry.name === '.git') continue;
+    const path = relPath ? `${relPath}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      if (LOCAL_PROVIDER_DIRS.has(entry.name)) return path;
+      const found = localProviderPath(root, path);
+      if (found) return found;
+    } else if (LOCAL_PROVIDER_FILES.has(entry.name)) {
+      return path;
+    }
+  }
+  return undefined;
+}
+
 export function walkTerraformFiles(root: string, limit = 50_000): string[] {
   const found: string[] = [];
   let seen = 0;

@@ -132,6 +132,45 @@ describe('redrawCloudArchitecture: safety', () => {
   });
 });
 
+describe('redrawCloudArchitecture: only vetted providers can be installed', () => {
+  it('gives Terraform a CLI config that installs only the vetted providers, written before TerraVision runs', async () => {
+    const configs: string[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const run: RedrawDeps['run'] = async (file, args, options) => {
+      const path = options.env!.TF_CLI_CONFIG_FILE!;
+      configs.push(existsSync(path) ? readFileSync(path, 'utf-8') : '');
+      return fakeTerravision([])(file, args, options);
+    };
+    await redrawCloudArchitecture({ projectDir, commit: 'c12', changedFiles: ['infra/main.tf'], storeDir }, { ...deps, run });
+    expect(configs.length).toBeGreaterThan(0);
+    for (const config of configs) {
+      expect(config).toMatch(/provider_installation\s*\{\s*direct\s*\{\s*include\s*=/);
+      expect(config).toContain('"registry.terraform.io/hashicorp/azurerm"');
+      expect(config).toContain('"registry.opentofu.org/hashicorp/azurerm"');
+      // nothing else: no wildcards, no other namespaces
+      expect(config).not.toMatch(/\*/);
+      expect(config.match(/"registry\.[^"]+"/g)!.every((entry) => /\/hashicorp\/(aws|azurerm|azuread|google|google-beta|random|tls|time)"$/.test(entry))).toBe(true);
+    }
+  });
+
+  it.each(['terraform.d/plugins/x', '.terraform/providers/x', '.terraformrc', 'infra/terraform.rc'])('refuses a copy that brings its own %s', async (path) => {
+    const runCalls: { args: string[]; options: RunOptions }[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const git: RedrawDeps['git'] = async (args, cwd) => {
+      const result = await deps.git(args, cwd);
+      if (args[0] === 'clone') {
+        const file = join(args[args.length - 1], path);
+        mkdirSync(join(file, '..'), { recursive: true });
+        writeFileSync(file, 'x');
+      }
+      return result;
+    };
+    const meta = await redrawCloudArchitecture({ projectDir, commit: 'c13', changedFiles: ['infra/main.tf'], storeDir }, { ...deps, git, run: fakeTerravision(runCalls) });
+    expect(runCalls).toEqual([]);
+    expect(meta?.lastAttempt).toMatchObject({ status: 'refused' });
+  });
+});
+
 describe('redrawCloudArchitecture', () => {
   it('does nothing at all when the merge changed no Terraform', async () => {
     const { projectDir, storeDir, gitCalls, runCalls, deps } = setup();
