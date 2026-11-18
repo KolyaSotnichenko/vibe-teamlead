@@ -9,6 +9,7 @@
 | `<проєкт>/.vibe-teamlead/design-system.md`, `design-tokens.json` | Дизайн-система (якщо не у файлі репозиторію). |
 | `<проєкт>/.vibe-teamlead/specs/<id>/design_check.md` | Результат дизайн-перевірки задачі. |
 | `<project>/.vibe-teamlead/specs/<id>/design/` | Wireframe і екрани задачі. |
+| `<проєкт>/.vibe-teamlead/cloud-architecture/` | Хмарна архітектура, намальована з коду Terraform після останнього злиття, що його змінило (`latest/`: SVG, draw.io, HTML, граф), і `meta.json` (який коміт і задача, остання спроба). |
 | `<project>/.vibe-teamlead/design/` | Бібліотека дизайну проєкту, референси та імпортований пакет. |
 | `~/.vibe-teamlead/worktrees/preview` | Власна копія main для Preview, поза проєктом. |
 | `~/.vibe-teamlead/memories` | Пам'ять агентів. |

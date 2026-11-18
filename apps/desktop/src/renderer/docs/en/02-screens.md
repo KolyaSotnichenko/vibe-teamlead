@@ -59,6 +59,7 @@
 | **Context → Project Index** | The project "passport": services, frameworks, test commands, ports. The Analyze Project button. |
 | **Context → Memories** | What the agents have remembered about this project. |
 | **Context → Design system** | The project's UI rules and tokens, the design check in QA, Storybook (see "Design system and Storybook"). Its Screens part holds the library of wireframes and screens the designer drew (see "Design before code"). |
+| **Context → Architecture** | The project's cloud architecture (TerraVision, experimental): the latest designed by an architect and the latest drawn from the Terraform code after a merge, side by side; the decisions (ADRs) of merged tasks; the Design the cloud architecture button (see "Cloud architecture diagrams"). |
 | **Changelog** | Generate a changelog from completed tasks, git history or a branch comparison. |
 | **MCP Overview** | Which MCP servers and tools each agent has; your own MCP servers; toggles for Context7, Linear and browser tools. |
 
@@ -69,7 +70,7 @@
 | **Overview** | Description, status, subtask progress, the Start, Stop, Merge and PR buttons. A CI notice: the CI status of the task's branch, why there is none (CI not set up, public repository), or why the last push of its branch failed (see "CI" → CI on task cards). |
 | **Workspace → Spec** | Acceptance criteria with QA results (✓ / ✗ / not verified) and what covers them; `spec.md` with checked checkboxes. |
 | **Workspace → Plan** | The subtask dependency graph (left to right or top to bottom, toggle in the corner) and a timeline of what happened. |
-| **Workspace → Architecture** | Diagrams (draw.io diagrams open in draw.io), `architecture.md` with embedded diagrams, ADRs. |
+| **Workspace → Architecture** | Diagrams (draw.io diagrams open in draw.io; SVGs, such as the architect's TerraVision cloud diagram, are shown too), `architecture.md` with embedded diagrams, ADRs. |
 | **Workspace → Security** | Gate and Strix results: findings with severity. |
 | **Design** | Wireframes and screens the designer drew for a task that changes UI: comment on a spot, approve, play the prototype, and later see how the built page differs (see "Design before code"). |
 | **Workspace → Preview** | The task's own app before it merges (see "Preview"). Shown while the task waits in review. |

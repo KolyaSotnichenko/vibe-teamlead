@@ -9,6 +9,7 @@
 | `<project>/.vibe-teamlead/design-system.md`, `design-tokens.json` | Design system (if it's not in a repository file). |
 | `<project>/.vibe-teamlead/specs/<id>/design_check.md` | The task's design check result. |
 | `<project>/.vibe-teamlead/specs/<id>/design/` | The task's wireframes and screens. |
+| `<project>/.vibe-teamlead/cloud-architecture/` | The cloud architecture drawn from the Terraform code after the latest merge that changed it (`latest/`: SVG, draw.io, HTML, graph) and `meta.json` (which commit and task, and the last attempt). |
 | `<project>/.vibe-teamlead/design/` | The project's design library, references and imported package. |
 | `~/.vibe-teamlead/worktrees/preview` | The preview's own copy of main, outside the project. |
 | `~/.vibe-teamlead/memories` | Agent memory. |
