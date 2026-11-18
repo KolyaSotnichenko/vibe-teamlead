@@ -153,6 +153,8 @@ export function cloudSafeEnv(host: NodeJS.ProcessEnv, options: { platform: Platf
     KUBECONFIG: at('kube', 'config'),
     TF_CLI_CONFIG_FILE: at('terraformrc'),
     TF_PLUGIN_CACHE_DIR: at('terraform-plugins'),
+    // Terraform's working data in a folder of its own: a .terraform folder in the code is never read
+    TF_DATA_DIR: at('terraform-data'),
     TF_INPUT: '0',
     TF_IN_AUTOMATION: '1',
     CHECKPOINT_DISABLE: '1',

@@ -153,7 +153,23 @@ describe('redrawCloudArchitecture: only vetted providers can be installed', () =
     }
   });
 
-  it.each(['terraform.d/plugins/x', '.terraform/providers/x', '.terraformrc', 'infra/terraform.rc'])('refuses a copy that brings its own %s', async (path) => {
+  it("gives Terraform a data folder of its own, so a .terraform folder in the code is never read", async () => {
+    const dirs: string[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const run: RedrawDeps['run'] = async (file, args, options) => {
+      dirs.push(options.env!.TF_DATA_DIR ?? '');
+      return fakeTerravision([])(file, args, options);
+    };
+    await redrawCloudArchitecture({ projectDir, commit: 'c14', changedFiles: ['infra/main.tf'], storeDir }, { ...deps, run });
+    expect(dirs.length).toBeGreaterThan(0);
+    for (const dir of dirs) {
+      expect(dir).not.toBe('');
+      expect(dir).not.toContain(`${projectDir}`);
+      expect(dir).not.toMatch(/[\\/]copy[\\/]/);
+    }
+  });
+
+  it.each(['terraform.d/plugins/x', '.terraform/providers/x', '.terraformrc', 'infra/terraform.rc', 'Terraform.D/plugins/x', '.TERRAFORM/x', 'infra/.Terraformrc', 'TERRAFORM.RC', 'terraform.d. /x'])('refuses a copy that brings its own %s', async (path) => {
     const runCalls: { args: string[]; options: RunOptions }[] = [];
     const { projectDir, storeDir, deps } = setup();
     const git: RedrawDeps['git'] = async (args, cwd) => {

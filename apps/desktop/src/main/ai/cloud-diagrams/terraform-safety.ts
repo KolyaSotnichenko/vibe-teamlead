@@ -313,20 +313,26 @@ export function providerInstallationConfig(): string {
   return `provider_installation {\n  direct {\n    include = [\n${entries.map((entry) => `      "${entry}",`).join('\n')}\n    ]\n  }\n}\n`;
 }
 
-const LOCAL_PROVIDER_DIRS = new Set(['terraform.d', '.terraform']);
-const LOCAL_PROVIDER_FILES = new Set(['.terraformrc', 'terraform.rc']);
+/**
+ * A name as the file system may treat it: macOS and Windows ignore case, and Windows drops
+ * trailing dots and spaces (`terraform.d. ` is `terraform.d`).
+ */
+const fsName = (name: string) => name.toLowerCase().replace(/[. ]+$/, '');
+/** Anything named like Terraform's own folders or settings (.terraform*, terraform.d*, *terraformrc, terraform.rc) */
+const ownTerraformName = (name: string) => {
+  const n = fsName(name);
+  return n.startsWith('.terraform') || n.startsWith('terraform.d') || n.endsWith('terraformrc') || n === 'terraform.rc';
+};
 
 /** A provider or CLI config the code brings itself (a local plugin dir, an rc file): the first found, or undefined */
 export function localProviderPath(root: string, relPath = ''): string | undefined {
   for (const entry of readdirSync(join(root, relPath), { withFileTypes: true })) {
     if (entry.name === '.git') continue;
     const path = relPath ? `${relPath}/${entry.name}` : entry.name;
+    if (ownTerraformName(entry.name)) return path;
     if (entry.isDirectory()) {
-      if (LOCAL_PROVIDER_DIRS.has(entry.name)) return path;
       const found = localProviderPath(root, path);
       if (found) return found;
-    } else if (LOCAL_PROVIDER_FILES.has(entry.name)) {
-      return path;
     }
   }
   return undefined;
