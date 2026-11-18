@@ -232,13 +232,13 @@ function classifyAuthFailureType(output: string): 'missing' | 'invalid' | 'expir
 function getAuthFailureMessage(failureType: 'missing' | 'invalid' | 'expired' | 'unknown'): string {
   switch (failureType) {
     case 'missing':
-      return 'Claude authentication required. Add an Anthropic API key in Settings > Claude.';
+      return 'Claude authentication required. Add an Anthropic API key or a Claude subscription token in Settings > Claude.';
     case 'expired':
-      return 'Your Claude session has expired. Update your key in Settings > Claude.';
+      return 'Your Claude session has expired. Update your API key or subscription token in Settings > Claude.';
     case 'invalid':
-      return 'Invalid Claude credentials. Check your API key in Settings > Claude.';
+      return 'Invalid Claude credentials. Check your API key or subscription token in Settings > Claude.';
     default:
-      return 'Claude authentication failed. Check your API key in Settings > Claude.';
+      return 'Claude authentication failed. Check your API key or subscription token in Settings > Claude.';
   }
 }
 

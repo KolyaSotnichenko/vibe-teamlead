@@ -62,7 +62,7 @@ export class AgentManager extends EventEmitter {
   private requireClaudeAuth(taskId: string): ResolvedClaudeCredential | null {
     const auth = resolveClaudeCredential();
     if (!auth.key) {
-      this.emit('error', taskId, isSubscriptionModeEnabled() ? 'No Claude subscription token saved. Add it in Settings > Claude (Claude subscription), or switch to API key.' : 'No Claude credentials configured. Add an Anthropic API key in Settings > Claude before starting tasks.');
+      this.emit('error', taskId, isSubscriptionModeEnabled() ? 'No Claude subscription token saved. Add it in Settings > Claude (Claude subscription), or switch to API key.' : 'No Claude credentials configured. Add an Anthropic API key or a Claude subscription token in Settings > Claude before starting tasks.');
       return null;
     }
     return auth;

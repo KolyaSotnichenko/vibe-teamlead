@@ -115,7 +115,7 @@ export function registerAgenteventsHandlers(
 
     const authFailureInfo: AuthFailureInfo = {
       failureType: authFailure.failureType || 'unknown',
-      message: authFailure.message || 'Claude authentication failed. Check your API key in Settings > Claude.',
+      message: authFailure.message || 'Claude authentication failed. Check your API key or subscription token in Settings > Claude.',
       originalError: authFailure.originalError,
       taskId,
       detectedAt: new Date(),

@@ -372,6 +372,7 @@ describe('Auth Failure Detection', () => {
       expect(result.isAuthFailure).toBe(true);
       expect(result.message).toContain('Settings > Claude');
       expect(result.message).toContain('API key');
+      expect(result.message).toContain('Claude subscription token');
     });
 
     it('should provide user-friendly message for expired auth', async () => {
@@ -391,6 +392,7 @@ describe('Auth Failure Detection', () => {
 
       expect(result.isAuthFailure).toBe(true);
       expect(result.message).toContain('Invalid');
+      expect(result.message).toContain('subscription token');
     });
   });
 

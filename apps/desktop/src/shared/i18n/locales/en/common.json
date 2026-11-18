@@ -158,8 +158,8 @@
     "failedToDeleteTaskWorktree": "Failed to delete task worktree: {{specName}}",
     "terminalWorktreeNotFound": "Terminal worktree not found: {{name}}",
     "failedToDeleteTerminalWorktree": "Failed to delete terminal worktree: {{name}}",
-    "noClaudeCredential": "No Claude API key",
-    "addClaudeKey": "Add your Anthropic API key in Settings → Claude to use AI features.",
+    "noClaudeCredential": "No Claude credential",
+    "addClaudeKey": "Add an Anthropic API key or a Claude subscription token in Settings → Claude to use AI features.",
     "unexpected": "An unexpected error occurred"
   },
   "worktrees": {
@@ -525,7 +525,7 @@
     "conversionFailedDescription": "Failed to convert idea to task",
     "conversionError": "Conversion error",
     "conversionErrorDescription": "An error occurred while converting the idea",
-    "noClaudeCredential": "No Claude API key yet. Add it in Settings → Claude to generate ideas.",
+    "noClaudeCredential": "No Claude credential yet. Add an API key or a subscription token in Settings → Claude to generate ideas.",
     "ideaCount_one": "{{count}} idea",
     "ideaCount_other": "{{count}} ideas",
     "noIdeasToDisplay": "No ideas to display",
@@ -952,7 +952,7 @@
       "tokenInvalid": "The Claude credential was rejected.",
       "tokenMissing": "No Claude credential found.",
       "authFailed": "Authentication failed.",
-      "description": "Check the API key in Settings → Claude, then start the task again.",
+      "description": "Check the API key or subscription token in Settings → Claude, then start the task again.",
       "taskAffected": "Task affected",
       "technicalDetails": "Technical details",
       "goToSettings": "Go to Settings"

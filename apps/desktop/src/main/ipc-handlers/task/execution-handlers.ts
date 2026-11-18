@@ -43,7 +43,7 @@ function hasClaudeCredential(): boolean {
   return !!resolveClaudeCredential().key;
 }
 
-const MISSING_CREDENTIAL_MESSAGE = 'No Claude credentials configured. Add an Anthropic API key in Settings > Claude before starting tasks.';
+const MISSING_CREDENTIAL_MESSAGE = 'No Claude credentials configured. Add an Anthropic API key or a Claude subscription token in Settings > Claude before starting tasks.';
 
 /**
  * Safe file read that handles missing files without TOCTOU issues.
@@ -1029,7 +1029,7 @@ export function registerTaskExecutionHandlers(
                 taskId,
                 recovered: true,
                 newStatus,
-                message: 'Task recovered but cannot restart: add an Anthropic API key in Settings > Claude.',
+                message: 'Task recovered but cannot restart: add an Anthropic API key or a Claude subscription token in Settings > Claude.',
                 autoRestarted: false
               }
             };

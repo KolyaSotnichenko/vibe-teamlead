@@ -158,8 +158,8 @@
     "failedToDeleteTaskWorktree": "Не вдалося видалити worktree задачі: {{specName}}",
     "terminalWorktreeNotFound": "Worktree термінала не знайдено: {{name}}",
     "failedToDeleteTerminalWorktree": "Не вдалося видалити worktree термінала: {{name}}",
-    "noClaudeCredential": "Немає API-ключа Claude",
-    "addClaudeKey": "Додайте API-ключ Anthropic у Налаштування → Claude, щоб користуватися функціями AI.",
+    "noClaudeCredential": "Немає облікових даних Claude",
+    "addClaudeKey": "Додайте API-ключ Anthropic або токен підписки Claude у Налаштування → Claude, щоб користуватися функціями AI.",
     "unexpected": "Сталася неочікувана помилка"
   },
   "worktrees": {
@@ -532,7 +532,7 @@
     "conversionFailedDescription": "Не вдалося перетворити ідею на задачу",
     "conversionError": "Помилка перетворення",
     "conversionErrorDescription": "Під час перетворення ідеї сталася помилка",
-    "noClaudeCredential": "API-ключа Claude ще немає. Додайте його в Налаштування → Claude, щоб генерувати ідеї.",
+    "noClaudeCredential": "Облікових даних Claude ще немає. Додайте API-ключ або токен підписки в Налаштування → Claude, щоб генерувати ідеї.",
     "ideaCount_one": "{{count}} ідея",
     "ideaCount_few": "{{count}} ідеї",
     "ideaCount_many": "{{count}} ідей",
@@ -989,7 +989,7 @@
       "tokenInvalid": "Облікові дані Claude відхилено.",
       "tokenMissing": "Облікових даних Claude не знайдено.",
       "authFailed": "Не вдалося автентифікуватися.",
-      "description": "Перевірте API-ключ у Налаштування → Claude і запустіть задачу знову.",
+      "description": "Перевірте API-ключ або токен підписки в Налаштування → Claude і запустіть задачу знову.",
       "taskAffected": "Зачеплена задача",
       "technicalDetails": "Технічні подробиці",
       "goToSettings": "Перейти до налаштувань"
