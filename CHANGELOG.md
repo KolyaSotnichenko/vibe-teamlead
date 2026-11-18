@@ -2,6 +2,16 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.56 - 2026-11-18
+
+- Design is never skipped silently: when the designer hits a rate limit it waits and tries again, a cancelled task continues its design where it stopped, and if the design still can't be made the task waits in Human Review as "Design couldn't be made" with **Try the design again** or **Build without design** (also sent to Telegram). Before, a designer that stopped meant the task was built from the spec with no design.
+- Specs no longer ask for unstyled screens: every screen a person sees, a local test sign-in included, follows the design system.
+- The designer starts with the frames its task needs (up to 20, with an index of the rest) instead of every frame of the project, and asks CodeGraph about pages and components before reading files.
+- Approving a design starts the task at once; QA's pictures of the screens are taken in the background.
+- A status bar at the bottom of the window: questions waiting for you, tasks running and queued, a paused queue and CI on main on the left; Context, Changelog, MCP Overview, Documentation and Settings on the right. The sidebar keeps Build and Plan.
+- Context → Architecture: decisions open in place, grouped by task in number order.
+- Preview Environment tab: each service's own settings first, the ones shared from the project root in their own group.
+
 ## 2.0.0-beta.55 - 2026-11-18
 
 - Design check: the project's own design-system folder and token files (tokens.css and the like) are no longer checked against themselves. A task that added colours to the palette got a finding for each of them, and running QA again changed nothing.
