@@ -23,7 +23,7 @@
  * Pure, no Electron: the worker uses it.
  */
 
-import { join, win32 } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 
 import { envValue, WINDOWS_HOST_ENV, withPath } from '../../platform/env';
 import { searchPath } from '../../platform/exec';
@@ -117,7 +117,7 @@ const KEPT = ['LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TERM', 'USER', 'LOGNAME',
  */
 export function cloudSafeEnv(host: NodeJS.ProcessEnv, options: { platform: PlatformKey; sandboxHome: string }): NodeJS.ProcessEnv {
   const { platform, sandboxHome } = options;
-  const at = (...parts: string[]) => (platform === 'win32' ? win32.join(sandboxHome, ...parts) : join(sandboxHome, ...parts));
+  const at = (...parts: string[]) => (platform === 'win32' ? win32.join(sandboxHome, ...parts) : posix.join(sandboxHome, ...parts));
   const env: NodeJS.ProcessEnv = {};
   for (const name of KEPT) {
     const value = host[name];
@@ -134,11 +134,11 @@ export function cloudSafeEnv(host: NodeJS.ProcessEnv, options: { platform: Platf
   const uvCache = envValue(host, 'UV_CACHE_DIR')
     ?? (platform === 'win32'
       ? win32.join(envValue(host, 'LOCALAPPDATA') ?? win32.join(realHome, 'AppData', 'Local'), 'uv', 'cache')
-      : join(envValue(host, 'XDG_CACHE_HOME') ?? join(realHome, '.cache'), 'uv'));
+      : posix.join(envValue(host, 'XDG_CACHE_HOME') ?? posix.join(realHome, '.cache'), 'uv'));
   const uvPython = envValue(host, 'UV_PYTHON_INSTALL_DIR')
     ?? (platform === 'win32'
       ? win32.join(envValue(host, 'APPDATA') ?? win32.join(realHome, 'AppData', 'Roaming'), 'uv', 'data', 'python')
-      : join(envValue(host, 'XDG_DATA_HOME') ?? join(realHome, '.local', 'share'), 'uv', 'python'));
+      : posix.join(envValue(host, 'XDG_DATA_HOME') ?? posix.join(realHome, '.local', 'share'), 'uv', 'python'));
 
   Object.assign(env, {
     HOME: sandboxHome,

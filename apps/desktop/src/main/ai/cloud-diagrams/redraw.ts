@@ -68,9 +68,11 @@ const depth = (dir: string) => (dir === '.' ? 0 : dir.split(/[\\/]/).length);
 
 /** The folder to draw: one a changed file is in (not a reusable module), else the shallowest root. Pure. */
 export function terraformRoot(tfFiles: string[], changedFiles: string[]): string | undefined {
-  const dirs = [...new Set(tfFiles.map((file) => dirname(file)))];
+  // Either separator in, the platform's out
+  const native = (path: string) => path.split(/[\\/]/).join(sep);
+  const dirs = [...new Set(tfFiles.map((file) => dirname(native(file))))];
   if (!dirs.length) return undefined;
-  const changedDirs = new Set(changedFiles.filter((f) => /\.((tf|tofu)(\.json)?|tfvars)$/i.test(f)).map((f) => dirname(f).split('/').join(sep)));
+  const changedDirs = new Set(changedFiles.filter((f) => /\.((tf|tofu)(\.json)?|tfvars)$/i.test(f)).map((f) => dirname(native(f))));
   const roots = dirs.filter((dir) => !isModule(dir));
   const pool = roots.length ? roots : dirs;
   const changed = pool.filter((dir) => changedDirs.has(dir));

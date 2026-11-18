@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({ BrowserWindow: vi.fn() }));
@@ -29,7 +30,7 @@ describe('architectCloudDiagrams', () => {
   it('gives the architect TerraVision for a cloud task, writing into the spec diagrams folder', () => {
     const cloud = architectCloudDiagrams({ ...base, agentType: 'architect', text: 'Host the API on Azure App Service', terraformFiles: [] });
     expect(cloud).toBeDefined();
-    expect(cloud!.outputDir).toBe('/work/.vibe-teamlead/specs/001-x/architecture/diagrams');
+    expect(cloud!.outputDir).toBe(join('/work/.vibe-teamlead/specs/001-x', 'architecture', 'diagrams'));
     expect(cloud!.server.type).toBe('stdio');
     const server = cloud!.server as { command: string; args: string[]; env: Record<string, string> };
     expect(server.command).toBe('/u/uvx');
