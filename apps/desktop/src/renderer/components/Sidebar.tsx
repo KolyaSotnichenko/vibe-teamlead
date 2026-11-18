@@ -7,18 +7,14 @@ import {
   MonitorPlay,
   Terminal,
   Map as MapIcon,
-  BookOpen,
   Lightbulb,
   Github,
   GitlabIcon,
   GitPullRequest,
   GitMerge,
-  FileText,
   Sparkles,
   GitBranch,
   HelpCircle,
-  BookMarked,
-  Wrench,
   PanelLeft,
   PanelLeftClose,
   FileInput,
@@ -48,6 +44,7 @@ import { GitSetupModal } from './GitSetupModal';
 import { UpdateBanner } from './UpdateBanner';
 import { TeamStatus } from './sidebar/TeamStatus';
 import { BriefImportDialog } from './brief-import';
+import { KNOWLEDGE_ITEMS } from './status-bar/knowledge-items';
 import type { GitStatus } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'preview' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'docs' | 'deploy';
@@ -64,11 +61,11 @@ interface NavItem {
   labelKey: string;
   icon: React.ElementType;
   shortcut?: string;
-  /** Purpose group in the sidebar */
-  group: 'build' | 'plan' | 'knowledge';
+  /** Purpose group in the sidebar (the Knowledge pages live in the status bar) */
+  group: 'build' | 'plan';
 }
 
-const NAV_GROUPS = ['build', 'plan', 'knowledge'] as const;
+const NAV_GROUPS = ['build', 'plan'] as const;
 
 const baseNavItems: NavItem[] = [
   { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K', group: 'build' },
@@ -78,11 +75,7 @@ const baseNavItems: NavItem[] = [
   { id: 'deploy', labelKey: 'navigation:items.deploy', icon: Workflow, shortcut: 'Y', group: 'build' },
   { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D', group: 'plan' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I', group: 'plan' },
-  { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' },
-  { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C', group: 'knowledge' },
-  { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L', group: 'knowledge' },
-  { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M', group: 'knowledge' },
-  { id: 'docs', labelKey: 'navigation:items.docs', icon: BookMarked, shortcut: 'H', group: 'knowledge' }
+  { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N', group: 'plan' }
 ];
 
 const githubNavItems: NavItem[] = [
@@ -215,8 +208,8 @@ export function Sidebar({
 
       const key = e.key.toUpperCase();
 
-      // Find matching nav item from visible items only
-      const matchedItem = visibleNavItems.find((item) => item.shortcut === key);
+      // Find matching nav item from visible items only, or a Knowledge page (in the status bar)
+      const matchedItem = [...visibleNavItems, ...KNOWLEDGE_ITEMS].find((item) => item.shortcut === key);
 
       if (matchedItem) {
         e.preventDefault();
@@ -279,8 +272,7 @@ export function Sidebar({
         type="button"
         key={item.id}
         onClick={() => handleNavClick(item.id)}
-        // Documentation works without a project
-        disabled={!selectedProjectId && item.id !== 'docs'}
+        disabled={!selectedProjectId}
         aria-keyshortcuts={item.shortcut}
         className={cn(
           // DESIGN-SYSTEM sidebar item: muted on ink; active = ink-hover fill,
