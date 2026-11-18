@@ -54,6 +54,8 @@
 
 ## Knowledge
 
+The Knowledge pages are not in the sidebar: they sit on the right of the status bar at the bottom of the window — **Context** (shortcut C), **Changelog** (L), **MCP Overview** (M) and **Documentation** (H), then the Settings gear. The open one is marked as in the sidebar. On a narrow window only their icons show; hover for the name and shortcut.
+
 | Screen | What's there |
 |---|---|
 | **Context → Project Index** | The project "passport": services, frameworks, test commands, ports. The Analyze Project button. |
@@ -62,6 +64,17 @@
 | **Context → Architecture** | The project's cloud architecture (TerraVision, experimental): the latest designed by an architect and the latest drawn from the Terraform code after a merge, side by side; the decisions (ADRs) of merged tasks; the Design the cloud architecture button, whose task ends after the architect (see "Cloud architecture diagrams"). |
 | **Changelog** | Generate a changelog from completed tasks, git history or a branch comparison. |
 | **MCP Overview** | Which MCP servers and tools each agent has; your own MCP servers; toggles for Context7, Linear and browser tools. |
+
+### Status bar
+
+A thin line along the bottom of the whole window, under the sidebar and the page. On the left, what is happening now; click an item to open where it lives:
+
+- **Questions for you** — an agent is waiting for your answer (vermilion); opens the question.
+- **Running** and **queued** — the project's tasks being worked on and waiting in the queue; open the board.
+- **Queue paused** — shown while the queue starts no new task (for example after the Telegram bot's /stop_all); opens the board.
+- **CI on main** — once CI is set up and the CI readiness check has recorded a run on main: passing, failing (vermilion) or no verdict; opens CI → CI readiness. The bar only shows what the app already knows; it does not ask GitHub itself.
+
+With no project open the left side is empty, except for a question waiting. On the right are the Knowledge pages and Settings.
 
 ## Task window
 
