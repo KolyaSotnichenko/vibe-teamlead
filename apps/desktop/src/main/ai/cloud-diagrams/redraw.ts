@@ -16,7 +16,7 @@
 
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 import type { RunOptions, RunResult } from '../../platform/exec';
 import { localProviderPath, providerInstallationConfig, terraformUnsafe, walkTerraformFiles } from './terraform-safety';
@@ -68,9 +68,10 @@ const depth = (dir: string) => (dir === '.' ? 0 : dir.split(/[\\/]/).length);
 
 /** The folder to draw: one a changed file is in (not a reusable module), else the shallowest root. Pure. */
 export function terraformRoot(tfFiles: string[], changedFiles: string[]): string | undefined {
-  // Either separator in, the platform's out
-  const native = (path: string) => path.split(/[\\/]/).join(sep);
-  const dirs = [...new Set(tfFiles.map((file) => dirname(native(file))))];
+  // On Windows either separator is one; on macOS and Linux a backslash is part of a name
+  const native = (path: string) => (sep === '\\' ? path.split(/[\\/]/).join(sep) : path);
+  const inside = (dir: string) => !dir.split(/[\\/]/).includes('..');
+  const dirs = [...new Set(tfFiles.map((file) => dirname(native(file))))].filter(inside);
   if (!dirs.length) return undefined;
   const changedDirs = new Set(changedFiles.filter((f) => /\.((tf|tofu)(\.json)?|tfvars)$/i.test(f)).map((f) => dirname(native(f))));
   const roots = dirs.filter((dir) => !isModule(dir));
@@ -144,6 +145,10 @@ export async function redrawCloudArchitecture(
     const root = terraformRoot(allFiles.filter((file) => /\.(tf|tofu)$/i.test(file)).map((file) => file.split('/').join(sep)), changedFiles);
     if (!root) return attempt('failed', { detail: 'No Terraform files in the merged commit.' });
     const source = root === '.' ? copy : join(copy, root);
+    // Never anywhere but inside the copy
+    if (resolve(source) !== resolve(copy) && !resolve(source).startsWith(resolve(copy) + sep)) {
+      return attempt('refused', { detail: "Couldn't draw from code safely: the Terraform folder is outside the project" });
+    }
 
     const env = cloudSafeEnv(deps.hostEnv, { platform: deps.platform, sandboxHome: home });
     if (env.TF_PLUGIN_CACHE_DIR) mkdirSync(env.TF_PLUGIN_CACHE_DIR, { recursive: true });

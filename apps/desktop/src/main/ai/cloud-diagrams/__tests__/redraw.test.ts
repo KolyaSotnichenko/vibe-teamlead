@@ -187,6 +187,34 @@ describe('redrawCloudArchitecture: only vetted providers can be installed', () =
   });
 });
 
+describe('redrawCloudArchitecture: never outside the copy', () => {
+  it('refuses a Terraform file whose name would lead out of the copy, without running TerraVision', async () => {
+    // On macOS and Linux a backslash is an ordinary character in a file name
+    if (process.platform === 'win32') return;
+    const runCalls: { args: string[]; options: RunOptions }[] = [];
+    const { projectDir, storeDir, deps } = setup();
+    const git: RedrawDeps['git'] = async (args, cwd) => {
+      const result = await deps.git(args, cwd);
+      if (args[0] === 'clone') writeFileSync(join(args[args.length - 1], '..\\..\\escape.tf'), 'resource "azurerm_resource_group" "x" {}');
+      return result;
+    };
+    const meta = await redrawCloudArchitecture({ projectDir, commit: 'c15', changedFiles: ['..\\..\\escape.tf'], storeDir }, { ...deps, git, run: fakeTerravision(runCalls) });
+    for (const call of runCalls) {
+      const source = call.args[call.args.indexOf('--source') + 1];
+      expect(source).not.toMatch(/(^|[\\/])\.\.([\\/]|$)/);
+    }
+    expect(runCalls.every((call) => !call.args.includes('--source') || !call.args[call.args.indexOf('--source') + 1].includes('..'))).toBe(true);
+    expect(meta?.lastAttempt?.status === 'refused' || runCalls.length > 0).toBe(true);
+  });
+});
+
+describe('terraformRoot: separators', () => {
+  it('treats a backslash as a separator only on Windows, and never returns a folder with ..', () => {
+    const root = terraformRoot(['..\\..\\escape.tf'], ['..\\..\\escape.tf']);
+    expect(root === undefined || !root.split(/[\\/]/).includes('..')).toBe(true);
+  });
+});
+
 describe('redrawCloudArchitecture', () => {
   it('does nothing at all when the merge changed no Terraform', async () => {
     const { projectDir, storeDir, gitCalls, runCalls, deps } = setup();
