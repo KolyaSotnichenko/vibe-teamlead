@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -179,6 +179,64 @@ else echo '[{"RuleID":"generic-api-key","File":".vibe-teamlead/specs/003-auth/ta
     const files = report.findings.map((f) => f.file);
     expect(files).toContain('config.ts');
     expect(files.filter((f) => f?.includes('.vibe-teamlead'))).toEqual([]);
+  });
+
+  // The fake scanner is a sh script, which Windows can't spawn
+  it.skipIf(isWindowsHost)('a secret already removed from the code is a note to rotate it, not a finding no fixer can clear', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    // History: config.ts (still there, at a new line) and old.ts (fixed since). The tree: config.ts only.
+    const gitleaks = fakeScanner(
+      bin,
+      'gitleaks',
+      `mode="$1"; while [ $# -gt 0 ]; do case "$1" in --report-path) out="$2"; shift;; esac; last="$1"; shift; done
+if [ "$mode" = dir ]; then echo '[{"RuleID":"generic-api-key","Description":"Generic API Key","File":"'$last'/config.ts","StartLine":3}]' > "$out"
+else echo '[{"RuleID":"generic-api-key","Description":"Generic API Key","File":"config.ts","StartLine":1,"Commit":"abcdef1234"},{"RuleID":"generic-api-key","Description":"Generic API Key","File":"old.ts","StartLine":7,"Commit":"abcdef1234"}]' > "$out"; fi`,
+    );
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-spec-'));
+    const report = await runSecurityGates({ projectDir: dir, specDir, gitleaksBin: gitleaks });
+
+    // Still in the code: one finding, where it is now
+    expect(report.findings.map((f) => `${f.file}:${f.line}`)).toEqual(['config.ts:3']);
+    // Gone from the code, still in a commit: the fixer can't clear it without rewriting history
+    expect(report.removedSecrets?.map((f) => `${f.file}:${f.line}`)).toEqual(['old.ts:7']);
+    const md = readFileSync(join(specDir, 'security_gates.md'), 'utf-8');
+    expect(md).toContain('old.ts:7');
+    expect(md).toMatch(/rotate/i);
+  });
+
+  it.skipIf(isWindowsHost)('gives gitleaks the default rules plus the published emulator keys as allowed', async () => {
+    const dir = repo();
+    const bin = mkdtempSync(join(tmpdir(), 'vtl-bin-'));
+    const seen = join(bin, 'config.toml');
+    const gitleaks = fakeScanner(
+      bin,
+      'gitleaks',
+      `while [ $# -gt 0 ]; do case "$1" in --report-path) out="$2"; shift;; --config) cp "$2" "${seen}"; shift;; esac; shift; done; echo '[]' > "$out"`,
+    );
+    await runSecurityGates({ projectDir: dir, specDir: mkdtempSync(join(tmpdir(), 'vtl-spec-')), gitleaksBin: gitleaks });
+    const config = readFileSync(seen, 'utf-8');
+    expect(config).toContain('useDefault = true');
+    expect(config).toContain('Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==');
+  });
+
+  // The real scanner, when fetched (scripts/fetch-scanners): the Azurite key passes, a real-looking key does not
+  const realGitleaks = join(__dirname, '../../../../../vendor-bin', isWindowsHost ? 'gitleaks.exe' : 'gitleaks');
+  it.skipIf(!existsSync(realGitleaks))("doesn't flag Azurite's published development key, still flags a real-looking one", async () => {
+    const dir = repo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: dir });
+    writeFileSync(
+      join(dir, 'storage.ts'),
+      'const AZURITE_DEV_ACCOUNT_KEY =\n  "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";\n',
+    );
+    g('add', 'storage.ts');
+    g('commit', '-qm', 'azurite');
+    const clean = await runSecurityGates({ projectDir: dir, specDir: mkdtempSync(join(tmpdir(), 'vtl-spec-')), gitleaksBin: realGitleaks });
+    expect(clean.findings.filter((f) => f.file === 'storage.ts')).toEqual([]);
+
+    writeFileSync(join(dir, 'other.ts'), 'const PAYMENTS_API_KEY = "q8Zt3VwK9xLmR2pN7sYbH4cJ6dFgT1aE";\n');
+    const flagged = await runSecurityGates({ projectDir: dir, specDir: mkdtempSync(join(tmpdir(), 'vtl-spec-')), gitleaksBin: realGitleaks });
+    expect(flagged.findings.map((f) => f.file)).toContain('other.ts');
   });
 
   it('skips missing scanners instead of failing', async () => {

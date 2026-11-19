@@ -3,7 +3,10 @@
  *
  * - gitleaks: secrets in what the build changed — commits since the base
  *   (catches a secret added and then deleted) and the current content of
- *   every changed or untracked file, scanned in one run.
+ *   every changed or untracked file, scanned in one run. A secret only in an
+ *   earlier commit is a note to rotate it, not a finding: the fixer may not
+ *   rewrite history, so it could never clear it. Microsoft's published Azurite
+ *   key is allowed (it only works against a local emulator).
  * - OSV-Scanner: known vulnerabilities newly introduced in changed lockfiles
  *   (compared with the same lockfile at the base, so pre-existing issues don't
  *   block the task).
@@ -49,6 +52,8 @@ export interface GateReport {
   /** Gates that ran but could not cover everything (files a scanner could not parse) */
   partial?: { gate: GateName; reason: string }[];
   findings: GateFinding[];
+  /** Secrets in an earlier commit of the task, gone from the code since: rotate if real; they don't block */
+  removedSecrets?: GateFinding[];
   baseRef?: string;
 }
 
@@ -199,6 +204,32 @@ export function parseGitleaks(json: string, root?: string): GateFinding[] {
   });
 }
 
+/**
+ * Keys published for local emulators. They only work against an emulator on the
+ * developer's machine, and code that supports the emulator has to contain them.
+ */
+const PUBLIC_DEV_KEYS = [
+  // Azurite / Azure Storage emulator, account devstoreaccount1 (learn.microsoft.com: "Use the Azurite emulator")
+  'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==',
+];
+
+const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** gitleaks' own rules, with the published emulator keys allowed. Never the project's config: agents can write it. */
+export function gitleaksConfig(): string {
+  return [
+    '[extend]',
+    'useDefault = true',
+    '',
+    '[[allowlists]]',
+    'description = "Keys published for local emulators"',
+    `regexes = [${PUBLIC_DEV_KEYS.map((key) => `'''^${escapeRegex(key)}$'''`).join(', ')}]`,
+    '',
+  ].join('\n');
+}
+
+const ruleOf = (finding: GateFinding) => finding.key.split(':')[1];
+
 async function readReport(path: string): Promise<string> {
   return existsSync(path) ? readFile(path, 'utf-8') : '[]';
 }
@@ -209,18 +240,21 @@ async function runGitleaks(
   baseRef: string | undefined,
   files: string[],
   signal?: AbortSignal,
-): Promise<GateFinding[]> {
+): Promise<{ findings: GateFinding[]; removed: GateFinding[] }> {
   const work = mkdtempSync(join(tmpdir(), 'vtl-gitleaks-'));
-  const common = ['--no-banner', '--redact', '--exit-code', '0', '--report-format', 'json'];
+  const config = join(work, 'gitleaks.toml');
+  writeFileSync(config, gitleaksConfig());
+  const common = ['--no-banner', '--redact', '--exit-code', '0', '--report-format', 'json', '--config', config];
   const options = { cwd, signal, timeoutMs: SCAN_TIMEOUT_MS };
   try {
-    const findings: GateFinding[] = [];
+    const history: GateFinding[] = [];
+    const current: GateFinding[] = [];
 
     if (baseRef) {
       const report = join(work, 'history.json');
       const args = ['git', ...common, '--report-path', report, '--log-opts', `${baseRef}..HEAD`, '.'];
       assertRan(await runProcess(bin, args, options), 'gitleaks', [0]);
-      findings.push(...parseGitleaks(await readReport(report)));
+      history.push(...parseGitleaks(await readReport(report)));
     }
 
     // Copy the changed files into one tree and scan it in a single run.
@@ -236,10 +270,16 @@ async function runGitleaks(
     if (copied > 0) {
       const report = join(work, 'tree.json');
       assertRan(await runProcess(bin, ['dir', ...common, '--report-path', report, tree], options), 'gitleaks', [0]);
-      findings.push(...parseGitleaks(await readReport(report), tree));
+      current.push(...parseGitleaks(await readReport(report), tree));
     }
     // Also for commits that added the app's folder
-    return dedupe(findings.filter((f) => !f.file || !isAppDataPath(f.file)));
+    const own = (f: GateFinding) => !f.file || !isAppDataPath(f.file);
+    const stillThere = (f: GateFinding) => current.some((c) => c.file === f.file && ruleOf(c) === ruleOf(f));
+    // What is in the code now is reported where it is now; a history finding without a file can't be matched, so it stays
+    return {
+      findings: dedupe([...current, ...history.filter((f) => !f.file)].filter(own)),
+      removed: dedupe(history.filter((f) => f.file && !stillThere(f)).filter(own)),
+    };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -524,6 +564,16 @@ export function formatGateReport(report: GateReport): string {
       '- Semgrep findings: fix the code the rule points at (the rule id says what it is: injection, unsafe deserialization, …); do not silence the rule. Re-run the tests.',
     );
   }
+  if (report.removedSecrets?.length) {
+    lines.push('', '## Removed from the code, still in an earlier commit', '');
+    for (const f of report.removedSecrets) {
+      lines.push(`- ${f.title} — \`${cleanForMessage(f.file ?? '', 200)}${f.line ? `:${f.line}` : ''}\`${f.detail ? `, ${f.detail}` : ''}`);
+    }
+    lines.push(
+      '',
+      "These don't block: the code no longer has them, and history is never rewritten. If a value was a real key, tell the user to rotate it.",
+    );
+  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -561,7 +611,11 @@ export async function runSecurityGates(options: GateOptions): Promise<GateReport
     const { gitleaksBin, osvScannerBin, semgrepBin } = options;
 
     if (gitleaksBin) {
-      await runGate(report, 'gitleaks', () => runGitleaks(gitleaksBin, projectDir, baseRef, files, signal));
+      await runGate(report, 'gitleaks', async () => {
+        const { findings, removed } = await runGitleaks(gitleaksBin, projectDir, baseRef, files, signal);
+        if (removed.length) report.removedSecrets = removed;
+        return findings;
+      });
     } else {
       report.skipped.push({ gate: 'gitleaks', reason: 'gitleaks is not available' });
     }

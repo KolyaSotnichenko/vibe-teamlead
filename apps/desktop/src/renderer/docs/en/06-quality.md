@@ -4,7 +4,7 @@
 |---|---|
 | **TDD + AC** | Every requirement has a test; QA checks that the test actually holds it. |
 | **App checks** | The app runs the project's typecheck and tests itself, on a clean copy of what is committed, before each QA review and after a merge. A failure blocks approval only if the check passes on the base (see "App checks" below). |
-| **gitleaks** | Secrets in the code block approval. |
+| **gitleaks** | Secrets in the code block approval. A secret that was in an earlier commit and is gone from the code is a note to rotate it, not a block. Microsoft's published Azurite key (local emulator only) is not a secret. |
 | **OSV-Scanner** | Vulnerable dependencies block approval. |
 | **Semgrep** | Static analysis of the changed files blocks approval. It runs only when Semgrep is installed (see "Semgrep" below). |
 | **Design check** | A static check of added UI lines against the design system tokens + a screenshot review (see "Design system and Storybook"). The project's own design-system folder and token files (`tokens.css` and the like) are not checked: that is where the palette is defined. |
