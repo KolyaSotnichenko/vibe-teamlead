@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.57 - 2026-11-19
+
+- Secrets check: a key already removed from the code but still in an earlier commit of the task no longer blocks QA forever (the fixer may not rewrite history, so running QA again changed nothing). It is listed as a note to rotate the key, and the task then waits for you to merge instead of merging by itself.
+- Secrets check: Microsoft's published Azurite development key (it only works against the local emulator) is no longer reported as a secret.
+
 ## 2.0.0-beta.56 - 2026-11-18
 
 - Design is never skipped silently: when the designer hits a rate limit it waits (at most an hour in all, shown on the task card and the Design tab with **Stop waiting**) and tries again, a cancelled task continues its design where it stopped, and if the design still can't be made the task waits in Human Review as "Design couldn't be made" with **Try the design again** or **Build without design** — buttons in Telegram too. Before, a designer that stopped meant the task was built from the spec with no design.
