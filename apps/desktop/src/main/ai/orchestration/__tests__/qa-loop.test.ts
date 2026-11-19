@@ -47,7 +47,7 @@ vi.mock('../../schema', () => ({
 
 import { validateStructuredOutput } from '../../schema';
 import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection } from '../qa-loop';
-import { approvalHolds, recordApproval } from '../qa-approval';
+import { approvalHolds, recordApproval, SECRET_IN_HISTORY_HOLD, autoMergeRefusal } from '../qa-approval';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
 
@@ -206,6 +206,23 @@ describe('QALoop', () => {
 
       await new QALoop(makeConfig({ runSession, approvals: store })).run();
       expect(runSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('an approval after the gates saw a key in an earlier commit is recorded as one that waits for the owner', async () => {
+      const store = await approvals();
+      const { approve } = planSays(completedPlan());
+      const runSession = vi.fn(async () => {
+        approve();
+        return makeSessionResult('completed');
+      });
+      const removed = { gate: 'gitleaks' as const, key: 'gitleaks:generic-api-key:old.ts:7', title: 'Secret detected', file: 'old.ts', line: 7, detail: 'in commit abcdef1234' };
+      const runGates = async () => ({ ran: ['gitleaks' as const], skipped: [], findings: [], removedSecrets: [removed] });
+
+      const outcome = await new QALoop(makeConfig({ runSession, runGates, approvals: store })).run();
+
+      expect(outcome.approved).toBe(true);
+      expect(approvalHolds(store.dir, PROJECT_DIR, SPEC_DIR, 'code-1')).toBe(true);
+      expect(await autoMergeRefusal({ auto: true }, PROJECT_DIR, SPEC_DIR, async () => true, undefined, store.dir)).toBe(SECRET_IN_HISTORY_HOLD);
     });
 
     it('an approval is recorded only for the code the review started on', async () => {

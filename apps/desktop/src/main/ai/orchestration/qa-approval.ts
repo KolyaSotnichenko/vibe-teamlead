@@ -24,14 +24,17 @@ function recordFile(dir: string, projectDir: string, specDir: string): string {
   return join(dir, `${task}.json`);
 }
 
+function readRecord(dir: string, projectDir: string, specDir: string): { fingerprint?: unknown; secretInHistory?: unknown } | undefined {
+  try {
+    return JSON.parse(readFileSync(recordFile(dir, projectDir, specDir), 'utf-8')) as { fingerprint?: unknown; secretInHistory?: unknown };
+  } catch {
+    return undefined;
+  }
+}
+
 export function approvalHolds(dir: string, projectDir: string, specDir: string, fingerprint: string | undefined): boolean {
   if (!fingerprint) return false;
-  try {
-    const record = JSON.parse(readFileSync(recordFile(dir, projectDir, specDir), 'utf-8')) as { fingerprint?: unknown };
-    return record.fingerprint === fingerprint;
-  } catch {
-    return false;
-  }
+  return readRecord(dir, projectDir, specDir)?.fingerprint === fingerprint;
 }
 
 /** Whether QA approved this task's folder exactly as it is now. */
@@ -54,22 +57,36 @@ export async function autoMergeRefusal(
    * UI files, undefined when they can't be listed (then it waits too: the safe side)
    */
   touchesUi?: () => Promise<boolean | undefined>,
+  approvalsDir = qaApprovalsDir(),
 ): Promise<string | null> {
   if (!options?.auto) return null;
   if (!worktreePath || !(await approved(worktreePath, specId))) return 'QA did not approve this exact code, so the merge waits for you.';
+  // The app's own record (agents can't write it): a key once committed stays in the history that merges
+  if (readRecord(approvalsDir, worktreePath, specId)?.secretInHistory === true) return SECRET_IN_HISTORY_HOLD;
   if (touchesUi && (await touchesUi()) !== false) return PREVIEW_HOLD;
   return null;
 }
+
+/** Why an approved task with a key in an earlier commit did not merge by itself */
+export const SECRET_IN_HISTORY_HOLD =
+  'A key was in an earlier commit of this task. It is gone from the code but stays in the history that merges, so the merge waits for you: if it was a real key, rotate it.';
 
 /** Why an approved UI task did not merge by itself: the owner looks at it first */
 export const PREVIEW_HOLD = 'This task changed UI, so it waits for your preview before it merges.';
 
 /** Never throws: without a record, a later run simply reviews again. */
-export function recordApproval(dir: string, projectDir: string, specDir: string, fingerprint: string | undefined): void {
+export function recordApproval(
+  dir: string,
+  projectDir: string,
+  specDir: string,
+  fingerprint: string | undefined,
+  extra: { secretInHistory?: boolean } = {},
+): void {
   if (!fingerprint) return;
   try {
     mkdirSync(dir, { recursive: true });
-    writeFileReplacingSync(recordFile(dir, projectDir, specDir), JSON.stringify({ fingerprint, at: new Date().toISOString() }));
+    const record = { fingerprint, at: new Date().toISOString(), ...(extra.secretInHistory ? { secretInHistory: true } : {}) };
+    writeFileReplacingSync(recordFile(dir, projectDir, specDir), JSON.stringify(record));
   } catch {
     // informational
   }

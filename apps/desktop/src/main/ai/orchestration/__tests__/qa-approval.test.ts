@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal, PREVIEW_HOLD } from '../qa-approval';
+import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal, PREVIEW_HOLD, SECRET_IN_HISTORY_HOLD } from '../qa-approval';
 
 const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'vtl-approval-')));
 
@@ -48,6 +48,18 @@ describe('the approval record', () => {
     recordApproval(dir, '/p', '/p/specs/001', 'code-1');
     clearApproval(dir, '/p', '/p/specs/001');
     expect(approvalHolds(dir, '/p', '/p/specs/001', 'code-1')).toBe(false);
+  });
+
+  it("an approval that saw a key in an earlier commit doesn't merge by itself: the owner decides", async () => {
+    const dir = tmp();
+    recordApproval(dir, '/p', '/p/specs/001', 'code-1', { secretInHistory: true });
+    expect(approvalHolds(dir, '/p', '/p/specs/001', 'code-1')).toBe(true);
+    const approved = async () => true;
+    expect(await autoMergeRefusal({ auto: true }, '/p', '001', approved, undefined, dir)).toBe(SECRET_IN_HISTORY_HOLD);
+    // The owner's own merge is theirs to make
+    expect(await autoMergeRefusal({ auto: false }, '/p', '001', approved, undefined, dir)).toBeNull();
+    recordApproval(dir, '/p', '/p/specs/001', 'code-1');
+    expect(await autoMergeRefusal({ auto: true }, '/p', '001', approved, undefined, dir)).toBeNull();
   });
 
   it('never throws: a run must not fail over it', () => {

@@ -419,6 +419,8 @@ export class QALoop extends EventEmitter {
    */
   private lastReviewThisRun: QAPromptContext['lastReview'];
   private lastGateKeys: string[] = [];
+  /** The last gate run saw a key gone from the code but still in a commit: an approval then waits for the owner to merge */
+  private secretInHistory = false;
   /** Why the last read of qa_signoff found no verdict */
   private signoffProblem = '';
 
@@ -640,7 +642,7 @@ export class QALoop extends EventEmitter {
           if (this.config.approvals) {
             const fingerprint = await this.config.approvals.fingerprint();
             if (fingerprint === reviewStartFingerprint) {
-              recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint);
+              recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint, { secretInHistory: this.secretInHistory });
             } else {
               this.emitTyped('log', 'The code changed during the review, so this approval will not be reused by a later run');
             }
@@ -807,6 +809,8 @@ export class QALoop extends EventEmitter {
       }
       // The last part of a gitleaks key is the line, which moves with any edit
       this.lastGateKeys.push(...report.findings.map((f) => f.key.replace(/:\d+$/, '')));
+      this.secretInHistory = Boolean(report.removedSecrets?.length);
+      if (this.secretInHistory) this.emitTyped('log', `Security gates: ${report.removedSecrets?.length} key(s) gone from the code but still in an earlier commit; an approval will wait for the owner to merge`);
       return gateIssues(report.findings);
     } catch (error) {
       this.emitTyped('log', `Security gates failed to run: ${error instanceof Error ? error.message : String(error)}`);
