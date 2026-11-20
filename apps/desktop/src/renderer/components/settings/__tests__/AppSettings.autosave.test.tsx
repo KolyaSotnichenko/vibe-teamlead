@@ -159,6 +159,45 @@ describe('AppSettingsDialog autosave', () => {
     expect(app.discardChanges).toHaveBeenCalled();
   });
 
+  // The second close discarded without trying again, so a save that would now work was lost
+  it('closing again after a failed save tries once more, and closes saved when it works', async () => {
+    app.hasUnsavedChanges.mockReturnValue(true);
+    app.saveSettings
+      .mockImplementationOnce(async () => {
+        app.error = 'busy';
+        return false;
+      })
+      .mockResolvedValueOnce(true);
+    const onOpenChange = renderDialog();
+    pressEscape();
+    await screen.findByRole('alert');
+    pressEscape();
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(app.saveSettings).toHaveBeenCalledTimes(2);
+    expect(app.discardChanges).not.toHaveBeenCalled();
+  });
+
+  it('"Get a token" saves the open section before the dialog closes for the terminal', async () => {
+    app.hasUnsavedChanges.mockReturnValue(true);
+    renderDialog();
+    act(() => window.dispatchEvent(new Event('open-claude-setup-token')));
+    await waitFor(() => expect(app.saveSettings).toHaveBeenCalledTimes(1));
+  });
+
+  it('quitting the app saves the open section first, then tells main it is done', async () => {
+    app.hasUnsavedChanges.mockReturnValue(true);
+    let flush: (() => Promise<unknown>) | undefined;
+    const unsubscribe = vi.fn();
+    (window as unknown as { electronAPI: unknown }).electronAPI = {
+      getAppVersion: vi.fn(async () => '2.0.0'),
+      onFlushBeforeQuit: vi.fn((handler: () => Promise<unknown>) => { flush = handler; return unsubscribe; }),
+    };
+    renderDialog();
+    await waitFor(() => expect(flush).toBeDefined());
+    await act(async () => { await flush?.(); });
+    expect(app.saveSettings).toHaveBeenCalledTimes(1);
+  });
+
   it('shows that the settings were saved', async () => {
     app.hasUnsavedChanges.mockReturnValue(true);
     renderDialog();

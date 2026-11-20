@@ -16,6 +16,7 @@ export const settingsMock = {
   }),
 
   saveSettings: async () => ({ success: true }),
+  onFlushBeforeQuit: () => () => {},
 
   // Sentry error reporting
   notifySentryStateChanged: (_enabled: boolean) => {

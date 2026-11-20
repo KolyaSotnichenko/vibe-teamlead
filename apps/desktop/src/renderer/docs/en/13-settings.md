@@ -1,6 +1,6 @@
 # Settings — cheat sheet
 
-Settings save by themselves when you leave a section or close Settings (×, Escape or a click outside); there is no Save button. The header shows "Saving…" and "Saved". If a save fails, Settings stays open with the error; closing it again discards the changes that weren't saved.
+Settings save by themselves when you leave a section or close Settings (×, Escape or a click outside); there is no Save button. The header shows "Saving…" and "Saved". If a save fails, Settings stays open with the error; closing it again tries once more and, if that fails too, discards the changes that weren't saved. Quitting the app, or **Get a token**, saves the open section first.
 
 | Section | What's there |
 |---|---|

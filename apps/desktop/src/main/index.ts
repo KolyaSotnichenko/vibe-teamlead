@@ -58,6 +58,7 @@ for (const envPath of possibleEnvPaths) {
 }
 
 import { app, BrowserWindow, dialog, ipcMain, shell, nativeImage, session, screen, Menu, MenuItem, powerMonitor, protocol } from 'electron';
+import { flushRendererBeforeQuit } from './settings-flush';
 import { DESIGN_SCHEME } from './design/design-protocol';
 import { bundledBrowserServers } from './ai/claude-code/bundled-tools';
 import { stopOrphanedBrowserServers } from './utils/browser-mcp-orphans';
@@ -717,6 +718,9 @@ app.on('before-quit', (event) => {
   // Perform async cleanup, then allow quit to proceed
   (async () => {
     try {
+      // Settings open in the window: what its section changed is saved before anything stops
+      await flushRendererBeforeQuit(mainWindow, ipcMain).catch(() => undefined);
+
       // The preview's servers and database container; bounded so a hung docker can't hold the quit
       await Promise.race([stopPreview().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 5000))]);
 

@@ -418,7 +418,7 @@
     "saving": "Saving…",
     "saved": "Saved",
     "failed": "Couldn't save the settings: {{error}}",
-    "closeAgainToDiscard": "Close Settings again to discard the changes that weren't saved."
+    "closeAgainToDiscard": "Close Settings again to try once more; if it fails again, the changes that weren't saved are discarded."
   },
   "projectSections": {
     "general": {

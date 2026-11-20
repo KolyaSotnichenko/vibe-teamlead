@@ -232,6 +232,9 @@ export const IPC_CHANNELS = {
   // Settings
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
+  // Main → renderer before a quit: save what Settings changed; the renderer answers with the id
+  SETTINGS_FLUSH_BEFORE_QUIT: 'settings:flushBeforeQuit',
+  SETTINGS_FLUSHED_BEFORE_QUIT: 'settings:flushedBeforeQuit',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',  // Check hasCompletedOnboarding from ~/.claude.json
 
   // Dialogs

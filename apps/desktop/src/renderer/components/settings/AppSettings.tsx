@@ -58,6 +58,7 @@ import { TelegramSettings } from './TelegramSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
+import { listenOpenClaudeSetupToken } from '../../lib/open-terminal';
 import type { UseProjectSettingsReturn } from '../project-settings/hooks/useProjectSettings';
 
 interface AppSettingsDialogProps {
@@ -210,6 +211,19 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
     return ok;
   };
 
+  // The latest savePending, for listeners registered once
+  const savePendingRef = useRef(savePending);
+  savePendingRef.current = savePending;
+
+  // "Get a token" closes the dialog for its terminal: what this section changed is saved first
+  useEffect(() => (open ? listenOpenClaudeSetupToken(() => void savePendingRef.current()) : undefined), [open]);
+
+  // Quitting the app with the dialog open: main waits for this save before it quits
+  useEffect(() => {
+    if (!open) return undefined;
+    return window.electronAPI?.onFlushBeforeQuit?.(() => savePendingRef.current());
+  }, [open]);
+
   /** Leaves the current section once its changes are saved (stays on it when the save fails). */
   const leaveSection = async (next: () => void) => {
     if (savingRef.current) return;
@@ -218,16 +232,16 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
 
   /**
    * Closing saves. When the save fails the dialog stays open with the error; closing again
-   * discards the changes that could not be saved.
+   * tries once more and, if it fails again, discards the changes that could not be saved.
    */
   const requestClose = async (): Promise<boolean> => {
     if (savingRef.current) return false;
-    if (closeBlocked) {
-      discardChanges();
+    if (await savePending()) {
       onOpenChange(false);
       return true;
     }
-    if (await savePending()) {
+    if (closeBlocked) {
+      discardChanges();
       onOpenChange(false);
       return true;
     }

@@ -280,6 +280,8 @@ export interface ElectronAPI {
   // App settings
   getSettings: () => Promise<IPCResult<AppSettings>>;
   saveSettings: (settings: Partial<AppSettings>) => Promise<IPCResult>;
+  /** Before the app quits: run the handler (the Settings dialog's save), then let main go on. Returns the unsubscribe. */
+  onFlushBeforeQuit: (handler: () => Promise<unknown>) => () => void;
 
   // Spell check
   setSpellCheckLanguages: (language: string) => Promise<IPCResult<{ success: boolean }>>;

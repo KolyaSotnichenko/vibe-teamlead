@@ -14,6 +14,8 @@ export interface SettingsAPI {
   // App Settings
   getSettings: () => Promise<IPCResult<AppSettings>>;
   saveSettings: (settings: Partial<AppSettings>) => Promise<IPCResult>;
+  /** Before the app quits: run the handler (the Settings dialog's save), then let main go on. Returns the unsubscribe. */
+  onFlushBeforeQuit: (handler: () => Promise<unknown>) => () => void;
 
   // CLI Tools Detection
   getCliToolsInfo: () => Promise<IPCResult<{
@@ -41,6 +43,14 @@ export interface SettingsAPI {
   listClaudeModels: (options?: { refresh?: boolean }) => Promise<IPCResult<ClaudeModelList>>;
 }
 
+// Every open handler runs before main is told it may quit; with none, main is told at once
+const flushHandlers = new Set<() => Promise<unknown>>();
+ipcRenderer.on(IPC_CHANNELS.SETTINGS_FLUSH_BEFORE_QUIT, (_event, id: string) => {
+  void Promise.allSettled([...flushHandlers].map((handler) => handler())).then(() =>
+    ipcRenderer.send(IPC_CHANNELS.SETTINGS_FLUSHED_BEFORE_QUIT, id)
+  );
+});
+
 export const createSettingsAPI = (): SettingsAPI => ({
   // App Settings
   getSettings: (): Promise<IPCResult<AppSettings>> =>
@@ -48,6 +58,11 @@ export const createSettingsAPI = (): SettingsAPI => ({
 
   saveSettings: (settings: Partial<AppSettings>): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SAVE, settings),
+
+  onFlushBeforeQuit: (handler: () => Promise<unknown>): (() => void) => {
+    flushHandlers.add(handler);
+    return () => flushHandlers.delete(handler);
+  },
 
   // CLI Tools Detection
   getCliToolsInfo: (): Promise<IPCResult<{
