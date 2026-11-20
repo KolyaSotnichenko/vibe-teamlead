@@ -26,6 +26,18 @@ describe('vt-design:// URLs', () => {
 });
 
 describe('what vt-design:// serves', () => {
+  it("a screen's shared stylesheet, so frames that link it render styled", () => {
+    const dir = specDir();
+    writeFileSync(path.join(dir, 'design', 'screens', 'styles.css'), '.btn{color:#111}');
+    const asset = designAsset(dir, { taskId: '031', file: 'screens/styles.css', area: 'design' });
+    expect(asset?.mime).toBe('text/css; charset=utf-8');
+    expect(String(asset?.body)).toBe('.btn{color:#111}');
+    expect(asset?.headers['X-Content-Type-Options']).toBe('nosniff');
+    // Only images from the rest of the spec folder, never its stylesheets
+    writeFileSync(path.join(dir, 'x.css'), 'a{}');
+    expect(designAsset(dir, { taskId: '031', file: 'x.css', area: 'spec' })).toBeNull();
+  });
+
   it('an HTML frame with a strict CSP and the comment script added', () => {
     const asset = designAsset(specDir(), { taskId: '031', file: 'screens/roadmap.html', area: 'design' });
     expect(asset?.mime).toBe('text/html; charset=utf-8');

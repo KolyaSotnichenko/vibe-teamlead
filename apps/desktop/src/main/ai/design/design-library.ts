@@ -4,6 +4,7 @@
  *
  *   library/canvas.json            frames, each with the task it came from and when
  *   library/wireframes/*.html, library/screens/*.html
+ *   library/{wireframes,screens}/styles.css   the latest task's shared stylesheet, the next designer's start
  *
  * A task's design goes in when its design step is done (approved, or gone on by itself); a frame
  * with the same file name replaces the older version. The next task's designer starts from a
@@ -13,10 +14,31 @@
  * to open on demand. Context → Design system → Screens shows it.
  */
 
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { type DesignFrame, designFile, frameFileOk, readDesignCanvas, realFileInside } from './design-step';
+import { type DesignFrame, designDir, designFile, frameFileOk, readDesignCanvas, realFileInside } from './design-step';
+
+/** The stylesheet a task's frames share, in the frames' own folder (the designer writes it once) */
+export const SHARED_STYLESHEET = 'styles.css';
+const FRAME_FOLDERS = ['wireframes', 'screens'] as const;
+const SHARED_LINK = /<link\b(?=[^>]*\brel\s*=\s*["']?stylesheet)[^>]*\bhref\s*=\s*["']?(?:\.\/)?styles\.css["']?[^>]*>/gi;
+
+/**
+ * A frame with its shared stylesheet put inside it, so a library frame shows the same whatever
+ * a later task does to its own styles.css. Pure.
+ */
+export function inlineSharedStylesheet(html: string, css: string | undefined): string {
+  if (css === undefined) return html;
+  // Never let the stylesheet close the <style> early
+  const safe = css.replace(/<\/style/gi, '<\\/style');
+  return html.replace(SHARED_LINK, () => `<style>${safe}</style>`);
+}
+
+function readShared(folderDir: string): string | undefined {
+  const file = path.join(folderDir, SHARED_STYLESHEET);
+  return existsSync(file) && realFileInside(folderDir, file) ? readFileSync(file, 'utf-8') : undefined;
+}
 
 export interface LibraryFrame extends DesignFrame {
   taskId: string;
@@ -63,12 +85,20 @@ export function publishToLibrary(projectRoot: string, specDir: string, opts: { t
     const dir = libraryDir(projectRoot);
     const library = readLibrary(projectRoot).frames;
     const at = (opts.now ?? new Date()).toISOString();
+    const shared = new Map(FRAME_FOLDERS.map((folder) => [folder, readShared(path.join(designDir(specDir), folder))]));
+    for (const [folder, css] of shared) {
+      if (css === undefined) continue;
+      mkdirSync(path.join(dir, folder), { recursive: true });
+      writeFileSync(path.join(dir, folder, SHARED_STYLESHEET), css);
+    }
     for (const frame of frames) {
       // readDesignCanvas lists only regular files inside design/ with a wireframes|screens/<name>.html path
       const source = designFile(specDir, frame.file);
       if (!source || !frameFileOk(frame.file)) continue;
       mkdirSync(path.dirname(path.join(dir, frame.file)), { recursive: true });
-      copyFileSync(source, path.join(dir, frame.file));
+      const css = shared.get(frame.file.split('/')[0] as (typeof FRAME_FOLDERS)[number]);
+      if (css === undefined) copyFileSync(source, path.join(dir, frame.file));
+      else writeFileSync(path.join(dir, frame.file), inlineSharedStylesheet(readFileSync(source, 'utf-8'), css));
       const entry: LibraryFrame = { ...frame, taskId: opts.taskId, updatedAt: at };
       // A responsive page is on the canvas once per width
       const index = library.findIndex((f) => f.file === frame.file && f.width === frame.width);
@@ -289,6 +319,13 @@ export function copyLibraryToBase(projectRoot: string, specDir: string, specMd =
     for (const file of files) {
       mkdirSync(path.dirname(path.join(base, file)), { recursive: true });
       copyFileSync(path.join(libraryDir(projectRoot), file), path.join(base, file));
+    }
+    // The latest shared stylesheets: the designer starts its own from them
+    for (const folder of FRAME_FOLDERS) {
+      const css = readShared(path.join(libraryDir(projectRoot), folder));
+      if (css === undefined) continue;
+      mkdirSync(path.join(base, folder), { recursive: true });
+      writeFileSync(path.join(base, folder, SHARED_STYLESHEET), css);
     }
     const chosen = selectBaseFrames(frames, specMd);
     const chosenFiles = new Set(chosen.map((f) => f.file));

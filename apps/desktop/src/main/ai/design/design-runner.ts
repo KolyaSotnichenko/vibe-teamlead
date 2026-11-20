@@ -251,7 +251,7 @@ export async function runDesignStep(deps: DesignStepDeps): Promise<DesignStepRes
       if (checkFindings > 0 && job !== 'revise') {
         deps.log(`Design: ${checkFindings} design-check finding(s) in the screens; one pass to fix them`);
         const fix = await deps.runDesigner('revise', brief('revise', { ...(state ?? { round: 0 }), stage: 'design', comments: [] } as DesignState, specDir,
-          `The design check found ${checkFindings} place(s) in design/screens that don't follow the design system (colours outside the palette, radii, shadows, gradients, banned patterns). Fix them with the design system's values; change nothing else.`));
+          `The design check found ${checkFindings} place(s) in design/screens that don't follow the design system (colours outside the palette, radii, shadows, gradients, banned patterns). Fix them in place with Edit, using the design system's values (in styles.css when the value is there); change nothing else.`));
         if (fix.ok) checkFindings = deps.checkScreens();
       }
     }

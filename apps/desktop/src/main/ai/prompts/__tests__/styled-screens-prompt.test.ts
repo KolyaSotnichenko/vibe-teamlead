@@ -17,3 +17,14 @@ describe('every screen a person can see follows the design system', () => {
     expect(prompt('spec_writer.md')).toMatch(/Sign in as <role>/);
   });
 });
+
+// Most of what the designer wrote was the same CSS in every page, and whole files rewritten (planner-mhp)
+describe('the designer writes each thing once', () => {
+  it('shares one stylesheet per folder and changes files with Edit', () => {
+    const text = prompt('designer.md');
+    expect(text).toContain('<link rel="stylesheet" href="styles.css">');
+    expect(text).not.toMatch(/styles in one `<style>`/);
+    expect(text).toMatch(/change it with Edit/);
+    expect(text).toMatch(/Don't Read a file you have just written/);
+  });
+});

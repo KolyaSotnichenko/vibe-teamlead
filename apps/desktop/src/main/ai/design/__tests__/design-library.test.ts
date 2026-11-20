@@ -235,5 +235,31 @@ describe("the designer's start: exact signals before words (planner-mhp)", () =>
     const spec = library.map((f) => '`/' + path.basename(f.file, '.html') + '`').join(' ');
     expect(selectBaseFrames(library, spec, 7).length).toBeLessThanOrEqual(7);
   });
+
+  it('keeps library frames whole: the shared stylesheet is put inside each copy, and kept as the next designer\'s start', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    const spec = taskSpec(root, '070', [{ file: 'screens/board.html', title: 'Board', kind: 'screen', html: '<head><link rel="stylesheet" href="styles.css"><style>.x{}</style></head><body></body>' }]);
+    writeFileSync(path.join(spec, 'design', 'screens', 'styles.css'), '.btn{color:#111}');
+    publishToLibrary(root, spec, { taskId: '070' });
+    const copy = readFileSync(path.join(libraryDir(root), 'screens', 'board.html'), 'utf-8');
+    expect(copy).not.toContain('href="styles.css"');
+    expect(copy).toContain('<style>.btn{color:#111}</style>');
+    expect(copy).toContain('<style>.x{}</style>');
+    // The task's own stylesheet stays untouched in its spec folder
+    expect(readFileSync(path.join(spec, 'design', 'screens', 'board.html'), 'utf-8')).toContain('href="styles.css"');
+    expect(readFileSync(path.join(libraryDir(root), 'screens', 'styles.css'), 'utf-8')).toBe('.btn{color:#111}');
+
+    const next = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-wt-')), 'spec');
+    copyLibraryToBase(root, next);
+    expect(readFileSync(path.join(next, 'design', 'base', 'screens', 'styles.css'), 'utf-8')).toBe('.btn{color:#111}');
+  });
+
+  it('leaves a frame without a stylesheet link as it is', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    const spec = taskSpec(root, '071', [{ file: 'wireframes/a.html', title: 'A', kind: 'wireframe', html: '<link rel="stylesheet" href="https://x/y.css"><p>a</p>' }]);
+    publishToLibrary(root, spec, { taskId: '071' });
+    expect(readFileSync(path.join(libraryDir(root), 'wireframes', 'a.html'), 'utf-8')).toBe('<link rel="stylesheet" href="https://x/y.css"><p>a</p>');
+    expect(existsSync(path.join(libraryDir(root), 'wireframes', 'styles.css'))).toBe(false);
+  });
 });
 

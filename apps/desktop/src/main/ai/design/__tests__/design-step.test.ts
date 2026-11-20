@@ -79,6 +79,9 @@ describe('the design files', () => {
     const tokens = { colors: [{ name: 'ink', value: '#181818' }], fonts: [], radius: [10], shadows: false, gradients: false };
     const findings = lintDesignScreens(specDir, tokens as never);
     expect(findings.map((f) => [f.file, f.line, f.rule])).toEqual([['design/screens/roadmap.html', 2, 'off-palette-color']]);
+    // The shared stylesheet is part of the screens: its colours are checked too
+    writeFileSync(path.join(specDir, 'design', 'screens', 'styles.css'), '.a{}\n.b{color:#ff00aa}\n');
+    expect(lintDesignScreens(specDir, tokens as never).map((f) => [f.file, f.line])).toContainEqual(['design/screens/styles.css', 2]);
     expect(lintDesignScreens(mkdtempSync(path.join(tmpdir(), 'vtl-none-')), tokens as never)).toEqual([]);
   });
 });
@@ -104,6 +107,8 @@ describe('what the planner, the coder and QA are told about the design', () => {
     // The flow and the responsive page are part of the design
     expect(text).toMatch(/navigation/i);
     expect(text).toMatch(/one responsive page/i);
+    // The pages' shared styles are part of what they look like
+    expect(text).toContain('styles.css');
   });
 
   it('with wireframes only, they are the reference for layout and states', () => {

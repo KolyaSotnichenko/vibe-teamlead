@@ -31,6 +31,8 @@ export const DESIGN_CSP = [
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
+  // The frames' shared stylesheet (screens/styles.css)
+  '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
