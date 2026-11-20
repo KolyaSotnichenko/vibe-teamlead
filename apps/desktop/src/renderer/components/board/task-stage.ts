@@ -9,8 +9,13 @@
  * ("Spec creation: …", "Designing the architecture", "Creating implementation plan").
  * Security gates run inside QA and Strix runs after QA approval without a phase
  * of their own, so they are part of the QA stage here.
+ *
+ * A task shows the stages of its own pipeline (shared/pipeline.ts): the short one has no
+ * designer, architect or planner, and a task one session builds starts at the coder, with
+ * the app's checks where QA would be.
  */
 
+import { type PipelineDecision, pipelineOf, pipelineStages } from '../../../shared/pipeline';
 import type { ExecutionPhase, Task } from '../../../shared/types';
 
 export const PIPELINE_STAGES = ['spec', 'designer', 'architect', 'planner', 'coder', 'qa', 'review'] as const;
@@ -34,7 +39,14 @@ export interface TaskStageInfo {
   states: Record<PipelineStage, StageState>;
   /** All stages passed (done / PR created) */
   finished: boolean;
+  /** The stages this task's pipeline has, in order: what the card and the task window show */
+  stages: PipelineStage[];
+  /** The pipeline decided for the task, once it is; before that the full one is shown */
+  pipeline?: PipelineDecision;
 }
+
+/** Where the task is, over all seven stages, before its own pipeline is applied */
+type StageBasis = Omit<TaskStageInfo, 'stages' | 'pipeline'>;
 
 const ACTIVE_PHASES: ReadonlySet<ExecutionPhase> = new Set([
   'planning',
@@ -95,6 +107,22 @@ function failedStage(task: Task): PipelineStage {
 }
 
 export function getTaskStage(task: Task): TaskStageInfo {
+  const basis = stageBasis(task);
+  const pipeline = pipelineOf(task.metadata);
+  const stages = pipelineStages(pipeline?.kind ?? 'full');
+  // A stage the task's pipeline doesn't have (a progress message of the spec, say, before the one
+  // session starts) is shown as the next stage it does have
+  let current = basis.current;
+  const states = { ...basis.states };
+  if (current && !stages.includes(current)) {
+    const next = stages.find((stage) => PIPELINE_STAGES.indexOf(stage) > PIPELINE_STAGES.indexOf(current as PipelineStage)) ?? stages[stages.length - 1];
+    states[next] = states[current];
+    current = next;
+  }
+  return { ...basis, current, states, stages, ...(pipeline ? { pipeline } : {}) };
+}
+
+function stageBasis(task: Task): StageBasis {
   const progress = task.executionProgress;
   const phase = progress?.phase;
   const base = { running: false, paused: null, agent: null, finished: false } as const;

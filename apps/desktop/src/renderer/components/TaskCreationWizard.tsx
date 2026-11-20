@@ -25,6 +25,7 @@ import { createTask, saveDraft, loadDraft, clearDraft, isDraftEmpty } from '../s
 import { useProjectStore } from '../stores/project-store';
 import { buildBranchOptions } from '../lib/branch-utils';
 import { cn } from '../lib/utils';
+import type { PipelineChoice } from '../../shared/pipeline';
 import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile, GitBranchDetail } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import {
@@ -119,6 +120,8 @@ export function TaskCreationWizard({
   const [priority, setPriority] = useState<TaskPriority | ''>('');
   const [complexity, setComplexity] = useState<TaskComplexity | ''>('');
   const [impact, setImpact] = useState<TaskImpact | ''>('');
+  // Which pipeline the task runs: Auto unless the user picks one (shared/pipeline.ts)
+  const [pipeline, setPipeline] = useState<PipelineChoice>('auto');
 
   // Model configuration
   const [profileId, setProfileId] = useState<string>(resolvedProfileId);
@@ -445,6 +448,7 @@ export function TaskCreationWizard({
       if (priority) metadata.priority = priority;
       if (complexity) metadata.complexity = complexity;
       if (impact) metadata.impact = impact;
+      if (pipeline !== 'auto') metadata.pipeline = pipeline;
       if (model) metadata.model = model;
       if (thinkingLevel) metadata.thinkingLevel = thinkingLevel;
       if (phaseModels && phaseThinking) {
@@ -496,6 +500,7 @@ export function TaskCreationWizard({
     setPriority('');
     setComplexity('');
     setImpact('');
+    setPipeline('auto');
     setProfileId(resolvedProfileId);
     setModel(selectedProfile.model);
     setThinkingLevel(selectedProfile.thinkingLevel);
@@ -684,6 +689,8 @@ export function TaskCreationWizard({
           onImpactChange={setImpact}
           showClassification={showClassification}
           onShowClassificationChange={setShowClassification}
+          pipeline={pipeline}
+          onPipelineChange={setPipeline}
           images={images}
           onImagesChange={setImages}
           requireReviewBeforeCoding={requireReviewBeforeCoding}

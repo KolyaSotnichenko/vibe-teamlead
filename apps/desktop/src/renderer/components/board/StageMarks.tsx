@@ -11,7 +11,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Subtask } from '../../../shared/types';
 import { cn } from '../../lib/utils';
-import { PIPELINE_STAGES, type PipelineStage, type StageState, type TaskStageInfo } from './task-stage';
+import type { PipelineStage, StageState, TaskStageInfo } from './task-stage';
 
 export function stageTickClass(state: StageState, breathing: boolean): string {
   return cn(
@@ -24,17 +24,22 @@ export function stageTickClass(state: StageState, breathing: boolean): string {
   );
 }
 
+/** The name a stage goes by: where one session built the task, QA is the app's checks alone */
+export function stageLabel(info: Pick<TaskStageInfo, 'pipeline'>, stage: PipelineStage): PipelineStage | 'checks' {
+  return stage === 'qa' && info.pipeline?.kind === 'single' ? 'checks' : stage;
+}
+
 export function StageTicks({ info, className }: { info: TaskStageInfo; className?: string }) {
   const { t } = useTranslation('tasks');
-  const index = info.current ? PIPELINE_STAGES.indexOf(info.current) + 1 : 0;
+  const index = info.current ? info.stages.indexOf(info.current) + 1 : 0;
   const label = info.finished
     ? t('board.stage.allPassed')
     : info.current
-      ? t('board.stage.position', { index, total: PIPELINE_STAGES.length, stage: t(`board.stages.${info.current}`) })
+      ? t('board.stage.position', { index, total: info.stages.length, stage: t(`board.stages.${stageLabel(info, info.current)}`) })
       : t('board.stage.notStarted');
   return (
     <span role="img" aria-label={label} className={cn('inline-flex items-center gap-[3px]', className)}>
-      {PIPELINE_STAGES.map((stage: PipelineStage) => (
+      {info.stages.map((stage: PipelineStage) => (
         <span key={stage} aria-hidden="true" className={stageTickClass(info.states[stage], info.running && info.states[stage] === 'current')} />
       ))}
     </span>

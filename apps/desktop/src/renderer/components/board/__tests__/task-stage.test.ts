@@ -207,3 +207,44 @@ describe('formatSince', () => {
     expect(formatSince('nope', 'en', now)).toBeNull();
   });
 });
+
+describe("a task shows its own pipeline's stages", () => {
+  const decided = (kind: 'single' | 'short' | 'full', overrides: Partial<Task> = {}) =>
+    task({ metadata: { pipelineDecision: { kind, by: 'rule', reason: 'quick_fix' } }, ...overrides });
+
+  it('a task with no decision yet shows the full pipeline', () => {
+    const info = getTaskStage(task());
+    expect(info.stages).toEqual(['spec', 'designer', 'architect', 'planner', 'coder', 'qa', 'review']);
+    expect(info.pipeline).toBeUndefined();
+  });
+
+  it('the short pipeline has no designer, architect or planner', () => {
+    const info = getTaskStage(decided('short'));
+    expect(info.stages).toEqual(['spec', 'coder', 'qa', 'review']);
+    expect(info.pipeline).toMatchObject({ kind: 'short', reason: 'quick_fix' });
+  });
+
+  it('a task one session builds starts at the coder', () => {
+    expect(getTaskStage(decided('single')).stages).toEqual(['coder', 'qa', 'review']);
+  });
+
+  it('a stage the pipeline does not have is shown as the next one it has', () => {
+    // Started, nothing reported yet: the basis says "spec", which one session does not have
+    const starting = getTaskStage(decided('single', { status: 'in_progress' }));
+    expect(starting.current).toBe('coder');
+    expect(starting.states.coder).toBe('current');
+    expect(starting.running).toBe(true);
+
+    // The short pipeline's quick spec writes the plan too: "planner" is shown as the coder
+    const planning = getTaskStage(
+      decided('short', { status: 'in_progress', subtasks: [sub('pending')], executionProgress: { phase: 'planning', phaseProgress: 0, overallProgress: 0, message: 'Creating implementation plan' } }),
+    );
+    expect(planning.current).toBe('coder');
+  });
+
+  it('keeps a stage the pipeline has', () => {
+    const info = getTaskStage(decided('single', { status: 'ai_review', executionProgress: { phase: 'qa_review', phaseProgress: 0, overallProgress: 0 } }));
+    expect(info.current).toBe('qa');
+    expect(info.states.qa).toBe('current');
+  });
+});

@@ -573,7 +573,8 @@
       "planner": "Plan",
       "coder": "Code",
       "qa": "QA",
-      "review": "Review"
+      "review": "Review",
+      "checks": "Checks"
     },
     "agents": {
       "spec": "Spec writer",
@@ -656,7 +657,8 @@
         "coder": "Test first, in an isolated worktree",
         "qa": "Security gates, AC coverage, Strix",
         "review": "You approve and merge",
-        "designer": "Wireframes and screens, before the plan"
+        "designer": "Wireframes and screens, before the plan",
+        "checks": "Typecheck, tests and scanners, run by the app"
       }
     },
     "question": {
@@ -1398,6 +1400,32 @@
       "permissions": "the app has no permission to push",
       "no-connection": "no connection",
       "unavailable": "GitHub is not available"
+    }
+  },
+  "pipeline": {
+    "label": "Pipeline",
+    "options": {
+      "auto": "Auto",
+      "single": "One session",
+      "short": "Short",
+      "full": "Full"
+    },
+    "optionHelp": {
+      "auto": "The app decides when the task starts: tasks from a spec document and anything about sign-in, money, personal data, migrations or access run the full pipeline; for the rest the complexity assessor chooses. The task shows what was chosen and why.",
+      "single": "One agent writes the acceptance criteria, the tests and the code in one go. The app still runs the project's checks and the scanners, then you review. No spec writer, designer, architect, planner or QA reviewer, so the task never merges by itself.",
+      "short": "A short spec with acceptance criteria and its plan, then code, then QA, then your review. No designer and no architect.",
+      "full": "Spec, design, architecture, plan, code, QA, your review."
+    },
+    "shown": "{{name}}: {{reason}}.",
+    "reasons": {
+      "chosen": "chosen in the task",
+      "brief": "the task comes from a spec document",
+      "architecture": "the architect designs this task",
+      "quick_fix": "a quick fix from the preview",
+      "fix_main": "the app made this task to repair main",
+      "sensitive": "the task is about sign-in, money, personal data, a migration or access",
+      "assessed": "chosen by the complexity assessment",
+      "not_assessed": "the task could not be assessed"
     }
   }
 }

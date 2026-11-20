@@ -1,5 +1,25 @@
 # How a task goes through the pipeline
 
+## Which pipeline a task runs
+
+Not every task needs the whole team. A task runs one of three pipelines:
+
+| Pipeline | What runs | For |
+|---|---|---|
+| **Full** | spec → design → architecture → plan → code → QA → your review | What the rest of this page describes. |
+| **Short** | a short spec with acceptance criteria and its plan → code → QA → your review | A clear, bounded job. No designer and no architect. |
+| **One session** | one agent writes the acceptance criteria, the tests and the code → the app's checks and scanners → your review | A small self-contained thing: a small game, a script, a tweak. |
+
+- **You choose** in the task form (**Pipeline**), when you create or edit the task. Your choice always wins. It applies when the task starts: changing it later does not re-plan a task that already has a plan.
+- **Auto** (the default) decides when the task starts, without stopping to ask.
+  - First by what the app can check itself. A task from a spec document, a task the architect designs, and any task whose text is about sign-in, money, personal data, a migration or access run the full pipeline. A quick fix from the preview and a task the app made to repair main run the short one.
+  - For any other task the complexity assessor chooses and says why. A task it finds complex is always full.
+- **The task shows it.** The Pipeline row in the task window has only the stages of the task's pipeline, with a line saying which pipeline and why. The marks on the card follow.
+- **Nothing but you makes a task lighter.** A later automatic decision for the same task can only keep it or make it heavier.
+- **One session keeps the rules.** Acceptance criteria with IDs come first, then a failing test for each, then the code. The app's own checks and the security scanners run as for any task and block the same way, and the fixer fixes what they find. There is no QA reviewer, so the app records no QA approval and **the task never merges by itself**, whatever the queue's auto-merge says: it waits for your review. In the task window its QA stage is called **Checks**.
+- **The short pipeline** uses the quick spec (the spec and its plan in one session). It has no designer even for a UI task and no architect whatever the Architect setting says. Its QA is the usual one.
+- **When one session isn't enough.** If the agent reaches its turn limit three times, the task stops as any task does and names the subtask. It is not moved to a heavier pipeline by itself yet: create the task again with Short or Full.
+
 ## Specification — depth depends on complexity
 
 First, the **complexity assessor** determines the task's level:

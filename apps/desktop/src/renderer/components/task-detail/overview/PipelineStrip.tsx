@@ -1,5 +1,7 @@
 /**
- * The pipeline as a seven-cell datasheet row: spec → design → architect → planner → coder → QA → review.
+ * The task's pipeline as a datasheet row, one cell per stage it has: the full one is
+ * spec → design → architect → planner → coder → QA → review; the short one and a task one
+ * session builds have fewer (shared/pipeline.ts). Under the title: which pipeline and why.
  * The current stage is the one ink-filled cell (its square breathes while an agent works);
  * a stage that sent the task back shows ✕ and "Sent back" in vermilion.
  * Cells open the part of the task that stage writes.
@@ -7,10 +9,18 @@
 
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../../lib/utils';
-import { PIPELINE_STAGES, type PipelineStage, type TaskStageInfo } from '../../board/task-stage';
+import { stageLabel } from '../../board/StageMarks';
+import type { PipelineStage, TaskStageInfo } from '../../board/task-stage';
 import { SectionHeader } from '../workspace/workspace-ui';
 
 export type StageTarget = 'spec' | 'design' | 'architecture' | 'plan' | 'subtasks' | 'security' | null;
+
+/** Columns per number of stages (class names spelled out for Tailwind) */
+const COLUMNS: Record<number, string> = {
+  3: 'sm:grid-cols-3',
+  4: 'sm:grid-cols-4',
+  7: 'sm:grid-cols-4 lg:grid-cols-7',
+};
 
 const STAGE_TARGET: Record<PipelineStage, StageTarget> = {
   spec: 'spec',
@@ -56,8 +66,14 @@ export function PipelineStrip({
         title={t('overview.pipeline.title')}
         meta={info.running && message ? message : info.finished ? t('board.stage.allPassed') : undefined}
       />
-      <ol className="mt-3 grid grid-cols-2 gap-px border border-foreground bg-border sm:grid-cols-4 lg:grid-cols-7">
-        {PIPELINE_STAGES.map((stage, index) => {
+      {info.pipeline && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('pipeline.shown', { name: t(`pipeline.options.${info.pipeline.kind}`), reason: t(`pipeline.reasons.${info.pipeline.reason}`) })}
+          {info.pipeline.detail ? ` ${info.pipeline.detail}` : ''}
+        </p>
+      )}
+      <ol className={cn('mt-3 grid grid-cols-2 gap-px border border-foreground bg-border', COLUMNS[info.stages.length] ?? COLUMNS[7])}>
+        {info.stages.map((stage, index) => {
           const state = info.states[stage];
           const current = state === 'current';
           const { word, attention } = stateWord(stage);
@@ -81,7 +97,7 @@ export function PipelineStrip({
                 </span>
               </span>
               <span className={cn('mt-3 block text-sm font-semibold', current ? 'text-primary-foreground' : state === 'upcoming' ? 'text-muted-foreground' : 'text-foreground')}>
-                {t(`board.stages.${stage}`)}
+                {t(`board.stages.${stageLabel(info, stage)}`)}
               </span>
               <span
                 className={cn(
@@ -100,7 +116,7 @@ export function PipelineStrip({
                 {word}
               </span>
               <span className={cn('mt-2 block text-[11px] leading-snug', current ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                {t(`overview.pipeline.writes.${stage}`)}
+                {t(`overview.pipeline.writes.${stageLabel(info, stage)}`)}
               </span>
             </>
           );

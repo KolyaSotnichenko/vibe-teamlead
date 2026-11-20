@@ -20,12 +20,14 @@ import { Switch } from '../ui/switch';
 import { Button } from '../ui/button';
 import { AgentProfileSelector } from '../AgentProfileSelector';
 import { ClassificationFields } from './ClassificationFields';
+import { PipelineField } from './PipelineField';
 import { useImageUpload, type FileReferenceData } from './useImageUpload';
 import { createThumbnail } from '../ImageUpload';
 import { ScreenshotCapture } from '../ScreenshotCapture';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { cn } from '../../lib/utils';
 import { MAX_IMAGES_PER_TASK } from '../../../shared/constants';
+import type { PipelineChoice } from '../../../shared/pipeline';
 import type {
   TaskCategory,
   TaskPriority,
@@ -78,6 +80,10 @@ interface TaskFormFieldsProps {
   onImpactChange: (value: TaskImpact | '') => void;
   showClassification: boolean;
   onShowClassificationChange: (show: boolean) => void;
+
+  // Which pipeline the task runs; shown when a change handler is given
+  pipeline?: PipelineChoice;
+  onPipelineChange?: (value: PipelineChoice) => void;
 
   // Images
   images: ImageAttachment[];
@@ -137,6 +143,8 @@ export function TaskFormFields({
   onImpactChange,
   showClassification,
   onShowClassificationChange,
+  pipeline,
+  onPipelineChange,
   images,
   onImagesChange,
   requireReviewBeforeCoding,
@@ -481,6 +489,10 @@ export function TaskFormFields({
           onPhaseThinkingChange={onPhaseThinkingChange}
           disabled={disabled}
         />
+
+        {onPipelineChange && (
+          <PipelineField value={pipeline ?? 'auto'} onChange={onPipelineChange} disabled={disabled} idPrefix={idPrefix} />
+        )}
 
         {/* Classification Toggle */}
         <button
