@@ -1,18 +1,20 @@
 /**
  * The status bar: one thin line along the bottom of the window, under the sidebar and the page.
- * Left: live state at a glance (questions waiting, tasks running and queued, the queue pause, CI on
- * main), each opening where it lives. Right: the Knowledge pages and Settings.
+ * Left: live state at a glance (tasks running, queued and ready for review, the queue pause, CI on
+ * main, and a waiting question while the sidebar is collapsed), each opening where it lives.
+ * Right: the Knowledge pages and Settings.
  * Only what needs the user is vermilion; everything else stays muted.
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
-import { CircleDot, GitBranch, ListOrdered, MessageCircleQuestion, Pause, Settings } from 'lucide-react';
+import { CircleDot, GitBranch, ListOrdered, MessageCircleQuestion, Pause, Settings, SquareCheckBig } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 import { useAgentQuestionsStore } from '../../stores/agent-questions-store';
 import { useProjectStore } from '../../stores/project-store';
 import { useQueuePauseStore } from '../../stores/queue-pause-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useTaskStore } from '../../stores/task-store';
 import type { ReadinessState } from '../../../shared/types/deploy';
 import type { Project } from '../../../shared/types';
@@ -33,6 +35,7 @@ const ICONS: Record<StatusItem['key'], React.ElementType> = {
   waiting: MessageCircleQuestion,
   running: CircleDot,
   queued: ListOrdered,
+  review: SquareCheckBig,
   paused: Pause,
   ci: GitBranch,
 };
@@ -79,14 +82,17 @@ export function StatusBar({ activeView, onViewChange, onSettingsClick }: StatusB
   const pending = useAgentQuestionsStore((s) => s.pending);
   const openQuestion = useAgentQuestionsStore((s) => s.open);
   const ciConclusion = useMainCiConclusion(project);
+  const sidebarCollapsed = useSettingsStore((s) => s.settings.sidebarCollapsed ?? false);
 
   const waiting = pending.filter((q) => !projectId || !q.projectId || q.projectId === projectId);
   const items = statusItems({
     hasProject: !!project,
     working: counts.working,
     queued: counts.queued,
+    review: counts.review,
     paused,
     waiting: waiting.length,
+    sidebarShowsWaiting: !sidebarCollapsed,
     ciConclusion,
   });
 

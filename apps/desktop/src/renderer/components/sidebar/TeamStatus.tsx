@@ -1,15 +1,17 @@
 /**
- * Team status readout — the sidebar's instrument: what the agent team is doing
- * right now for the selected project. The pixel teamlead shows it as a mood
- * (and, if enabled, says it in droid chirps); the counts stay below in mono.
- * The only vermilion is "waiting for you", and only when it is non-zero.
+ * Team status — what the agent team is doing right now for the selected project,
+ * as the pixel teamlead's mood and one sentence (and, if enabled, droid chirps),
+ * and under it the one thing that needs the user: an agent's question, shown only
+ * while one is waiting. That row is the only vermilion here.
+ *
+ * The counts of running, queued and ready-for-review tasks are in the status bar:
+ * with them here too, every number stood on the screen two or three times.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTranslation } from 'react-i18next';
 
-import { cn } from '../../lib/utils';
 import { useAgentQuestionsStore } from '../../stores/agent-questions-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useTaskStore } from '../../stores/task-store';
@@ -39,10 +41,6 @@ export function countTeam(statuses: string[]): TeamCounts {
 
 export function TeamStatus({ projectId, collapsed }: { projectId: string | null; collapsed: boolean }) {
   const { t } = useTranslation('navigation');
-  // Subscribe to the counts only (stable values), not to every task update.
-  const counts = useTaskStore(
-    useShallow((s) => countTeam(projectId ? s.tasks.filter((task) => task.projectId === projectId).map((task) => task.status) : []))
-  );
   const pending = useAgentQuestionsStore((s) => s.pending);
   const openQuestion = useAgentQuestionsStore((s) => s.open);
 
@@ -63,56 +61,29 @@ export function TeamStatus({ projectId, collapsed }: { projectId: string | null;
     ) : null;
   }
 
-  const rows: Array<{ key: string; label: string; value: number; onClick?: () => void; alert?: boolean }> = [
-    {
-      key: 'waiting',
-      label: t('teamStatus.waiting'),
-      value: waiting.length,
-      alert: waiting.length > 0,
-      onClick: waiting.length > 0 ? () => openQuestion(waiting[0].questionId) : undefined,
-    },
-    { key: 'working', label: t('teamStatus.working'), value: counts.working },
-    { key: 'queued', label: t('teamStatus.queued'), value: counts.queued },
-    { key: 'review', label: t('teamStatus.review'), value: counts.review },
-  ];
   const caption = t(`teamStatus.mood.${mood.mood}`, { count: mood.count });
 
   return (
     <section aria-label={t('teamStatus.title')} className="mx-3 border border-border">
-      <h2 className="border-b border-border px-3 py-2 text-xs text-muted-foreground">{t('teamStatus.title')}</h2>
-      <div className="flex items-center gap-3 border-b border-border px-3 py-3">
+      <div className="flex items-center gap-3 px-3 py-3">
         <Teamlead mood={mood.mood} label={t('teamStatus.teamleadLabel', { mood: caption })} onClick={mood.greet} />
         <p aria-live="polite" className="min-w-0 text-xs leading-relaxed text-foreground">
           {caption}
         </p>
       </div>
-      <div>
-          {rows.map((row, index) => {
-            const content = (
-              <>
-                <span className="flex items-center gap-2">
-                  {row.alert && <span aria-hidden className="h-2 w-2 bg-[var(--vt-signal-on-dark)] vt-breathe" />}
-                  {row.label}
-                </span>
-                <span className="font-mono tabular-nums">{row.value}</span>
-              </>
-            );
-            const className = cn(
-              'flex min-h-9 w-full items-center justify-between px-3 text-sm',
-              index > 0 && 'border-t border-border',
-              row.alert ? 'text-[var(--vt-signal-on-dark)]' : row.value === 0 ? 'text-muted-foreground' : 'text-foreground',
-            );
-            return row.onClick ? (
-              <button key={row.key} type="button" onClick={row.onClick} className={cn(className, 'hover:bg-accent')}>
-                {content}
-              </button>
-            ) : (
-              <div key={row.key} className={className}>
-                {content}
-              </div>
-            );
-          })}
-      </div>
+      {waiting.length > 0 && (
+        <button
+          type="button"
+          onClick={() => openQuestion(waiting[0].questionId)}
+          className="flex min-h-9 w-full items-center justify-between border-t border-border px-3 text-sm text-[var(--vt-signal-on-dark)] hover:bg-accent"
+        >
+          <span className="flex items-center gap-2">
+            <span aria-hidden className="h-2 w-2 bg-[var(--vt-signal-on-dark)] vt-breathe" />
+            {t('teamStatus.waiting')}
+          </span>
+          <span className="font-mono tabular-nums">{waiting.length}</span>
+        </button>
+      )}
     </section>
   );
 }

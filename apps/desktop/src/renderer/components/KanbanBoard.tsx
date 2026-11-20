@@ -15,7 +15,7 @@ import {
   type DragOverEvent
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { Loader2, RefreshCw, ChevronsRight, Trash2 } from 'lucide-react';
+import { Loader2, ChevronsRight, Trash2 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { TaskCard } from './TaskCard';
 import { BoardColumn } from './board/BoardColumn';
@@ -66,11 +66,9 @@ interface KanbanBoardProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onNewTaskClick?: () => void;
-  onRefresh?: () => void;
-  isRefreshing?: boolean;
 }
 
-export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isRefreshing }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick }: KanbanBoardProps) {
   const { t } = useTranslation(['tasks', 'dialogs', 'common']);
   const { toast } = useToast();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -758,8 +756,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
-      {/* Board toolbar: expand all (when 3+ columns are collapsed) and refresh */}
-      {(onRefresh || collapsedColumnCount >= 3) && (
+      {/* Board toolbar: expand all, only when 3+ columns are collapsed (refresh is an icon in the tab bar) */}
+      {collapsedColumnCount >= 3 && (
         <div className="flex h-11 shrink-0 items-center justify-end gap-1 px-4 pt-2">
           {collapsedColumnCount >= 3 && (
             <button
@@ -769,17 +767,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
             >
               <ChevronsRight aria-hidden className="h-4 w-4" />
               {t('tasks:kanban.expandAll')}
-            </button>
-          )}
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="inline-flex h-11 items-center gap-2 px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60"
-            >
-              <RefreshCw aria-hidden className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
-              {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
             </button>
           )}
         </div>

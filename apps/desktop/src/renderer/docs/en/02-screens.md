@@ -4,7 +4,7 @@
 
 | Screen | What's there |
 |---|---|
-| **Team now** (sidebar) | The pixel teamlead shows what the team is doing, with the counts below him (see "Team now" below). |
+| **Team now** (sidebar) | The pixel teamlead shows what the team is doing and, while an agent is waiting for your answer, a row that opens the question (see "Team now" below). |
 | **Project tabs** (top) | Open projects; the "+" adds one. Next to it: tokens spent on the project (and the Anthropic API cost); click for the breakdown (see "Project tabs" below). |
 | **Kanban Board** | Tasks by column: *Planning → Queue → In Progress → AI Review → Human Review → Done*. The board updates live (see "Kanban Board" below). |
 | **Agent Terminals** | Claude Code terminals, each in its own worktree, for manual work alongside the agents. New terminal: ⌘T on macOS, Ctrl+T on Windows. |
@@ -20,13 +20,14 @@
 - He waves when the app opens; click him to say hi.
 - He chirps like a droid when an agent asks a question, a task is ready or fails, and after a merge.
 - The voice is turned off in Settings → Notifications → Teamlead voice.
-- The counts are below him.
+- While an agent is waiting for your answer, a vermilion row under him opens the question. The counts of tasks are in the status bar.
 
 ### Project tabs
 
 - The tabs are the open projects; the "+" adds one.
 - Next to it: tokens spent on the project (and the Anthropic API cost). Click for the breakdown by kind of token and by agent.
 - Subscription tokens are counted but not priced.
+- While the board is open, the refresh icon next to it reloads the tasks.
 
 #### Prices through a gateway
 
@@ -69,8 +70,8 @@ The Knowledge pages are not in the sidebar: they sit on the right of the status 
 
 A thin line along the bottom of the whole window, under the sidebar and the page. On the left, what is happening now; click an item to open where it lives:
 
-- **Questions for you** — an agent is waiting for your answer (vermilion); opens the question.
-- **Running** and **queued** — the project's tasks being worked on and waiting in the queue; open the board.
+- **Questions for you** — an agent is waiting for your answer (vermilion); opens the question. Shown while the sidebar is collapsed; the open sidebar shows it under the teamlead.
+- **Running**, **queued** and **for review** — the project's tasks being worked on, waiting in the queue and waiting for your review; open the board.
 - **Queue paused** — shown while the queue starts no new task (for example after the Telegram bot's /stop_all); opens the board.
 - **CI on main** — once CI is set up and the CI readiness check has recorded a run on main: passing, failing (vermilion) or no verdict; opens CI → CI readiness. The bar only shows what the app already knows; it does not ask GitHub itself.
 

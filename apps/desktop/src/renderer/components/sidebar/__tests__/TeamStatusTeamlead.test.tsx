@@ -12,6 +12,7 @@ vi.mock('react-i18next', () => ({
 const speak = vi.fn();
 vi.mock('../teamlead/droid-voice', async (orig) => ({ ...(await orig<object>()), speak: (p: string) => speak(p) }));
 
+import { useAgentQuestionsStore } from '../../../stores/agent-questions-store';
 import { useSettingsStore } from '../../../stores/settings-store';
 import { useTaskStore } from '../../../stores/task-store';
 import { TeamStatus } from '../TeamStatus';
@@ -27,10 +28,33 @@ beforeEach(() => {
   speak.mockClear();
   useSettingsStore.setState((s) => ({ settings: { ...s.settings, teamleadVoice: true } }));
   useTaskStore.setState({ tasks: [] as never });
+  useAgentQuestionsStore.setState({ pending: [], openQuestionId: null });
 });
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+describe('TeamStatus: one thing that needs the user', () => {
+  it('shows no counts: running, queued and ready-for-review tasks are in the status bar', () => {
+    setTasks([task('a', 'in_progress'), task('b', 'queue'), task('c', 'human_review', 'completed')]);
+    render(<TeamStatus projectId="p1" collapsed={false} />);
+    for (const key of ['teamStatus.working', 'teamStatus.queued', 'teamStatus.review', 'teamStatus.waiting']) {
+      expect(screen.queryByText(key)).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  });
+
+  it('shows the waiting question only while one is waiting, and opens it', () => {
+    render(<TeamStatus projectId="p1" collapsed={false} />);
+    expect(screen.queryByText('teamStatus.waiting')).not.toBeInTheDocument();
+
+    act(() => useAgentQuestionsStore.setState({ pending: [{ questionId: 'q1', projectId: 'p1' } as never, { questionId: 'q2', projectId: 'other' } as never] }));
+    const row = screen.getByText('teamStatus.waiting').closest('button') as HTMLElement;
+    expect(row).toHaveTextContent('1');
+    fireEvent.click(row);
+    expect(useAgentQuestionsStore.getState().openQuestionId).toBe('q1');
+  });
 });
 
 describe('TeamStatus teamlead', () => {

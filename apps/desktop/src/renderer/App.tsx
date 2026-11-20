@@ -97,6 +97,8 @@ interface ProjectTabBarWithContextProps {
   onProjectClose: (projectId: string) => void;
   onAddProject: () => void;
   onSettingsClick: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 function ProjectTabBarWithContext({
@@ -105,7 +107,9 @@ function ProjectTabBarWithContext({
   onProjectSelect,
   onProjectClose,
   onAddProject,
-  onSettingsClick
+  onSettingsClick,
+  onRefresh,
+  isRefreshing
 }: ProjectTabBarWithContextProps) {
   return (
     <ProjectTabBar
@@ -115,6 +119,8 @@ function ProjectTabBarWithContext({
       onProjectClose={onProjectClose}
       onAddProject={onAddProject}
       onSettingsClick={onSettingsClick}
+      onRefresh={onRefresh}
+      isRefreshing={isRefreshing}
     />
   );
 }
@@ -896,6 +902,8 @@ export function App() {
                   onProjectClose={handleProjectTabClose}
                   onAddProject={handleAddProject}
                   onSettingsClick={() => setIsSettingsDialogOpen(true)}
+                  onRefresh={activeView === 'kanban' && selectedProject ? handleRefreshTasks : undefined}
+                  isRefreshing={isRefreshingTasks}
                 />
               </SortableContext>
 
@@ -925,8 +933,6 @@ export function App() {
                     tasks={tasks}
                     onTaskClick={handleTaskClick}
                     onNewTaskClick={() => setIsNewTaskDialogOpen(true)}
-                    onRefresh={handleRefreshTasks}
-                    isRefreshing={isRefreshingTasks}
                   />
                 )}
                 {/* TerminalGrid is always mounted but hidden when not active to preserve terminal state */}

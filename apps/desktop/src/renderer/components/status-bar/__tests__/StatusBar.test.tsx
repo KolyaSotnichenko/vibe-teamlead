@@ -13,6 +13,7 @@ vi.mock('react-i18next', () => ({
 import { useAgentQuestionsStore } from '../../../stores/agent-questions-store';
 import { useProjectStore } from '../../../stores/project-store';
 import { useQueuePauseStore } from '../../../stores/queue-pause-store';
+import { useSettingsStore } from '../../../stores/settings-store';
 import { useTaskStore } from '../../../stores/task-store';
 import { StatusBar } from '../StatusBar';
 
@@ -52,6 +53,7 @@ beforeEach(() => {
   };
   useQueuePauseStore.setState({ paused: false });
   useAgentQuestionsStore.setState({ pending: [], openQuestionId: null });
+  useSettingsStore.setState((s) => ({ settings: { ...s.settings, sidebarCollapsed: false } }));
 });
 afterEach(cleanup);
 
@@ -64,12 +66,13 @@ describe('StatusBar — live state (left)', () => {
     expect(onViewChange).toHaveBeenCalledWith('docs');
   });
 
-  it('shows running and queued tasks of the project and opens the board', () => {
+  it('shows running, queued and ready-for-review tasks of the project and opens the board', () => {
     const { onViewChange } = setup({
       project: project(),
-      tasks: [{ status: 'in_progress' }, { status: 'ai_review' }, { status: 'queue' }, { status: 'done' }],
+      tasks: [{ status: 'in_progress' }, { status: 'ai_review' }, { status: 'queue' }, { status: 'done' }, { status: 'human_review' }, { status: 'human_review' }],
     });
     expect(screen.getByText('statusBar.running:2')).toBeInTheDocument();
+    expect(screen.getByText('statusBar.review:2')).toBeInTheDocument();
     fireEvent.click(screen.getByText('statusBar.queued:1'));
     expect(onViewChange).toHaveBeenCalledWith('kanban');
   });
@@ -80,7 +83,14 @@ describe('StatusBar — live state (left)', () => {
     expect(screen.getByText('statusBar.paused')).toBeInTheDocument();
   });
 
-  it('marks a waiting question as needing the user and opens it on click', () => {
+  it('leaves a waiting question to the open sidebar, which shows it in words', () => {
+    useAgentQuestionsStore.setState({ pending: [{ questionId: 'q1', projectId: 'p1' } as never], openQuestionId: null });
+    setup({ project: project() });
+    expect(screen.queryByText(/statusBar\.waiting/)).not.toBeInTheDocument();
+  });
+
+  it('with the sidebar collapsed, marks a waiting question as needing the user and opens it on click', () => {
+    useSettingsStore.setState((s) => ({ settings: { ...s.settings, sidebarCollapsed: true } }));
     useAgentQuestionsStore.setState({ pending: [{ questionId: 'q1', projectId: 'p1' } as never], openQuestionId: null });
     setup({ project: project() });
     const button = screen.getByText('statusBar.waiting:1').closest('button') as HTMLElement;

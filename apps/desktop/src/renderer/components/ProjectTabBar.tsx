@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { SortableProjectTab } from './SortableProjectTab';
 import { ProjectUsage } from './ProjectUsage';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { Project } from '../../shared/types';
 
 interface ProjectTabBarProps {
@@ -16,6 +17,9 @@ interface ProjectTabBarProps {
   className?: string;
   // Control props for active tab
   onSettingsClick?: () => void;
+  /** Reload the board's tasks; given only while the board is the page shown */
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export function ProjectTabBar({
@@ -25,9 +29,11 @@ export function ProjectTabBar({
   onProjectClose,
   onAddProject,
   className,
-  onSettingsClick
+  onSettingsClick,
+  onRefresh,
+  isRefreshing
 }: ProjectTabBarProps) {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'tasks']);
 
   // Keyboard shortcuts for tab navigation
   useEffect(() => {
@@ -117,6 +123,28 @@ export function ProjectTabBar({
       </div>
 
       <div className="flex items-center gap-1 px-2 py-1">
+        {/* An icon here instead of a row of its own above the board's columns */}
+        {onRefresh && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="electron-no-drag h-8 w-8"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  aria-label={isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
+                >
+                  <RefreshCw aria-hidden className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="font-mono text-xs">
+                {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         <ProjectUsage projectId={activeProjectId} />
         <Button
           variant="ghost"

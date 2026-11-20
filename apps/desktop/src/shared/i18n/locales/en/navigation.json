@@ -104,11 +104,7 @@
   },
   "teamStatus": {
     "title": "Team now",
-    "working": "Working",
     "waiting": "Waiting for you",
-    "review": "Ready for review",
-    "queued": "Queued",
-    "idle": "Idle — start a task to put the team to work",
     "teamleadLabel": "Teamlead: {{mood}} Click to say hi.",
     "mood": {
       "idle": "All quiet. Add a task and the team will pick it up.",
@@ -142,6 +138,8 @@
     "running_other": "{{count}} running",
     "queued_one": "{{count}} queued",
     "queued_other": "{{count}} queued",
+    "review_one": "{{count}} for review",
+    "review_other": "{{count}} for review",
     "paused": "Queue paused",
     "ci": {
       "passing": "CI passing on main",

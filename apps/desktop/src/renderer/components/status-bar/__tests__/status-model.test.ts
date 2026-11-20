@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ciState, statusItems, type StatusInput } from '../status-model';
 
-const base: StatusInput = { hasProject: true, working: 0, queued: 0, paused: false, waiting: 0, ciConclusion: null };
+const base: StatusInput = { hasProject: true, working: 0, queued: 0, review: 0, paused: false, waiting: 0, sidebarShowsWaiting: false, ciConclusion: null };
 const keys = (input: Partial<StatusInput>) => statusItems({ ...base, ...input }).map((item) => item.key);
 
 describe('statusItems', () => {
@@ -15,11 +15,18 @@ describe('statusItems', () => {
     ]);
   });
 
-  it('shows running and queued counts that open the board, quietly', () => {
-    expect(statusItems({ ...base, working: 2, queued: 3 })).toEqual([
+  it('shows running, queued and ready-for-review counts that open the board, quietly', () => {
+    expect(statusItems({ ...base, working: 2, queued: 3, review: 4 })).toEqual([
       { key: 'running', count: 2, alert: false, target: 'kanban' },
       { key: 'queued', count: 3, alert: false, target: 'kanban' },
+      { key: 'review', count: 4, alert: false, target: 'kanban' },
     ]);
+  });
+
+  it('leaves the question to the open sidebar, which shows it in words, and shows it when the sidebar is collapsed', () => {
+    expect(keys({ waiting: 1, sidebarShowsWaiting: true })).toEqual(['running', 'queued', 'review']);
+    expect(keys({ waiting: 1, sidebarShowsWaiting: false })[0]).toBe('waiting');
+    expect(statusItems({ ...base, hasProject: false, waiting: 1, sidebarShowsWaiting: true })).toEqual([]);
   });
 
   it('puts a waiting question first and marks it as needing the user', () => {
@@ -52,8 +59,8 @@ describe('statusItems', () => {
     });
   });
 
-  it('keeps a fixed order: question, running, queued, paused, CI', () => {
-    expect(keys({ waiting: 1, paused: true, ciConclusion: 'success' })).toEqual(['waiting', 'running', 'queued', 'paused', 'ci']);
+  it('keeps a fixed order: question, running, queued, review, paused, CI', () => {
+    expect(keys({ waiting: 1, paused: true, ciConclusion: 'success' })).toEqual(['waiting', 'running', 'queued', 'review', 'paused', 'ci']);
   });
 });
 

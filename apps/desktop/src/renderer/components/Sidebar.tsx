@@ -371,14 +371,8 @@ export function Sidebar({
         )}>
           <BrandMark className="h-6 w-6 shrink-0" />
           {!isCollapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-semibold leading-tight tracking-[-0.01em] text-foreground">Vibe Teamlead</p>
-              {selectedProject && (
-                <p className="truncate font-mono text-xs text-muted-foreground" title={selectedProject.path}>
-                  {selectedProject.name}
-                </p>
-              )}
-            </div>
+            // The project's name is on its tab, right next to this
+            <p className="min-w-0 flex-1 text-[15px] font-semibold leading-tight tracking-[-0.01em] text-foreground">Vibe Teamlead</p>
           )}
           <Tooltip>
             <TooltipTrigger asChild>
