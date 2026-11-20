@@ -2,8 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
-## 2.0.0-beta.59 - 2026-11-20
+## 2.0.0-beta.60 - 2026-11-20
 
+- **Three pipelines.** A task runs **Full** (spec, design, architecture, plan, code, QA, review), **Short** (a quick spec with the plan, code, QA, review) or **One session** (one coder writes the acceptance criteria, tests and code; the gates and app checks still run, and the task waits for you to merge). Choose it in the task form, or leave **Auto**: tasks from a spec document, ones the architect designs and ones about sign-in, money, personal data, migrations or access are always Full; for the rest the complexity assessor decides and says why. Settings → Project → Queue sets the project's default. The task window and card show only the stages of the task's pipeline.
+- A one-session task that reaches its turn limit goes on as Short with its work kept, instead of stopping.
+- Two more colour themes in Settings → Appearance: **Blueprint** and **Sand**, each in light and dark.
+- Agents can ask you questions again: the bundled Claude Code had left the question tool out of every session, so agents wrote down assumptions instead of asking.
+- App checks: a commit already checked is not checked again, and kept results are signed by the app, so nothing else can write a pass into them.
 - **Get a token** no longer leaves the subscription token on disk: its terminal is never saved with the other terminals (before, its output, token included, went to `terminals.json` in plain text and came back after a restart). The terminal now runs Claude Code's `setup-token` itself instead of typing a command into your shell, which also fixes it under WSL on Windows, and it stays open until you close it, so the token can be copied.
 - Settings: a changed interface language is now saved (it came back to the old one after a restart).
 - Settings: changes in the open section are saved when you quit the app or press **Get a token**, and closing again after a failed save tries once more before discarding.
