@@ -42,8 +42,6 @@ const EXTERNAL_MCP: Record<string, { tools: number; chars: number }> = {
   // Hosted (not measured here): two tools with long descriptions
   context7: { tools: 2, chars: 4_000 },
 };
-/** A deferred MCP tool (tool search, Claude Code's default) costs its name in the listing */
-const DEFERRED_TOOL_CHARS = 50;
 
 const scratch = mkdtempSync(join(tmpdir(), 'vtl-budget-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -137,7 +135,7 @@ interface Row {
   injected: number;
   appended: number;
   skills: number;
-  mcpDeferred: number;
+  /** Sent in full: the sessions have no ToolSearch tool, so Claude Code never defers MCP tools (measured on 2.1.317) */
   mcpFull: number;
   mcpServers: string[];
   skillNames: string[];
@@ -177,18 +175,15 @@ function measure(c: Case): Row {
   const servers = Object.keys(options.mcpServers ?? {});
 
   let mcpFull = 0;
-  let mcpTools = 0;
   for (const key of servers) {
     const external = EXTERNAL_MCP[key];
     if (external) {
       mcpFull += external.chars;
-      mcpTools += external.tools;
       continue;
     }
     const server = (options.mcpServers as Record<string, { instance?: { _registeredTools?: Record<string, { description?: string; inputSchema?: unknown }> } }>)[key];
     const registered = server.instance?._registeredTools ?? {};
     for (const [name, def] of Object.entries(registered)) {
-      mcpTools += 1;
       mcpFull += name.length + (def.description?.length ?? 0) + JSON.stringify(def.inputSchema ?? {}).length;
     }
   }
@@ -199,20 +194,19 @@ function measure(c: Case): Row {
     injected: tokens(injected.length),
     appended: tokens(append.length),
     skills: tokens(skills.reduce((n, s) => n + listingChars(s), 0)),
-    mcpDeferred: tokens(mcpTools * DEFERRED_TOOL_CHARS),
     mcpFull: tokens(mcpFull),
     mcpServers: servers,
     skillNames: skills,
   };
 }
 
-const total = (r: Row) => r.role + r.injected + r.appended + r.skills + r.mcpDeferred;
+const total = (r: Row) => r.role + r.injected + r.appended + r.skills + r.mcpFull;
 
 function table(rows: Row[]): string {
   const lines = [
-    '| Agent | Role prompt | Injected (design system, QA tools, helpers, spec paths) | Runner sections | Skill listing | MCP tools, deferred (full if tool search is off) | Total (deferred MCP) | MCP servers | Skills |',
+    '| Agent | Role prompt | Injected (design system, QA tools, helpers, spec paths) | Runner sections | Skill listing | MCP tool definitions | Total | MCP servers | Skills |',
     '|---|---:|---:|---:|---:|---:|---:|---|---|',
-    ...rows.map((r) => `| ${r.label} | ${r.role} | ${r.injected} | ${r.appended} | ${r.skills} | ${r.mcpDeferred} (${r.mcpFull}) | ${total(r)} | ${r.mcpServers.join(', ')} | ${r.skillNames.length} |`),
+    ...rows.map((r) => `| ${r.label} | ${r.role} | ${r.injected} | ${r.appended} | ${r.skills} | ${r.mcpFull} | ${total(r)} | ${r.mcpServers.join(', ')} | ${r.skillNames.length} |`),
   ];
   return lines.join('\n');
 }
