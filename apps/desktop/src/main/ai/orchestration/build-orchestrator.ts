@@ -136,6 +136,8 @@ export interface BuildOrchestratorConfig {
   designStep?: () => Promise<{ paused?: 'wireframes' | 'design'; error?: string; failed?: string; cancelled?: boolean }>;
   /** The code a coder session starts with, as a block for its first message ('' for none). Never rejects. */
   subtaskCodeContext?: (subtask: PlanSubtaskEntry, log: (line: string) => void) => Promise<string>;
+  /** Where the lines about that code go, so they stay in the task's log (default: the live log only) */
+  kickoffLog?: (line: string) => void;
   /** Optional callback for syncing spec to source (worktree mode) */
   syncSpecToSource?: (specDir: string, sourceSpecDir: string) => Promise<boolean>;
   /** Optional callback to get a resolved LanguageModel for lightweight repair calls */
@@ -658,10 +660,10 @@ export class BuildOrchestrator extends EventEmitter {
     const ownerInstruction = readOwnerDecisions(this.config.ownerDecisionsFile).instructions[subtaskId];
     const context = coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir, ownerInstruction });
     const found = findPlanSubtask(plan, subtaskId);
-    const log = (line: string) => this.emitTyped('log', line);
+    const log = this.config.kickoffLog ?? ((line: string) => this.emitTyped('log', line));
     if (!this.config.subtaskCodeContext) return context;
     if (!found) {
-      log(`CodeGraph context for ${cleanForMessage(subtaskId, 64)}: none (the subtask is not in the plan)`);
+      log(`Code context for ${cleanForMessage(subtaskId, 64)}: none (the subtask is not in the plan)`);
       return context;
     }
     const code = await this.config.subtaskCodeContext(found.subtask, log);

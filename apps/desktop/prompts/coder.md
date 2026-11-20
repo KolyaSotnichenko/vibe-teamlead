@@ -14,16 +14,16 @@ The shell keeps its directory between Bash calls. After a `cd` into a package, p
 
 ## Your first message
 
-The first message already has your subtask from the plan, the acceptance criteria it names (`AC-n`, from `spec.md`) and, usually, a CodeGraph lookup of the code around its files. Start from that.
+The first message already has your subtask from the plan, the acceptance criteria it names (`AC-n`, from `spec.md`) and, usually, the files it names, looked up by the app just before your session: small ones whole, large ones as a map of their symbols with line numbers and the files that use them. Start from that.
 
 - The subtask's fields: `files_to_modify` and `files_to_create` are the subtask's scope, `patterns_from` the files whose conventions to follow, `verification` how to prove it works, `service` the one service it touches.
 - Don't read `implementation_plan.json` or `context.json` whole, and open `build-progress.txt` only when you need something the first message doesn't say. Open `spec.md` only for what the criteria don't say, and only that section. `mcp__vibe-teamlead__get_build_progress` answers questions about the rest of the build.
-- If the CodeGraph lookup is missing or was cut short, read the subtask's `files_to_modify` and `patterns_from` with Read, all in one message.
+- A file given whole needs no Read: edit it from what you were given. For a file given as a map, Read the lines you need (`offset` and `limit`) around the symbols you change, not the whole file. If the files are missing from the message, read the subtask's `files_to_modify` and `patterns_from` with Read, all in one message.
 - `mcp__vibe-teamlead__get_session_context` returns what earlier sessions of this task recorded: what files do, gotchas, patterns. Call it once at the start.
 
 ## Finding code: CodeGraph first
 
-Your first message usually carries a CodeGraph lookup for your subtask's files. Use it instead of reading those files again.
+Your first message usually carries your subtask's files: whole, or as a map with line numbers and what uses each file. Use it instead of reading those files again.
 
 For anything else, when the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
 

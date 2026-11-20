@@ -20,7 +20,8 @@ This file is written when you press the button in Context → Project Index (to 
 A symbol graph: functions, classes, who calls whom, what a change will affect.
 - **Indexing:** automatic before an agent starts, separately for each worktree (`.codegraph/`, not committed to git). The graph updates while the agent edits code.
 - **Usage:** agents ask it with one tool, `codegraph_explore`: name the symbols, files or the question, and it returns their source with line numbers, who calls them, what they call and what a change would affect. This replaces grep and reading files blindly, so it is faster and cheaper.
-- **Where to see it:** in the task logs, the lines "CodeGraph: index ready / attached" and calls to its tools.
+- **Looked up by the app:** agents don't always ask, so before a session the app asks CodeGraph itself about the files that work names and puts the answer in the agent's first message. The coder gets its subtask's files; the planner, architect and designer get the files the spec's `context.json` names; the QA reviewer and fixer get the files the task changed. A small file to change is given whole, a large one as a map: its symbols with the line each starts on and the files that use it, so the agent reads the lines it needs instead of the whole file. The index is brought up to date first, and a map that does not match the file on disk is dropped. Agents of the spec stage start before any file is named, so they only ask on their own.
+- **Where to see it:** in the task logs. "CodeGraph: index ready / attached" says the graph is there. "Code context for …" says what the app gave the session (for example "9.8 KB (2 whole files, 3 CodeGraph maps)") or why it gave nothing. The line that ends each session has "CodeGraph lookups by the agent: N": how often the agent itself asked. Its calls are in the log too.
 
 ## Memory — the agents' experience
 

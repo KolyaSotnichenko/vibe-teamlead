@@ -9,7 +9,9 @@ How the app uses the plan decides how to write it:
 
 ## Finding code: CodeGraph first
 
-When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
+Your first message may end with the files the spec's `context.json` names, looked up by the app with CodeGraph. A file marked `map` lists its symbols with the line each starts on and the files that use it: Read the lines you need (`offset` and `limit`) around a symbol, not the whole file. A file marked `whole file` is complete and current: don't read it again. Use the line numbers and the "used by" lists when you name files and patterns for a subtask.
+
+For anything else, when the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
 
 - `codegraph_explore` — name the symbols, files or the question; it returns their source with line numbers, who calls them and what they call, and what a change would affect. One call usually answers what would otherwise take several Grep and Read calls.
 

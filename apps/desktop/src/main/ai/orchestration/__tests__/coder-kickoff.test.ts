@@ -295,7 +295,7 @@ describe('a coder session', () => {
       return { outcome: 'completed' };
     });
     const subtaskCodeContext = vi.fn(async (_subtask: unknown, log: (line: string) => void) => {
-      log('CodeGraph context for subtask-2-2: 1.0 KB');
+      log('Code context for subtask-2-2: 1.0 KB');
       return 'CODE-BLOCK';
     });
     const o = new BuildOrchestrator({
@@ -314,7 +314,7 @@ describe('a coder session', () => {
     expect(subtaskCodeContext.mock.calls[0][0]).toMatchObject({ id: 'subtask-2-2', files_to_modify: ['src/app.ts'] });
     expect(config.kickoffData).toContain('Test first: tests/limiter.test.ts');
     expect(config.kickoffData.endsWith('CODE-BLOCK')).toBe(true);
-    expect(logs).toContain('CodeGraph context for subtask-2-2: 1.0 KB');
+    expect(logs).toContain('Code context for subtask-2-2: 1.0 KB');
   });
 
   it("logs that there is no code context when the plan doesn't have the subtask", async () => {
@@ -327,6 +327,6 @@ describe('a coder session', () => {
     const data = await (o as unknown as { coderKickoff(id: string): Promise<string> }).coderKickoff('subtask-9-9');
     expect(data).toMatch(/read .*implementation_plan\.json/i);
     expect(subtaskCodeContext).not.toHaveBeenCalled();
-    expect(logs).toEqual(['CodeGraph context for subtask-9-9: none (the subtask is not in the plan)']);
+    expect(logs).toEqual(['Code context for subtask-9-9: none (the subtask is not in the plan)']);
   });
 });

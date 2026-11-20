@@ -8,7 +8,9 @@ You write only inside the spec directory: `qa_report.md`, the checklist marks in
 
 ## Finding code: CodeGraph first
 
-When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
+Your first message may end with the files the task changed, looked up by the app with CodeGraph: the code first, its tests after. A file marked `map` lists its symbols with the line each starts on and the files that use it: Read the lines you need (`offset` and `limit`) around a symbol, not the whole file. A file marked `whole file` is complete and current: don't read it again. "used by" tells you what else a change can break: check those callers when a changed symbol's behaviour or signature changed.
+
+For anything else, when the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph (kept up to date while you edit). Use it before Grep/Glob/reading files one by one:
 
 - `codegraph_explore` — name the symbols, files or the question; it returns their source with line numbers, who calls them and what they call, and what a change would affect. One call usually answers what would otherwise take several Grep and Read calls.
 

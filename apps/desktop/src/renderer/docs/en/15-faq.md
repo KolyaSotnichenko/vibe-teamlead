@@ -66,7 +66,7 @@ QA writes the AC table to `qa_report.md`. If the model didn't fill in the table 
 
 ## Agents don't use CodeGraph
 
-The task logs should contain the line "CodeGraph: index ready / attached". Agents are told to search through CodeGraph first, but weaker models sometimes still go to grep. If the line is missing, check Settings → Tools.
+The task logs should contain the line "CodeGraph: index ready / attached"; if it is missing, check Settings → Tools. Agents are told to search through CodeGraph first, but whether they do depends on the model: the line that ends each session says "CodeGraph lookups by the agent: N". The app does not rely on that: before a coder, planner, architect, designer or QA session it looks up the files of that work itself, and the line "Code context for …" says what the session was given.
 
 ## Closing the app while agents work
 

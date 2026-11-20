@@ -52,7 +52,7 @@ import type {
   WorkerTaskEventMessage } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
 import { type BuildOutcome, BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
-import { subtaskCodeContext } from '../orchestration/coder-code-context';
+import { sessionCodeContext, subtaskCodeContext } from '../orchestration/code-context';
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
@@ -312,7 +312,7 @@ async function runTaskDesignStep(session: SerializableSessionConfig, toolContext
             session,
             // The designer draws; it writes only inside the spec's design/ folder
             { ...toolContext, allowedWritePaths: [join(session.specDir, 'design')] },
-            message,
+            await withCodeContext('designer', message, session, toolContext, 'design'),
             true,
             undefined,
             // GSAP's skills only when the project animates with it (the prompt says CSS otherwise)
@@ -753,6 +753,31 @@ const phaseModel = resolvePhaseModel;
  * Run a single agent session and return the result.
  * Used as the runSession callback for BuildOrchestrator and QALoop.
  */
+/**
+ * The first message with the code the app looked up for this agent (code-context.ts): the files
+ * the spec's context names for the planner, architect and designer, the files the task changed
+ * for QA. Unchanged for the other agents. The result is written to the task's log.
+ */
+async function withCodeContext(
+  agentType: AgentType,
+  firstMessage: string,
+  session: SerializableSessionConfig,
+  toolContext: ToolContext,
+  logPhase: LogPhase,
+): Promise<string> {
+  const code = await sessionCodeContext({
+    agentType,
+    specDir: session.specDir,
+    projectDir: toolContext.cwd,
+    bin: session.bundled?.codegraphBin,
+    kickoff: firstMessage,
+    changedFiles: () => changedFilesSinceBase(session.projectDir),
+    signal: abortController.signal,
+    log: taskLogger(postLog, logWriter, logPhase),
+  });
+  return [firstMessage, code].filter(Boolean).join('\n\n');
+}
+
 async function runSingleSession(
   agentType: AgentType,
   phase: Phase,
@@ -1014,6 +1039,8 @@ async function runBuildOrchestrator(
 
       subtaskCodeContext: (subtask, log) =>
         subtaskCodeContext({ bin: session.bundled?.codegraphBin, projectDir: toolContext.cwd, subtask, signal: abortController.signal, log }),
+      // What the coder was given stays in the task's log: without it nobody can tell afterwards
+      kickoffLog: taskLogger(postLog, logWriter, 'coding'),
 
       generatePrompt: async (agentType, _phase, context) => {
         const promptName = agentType === 'coder' ? 'coder' : agentType;
@@ -1048,9 +1075,13 @@ async function runBuildOrchestrator(
             ? { ...toolContext, allowedWritePaths: [runConfig.specDir] }
             : toolContext;
         // Build a kickoff message for the agent so it has a task to act on
-        const kickoffMessage = [buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
-          .filter(Boolean)
-          .join('\n\n');
+        const kickoffMessage = await withCodeContext(
+          runConfig.agentType,
+          [buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData].filter(Boolean).join('\n\n'),
+          session,
+          sessionToolContext,
+          runConfig.phase,
+        );
         return runSingleSession(
           runConfig.agentType,
           runConfig.phase,
@@ -1318,6 +1349,9 @@ async function runQualityAssurance(
       const touchesUi = await uiChangedSince(() => changedFilesSinceBase(session.projectDir));
       if (touchesUi === false) qaLog(`Browser tools are off for this ${runConfig.agentType} session: no UI file changed in this task.`);
       const qaSession = touchesUi === undefined ? session : { ...session, mcpOptions: { ...session.mcpOptions, taskTouchesUi: touchesUi } };
+      const firstMessage = [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
+        .filter(Boolean)
+        .join('\n\n');
       return runSingleSession(
         runConfig.agentType,
         runConfig.phase,
@@ -1328,9 +1362,8 @@ async function runQualityAssurance(
         undefined,
         qaSession,
         toolContext,
-        [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
-          .filter(Boolean)
-          .join('\n\n'),
+        // A session that only records the verdict (its own kickoff) reads no code
+        runConfig.kickoffMessage ? firstMessage : await withCodeContext(runConfig.agentType, firstMessage, session, toolContext, 'qa'),
         true, // skipPhaseLogging — the caller manages QA phase logging
         undefined,
         // The UX review, for a reviewer of a task that changed UI

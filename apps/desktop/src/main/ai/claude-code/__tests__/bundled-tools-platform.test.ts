@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { resolveDevTools, resolvePackagedTools } from '../bundled-tools';
 import { codegraphLaunch, codegraphMcpServer } from '../codegraph';
-import { subtaskCodeContext } from '../../orchestration/coder-code-context';
+import { subtaskCodeContext } from '../../orchestration/code-context';
 
 /** A fake Resources folder holding these files. */
 function resources(files: string[]): string {
@@ -109,9 +109,12 @@ describe('codegraphLaunch', () => {
       run,
       ensureIndex: async () => true,
     });
-    expect(run).toHaveBeenCalledTimes(1);
-    const [command, args] = run.mock.calls[0];
-    expect(command).toBe('C:\\R\\codegraph\\node.exe');
-    expect(args.slice(0, 4)).toEqual(['--liftoff-only', '--disable-warning=ExperimentalWarning', 'C:\\R\\codegraph\\lib\\dist\\bin\\codegraph.js', 'explore']);
+    // The index is brought up to date, then searched
+    expect(run).toHaveBeenCalledTimes(2);
+    for (const [i, subcommand] of ['sync', 'explore'].entries()) {
+      const [command, args] = run.mock.calls[i];
+      expect(command).toBe('C:\\R\\codegraph\\node.exe');
+      expect(args.slice(0, 4)).toEqual(['--liftoff-only', '--disable-warning=ExperimentalWarning', 'C:\\R\\codegraph\\lib\\dist\\bin\\codegraph.js', subcommand]);
+    }
   });
 });

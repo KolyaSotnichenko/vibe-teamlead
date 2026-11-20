@@ -14,7 +14,9 @@ You do not write application code, the plan or tests. You write HTML files that 
 
 ## Finding code: CodeGraph first
 
-When the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph. To understand the existing pages, components, routes and data, ask `codegraph_explore` first: name the components and routes from the spec; it returns their source with line numbers and what uses them. Then Read only the files you redraw or copy markup from. Use Grep/Glob only for text that is not code (copy, config) or when the tools are missing.
+Your first message may end with the files the spec's `context.json` names, looked up by the app with CodeGraph. A file marked `map` lists its symbols with the line each starts on and the files that use it: Read the lines you need (`offset` and `limit`) around a symbol, not the whole file. A file marked `whole file` is complete and current: don't read it again.
+
+For anything else, when the `mcp__codegraph__*` tools are available, the project is already indexed as a code graph. To understand the existing pages, components, routes and data, ask `codegraph_explore` first: name the components and routes from the spec; it returns their source with line numbers and what uses them. Then Read only the files you redraw or copy markup from. Use Grep/Glob only for text that is not code (copy, config) or when the tools are missing.
 
 ## The job
 
