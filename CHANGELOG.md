@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.59 - 2026-11-20
+
+- **Get a token** no longer leaves the subscription token on disk: its terminal is never saved with the other terminals (before, its output, token included, went to `terminals.json` in plain text and came back after a restart). The terminal now runs Claude Code's `setup-token` itself instead of typing a command into your shell, which also fixes it under WSL on Windows, and it stays open until you close it, so the token can be copied.
+- Settings: a changed interface language is now saved (it came back to the old one after a restart).
+- Settings: changes in the open section are saved when you quit the app or press **Get a token**, and closing again after a failed save tries once more before discarding.
+- Settings: save errors are shown in the app's language.
+
 ## 2.0.0-beta.58 - 2026-11-20
 
 - Cheaper designs: the designer writes the styles a task's pages share once, in one `styles.css` per folder (design system tokens, app shell, components), instead of repeating them in every page, and changes its files with small edits instead of rewriting them. In one project half of what the designer wrote was the same CSS in every page, and the designer was 62% of the project's model cost. Screens in the project's design library keep their styles inside them, so a later task never changes how an earlier screen looks.
