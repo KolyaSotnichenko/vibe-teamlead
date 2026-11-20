@@ -91,9 +91,14 @@ function toolResultText(content: unknown): unknown {
   return texts.length === content.length ? texts.join('\n') : content;
 }
 
+/** CodeGraph's MCP tools (codegraph.ts CODEGRAPH_SERVER_KEY) */
+const CODEGRAPH_TOOL_PREFIX = 'mcp__codegraph__';
+
 export class SessionAccumulator {
   stepsExecuted = 0;
   toolCallCount = 0;
+  /** Calls of CodeGraph's tools, the agent's own and its subagents' */
+  codegraphCallCount = 0;
   usage: TokenUsage = toTokenUsage(undefined);
   costUsd = 0;
   sessionId: string | undefined;
@@ -146,6 +151,7 @@ export class SessionAccumulator {
           for (const block of message.message.content as ContentBlockLike[]) {
             if (block.type !== 'tool_use' || !block.id || !block.name) continue;
             this.toolCallCount += 1;
+            if (block.name.startsWith(CODEGRAPH_TOOL_PREFIX)) this.codegraphCallCount += 1;
             this.toolStarts.set(block.id, { name: block.name, startedAt: Date.now() });
             this.emit({
               type: 'tool-call',
@@ -168,6 +174,7 @@ export class SessionAccumulator {
             this.currentText += block.text;
           } else if (block.type === 'tool_use' && block.id && block.name) {
             this.toolCallCount += 1;
+            if (block.name.startsWith(CODEGRAPH_TOOL_PREFIX)) this.codegraphCallCount += 1;
             this.toolStarts.set(block.id, { name: block.name, startedAt: Date.now() });
             this.emit({
               type: 'tool-call',

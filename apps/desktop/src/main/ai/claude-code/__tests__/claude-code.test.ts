@@ -190,6 +190,13 @@ describe('session summary in the task log', () => {
     expect(line).toContain('no prompt caching');
     expect(line).toContain('stopped at the 200-turn limit');
   });
+
+  it('says how often the agent asked CodeGraph when the session had it, zero included', () => {
+    const usage = { promptTokens: 1000, completionTokens: 10 };
+    expect(sessionSummary('planner', 'completed', 3, 4, usage, 200, 0)).toContain(' · CodeGraph lookups by the agent: 0');
+    expect(sessionSummary('planner', 'completed', 3, 4, usage, 200, 2)).toContain('CodeGraph lookups by the agent: 2');
+    expect(sessionSummary('planner', 'completed', 3, 4, usage, 200)).not.toContain('CodeGraph');
+  });
 });
 
 describe('MCP servers that did not start', () => {

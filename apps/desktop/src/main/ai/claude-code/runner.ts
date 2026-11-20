@@ -393,6 +393,8 @@ export function sessionSummary(
   toolCalls: number,
   usage: { promptTokens: number; completionTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number },
   maxTurns: number,
+  /** How often the agent asked CodeGraph, when the session had it: attached is not the same as used */
+  codegraphLookups?: number,
 ): string {
   const cacheRead = usage.cacheReadTokens ?? 0;
   const cacheWrite = usage.cacheCreationTokens ?? 0;
@@ -401,6 +403,7 @@ export function sessionSummary(
     `${agentType} session ${outcome}: ${turns} turn${turns === 1 ? '' : 's'}, ${toolCalls} tool call${toolCalls === 1 ? '' : 's'}`,
     `tokens in ${kTokens(input)}, cache read ${kTokens(cacheRead)}, cache write ${kTokens(cacheWrite)}, out ${kTokens(usage.completionTokens)}`,
   ];
+  if (codegraphLookups !== undefined) parts.push(`CodeGraph lookups by the agent: ${codegraphLookups}`);
   if (usage.promptTokens > 50_000 && cacheRead === 0) parts.push('no prompt caching (every turn paid the whole context)');
   if (outcome === 'max_steps') parts.push(`stopped at the ${maxTurns}-turn limit`);
   return parts.join(' · ');
@@ -516,7 +519,7 @@ export async function runAgentSession(
     recordTurnLimit(config.specDir, { agentType: config.agentType, subtaskId: config.subtaskId, limit: config.maxSteps });
   }
 
-  options.onLog?.(sessionSummary(config.agentType, outcome, acc.stepsExecuted, acc.toolCallCount, acc.usage, config.maxSteps));
+  options.onLog?.(sessionSummary(config.agentType, outcome, acc.stepsExecuted, acc.toolCallCount, acc.usage, config.maxSteps, codegraphReady ? acc.codegraphCallCount : undefined));
 
   return {
     outcome,
