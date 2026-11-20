@@ -8,12 +8,16 @@
  * QA rounds and restarts on a commit that had not moved, and the same base commit
  * run again for every task that started from it.
  *
- * Kept outside the folders agents work in, like the QA approvals: an agent that
- * could write here could write itself a pass. One file per project. No Electron
- * imports: this runs in the worker too.
+ * Kept outside the folders agents work in, one file per project. That alone is not
+ * enough: the checks run the task's own code with the user's rights, and so do
+ * agents' shell commands, so either could write a pass here. Every entry is signed
+ * with a key that exists only in the app's memory, made anew each time the app
+ * starts, and an entry without a valid signature does not exist. So a result is
+ * kept while the app runs, and after a restart a commit is checked once more.
+ * No Electron imports: this runs in the worker too.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -26,6 +30,23 @@ export const MAX_BASE_RESULTS = 60;
 
 export function checkMemoryDir(): string {
   return join(homedir(), '.vibe-teamlead', 'check-results');
+}
+
+/** Where results are kept and the key that signs them */
+export interface CheckMemoryPlace {
+  dir: string;
+  secret: string;
+}
+
+let appSecret: string | undefined;
+
+/**
+ * This run of the app's memory of checks. Main process only: a worker thread has its own copy
+ * of this module, so it gets the place through its session, never by calling this.
+ */
+export function appCheckMemory(): CheckMemoryPlace {
+  appSecret ??= randomBytes(32).toString('hex');
+  return { dir: checkMemoryDir(), secret: appSecret };
 }
 
 export interface BaseResult {
@@ -47,10 +68,24 @@ export interface CheckMemory {
   keepBase(key: string, result: BaseResult): void;
 }
 
+/** Key, value, signature */
+type Entry<T> = [string, T, string];
+
 interface Stored {
   /** Oldest first */
-  reports: [string, KeptReport][];
-  base: [string, BaseResult][];
+  reports: Entry<KeptReport>[];
+  base: Entry<BaseResult>[];
+}
+
+function sign(secret: string, kind: 'report' | 'base', key: string, value: unknown): string {
+  return createHmac('sha256', secret).update(JSON.stringify([kind, key, value])).digest('hex');
+}
+
+function signedBy(secret: string, kind: 'report' | 'base', entry: unknown): boolean {
+  if (!Array.isArray(entry) || typeof entry[0] !== 'string' || typeof entry[2] !== 'string') return false;
+  const expected = Buffer.from(sign(secret, kind, entry[0], entry[1]), 'hex');
+  const given = Buffer.from(entry[2], 'hex');
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
 /** One key for everything an answer depends on. Pure. */
@@ -67,27 +102,29 @@ export function ago(at: string, now = Date.now()): string {
   return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
 }
 
-function read(file: string): Stored {
+/** Only what this run of the app signed: anything else, an earlier run's entries included, is dropped */
+function read(file: string, secret: string): Stored {
   try {
-    const stored = JSON.parse(readFileSync(file, 'utf-8')) as Partial<Stored>;
-    return { reports: Array.isArray(stored.reports) ? stored.reports : [], base: Array.isArray(stored.base) ? stored.base : [] };
+    const stored = JSON.parse(readFileSync(file, 'utf-8')) as { reports?: unknown; base?: unknown };
+    const signed = <T>(entries: unknown, kind: 'report' | 'base') => (Array.isArray(entries) ? (entries.filter((entry) => signedBy(secret, kind, entry)) as Entry<T>[]) : []);
+    return { reports: signed<KeptReport>(stored.reports, 'report'), base: signed<BaseResult>(stored.base, 'base') };
   } catch {
     return { reports: [], base: [] };
   }
 }
 
 /** Newest last, the oldest dropped past the limit */
-function put<T>(entries: [string, T][], key: string, value: T, limit: number): [string, T][] {
-  return [...entries.filter(([existing]) => existing !== key), [key, value] as [string, T]].slice(-limit);
+function put<T>(entries: Entry<T>[], entry: Entry<T>, limit: number): Entry<T>[] {
+  return [...entries.filter(([existing]) => existing !== entry[0]), entry].slice(-limit);
 }
 
 /**
  * The memory of one project's checks. `project` is what its tasks share (the checks' lock).
  * Never throws: a memory that can't be read is empty, one that can't be written is lost.
  */
-export function openCheckMemory(dir: string, project: string): CheckMemory {
+export function openCheckMemory({ dir, secret }: CheckMemoryPlace, project: string): CheckMemory {
   const file = join(dir, `${createHash('sha256').update(resolve(project)).digest('hex')}.json`);
-  let stored = read(file);
+  let stored = read(file, secret);
   const save = () => {
     try {
       mkdirSync(dir, { recursive: true });
@@ -99,12 +136,13 @@ export function openCheckMemory(dir: string, project: string): CheckMemory {
   return {
     report: (key) => stored.reports.find(([existing]) => existing === key)?.[1],
     keepReport: (key, report) => {
-      stored = { ...stored, reports: put(stored.reports, key, { at: new Date().toISOString(), report }, MAX_REPORTS) };
+      const value: KeptReport = { at: new Date().toISOString(), report };
+      stored = { ...stored, reports: put(stored.reports, [key, value, sign(secret, 'report', key, value)], MAX_REPORTS) };
       save();
     },
     base: (key) => stored.base.find(([existing]) => existing === key)?.[1],
     keepBase: (key, result) => {
-      stored = { ...stored, base: put(stored.base, key, result, MAX_BASE_RESULTS) };
+      stored = { ...stored, base: put(stored.base, [key, result, sign(secret, 'base', key, result)], MAX_BASE_RESULTS) };
       save();
     },
   };

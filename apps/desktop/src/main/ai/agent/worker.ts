@@ -56,7 +56,6 @@ import { subtaskCodeContext } from '../orchestration/coder-code-context';
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
-import { checkMemoryDir } from '../verification/check-memory';
 import { type CheckOutcome, verifyTask } from '../verification/verify-task';
 import { baseFailures } from '../verification/base-fix';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
@@ -1222,7 +1221,7 @@ async function runQualityAssurance(
             lockDir: verification.lockDir,
             baseResults: verificationBaseResults,
             // A commit already checked is not checked again, unless the user asked to run QA again
-            memoryDir: checkMemoryDir(),
+            memory: verification.memory,
             fresh,
             signal: abortController.signal,
             // Into the task's QA log: these checks take minutes, and a silent log looks stuck

@@ -38,6 +38,7 @@ import { readSubagentSettings } from '../claude-code/subagent-setting';
 import { readArchitectMode } from '../orchestration/architect-setting';
 import { loadDesignSystem } from '../design/design-system';
 import { projectStore } from '../../project-store';
+import { appCheckMemory } from '../verification/check-memory';
 import { projectVerification } from '../verification/verify-task';
 import { resolvePromptsDir } from '../prompts/prompt-loader';
 import { getFeatureSettings } from '../../ipc-handlers/feature-settings-helper';
@@ -45,10 +46,14 @@ import type { AgentAnswers } from '../claude-code/user-questions';
 import type { StreamEvent } from '../session/types';
 
 // ESM-compatible __dirname
-/** The project's check settings. In the main process: agents can't reach them. */
+/**
+ * The project's check settings. In the main process: agents can't reach them. With them goes
+ * this app run's memory of checks and the key that signs it, which only lives in memory.
+ */
 function readVerification(projectId: string | undefined) {
   const project = projectId ? projectStore.getProject(projectId) : undefined;
-  return project ? projectVerification(project.path, project.settings) : undefined;
+  const verification = project ? projectVerification(project.path, project.settings) : undefined;
+  return verification ? { ...verification, memory: appCheckMemory() } : undefined;
 }
 
 /** The project's design system for the agents; never blocks a session. */

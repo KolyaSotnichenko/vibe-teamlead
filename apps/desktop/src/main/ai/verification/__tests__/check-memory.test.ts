@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MAX_BASE_RESULTS, MAX_REPORTS, openCheckMemory } from '../check-memory';
+import { appCheckMemory, type CheckMemoryPlace, MAX_BASE_RESULTS, MAX_REPORTS, openCheckMemory } from '../check-memory';
 import { type VerificationReport, type VerifyTaskOptions, verifyTask } from '../verify-task';
 
 describe('what the checks already found out is not found out again', () => {
   let repo: string;
   let wt: string;
-  let memoryDir: string;
+  let memory: CheckMemoryPlace;
   let ran: string;
   const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   const commit = (cwd: string, message: string) => {
@@ -24,13 +24,13 @@ describe('what the checks already found out is not found out again', () => {
     commands: [`echo run >> "${ran}"; test -f good.txt`],
     env: {},
     lockDir: join(repo, '.git', 'verify-lock'),
-    memoryDir,
+    memory,
     ...over,
   });
 
   beforeEach(() => {
     repo = realpathSync(mkdtempSync(join(tmpdir(), 'vtl-memory-')));
-    memoryDir = join(realpathSync(mkdtempSync(join(tmpdir(), 'vtl-memory-home-'))), 'check-results');
+    memory = { dir: join(realpathSync(mkdtempSync(join(tmpdir(), 'vtl-memory-home-'))), 'check-results'), secret: 'this-run-of-the-app' };
     ran = join(repo, 'ran.log');
     git(repo, 'init', '-q', '-b', 'main');
     git(repo, 'config', 'user.email', 't@t');
@@ -150,15 +150,68 @@ describe('what the checks already found out is not found out again', () => {
   });
 
   it('without a place to keep them, every run checks', async () => {
-    await verify({ memoryDir: undefined });
-    await verify({ memoryDir: undefined });
+    await verify({ memory: undefined });
+    await verify({ memory: undefined });
     expect(runs()).toBe(2);
   });
 
   it('keeps one file per project, outside the project', async () => {
     await verify();
-    expect(readdirSync(memoryDir)).toHaveLength(1);
-    expect(memoryDir.startsWith(repo)).toBe(false);
+    expect(readdirSync(memory.dir)).toHaveLength(1);
+    expect(memory.dir.startsWith(repo)).toBe(false);
+  });
+
+  describe('only what the app itself wrote counts: the checks run the task\'s code, which could write here', () => {
+    const file = () => join(memory.dir, readdirSync(memory.dir)[0]);
+
+    it('a pass written into the file by anything else is not a pass: the checks run', async () => {
+      unlinkSync(join(wt, 'good.txt'));
+      commit(wt, 'broke it');
+      const broken = await verify();
+      expect(broken.status).toBe('regression');
+      const after = runs();
+      // The forger knows the format and the key of the entry, but not the app's secret
+      const stored = JSON.parse(readFileSync(file(), 'utf-8'));
+      stored.reports[0][1].report.status = 'passed';
+      stored.reports[0][1].report.checks[0].outcome = 'passed';
+      writeFileSync(file(), JSON.stringify(stored));
+
+      const report = await verify();
+
+      expect(runs()).toBeGreaterThan(after);
+      expect(report.status).toBe('regression');
+      expect(report.fromRunAt).toBeUndefined();
+    });
+
+    it('nor can the base be made to fail, to turn what the task broke into "says nothing"', async () => {
+      const command = `echo run >> "${ran}"; test -f good.txt`;
+      unlinkSync(join(wt, 'good.txt'));
+      commit(wt, 'broke it');
+      await verify({ commands: [command] });
+      const stored = JSON.parse(readFileSync(file(), 'utf-8'));
+      stored.base[0][1].outcome = 'failed';
+      stored.reports = [];
+      writeFileSync(file(), JSON.stringify(stored));
+
+      const report = await verify({ commands: [command] });
+
+      expect(report.checks[0]).toMatchObject({ outcome: 'failed', onBase: 'passed' });
+      expect(report.status).toBe('regression');
+    });
+
+    it('a signature made with another key is no signature: after a restart the app checks once more', async () => {
+      await verify();
+      await verify({ memory: { ...memory, secret: 'the-next-run-of-the-app' } });
+      expect(runs()).toBe(2);
+    });
+
+    it('the app makes its key once per run and keeps it out of the file', async () => {
+      const place = appCheckMemory();
+      expect(place.secret).toMatch(/^[0-9a-f]{64}$/);
+      expect(appCheckMemory().secret).toBe(place.secret);
+      await verify();
+      expect(readFileSync(file(), 'utf-8')).not.toContain(memory.secret);
+    });
   });
 });
 
@@ -172,17 +225,19 @@ describe('the store itself', () => {
     runnerConfigChanged: [],
   });
   let dir: string;
+  let place: CheckMemoryPlace;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'vtl-memory-store-'));
+    place = { dir, secret: 'this-run-of-the-app' };
   });
 
   it('keeps the newest results and drops the oldest', () => {
-    const memory = openCheckMemory(dir, '/project/.vibe-teamlead/verify.lock');
+    const memory = openCheckMemory(place, '/project/.vibe-teamlead/verify.lock');
     for (let i = 0; i < MAX_REPORTS + 5; i++) memory.keepReport(`key-${i}`, report(`commit-${i}`));
     for (let i = 0; i < MAX_BASE_RESULTS + 5; i++) memory.keepBase(`base-${i}`, { outcome: 'passed' });
 
-    const reopened = openCheckMemory(dir, '/project/.vibe-teamlead/verify.lock');
+    const reopened = openCheckMemory(place, '/project/.vibe-teamlead/verify.lock');
     expect(reopened.report('key-0')).toBeUndefined();
     expect(reopened.report(`key-${MAX_REPORTS + 4}`)?.report.commit).toBe(`commit-${MAX_REPORTS + 4}`);
     expect(reopened.base('base-0')).toBeUndefined();
@@ -190,18 +245,18 @@ describe('the store itself', () => {
   });
 
   it('projects do not see each other', () => {
-    openCheckMemory(dir, '/one/.vibe-teamlead/verify.lock').keepReport('key', report('abc'));
-    expect(openCheckMemory(dir, '/two/.vibe-teamlead/verify.lock').report('key')).toBeUndefined();
+    openCheckMemory(place, '/one/.vibe-teamlead/verify.lock').keepReport('key', report('abc'));
+    expect(openCheckMemory(place, '/two/.vibe-teamlead/verify.lock').report('key')).toBeUndefined();
   });
 
   it('a damaged file is an empty memory, and the next result replaces it', () => {
-    const memory = openCheckMemory(dir, '/project/lock');
+    const memory = openCheckMemory(place, '/project/lock');
     memory.keepReport('key', report('abc'));
     writeFileSync(join(dir, readdirSync(dir)[0]), '{ not json');
 
-    const reopened = openCheckMemory(dir, '/project/lock');
+    const reopened = openCheckMemory(place, '/project/lock');
     expect(reopened.report('key')).toBeUndefined();
     reopened.keepReport('key', report('def'));
-    expect(openCheckMemory(dir, '/project/lock').report('key')?.report.commit).toBe('def');
+    expect(openCheckMemory(place, '/project/lock').report('key')?.report.commit).toBe('def');
   });
 });

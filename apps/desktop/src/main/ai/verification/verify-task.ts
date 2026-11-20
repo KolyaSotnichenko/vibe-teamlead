@@ -20,7 +20,7 @@ import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
-import { ago, type CheckMemory, memoryKey, openCheckMemory } from './check-memory';
+import { ago, type CheckMemory, type CheckMemoryPlace, memoryKey, openCheckMemory } from './check-memory';
 import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
 import { createRunNetwork, startComposeServices } from './compose-runner';
 import { bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
@@ -87,10 +87,10 @@ export interface VerifyTaskOptions {
   /** What a run already learned about the base, kept between runs */
   baseResults?: Map<string, CheckOutcome>;
   /**
-   * Where results are kept between runs, outside the folders agents work in (checkMemoryDir()).
+   * Where results are kept between runs and the app's key that signs them (appCheckMemory()).
    * Without it every run checks.
    */
-  memoryDir?: string;
+  memory?: CheckMemoryPlace;
   /** The user asked to run the checks again: nothing kept is used, and the new result replaces it */
   fresh?: boolean;
   /** Instead of detecting from the base. For tests. */
@@ -342,7 +342,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   /** Progress for the task's log: these checks take minutes, and a silent log looks stuck */
   const say = (line: string) => onLog?.(`App checks: ${line}`);
   // The same commit, base, commands and settings give the same answer: it is not asked twice
-  const memory: CheckMemory | undefined = options.memoryDir ? openCheckMemory(options.memoryDir, options.lockDir) : undefined;
+  const memory: CheckMemory | undefined = options.memory ? openCheckMemory(options.memory, options.lockDir) : undefined;
   const settings = [options.commands ?? null, Object.entries(options.env).sort(([a], [b]) => a.localeCompare(b))];
   const reportKey = memoryKey([commit, baseCommit, settings]);
   const kept = options.fresh ? undefined : memory?.report(reportKey);

@@ -35,7 +35,7 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 - The result on the commit a task started from is kept too, for every task that starts from it.
 - A run that ran out of time, lacked a tool or had no database is never kept.
 - **Run QA again** always runs the checks anew.
-- The results are kept on your computer in `~/.vibe-teamlead/check-results`, outside the folders agents work in.
+- The results are kept while the app is open, on your computer in `~/.vibe-teamlead/check-results`, outside the folders agents work in. The app signs each one with a key that exists only in its memory, so a result written there by anything else is ignored, and after the app restarts a commit is checked once more.
 
 #### When a check can't say anything
 
