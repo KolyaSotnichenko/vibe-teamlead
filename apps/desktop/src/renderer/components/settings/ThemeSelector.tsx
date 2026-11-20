@@ -86,6 +86,7 @@ export function ThemeSelector({ settings, onSettingsChange }: ThemeSelectorProps
           {COLOR_THEMES.map((theme) => {
             const isSelected = currentColorTheme === theme.id;
             const bgColor = isDark ? theme.previewColors.darkBg : theme.previewColors.bg;
+            const textColor = isDark ? theme.previewColors.darkFg : theme.previewColors.fg;
             const accentColor = isDark
               ? (theme.previewColors.darkAccent || theme.previewColors.accent)
               : theme.previewColors.accent;
@@ -117,6 +118,13 @@ export function ThemeSelector({ settings, onSettingsChange }: ThemeSelectorProps
                       style={{ backgroundColor: bgColor }}
                       title={t('settings:theme.backgroundColor')}
                     />
+                    {textColor && (
+                      <div
+                        className="w-6 h-6 rounded-full border-2 border-background shadow-sm"
+                        style={{ backgroundColor: textColor }}
+                        title={t('settings:theme.textColor')}
+                      />
+                    )}
                     <div
                       className="w-6 h-6 rounded-full border-2 border-background shadow-sm"
                       style={{ backgroundColor: accentColor }}
@@ -127,7 +135,7 @@ export function ThemeSelector({ settings, onSettingsChange }: ThemeSelectorProps
 
                 {/* Theme info */}
                 <div className="space-y-1">
-                  <p className="font-medium text-sm text-foreground">{theme.name}</p>
+                  <p className="font-medium text-sm text-foreground">{t(`settings:theme.themes.${theme.id}.name`, { defaultValue: theme.name })}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{t(`settings:theme.themes.${theme.id}.description`, { defaultValue: theme.description })}</p>
                 </div>
               </button>

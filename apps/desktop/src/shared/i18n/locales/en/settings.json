@@ -312,10 +312,20 @@
     "appearanceModeDescription": "Choose light, dark, or system preference",
     "colorThemeSelectDescription": "Select a color palette for the interface",
     "backgroundColor": "Background color",
-    "accentColor": "Accent color",
+    "accentColor": "Signal color",
+    "textColor": "Text color",
     "themes": {
       "default": {
+        "name": "Vibe Teamlead",
         "description": "Instrument-panel palette shared with Meter: ink on ground, vermilion only as a signal"
+      },
+      "blueprint": {
+        "name": "Blueprint",
+        "description": "Drafting-paper blue: navy ink on a pale blue ground, vermilion only as a signal"
+      },
+      "sand": {
+        "name": "Sand",
+        "description": "Warm paper: brown-black ink on a sand ground, vermilion only as a signal"
       }
     }
   },

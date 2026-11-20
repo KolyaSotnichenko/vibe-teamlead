@@ -9,7 +9,8 @@ import type { SupportedLanguage } from '../constants/i18n';
 import type { StrixProviderFields, StrixProviderId } from '../constants/strix-providers';
 
 // Color theme types for multi-theme support
-export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
+/** A palette for the interface (constants/themes.ts; the colours are in renderer/styles/globals.css) */
+export type ColorTheme = 'default' | 'blueprint' | 'sand';
 
 // Developer tools preferences - IDE and terminal selection
 // Comprehensive list based on Stack Overflow Developer Survey 2024, JetBrains Survey, and market research
@@ -154,10 +155,13 @@ export type SupportedCLI =
   | 'codex'         // Codex CLI
   | 'custom';
 
+/** The theme's own colours, for its card in the selector: ground, ink and signal, in light and in dark */
 export interface ThemePreviewColors {
   bg: string;
+  fg?: string;
   accent: string;
   darkBg: string;
+  darkFg?: string;
   darkAccent?: string;
 }
 

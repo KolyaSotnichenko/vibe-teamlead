@@ -4,7 +4,7 @@ Settings save by themselves when you leave a section or close Settings (×, Esca
 
 | Section | What's there |
 |---|---|
-| **Appearance / Display / Language** | Theme (light/dark/system), scale, language (Ukrainian/English). |
+| **Appearance / Display / Language** | Mode (light/dark/system), colour theme (Vibe Teamlead, Blueprint or Sand: the same interface on another paper and ink; vermilion stays the one signal colour), scale, language (Ukrainian/English). |
 | **Developer Tools** | IDE and terminal for "open in…", YOLO mode for manual terminals. |
 | **Terminal Fonts** | Terminal fonts. |
 | **Claude** | Access mode (API key / subscription), keys, base URL, connection test. |
