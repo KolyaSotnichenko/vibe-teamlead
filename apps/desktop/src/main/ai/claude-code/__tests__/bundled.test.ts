@@ -106,6 +106,17 @@ describe('bundled tools in query options', () => {
     expect(options.hooks?.PreToolUse).toHaveLength(3); // security, questions, dev server guard
   });
 
+  it('gives Claude Code someone to answer prompts, or it leaves AskUserQuestion out of the session', async () => {
+    const { canUseTool } = buildQueryOptions(config, new AbortController(), { codegraphReady: false });
+    if (!canUseTool) throw new Error('expected canUseTool');
+    const context = { signal: new AbortController().signal, toolUseID: 't1', requestId: 'r1' } as Parameters<typeof canUseTool>[2];
+
+    // The hook answers questions; a question that reaches the callback has no answer
+    expect(await canUseTool('AskUserQuestion', { questions }, context)).toMatchObject({ behavior: 'deny', message: expect.stringMatching(/assumption/) });
+    // Nobody approves prompts in an unattended session, as before
+    expect(await canUseTool('Write', { file_path: '/work/.git/config' }, context)).toMatchObject({ behavior: 'deny' });
+  });
+
   it('lets agents with Bash stop their background commands, and tells them to', () => {
     const options = buildQueryOptions(config, new AbortController(), { codegraphReady: false });
     expect(options.tools).toContain('TaskStop');

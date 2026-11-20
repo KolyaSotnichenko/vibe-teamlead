@@ -35,7 +35,7 @@ import { buildBackgroundTaskHooks, buildDevServerGuard } from './background-task
 import { buildFormatLintHook, FORMAT_LINT_AGENTS } from './format-lint-hook';
 import { pickHostEnv, SESSION_HOST_ENV } from './host-env';
 import { FRONTEND_DESIGN_INSTRUCTIONS, FRONTEND_DESIGN_SKILL, GSAP_INSTRUCTIONS, skillsForAgent, SUPERPOWERS_INSTRUCTIONS, UX_REVIEW_INSTRUCTIONS, UX_REVIEW_SKILL } from './skills';
-import { ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
+import { answerPrompts, ASK_USER_INSTRUCTIONS, buildAskUserHook, type AskUserHandler } from './user-questions';
 import { cloudDiagramsInstructions, TERRAVISION_DISALLOWED_TOOLS, TERRAVISION_SERVER_KEY } from '../cloud-diagrams/architect-session';
 
 /** Claude Code built-in tools Vibe Teamlead agents may be given */
@@ -325,6 +325,8 @@ export function buildQueryOptions(
     // PreToolUse hooks (command allowlist + write-path containment).
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
+    // Without it Claude Code leaves AskUserQuestion out of the session (user-questions.ts)
+    canUseTool: answerPrompts,
     hooks: {
       PreToolUse: [
         ...buildSecurityHooks({ ...config.toolContext, agentType: config.agentType }),

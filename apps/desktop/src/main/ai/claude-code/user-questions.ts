@@ -11,7 +11,7 @@
  * stalling.
  */
 
-import type { HookCallbackMatcher, HookJSONOutput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, HookCallbackMatcher, HookJSONOutput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 
 import type { AgentAnswers, AgentQuestion } from '../../../shared/types/agent-questions';
 
@@ -53,6 +53,25 @@ function denyNoAnswer(): HookJSONOutput {
     },
   };
 }
+
+/**
+ * The session's answer to permission prompts.
+ *
+ * Claude Code offers AskUserQuestion to a headless session only when its host can
+ * answer prompts, which for the SDK means a `canUseTool` callback: without one the
+ * tool is left out of the session ("No such tool available") and the hook below
+ * never runs. Sessions run with bypassPermissions, so the callback is not consulted
+ * for ordinary tool calls, and the hook answers the questions before it. What still
+ * reaches it is a prompt nobody is there to approve, and that is denied, as it was
+ * when the session had no callback at all.
+ */
+export const answerPrompts: CanUseTool = async (toolName) => ({
+  behavior: 'deny',
+  message:
+    toolName === 'AskUserQuestion'
+      ? NO_ANSWER_REASON
+      : 'Nobody can approve this in an unattended session. Continue without it.',
+});
 
 export function buildAskUserHook(ask?: AskUserHandler): HookCallbackMatcher {
   return {
