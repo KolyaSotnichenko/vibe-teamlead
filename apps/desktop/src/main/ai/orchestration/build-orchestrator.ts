@@ -109,6 +109,8 @@ export interface BuildOrchestratorConfig {
   abortSignal?: AbortSignal;
   /** When the architect designs before the planner (default: complex tasks only) */
   architectMode?: ArchitectMode;
+  /** The pause before a coder session continues its subtask. For tests. */
+  autoContinueDelayMs?: number;
   /** Callback to generate the system prompt for a given agent type and phase */
   generatePrompt: (agentType: AgentType, phase: BuildPhase, context: PromptContext) => Promise<string>;
   /** Callback to run an agent session */
@@ -217,6 +219,10 @@ export interface BuildOutcome {
   error?: string;
   /** Whether the coding phase completed before failure (indicates QA-phase failure) */
   codingCompleted: boolean;
+  /** The subtasks that stopped the build: not finished after their tries */
+  stuckSubtasks?: string[];
+  /** Of those, the ones the coder itself gave up on and wrote why */
+  gaveUpSubtasks?: string[];
   /** The build stopped for the owner to look at the wireframes or the design (design-runner.ts) */
   paused?: 'wireframes' | 'design';
   /** The designer could not draw (after its retries): the owner decides (design-runner.ts) */
@@ -298,6 +304,8 @@ export class BuildOrchestrator extends EventEmitter {
   private completedPhases: CompletablePhase[] = [];
   private iteration = 0;
   private aborted = false;
+  /** The subtasks the coding phase could not get past, for the outcome */
+  private stoppedAt: { stuckSubtasks: string[]; gaveUpSubtasks: string[] } | undefined;
 
   constructor(config: BuildOrchestratorConfig) {
     super();
@@ -579,7 +587,7 @@ export class BuildOrchestrator extends EventEmitter {
       projectDir: this.config.projectDir,
       sourceSpecDir: this.config.sourceSpecDir,
       maxRetries: MAX_SUBTASK_RETRIES,
-      autoContinueDelayMs: AUTO_CONTINUE_DELAY_MS,
+      autoContinueDelayMs: this.config.autoContinueDelayMs ?? AUTO_CONTINUE_DELAY_MS,
       abortSignal: this.config.abortSignal,
       onSubtaskStart: (subtask, attempt) => {
         this.iteration++;
@@ -629,7 +637,10 @@ export class BuildOrchestrator extends EventEmitter {
     }
 
     const failure = codingFailure(iteratorResult.stuckSubtasks, iteratorResult.gaveUpSubtasks);
-    if (failure) return { success: false, error: failure };
+    if (failure) {
+      this.stoppedAt = { stuckSubtasks: [...iteratorResult.stuckSubtasks], gaveUpSubtasks: [...iteratorResult.gaveUpSubtasks] };
+      return { success: false, error: failure };
+    }
 
     // Sync after coding
     if (this.config.sourceSpecDir && this.config.syncSpecToSource) {
@@ -829,6 +840,7 @@ export class BuildOrchestrator extends EventEmitter {
       durationMs,
       error,
       codingCompleted: this.completedPhases.includes('coding'),
+      ...(!success && this.stoppedAt ? this.stoppedAt : {}),
     };
 
     if (!success && !isTerminalPhase(this.currentPhase)) {

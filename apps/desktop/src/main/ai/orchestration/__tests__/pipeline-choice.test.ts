@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ImplementationPlanSchema } from '../../schema/implementation-plan';
 import { specTaskMessage } from '../../../agent/spec-task-message';
-import { decidedPipeline, pipelineLogLine, recordPipeline, SINGLE_SESSION_SUBTASK_ID, taskTextOf, writeSingleSessionPlan } from '../pipeline-choice';
+import { decidedPipeline, escalateSingleSession, pipelineLogLine, recordPipeline, SINGLE_SESSION_SUBTASK_ID, singleSessionRanOut, taskTextOf, writeSingleSessionPlan } from '../pipeline-choice';
 
 describe("a task's pipeline in its metadata", () => {
   let specDir: string;
@@ -100,5 +100,76 @@ describe('what one session gets instead of a spec writer and a planner', () => {
     writeFileSync(join(specDir, 'spec.md'), '# Mine\n\n- AC-1 already written\n');
     await writeSingleSessionPlan(specDir, { title: 'Sea battle', description: 'A game.' });
     expect(read('spec.md')).toBe('# Mine\n\n- AC-1 already written\n');
+  });
+});
+
+describe('one session that could not finish goes on under the short pipeline', () => {
+  let specDir: string;
+  let sourceSpecDir: string;
+  const json = (dir: string, file: string) => JSON.parse(readFileSync(join(dir, file), 'utf-8'));
+
+  beforeEach(async () => {
+    specDir = mkdtempSync(join(tmpdir(), 'vtl-escalate-'));
+    sourceSpecDir = mkdtempSync(join(tmpdir(), 'vtl-escalate-source-'));
+    for (const dir of [specDir, sourceSpecDir]) await recordPipeline(dir, { kind: 'single', by: 'assessor', reason: 'assessed' });
+    await writeSingleSessionPlan(specDir, { title: 'Sea battle', description: 'A game.' });
+  });
+
+  describe('when', () => {
+    const ranOut = { success: false, stuckSubtasks: ['1-1'], gaveUpSubtasks: [] };
+
+    it('the session used up its tries without finishing', () => {
+      expect(singleSessionRanOut('single', ranOut, false)).toBe(true);
+    });
+
+    it('not when the build succeeded, was stopped, or failed for another reason', () => {
+      expect(singleSessionRanOut('single', { success: true }, false)).toBe(false);
+      expect(singleSessionRanOut('single', ranOut, true)).toBe(false);
+      expect(singleSessionRanOut('single', { success: false }, false)).toBe(false);
+    });
+
+    it('not when the coder gave up and wrote why: that waits for the owner', () => {
+      expect(singleSessionRanOut('single', { success: false, stuckSubtasks: ['1-1'], gaveUpSubtasks: ['1-1'] }, false)).toBe(false);
+    });
+
+    it('only a one-session task: the others already have a plan and a reviewer', () => {
+      expect(singleSessionRanOut('short', ranOut, false)).toBe(false);
+      expect(singleSessionRanOut('full', ranOut, false)).toBe(false);
+    });
+  });
+
+  it('records the short pipeline where the build and the window read it, and says why', async () => {
+    expect(await escalateSingleSession(specDir, sourceSpecDir)).toBe(true);
+
+    for (const dir of [specDir, sourceSpecDir]) {
+      expect(json(dir, 'task_metadata.json').pipelineDecision).toEqual({ kind: 'short', by: 'rule', reason: 'escalated' });
+    }
+  });
+
+  it("empties the plan so the build plans what is left, and keeps the task's status and the spec", async () => {
+    const planFile = join(specDir, 'implementation_plan.json');
+    writeFileSync(planFile, JSON.stringify({ ...json(specDir, 'implementation_plan.json'), status: 'in_progress', xstateState: 'coding' }));
+    const spec = readFileSync(join(specDir, 'spec.md'), 'utf-8');
+
+    await escalateSingleSession(specDir, sourceSpecDir);
+
+    expect(json(specDir, 'implementation_plan.json')).toMatchObject({ feature: 'Sea battle', status: 'in_progress', xstateState: 'coding', phases: [] });
+    expect(readFileSync(join(specDir, 'spec.md'), 'utf-8')).toBe(spec);
+  });
+
+  it("the user's own choice of one session goes on too: a task that cannot finish helps nobody", async () => {
+    await recordPipeline(specDir, { kind: 'single', by: 'user', reason: 'chosen' });
+    expect(await escalateSingleSession(specDir)).toBe(true);
+    expect((await decidedPipeline(specDir))?.kind).toBe('short');
+  });
+
+  it('does nothing to a task that is not a one-session task', async () => {
+    await recordPipeline(specDir, { kind: 'full', by: 'user', reason: 'chosen' });
+    const plan = readFileSync(join(specDir, 'implementation_plan.json'), 'utf-8');
+
+    expect(await escalateSingleSession(specDir, sourceSpecDir)).toBe(false);
+
+    expect((await decidedPipeline(specDir))?.kind).toBe('full');
+    expect(readFileSync(join(specDir, 'implementation_plan.json'), 'utf-8')).toBe(plan);
   });
 });

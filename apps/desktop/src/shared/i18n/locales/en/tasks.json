@@ -137,7 +137,9 @@
       "autoMergeLabel": "Merge automatically",
       "autoMergeHint": "A task merges by itself once QA approved it and the app's checks and Security QA are clean. Anything else, or a merge an agent changed code for, waits for you.",
       "previewHoldLabel": "UI tasks wait for my preview",
-      "previewHoldHint": "A task that changed UI files stops in Human Review instead of merging, so you can look at it in its Preview tab first. It keeps its slot until you merge it or send notes."
+      "previewHoldHint": "A task that changed UI files stops in Human Review instead of merging, so you can look at it in its Preview tab first. It keeps its slot until you merge it or send notes.",
+      "defaultPipelineLabel": "Pipeline for tasks",
+      "defaultPipelineHint": "The pipeline of every task that chooses none of its own, tasks from a spec document included. A task can still choose another in its form. It does not apply to tasks the architect designs, quick fixes from the preview and tasks the app makes to repair main."
     },
     "autoMergeFailed": "Couldn't merge \"{{title}}\" automatically",
     "mergeWaiting": {
@@ -1405,6 +1407,7 @@
   "pipeline": {
     "label": "Pipeline",
     "options": {
+      "project": "As in the project: {{name}}",
       "auto": "Auto",
       "single": "One session",
       "short": "Short",
@@ -1414,7 +1417,8 @@
       "auto": "The app decides when the task starts: tasks from a spec document and anything about sign-in, money, personal data, migrations or access run the full pipeline; for the rest the complexity assessor chooses. The task shows what was chosen and why.",
       "single": "One agent writes the acceptance criteria, the tests and the code in one go. The app still runs the project's checks and the scanners, then you review. No spec writer, designer, architect, planner or QA reviewer, so the task never merges by itself.",
       "short": "A short spec with acceptance criteria and its plan, then code, then QA, then your review. No designer and no architect.",
-      "full": "Spec, design, architecture, plan, code, QA, your review."
+      "full": "Spec, design, architecture, plan, code, QA, your review.",
+      "project": "The project's default pipeline (Settings → Project → Queue), now {{name}}."
     },
     "shown": "{{name}}: {{reason}}.",
     "reasons": {
@@ -1425,7 +1429,9 @@
       "fix_main": "the app made this task to repair main",
       "sensitive": "the task is about sign-in, money, personal data, a migration or access",
       "assessed": "chosen by the complexity assessment",
-      "not_assessed": "the task could not be assessed"
+      "not_assessed": "the task could not be assessed",
+      "project_default": "the project's default pipeline",
+      "escalated": "one session could not finish it, so a planner and a QA reviewer took over"
     }
   }
 }

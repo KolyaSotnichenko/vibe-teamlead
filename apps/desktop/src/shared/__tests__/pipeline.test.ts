@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { heavierPipeline, pipelineByRule, pipelineFromAssessment, pipelineOf, pipelineStages, raisedPipeline } from '../pipeline';
+import { ESCALATED_PIPELINE, heavierPipeline, pipelineByRule, pipelineFromAssessment, pipelineOf, pipelineStages, raisedPipeline } from '../pipeline';
 
 describe('which pipeline a task runs', () => {
   describe("the user's choice comes first", () => {
@@ -62,6 +62,47 @@ describe('which pipeline a task runs', () => {
         expect(pipelineByRule({ sourceType: 'manual' }, text)).toBeUndefined();
       },
     );
+  });
+
+  describe("the project's default pipeline", () => {
+    it('is the pipeline of every task that chose none: from a spec document or about sign-in too', () => {
+      expect(pipelineByRule({ sourceType: 'manual' }, 'Sea battle game', 'single')).toEqual({ kind: 'single', by: 'user', reason: 'project_default' });
+      expect(pipelineByRule({ sourceType: 'brief' }, 'Add sign-in with a password', 'short')).toMatchObject({ kind: 'short', reason: 'project_default' });
+      expect(pipelineByRule(undefined, 'Anything', 'full')).toMatchObject({ kind: 'full', reason: 'project_default' });
+    });
+
+    it("gives way to the task's own choice, and to a task that says Auto", () => {
+      expect(pipelineByRule({ pipeline: 'full' }, 'Sea battle game', 'single')).toMatchObject({ kind: 'full', reason: 'chosen' });
+      expect(pipelineByRule({ pipeline: 'auto' }, 'Sea battle game', 'single')).toBeUndefined();
+      expect(pipelineByRule({ pipeline: 'auto', sourceType: 'brief' }, 'Sea battle game', 'single')).toMatchObject({ kind: 'full', reason: 'brief' });
+    });
+
+    it('does not reach the tasks whose pipeline follows from what they are', () => {
+      expect(pipelineByRule({ architectureOnly: true }, 'Design the cloud', 'single')).toMatchObject({ kind: 'full', reason: 'architecture' });
+      // A repair of main merges by itself only after a QA review, which one session does not have
+      expect(pipelineByRule({ sourceType: 'base-fix' }, 'Fix main: pnpm run test fails', 'single')).toMatchObject({ kind: 'short', reason: 'fix_main' });
+      expect(pipelineByRule({ previewQuickFix: true }, 'The button is off by 2px', 'full')).toMatchObject({ kind: 'short', reason: 'quick_fix' });
+    });
+
+    it('"auto", nothing or nonsense as the default changes nothing', () => {
+      for (const projectDefault of ['auto', undefined, 'turbo']) {
+        expect(pipelineByRule({ sourceType: 'brief' }, 'Rename the button', projectDefault)).toMatchObject({ reason: 'brief' });
+        expect(pipelineByRule({}, 'Rename the button', projectDefault)).toBeUndefined();
+      }
+    });
+  });
+
+  describe('one session that could not finish', () => {
+    it('goes on under the short pipeline, whoever chose one session', () => {
+      expect(ESCALATED_PIPELINE).toEqual({ kind: 'short', by: 'rule', reason: 'escalated' });
+      expect(raisedPipeline({ kind: 'single', by: 'user', reason: 'chosen' }, ESCALATED_PIPELINE)).toBe(ESCALATED_PIPELINE);
+      expect(raisedPipeline({ kind: 'single', by: 'assessor', reason: 'assessed' }, ESCALATED_PIPELINE)).toBe(ESCALATED_PIPELINE);
+    });
+
+    it('never makes a heavier task lighter', () => {
+      const full = { kind: 'full', by: 'rule', reason: 'sensitive' } as const;
+      expect(raisedPipeline(full, ESCALATED_PIPELINE)).toBe(full);
+    });
   });
 
   describe('Auto: the assessor', () => {

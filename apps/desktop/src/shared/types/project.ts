@@ -34,6 +34,8 @@ export interface ProjectSettings {
   maxParallelTasks?: number;
   /** A task QA approved merges by itself (default: off) */
   autoMerge?: boolean;
+  /** The pipeline of every task that chooses none of its own; "auto" or nothing lets the app decide (shared/pipeline.ts) */
+  defaultPipeline?: import('../pipeline').PipelineChoice;
   /** With auto-merge on: a task that changed UI files waits in review for the owner's preview */
   previewBeforeAutoMerge?: boolean;
   /** Design system markdown, relative to the project (default: found automatically) */

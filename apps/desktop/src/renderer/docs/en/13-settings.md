@@ -14,7 +14,7 @@ Settings save by themselves when you leave a section or close Settings (×, Esca
 | **Paths / Updates / Notifications / Debug** | Paths, updates, notifications, diagnostic logs. |
 | **Telegram** | Your own Telegram bot: token, pairing, which notifications it sends, the morning digest. See the Telegram page. |
 | **Project → General** | The project's agent model, CLAUDE.md, the app's own checks (commands and variables, see "Quality and security"), notifications. |
-| **Project → Queue** | How many tasks may be under way at once (1 by default, up to 3), auto-merge, and UI tasks waiting for your preview (see "How a task goes through the pipeline"). |
+| **Project → Queue** | The pipeline for tasks that choose none of their own (Auto, One session, Short or Full), how many tasks may be under way at once (1 by default, up to 3), auto-merge, and UI tasks waiting for your preview (see "How a task goes through the pipeline"). |
 | **Project → GitHub / GitLab / Linear** | Repository, token, base branch, branch pushing, issue sync. |
 | **Setup wizard** | First run: Claude, tools, Dev Tools, privacy, memory, accounts, documentation. You can run it again (see "Setup wizard" below). |
 

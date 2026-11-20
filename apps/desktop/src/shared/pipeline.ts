@@ -8,21 +8,31 @@
  *   own checks and scanners still run (they call no model); then your review. No spec writer,
  *   designer, architect, planner or QA reviewer, so it never merges by itself.
  *
- * The user's choice in the task comes first. "Auto" first looks at what the app can check itself
- * (where the task came from, words about sign-in, money, personal data, migrations, access), and
- * only then asks the complexity assessor. Whatever decides without the user may only make a task
- * heavier, never lighter. Shared by the main process and the renderer: no imports.
+ * The user's choice in the task comes first, then the project's default pipeline (Settings →
+ * Project), which is the owner's choice for every task that has none of its own. "Auto" first
+ * looks at what the app can check itself (where the task came from, words about sign-in, money,
+ * personal data, migrations, access), and only then asks the complexity assessor. Whatever
+ * decides without the user may only make a task heavier, never lighter: a task one session
+ * could not finish goes on under the short pipeline. Shared by the main process and the
+ * renderer: no imports.
  */
 
 /** Lightest first */
 export const PIPELINE_KINDS = ['single', 'short', 'full'] as const;
 export type PipelineKind = (typeof PIPELINE_KINDS)[number];
-/** What the user picks in the task; "auto" (or nothing) lets the app decide */
+/**
+ * What the user picks, in the task or as the project's default. In a task, nothing means "as the
+ * project says" and "auto" means the app decides even where the project has a default.
+ */
 export type PipelineChoice = 'auto' | PipelineKind;
 
 export type PipelineReason =
   /** The user picked it in the task */
   | 'chosen'
+  /** The project's default pipeline (Settings → Project) */
+  | 'project_default'
+  /** One session could not finish the task, so it goes on with a plan and a QA reviewer */
+  | 'escalated'
   /** The task comes from a spec document: part of a larger product */
   | 'brief'
   /** The architect must design it */
@@ -89,23 +99,40 @@ const SENSITIVE =
 const flag = (metadata: unknown, name: string): unknown => (metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>)[name] : undefined);
 
 /**
- * What decides without a model: the user's choice, then where the task came from and what its
- * text is about. Undefined: nothing here decides, ask the assessor. `text` is the task's title
- * and description. Pure.
+ * What decides without a model, in this order:
+ * 1. the user's choice in the task;
+ * 2. what the task is: one the architect designs is full; a quick fix from the preview and a task
+ *    the app made to repair main are short (full when their text is about something sensitive).
+ *    The project's default does not reach these: the architect needs the full pipeline, a repair
+ *    of main merges by itself only after a QA review, and a quick fix is the user's own choice;
+ * 3. the project's default pipeline, unless the task says "auto";
+ * 4. Auto's rules: a task from a spec document is full, and so is one about something sensitive.
+ * Undefined: nothing here decides, ask the assessor. `text` is the task's title and description.
+ * Pure.
  */
-export function pipelineByRule(metadata: unknown, text: string): PipelineDecision | undefined {
+export function pipelineByRule(metadata: unknown, text: string, projectDefault?: unknown): PipelineDecision | undefined {
   const chosen = flag(metadata, 'pipeline');
   if (isPipelineKind(chosen)) return { kind: chosen, by: 'user', reason: 'chosen' };
 
   const rule = (kind: PipelineKind, reason: PipelineReason): PipelineDecision => ({ kind, by: 'rule', reason });
+  const sensitive = SENSITIVE.test(text);
   if (flag(metadata, 'architectureOnly') === true || flag(metadata, 'cloudArchitectureDesign') === true) return rule('full', 'architecture');
   const source = flag(metadata, 'sourceType');
+  if (flag(metadata, 'previewQuickFix') === true) return sensitive ? rule('full', 'sensitive') : rule('short', 'quick_fix');
+  if (source === 'base-fix' || source === 'deploy') return sensitive ? rule('full', 'sensitive') : rule('short', 'fix_main');
+
+  if (chosen !== 'auto' && isPipelineKind(projectDefault)) return { kind: projectDefault, by: 'user', reason: 'project_default' };
+
   if (source === 'brief') return rule('full', 'brief');
-  if (SENSITIVE.test(text)) return rule('full', 'sensitive');
-  if (flag(metadata, 'previewQuickFix') === true) return rule('short', 'quick_fix');
-  if (source === 'base-fix' || source === 'deploy') return rule('short', 'fix_main');
+  if (sensitive) return rule('full', 'sensitive');
   return undefined;
 }
+
+/**
+ * One session could not finish its task: what stands in its place. Short, because that is the
+ * next pipeline up: a planner splits what is left and a QA reviewer checks the result. Pure.
+ */
+export const ESCALATED_PIPELINE: PipelineDecision = { kind: 'short', by: 'rule', reason: 'escalated' };
 
 /**
  * The assessor's call. It may name a pipeline (complexity_assessment.json: `pipeline`,

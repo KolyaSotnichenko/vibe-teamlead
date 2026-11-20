@@ -51,7 +51,7 @@ import type {
   SerializableSessionConfig,
   WorkerTaskEventMessage } from './types';
 import type { SessionConfig, StreamEvent, SessionResult } from '../session/types';
-import { BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
+import { type BuildOutcome, BuildOrchestrator, type QAPhaseHooks } from '../orchestration/build-orchestrator';
 import { subtaskCodeContext } from '../orchestration/coder-code-context';
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
@@ -66,7 +66,7 @@ import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { projectRootFor } from '../usage/usage-ledger';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import { architectModeFor, architectureOnlyFor, complexityOverrideFor, readTaskMetadata, agenticSpecFor } from '../orchestration/quick-fix';
-import { decidedPipeline, pipelineLogLine, recordPipeline, SINGLE_SESSION_INSTRUCTIONS, taskTextOf, writeSingleSessionPlan } from '../orchestration/pipeline-choice';
+import { decidedPipeline, ESCALATED_PLANNER_INSTRUCTIONS, escalateSingleSession, pipelineLogLine, recordPipeline, SINGLE_SESSION_INSTRUCTIONS, singleSessionRanOut, taskTextOf, writeSingleSessionPlan } from '../orchestration/pipeline-choice';
 import { type PipelineDecision, pipelineByRule, pipelineFromAssessment } from '../../../shared/pipeline';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
@@ -984,162 +984,201 @@ async function runBuildOrchestrator(
   // The task's pipeline, decided when it started (shared/pipeline.ts). Only the full one has a
   // designer and an architect; a task one session builds tells its coder it is the whole team.
   const decision = await taskPipeline(session);
-  const pipeline = decision?.kind ?? 'full';
+  let pipeline = decision?.kind ?? 'full';
+  /** One session could not finish, and the task now goes on under the short pipeline */
+  let escalated = false;
+  /** What a one-session build failed with, not yet reported (see the phase-change listener) */
+  let heldFailure: string | undefined;
   if (decision && pipeline !== 'full') postLog(pipelineLogLine(decision));
-  const orchestrator = new BuildOrchestrator({
-    specDir: session.specDir,
-    projectDir: session.projectDir,
-    sourceSpecDir: session.sourceSpecDir,
-    ownerDecisionsFile: session.ownerDecisionsFile,
-    abortSignal: abortController.signal,
-    architectMode: pipeline === 'full' ? session.architectMode : 'never',
+  // One build under the pipeline as it stands now (a task one session could not finish runs twice)
+  const runBuild = async (): Promise<BuildOutcome> => {
+    const orchestrator = new BuildOrchestrator({
+      specDir: session.specDir,
+      projectDir: session.projectDir,
+      sourceSpecDir: session.sourceSpecDir,
+      ownerDecisionsFile: session.ownerDecisionsFile,
+      abortSignal: abortController.signal,
+      architectMode: pipeline === 'full' ? session.architectMode : 'never',
 
-    // What each coder session learned goes to the project's memory. With memory off, nothing is
-    // extracted: the extraction is a model call whose result would be thrown away
-    insightModel: await phaseModel(session.specDir, 'coding', session.modelId),
-    onInsights: session.agentMemory === false ? undefined : (_subtask, insights) => {
-      const log = taskLogger(postLog, logWriter, 'coding');
-      if (insights.failure) {
-        log(insightsLogLine(insights.subtask_id, insights));
+      // What each coder session learned goes to the project's memory. With memory off, nothing is
+      // extracted: the extraction is a model call whose result would be thrown away
+      insightModel: await phaseModel(session.specDir, 'coding', session.modelId),
+      onInsights: session.agentMemory === false ? undefined : (_subtask, insights) => {
+        const log = taskLogger(postLog, logWriter, 'coding');
+        if (insights.failure) {
+          log(insightsLogLine(insights.subtask_id, insights));
+          return;
+        }
+        void memoryRequest({ op: 'insights', insights }).then((reply) => log(insightsLogLine(insights.subtask_id, insights, reply)));
+      },
+
+      subtaskCodeContext: (subtask, log) =>
+        subtaskCodeContext({ bin: session.bundled?.codegraphBin, projectDir: toolContext.cwd, subtask, signal: abortController.signal, log }),
+
+      generatePrompt: async (agentType, _phase, context) => {
+        const promptName = agentType === 'coder' ? 'coder' : agentType;
+        if (agentType === 'coder' && context.subtask) {
+          const caps = projectCapabilities(session);
+          uiSkills.set(
+            context.subtask.id,
+            subtaskSkills([...(context.subtask.filesToCreate ?? []), ...(context.subtask.filesToModify ?? [])], {
+              isUiFile,
+              projectHasUi: !!(caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native),
+              animates: (projectAnimates ??= animatesWithGsap(session.projectDir, session.specDir)),
+            }),
+          );
+        }
+        let prompt = await assemblePrompt(promptName, session, context.subtask?.description, context.subtask);
+        if (agentType === 'coder' && pipeline === 'single') prompt += `\n${SINGLE_SESSION_INSTRUCTIONS}`;
+      if (agentType === 'planner' && escalated) prompt += `\n${ESCALATED_PLANNER_INSTRUCTIONS}`;
+
+        // Inject schema validation error feedback on retry so the planner knows what to fix
+        if (context.planningRetryContext) {
+          prompt += `\n\n${context.planningRetryContext}`;
+        }
+
+        return prompt;
+      },
+
+      runSession: async (runConfig) => {
+        postLog(`Running ${runConfig.agentType} session (phase=${runConfig.phase}, session=${runConfig.sessionNumber})`);
+        // The architect documents; it writes only inside the spec directory.
+        const sessionToolContext: ToolContext =
+          runConfig.agentType === 'architect'
+            ? { ...toolContext, allowedWritePaths: [runConfig.specDir] }
+            : toolContext;
+        // Build a kickoff message for the agent so it has a task to act on
+        const kickoffMessage = [buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
+          .filter(Boolean)
+          .join('\n\n');
+        return runSingleSession(
+          runConfig.agentType,
+          runConfig.phase,
+          runConfig.systemPrompt,
+          runConfig.specDir,
+          runConfig.projectDir,
+          runConfig.sessionNumber,
+          runConfig.subtaskId,
+          session,
+          sessionToolContext,
+          kickoffMessage,
+          true, // skipPhaseLogging — orchestrator manages phase start/end
+          runConfig.outputSchema,
+          runConfig.agentType === 'coder' && runConfig.subtaskId ? uiSkills.get(runConfig.subtaskId) : undefined,
+        );
+      },
+
+      runQA: (hooks) => runQualityAssurance(session, toolContext, hooks),
+
+      designStep: pipeline === 'full' ? () => runTaskDesignStep(session, toolContext) : undefined,
+    });
+
+    orchestrator.on('phase-change', (phase: ExecutionPhase, message: string) => {
+      // A one-session task that stops here may go on under the short pipeline: "failed" is said
+      // once that is settled, so the window does not show a failure that is not one, and the
+      // main process does not write the plan file while the plan is being emptied
+      if (phase === 'failed' && pipeline === 'single') {
+        heldFailure = message;
         return;
       }
-      void memoryRequest({ op: 'insights', insights }).then((reply) => log(insightsLogLine(insights.subtask_id, insights, reply)));
-    },
-
-    subtaskCodeContext: (subtask, log) =>
-      subtaskCodeContext({ bin: session.bundled?.codegraphBin, projectDir: toolContext.cwd, subtask, signal: abortController.signal, log }),
-
-    generatePrompt: async (agentType, _phase, context) => {
-      const promptName = agentType === 'coder' ? 'coder' : agentType;
-      if (agentType === 'coder' && context.subtask) {
-        const caps = projectCapabilities(session);
-        uiSkills.set(
-          context.subtask.id,
-          subtaskSkills([...(context.subtask.filesToCreate ?? []), ...(context.subtask.filesToModify ?? [])], {
-            isUiFile,
-            projectHasUi: !!(caps.is_web_frontend || caps.is_electron || caps.is_tauri || caps.is_expo || caps.is_react_native),
-            animates: (projectAnimates ??= animatesWithGsap(session.projectDir, session.specDir)),
-          }),
-        );
+      postLog(`Phase: ${phase} — ${message}`);
+      // Start the phase in the log writer at orchestrator level (not per-session)
+      const logPhase = mapExecutionPhaseToPhase(phase);
+      if (logWriter && logPhase) {
+        logWriter.startPhase(logPhase, message);
       }
-      let prompt = await assemblePrompt(promptName, session, context.subtask?.description, context.subtask);
-      if (agentType === 'coder' && pipeline === 'single') prompt += `\n${SINGLE_SESSION_INSTRUCTIONS}`;
-
-      // Inject schema validation error feedback on retry so the planner knows what to fix
-      if (context.planningRetryContext) {
-        prompt += `\n\n${context.planningRetryContext}`;
+      // Emit XState-compatible task events for phase transitions
+      // so the state machine tracks the build lifecycle correctly.
+      if (phase === 'coding') {
+        postTaskEvent('CODING_STARTED', { subtaskId: '', subtaskDescription: 'Starting coding phase' });
+      } else if (phase === 'qa_review') {
+        postTaskEvent('QA_STARTED', { iteration: 0, maxIterations: DEFAULT_QA_ITERATIONS });
+      } else if (phase === 'qa_fixing') {
+        postTaskEvent('QA_FIXING_STARTED', { iteration: 0 });
       }
+      // Emit execution-progress so the main thread can:
+      // 1. Re-point the file watcher to the worktree spec dir
+      // 2. Update the UI with phase progress
+      postMessage({
+        type: 'execution-progress',
+        taskId: config.taskId,
+        data: {
+          phase,
+          phaseProgress: 0,
+          overallProgress: 0,
+          message,
+        },
+        projectId: config.projectId,
+      });
+    });
 
-      return prompt;
-    },
+    orchestrator.on('iteration-start', (iteration: number, phase: ExecutionPhase) => {
+      postMessage({
+        type: 'execution-progress',
+        taskId: config.taskId,
+        data: {
+          phase,
+          phaseProgress: 0,
+          overallProgress: 0,
+          message: `Iteration ${iteration} (${phase})`,
+        },
+        projectId: config.projectId,
+      });
+    });
 
-    runSession: async (runConfig) => {
-      postLog(`Running ${runConfig.agentType} session (phase=${runConfig.phase}, session=${runConfig.sessionNumber})`);
-      // The architect documents; it writes only inside the spec directory.
-      const sessionToolContext: ToolContext =
-        runConfig.agentType === 'architect'
-          ? { ...toolContext, allowedWritePaths: [runConfig.specDir] }
-          : toolContext;
-      // Build a kickoff message for the agent so it has a task to act on
-      const kickoffMessage = [buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
-        .filter(Boolean)
-        .join('\n\n');
-      return runSingleSession(
-        runConfig.agentType,
-        runConfig.phase,
-        runConfig.systemPrompt,
-        runConfig.specDir,
-        runConfig.projectDir,
-        runConfig.sessionNumber,
-        runConfig.subtaskId,
-        session,
-        sessionToolContext,
-        kickoffMessage,
-        true, // skipPhaseLogging — orchestrator manages phase start/end
-        runConfig.outputSchema,
-        runConfig.agentType === 'coder' && runConfig.subtaskId ? uiSkills.get(runConfig.subtaskId) : undefined,
-      );
-    },
+    orchestrator.on('session-complete', (_result: SessionResult, phase: string) => {
+      // The coder commits after marking its subtask done: push the branch now (preview)
+      if (phase === 'coding') postSessionEnded('coder');
+      // Notify the main process that a session (subtask) completed.
+      // This triggers persistPlanPhaseSync → invalidateTasksCache so the frontend
+      // sees updated subtask statuses in the implementation plan.
+      postMessage({
+        type: 'execution-progress',
+        taskId: config.taskId,
+        data: {
+          phase: phase as ExecutionPhase,
+          phaseProgress: 0,
+          overallProgress: 0,
+          message: `Session complete (${phase})`,
+        },
+        projectId: config.projectId,
+      });
+    });
 
-    runQA: (hooks) => runQualityAssurance(session, toolContext, hooks),
+    orchestrator.on('log', (message: string) => {
+      postLog(message);
+    });
 
-    designStep: pipeline === 'full' ? () => runTaskDesignStep(session, toolContext) : undefined,
-  });
+    orchestrator.on('error', (error: Error, phase: string) => {
+      postLog(`Error in ${phase} phase: ${error.message}`);
+    });
 
-  orchestrator.on('phase-change', (phase: ExecutionPhase, message: string) => {
-    postLog(`Phase: ${phase} — ${message}`);
-    // Start the phase in the log writer at orchestrator level (not per-session)
-    const logPhase = mapExecutionPhaseToPhase(phase);
-    if (logWriter && logPhase) {
-      logWriter.startPhase(logPhase, message);
-    }
-    // Emit XState-compatible task events for phase transitions
-    // so the state machine tracks the build lifecycle correctly.
-    if (phase === 'coding') {
-      postTaskEvent('CODING_STARTED', { subtaskId: '', subtaskDescription: 'Starting coding phase' });
-    } else if (phase === 'qa_review') {
-      postTaskEvent('QA_STARTED', { iteration: 0, maxIterations: DEFAULT_QA_ITERATIONS });
-    } else if (phase === 'qa_fixing') {
-      postTaskEvent('QA_FIXING_STARTED', { iteration: 0 });
-    }
-    // Emit execution-progress so the main thread can:
-    // 1. Re-point the file watcher to the worktree spec dir
-    // 2. Update the UI with phase progress
+    return orchestrator.run();
+  };
+
+  let outcome = await runBuild();
+
+  // One session ran out of tries: the task goes on under the short pipeline, with its work kept.
+  // The plan is emptied, so this build plans what is left; its QA has a reviewer (pipeline-choice.ts).
+  if (singleSessionRanOut(pipeline, outcome, abortController.signal.aborted) && (await escalateSingleSession(session.specDir, session.sourceSpecDir))) {
+    pipeline = 'short';
+    escalated = true;
+    clearTurnLimits(session.specDir);
+    postLog(
+      `One session could not finish this task (${(outcome.stuckSubtasks ?? []).join(', ')} not finished after its tries). ` +
+        'It goes on under the short pipeline: a planner splits what is left into subtasks and a QA reviewer checks the result. The work so far is kept.',
+    );
+    outcome = await runBuild();
+  } else if (heldFailure !== undefined) {
+    // No way on: the failure stands, said now as any build says it
+    postLog(`Phase: failed — ${heldFailure}`);
     postMessage({
       type: 'execution-progress',
       taskId: config.taskId,
-      data: {
-        phase,
-        phaseProgress: 0,
-        overallProgress: 0,
-        message,
-      },
+      data: { phase: 'failed', phaseProgress: 0, overallProgress: 0, message: heldFailure },
       projectId: config.projectId,
     });
-  });
-
-  orchestrator.on('iteration-start', (iteration: number, phase: ExecutionPhase) => {
-    postMessage({
-      type: 'execution-progress',
-      taskId: config.taskId,
-      data: {
-        phase,
-        phaseProgress: 0,
-        overallProgress: 0,
-        message: `Iteration ${iteration} (${phase})`,
-      },
-      projectId: config.projectId,
-    });
-  });
-
-  orchestrator.on('session-complete', (_result: SessionResult, phase: string) => {
-    // The coder commits after marking its subtask done: push the branch now (preview)
-    if (phase === 'coding') postSessionEnded('coder');
-    // Notify the main process that a session (subtask) completed.
-    // This triggers persistPlanPhaseSync → invalidateTasksCache so the frontend
-    // sees updated subtask statuses in the implementation plan.
-    postMessage({
-      type: 'execution-progress',
-      taskId: config.taskId,
-      data: {
-        phase: phase as ExecutionPhase,
-        phaseProgress: 0,
-        overallProgress: 0,
-        message: `Session complete (${phase})`,
-      },
-      projectId: config.projectId,
-    });
-  });
-
-  orchestrator.on('log', (message: string) => {
-    postLog(message);
-  });
-
-  orchestrator.on('error', (error: Error, phase: string) => {
-    postLog(`Error in ${phase} phase: ${error.message}`);
-  });
-
-  const outcome = await orchestrator.run();
+  }
 
   if (!outcome.success) logRunFailure(postLog, logWriter, outcome.error);
 
@@ -1465,7 +1504,7 @@ async function runSpecOrchestrator(
     postLog(pipelineLogLine(stands));
     return stands;
   };
-  const byRule = pipelineByRule(taskMetadata, taskTextOf(taskDescription));
+  const byRule = pipelineByRule(taskMetadata, taskTextOf(taskDescription), session.defaultPipeline);
   let pipeline = byRule ? await decide(byRule) : undefined;
   if (pipeline?.kind === 'single') {
     await finishSpecForSingleSession(session, taskDescription, 0);

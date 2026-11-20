@@ -456,8 +456,8 @@
     },
     "queue": {
       "title": "Queue",
-      "description": "Parallel tasks, auto-merge",
-      "panelDescription": "How many tasks of this project may be under way at once. A task holds its slot until it is merged."
+      "description": "Pipeline, parallel tasks, auto-merge",
+      "panelDescription": "Which pipeline this project's tasks run, and how many of them may be under way at once. A task holds its slot until it is merged."
     },
     "claude": {
       "title": "Claude Auth",

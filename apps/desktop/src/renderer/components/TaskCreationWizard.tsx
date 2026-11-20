@@ -25,7 +25,7 @@ import { createTask, saveDraft, loadDraft, clearDraft, isDraftEmpty } from '../s
 import { useProjectStore } from '../stores/project-store';
 import { buildBranchOptions } from '../lib/branch-utils';
 import { cn } from '../lib/utils';
-import type { PipelineChoice } from '../../shared/pipeline';
+import { isPipelineKind, type PipelineChoice } from '../../shared/pipeline';
 import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile, GitBranchDetail } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import {
@@ -120,8 +120,12 @@ export function TaskCreationWizard({
   const [priority, setPriority] = useState<TaskPriority | ''>('');
   const [complexity, setComplexity] = useState<TaskComplexity | ''>('');
   const [impact, setImpact] = useState<TaskImpact | ''>('');
-  // Which pipeline the task runs: Auto unless the user picks one (shared/pipeline.ts)
-  const [pipeline, setPipeline] = useState<PipelineChoice>('auto');
+  // Which pipeline the task runs: as the project says unless the user picks one (shared/pipeline.ts)
+  const [pipeline, setPipeline] = useState<PipelineChoice | undefined>(undefined);
+  const projectPipeline = useMemo(() => {
+    const projectDefault = projects.find((project) => project.id === projectId)?.settings?.defaultPipeline;
+    return isPipelineKind(projectDefault) ? projectDefault : undefined;
+  }, [projects, projectId]);
 
   // Model configuration
   const [profileId, setProfileId] = useState<string>(resolvedProfileId);
@@ -448,7 +452,7 @@ export function TaskCreationWizard({
       if (priority) metadata.priority = priority;
       if (complexity) metadata.complexity = complexity;
       if (impact) metadata.impact = impact;
-      if (pipeline !== 'auto') metadata.pipeline = pipeline;
+      if (pipeline) metadata.pipeline = pipeline;
       if (model) metadata.model = model;
       if (thinkingLevel) metadata.thinkingLevel = thinkingLevel;
       if (phaseModels && phaseThinking) {
@@ -500,7 +504,7 @@ export function TaskCreationWizard({
     setPriority('');
     setComplexity('');
     setImpact('');
-    setPipeline('auto');
+    setPipeline(undefined);
     setProfileId(resolvedProfileId);
     setModel(selectedProfile.model);
     setThinkingLevel(selectedProfile.thinkingLevel);
@@ -691,6 +695,7 @@ export function TaskCreationWizard({
           onShowClassificationChange={setShowClassification}
           pipeline={pipeline}
           onPipelineChange={setPipeline}
+          projectPipeline={projectPipeline}
           images={images}
           onImagesChange={setImages}
           requireReviewBeforeCoding={requireReviewBeforeCoding}

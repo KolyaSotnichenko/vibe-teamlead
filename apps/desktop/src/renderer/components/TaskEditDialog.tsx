@@ -35,7 +35,7 @@ import { TaskFormFields } from './task-form/TaskFormFields';
 import { type FileReferenceData } from './task-form/useImageUpload';
 import { persistUpdateTask } from '../stores/task-store';
 import { useProjectStore } from '../stores/project-store';
-import type { PipelineChoice } from '../../shared/pipeline';
+import { isPipelineKind, type PipelineChoice } from '../../shared/pipeline';
 import type { Task, ImageAttachment, TaskCategory, TaskPriority, TaskComplexity, TaskImpact, ModelType, ThinkingLevel } from '../../shared/types';
 import {
   DEFAULT_AGENT_PROFILES,
@@ -81,6 +81,10 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     const project = projects.find(p => p.id === task.projectId);
     return project?.path;
   }, [projects, task.projectId]);
+  const projectPipeline = useMemo(() => {
+    const projectDefault = projects.find((project) => project.id === task.projectId)?.settings?.defaultPipeline;
+    return isPipelineKind(projectDefault) ? projectDefault : undefined;
+  }, [projects, task.projectId]);
 
   // Form state
   const [title, setTitle] = useState(task.title);
@@ -94,7 +98,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   const [priority, setPriority] = useState<TaskPriority | ''>(task.metadata?.priority || '');
   const [complexity, setComplexity] = useState<TaskComplexity | ''>(task.metadata?.complexity || '');
   const [impact, setImpact] = useState<TaskImpact | ''>(task.metadata?.impact || '');
-  const [pipeline, setPipeline] = useState<PipelineChoice>(task.metadata?.pipeline ?? 'auto');
+  const [pipeline, setPipeline] = useState<PipelineChoice | undefined>(task.metadata?.pipeline);
 
   // Agent profile / model configuration
   const [profileId, setProfileId] = useState<string>(() => {
@@ -151,7 +155,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       setPriority(task.metadata?.priority || '');
       setComplexity(task.metadata?.complexity || '');
       setImpact(task.metadata?.impact || '');
-      setPipeline(task.metadata?.pipeline ?? 'auto');
+      setPipeline(task.metadata?.pipeline);
 
       // Reset model configuration
       const taskModel = task.metadata?.model;
@@ -225,7 +229,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       priority !== (task.metadata?.priority || '') ||
       complexity !== (task.metadata?.complexity || '') ||
       impact !== (task.metadata?.impact || '') ||
-      pipeline !== (task.metadata?.pipeline ?? 'auto') ||
+      pipeline !== task.metadata?.pipeline ||
       model !== (task.metadata?.model || '') ||
       thinkingLevel !== (task.metadata?.thinkingLevel || '') ||
       requireReviewBeforeCoding !== (task.metadata?.requireReviewBeforeCoding ?? false) ||
@@ -248,8 +252,8 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     if (priority) metadataUpdates.priority = priority;
     if (complexity) metadataUpdates.complexity = complexity;
     if (impact) metadataUpdates.impact = impact;
-    // "auto" is written too: it takes back an earlier choice
-    if (pipeline !== (task.metadata?.pipeline ?? 'auto')) metadataUpdates.pipeline = pipeline;
+    // Nothing chosen is written too: it takes back an earlier choice
+    if (pipeline !== task.metadata?.pipeline) metadataUpdates.pipeline = pipeline;
     if (model) metadataUpdates.model = model as ModelType;
     if (thinkingLevel) metadataUpdates.thinkingLevel = thinkingLevel as ThinkingLevel;
     if (phaseModels && phaseThinking) {
@@ -339,6 +343,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
         onShowClassificationChange={setShowClassification}
         pipeline={pipeline}
         onPipelineChange={setPipeline}
+        projectPipeline={projectPipeline}
         images={images}
         onImagesChange={setImages}
         requireReviewBeforeCoding={requireReviewBeforeCoding}

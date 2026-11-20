@@ -27,7 +27,7 @@ import { ScreenshotCapture } from '../ScreenshotCapture';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { cn } from '../../lib/utils';
 import { MAX_IMAGES_PER_TASK } from '../../../shared/constants';
-import type { PipelineChoice } from '../../../shared/pipeline';
+import type { PipelineChoice, PipelineKind } from '../../../shared/pipeline';
 import type {
   TaskCategory,
   TaskPriority,
@@ -83,7 +83,9 @@ interface TaskFormFieldsProps {
 
   // Which pipeline the task runs; shown when a change handler is given
   pipeline?: PipelineChoice;
-  onPipelineChange?: (value: PipelineChoice) => void;
+  onPipelineChange?: (value: PipelineChoice | undefined) => void;
+  /** The project's default pipeline, when it has one */
+  projectPipeline?: PipelineKind;
 
   // Images
   images: ImageAttachment[];
@@ -145,6 +147,7 @@ export function TaskFormFields({
   onShowClassificationChange,
   pipeline,
   onPipelineChange,
+  projectPipeline,
   images,
   onImagesChange,
   requireReviewBeforeCoding,
@@ -491,7 +494,7 @@ export function TaskFormFields({
         />
 
         {onPipelineChange && (
-          <PipelineField value={pipeline ?? 'auto'} onChange={onPipelineChange} disabled={disabled} idPrefix={idPrefix} />
+          <PipelineField value={pipeline} onChange={onPipelineChange} projectDefault={projectPipeline} disabled={disabled} idPrefix={idPrefix} />
         )}
 
         {/* Classification Toggle */}

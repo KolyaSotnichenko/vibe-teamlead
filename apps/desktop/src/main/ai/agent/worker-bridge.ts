@@ -177,6 +177,7 @@ export class WorkerBridge extends EventEmitter {
         cloudDiagrams: config.session.cloudDiagrams !== undefined ? config.session.cloudDiagrams : (cloudDiagramsLaunch() ?? null),
         designSystem: config.session.designSystem ?? readDesignSystem(config.projectId),
         verification: config.session.verification ?? readVerification(config.projectId),
+        defaultPipeline: config.session.defaultPipeline ?? (config.projectId ? projectStore.getProject(config.projectId)?.settings?.defaultPipeline : undefined),
         design: config.session.design ?? readDesignSettings(config.projectId),
       },
       promptsDir: resolvePromptsDir(),

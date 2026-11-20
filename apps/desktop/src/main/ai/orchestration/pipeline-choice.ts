@@ -11,7 +11,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { type PipelineDecision, type PipelineKind, pipelineOf, raisedPipeline } from '../../../shared/pipeline';
+import { ESCALATED_PIPELINE, type PipelineDecision, type PipelineKind, pipelineOf, raisedPipeline } from '../../../shared/pipeline';
 import { writeFileReplacing } from '../safe-write';
 import { safeParseJson } from '../../utils/json-repair';
 
@@ -65,6 +65,8 @@ export function pipelineLogLine(decision: PipelineDecision): string {
   };
   const WHY: Record<PipelineDecision['reason'], string> = {
     chosen: 'chosen in the task',
+    project_default: "the project's default pipeline",
+    escalated: 'one session could not finish the task',
     brief: 'the task comes from a spec document',
     architecture: 'the architect designs this task',
     quick_fix: 'a quick fix from the preview',
@@ -129,6 +131,55 @@ export async function writeSingleSessionPlan(specDir: string, task: { title?: st
   ];
   await writeFileReplacing(planFile, JSON.stringify({ feature: title, workflow_type: 'simple', ...plan, phases, updated_at: new Date().toISOString() }, null, 2), 'utf-8');
 }
+
+/**
+ * Whether a task one session builds goes on under the short pipeline: the session ran out of
+ * tries without finishing (its turn limit, three times). Not when it was stopped, and not when
+ * the coder itself gave up and wrote why: more agents don't settle a question that is the
+ * owner's, so that task waits for the owner as before. Pure.
+ */
+export function singleSessionRanOut(
+  pipeline: PipelineKind,
+  outcome: { success: boolean; stuckSubtasks?: string[]; gaveUpSubtasks?: string[] },
+  cancelled: boolean,
+): boolean {
+  if (pipeline !== 'single' || outcome.success || cancelled) return false;
+  const stuck = outcome.stuckSubtasks ?? [];
+  const gaveUp = outcome.gaveUpSubtasks ?? [];
+  return stuck.length > 0 && stuck.every((id) => !gaveUp.includes(id));
+}
+
+/**
+ * Move a one-session task to the short pipeline, keeping its work: the decision is recorded
+ * (in the task's own folder and in the project's copy, which the window reads), and the plan
+ * loses its one subtask, so the build plans again from what is in the working tree. Returns
+ * false when the task is not a one-session task any more. Never throws.
+ */
+export async function escalateSingleSession(specDir: string, sourceSpecDir?: string): Promise<boolean> {
+  if ((await decidedPipeline(specDir))?.kind !== 'single') return false;
+  await recordPipeline(specDir, ESCALATED_PIPELINE);
+  if (sourceSpecDir && sourceSpecDir !== specDir) await recordPipeline(sourceSpecDir, ESCALATED_PIPELINE);
+  const planFile = join(specDir, 'implementation_plan.json');
+  const plan = (await readJson(planFile)) ?? {};
+  try {
+    await writeFileReplacing(planFile, JSON.stringify({ ...plan, phases: [], updated_at: new Date().toISOString() }, null, 2), 'utf-8');
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/** Added to the planner's prompt when it plans the rest of a task one session could not finish */
+export const ESCALATED_PLANNER_INSTRUCTIONS = `
+## This task was started by one session
+
+One agent tried to build this whole task in a single session and ran out of turns before it was done. The task goes on with a plan, coder subtasks and a QA review. You are planning **what is left**, not the task from scratch.
+
+- The working tree already holds that agent's work: commits on the task's branch, and possibly uncommitted changes. Read it (\`git log\`, \`git status\`, the changed files) before you plan. Keep what works.
+- \`spec.md\` has the request and the acceptance criteria that agent wrote. If criteria are missing or the list is empty, the first subtask writes them (\`AC-1\`, \`AC-2\`, …, each with its test level) from the request, without adding scope.
+- If there are uncommitted changes, the first subtask brings them to a committed state that passes the project's checks, or removes what is broken.
+- Split the rest into subtasks small enough for one session each. Each subtask names the criteria it covers and the failing test to write first, as in any plan.
+- Do not plan again what is already built and tested.`;
 
 /** Added to the coder's prompt when one session builds the task */
 export const SINGLE_SESSION_INSTRUCTIONS = `

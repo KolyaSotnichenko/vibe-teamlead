@@ -1,6 +1,6 @@
 /**
- * Settings → Project → Queue: how many tasks may be under way at once, and whether tasks QA
- * approved merge by themselves. Edits the project's settings; they save with the section, and
+ * Settings → Project → Queue: which pipeline the project's tasks run when they choose none,
+ * how many tasks may be under way at once, and whether tasks QA approved merge by themselves. Edits the project's settings; they save with the section, and
  * a limit out of range is refused then (`lib/queue-settings.ts`).
  */
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { DEFAULT_MAX_PARALLEL_TASKS, MAX_PARALLEL_TASKS } from '../../../shared/utils/task-slots';
 import { maxParallelError } from '../../lib/queue-settings';
+import { PipelineField } from '../task-form/PipelineField';
 import type { ProjectSettings } from '../../../shared/types';
 
 interface QueueSettingsProps {
@@ -31,6 +32,17 @@ export function QueueSettings({ settings, setSettings }: QueueSettingsProps) {
 
   return (
     <div className="space-y-6">
+      <div className="space-y-2">
+        <PipelineField
+          label={t('tasks:queue.settings.defaultPipelineLabel')}
+          value={settings.defaultPipeline}
+          // Auto is the absence of a default
+          onChange={(choice) => setSettings((prev) => ({ ...prev, defaultPipeline: choice ?? 'auto' }))}
+          idPrefix="project"
+        />
+        <p className="text-sm text-muted-foreground">{t('tasks:queue.settings.defaultPipelineHint')}</p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="maxParallel">{t('tasks:queue.settings.maxParallelLabel')}</Label>
         <Input

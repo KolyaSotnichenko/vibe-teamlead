@@ -43,6 +43,18 @@ describe('QueueSettings', () => {
     expect(preview).toBeChecked();
   });
 
+  it("shows the project's pipeline for tasks: Auto when none is saved, the saved one otherwise", () => {
+    show();
+    expect(screen.getByText('tasks:queue.settings.defaultPipelineLabel')).toBeInTheDocument();
+    expect(screen.getByText('tasks:queue.settings.defaultPipelineHint')).toBeInTheDocument();
+    // The line under the field says what the shown pipeline runs
+    expect(screen.getByText('pipeline.optionHelp.auto')).toBeInTheDocument();
+    cleanup();
+    show({ defaultPipeline: 'single' });
+    expect(screen.getByText('pipeline.optionHelp.single')).toBeInTheDocument();
+    expect(screen.queryByText('pipeline.optionHelp.auto')).not.toBeInTheDocument();
+  });
+
   it('warns about conflicts only above one task', () => {
     const { input, latest } = show();
     expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
