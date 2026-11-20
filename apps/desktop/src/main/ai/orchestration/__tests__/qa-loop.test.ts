@@ -1348,6 +1348,24 @@ describe('QALoop', () => {
         expect((state.plan.qa_iteration_history as unknown[]).length).toBeGreaterThan(3);
       });
 
+      it('Run QA again really runs the checks once, then a result may be reused; an ordinary run may reuse from the start', async () => {
+        const asked: boolean[] = [];
+        const runVerification = async ({ fresh }: { fresh: boolean }) => {
+          asked.push(fresh);
+          return asked.length === 1 ? broken() : report();
+        };
+
+        await new QALoop(makeConfig({ runSession: approvingReviewer().runSession, runVerification: runVerification as QALoopConfig['runVerification'] })).run();
+        expect(asked).toEqual([false, false]);
+
+        asked.length = 0;
+        const { runSession } = approvingReviewer();
+        const read = mockReadFile.getMockImplementation()!;
+        mockReadFile.mockImplementation((p: string) => (p.endsWith('QA_RERUN') ? Promise.resolve('x') : read(p)));
+        await new QALoop(makeConfig({ runSession, runVerification: runVerification as QALoopConfig['runVerification'] })).run();
+        expect(asked).toEqual([true, false]);
+      });
+
       it('without Run QA again, a check earlier runs could not clear is handed over at once', async () => {
         const round = (n: number) => ({ iteration: n, status: 'rejected', durationMs: 1, timestamp: 't', issues: [], gate_keys: ['check:npm test'] });
         const { runSession } = approvingReviewer({ qa_iteration_history: [round(1), round(2)] });

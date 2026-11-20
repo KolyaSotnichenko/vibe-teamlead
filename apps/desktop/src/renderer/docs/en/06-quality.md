@@ -29,6 +29,14 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 - A changed `test` or `typecheck` script blocks approval.
 - A check or install that runs out of time gets a second try before it counts.
 
+#### When a check isn't run again
+
+- A commit that was already checked, with the same commands and settings, isn't checked a second time. QA rounds and restarts on a commit that hasn't moved use the result of the first run, and the log says when it ran. So does the check before a merge that brings nothing new into the task.
+- The result on the commit a task started from is kept too, for every task that starts from it.
+- A run that ran out of time, lacked a tool or had no database is never kept.
+- **Run QA again** always runs the checks anew.
+- The results are kept on your computer in `~/.vibe-teamlead/check-results`, outside the folders agents work in.
+
 #### When a check can't say anything
 
 - If a check can't say anything (it fails on the base too, its tool isn't installed), the task isn't blocked and the log says it wasn't verified.

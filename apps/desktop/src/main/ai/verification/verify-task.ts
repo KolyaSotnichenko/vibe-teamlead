@@ -20,6 +20,7 @@ import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun } from '../merge/git-merge';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
+import { ago, type CheckMemory, memoryKey, openCheckMemory } from './check-memory';
 import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
 import { createRunNetwork, startComposeServices } from './compose-runner';
 import { bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
@@ -67,6 +68,11 @@ export interface VerificationReport {
    * and database came from the task itself. A pass shows less than usual; a failure is the task's.
    */
   source?: 'task';
+  /**
+   * Set when the checks were not run this time: this is the result of an earlier run (at this
+   * time) on the same commit, base, commands and settings (check-memory.ts).
+   */
+  fromRunAt?: string;
 }
 
 export interface VerifyTaskOptions {
@@ -80,6 +86,13 @@ export interface VerifyTaskOptions {
   lockDir: string;
   /** What a run already learned about the base, kept between runs */
   baseResults?: Map<string, CheckOutcome>;
+  /**
+   * Where results are kept between runs, outside the folders agents work in (checkMemoryDir()).
+   * Without it every run checks.
+   */
+  memoryDir?: string;
+  /** The user asked to run the checks again: nothing kept is used, and the new result replaces it */
+  fresh?: boolean;
   /** Instead of detecting from the base. For tests. */
   detected?: DetectedChecks;
   checkTimeoutMs?: number;
@@ -279,6 +292,15 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
 }
 
 /** A duration for the log: 4.2s, 1m16s */
+/**
+ * Whether running the same checks again could only say the same: every check ran to an exit
+ * code, with the services it needs, and so did the base where it was asked. Pure.
+ */
+function isAnAnswer(report: VerificationReport): boolean {
+  const ran = (outcome: CheckOutcome | undefined) => outcome === undefined || outcome === 'passed' || outcome === 'failed';
+  return report.services?.status !== 'unavailable' && report.checks.every((check) => ran(check.outcome) && ran(check.onBase));
+}
+
 function took(ms: number): string {
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s`;
@@ -317,6 +339,18 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const runnerConfigChanged = (await run(['-c', 'core.quotepath=off', 'diff', '--name-only', '-z', baseCommit, commit])).raw.split('\0').filter((file) => RUNNER_CONFIG.test(file)).sort();
   if (!checks.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
 
+  /** Progress for the task's log: these checks take minutes, and a silent log looks stuck */
+  const say = (line: string) => onLog?.(`App checks: ${line}`);
+  // The same commit, base, commands and settings give the same answer: it is not asked twice
+  const memory: CheckMemory | undefined = options.memoryDir ? openCheckMemory(options.memoryDir, options.lockDir) : undefined;
+  const settings = [options.commands ?? null, Object.entries(options.env).sort(([a], [b]) => a.localeCompare(b))];
+  const reportKey = memoryKey([commit, baseCommit, settings]);
+  const kept = options.fresh ? undefined : memory?.report(reportKey);
+  if (kept) {
+    say(`commit ${commit.slice(0, 7)} was already checked ${ago(kept.at)}, with the same commands and settings: not running them again`);
+    return { ...kept.report, fromRunAt: kept.at };
+  }
+
   const docker = options.docker ?? hostDocker(hostEnv, signal);
   const serviceLabel = basename(dirname(dirname(options.lockDir))).replace(/[^\w.-]/g, '_') || 'project';
   let services: VerificationReport['services'];
@@ -339,8 +373,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     const outcome: CheckOutcome = result.timedOut ? 'timed_out' : result.code === 0 ? 'passed' : result.code === 127 || result.code === 126 ? 'unavailable' : 'failed';
     return { outcome, exitCode: result.code, tail };
   };
-  /** Progress for the task's log: these checks take minutes, and a silent log looks stuck */
-  const say = (line: string) => onLog?.(`App checks: ${line}`);
+  /** Whether the last copy had to do without a database or service it needs: its failures may be only that */
+  let copyWithoutServices = false;
   /** A clean copy of a commit, gone afterwards */
   const inCopy = async <T>(at: string, work: (cwd: string) => Promise<T>): Promise<T> => {
     const parent = mkdtempSync(join(tmpdir(), 'vibe-teamlead-verify-'));
@@ -368,6 +402,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       if (compose.status === 'unavailable' && compose.reason && !compose.failed.length) say(`no ${composeNames}: ${compose.reason}`);
       try {
         const statuses = [started.status, compose.status].filter((status) => status !== 'none');
+        copyWithoutServices = statuses.includes('unavailable');
         if (statuses.length) {
           const reason = [started.reason, compose.status === 'unavailable' ? compose.reason : undefined].filter(Boolean).join(' ');
           services ??= {
@@ -446,6 +481,17 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   // Exit codes come from the task's code, so "tool missing" or a timeout proves nothing by itself: only the base can tell
   const failed = results.filter((result) => result.outcome !== 'passed');
   const baseTails = new Map<string, string>();
+  const baseMemoryKey = (command: string) => memoryKey([baseCommit, command, settings]);
+  // What an earlier run, of this task or another, found on this base commit
+  if (memory && !options.fresh && !source) {
+    for (const result of failed) {
+      const key = `${baseCommit}\0${result.command}`;
+      const known = baseResults.has(key) ? undefined : memory.base(baseMemoryKey(result.command));
+      if (!known) continue;
+      baseResults.set(key, known.outcome);
+      if (known.tail !== undefined) baseTails.set(key, known.tail);
+    }
+  }
   // With the task's own commands there is nothing on the base to compare with
   const unknown = source ? [] : failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
   if (unknown.length) {
@@ -468,6 +514,14 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         }
       }
     });
+    // Kept only when it is an answer: not a run out of time, a missing tool or a missing database
+    if (memory && !copyWithoutServices) {
+      for (const result of unknown) {
+        const key = `${baseCommit}\0${result.command}`;
+        const outcome = baseResults.get(key);
+        if (outcome === 'passed' || outcome === 'failed') memory.keepBase(baseMemoryKey(result.command), { outcome, ...(baseTails.has(key) ? { tail: baseTails.get(key) } : {}) });
+      }
+    }
   }
   for (const result of failed) {
     const key = `${baseCommit}\0${result.command}`;
@@ -477,7 +531,9 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
 
   const broke = failed.some((result) => (source ? blocksOnItsOwn(result) : result.onBase === 'passed'));
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
-  return { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
+  const report: VerificationReport = { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
+  if (memory && isAnAnswer(report)) memory.keepReport(reportKey, report);
+  return report;
 }
 
 /**
@@ -525,7 +581,10 @@ export function describeVerification(report: VerificationReport): string {
   const origin = report.source === 'task'
     ? ['The base branch has no checks yet, so these commands come from this task itself: a pass shows less than usual (the task chose what checks it), a failure is the task\'s own.']
     : [];
-  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...origin, ...databases, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
+  const earlier = report.fromRunAt
+    ? [`These are the results of its run at ${report.fromRunAt}: the commit, its base, the commands and the settings are the same, so it did not run them again.`]
+    : [];
+  return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...earlier, ...origin, ...databases, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
 }
 
 /** What must be fixed before a review can pass. Keys ignore the wording, to compare rounds. Pure. */

@@ -196,8 +196,9 @@ export interface QALoopConfig {
   /**
    * The app runs the project's checks itself on a clean copy. What the task broke
    * blocks like a gate finding, and the reviewer gets the rest as facts.
+   * `fresh`: the user asked to run QA again, so a result kept from an earlier run is not used.
    */
-  runVerification?: () => Promise<VerificationReport>;
+  runVerification?: (options: { fresh: boolean }) => Promise<VerificationReport>;
   /**
    * Static design check on the lines the task added to UI files. In 'block'
    * mode its findings are QA issues like gate findings; in 'warn' mode they are
@@ -405,6 +406,8 @@ export class QALoop extends EventEmitter {
   private lastReviewerApproved = false;
   private lastBlocking: QaOutcomeInfo['blocking'] = [];
   private lastVerification: string | undefined;
+  /** "Run QA again": this run's first checks really run, whatever an earlier run found */
+  private freshChecks = false;
   /** Project files the reviewer changed during this run (see runReviewerSession) */
   private reviewerChangedFiles: string[] = [];
   /** A snapshot failed, so whether the reviewer changed files is not known */
@@ -459,6 +462,7 @@ export class QALoop extends EventEmitter {
 
       // "Run QA again": straight to a fresh review, whatever earlier runs left behind
       const rerun = await this.consumeRerunRequest();
+      this.freshChecks = rerun;
 
       // Check if already approved (unless human feedback pending)
       const hasHumanFeedback = !rerun && (await this.hasHumanFeedback());
@@ -781,7 +785,9 @@ export class QALoop extends EventEmitter {
     this.lastVerification = undefined;
     if (!this.config.runVerification) return [];
     try {
-      const report = await this.config.runVerification();
+      const fresh = this.freshChecks;
+      this.freshChecks = false;
+      const report = await this.config.runVerification({ fresh });
       this.lastVerification = describeVerification(report);
       this.emitTyped('log', this.lastVerification);
       await writeFileReplacing(join(this.config.specDir, 'verification.json'), JSON.stringify(verificationSummary(report), null, 2), 'utf-8');

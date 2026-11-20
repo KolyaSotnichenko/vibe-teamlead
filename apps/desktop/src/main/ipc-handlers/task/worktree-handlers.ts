@@ -11,6 +11,7 @@ import { projectStore } from '../../project-store';
 
 import { MergeOrchestrator } from '../../ai/merge/orchestrator';
 import { runMergeIntegrator } from '../../ai/runners/merge-integrator';
+import { checkMemoryDir } from '../../ai/verification/check-memory';
 import { describeVerification, projectVerification, verifyTask } from '../../ai/verification/verify-task';
 import { createPR } from '../../ai/runners/github/pr-creator';
 import type { ModelShorthand, ThinkingLevel } from '../../ai/config/types';
@@ -750,7 +751,8 @@ export async function mergeTaskWorktree(
         ? async () => {
             if (!worktreePath) return { ok: true, summary: '' };
             emitProgress('validating', 70, 'The app is running the checks itself');
-            const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, git: git.git, hostEnv: git.env });
+            // The commit QA approved, when the merge brought nothing new into the task, is not checked twice
+            const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, memoryDir: checkMemoryDir(), git: git.git, hostEnv: git.env });
             const summary = describeVerification(report);
             if (report.status === 'regression') appEvents.emit('verification-regression', { taskId, projectId: project.id });
             return { ok: report.status !== 'regression', summary };
