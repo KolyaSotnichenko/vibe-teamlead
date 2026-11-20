@@ -2,6 +2,14 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.61 - 2026-11-20
+
+- **Agents start with the code they work on.** Before a coder, planner, architect, designer or QA session the app looks up the files that work names and puts them in the agent's first message: a small file to change whole, a large one as CodeGraph's map of its symbols with line numbers and the files that use it, so the agent reads the lines it needs instead of the whole file. Before, the coder got parts of its files with gaps and read more than half of them again, and agents asked CodeGraph themselves in fewer than a third of their sessions. The task log says what each session was given ("Code context for …").
+- The line that ends each session in the task log says how often the agent itself asked CodeGraph.
+- A test run that an agent pipes through `tail` or `head` gets the app's short version instead: the exit code, the failing lines, the last lines, and the whole output in a log. The pipe hid the failures, and agents then ran the same suite again a quarter of the time. `pnpm vitest run` and `pnpm --filter web exec …` are now recognised as test runs too.
+- The sidebar no longer repeats the status bar. Under the teamlead it shows one thing: an agent's question, while one is waiting. The counts of running, queued and ready-for-review tasks are in the status bar, which now has the last one too. The project's name is on its tab only.
+- **Refresh** on the board is an icon next to the token counter instead of a row of its own above the columns.
+
 ## 2.0.0-beta.60 - 2026-11-20
 
 - **Three pipelines.** A task runs **Full** (spec, design, architecture, plan, code, QA, review), **Short** (a quick spec with the plan, code, QA, review) or **One session** (one coder writes the acceptance criteria, tests and code; the gates and app checks still run, and the task waits for you to merge). Choose it in the task form, or leave **Auto**: tasks from a spec document, ones the architect designs and ones about sign-in, money, personal data, migrations or access are always Full; for the rest the complexity assessor decides and says why. Settings → Project → Queue sets the project's default. The task window and card show only the stages of the task's pipeline.
