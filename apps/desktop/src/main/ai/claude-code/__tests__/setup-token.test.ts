@@ -1,40 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SETUP_TOKEN_DROPPED_ENV, isSetupTokenLaunch, setupTokenCommand, setupTokenEnv } from '../setup-token';
-
-describe('setupTokenCommand', () => {
-  it('macOS: quotes the bundled binary for the POSIX shell', () => {
-    expect(setupTokenCommand('/Applications/Vibe Teamlead.app/Contents/Resources/claude-code/claude', 'darwin', '/bin/zsh')).toBe(
-      "'/Applications/Vibe Teamlead.app/Contents/Resources/claude-code/claude' setup-token"
-    );
-  });
-
-  it("macOS: a quote in the path can't break out of the quoting", () => {
-    expect(setupTokenCommand("/Users/o'neil/claude", 'darwin', '/bin/bash')).toBe("'/Users/o'\\''neil/claude' setup-token");
-  });
-
-  const winBinary = 'D:\\Vibe Teamlead\\resources\\claude-code\\claude.exe';
-
-  it('Windows cmd.exe: a double-quoted path on any drive, spaces included', () => {
-    expect(setupTokenCommand(winBinary, 'win32', 'C:\\Windows\\System32\\cmd.exe')).toBe(`"${winBinary}" setup-token`);
-  });
-
-  it('Windows PowerShell 5.1 and 7: the call operator with a single-quoted path', () => {
-    expect(setupTokenCommand(winBinary, 'win32', 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
-      `& '${winBinary}' setup-token`
-    );
-    expect(setupTokenCommand("D:\\O'Neil\\claude.exe", 'win32', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBe(
-      "& 'D:\\O''Neil\\claude.exe' setup-token"
-    );
-  });
-
-  it('Windows Git Bash: POSIX quoting', () => {
-    expect(setupTokenCommand(winBinary, 'win32', 'C:\\Program Files\\Git\\bin\\bash.exe')).toBe(`'${winBinary}' setup-token`);
-  });
-
-  it('drops line breaks, which would end the command early', () => {
-    expect(setupTokenCommand('/a\nrm -rf ~/claude', 'darwin', '/bin/zsh')).toBe("'/arm -rf ~/claude' setup-token");
-  });
-});
+import { SETUP_TOKEN_DROPPED_ENV, isSetupTokenLaunch, setupTokenEnv } from '../setup-token';
 
 describe('setupTokenEnv', () => {
   it("keeps the app's credentials and Claude Code's nesting guard out, and uses the app's config dir", () => {

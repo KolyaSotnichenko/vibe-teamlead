@@ -15,10 +15,10 @@ import type {
   WindowGetter,
   TerminalOperationResult
 } from './types';
-import { getPlatformKey, isWindows } from '../platform';
+import { isWindows } from '../platform';
 import { resolveBundledTools } from '../ai/claude-code/bundled-tools';
 import { defaultClaudeConfigDir } from '../ai/claude-code/runner';
-import { isSetupTokenLaunch, setupTokenCommand, setupTokenEnv } from '../ai/claude-code/setup-token';
+import { isSetupTokenLaunch, setupTokenEnv } from '../ai/claude-code/setup-token';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
 import { safeSendToRenderer } from '../ipc-handlers/utils';
 import { getClaudeCodeEnv } from '../claude-code-settings';
@@ -91,15 +91,15 @@ export async function createTerminal(
       effectiveCwd = projectPath || os.homedir();
     }
 
-    const { pty: ptyProcess, shellType, shell } = PtyManager.spawnPtyProcess(
+    const { pty: ptyProcess, shellType } = PtyManager.spawnPtyProcess(
       effectiveCwd || os.homedir(),
       cols,
       rows,
       mergedEnv,
-      setupTokenBinary ? (env) => setupTokenEnv(env, defaultClaudeConfigDir()) : undefined
+      setupTokenBinary ? (env) => setupTokenEnv(env, defaultClaudeConfigDir()) : undefined,
+      // The binary itself is the terminal: nothing is typed into a shell, so no quoting per shell (cmd, PowerShell, WSL)
+      setupTokenBinary ? { file: setupTokenBinary, args: ['setup-token'] } : undefined
     );
-    // The shell reads typed-ahead input once it starts; the token stays in the terminal
-    if (setupTokenBinary) ptyProcess.write(`${setupTokenCommand(setupTokenBinary, getPlatformKey(), shell)}\r`);
 
     debugLog('[TerminalLifecycle] PTY process spawned, pid:', ptyProcess.pid, 'shellType:', shellType);
 

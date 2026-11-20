@@ -61,6 +61,10 @@ export function useTerminalEvents({
         }
         onExitRef.current?.(exitCode);
 
+        // "Get a token": setup-token is the terminal's program and ends right after printing the
+        // token, which the owner still has to copy; the owner closes this terminal
+        if (terminal?.launch) return;
+
         // Auto-remove exited terminals from store after a short delay
         // This prevents them from counting toward the max terminal limit
         // and ensures they don't get persisted and restored on next launch

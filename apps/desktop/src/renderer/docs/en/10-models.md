@@ -10,7 +10,7 @@ The two keys are stored separately, encrypted by your operating system (the Keyc
 
 ### Getting a subscription token
 
-In Claude subscription mode, **Get a token** opens a terminal in the open project that runs `setup-token` with the Claude Code built into the app, so you don't need to know where the app is installed. Sign in in the browser, then copy the token the terminal prints into the token field. The app never reads the token from the terminal. A project must be open (terminals live in a project), and the project's terminal limit applies.
+In Claude subscription mode, **Get a token** opens a terminal in the open project that runs `setup-token` with the Claude Code built into the app, so you don't need to know where the app is installed. Sign in in the browser, then copy the token the terminal prints into the token field. The terminal stays open after `setup-token` ends, until you close it; it is never saved, so the token isn't kept on disk or shown again after a restart. The app never reads the token from the terminal. A project must be open (terminals live in a project), and the project's terminal limit applies.
 
 Without the button, run the built-in Claude Code yourself:
 - macOS (Terminal): `"/Applications/Vibe Teamlead.app/Contents/Resources/claude-code/claude" setup-token`

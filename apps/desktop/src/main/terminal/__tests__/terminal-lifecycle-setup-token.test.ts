@@ -26,12 +26,14 @@ describe('createTerminal with the setup-token launch', () => {
     tools.claudeCodeExecutable = BINARY;
   });
 
-  it('types the bundled binary with setup-token into the new shell, with credentials kept out', async () => {
+  // Typed into the user's shell, the path needed quoting per shell and broke under WSL's bash
+  it('runs the bundled binary with setup-token as the terminal itself, with credentials kept out', async () => {
     const result = await createTerminal({ id: 't1', cwd: '/p', projectPath: '/p', launch: 'claude-setup-token' }, new Map(), () => null, vi.fn());
     expect(result.success).toBe(true);
-    expect(write).toHaveBeenCalledWith(`'${BINARY}' setup-token\r`);
+    expect(write).not.toHaveBeenCalled();
 
-    const [, , , extraEnv, transformEnv] = spawnPtyProcess.mock.calls[0];
+    const [, , , extraEnv, transformEnv, command] = spawnPtyProcess.mock.calls[0];
+    expect(command).toEqual({ file: BINARY, args: ['setup-token'] });
     // Settings-file env (which could carry a gateway or a key) is not used for this terminal
     expect(extraEnv).toEqual({});
     const env = transformEnv({ PATH: '/bin', ANTHROPIC_API_KEY: 'k', CLAUDE_CODE_OAUTH_TOKEN: 'o' });
@@ -59,7 +61,8 @@ describe('createTerminal with the setup-token launch', () => {
   it('a plain terminal types nothing and keeps the settings env', async () => {
     await createTerminal({ id: 't3', cwd: '/p' }, new Map(), () => null, vi.fn());
     expect(write).not.toHaveBeenCalled();
-    const [, , , extraEnv, transformEnv] = spawnPtyProcess.mock.calls[0];
+    const [, , , extraEnv, transformEnv, command] = spawnPtyProcess.mock.calls[0];
+    expect(command).toBeUndefined();
     expect(extraEnv).toEqual({ ANTHROPIC_BASE_URL: 'https://from-settings', FOO: 'bar' });
     expect(transformEnv).toBeUndefined();
   });

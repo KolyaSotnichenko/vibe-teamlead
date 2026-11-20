@@ -150,7 +150,9 @@ export function spawnPtyProcess(
   rows: number,
   extraEnv?: Record<string, string>,
   /** Last word on the environment (e.g. drop credentials for `claude setup-token`) */
-  transformEnv?: (env: Record<string, string | undefined>) => Record<string, string>
+  transformEnv?: (env: Record<string, string | undefined>) => Record<string, string>,
+  /** Run this program as the terminal instead of the user's shell (no quoting, no shell to type into) */
+  command?: { file: string; args: string[] }
 ): SpawnPtyResult {
   // Read user's preferred terminal setting
   const settings = readSettingsFile();
@@ -191,7 +193,7 @@ export function spawnPtyProcess(
     PROMPT_EOL_MARK: '',
   };
 
-  const ptyProcess = pty.spawn(shell, shellArgs, {
+  const ptyProcess = pty.spawn(command?.file ?? shell, command?.args ?? shellArgs, {
     name: 'xterm-256color',
     cols,
     rows,
