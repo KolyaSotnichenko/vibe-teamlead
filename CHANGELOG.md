@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.58 - 2026-11-20
+
+- Cheaper designs: the designer writes the styles a task's pages share once, in one `styles.css` per folder (design system tokens, app shell, components), instead of repeating them in every page, and changes its files with small edits instead of rewriting them. In one project half of what the designer wrote was the same CSS in every page, and the designer was 62% of the project's model cost. Screens in the project's design library keep their styles inside them, so a later task never changes how an earlier screen looks.
+
 ## 2.0.0-beta.57 - 2026-11-19
 
 - Secrets check: a key already removed from the code but still in an earlier commit of the task no longer blocks QA forever (the fixer may not rewrite history, so running QA again changed nothing). It is listed as a note to rotate the key, and the task then waits for you to merge instead of merging by itself.
