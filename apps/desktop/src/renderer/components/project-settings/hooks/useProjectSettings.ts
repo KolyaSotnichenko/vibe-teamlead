@@ -166,10 +166,10 @@ export function useProjectSettings(
             // Update the shared store so other components (like Sidebar) can react
             setProjectEnvConfig(project.id, result.data);
           } else {
-            setEnvError(result.error || 'Failed to load environment config');
+            setEnvError(result.error || i18n.t('settings:autosave.envLoad'));
           }
         } catch (err) {
-          setEnvError(err instanceof Error ? err.message : 'Unknown error');
+          setEnvError(err instanceof Error ? err.message : i18n.t('settings:autosave.unknown'));
         } finally {
           setIsLoadingEnv(false);
         }
@@ -282,7 +282,7 @@ export function useProjectSettings(
         setError(result?.error || 'Failed to initialize');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : i18n.t('settings:autosave.unknown'));
     } finally {
       setIsUpdating(false);
     }
@@ -320,14 +320,14 @@ export function useProjectSettings(
       if (saveSettingsToo) {
         const saved = project.settings;
         const success = await updateProjectSettings(project.id, settings);
-        if (!success) return fail('Failed to save settings');
+        if (!success) return fail(i18n.t('settings:autosave.notWritten'));
         await queueSettingsSaved(project.id, saved, settings);
       }
 
       if (saveEnvToo && committedEnvConfigRef.current) {
         const pending = committedEnvConfigRef.current;
         const envResult = await window.electronAPI.updateProjectEnv(project.id, pending);
-        if (!envResult.success) return fail(envResult.error || 'Failed to save environment config');
+        if (!envResult.success) return fail(envResult.error || i18n.t('settings:autosave.envSave'));
         setEnvError(null);
         setEnvConfig(pending);
         setProjectEnvConfig(project.id, pending);
@@ -336,7 +336,7 @@ export function useProjectSettings(
       onClose?.();
       return { ok: true, error: null };
     } catch (err) {
-      return fail(err instanceof Error ? err.message : 'Unknown error');
+      return fail(err instanceof Error ? err.message : i18n.t('settings:autosave.unknown'));
     } finally {
       setIsSaving(false);
     }
@@ -359,14 +359,14 @@ export function useProjectSettings(
       const result = await window.electronAPI.updateProjectEnv(project.id, newConfig);
       if (!result.success) {
         console.error('[useProjectSettings] Failed to auto-save env config:', result.error);
-        setEnvError(result.error || 'Failed to save environment config');
+        setEnvError(result.error || i18n.t('settings:autosave.envSave'));
         // Note: We don't rollback the ref here because another concurrent call may have
         // already updated it. The error is shown to the user who can retry.
         return;
       }
     } catch (err) {
       console.error('[useProjectSettings] Error auto-saving env config:', err);
-      setEnvError(err instanceof Error ? err.message : 'Failed to save environment config');
+      setEnvError(err instanceof Error ? err.message : i18n.t('settings:autosave.envSave'));
       // Note: We don't rollback the ref here for the same reason as above.
       return;
     }

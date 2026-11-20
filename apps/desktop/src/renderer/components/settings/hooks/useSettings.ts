@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSettingsStore, saveSettings as saveSettingsToStore, loadSettings as loadSettingsFromStore } from '../../../stores/settings-store';
 import type { AppSettings } from '../../../../shared/types';
+import i18n from '../../../../shared/i18n';
 import { UI_SCALE_DEFAULT } from '../../../../shared/constants';
 
 type SettingsKey = keyof AppSettings;
@@ -121,10 +122,10 @@ export function useSettings() {
         applyTheme(settingsRef.current.theme);
         return true;
       }
-      setError('Failed to save settings');
+      setError(i18n.t('settings:autosave.notWritten'));
       return false;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : i18n.t('settings:autosave.unknown'));
       return false;
     } finally {
       setIsSaving(false);

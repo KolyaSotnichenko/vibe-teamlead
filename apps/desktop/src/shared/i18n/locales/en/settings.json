@@ -418,6 +418,10 @@
     "saving": "Saving…",
     "saved": "Saved",
     "failed": "Couldn't save the settings: {{error}}",
+    "notWritten": "the app couldn't write them",
+    "unknown": "something went wrong",
+    "envLoad": "Couldn't load the environment settings.",
+    "envSave": "Couldn't save the environment settings.",
     "closeAgainToDiscard": "Close Settings again to try once more; if it fails again, the changes that weren't saved are discarded."
   },
   "projectSections": {

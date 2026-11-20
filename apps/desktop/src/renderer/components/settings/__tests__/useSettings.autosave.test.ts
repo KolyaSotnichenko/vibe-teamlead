@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore } from '../../../stores/settings-store';
 import { useSettings } from '../hooks/useSettings';
 import type { AppSettings } from '../../../../shared/types';
+import i18n from '../../../../shared/i18n';
 
 const saveSettingsIpc = vi.fn(async (_updates: Partial<AppSettings>) => ({ success: true }));
 
@@ -102,7 +103,9 @@ describe('useSettings autosave', () => {
     let ok = true;
     await act(async () => { ok = await result.current.saveSettings(); });
     expect(ok).toBe(false);
-    expect(result.current.error).toBeTruthy();
+    // In the app's language, not a fixed English string ("Не вдалося зберегти налаштування: Failed to save settings")
+    expect(result.current.error).toBe(i18n.t('settings:autosave.notWritten'));
+    expect(result.current.error).not.toBe('settings:autosave.notWritten');
     expect(result.current.hasUnsavedChanges()).toBe(true);
   });
 
