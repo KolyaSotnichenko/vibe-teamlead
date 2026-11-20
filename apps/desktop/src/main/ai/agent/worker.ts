@@ -66,6 +66,8 @@ import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { projectRootFor } from '../usage/usage-ledger';
 import { SpecOrchestrator } from '../orchestration/spec-orchestrator';
 import { architectModeFor, architectureOnlyFor, complexityOverrideFor, readTaskMetadata, agenticSpecFor } from '../orchestration/quick-fix';
+import { decidedPipeline, pipelineLogLine, recordPipeline, SINGLE_SESSION_INSTRUCTIONS, taskTextOf, writeSingleSessionPlan } from '../orchestration/pipeline-choice';
+import { type PipelineDecision, pipelineByRule, pipelineFromAssessment } from '../../../shared/pipeline';
 import type { SpecPhase } from '../orchestration/spec-orchestrator';
 import type { AgentType } from '../config/agent-configs';
 import type { Phase } from '../config/types';
@@ -235,6 +237,11 @@ function requirementsText(specDir: string): string {
   } catch {
     return '';
   }
+}
+
+/** The pipeline decided for this task: in its spec directory, or in the project's copy of it */
+async function taskPipeline(session: SerializableSessionConfig): Promise<PipelineDecision | undefined> {
+  return (await decidedPipeline(session.specDir)) ?? (session.sourceSpecDir ? await decidedPipeline(session.sourceSpecDir) : undefined);
 }
 
 /** Whether the task's spec changes UI (design-step.ts specTouchesUi) */
@@ -974,13 +981,18 @@ async function runBuildOrchestrator(
 
   // frontend-design for coder subtasks that build UI, decided when the subtask's prompt is built
   const uiSkills = new Map<string, string[]>();
+  // The task's pipeline, decided when it started (shared/pipeline.ts). Only the full one has a
+  // designer and an architect; a task one session builds tells its coder it is the whole team.
+  const decision = await taskPipeline(session);
+  const pipeline = decision?.kind ?? 'full';
+  if (decision && pipeline !== 'full') postLog(pipelineLogLine(decision));
   const orchestrator = new BuildOrchestrator({
     specDir: session.specDir,
     projectDir: session.projectDir,
     sourceSpecDir: session.sourceSpecDir,
     ownerDecisionsFile: session.ownerDecisionsFile,
     abortSignal: abortController.signal,
-    architectMode: session.architectMode,
+    architectMode: pipeline === 'full' ? session.architectMode : 'never',
 
     // What each coder session learned goes to the project's memory. With memory off, nothing is
     // extracted: the extraction is a model call whose result would be thrown away
@@ -1011,6 +1023,7 @@ async function runBuildOrchestrator(
         );
       }
       let prompt = await assemblePrompt(promptName, session, context.subtask?.description, context.subtask);
+      if (agentType === 'coder' && pipeline === 'single') prompt += `\n${SINGLE_SESSION_INSTRUCTIONS}`;
 
       // Inject schema validation error feedback on retry so the planner knows what to fix
       if (context.planningRetryContext) {
@@ -1050,7 +1063,7 @@ async function runBuildOrchestrator(
 
     runQA: (hooks) => runQualityAssurance(session, toolContext, hooks),
 
-    designStep: () => runTaskDesignStep(session, toolContext),
+    designStep: pipeline === 'full' ? () => runTaskDesignStep(session, toolContext) : undefined,
   });
 
   orchestrator.on('phase-change', (phase: ExecutionPhase, message: string) => {
@@ -1194,7 +1207,10 @@ async function runQualityAssurance(
   cachedCapabilities = undefined;
   const verification = session.verification;
   const verificationBaseResults = new Map<string, CheckOutcome>();
+  // A task one session built has no QA reviewer: the app's checks, then the owner (qa-loop.ts `review`)
+  const review = ((await taskPipeline(session))?.kind ?? 'full') !== 'single';
   const qaLoop = new QALoop({
+    review,
     specDir: session.specDir,
     ownerDecisionsFile: session.ownerDecisionsFile,
     projectDir: session.projectDir,
@@ -1441,17 +1457,38 @@ async function runSpecOrchestrator(
   if (complexityOverride === 'standard') postLog('Cloud architecture design: the standard spec path with the architect, without the complexity assessment');
   const architectureOnly = architectureOnlyFor(taskMetadata);
   if (architectureOnly) postLog('Architecture only: the task ends after the architect (no planner, code, QA or merge)');
+
+  // The pipeline (shared/pipeline.ts): the user's choice or a rule decides now, before any model
+  // is called; otherwise the assessor does, once the complexity is known (choosePipeline below)
+  const decide = async (decision: PipelineDecision): Promise<PipelineDecision> => {
+    const stands = await recordPipeline(session.specDir, decision);
+    postLog(pipelineLogLine(stands));
+    return stands;
+  };
+  const byRule = pipelineByRule(taskMetadata, taskTextOf(taskDescription));
+  let pipeline = byRule ? await decide(byRule) : undefined;
+  if (pipeline?.kind === 'single') {
+    await finishSpecForSingleSession(session, taskDescription, 0);
+    return;
+  }
+
   const orchestrator = new SpecOrchestrator({
     specDir: session.specDir,
     projectDir: session.projectDir,
     taskDescription,
     complexityOverride,
+    pipeline: pipeline?.kind,
+    choosePipeline: async (assessment) => {
+      pipeline = await decide(pipelineFromAssessment(assessment));
+      return pipeline.kind;
+    },
     projectIndex: projectIndexContent,
     abortSignal: abortController.signal,
     architectMode: architectModeFor(taskMetadata, session.architectMode),
     architectureOnly,
-    // Design before code: a UI task's plan is made in the build, after its design
-    planAfterDesign: () => !!session.design && session.design.mode !== 'off' && specChangesUi(session),
+    // Design before code: a UI task's plan is made in the build, after its design.
+    // Only the full pipeline has a designer.
+    planAfterDesign: () => (pipeline?.kind ?? 'full') === 'full' && !!session.design && session.design.mode !== 'off' && specChangesUi(session),
 
     generatePrompt: async (_agentType, phase, context) => {
       const promptName = specPhaseToPromptName(phase);
@@ -1534,6 +1571,13 @@ async function runSpecOrchestrator(
 
   const outcome = await orchestrator.run();
 
+  // Auto chose one session: there is no spec to write, the build's one coder does it all
+  if (outcome.success && outcome.pipeline === 'single') {
+    if (logWriter && logWriter.getData().phases.planning?.status === 'active') logWriter.endPhase('spec', true);
+    await finishSpecForSingleSession(session, taskDescription, outcome.durationMs);
+    return;
+  }
+
   // Emit task event on failure so XState gets a specific signal
   // instead of relying on the generic PROCESS_EXITED fallback.
   if (!outcome.success) {
@@ -1567,6 +1611,37 @@ async function runSpecOrchestrator(
     type: 'result',
     taskId: config.taskId,
     data: result,
+    projectId: config.projectId,
+  });
+}
+
+/**
+ * One session builds the task: instead of spec sessions, the request goes into spec.md with an
+ * empty list of acceptance criteria and the plan gets one subtask (pipeline-choice.ts). The
+ * spec run then ends as any other, and the build follows.
+ */
+async function finishSpecForSingleSession(session: SerializableSessionConfig, taskDescription: string, durationMs: number): Promise<void> {
+  let error: string | undefined;
+  try {
+    await writeSingleSessionPlan(session.specDir, { description: taskTextOf(taskDescription) });
+    postLog('One session builds this task: the request is in spec.md, and the plan has one subtask');
+  } catch (cause) {
+    error = `Could not prepare the task for one session: ${cause instanceof Error ? cause.message : String(cause)}`;
+    postTaskEvent('PLANNING_FAILED', { error });
+  }
+  logWriter?.flush();
+  postMessage({
+    type: 'result',
+    taskId: config.taskId,
+    data: {
+      outcome: error ? 'error' : 'completed',
+      stepsExecuted: 0,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      messages: [],
+      toolCallCount: 0,
+      durationMs,
+      error: error ? { code: 'error', message: error, retryable: false } : undefined,
+    },
     projectId: config.projectId,
   });
 }

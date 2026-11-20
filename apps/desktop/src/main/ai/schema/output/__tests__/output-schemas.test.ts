@@ -13,6 +13,8 @@ describe('ComplexityAssessmentOutputSchema', () => {
       reasoning: 'Small change to a single file',
       needs_research: false,
       needs_self_critique: false,
+      pipeline: 'single',
+      pipeline_reason: 'One small change the request fully describes',
     };
     expect(ComplexityAssessmentOutputSchema.parse(valid)).toEqual(valid);
   });

@@ -75,6 +75,9 @@ export const ComplexityAssessmentSchema = z.preprocess(coerceAssessment, z.objec
   reasoning: z.string().default(''),
   needs_research: z.boolean().optional(),
   needs_self_critique: z.boolean().optional(),
+  // The pipeline the assessor recommends (shared/pipeline.ts); anything else is read as none
+  pipeline: z.string().optional(),
+  pipeline_reason: z.string().optional(),
 }).passthrough());
 
 export type ValidatedComplexityAssessment = z.infer<typeof ComplexityAssessmentSchema>;

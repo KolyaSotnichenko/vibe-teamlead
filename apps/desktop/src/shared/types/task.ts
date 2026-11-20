@@ -242,6 +242,10 @@ export interface TaskMetadata {
   cloudArchitectureDesign?: boolean;  // Made by Context → Architecture: the architect draws the target cloud architecture
   /** The spec ends after the architect; the task waits in Human Review as "architecture ready" (no plan, code, QA or merge) */
   architectureOnly?: boolean;
+  /** The pipeline the user picked for the task; "auto" or nothing lets the app decide (shared/pipeline.ts) */
+  pipeline?: import('../pipeline').PipelineChoice;
+  /** The pipeline the task runs, written by the app when the task starts, with why */
+  pipelineDecision?: import('../pipeline').PipelineDecision;
   attachedImages?: ImageAttachment[];
 
   // Referenced files (files/folders from project for context)

@@ -200,6 +200,13 @@ export interface QALoopConfig {
    */
   runVerification?: (options: { fresh: boolean }) => Promise<VerificationReport>;
   /**
+   * false: the task has no QA reviewer (one session builds it; shared/pipeline.ts). The gates,
+   * the app's checks and the design check still run and the fixer still fixes what they find.
+   * When they are clear the task goes to the owner's review, and no approval is recorded: an
+   * approval is the reviewer's, and only an approved task may merge by itself.
+   */
+  review?: boolean;
+  /**
    * Static design check on the lines the task added to UI files. In 'block'
    * mode its findings are QA issues like gate findings; in 'warn' mode they are
    * only reported (design_check.md in the spec dir).
@@ -408,6 +415,8 @@ export class QALoop extends EventEmitter {
   private lastVerification: string | undefined;
   /** "Run QA again": this run's first checks really run, whatever an earlier run found */
   private freshChecks = false;
+  /** This run ended on the checks alone: the task's pipeline has no reviewer */
+  private noReview = false;
   /** Project files the reviewer changed during this run (see runReviewerSession) */
   private reviewerChangedFiles: string[] = [];
   /** A snapshot failed, so whether the reviewer changed files is not known */
@@ -553,6 +562,16 @@ export class QALoop extends EventEmitter {
           const stopped = await this.runFixer(iteration, maxIterations, blockers, startTime);
           if (stopped) return stopped;
           continue;
+        }
+
+        // No reviewer in this task's pipeline: the checks were the whole of QA, the owner reviews
+        if (this.config.review === false) {
+          this.noReview = true;
+          this.emitTyped('log', "The app's checks and scanners are clear. One session built this task and no QA reviewer follows it: it waits for your review");
+          this.emitTyped('qa-review-complete', iteration, 'approved', []);
+          await this.recordIteration(iteration, 'approved', [], Date.now() - iterationStart, { reviewed_commit: await this.config.currentCommit?.().catch(() => undefined) });
+          await this.writeReports('approved');
+          return this.outcome(true, iteration, Date.now() - startTime);
         }
 
         // Run QA reviewer
@@ -1163,7 +1182,8 @@ export class QALoop extends EventEmitter {
         approved,
         reason: approved ? undefined : reason,
         iterations: totalIterations,
-        reviewerApproved: approved || this.lastReviewerApproved,
+        reviewerApproved: !this.noReview && (approved || this.lastReviewerApproved),
+        ...(this.noReview ? { noReview: true } : {}),
         ...(this.checksRepeat ? { checksRepeat: true } : {}),
         blocking: approved ? [] : this.lastBlocking,
         ...(error ? { error } : {}),

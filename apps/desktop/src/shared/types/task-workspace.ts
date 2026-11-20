@@ -186,6 +186,8 @@ export interface QaOutcomeInfo {
   iterations: number;
   /** The reviewer itself approved; only the automatic checks blocked it */
   reviewerApproved: boolean;
+  /** The task's pipeline has no QA reviewer (one session built it): only the app's checks ran */
+  noReview?: boolean;
   /** The checks keep finding the same thing after the fixer's round; the review is waiting for them */
   checksRepeat?: boolean;
   blocking: Array<{

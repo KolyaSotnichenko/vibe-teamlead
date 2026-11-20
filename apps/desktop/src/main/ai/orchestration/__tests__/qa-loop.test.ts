@@ -1366,6 +1366,35 @@ describe('QALoop', () => {
         expect(asked).toEqual([true, false]);
       });
 
+      describe('a task one session built has no QA reviewer', () => {
+        it('ends on the checks alone: no reviewer session, no approval recorded (so it never merges by itself), and the outcome says nobody reviewed it', async () => {
+          const { mkdtempSync, readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+          const { tmpdir } = await import('node:os');
+          const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-noreview-'));
+          const store = { dir: mkdtempSync(path.join(tmpdir(), 'vtl-approvals-')), fingerprint: async () => 'code-1' };
+          const { runSession } = approvingReviewer();
+
+          const outcome = await new QALoop(
+            makeConfig({ specDir, runSession, review: false, approvals: store, runVerification: (async () => report()) as QALoopConfig['runVerification'] }),
+          ).run();
+
+          expect(outcome.approved).toBe(true);
+          expect(agents(runSession)).toEqual([]);
+          expect(approvalHolds(store.dir, PROJECT_DIR, specDir, 'code-1')).toBe(false);
+          expect(JSON.parse(readFileSync(path.join(specDir, 'qa_outcome.json'), 'utf-8'))).toMatchObject({ approved: true, noReview: true, reviewerApproved: false });
+        });
+
+        it('still sends what the checks find to the fixer, and still no reviewer afterwards', async () => {
+          const { runSession } = approvingReviewer();
+          let round = 0;
+          const runVerification = async () => (round++ === 0 ? broken() : report());
+          const outcome = await new QALoop(makeConfig({ runSession, review: false, runVerification: runVerification as QALoopConfig['runVerification'] })).run();
+
+          expect(agents(runSession)).toEqual(['qa_fixer']);
+          expect(outcome.approved).toBe(true);
+        });
+      });
+
       it('without Run QA again, a check earlier runs could not clear is handed over at once', async () => {
         const round = (n: number) => ({ iteration: n, status: 'rejected', durationMs: 1, timestamp: 't', issues: [], gate_keys: ['check:npm test'] });
         const { runSession } = approvingReviewer({ qa_iteration_history: [round(1), round(2)] });

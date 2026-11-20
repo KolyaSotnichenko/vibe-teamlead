@@ -32,6 +32,7 @@ import {
 import type { ZodSchema } from 'zod';
 import type { SessionResult } from '../session/types';
 import { writeFileReplacing } from '../safe-write';
+import type { PipelineKind } from '../../../shared/pipeline';
 import type { ArchitectMode } from '../../../shared/types/settings';
 
 // =============================================================================
@@ -156,6 +157,17 @@ export interface SpecOrchestratorConfig {
   taskDescription?: string;
   /** Complexity override (skip AI assessment) */
   complexityOverride?: ComplexityTier;
+  /**
+   * The task's pipeline, when it was decided before the spec started (the user's choice or a
+   * rule; shared/pipeline.ts). 'short' runs the quick spec whatever the tier, with no architect.
+   * A 'single' task has no spec sessions at all, so it never gets here.
+   */
+  pipeline?: PipelineKind;
+  /**
+   * Auto: asked once, when the complexity is known and nothing decided the pipeline before.
+   * 'single' ends the spec here (one session builds the task); 'short' runs the quick spec.
+   */
+  choosePipeline?: (assessment: ComplexityAssessment | undefined) => Promise<PipelineKind> | PipelineKind;
   /** Whether to use AI for complexity assessment (default: true) */
   useAiAssessment?: boolean;
   /** When the architect designs before the planner (default: complex tasks only) */
@@ -255,18 +267,23 @@ export interface SpecOrchestratorEvents {
 export interface SpecOutcome {
   success: boolean;
   complexity?: ComplexityTier;
+  /** The pipeline the spec ran under, when one was decided here or before */
+  pipeline?: PipelineKind;
   phasesExecuted: SpecPhase[];
   durationMs: number;
   error?: string;
 }
 
 /** Complexity assessment result (matches Python spec/complexity.py) */
-interface ComplexityAssessment {
+export interface ComplexityAssessment {
   complexity: ComplexityTier;
   confidence: number;
   reasoning: string;
   needs_research?: boolean;
   needs_self_critique?: boolean;
+  /** The pipeline the assessor recommends (shared/pipeline.ts) and why, in its words */
+  pipeline?: string;
+  pipeline_reason?: string;
 }
 
 // =============================================================================
@@ -285,6 +302,7 @@ export class SpecOrchestrator extends EventEmitter {
   private sessionNumber = 0;
   private aborted = false;
   private assessment: ComplexityAssessment | null = null;
+  private pipeline: PipelineKind | undefined;
   private phaseSummaries: Record<string, string> = {};
 
   constructor(config: SpecOrchestratorConfig) {
@@ -364,7 +382,16 @@ export class SpecOrchestrator extends EventEmitter {
       // ===================================================================
       // Step 2: Determine and run phases based on assessed complexity
       // ===================================================================
-      let phasesToRun = specPhasesFor(complexity, this.config.architectMode);
+      // The pipeline: decided before the spec (the user or a rule), or now that the complexity is known
+      const pipeline = this.config.pipeline ?? (await this.config.choosePipeline?.(this.assessment ?? undefined));
+      this.pipeline = pipeline;
+      if (pipeline === 'single') {
+        this.emitTyped('log', 'One session builds this task: no spec writer and no planner');
+        return this.outcome(true, phasesExecuted, Date.now() - startTime);
+      }
+      // Short: the quick spec (the spec and its plan in one session) whatever the tier, and no architect
+      if (pipeline === 'short') complexity = 'simple';
+      let phasesToRun = specPhasesFor(complexity, pipeline === 'short' ? 'never' : this.config.architectMode);
       const architectureOnly = !!this.config.architectureOnly;
       if (architectureOnly) {
         const architectureIdx = phasesToRun.indexOf('architecture');
@@ -782,6 +809,7 @@ export class SpecOrchestrator extends EventEmitter {
     const outcome: SpecOutcome = {
       success,
       complexity: this.assessment?.complexity,
+      ...(this.pipeline ? { pipeline: this.pipeline } : {}),
       phasesExecuted,
       durationMs,
       error,

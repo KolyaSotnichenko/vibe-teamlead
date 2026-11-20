@@ -20,6 +20,9 @@ export const ComplexityAssessmentOutputSchema = z.object({
   reasoning: z.string(),
   needs_research: z.boolean(),
   needs_self_critique: z.boolean(),
+  // Which pipeline the task should run (shared/pipeline.ts) and why, in one sentence
+  pipeline: z.enum(['single', 'short', 'full']),
+  pipeline_reason: z.string(),
 });
 
 export type ComplexityAssessmentOutput = z.infer<typeof ComplexityAssessmentOutputSchema>;

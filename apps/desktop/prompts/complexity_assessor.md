@@ -191,6 +191,20 @@ discovery → requirements → research → context → spec_writing → self_cr
 
 ---
 
+## PHASE 2.5: RECOMMEND THE PIPELINE
+
+Besides the complexity, say which pipeline the task should run. The app has three, and a lighter one saves the owner time and money only when the task really is that small:
+
+- **`single`** — one coder session writes the acceptance criteria, the tests and the code; then the app runs the project's typecheck, tests and security scanners itself, and the owner reviews. No spec writer, designer, architect, planner or QA reviewer. Choose it when **all** of these hold: one session can hold the whole job (a small self-contained thing: a small game, a script, a one-page tool, a fix or tweak in a few files); the request already says what to build, so nothing needs to be gathered or researched; nothing needs a second pair of eyes (no user data, no sign-in, no money, no schema or infrastructure change, no public API other code depends on).
+- **`short`** — a short spec with acceptance criteria and its plan in one session, then coder subtasks, then a QA review. No designer, no architect. Choose it when the job is clear and bounded but too large or too risky for one session: several files or a couple of subtasks, existing patterns to follow, a reviewer is worth having.
+- **`full`** — the whole pipeline: discovery, requirements, spec, design, architecture, plan, code, QA. Choose it for anything else: new screens that need designing, new architecture, several services, external integrations, unclear requirements, or anything `complex`.
+
+When unsure between two, choose the heavier one: a task that turns out bigger than its pipeline wastes more than a pipeline that was fuller than needed. A `complex` task is always `full`.
+
+Write the choice as `pipeline` and one plain sentence of why as `pipeline_reason` (the owner reads it on the task).
+
+---
+
 ## PHASE 3: OUTPUT ASSESSMENT
 
 Create `complexity_assessment.json`:
@@ -247,6 +261,9 @@ Use the **Write tool** to create `complexity_assessment.json` in the spec direct
     "needs_self_critique": false,
     "needs_infrastructure_setup": false
   },
+
+  "pipeline": "[single|short|full]",
+  "pipeline_reason": "One sentence the owner can read: why this pipeline",
 
   "validation_recommendations": {
     "risk_level": "[trivial|low|medium|high|critical]",
@@ -460,6 +477,8 @@ START
     "needs_research": false,
     "needs_self_critique": false
   },
+  "pipeline": "single",
+  "pipeline_reason": "One small change in one file that the request fully describes.",
   "validation_recommendations": {
     "risk_level": "low",
     "skip_validation": false,
@@ -500,6 +519,8 @@ START
     "needs_research": false,
     "needs_self_critique": false
   },
+  "pipeline": "short",
+  "pipeline_reason": "A clear, bounded endpoint that follows existing patterns; worth a QA review, no design or architecture needed.",
   "validation_recommendations": {
     "risk_level": "medium",
     "skip_validation": false,
@@ -540,6 +561,8 @@ START
     "needs_research": true,
     "needs_self_critique": false
   },
+  "pipeline": "full",
+  "pipeline_reason": "Payments through an external service: needs research and a careful review.",
   "validation_recommendations": {
     "risk_level": "critical",
     "skip_validation": false,
@@ -580,6 +603,8 @@ START
     "needs_research": false,
     "needs_self_critique": false
   },
+  "pipeline": "full",
+  "pipeline_reason": "Changes how sign-in works across the app: needs a full spec and review.",
   "validation_recommendations": {
     "risk_level": "high",
     "skip_validation": false,
@@ -640,6 +665,8 @@ START
     "needs_self_critique": true,
     "needs_infrastructure_setup": false
   },
+  "pipeline": "full",
+  "pipeline_reason": "Complex: a new integration, a new database and infrastructure changes.",
   "validation_recommendations": {
     "risk_level": "high",
     "skip_validation": false,
