@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const saveSession = vi.fn();
-const saveSessionAsync = vi.fn(async () => undefined);
+const saveSessionAsync = vi.fn(async (_session: unknown) => undefined);
 vi.mock('../../terminal-session-store', () => ({ getTerminalSessionStore: () => ({ saveSession, saveSessionAsync }) }));
 
 import { persistAllSessions, persistAllSessionsAsync, persistSession, persistSessionAsync } from '../session-handler';
