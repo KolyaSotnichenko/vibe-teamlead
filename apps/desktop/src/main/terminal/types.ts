@@ -25,6 +25,8 @@ export interface TerminalProcess {
   dangerouslySkipPermissions?: boolean;
   /** Shell type for Windows (affects command chaining syntax) */
   shellType?: WindowsShellType;
+  /** Never saved to terminals.json (Settings → Claude → "Get a token" prints a token) */
+  ephemeral?: boolean;
   /** Whether PTY has emitted exit; used to avoid writes/resizes on dead PTYs */
   hasExited?: boolean;
 }

@@ -41,6 +41,14 @@ describe('createTerminal with the setup-token launch', () => {
     expect(env.CLAUDE_CONFIG_DIR).toMatch(/\.vibe-teamlead[/\\]claude-code$/);
   });
 
+  it('marks the token terminal as never saved, and a plain one as saved', async () => {
+    const terminals = new Map();
+    await createTerminal({ id: 't5', cwd: '/p', projectPath: '/p', launch: 'claude-setup-token' }, terminals, () => null, vi.fn());
+    await createTerminal({ id: 't6', cwd: '/p', projectPath: '/p' }, terminals, () => null, vi.fn());
+    expect(terminals.get('t5').ephemeral).toBe(true);
+    expect(terminals.get('t6').ephemeral).toBeFalsy();
+  });
+
   it('fails without opening a shell when the bundled binary is missing', async () => {
     tools.claudeCodeExecutable = undefined;
     const result = await createTerminal({ id: 't2', cwd: '/p', launch: 'claude-setup-token' }, new Map(), () => null, vi.fn());

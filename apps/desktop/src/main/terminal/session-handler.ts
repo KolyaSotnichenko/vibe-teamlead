@@ -150,6 +150,9 @@ export function findClaudeSessionAfter(
  * Create a TerminalSession object from a TerminalProcess.
  * Shared helper used by both persistSession and persistSessionAsync.
  */
+/** Saved to terminals.json: a project's terminal, never one that is ephemeral (a token's) */
+const saved = (terminal: TerminalProcess) => Boolean(terminal.projectPath) && !terminal.ephemeral;
+
 function createSessionObject(terminal: TerminalProcess): TerminalSession {
   return {
     id: terminal.id,
@@ -169,7 +172,7 @@ function createSessionObject(terminal: TerminalProcess): TerminalSession {
  * Persist a terminal session to disk
  */
 export function persistSession(terminal: TerminalProcess): void {
-  if (!terminal.projectPath) {
+  if (!saved(terminal)) {
     return;
   }
 
@@ -182,7 +185,7 @@ export function persistSession(terminal: TerminalProcess): void {
  * This is non-blocking and prevents the main process from freezing during disk writes.
  */
 export function persistSessionAsync(terminal: TerminalProcess): void {
-  if (!terminal.projectPath) {
+  if (!saved(terminal)) {
     return;
   }
 
@@ -203,7 +206,7 @@ export async function persistAllSessionsAsync(terminals: Map<string, TerminalPro
 
   const savePromises: Promise<void>[] = [];
   terminals.forEach((terminal) => {
-    if (terminal.projectPath) {
+    if (saved(terminal)) {
       savePromises.push(store.saveSessionAsync(createSessionObject(terminal)));
     }
   });
@@ -219,7 +222,7 @@ export async function persistAllSessionsAsync(terminals: Map<string, TerminalPro
  */
 export function persistAllSessions(terminals: Map<string, TerminalProcess>): void {
   terminals.forEach((terminal) => {
-    if (terminal.projectPath) {
+    if (saved(terminal)) {
       persistSession(terminal);
     }
   });

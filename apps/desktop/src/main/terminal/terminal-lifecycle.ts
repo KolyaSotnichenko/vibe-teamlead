@@ -112,6 +112,7 @@ export async function createTerminal(
       projectPath,
       cwd: terminalCwd,
       outputBuffer: '',
+      ...(setupTokenBinary ? { ephemeral: true } : {}),
       title: `Terminal ${terminals.size + 1}`,
       shellType
     };
@@ -126,7 +127,7 @@ export async function createTerminal(
       (term) => handleTerminalExit(term, terminals)
     );
 
-    if (projectPath) {
+    if (projectPath && !terminal.ephemeral) {
       SessionHandler.persistSessionAsync(terminal);
     }
 
