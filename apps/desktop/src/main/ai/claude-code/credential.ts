@@ -52,8 +52,9 @@ function storePath(): string {
  * there belongs to the subscription slot. Pure — tested directly.
  */
 export function normalizeStoredCredential(parsed: Partial<StoredCredential> | undefined): StoredCredential {
-  const apiKey = parsed?.apiKey?.trim() || undefined;
-  const subscriptionToken = parsed?.subscriptionToken?.trim() || undefined;
+  // Cleaned in this one place every reader goes through: a key saved before keys were cleaned on paste may hold line breaks
+  const apiKey = (parsed?.apiKey && cleanCredential(parsed.apiKey)) || undefined;
+  const subscriptionToken = (parsed?.subscriptionToken && cleanCredential(parsed.subscriptionToken)) || undefined;
   if (apiKey && isSubscriptionToken(apiKey)) return { subscriptionToken: subscriptionToken ?? apiKey };
   return { apiKey, subscriptionToken };
 }
@@ -177,9 +178,8 @@ function readBaseUrlSetting(): string | undefined {
 function resolveFor(subscriptionMode: boolean): ResolvedClaudeCredential {
   const stored = loadStored();
   return pickClaudeCredential({
-    // Cleaned here too: a token saved before cleanCredential existed may hold line breaks
-    storedKey: stored.apiKey && cleanCredential(stored.apiKey),
-    storedSubscriptionToken: stored.subscriptionToken && cleanCredential(stored.subscriptionToken),
+    storedKey: stored.apiKey,
+    storedSubscriptionToken: stored.subscriptionToken,
     baseUrlSetting: readBaseUrlSetting(),
     env: process.env,
     subscriptionMode,

@@ -36,6 +36,9 @@ describe('pickClaudeCredential', () => {
     expect(normalizeStoredCredential({ apiKey: 'sk-ant-oat01-old' })).toEqual({ subscriptionToken: 'sk-ant-oat01-old' });
     expect(normalizeStoredCredential({ apiKey: ' mtr_key ', subscriptionToken: 'sk-ant-oat01-t' })).toEqual({ apiKey: 'mtr_key', subscriptionToken: 'sk-ant-oat01-t' });
     expect(normalizeStoredCredential(undefined)).toEqual({ apiKey: undefined, subscriptionToken: undefined });
+    // Saved before keys were cleaned on paste: every reader gets it without the line breaks
+    expect(normalizeStoredCredential({ subscriptionToken: 'sk-ant-oat01-abc\r\ndef' })).toEqual({ apiKey: undefined, subscriptionToken: 'sk-ant-oat01-abcdef' });
+    expect(normalizeStoredCredential({ apiKey: '\nsk-ant-oat01-x\ny' })).toEqual({ subscriptionToken: 'sk-ant-oat01-xy' });
   });
 
   it('uses CLAUDE_CODE_OAUTH_TOKEN only in personal mode', () => {
