@@ -35,7 +35,7 @@ import { bashSecurityHook } from '../security/bash-validator';
 import { splitCommandSegments } from '../security/command-parser';
 import { isPathContained } from '../security/path-containment';
 import { labelDockerRuns } from '../../utils/task-containers';
-import { isFloodingCommand, toolLogPath, trimmedCommand } from './output-trim';
+import { isFloodingCommand, toolLogPath, trimmedCommand, withoutOutputLimit } from './output-trim';
 import type { ToolContext } from '../tools/types';
 import { terravisionToolDenied } from '../cloud-diagrams/tool-guard';
 
@@ -249,8 +249,10 @@ export function evaluatePreToolUse(
     }
     const labelled = labelDockerRuns(command, context.cwd);
     // Long test/build/install output goes to a log; the agent gets a bounded summary (output-trim.ts)
-    const shaped = toolInput?.run_in_background !== true && isFloodingCommand(labelled)
-      ? trimmedCommand(labelled, toolLogPath(context.specDir, ++toolLogCount))
+    // `| tail -N` on such a command is the agent shortening it by hand; the app's summary keeps the exit code and the failures
+    const unpiped = withoutOutputLimit(labelled);
+    const shaped = toolInput?.run_in_background !== true && isFloodingCommand(unpiped)
+      ? trimmedCommand(unpiped, toolLogPath(context.specDir, ++toolLogCount))
       : labelled;
     const rewritten = withoutClaudeCredentials(shaped);
     if (rewritten !== command) {

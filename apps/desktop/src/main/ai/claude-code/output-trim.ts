@@ -15,7 +15,9 @@
  * is) ends in PostToolUseFailure, whose output a hook cannot replace.
  *
  * Commands the agent already pipes, redirects, substitutes or backgrounds are
- * left as they are, and so are watchers and dev servers. Claude Code runs Bash
+ * left as they are, and so are watchers and dev servers. One pipe is not left:
+ * `| tail -N` or `| head -N` on a flooding command, which is the agent doing
+ * this job by hand and worse (see withoutOutputLimit). Claude Code runs Bash
  * with Git Bash on Windows, so the wrapper is plain bash and paths are written
  * with forward slashes there.
  */
@@ -133,6 +135,18 @@ function commandWords(segment: string): string[] {
   return words;
 }
 
+/** A tool that floods, by its own name: `vitest run`, `tsc --noEmit`, `playwright test` */
+function toolFloods(words: string[]): boolean {
+  if (!words.length) return false;
+  const name = baseName(words[0]);
+  if (TOOLS_ANY.has(name)) return true;
+  const subs = TOOL_SUBCOMMANDS[name];
+  return !!subs && subs.includes(words[1] ?? '');
+}
+
+/** Subcommands that run a tool of the project: `pnpm --filter web exec vitest run` */
+const PM_EXEC = new Set(['exec', 'dlx', 'x']);
+
 function packageManagerFloods(words: string[]): boolean {
   const args = words.slice(1);
   let i = 0;
@@ -141,18 +155,17 @@ function packageManagerFloods(words: string[]): boolean {
   if (sub === undefined) return baseName(words[0]) === 'yarn';
   if (PM_SUBCOMMANDS.has(sub)) return true;
   if (sub === 'run' || sub === 'run-script') return SCRIPT_NAME.test(args[i + 1] ?? '');
-  return baseName(words[0]) !== 'npm' && SCRIPT_NAME.test(sub);
+  if (PM_EXEC.has(sub)) return toolFloods(args.slice(i + 1));
+  // pnpm, yarn and bun run a script or a tool of the project by its name: `pnpm vitest run` was
+  // the form of 236 commands in real sessions and none of them was recognised
+  return baseName(words[0]) !== 'npm' && (SCRIPT_NAME.test(sub) || toolFloods(args.slice(i)));
 }
 
 function segmentFloods(segment: string): boolean {
   const words = commandWords(segment);
   if (!words.length) return false;
   if (words.some((w) => LONG_RUNNING.has(w))) return false;
-  const name = baseName(words[0]);
-  if (PACKAGE_MANAGERS.has(name)) return packageManagerFloods(words);
-  if (TOOLS_ANY.has(name)) return true;
-  const subs = TOOL_SUBCOMMANDS[name];
-  return !!subs && subs.includes(words[1] ?? '');
+  return PACKAGE_MANAGERS.has(baseName(words[0])) ? packageManagerFloods(words) : toolFloods(words);
 }
 
 /**
@@ -166,6 +179,61 @@ export function isFloodingCommand(command: string): boolean {
   const operatorsOnly = bare.replace(/&&|\|\|/g, ' ; ');
   if (/[|<>`&]|\$\(/.test(operatorsOnly)) return false;
   return operatorsOnly.split(';').some(segmentFloods);
+}
+
+/** The command with every quoted character replaced, at the same positions, so operators inside quotes don't count. */
+function maskQuotes(command: string): string {
+  return command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (quoted) => 'x'.repeat(quoted.length));
+}
+
+/** `cmd [2>&1] [| tail -N]`: the command, the stderr merge, the limiting pipe */
+const OUTPUT_LIMIT = /^(\s*)(.*?)(\s+2>&1)?(\s*\|\s*(?:tail|head)(?:\s+-n\s*\d+|\s+-\d+)?)?(\s*)$/;
+
+/**
+ * The command without the `| tail -N` / `| head -N` (and `2>&1`) an agent puts on a
+ * test run or a build, so the app shortens the output itself. Unchanged when there
+ * is nothing of the kind, or when taking it away would change what runs.
+ *
+ * In 3000 real test and check runs by coders, the same command was run again with
+ * nothing changed after 24% of the runs piped through tail or head, and after 6% of
+ * the plain ones: the pipe hides the exit code and the failing lines, so the agent
+ * runs the suite a second time to see them. The app's own summary has both, and the
+ * whole output stays in a log.
+ *
+ * A pipeline ends with tail's status, so `a | tail && b` always ran `b`: the `&&`
+ * after a pipe that is taken away becomes `;`. Pure.
+ */
+export function withoutOutputLimit(command: string): string {
+  if (!command.trim() || command.includes('\n')) return command;
+  const mask = maskQuotes(command);
+  const parts: string[] = [];
+  let changed = false;
+  let start = 0;
+  let unpiped = false;
+  const segment = (end: number) => {
+    const text = command.slice(start, end);
+    const match = OUTPUT_LIMIT.exec(mask.slice(start, end));
+    unpiped = false;
+    if (!match || (!match[3] && !match[4]) || /[|<>`&]|\$\(/.test(match[2])) return text;
+    const body = text.slice(match[1].length, match[1].length + match[2].length);
+    if (!segmentFloods(body)) return text;
+    changed = true;
+    unpiped = !!match[4];
+    return `${match[1]}${body}${match[5]}`;
+  };
+  for (let i = 0; i < mask.length; i++) {
+    const two = mask.slice(i, i + 2);
+    const operator = two === '&&' || two === '||' ? two : mask[i] === ';' ? ';' : '';
+    if (!operator) continue;
+    parts.push(segment(i));
+    // After the pipe, `||` never ran its right side: leave such a command alone
+    if (unpiped && operator === '||') return command;
+    parts.push(unpiped && operator === '&&' ? ';' : operator);
+    i += operator.length - 1;
+    start = i + 1;
+  }
+  parts.push(segment(mask.length));
+  return changed ? parts.join('') : command;
 }
 
 /** Where one command's full output goes: the spec's logs/ folder, else the temp directory. */

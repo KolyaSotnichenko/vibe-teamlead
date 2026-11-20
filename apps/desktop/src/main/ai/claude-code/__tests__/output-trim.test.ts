@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { isFloodingCommand, toolLogPath, trimmedCommand, TRIM_THRESHOLD_BYTES } from '../output-trim';
+import { isFloodingCommand, toolLogPath, trimmedCommand, TRIM_THRESHOLD_BYTES, withoutOutputLimit } from '../output-trim';
 import { evaluatePreToolUse } from '../security-hooks';
 import type { ToolContext } from '../../tools/types';
 
@@ -28,6 +28,15 @@ describe('isFloodingCommand', () => {
       'npx vitest run',
       'npx tsc --noEmit',
       'pnpm exec eslint .',
+      'pnpm vitest run',
+      'pnpm vitest run src/health',
+      'pnpm tsc --noEmit',
+      'pnpm playwright test',
+      'pnpm --filter web exec vitest run src/pages',
+      'pnpm --filter @app/api exec tsc --noEmit',
+      'pnpm -C apps/web exec playwright test',
+      'yarn vitest run',
+      'bun x vitest run',
       './node_modules/.bin/jest',
       'CI=1 npm test',
       'cd apps/web && npm test',
@@ -68,6 +77,11 @@ describe('isFloodingCommand', () => {
       'npm run build > /dev/null 2>&1',
       'npx vitest --watch',
       'npx vitest watch',
+      'pnpm vitest --watch',
+      'pnpm prisma generate',
+      'pnpm --filter api exec prisma migrate deploy',
+      'pnpm exec playwright show-report',
+      'npm vitest run',
       'npm run dev',
       'npm start',
       'npx next dev',
@@ -82,6 +96,63 @@ describe('isFloodingCommand', () => {
     ]) {
       expect(isFloodingCommand(command), command).toBe(false);
     }
+  });
+});
+
+describe('withoutOutputLimit', () => {
+  it('takes `| tail -N` / `| head -N` and `2>&1` off a test run or a build', () => {
+    const cases: Array<[string, string]> = [
+      ['npm test | tail -50', 'npm test'],
+      ['pnpm vitest run 2>&1 | tail -5', 'pnpm vitest run'],
+      ['npx vitest run src/a.test.tsx 2>&1 | tail -n 15', 'npx vitest run src/a.test.tsx'],
+      ['pnpm exec tsc --noEmit 2>&1 | head -20', 'pnpm exec tsc --noEmit'],
+      ['npm run lint | head', 'npm run lint'],
+      ['npm test 2>&1', 'npm test'],
+      ['cd apps/web && npx vitest run "src/app/[orgSlug]/page.test.tsx" 2>&1 | tail -15', 'cd apps/web && npx vitest run "src/app/[orgSlug]/page.test.tsx"'],
+      ['DATABASE_URL=postgres://u:p@localhost/db pnpm test src/tasks | tail -8', 'DATABASE_URL=postgres://u:p@localhost/db pnpm test src/tasks'],
+      ['npx vitest run a.test.ts | tail -5; echo "exit: $?"', 'npx vitest run a.test.ts; echo "exit: $?"'],
+      ['npx vitest run -t "a | tail -5 b" | tail -3', 'npx vitest run -t "a | tail -5 b"'],
+    ];
+    for (const [command, expected] of cases) {
+      expect(withoutOutputLimit(command), command).toBe(expected);
+      expect(isFloodingCommand(expected), expected).toBe(true);
+    }
+  });
+
+  it('keeps running what ran before: after a pipe `&&` always went on, so it becomes `;`', () => {
+    expect(withoutOutputLimit('pnpm typecheck 2>&1 | tail -2 && pnpm vitest run src/auth 2>&1 | tail -4')).toBe('pnpm typecheck ; pnpm vitest run src/auth');
+    // No pipe was taken away before this `&&`: it still depends on the typecheck
+    expect(withoutOutputLimit('pnpm typecheck && pnpm vitest run | tail -4')).toBe('pnpm typecheck && pnpm vitest run');
+    expect(withoutOutputLimit('pnpm typecheck 2>&1 && pnpm test')).toBe('pnpm typecheck && pnpm test');
+  });
+
+  it('leaves alone what it can not take away safely, and everything that is not a flooding command', () => {
+    for (const command of [
+      'npm test',
+      'npm test | grep FAIL',
+      'npm test 2>&1 | grep -B5 failed | head -30',
+      'npm test | tail -f',
+      'npm test | tail -n +3',
+      'npm test | head -c 100',
+      'npm test | tail -5 || echo failed',
+      'npm test > out.log 2>&1',
+      'npm test | tee out.log | tail -5',
+      'cat package.json | head -20',
+      'git log | head -5',
+      'ls -la 2>&1 | tail -3',
+      'echo "npm test | tail -5"',
+      'npm run dev 2>&1 | tail -5',
+      'npm test | tail -5\nnpm run lint | tail -5',
+      '',
+    ]) {
+      expect(withoutOutputLimit(command), command).toBe(command);
+    }
+  });
+
+  it('a command with another pipe left in it is still the agent\'s own shaping', () => {
+    const mixed = 'grep -n x a.ts | head; npx vitest run a.test.ts 2>&1 | tail -5';
+    expect(withoutOutputLimit(mixed)).toBe('grep -n x a.ts | head; npx vitest run a.test.ts');
+    expect(isFloodingCommand(withoutOutputLimit(mixed))).toBe(false);
   });
 });
 
@@ -163,6 +234,21 @@ describe('trimmedCommand', () => {
     expect(TRIM_THRESHOLD_BYTES).toBeLessThanOrEqual(4000);
   });
 
+  it.runIf(bashRuns)('a failing run the agent piped through tail now shows its exit code and the failure, not the last five lines', () => {
+    const log = join(scratch, 'unpiped', 'tool.log');
+    // What `npx vitest run | tail -5` printed and returned: the end of the output and tail's exit code
+    const suite = 'bash -c \'echo "FAIL src/app.test.ts"; echo "AssertionError: expected 3 to be 4"; for i in $(seq 1 400); do echo "  ok late test $i"; done; exit 1\'';
+    const piped = run(`${suite} | tail -5`);
+    expect(piped.status).toBe(0);
+    expect(piped.stdout).not.toContain('AssertionError');
+
+    const result = run(trimmedCommand(suite, log, 'darwin'));
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('exit code 1');
+    expect(result.stdout).toContain('AssertionError: expected 3 to be 4');
+    expect(result.stdout).toContain('ok late test 400');
+  });
+
   it.runIf(bashRuns)('keeps a cd in the command for the rest of the shell, like the original', () => {
     const log = join(scratch, 'cd', 'tool.log');
     const result = run(`${trimmedCommand('cd /', log, 'darwin')}; pwd`);
@@ -189,8 +275,18 @@ describe('PreToolUse: Bash output trimming', () => {
     const specDir = join(scratch, 'spec');
     const bg = commandOf(evaluatePreToolUse('Bash', { command: 'npm test', run_in_background: true }, context(specDir)));
     expect(bg).toMatch(/^unset [A-Z_ ]+; npm test$/);
-    const piped = commandOf(evaluatePreToolUse('Bash', { command: 'npm test | tail -5' }, context(specDir)));
-    expect(piped).toMatch(/^unset [A-Z_ ]+; npm test \| tail -5$/);
+    const piped = commandOf(evaluatePreToolUse('Bash', { command: 'npm test | grep FAIL' }, context(specDir)));
+    expect(piped).toMatch(/^unset [A-Z_ ]+; npm test \| grep FAIL$/);
+    const bgPiped = commandOf(evaluatePreToolUse('Bash', { command: 'npm test | tail -5', run_in_background: true }, context(specDir)));
+    expect(bgPiped).toMatch(/^unset [A-Z_ ]+; npm test \| tail -5$/);
+  });
+
+  it('wraps a test run piped through tail without the pipe, so the summary has the exit code and the failures', () => {
+    const specDir = join(scratch, 'spec');
+    const command = commandOf(evaluatePreToolUse('Bash', { command: 'cd apps/web && npx vitest run src/a.test.ts 2>&1 | tail -15' }, context(specDir)));
+    expect(command).toContain('{ cd apps/web && npx vitest run src/a.test.ts\n}');
+    expect(command).not.toContain('| tail -15');
+    expect(command).toContain(join(specDir, 'logs').replace(/\\/g, '/'));
   });
 
   it('still denies what the security hooks deny', () => {
