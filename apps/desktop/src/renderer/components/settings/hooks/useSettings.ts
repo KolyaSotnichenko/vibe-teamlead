@@ -6,14 +6,14 @@ import { UI_SCALE_DEFAULT } from '../../../../shared/constants';
 type SettingsKey = keyof AppSettings;
 
 /** Settings previewed through the store before they are saved. */
-const PREVIEW_KEYS = new Set<SettingsKey>(['theme', 'colorTheme', 'uiScale']);
+const PREVIEW_KEYS = new Set<SettingsKey>(['theme', 'colorTheme', 'uiScale', 'language']);
 
 /**
  * Custom hook for managing application settings in the settings dialog.
  *
  * Edits stay local until saveSettings() runs (the dialog calls it when a section is left or
  * the dialog closes). Only the settings that changed are written, and nothing is written when
- * nothing changed. Theme and UI scale are previewed through the store at once; discardChanges()
+ * nothing changed. Theme, UI scale and language are previewed through the store at once; discardChanges()
  * drops the pending edits and reverts that preview.
  */
 export function useSettings() {
@@ -28,22 +28,24 @@ export function useSettings() {
   // Settings edited in the dialog and not yet saved
   const dirtyKeysRef = useRef<Set<SettingsKey>>(new Set());
 
-  // The theme/scale before any preview, restored by discardChanges()
+  // The theme/scale/language before any preview, restored by discardChanges()
   const originalThemeRef = useRef<{
     theme: AppSettings['theme'];
     colorTheme: AppSettings['colorTheme'];
     uiScale: number;
+    language: AppSettings['language'];
   }>({
     theme: currentSettings.theme,
     colorTheme: currentSettings.colorTheme,
-    uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
+    uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT,
+    language: currentSettings.language
   });
 
   // Follow the store, keeping the edits that are still pending
   useEffect(() => {
     const merged = { ...currentSettings } as Record<SettingsKey, unknown>;
     for (const key of dirtyKeysRef.current) {
-      // Saved elsewhere already (the Claude mode is saved when picked); a theme/scale
+      // Saved elsewhere already (the Claude mode is saved when picked); a theme/scale/language
       // preview only shows in the store and still needs saving
       if (!PREVIEW_KEYS.has(key) && currentSettings[key] === settingsRef.current[key]) {
         dirtyKeysRef.current.delete(key);
@@ -59,7 +61,8 @@ export function useSettings() {
       originalThemeRef.current = {
         theme: currentSettings.theme,
         colorTheme: currentSettings.colorTheme,
-        uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
+        uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT,
+        language: currentSettings.language
       };
     }
   }, [currentSettings]);
@@ -132,13 +135,14 @@ export function useSettings() {
     setSettings({ ...settingsRef.current, ...partial });
   };
 
-  /** Restores the theme/scale from before the preview. */
+  /** Restores the theme/scale/language from before the preview. */
   const revertTheme = useCallback(() => {
     const original = originalThemeRef.current;
     updateStoreSettings({
       theme: original.theme,
       colorTheme: original.colorTheme,
-      uiScale: original.uiScale
+      uiScale: original.uiScale,
+      language: original.language
     });
   }, [updateStoreSettings]);
 
@@ -148,7 +152,8 @@ export function useSettings() {
     originalThemeRef.current = {
       theme: current.theme,
       colorTheme: current.colorTheme,
-      uiScale: current.uiScale ?? UI_SCALE_DEFAULT
+      uiScale: current.uiScale ?? UI_SCALE_DEFAULT,
+      language: current.language
     };
   }, []);
 

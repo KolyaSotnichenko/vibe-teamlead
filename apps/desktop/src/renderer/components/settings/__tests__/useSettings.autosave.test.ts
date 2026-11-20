@@ -71,6 +71,30 @@ describe('useSettings autosave', () => {
     expect(saveSettingsIpc).toHaveBeenCalledWith({ theme: 'dark' });
   });
 
+  // LanguageSettings shows the new language at once through the store; it was then never written
+  it('still saves a previewed language, though the store already shows it', async () => {
+    const { result } = renderHook(() => useSettings());
+    act(() => {
+      result.current.setSettings({ ...result.current.settings, language: 'uk' });
+      useSettingsStore.getState().updateSettings({ language: 'uk' });
+    });
+    expect(result.current.hasUnsavedChanges()).toBe(true);
+    await act(async () => { await result.current.saveSettings(); });
+    expect(saveSettingsIpc).toHaveBeenCalledWith({ language: 'uk' });
+  });
+
+  it('discarding a previewed language goes back to the saved one', () => {
+    act(() => useSettingsStore.getState().updateSettings({ language: 'en' }));
+    const { result } = renderHook(() => useSettings());
+    act(() => {
+      result.current.setSettings({ ...result.current.settings, language: 'uk' });
+      useSettingsStore.getState().updateSettings({ language: 'uk' });
+    });
+    act(() => result.current.discardChanges());
+    expect(useSettingsStore.getState().settings.language).toBe('en');
+    expect(result.current.hasUnsavedChanges()).toBe(false);
+  });
+
   it('reports a failed save and keeps the change pending', async () => {
     saveSettingsIpc.mockResolvedValueOnce({ success: false });
     const { result } = renderHook(() => useSettings());

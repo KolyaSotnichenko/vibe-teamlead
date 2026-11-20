@@ -14,7 +14,7 @@ interface LanguageSettingsProps {
 
 /**
  * Language settings section for interface language selection
- * Changes apply immediately for live preview, saved on "Save Settings"
+ * Changes apply immediately for live preview, and are saved when the section is left or the dialog closes
  */
 export function LanguageSettings({ settings, onSettingsChange }: LanguageSettingsProps) {
   const { t, i18n } = useTranslation('settings');
