@@ -1305,6 +1305,7 @@ async function runQualityAssurance(
             commands: verification.commands,
             env: verification.env,
             lockDir: verification.lockDir,
+            previewServices: verification.previewServices,
             baseResults: verificationBaseResults,
             // A commit already checked is not checked again, unless the user asked to run QA again
             memory: verification.memory,

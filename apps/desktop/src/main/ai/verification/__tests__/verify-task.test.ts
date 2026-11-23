@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DockerRun } from '../test-services';
 import { describeVerification, failureSummary, onlyAddsTestFiles, type TamperFinding, verificationEnv, verificationIsConclusive, verificationIssues, verificationSummary, verifyTask, withVerifyLock, type VerifyTaskOptions } from '../verify-task';
@@ -187,6 +187,87 @@ describe('verifyTask', () => {
     expect(report.checks[0].outcome).toBe('timed_out');
     expect(Date.now() - started).toBeLessThan(20_000);
   }, 30_000);
+
+  describe('the project starts', () => {
+    type Starts = NonNullable<VerifyTaskOptions['startsCheck']>;
+    /** A stand-in for starting the project: the copy has its own answer */
+    const startsBy = (answer: (cwd: string, files: string[]) => Awaited<ReturnType<Starts>>) =>
+      vi.fn<Starts>(async (o) => answer(o.cwd, o.files));
+    /** Passes where good.txt is in the copy, fails where it is not */
+    const byGoodFile = startsBy((cwd) => (existsSync(join(cwd, 'good.txt')) ? { outcome: 'passed' } : { outcome: 'failed', tail: 'web did not start\nMissing script: dev' }));
+
+    it('is one of the checks, and passes when the project starts', async () => {
+      const report = await verify({ startsCheck: byGoodFile });
+      expect(report.status).toBe('passed');
+      expect(report.checks.map((c) => c.name)).toEqual(['test -f good.txt', 'starts']);
+      expect(report.checks[1]).toMatchObject({ name: 'starts', command: 'start the project by its recipe', outcome: 'passed' });
+    });
+
+    it('blocks a task that makes the project stop starting, when the base starts', async () => {
+      const startsCheck = startsBy((cwd) => (existsSync(join(cwd, 'task.txt')) ? { outcome: 'failed', tail: 'web did not start' } : { outcome: 'passed' }));
+      const report = await verify({ startsCheck });
+      expect(report.status).toBe('regression');
+      expect(report.checks.find((c) => c.name === 'starts')).toMatchObject({ outcome: 'failed', onBase: 'passed', tail: 'web did not start' });
+    });
+
+    it('does not block a task when the base does not start either', async () => {
+      const startsCheck = startsBy(() => ({ outcome: 'failed', tail: 'web did not start' }));
+      const report = await verify({ startsCheck });
+      expect(report.status).toBe('not_verified');
+      expect(report.checks.find((c) => c.name === 'starts')).toMatchObject({ outcome: 'failed', onBase: 'failed', tailOnBase: 'web did not start' });
+    });
+
+    it('is absent for a project with nothing to start, and says what it could not tell', async () => {
+      expect((await verify({ startsCheck: startsBy(() => null) })).checks.map((c) => c.name)).toEqual(['test -f good.txt']);
+      const unavailable = await verify({ startsCheck: startsBy(() => ({ outcome: 'unavailable', tail: 'Port 10000 is in use' })) });
+      expect(unavailable.status).toBe('not_verified');
+      expect(unavailable.checks.find((c) => c.name === 'starts')).toMatchObject({ outcome: 'unavailable' });
+    });
+
+    it("gives the check the copy's files, the saved services, and why it can't say anything when a compose port is taken", async () => {
+      writeFileSync(join(repo, 'docker-compose.yml'), 'services:\n  azurite:\n    image: mcr.microsoft.com/azure-storage/azurite\n    ports: ["10000:10000"]\n    healthcheck: { test: ["CMD", "true"] }\n');
+      commit(repo, 'azurite');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      let readInCopy: string | null = null;
+      const startsCheck = vi.fn<Starts>(async (o) => {
+        readInCopy = o.read('good.txt');
+        return { outcome: 'passed' };
+      });
+      const docker: DockerRun = async (args) => (args[0] === 'run' ? { ok: true, stdout: 'c1\n' } : args[0] === 'port' ? { ok: true, stdout: '127.0.0.1:50000\n' } : { ok: true, stdout: '' });
+      const saved = [{ name: 'site', dir: '', command: 'make serve', page: true }];
+      await verify({ startsCheck, docker, previewServices: saved, hostPortFree: async (port) => port !== 10000 });
+      const given = startsCheck.mock.calls[0][0];
+      expect(given.files).toEqual(expect.arrayContaining(['good.txt', 'task.txt', 'docker-compose.yml']));
+      expect(readInCopy).toBe('yes\n');
+      expect(given.saved).toEqual(saved);
+      expect(given.cannot).toMatch(/Port 10000 is in use/);
+      // Its own name for this run's servers
+      expect(given.runId).toMatch(/^[0-9a-f]{6,}$/);
+    });
+
+    it('runs even when the project has no other check', async () => {
+      const report = await verify({ commands: undefined, detected: { install: [], checks: [] }, previewServices: [{ name: 'site', dir: '', command: 'make serve', page: true }], startsCheck: byGoodFile });
+      expect(report.checks.map((c) => c.name)).toEqual(['starts']);
+      expect(report.status).toBe('passed');
+    });
+
+    it("lists a changed preview.json for the reviewer, and does not block a new project's first task on it alone", async () => {
+      writeFileSync(join(wt, 'preview.json'), '{"version":1,"kind":"web"}\n');
+      commit(wt, 'recipe');
+      const report = await verify({ startsCheck: byGoodFile });
+      expect(report.runnerConfigChanged).toContain('preview.json');
+    });
+
+    it('is started again only when its failure was a port in use, not for any failure', async () => {
+      const startsCheck = startsBy(() => ({ outcome: 'failed', tail: 'web did not start' }));
+      await verify({ startsCheck });
+      // Once on the task, once on the base
+      expect(startsCheck).toHaveBeenCalledTimes(2);
+      const busy = vi.fn<Starts>().mockResolvedValueOnce({ outcome: 'failed', tail: 'Error: listen EADDRINUSE: address already in use :::3000' }).mockResolvedValue({ outcome: 'passed' });
+      const report = await verify({ startsCheck: busy });
+      expect(report.checks.find((c) => c.name === 'starts')).toMatchObject({ outcome: 'passed', flaky: true });
+    });
+  });
 
   describe("a database the project's tests need", () => {
     const fakeDocker = () => {

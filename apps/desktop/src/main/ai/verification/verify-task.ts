@@ -10,7 +10,7 @@
  * It is no sandbox. No Electron imports: this runs in the worker too.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
@@ -25,6 +25,14 @@ import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './t
 import { createRunNetwork, startComposeServices } from './compose-runner';
 import { adapterOf, bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
 import { localPortFree } from '../../preview/preview-ports';
+import { probeThroughPage } from '../../preview/probe';
+import type { PreviewService } from '../../../shared/types/project';
+import { startDevServer, stopDevServer } from '../dev-servers/dev-servers';
+import { createServer } from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { STARTS_CHECK, startsCheck as realStartsCheck, type StartsCheckOptions, type StartsResult } from './starts-check';
+import type { ComposeWiring } from './compose-env';
+import type { StartedService } from './detect-checks';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
 
@@ -102,6 +110,10 @@ export interface VerifyTaskOptions {
   docker?: DockerRun;
   /** Whether nothing on this computer holds a local port. Default: a real look. For tests. */
   hostPortFree?: (port: number) => Promise<boolean>;
+  /** The project's saved preview services: what the start-up check starts when the copy has no preview.json */
+  previewServices?: PreviewService[];
+  /** Instead of starting the project for real. For tests. */
+  startsCheck?: (options: StartsCheckOptions) => Promise<StartsResult | null>;
   installTimeoutMs?: number;
   git?: string;
   hostEnv?: NodeJS.ProcessEnv;
@@ -121,9 +133,17 @@ const KEPT_ENV = /^(HOME|USER|LOGNAME|SHELL|TERM|TMPDIR|LANG|LC_[A-Z]+|JAVA_HOME
 const KEPT_WINDOWS_ENV = new Set<string>(WINDOWS_HOST_ENV.map((name) => name.toLowerCase()));
 
 /** A project's check settings, or nothing when they are off. Pure. */
-export function projectVerification(projectPath: string, settings: { verifyEnabled?: boolean; verifyCommands?: string[]; verifyEnv?: Record<string, string> } | undefined): { commands?: string[]; env: Record<string, string>; lockDir: string } | undefined {
+export function projectVerification(
+  projectPath: string,
+  settings: { verifyEnabled?: boolean; verifyCommands?: string[]; verifyEnv?: Record<string, string>; previewServices?: PreviewService[] } | undefined,
+): { commands?: string[]; env: Record<string, string>; lockDir: string; previewServices?: PreviewService[] } | undefined {
   if (settings?.verifyEnabled === false) return undefined;
-  return { commands: settings?.verifyCommands, env: settings?.verifyEnv ?? {}, lockDir: join(projectPath, '.vibe-teamlead', 'verify.lock') };
+  return {
+    commands: settings?.verifyCommands,
+    env: settings?.verifyEnv ?? {},
+    lockDir: join(projectPath, '.vibe-teamlead', 'verify.lock'),
+    ...(settings?.previewServices?.length ? { previewServices: settings.previewServices } : {}),
+  };
 }
 
 /** Pure. */
@@ -178,7 +198,7 @@ function codeOf(line: string): string {
   if (/^\s*(\/\/|\/\*|\*|--|#(?!\[))/.test(line)) return '';
   return line.replace(/\s\/\/.*$/, '');
 }
-const RUNNER_CONFIG = /(^|\/)(\.npmrc|\.yarnrc(\.yml)?|\.pnpmfile\.cjs|\.mocharc[^/]*|\.rspec|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Makefile|Rakefile|phpunit\.xml(\.dist)?|pom\.xml|mvnw|gradlew|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|Directory\.Build\.props|Cargo\.toml|go\.mod|Package\.swift|(vitest|vite|jest|playwright|karma)\.config\.[^/]+)$/;
+const RUNNER_CONFIG = /(^|\/)(preview\.json|\.npmrc|\.yarnrc(\.yml)?|\.pnpmfile\.cjs|\.mocharc[^/]*|\.rspec|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Makefile|Rakefile|phpunit\.xml(\.dist)?|pom\.xml|mvnw|gradlew|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|Directory\.Build\.props|Cargo\.toml|go\.mod|Package\.swift|(vitest|vite|jest|playwright|karma)\.config\.[^/]+)$/;
 
 function scriptsOf(text: string): Record<string, unknown> {
   try {
@@ -294,6 +314,47 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
   };
 }
 
+/** A failure of the start-up check that says only that a port was taken: it is run once more */
+const PORT_IN_USE = /EADDRINUSE|address already in use|port is already allocated/i;
+
+/** Whether a commit could have something to start: a recipe, saved services, or the files a proposal reads */
+async function mayStart(run: GitRun, commit: string, saved: PreviewService[] | undefined): Promise<boolean> {
+  if (saved?.length) return true;
+  const files = (await run(['ls-tree', '-r', '-z', '--name-only', commit])).raw.split('\0').filter(Boolean);
+  return files.some((file) => /(^|\/)(preview\.json|package\.json|manage\.py|artisan|go\.mod|pyproject\.toml|requirements\.txt|Gemfile)$/.test(file));
+}
+
+/** A free local port: a server on port 0, closed at once */
+function anyFreePort(): Promise<number> {
+  return new Promise((resolvePort, reject) => {
+    const server = createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => resolvePort(port));
+    });
+  });
+}
+
+/** What the start-up check starts servers with: the app's dev-server manager, with the copy's short environment */
+function startsDeps(hostEnv: NodeJS.ProcessEnv, projectEnv: Record<string, string>): StartsCheckOptions['deps'] {
+  return {
+    startServer: (start) => startDevServer({ ...start, env: { ...(verificationEnv(hostEnv, projectEnv) as Record<string, string>), ...start.env } }),
+    stopServer: stopDevServer,
+    pickPort: anyFreePort,
+    portFree: localPortFree,
+    probe: probeThroughPage,
+    readLog: (path) => {
+      try {
+        return readFileSync(path, 'utf-8');
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
 /** A duration for the log: 4.2s, 1m16s */
 /**
  * Whether running the same checks again could only say the same: every check ran to an exit
@@ -340,13 +401,15 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     : detected.checks;
   const tamper = await findTamper(run, baseCommit, commit);
   const runnerConfigChanged = (await run(['-c', 'core.quotepath=off', 'diff', '--name-only', '-z', baseCommit, commit])).raw.split('\0').filter((file) => RUNNER_CONFIG.test(file)).sort();
-  if (!checks.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
+  // Nothing to check and nothing to start: there is nothing to say
+  if (!checks.length && !(await mayStart(run, commit, options.previewServices))) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
 
   /** Progress for the task's log: these checks take minutes, and a silent log looks stuck */
   const say = (line: string) => onLog?.(`App checks: ${line}`);
   // The same commit, base, commands and settings give the same answer: it is not asked twice
   const memory: CheckMemory | undefined = options.memory ? openCheckMemory(options.memory, options.lockDir) : undefined;
-  const settings = [options.commands ?? null, Object.entries(options.env).sort(([a], [b]) => a.localeCompare(b))];
+  // The saved preview services decide what the start-up check starts: they are part of what a result was got with
+  const settings = [options.commands ?? null, Object.entries(options.env).sort(([a], [b]) => a.localeCompare(b)), options.previewServices ?? null];
   const reportKey = memoryKey([commit, baseCommit, settings]);
   const kept = options.fresh ? undefined : memory?.report(reportKey);
   if (kept) {
@@ -396,7 +459,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   /** Whether the last copy had to do without a database or service it needs: its failures may be only that */
   let copyWithoutServices = false;
   /** A clean copy of a commit, gone afterwards */
-  const inCopy = async <T>(at: string, work: (cwd: string) => Promise<T>): Promise<T> => {
+  const inCopy = async <T>(at: string, work: (cwd: string, services: { started: StartedService[]; compose: ComposeWiring }) => Promise<T>): Promise<T> => {
     const parent = mkdtempSync(join(tmpdir(), 'vibe-teamlead-verify-'));
     const cwd = join(parent, 'copy');
     say(`a clean copy of ${at.slice(0, 7)}`);
@@ -444,7 +507,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         migratable = !ownDatabase && !from.committedDatabase && started.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
         // Example values aren't secrets, the project's own values and the database addresses are
         secrets = [...Object.values(options.env), ...started.started.flatMap((service) => [service.url, new URL(service.url).password]), ...composeSecrets(compose.started)];
-        return await work(cwd);
+        return await work(cwd, { started: started.started, compose: { planned: from.compose, started: compose.started } });
       } finally {
         await compose.stop();
         await started.stop();
@@ -481,7 +544,49 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     return undefined;
   };
 
-  const results = await inCopy(commit, async (cwd) => {
+  const startsCheck = options.startsCheck ?? realStartsCheck;
+  /** This run's own servers: another project's run may be starting its project at the same time */
+  const runId = randomBytes(4).toString('hex');
+  /** The project started in this copy, by its recipe; once more when it failed only for a port in use */
+  const starts = async (cwd: string, at: string, services: { started: StartedService[]; compose: ComposeWiring }): Promise<CheckResult | null> => {
+    const files = (await run(['ls-tree', '-r', '-z', '--name-only', at])).raw.split('\0').filter(Boolean);
+    const read = (file: string) => {
+      try {
+        return readFileSync(join(cwd, file), 'utf-8');
+      } catch {
+        return null;
+      }
+    };
+    const once = () => startsCheck({
+      cwd, files, read, runId, saved: options.previewServices ?? [], started: services.started, compose: services.compose,
+      ...(startsCannot ? { cannot: startsCannot } : {}),
+      runCommand: async (command, dir, variables) => {
+        const result = await runShell(command, { cwd: dir, env: verificationEnv(hostEnv, { ...variables, ...options.env }), timeoutMs: installTimeout, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024 });
+        return { code: result.code, output: `${result.stdout}${result.stderr}`, timedOut: result.timedOut };
+      },
+      deps: startsDeps(hostEnv, options.env),
+      signal,
+    });
+    say('starting the project by its recipe');
+    const startedAt = Date.now();
+    let result = await once();
+    if (!result) {
+      say('nothing to start: no recipe or single page');
+      return null;
+    }
+    let flaky = false;
+    if (result.outcome === 'failed' && PORT_IN_USE.test(result.tail ?? '')) {
+      const again = await once();
+      if (again?.outcome === 'passed') {
+        result = again;
+        flaky = true;
+      }
+    }
+    say(`the project ${result.outcome === 'passed' ? 'started' : result.outcome.replace('_', ' ')} in ${took(Date.now() - startedAt)}`);
+    return { ...STARTS_CHECK, outcome: result.outcome, ...(result.tail ? { tail: redact(result.tail) } : {}), ...(flaky ? { flaky } : {}) };
+  };
+
+  const results = await inCopy(commit, async (cwd, services) => {
     const failedInstall = await install(cwd);
     if (failedInstall) return [failedInstall];
     const done: CheckResult[] = [];
@@ -500,6 +605,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       say(`${check.command} ${result.outcome.replace('_', ' ')} in ${took(Date.now() - startedAt)}${flaky ? ' (on the second try)' : ''}`);
       done.push({ ...check, ...result, ...(flaky ? { flaky } : {}) });
     }
+    const started = await starts(cwd, commit, services);
+    if (started) done.push(started);
     return done;
   });
 
@@ -521,11 +628,18 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   const unknown = source ? [] : failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
   if (unknown.length) {
     for (const result of unknown) say(`${result.command} ${result.outcome.replace('_', ' ')}: running it on ${baseRef} to see whether the task broke it`);
-    await inCopy(baseCommit, async (cwd) => {
+    await inCopy(baseCommit, async (cwd, services) => {
       const failedInstall = await install(cwd);
       for (const result of unknown) {
         const key = `${baseCommit}\0${result.command}`;
         if (result.name === 'install' || result.name === 'prepare') baseResults.set(key, failedInstall?.command === result.command ? failedInstall.outcome : 'passed');
+        else if (result.name === STARTS_CHECK.name && !failedInstall) {
+          // The base started by its own recipe: a base with nothing to start can't be compared with
+          const onBase = await starts(cwd, baseCommit, services);
+          baseResults.set(key, onBase?.outcome ?? 'unavailable');
+          if (onBase?.tail) baseTails.set(key, onBase.tail);
+          say(`on ${baseRef}, the project ${onBase?.outcome === 'passed' ? 'started: the task broke its start' : `${(onBase?.outcome ?? 'unavailable').replace('_', ' ')} too: it says nothing about the task`}`);
+        }
         else if (failedInstall) {
           baseResults.set(key, failedInstall.outcome);
           baseTails.set(key, failedInstall.tail ?? '');
@@ -556,7 +670,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     if (result.onBase !== 'passed' && baseTails.has(key)) result.tailOnBase = baseTails.get(key);
   }
 
-  const broke = failed.some((result) => (source ? blocksOnItsOwn(result) : result.onBase === 'passed'));
+  // A new project's first task is not blocked by its start alone: there is no base that started to compare with
+  const broke = failed.some((result) => (source ? blocksOnItsOwn(result) && result.name !== STARTS_CHECK.name : result.onBase === 'passed'));
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
   const report: VerificationReport = { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
   if (memory && isAnAnswer(report) && !portsMoved) memory.keepReport(reportKey, report);

@@ -83,7 +83,7 @@ export interface SerializableSessionConfig {
   /** The project's default pipeline (Settings → Project → Queue; resolved in the main process) */
   defaultPipeline?: import('../../../shared/pipeline').PipelineChoice;
   /** The app's own run of the project's checks (resolved in the main process); absent when off */
-  verification?: { commands?: string[]; env: Record<string, string>; lockDir: string; memory?: import('../verification/check-memory').CheckMemoryPlace };
+  verification?: { commands?: string[]; env: Record<string, string>; lockDir: string; previewServices?: import('../../../shared/types/project').PreviewService[]; memory?: import('../verification/check-memory').CheckMemoryPlace };
   /** The app's Claude credential: an API key, or a subscription token (personal mode only) */
   apiKey?: string;
   /** Optional Anthropic-compatible endpoint */

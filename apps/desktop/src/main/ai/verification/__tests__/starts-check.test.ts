@@ -53,6 +53,12 @@ describe('the start-up check', () => {
     expect(stopped.sort()).toEqual(['starts-api', 'starts-web']);
   });
 
+  it("names its servers after the run, so two runs at once don't stop each other's", async () => {
+    const { options, started } = setup({ 'preview.json': JSON.stringify(RECIPE) }, { runId: 'a1b2c3' });
+    await startsCheck(options);
+    expect(started).toEqual(['starts-a1b2c3-api', 'starts-a1b2c3-web']);
+  });
+
   it('fails, naming the service, when one does not start', async () => {
     const { options, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, {
       startServer: vi.fn(async (o: { name: string }) => {

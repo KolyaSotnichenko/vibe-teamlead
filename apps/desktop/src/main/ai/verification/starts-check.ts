@@ -43,6 +43,8 @@ export interface StartsCheckOptions {
   compose: ComposeWiring;
   /** A reason the check can't say anything this run (a compose port it needs is taken) */
   cannot?: string;
+  /** Goes into the servers' names: the app's dev servers are told apart by name, and two runs may be at work at once */
+  runId?: string;
   runCommand: (command: string, cwd: string, env: Record<string, string>) => Promise<{ code: number; output: string; timedOut?: boolean }>;
   deps: StartServicesDeps;
   /** How long the services must stay up after the page answered */
@@ -103,7 +105,7 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
           services,
           root: cwd,
           specDir: resolve(cwd, '.vibe-teamlead', 'specs', 'starts-check'),
-          serverName: (service) => `starts-${service.name}`,
+          serverName: (service) => (options.runId ? `starts-${options.runId}-${service.name}` : `starts-${service.name}`),
           read,
           baseVars: varsFor,
           timeoutMs: options.timeoutMs ?? SERVER_TIMEOUT_MS,
