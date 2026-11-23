@@ -118,7 +118,7 @@ export interface PreviewAddressIssue {
  * made the sentence itself (no key, a session that failed).
  */
 export type PreviewFix =
-  | { state: 'running'; tries: number }
+  | { state: 'running'; tries: number; /** Checking the project before its start, not after a failure */ check?: true }
   /** Nothing ran for this failure: the owner may ask */
   | { state: 'idle' }
   | { state: 'done'; outcome: 'fixed'; summary: string; summarySaid?: SaidText }

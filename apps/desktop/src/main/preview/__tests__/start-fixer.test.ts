@@ -339,3 +339,52 @@ describe('the fixer of a failed start', () => {
     expect(sent.at(-1)?.fix).toBeUndefined();
   });
 });
+
+describe('the check before a start', () => {
+  const INFO: FailedStart = { key: 'check-k', recipe: USED, source: 'proposal', base: 'none' };
+
+  it('has the agent check the project and try its recipe; one that came up is kept, and the started preview is the answer', async () => {
+    const { project, deps, fixer, sent } = setup();
+    const status = await fixer.check(project, INFO, { changed: ['apps/api/migrations/0023_email.sql'] });
+    expect(vi.mocked(deps.fix).mock.calls[0][0]).toMatchObject({ failure: {}, recipe: USED, source: 'proposal', check: { changed: ['apps/api/migrations/0023_email.sql'] } });
+    expect(sent.some((s) => s.fix?.state === 'running' && s.fix.check === true)).toBe(true);
+    expect(status).toMatchObject({ stage: 'ready', fix: { state: 'done', outcome: 'fixed' } });
+    expect(project.settings.previewPendingRecipe).toMatchObject({ recipe: GOOD, origin: 'agent' });
+    expect(deps.settle).toHaveBeenCalledWith('p1');
+    expect(fixer.running()).toBe(false);
+  });
+
+  it('counts toward the day: past three runs it does not check, and the start goes on as before', async () => {
+    const { project, deps, fixer } = setup();
+    for (let i = 0; i < 3; i += 1) await fixer.check(project, { ...INFO, key: `k${i}` }, { changed: [], first: true });
+    expect(await fixer.check(project, { ...INFO, key: 'k4' }, { changed: [], first: true })).toBeNull();
+    expect(deps.fix).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not run when the owner turned the agent off, or without a key', async () => {
+    const off = setup({}, { previewFixAutomatically: false });
+    expect(await off.fixer.check(off.project, INFO, { changed: [], first: true })).toBeNull();
+    const nokey = setup({ hasCredential: () => false });
+    expect(await nokey.fixer.check(nokey.project, INFO, { changed: [], first: true })).toBeNull();
+    expect(off.deps.fix).not.toHaveBeenCalled();
+    expect(nokey.deps.fix).not.toHaveBeenCalled();
+  });
+
+  it("shows what it found on the last try's status when it could not make it start, and does not start a second agent for it", async () => {
+    const missing = [{ what: 'Docker', why: 'потрібен для postgres' }];
+    const { project, deps, fixer, emit } = setup({
+      fix: vi.fn(async (run: FixRun): Promise<FixOutcome> => {
+        await run.tryRecipe(GOOD);
+        return { outcome: 'needs_owner', summary: 'Бракує Docker.', missing };
+      }),
+    });
+    vi.mocked(deps.tryStart).mockImplementation(async () => {
+      emit(FAILED);
+      return FAILED;
+    });
+    const status = await fixer.check(project, INFO, { changed: [], first: true });
+    expect(status).toMatchObject({ stage: 'failed', fix: { state: 'done', outcome: 'needs_owner', summary: 'Бракує Docker.' } });
+    await tick();
+    expect(deps.fix).toHaveBeenCalledTimes(1);
+  });
+});

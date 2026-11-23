@@ -4,6 +4,11 @@ import { ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../../shared/constants';
 
+// The check before a start syncs a real copy with git under the home folder: never here
+vi.mock('../../preview/check-before-start', () => ({
+  checkBeforeStart: vi.fn(async () => null),
+  carryLockfile: (sync: unknown) => ({ forCheck: sync, forStart: sync }),
+}));
 vi.mock('../../preview/preview-session', () => ({
   startPreview: vi.fn(async (project: { id: string }, onStatus: (s: unknown) => void) => {
     const status = { projectId: project.id, stage: 'ready', url: 'http://localhost:4100', origins: ['http://localhost:4100'] };

@@ -138,8 +138,8 @@
       "autoMergeHint": "A task merges by itself once QA approved it and the app's checks and Security QA are clean. Anything else, or a merge an agent changed code for, waits for you.",
       "previewHoldLabel": "UI tasks wait for my preview",
       "previewHoldHint": "A task that changed UI files stops in Human Review instead of merging, so you can look at it in its Preview tab first. It keeps its slot until you merge it or send notes.",
-      "previewFixLabel": "Fix a failed preview start with an agent",
-      "previewFixHint": "When the project does not start in Preview, one agent session works out why: once for each distinct failure and at most three times a day. It never sees the values of your settings. Off: the failed preview has a button instead.",
+      "previewFixLabel": "Check and fix preview starts with an agent",
+      "previewFixHint": "Before a start, when what decides how the project starts changed (dependencies, migrations, compose, example settings), one agent session checks it and tries its recipe; when the project does not start, one works out why. At most three sessions a day. It never sees the values of your settings. Off: neither runs by itself, and a failed preview has a button instead.",
       "defaultPipelineLabel": "Pipeline for tasks",
       "defaultPipelineHint": "The pipeline of every task that chooses none of its own, tasks from a spec document included. A task can still choose another in its form. It does not apply to tasks the architect designs, quick fixes from the preview and tasks the app makes to repair main."
     },
@@ -1119,6 +1119,7 @@
     "recipeInvalid": "preview.json was not used: {{reason}} The preview worked out what to run by itself.",
     "fix": {
       "running": "An agent is working out how to start this project.",
+      "checking": "An agent is checking that this project will start: what changed since the last check, migrations, services. The app starts it by the agent's recipe.",
       "tries": "Try {{n}} of {{max}}",
       "stop": "Stop",
       "fixed": "Started. What the agent changed: {{summary}}",

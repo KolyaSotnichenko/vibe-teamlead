@@ -32,7 +32,7 @@ import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
 import { readNotesDraft, writeNotesDraft } from '../preview/notes-draft';
-import { previewWorktreePath } from '../preview/preview-worktree';
+import { previewWorktreePath, syncPreviewWorktree } from '../preview/preview-worktree';
 import { readRunningMd } from '../preview/running-md';
 import { runClaudeTask } from '../ai/claude-code/task';
 import { getFeatureSettings } from './feature-settings-helper';
@@ -41,7 +41,8 @@ import { findOnPath, searchPath } from '../platform/exec';
 import { fixFacts } from '../preview/fix-facts';
 import { failureKey, openFixLedger } from '../preview/fix-ledger';
 import { fixStart } from '../preview/fix-start';
-import { createStartFixer } from '../preview/start-fixer';
+import { createStartFixer, type FixRun } from '../preview/start-fixer';
+import { carryLockfile, checkBeforeStart } from '../preview/check-before-start';
 import { readSettingsFile } from '../settings-utils';
 import { PreviewView } from '../preview/preview-view';
 import { projectStore } from '../project-store';
@@ -182,7 +183,9 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
   // One UX review at a time, on the running preview; it ends when the preview stops
   let uxReview: AbortController | null = null;
   // The agent that fixes a failed start of a project's preview: every status passes through it on its way to the page
-  const startDeps = () => ({ git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() });
+  /** A check before a start moves the copy first: a lockfile change it saw is carried to the start, which installs */
+  const syncs = carryLockfile(syncPreviewWorktree);
+  const startDeps = () => ({ git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot(), sync: syncs.forStart });
   /**
    * The preview's copy of main, the only folder the agent works in; null before the first start made
    * one. Never the project's own folder: its `.env` and the owner's uncommitted work are there.
@@ -196,7 +199,18 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     updateSettings: (id, settings) => {
       projectStore.updateProjectSettings(id, settings);
     },
-    describe: async (project, failed) => {
+    describe: (project, failed) => fixerDescribe(project, failed),
+    ledger: (projectId) => openFixLedger(app.getPath('userData'), projectId),
+    hasCredential: () => getClaudeCredentialStatus().configured,
+    fix: async (run) => fixRun(run),
+    tryStart: (project) => startPreview(project, onStatus, startDeps()),
+    stop: (projectId) => stopPreview(projectId),
+    settle: (projectId) => settleSoon(projectId),
+    send: (status) => send(status),
+  });
+
+  /** The failed start (or the start a check is for) as the ledger knows it, with the recipe it used */
+  async function fixerDescribe(project: Project, failed: PreviewStatus) {
       const dir = mainCopy(project);
       // A start that failed before there was a copy of main: nothing for the agent to work in
       if (!dir) return null;
@@ -216,10 +230,10 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       }
       const mainText = await mainRecipeText(project.path, mainBranchOf(project), { git: getToolPath('git'), env: getIsolatedGitEnv() });
       return { key: failureKey({ commit, recipe: resolved.recipe, stage: failed.failedAt, service: failed.failedService }), recipe: resolved.recipe, source: resolved.source, base: recipeHash(mainText) };
-    },
-    ledger: (projectId) => openFixLedger(app.getPath('userData'), projectId),
-    hasCredential: () => getClaudeCredentialStatus().configured,
-    fix: async (run) => {
+  }
+
+  /** One session of the agent, with the facts of this machine and the project's secrets kept from it */
+  async function fixRun(run: FixRun) {
       const project = projectStore.getProject(run.projectId);
       if (!project) throw new Error('Project not found');
       const dir = mainCopy(project);
@@ -252,13 +266,9 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
         secrets,
         // A recipe whose folder is a link out of the copy is not tried
         contained: (folder) => isPathContained(path.resolve(dir, folder), dir).contained,
+        ...(run.check ? { check: run.check } : {}),
       });
-    },
-    tryStart: (project) => startPreview(project, onStatus, startDeps()),
-    stop: (projectId) => stopPreview(projectId),
-    settle: (projectId) => settleSoon(projectId),
-    send: (status) => send(status),
-  });
+  }
 
   const onStatus = (status: PreviewStatus) => {
     if (status.stage !== 'ready') uxReview?.abort();
@@ -303,6 +313,25 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     view.setWorktree(task?.worktree ?? previewWorktreePath(previewWorktreesRoot(), projectId));
     try {
       if (!task) settleSoon(projectId);
+      // The project's own preview: the agent checks it first when what decides its start changed
+      if (!task) {
+        const worktree = previewWorktreePath(previewWorktreesRoot(), projectId);
+        const checked = await checkBeforeStart({
+          sync: async () => {
+            await syncs.forCheck(project.path, mainBranchOf(project), getToolPath('git'), worktree);
+          },
+          files: () => previewFiles(worktree, (project.settings.previewServices ?? []).map((s) => s.dir)),
+          read: safeRead(worktree),
+          checked: project.settings.previewCheckedInputs,
+          describe: () => fixerDescribe(project, { projectId, stage: 'failed', origins: [], failedAt: 'worktree' }),
+          check: (info, check) => fixer.check(project, info, check),
+          remember: (inputs) => projectStore.updateProjectSettings(projectId, { previewCheckedInputs: inputs }),
+        });
+        if (checked) {
+          sayDropped(projectId);
+          return { success: true, data: checked };
+        }
+      }
       const status = await startPreview(project, onStatus, startDeps(), { resetData, task });
       if (!task) sayDropped(projectId);
       return { success: true, data: status };

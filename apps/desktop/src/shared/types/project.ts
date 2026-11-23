@@ -56,6 +56,8 @@ export interface ProjectSettings {
   previewServiceEnv?: Record<string, Record<string, string>>;
   /** Whether a failed preview start asks the agent by itself (absent: yes). Off: the failed preview has a button instead. */
   previewFixAutomatically?: boolean;
+  /** What decided the project's start when the agent last checked it before a start (preview/start-inputs.ts): file → short hash */
+  previewCheckedInputs?: Record<string, string>;
   /** A recipe made in the app that the app has not written into the project's main branch yet */
   previewPendingRecipe?: import('./preview').PendingRecipe;
   /** Placeholders the owner said to leave, as `file\ntext` (loose-ends.ts) */

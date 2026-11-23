@@ -100,7 +100,11 @@ It proposes recipes (see "The recipe: preview.json"), and the app starts the pro
 - **Something is missing here.** A runtime to install, Docker to start, a value only you have. Each is listed, with **Open Environment** when it is a setting.
 - **It could not work it out.** What it found is shown.
 
-It starts by itself once for each distinct failure (the commit, the recipe, the stage and the service that failed) and at most three times a day per project; a session cut short because you left the preview counts too. A recipe by which the project came up and then stopped again is not kept. The same failure again shows what was found, with **Try again** (a new start, no agent) and **Ask the agent again**. To have only a button, turn off **Fix a failed preview start with an agent** in Settings → Project → Queue. It needs a Claude key (Settings → Claude); its model is under Settings → Feature models → Preview start-up.
+It starts by itself once for each distinct failure (the commit, the recipe, the stage and the service that failed) and at most three times a day per project; a session cut short because you left the preview counts too. A recipe by which the project came up and then stopped again is not kept. The same failure again shows what was found, with **Try again** (a new start, no agent) and **Ask the agent again**. To have only a button, and no check before a start, turn off **Check and fix preview starts with an agent** in Settings → Project → Queue. It needs a Claude key (Settings → Claude); its model is under Settings → Feature models → Preview start-up.
+
+### The agent checks first
+
+Before a start of the project's preview (not a task's), the app looks at what decides how the project starts: its package manifests and lockfiles, the compose files, the example settings, `RUNNING.md`, and the names of its migrations. When any of them changed since the last check, or the project was never checked, the same agent checks the project before anything starts: how it installs, migrates, seeds and runs, against the recipe. It tries its recipe, and the app starts the project by it; the preview you see is that start. A recipe that came up is kept, as above. While it works, the preview says "An agent is checking that this project will start", and **Stop** ends it. When nothing changed, the preview starts at once, with no agent. A check counts toward the three sessions a day; past them, or without a Claude key, the preview starts as before.
 
 ## Ports, and a page that can't reach its API
 

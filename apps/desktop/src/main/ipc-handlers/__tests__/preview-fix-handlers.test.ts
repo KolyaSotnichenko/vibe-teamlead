@@ -27,6 +27,12 @@ const session = vi.hoisted(() => ({
 const task = vi.hoisted(() => ({ runClaudeTask: vi.fn() }));
 
 vi.mock('../../preview/preview-session', () => session);
+// The check before a start syncs a real copy with git: these tests are about what follows it
+const checking = vi.hoisted(() => ({ result: null as unknown, calls: [] as unknown[] }));
+vi.mock('../../preview/check-before-start', () => ({
+  checkBeforeStart: vi.fn(async (deps: unknown) => { checking.calls.push(deps); return checking.result; }),
+  carryLockfile: (sync: unknown) => ({ forCheck: sync, forStart: sync }),
+}));
 // The preview's copies of main live under the home folder: a scratch one, never the real one
 vi.mock('node:os', async (original) => ({ ...(await original<Record<string, unknown>>()), homedir: () => state.home }));
 vi.mock('../../ai/claude-code/task', () => task);
@@ -88,6 +94,18 @@ describe('preview IPC: the agent that fixes a failed start', () => {
     });
     const view = { show: vi.fn(), hide: vi.fn(), setBounds: vi.fn(), navigate: vi.fn(), destroy: vi.fn(), setWorktree: vi.fn(), onOverlayEvent: vi.fn(() => () => {}) };
     registerPreviewHandlers(() => window as never, view as never);
+  });
+
+  it("checks the project's own preview before its start, and the check's last try is the start when it ran", async () => {
+    checking.result = { projectId: 'p1', stage: 'ready', url: 'http://localhost:5173', origins: [] };
+    try {
+      const answer = await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+      expect(answer).toMatchObject({ success: true, data: { stage: 'ready' } });
+      expect(checking.calls).toHaveLength(1);
+      expect(session.startPreview).not.toHaveBeenCalled();
+    } finally {
+      checking.result = null;
+    }
   });
 
   it('after a failed start, runs the agent once, starts the preview by its recipe, and keeps the recipe for the project', async () => {

@@ -187,6 +187,23 @@ describe('what counts as a try that came up', () => {
   });
 });
 
+describe('a check before the start', () => {
+  it("asks the agent to check the project before it starts, naming what changed, with no failure to explain", () => {
+    const prompt = fixStartPrompt({ ...options(), failure: {}, check: { changed: ['apps/api/migrations/0023_email.sql', 'apps/api/package.json'] } });
+    expect(prompt).toMatch(/^The app is about to start this project in its Preview/);
+    expect(prompt).toContain('- apps/api/migrations/0023_email.sql');
+    expect(prompt).toContain('migrations');
+    expect(prompt).toMatch(/try it at least once/i);
+    expect(prompt).not.toContain('could not start this project');
+    expect(prompt).not.toContain('start_log');
+  });
+
+  it('says when the project was never checked before, rather than listing every file', () => {
+    const prompt = fixStartPrompt({ ...options(), failure: {}, check: { changed: [], first: true } });
+    expect(prompt).toContain('It has not been checked before.');
+  });
+});
+
 describe('what reaches the model', () => {
   const OWNERS = 'hunter2-owner-value';
   const LEAKY = [

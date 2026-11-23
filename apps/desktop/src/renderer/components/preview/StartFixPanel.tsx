@@ -34,7 +34,7 @@ export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: st
     return (
       <div role="status" className="flex items-center justify-between gap-4 border-l-2 border-foreground bg-muted px-3 py-2 text-sm">
         <div>
-          <p className="font-semibold text-foreground">{t('preview.fix.running')}</p>
+          <p className="font-semibold text-foreground">{t(fix.check ? 'preview.fix.checking' : 'preview.fix.running')}</p>
           {fix.tries > 0 && <p className="text-muted-foreground">{t('preview.fix.tries', { n: fix.tries, max: MAX_TRIES })}</p>}
         </div>
         <Button size="sm" variant="outline" onClick={() => void api.cancelFix()}>

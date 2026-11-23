@@ -34,6 +34,12 @@ afterEach(() => {
 });
 
 describe('StartFixPanel', () => {
+  it('says the agent is checking the project before its start, rather than fixing it', () => {
+    show({ state: 'running', tries: 1, check: true });
+    expect(screen.getByText('preview.fix.checking')).toBeInTheDocument();
+    expect(screen.queryByText('preview.fix.running')).not.toBeInTheDocument();
+  });
+
   it('says the agent is working, on which try, and lets the owner stop it', () => {
     show({ state: 'running', tries: 2 });
     expect(screen.getByText('preview.fix.running')).toBeInTheDocument();

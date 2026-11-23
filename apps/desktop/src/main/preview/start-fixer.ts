@@ -26,6 +26,8 @@ export interface FixRun {
   tryRecipe: (recipe: PreviewRecipe) => Promise<PreviewStatus>;
   signal: AbortSignal;
   onTry: (n: number) => void;
+  /** A check before the start (fix-start.ts), not a failed start */
+  check?: { changed: string[]; first?: boolean };
 }
 
 /** A failed start as the ledger knows it, with the recipe it used */
@@ -69,6 +71,13 @@ export interface StartFixer {
    */
   previewStopped: () => Promise<void>;
   running: () => boolean;
+  /**
+   * Before a start of the project's preview: the agent checks the project and tries its recipe,
+   * by the same rules and the same bound per day as a run after a failed start. The status the
+   * last try ended in, with what was found; null when it did not run (one is running, no key,
+   * the owner turned the agent off, the day's bound is reached), and the start goes on as before.
+   */
+  check: (project: Project, info: FailedStart, check: { changed: string[]; first?: boolean }) => Promise<PreviewStatus | null>;
 }
 
 interface Running {
@@ -83,6 +92,8 @@ interface Running {
   latest: PreviewStatus;
   /** The start of a try that is under way */
   trying: Promise<unknown> | null;
+  /** A check before the start */
+  check?: { changed: string[]; first?: boolean };
 }
 
 /** What the agent can do something about: a failed start of the project's own preview, of a recipe the preview can show */
@@ -112,7 +123,7 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
 
   const attach = (status: PreviewStatus): PreviewStatus => {
     if (status.taskId) return status;
-    if (run?.projectId === status.projectId) return { ...status, fix: { state: 'running', tries: run.tries } };
+    if (run?.projectId === status.projectId) return { ...status, fix: { state: 'running', tries: run.tries, ...(run.check ? { check: true as const } : {}) } };
     const fix = shown.get(status.projectId);
     return fix ? { ...status, fix } : status;
   };
@@ -125,21 +136,21 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
     await deps.stop(mine.projectId).catch(() => undefined);
   };
 
-  const start = async (project: Project, failed: PreviewStatus, info: FailedStart, auto: boolean): Promise<void> => {
+  const start = async (project: Project, failed: PreviewStatus, info: FailedStart, auto: boolean, check?: { changed: string[]; first?: boolean }): Promise<PreviewStatus> => {
     const id = project.id;
     if (!deps.hasCredential()) {
       // Nothing ran, so nothing is kept: with a key, the same failure is looked at
       shown.set(id, { state: 'done', outcome: 'unknown', ...appSaid(say('fixNoCredential', 'No Claude key is set (Settings → Claude), so the agent could not look at why the project does not start.')) });
       deps.send(attach(failed));
-      return;
+      return attach(failed);
     }
     const ledger = deps.ledger(id);
     // Counted now: a run the owner leaves half-way costs as much as one that finishes
     if (auto) ledger.begin(now());
-    const mine: Running = { projectId: id, controller: new AbortController(), tries: 0, failed, info, auto, latest: failed, trying: null };
+    const mine: Running = { projectId: id, controller: new AbortController(), tries: 0, failed, info, auto, latest: failed, trying: null, ...(check ? { check } : {}) };
     run = mine;
     shown.delete(id);
-    lastFailed.set(id, failed);
+    if (!check) lastFailed.set(id, failed);
     deps.send(attach(failed));
     const pendingOf = (recipe: PreviewRecipe) => ({ recipe, base: info.base, origin: 'agent' as const, at: now().toISOString() });
     try {
@@ -153,6 +164,7 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
           mine.tries = n;
           deps.send(attach(mine.latest));
         },
+        ...(check ? { check } : {}),
         // The app's own start, with the candidate as the project's recipe that is not in main yet
         tryRecipe: async (recipe) => {
           if (mine.controller.signal.aborted) throw new Error('The agent was stopped.');
@@ -166,7 +178,7 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
           return mine.latest;
         },
       });
-      if (mine.controller.signal.aborted || run !== mine) return;
+      if (mine.controller.signal.aborted || run !== mine) return mine.latest;
       run = null;
       // Up when the agent said so, but stopped since: the recipe did not hold
       const held = outcome.outcome !== 'fixed' || mine.latest.stage === 'ready';
@@ -178,18 +190,27 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
         deps.updateSettings(id, { previewPendingRecipe: pendingOf(kept.recipe) });
         deps.settle(id);
         deps.send(attach(mine.latest));
-        return;
+        return attach(mine.latest);
       }
-      deps.send(attach(mine.latest.stage === 'failed' ? mine.latest : failed));
+      return ended(mine);
     } catch (error) {
-      if (mine.controller.signal.aborted || run !== mine) return;
+      if (mine.controller.signal.aborted || run !== mine) return mine.latest;
       run = null;
       const reason = error instanceof Error ? error.message : String(error);
       const kept: FixOutcome = { outcome: 'unknown', summary: reason, sessionFailed: true };
       ledger.record(info.key, kept, auto, now());
       shown.set(id, shownFor(kept));
-      deps.send(attach(mine.latest.stage === 'failed' ? mine.latest : failed));
+      return ended(mine);
     }
+  };
+
+  /** A run that did not make it start: what was found goes on the failed status the owner sees, and they may ask again */
+  const ended = (mine: Running): PreviewStatus => {
+    const shownOn = mine.latest.stage === 'failed' || mine.check ? mine.latest : mine.failed;
+    // After a failed start, asking again is about the failure the owner saw; after a check, the last try's is the only one
+    if (mine.check && shownOn.stage === 'failed') lastFailed.set(mine.projectId, shownOn);
+    deps.send(attach(shownOn));
+    return attach(shownOn);
   };
 
   const consider = async (status: PreviewStatus): Promise<void> => {
@@ -275,5 +296,12 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
       if (mine) await end(mine);
     },
     running: () => run !== null,
+    check: async (project, info, check) => {
+      if (run || !deps.hasCredential() || project.settings.previewFixAutomatically === false) return null;
+      if (!deps.ledger(project.id).mayRunAutomatically(info.key, now())) return null;
+      // What the page shows while the agent checks: the start has not begun
+      const starting: PreviewStatus = { projectId: project.id, stage: 'worktree', origins: [] };
+      return start(project, starting, info, true, check);
+    },
   };
 }

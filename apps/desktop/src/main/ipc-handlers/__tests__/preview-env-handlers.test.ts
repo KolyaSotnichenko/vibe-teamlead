@@ -22,6 +22,19 @@ const session = vi.hoisted(() => ({
 }));
 
 vi.mock('../../preview/preview-session', () => session);
+// The previews' copies live under the home folder: a scratch one, never the owner's
+const home = vi.hoisted(() => ({ dir: '' }));
+vi.mock('node:os', async (original) => {
+  const os = await original<typeof import('node:os')>();
+  if (!home.dir) home.dir = os.tmpdir() + '/vt-env-home-' + process.pid;
+  return { ...os, homedir: () => home.dir };
+});
+// The check before a start syncs a real copy with git: these tests are about what follows it
+const checking = vi.hoisted(() => ({ result: null as unknown, calls: [] as unknown[] }));
+vi.mock('../../preview/check-before-start', () => ({
+  checkBeforeStart: vi.fn(async (deps: unknown) => { checking.calls.push(deps); return checking.result; }),
+  carryLockfile: (sync: unknown) => ({ forCheck: sync, forStart: sync }),
+}));
 const SETTINGS: { previewServices: Array<{ name: string; dir: string; command: string; page?: boolean }>; previewPendingRecipe?: unknown } = { previewServices: [{ name: 'api', dir: 'api', command: 'x', page: true }] };
 vi.mock('../../project-store', () => ({
   projectStore: {
