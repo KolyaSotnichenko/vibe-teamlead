@@ -30,7 +30,9 @@ function parseUrlEnv(text: string): PreviewService['urlEnv'] {
   return pairs.length ? Object.fromEntries(pairs.map(([k, v]) => [k.trim(), v.trim()])) : undefined;
 }
 
-export function PreviewServicesForm({ initial, onSave, onCancel, readOnly = false, notice }: {
+export function PreviewServicesForm({ initial, onSave, onCancel, readOnly = false, recipe = false, notice }: {
+  /** The services are the project's recipe's: a change saved here is written to the project by the app */
+  recipe?: boolean;
   /** Shown above the list: why the form is here, or what state its services are in */
   notice?: string;
   initial: PreviewService[];
@@ -61,7 +63,7 @@ export function PreviewServicesForm({ initial, onSave, onCancel, readOnly = fals
   return (
     <div className="space-y-4">
       {notice && <Notice>{notice}</Notice>}
-      <p className="max-w-prose text-sm text-muted-foreground">{t(readOnly ? 'preview.services.fromFile' : 'preview.services.intro')}</p>
+      <p className="max-w-prose text-sm text-muted-foreground">{t(readOnly ? 'preview.services.fromFile' : recipe ? 'preview.services.fromRecipe' : 'preview.services.intro')}</p>
       <div className="space-y-3">
         {services.map((service, index) => (
           <div key={index} className="grid grid-cols-[8rem_10rem_1fr_12rem_auto_auto] items-center gap-2 border-b border-border pb-3">

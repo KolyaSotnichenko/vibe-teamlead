@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import type { PreviewService, PreviewStatus, Project } from '../../../../shared/types';
+import type { PreviewService, PreviewStatus, Project, Task } from '../../../../shared/types';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { reason?: string }) => (o?.reason ? `${key}:${o.reason}` : key), i18n: { language: 'en' } }) }));
 vi.mock('../../../stores/task-store', () => ({ createTask: vi.fn(), startTaskOrQueue: vi.fn(), submitReview: vi.fn() }));
@@ -30,6 +30,7 @@ const api = {
   recipe: vi.fn(),
   proposeServices: vi.fn(),
   restartServices: vi.fn(async () => ({ success: true })),
+  saveRecipeServices: vi.fn(),
 };
 
 beforeEach(() => {
@@ -138,10 +139,49 @@ describe('PreviewPage and the recipe', () => {
     expect(await screen.findByText('preview.recipeInvalid:preview.say.recipeCommand:sudo')).toBeInTheDocument();
   });
 
-  it("Services shows a file recipe's services read-only, with a way back", async () => {
-    api.recipe.mockResolvedValue({ success: true, data: { source: 'file', servicesFrom: 'file', services: [{ name: 'site', dir: '', command: 'make serve', page: true }] } });
+  const SITE = { name: 'site', dir: '', command: 'make serve', page: true };
+
+  it("saves a change to a recipe's services through the app, which writes it to main, and restarts by it", async () => {
+    api.recipe.mockResolvedValue({ success: true, data: { source: 'file', servicesFrom: 'file', services: [SITE] } });
+    api.saveRecipeServices.mockResolvedValue({ success: true, data: { source: 'file', servicesFrom: 'file', services: [SITE] } });
     session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'file', kind: 'web' } };
     render(<PreviewPage project={projectWith([])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.services' }));
+    expect(await screen.findByDisplayValue('site')).toBeEnabled();
+    expect(screen.getByText('preview.services.fromRecipe')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'preview.services.save' }));
+    await waitFor(() => expect(api.saveRecipeServices).toHaveBeenCalledWith('p1', [SITE]));
+    expect(store.updateProjectSettings).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.restartServices).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(screen.queryByDisplayValue('site')).not.toBeInTheDocument());
+  });
+
+  it('keeps the form open and says why when the change could not be saved', async () => {
+    api.recipe.mockResolvedValue({ success: true, data: { source: 'file', servicesFrom: 'file', services: [SITE] } });
+    api.saveRecipeServices.mockResolvedValue({ success: false, error: 'services[0].command is not allowed: sudo', errorSaid: { key: 'recipeCommand', params: { at: 'services[0]', reason: 'sudo' }, text: 'services[0].command is not allowed: sudo' } });
+    session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'file', kind: 'web' } };
+    render(<PreviewPage project={projectWith([])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.services' }));
+    await screen.findByDisplayValue('site');
+    fireEvent.click(screen.getByRole('button', { name: 'preview.services.save' }));
+    expect(await screen.findByText('preview.services.saveFailed:preview.say.recipeCommand:sudo')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('site')).toBeInTheDocument();
+    expect(api.restartServices).not.toHaveBeenCalled();
+  });
+
+  it('says that a change is not in the repository yet, with the reason when there is one', async () => {
+    api.recipe.mockResolvedValue({ success: true, data: { source: 'pending', servicesFrom: 'pending', services: [SITE], pending: { origin: 'owner', refusal: 'The project is on "feature".' } } });
+    session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'pending', kind: 'web' } };
+    render(<PreviewPage project={projectWith([])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.services' }));
+    expect(await screen.findByText('preview.services.notSavedReason:The project is on "feature".')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('site')).toBeEnabled();
+  });
+
+  it("Services shows a recipe's services read-only in a task's preview, with a way back", async () => {
+    api.recipe.mockResolvedValue({ success: true, data: { source: 'file', servicesFrom: 'file', services: [{ name: 'site', dir: '', command: 'make serve', page: true }] } });
+    session.status = { projectId: 'p1', taskId: 't1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'file', kind: 'web' } };
+    render(<PreviewPage project={projectWith([])} task={{ id: 't1', title: 'A task' } as unknown as Task} />);
     fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.services' }));
     expect(await screen.findByDisplayValue('site')).toBeDisabled();
     expect(screen.getByText('preview.services.fromFile')).toBeInTheDocument();

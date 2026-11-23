@@ -237,6 +237,8 @@ export interface PreviewRecipeInfo {
   servicesFrom: PreviewRecipeSource;
   services: PreviewService[];
   invalid?: string;
+  /** Set when the recipe in use was made in the app and is not in main yet: whose it is, and why the last try to write it was refused */
+  pending?: { origin: 'owner' | 'agent'; refusal?: string };
 }
 
 export interface PreviewAPI {
@@ -250,6 +252,11 @@ export interface PreviewAPI {
   proposeServices: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewService[]>>;
   /** What the preview runs for this project (or that task) and where that came from */
   recipe: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewRecipeInfo>>;
+  /**
+   * Changes the services of the project's recipe (preview.json): used at once, and written into
+   * the project's main branch by the app. `errorSaid`: the refusal as a sentence the interface can translate.
+   */
+  saveRecipeServices: (projectId: string, services: PreviewService[]) => Promise<IPCResult<PreviewRecipeInfo> & { errorSaid?: SaidText }>;
   resetData: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
   /** Reviews the running preview's pages as a person would use them (one agent session) */
   uxReview: (projectId: string) => Promise<IPCResult<UxReviewResult>>;

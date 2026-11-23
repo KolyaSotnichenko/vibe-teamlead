@@ -45,7 +45,9 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   const saved = project.settings.previewServices ?? [];
   const [editing, setEditing] = useState(false);
   /** What the form shows: the services a start would run, or the proposal when nothing says */
-  const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean } | null>(null);
+  const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean; recipe: boolean; pending?: { refusal?: string } } | null>(null);
+  /** Why the last save of a recipe's services was refused, in the interface's language */
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
   const [side, setSide] = useState<PreviewSide>(null);
   // The preview keeps running under the form: looking at the services costs nothing, and saving restarts them
@@ -68,6 +70,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
 
   const taskId = task?.id;
   useEffect(() => {
+    setSaveFailed(null);
     if (!editing) {
       setForm(null);
       return;
@@ -78,12 +81,14 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       const recipe = await (taskId ? api.recipe(project.id, taskId) : api.recipe(project.id));
       const found = recipe.success && recipe.data ? recipe.data : null;
       if (found?.services.length) {
-        if (live) setForm({ services: found.services, readOnly: found.servicesFrom === 'file' });
+        // A recipe's services are changed from the project's own preview; a task's preview shows them
+        const recipe = found.servicesFrom === 'file' || found.servicesFrom === 'pending';
+        if (live) setForm({ services: found.services, recipe, readOnly: recipe && !!taskId, ...(found.pending ? { pending: found.pending } : {}) });
         return;
       }
       // Nothing says what to run: what the project's files propose, for the owner to choose from
       const proposed = await (taskId ? api.proposeServices(project.id, taskId) : api.proposeServices(project.id));
-      if (live) setForm({ services: proposed.success && proposed.data ? proposed.data : [], readOnly: false });
+      if (live) setForm({ services: proposed.success && proposed.data ? proposed.data : [], readOnly: false, recipe: false });
     })();
     return () => { live = false; };
   }, [editing, project.id, taskId]);
@@ -98,11 +103,27 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
           <PreviewServicesForm
             initial={form.services}
             readOnly={form.readOnly}
-            notice={status?.recipe?.invalid ? t('preview.recipeInvalid', { reason: say(status.recipe.invalid) }) : undefined}
+            recipe={form.recipe}
+            notice={
+              saveFailed ??
+              (form.pending
+                ? (form.pending.refusal ? t('preview.services.notSavedReason', { reason: form.pending.refusal }) : t('preview.services.notSaved'))
+                : status?.recipe?.invalid
+                  ? t('preview.recipeInvalid', { reason: say(status.recipe.invalid) })
+                  : undefined)
+            }
             // Asked because nothing says what to run: there is nothing to go back to
             onCancel={needsServices ? undefined : () => setEditing(false)}
             onSave={async (services) => {
-              if (!(await updateProjectSettings(project.id, { previewServices: services }))) return;
+              if (form.recipe) {
+                // The project's recipe: the app keeps the change and writes it into main itself
+                const saved = await window.electronAPI.preview.saveRecipeServices(project.id, services);
+                if (!saved.success) {
+                  const reason = saved.errorSaid ? t(`preview.say.${saved.errorSaid.key}`, { ...saved.errorSaid.params, defaultValue: saved.errorSaid.text }) : (saved.error ?? '');
+                  setSaveFailed(t('preview.services.saveFailed', { reason }));
+                  return;
+                }
+              } else if (!(await updateProjectSettings(project.id, { previewServices: services }))) return;
               setEditing(false);
               // By the saved services: a running preview restarts them, one that could not start starts
               const api = window.electronAPI.preview;

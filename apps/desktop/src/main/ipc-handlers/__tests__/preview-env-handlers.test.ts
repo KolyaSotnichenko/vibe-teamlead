@@ -22,10 +22,12 @@ const session = vi.hoisted(() => ({
 }));
 
 vi.mock('../../preview/preview-session', () => session);
-const SETTINGS = { previewServices: [{ name: 'api', dir: 'api', command: 'x', page: true }] };
+const SETTINGS: { previewServices: Array<{ name: string; dir: string; command: string; page?: boolean }>; previewPendingRecipe?: unknown } = { previewServices: [{ name: 'api', dir: 'api', command: 'x', page: true }] };
 vi.mock('../../project-store', () => ({
   projectStore: {
     getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: dirs.project, settings: SETTINGS } : undefined)),
+    getProjects: vi.fn(() => [{ id: 'p1', path: dirs.project, settings: SETTINGS }]),
+    updateProjectSettings: vi.fn((_id: string, settings: Record<string, unknown>) => { Object.assign(SETTINGS, settings); }),
     getTasks: vi.fn(() => (dirs.taskWorktree ? [{ id: 't1', specId: '001-task' }] : [])),
   },
 }));
@@ -43,6 +45,7 @@ describe('preview IPC: Environment', () => {
     (ipcMain as unknown as { removeAllListeners: () => void }).removeAllListeners();
     dirs.project = mkdtempSync(join(tmpdir(), 'vt-env-'));
     dirs.taskWorktree = null;
+    delete SETTINGS.previewPendingRecipe;
     mkdirSync(join(dirs.project, 'api'));
     writeFileSync(join(dirs.project, 'api', '.env.example'), 'AUTH_TEST_IDP_ENABLED=true\nSTRIPE_KEY=\n');
     writeFileSync(join(dirs.project, 'api', '.env'), 'REAL_SECRET=leak\n');
@@ -86,6 +89,71 @@ describe('preview IPC: Environment', () => {
     writeFileSync(join(dirs.taskWorktree, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }));
     expect(await invoke(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, 'p1', 't1')).toEqual({ success: true, data: [{ name: 'web', dir: '', command: 'npm run dev -- --port {port}', page: true }] });
     expect(await invoke(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, 'p1')).toEqual({ success: true, data: [] });
+  });
+
+  describe("changing a recipe's services in the app", () => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: dirs.project, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const SITE = { name: 'site', dir: '', command: 'make serve', page: true };
+    const FILE = { version: 1, kind: 'web', env: { FEATURE: 'on' }, services: [SITE] };
+    const asRepo = (withFile = true) => {
+      if (withFile) writeFileSync(join(dirs.project, 'preview.json'), `${JSON.stringify(FILE, null, 2)}\n`);
+      git('init', '-q', '-b', 'main');
+      git('config', 'user.email', 't@t');
+      git('config', 'user.name', 't');
+      git('add', '-A');
+      git('commit', '-q', '-m', 'first');
+    };
+    type Saved = { success: boolean; error?: string; errorSaid?: { key: string }; data?: { source: string; servicesFrom: string; services: unknown[]; pending?: { origin: string; refusal?: string } } };
+    const save = (services: unknown) => invoke(IPC_CHANNELS.PREVIEW_SAVE_RECIPE_SERVICES, 'p1', services) as Promise<Saved>;
+
+    it('writes the change into main itself, keeps the rest of the recipe, and leaves nothing pending', async () => {
+      asRepo();
+      const changed = [{ ...SITE, command: 'make serve-fast', port: 8080 }];
+      const result = await save(changed);
+      expect(result).toEqual({ success: true, data: { source: 'file', servicesFrom: 'file', services: changed } });
+      expect(JSON.parse(git('show', 'main:preview.json'))).toEqual({ ...FILE, services: changed });
+      expect(SETTINGS.previewPendingRecipe).toBeUndefined();
+      expect(git('status', '--porcelain')).toBe('');
+    });
+
+    it("uses the change at once and says why it is not in the repository yet, while the owner's folder is on another branch", async () => {
+      asRepo();
+      git('checkout', '-q', '-b', 'feature');
+      const main = git('rev-parse', 'main');
+      const changed = [{ ...SITE, command: 'make serve-fast' }];
+      const result = await save(changed);
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({ source: 'pending', servicesFrom: 'pending', services: changed, pending: { origin: 'owner' } });
+      expect(result.data?.pending?.refusal).toMatch(/feature/);
+      expect(git('rev-parse', 'main')).toBe(main);
+      // Back on main, the next change goes in with it
+      git('checkout', '-q', 'main');
+      const again = await save([{ ...SITE, command: 'make serve-faster' }]);
+      expect(again.data).toMatchObject({ source: 'file' });
+      expect(JSON.parse(git('show', 'main:preview.json')).services[0].command).toBe('make serve-faster');
+    });
+
+    it('refuses services a recipe may not have, and stores nothing', async () => {
+      asRepo();
+      const result = await save([{ ...SITE, command: 'sudo make serve' }]);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/services\[0\]\.command/);
+      expect(result.errorSaid?.key).toBe('recipeCommand');
+      expect(SETTINGS.previewPendingRecipe).toBeUndefined();
+      expect(JSON.parse(git('show', 'main:preview.json'))).toEqual(FILE);
+    });
+
+    it('has nothing to change for a project without a recipe', async () => {
+      asRepo(false);
+      const result = await save([SITE]);
+      expect(result.success).toBe(false);
+      expect(result.errorSaid?.key).toBe('noRecipeToChange');
+      expect(SETTINGS.previewPendingRecipe).toBeUndefined();
+    });
+
+    it('is an error for an unknown project', async () => {
+      expect(await invoke(IPC_CHANNELS.PREVIEW_SAVE_RECIPE_SERVICES, 'nope', [SITE])).toMatchObject({ success: false });
+    });
   });
 
   it('recipe: an unknown project is an error', async () => {

@@ -15,7 +15,8 @@ import path from 'node:path';
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewEnvReport, PreviewRecipeInfo, Project, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
+import type { SaidText } from '../../shared/constants/preview-say';
+import type { IPCResult, PreviewBounds, PreviewEnvReport, PreviewRecipe, PreviewRecipeInfo, Project, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
 import { addPreviewNotice, currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
@@ -23,9 +24,9 @@ import { commitRecipeToMain, mainRecipeText } from '../preview/recipe-commit';
 import { createPendingRecipeSettler } from '../preview/settle-pending-recipe';
 import { inMergeQueue, onMergeSettled } from '../ai/merge/merge-queue';
 import { getIsolatedGitEnv } from '../utils/git-isolation';
-import { say } from '../say';
+import { saidFor, say } from '../say';
 import { plannedEnv } from '../preview/preview-env';
-import { resolveRecipe } from '../preview/recipe';
+import { parseRecipe, recipeFileText, recipeHash, resolveRecipe } from '../preview/recipe';
 import { isPathContained } from '../ai/security/path-containment';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { getMail, listMail } from '../preview/preview-mail';
@@ -40,6 +41,9 @@ import { projectStore } from '../project-store';
 import { findTaskWorktree } from '../worktree-paths';
 
 /** The previews' worktrees: in the app's folder, outside every project */
+/** How long saving a recipe's services waits for the commit into main before answering "not in the repository yet" */
+const SAVE_WAIT_MS = 5000;
+
 export const previewWorktreesRoot = () => path.join(homedir(), '.vibe-teamlead', 'worktrees', 'preview');
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -341,11 +345,43 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       return { success: false, error: errorMessage(error) };
     }
   });
+  /** What a start would run, and, when that is a recipe not in main yet, whose it is and why it is still waiting */
+  const recipeInfo = (project: Project, taskId?: unknown): PreviewRecipeInfo => {
+    const info = previewRecipeInfo(project, previewDir(project, taskId));
+    const pending = project.settings.previewPendingRecipe;
+    if (info.source !== 'pending' || !pending) return info;
+    const refusal = settler.refusal(project.id);
+    return { ...info, pending: { origin: pending.origin, ...(refusal ? { refusal } : {}) } };
+  };
   ipcMain.handle(IPC_CHANNELS.PREVIEW_RECIPE, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewRecipeInfo> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
     try {
-      return { success: true, data: previewRecipeInfo(project, previewDir(project, taskId)) };
+      return { success: true, data: recipeInfo(project, taskId) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+  // The owner changed the services of the project's recipe: used at once, and written into main by the app
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_SAVE_RECIPE_SERVICES, async (_e, projectId: string, services: unknown): Promise<IPCResult<PreviewRecipeInfo> & { errorSaid?: SaidText }> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    const refuse = (error: string) => ({ success: false as const, error, errorSaid: saidFor([error])[0] });
+    try {
+      const mainText = await mainRecipeText(project.path, mainBranchOf(project), { git: getToolPath('git'), env: getIsolatedGitEnv() });
+      // The recipe in use for main: one made in the app while main's file is still the one it was made against, else main's file
+      const pending = project.settings.previewPendingRecipe;
+      const fromFile = mainText === null ? undefined : parseRecipe(mainText);
+      const base: PreviewRecipe | undefined = pending && recipeHash(mainText) === pending.base ? pending.recipe : fromFile?.ok ? fromFile.recipe : undefined;
+      if (!base) return refuse(say('noRecipeToChange', 'This project has no recipe (preview.json) to change.'));
+      // Checked as the file would be: what comes from the interface is not trusted either
+      const checked = parseRecipe(JSON.stringify({ ...base, services }));
+      if (!checked.ok) return refuse(checked.reason);
+      projectStore.updateProjectSettings(projectId, { previewPendingRecipe: { recipe: checked.recipe, base: recipeHash(mainText), origin: 'owner', at: new Date().toISOString() } });
+      // Usually a moment; behind a task's merge it goes on in the background, and the form says it is not in the repository yet
+      await Promise.race([settler.settle(projectId), new Promise((resolve) => setTimeout(resolve, SAVE_WAIT_MS))]);
+      const saved = projectStore.getProject(projectId) ?? project;
+      return { success: true, data: recipeInfo(saved) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }

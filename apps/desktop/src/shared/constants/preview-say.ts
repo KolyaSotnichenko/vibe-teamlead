@@ -41,6 +41,7 @@ export const PREVIEW_SAY = {
   heldBack: ['names'],
   // A recipe made in the app (preview/settle-pending-recipe.ts)
   editDropped: [],
+  noRecipeToChange: [],
   // Why a project's preview.json was not used (preview/recipe.ts)
   recipeTooLarge: [],
   recipeNotJson: [],

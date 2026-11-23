@@ -214,6 +214,7 @@ const browserMockAPI: ElectronAPI = {
     navigate: async () => ({ success: true }),
     proposeServices: async () => ({ success: true, data: [] }),
     recipe: async () => ({ success: true, data: { source: 'none' as const, servicesFrom: 'none' as const, services: [] } }),
+    saveRecipeServices: async () => ({ success: false, error: 'Not available in the browser' }),
     resetData: async (projectId: string) => ({ success: true, data: { projectId, stage: 'stopped' as const, origins: [] } }),
     uxReview: async () => ({ success: false, error: 'Not available in the browser' }),
     cancelUxReview: async () => ({ success: true }),

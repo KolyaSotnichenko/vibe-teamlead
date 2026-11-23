@@ -29,6 +29,12 @@ describe('the preview services form', () => {
     expect(screen.getByText('preview.json was not used')).toBeTruthy();
   });
 
+  it("says that a change to a recipe's services is written to the project by the app", () => {
+    render(<PreviewServicesForm initial={PROPOSED} recipe onSave={vi.fn()} />);
+    expect(screen.getByText('preview.services.fromRecipe')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /preview.services.save/ })).toBeTruthy();
+  });
+
   it("shows a recipe's services without letting them be changed, and says where they come from", () => {
     const onCancel = vi.fn();
     render(<PreviewServicesForm initial={PROPOSED} readOnly onSave={vi.fn()} onCancel={onCancel} />);
