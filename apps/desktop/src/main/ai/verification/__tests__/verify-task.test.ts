@@ -258,6 +258,23 @@ describe('verifyTask', () => {
       expect(report.runnerConfigChanged).toContain('preview.json');
     });
 
+    it('says in the report and to QA that the project no longer starts, with what failed', async () => {
+      const startsCheck = startsBy((cwd) => (existsSync(join(cwd, 'task.txt')) ? { outcome: 'failed', tail: 'web did not start\nnpm error Missing script: "dev"' } : { outcome: 'passed' }));
+      const report = await verify({ startsCheck });
+      expect(describeVerification(report)).toMatch(/- The project starts: FAILED \(passes on the base: this task broke it\)/);
+      const unavailable = await verify({ startsCheck: startsBy(() => ({ outcome: 'unavailable', tail: 'Port 10000 is in use' })) });
+      expect(describeVerification(unavailable)).toMatch(/- The project starts: could not be tried here: Port 10000 is in use/);
+      const issue = verificationIssues(report).find((i) => i.key === 'check:start the project by its recipe');
+      expect(issue).toMatchObject({ title: 'The project no longer starts: it starts on the commit this task started from' });
+      expect(issue?.description).toContain('Missing script');
+      expect(issue?.fix_required).toMatch(/preview\.json/);
+    });
+
+    it("makes no QA issue of a new project's own start", async () => {
+      const report = { status: 'not_verified' as const, commit: 'c', baseCommit: 'b', checks: [{ name: 'starts', command: 'start the project by its recipe', outcome: 'failed' as const, tail: 'x' }], tamper: [], runnerConfigChanged: [], source: 'task' as const };
+      expect(verificationIssues(report)).toEqual([]);
+    });
+
     it('is started again only when its failure was a port in use, not for any failure', async () => {
       const startsCheck = startsBy(() => ({ outcome: 'failed', tail: 'web did not start' }));
       await verify({ startsCheck });

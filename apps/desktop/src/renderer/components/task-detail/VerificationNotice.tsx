@@ -8,12 +8,14 @@ import { useTranslation } from 'react-i18next';
 import type { Task } from '../../../shared/types';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { useVerification } from './useVerification';
+import { STARTS_CHECK_COMMAND } from '../../../shared/utils/verification-summary';
 
 type Check = VerificationSummary['checks'][number];
 
 function outcomeKey(check: Check): string {
   if (check.outcome === 'passed') return 'verification.outcome.passed';
-  if (check.outcome === 'unavailable') return 'verification.outcome.noTool';
+  // The start-up check that could not run here (a port in use, Docker): not a missing tool
+  if (check.outcome === 'unavailable') return check.command === STARTS_CHECK_COMMAND ? 'verification.outcome.notTried' : 'verification.outcome.noTool';
   if (check.outcome === 'timed_out') return 'verification.outcome.timedOut';
   return check.onBase && check.onBase !== 'passed' ? 'verification.outcome.sameOnBase' : 'verification.outcome.failed';
 }
@@ -38,7 +40,11 @@ export function VerificationNotice({ task }: { task: Task }) {
         <ul className="mt-1 space-y-0.5">
           {summary.checks.map((check) => (
             <li key={check.command} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-              <span className="break-all font-mono text-foreground">{check.command}</span>
+              {check.command === STARTS_CHECK_COMMAND ? (
+                <span className="text-foreground">{t('verification.startsCheck')}</span>
+              ) : (
+                <span className="break-all font-mono text-foreground">{check.command}</span>
+              )}
               <span className="text-muted-foreground">{t(outcomeKey(check))}</span>
             </li>
           ))}

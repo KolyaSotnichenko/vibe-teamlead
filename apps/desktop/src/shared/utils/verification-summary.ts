@@ -6,6 +6,9 @@
 
 export type VerificationOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
 
+/** The app check that starts the project by its recipe (main: ai/verification/starts-check.ts), told apart by this command */
+export const STARTS_CHECK_COMMAND = 'start the project by its recipe';
+
 export interface VerificationSummary {
   status: 'passed' | 'regression' | 'not_verified' | 'not_configured';
   commit?: string;

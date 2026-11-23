@@ -8,6 +8,7 @@ import type { Task } from '../../../../shared/types';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
+import { STARTS_CHECK_COMMAND } from '../../../../shared/utils/verification-summary';
 import { VerificationNotice } from '../VerificationNotice';
 
 const task = { id: 't1', projectId: 'p1', status: 'human_review' } as unknown as Task;
@@ -31,6 +32,18 @@ describe('VerificationNotice', () => {
     expect(await screen.findByText('verification.notVerifiedTitle')).toBeInTheDocument();
     expect(screen.getByText('verification.dockerNeeded')).toBeInTheDocument();
     expect(screen.getByText('verification.outcome.sameOnBase')).toBeInTheDocument();
+  });
+
+  it('calls the start-up check by what it means, not by a command', async () => {
+    setup({ status: 'not_verified', checks: [{ command: 'pnpm run test', outcome: 'passed' }, { command: STARTS_CHECK_COMMAND, outcome: 'failed', onBase: 'failed' }] });
+    expect(await screen.findByText('verification.startsCheck')).toBeInTheDocument();
+    expect(screen.queryByText(STARTS_CHECK_COMMAND)).not.toBeInTheDocument();
+    expect(screen.getByText('pnpm run test')).toBeInTheDocument();
+  });
+
+  it("says the start could not be tried here, not that a tool is missing", async () => {
+    setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable' }] });
+    expect(await screen.findByText('verification.outcome.notTried')).toBeInTheDocument();
   });
 
   it('says when it had nothing to run, so nobody takes silence for a pass', async () => {

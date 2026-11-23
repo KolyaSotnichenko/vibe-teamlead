@@ -714,7 +714,11 @@ export function describeVerification(report: VerificationReport): string {
   if (report.status === 'not_configured' && !report.tamper.length) return ['The app found no checks to run for this project, so it verified nothing.', ...runner].join('\n');
   const lines = report.checks.map((check) => {
     const base = check.onBase === undefined ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (the same on the base: says nothing about this task)';
-    return `- ${check.command}: ${OUTCOME_WORDS[check.outcome]}${check.exitCode === undefined ? '' : ` (exit ${check.exitCode})`}${check.flaky ? ' (failed once, then passed: flaky)' : ''}${base}`;
+    const starts = check.name === STARTS_CHECK.name;
+    const what = starts ? 'The project starts' : check.command;
+    // Not started for a reason outside the task (a port in use, Docker): the reason, not "a tool is missing"
+    const outcome = starts && check.outcome === 'unavailable' ? `could not be tried here${check.tail ? `: ${check.tail.split('\n')[0]}` : ''}` : OUTCOME_WORDS[check.outcome];
+    return `- ${what}: ${outcome}${check.exitCode === undefined ? '' : ` (exit ${check.exitCode})`}${check.flaky ? ' (failed once, then passed: flaky)' : ''}${base}`;
   });
   if (report.migrationsSkipped) runner.push('The migrations were not run: there was no temporary database to run them on, and they could change a real one.');
   const databases = report.services?.status === 'started'
@@ -727,6 +731,18 @@ export function describeVerification(report: VerificationReport): string {
     ? [`These are the results of its run at ${report.fromRunAt}: the commit, its base, the commands and the settings are the same, so it did not run them again.`]
     : [];
   return [`The app ran these itself on a clean copy of commit ${report.commit.slice(0, 8)}:`, ...earlier, ...origin, ...databases, ...lines, ...report.tamper.map((finding) => `- ${finding.file}: ${finding.detail}`), ...runner].join('\n');
+}
+
+/** The start-up check as QA reads it when the task broke the project's start */
+function startsIssue(check: CheckResult) {
+  const summary = failureSummary(check.tail ?? '');
+  return {
+    key: `check:${check.command}`,
+    type: 'critical' as const,
+    title: 'The project no longer starts: it starts on the commit this task started from',
+    description: `The app started the project by its recipe (preview.json, or what it works out from the files) on a clean copy, as the Preview does, and it did not come up.${summary ? `\n\nWhat failed:\n${summary}\n` : ''}\nThe end of the output:\n${check.tail ?? ''}`,
+    fix_required: 'Make the project start again. If how it is installed, configured or started changed on purpose, update preview.json (and RUNNING.md) to match. Commit it: the app checks what is committed, on a clean copy.',
+  };
 }
 
 /** What must be fixed before a review can pass. Keys ignore the wording, to compare rounds. Pure. */
@@ -759,7 +775,7 @@ export function failureSummary(tail: string): string {
 
 export function verificationIssues(report: VerificationReport): { key: string; type: 'critical'; title: string; description: string; location?: string; fix_required: string }[] {
   return [
-    ...report.checks.filter((check) => (report.source ? blocksOnItsOwn(check) : check.outcome !== 'passed' && check.onBase === 'passed')).map((check) => ({
+    ...report.checks.filter((check) => (report.source ? blocksOnItsOwn(check) && check.name !== STARTS_CHECK.name : check.outcome !== 'passed' && check.onBase === 'passed')).map((check) => check.name === STARTS_CHECK.name ? startsIssue(check) : ({
       key: `check:${check.command}`,
       type: 'critical' as const,
       title: report.source

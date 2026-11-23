@@ -10,6 +10,7 @@
 import { resolve } from 'node:path';
 
 import type { PreviewRecipeCommand } from '../../../shared/types/preview';
+import { STARTS_CHECK_COMMAND } from '../../../shared/utils/verification-summary';
 import type { PreviewService } from '../../../shared/types/project';
 import { isPathContained } from '../security/path-containment';
 import { workspaceLibraries } from '../../preview/detect-services';
@@ -19,7 +20,7 @@ import { startRecipeServices, type StartServicesDeps } from '../../preview/start
 import type { ComposeWiring } from './compose-env';
 import type { Check, StartedService } from './detect-checks';
 
-export const STARTS_CHECK: Check = { name: 'starts', command: 'start the project by its recipe' };
+export const STARTS_CHECK: Check = { name: 'starts', command: STARTS_CHECK_COMMAND };
 
 /** As verify-task.ts's CheckOutcome: the same words, without importing it back */
 export type StartsOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
