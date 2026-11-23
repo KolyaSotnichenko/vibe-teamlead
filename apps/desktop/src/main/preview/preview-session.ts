@@ -1,5 +1,6 @@
 /**
- * One preview at a time: the main branch's worktree, its dependencies, the
+ * One preview at a time: the main branch's worktree, the recipe it is run by (the project's
+ * preview.json, the saved services, or an unambiguous proposal: recipe.ts), its dependencies, the
  * workspace packages the services use, the preview database, the compose file's
  * other services (queues, storage, search…, throwaway for the session), migrations,
  * a seed on a fresh database, then the services, backends first and the page last.
@@ -32,6 +33,7 @@ import { findOnPath, runProcess, runShell, searchPath } from '../platform/exec';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
 import { PREVIEW_LABEL, type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
+import { type ResolvedRecipe, resolveRecipe } from './recipe';
 import { needsMail, type PreviewMail, startPreviewMail } from './preview-mail';
 import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
@@ -89,6 +91,8 @@ interface Session {
   onStatus: (status: PreviewStatus) => void;
   abort: AbortController;
   worktree: string;
+  /** What this start runs: worked out from the worktree's files once they are there */
+  resolved: ResolvedRecipe;
   servers: string[];
   /** Where each running service logs, by service name */
   logs: Record<string, string>;
@@ -118,6 +122,9 @@ let current: Session | null = null;
 const unfinished = new Set<Promise<unknown>>();
 
 const serverName = (service: PreviewService) => `preview-${service.name}`;
+/** The services this start runs, by its recipe */
+const servicesOf = (session: Session): PreviewService[] => session.resolved.recipe.services ?? [];
+const NO_RECIPE: ResolvedRecipe = { recipe: { version: 1, kind: 'web', services: [] }, source: 'none' };
 const tail = (text: string) => text.slice(-TAIL_CHARS);
 const cancelled = (session: Session) => session.abort.signal.aborted;
 
@@ -235,6 +242,7 @@ function varsFor(session: Session, dir: string, files: string[]): PreviewEnvVar[
     started: session.database?.status === 'started' ? session.database.started : [],
     compose: { planned: session.composePlanned, started: session.compose?.started ?? [] },
     mailPort: session.mail?.status === 'started' ? session.mail.smtpPort : undefined,
+    recipe: session.resolved.recipe.env,
     overrides: session.project.settings.previewEnv,
   });
 }
@@ -247,7 +255,7 @@ function envFor(session: Session, dir: string, files: string[]): Record<string, 
 async function buildLibraries(session: Session, files: string[], report: boolean): Promise<void> {
   const root = session.worktree;
   const read = (p: string) => session.deps.read(root, p);
-  for (const library of workspaceLibraries({ files, read }, session.project.settings.previewServices ?? [])) {
+  for (const library of workspaceLibraries({ files, read }, servicesOf(session))) {
     if (report) emit(session, { stage: 'libraries', message: library.name });
     const result = await session.deps.runCommand(library.command, resolve(root, library.dir), envFor(session, library.dir, files), session.abort.signal);
     check(session);
@@ -288,7 +296,7 @@ async function runMigrations(session: Session, files: string[], report: boolean)
 
 /** The root and every service's folder */
 function serviceDirs(session: Session): string[] {
-  return [...new Set(['', ...(session.project.settings.previewServices ?? []).map((s) => s.dir)])];
+  return [...new Set(['', ...servicesOf(session).map((s) => s.dir)])];
 }
 
 /** Where a folder's install is recorded, relative to the worktree */
@@ -341,7 +349,7 @@ async function choosePort(session: Session, expected: number | undefined, taken:
 }
 
 async function startServices(session: Session, files: string[]): Promise<StartedServices> {
-  const services = session.project.settings.previewServices ?? [];
+  const services = servicesOf(session);
   const ordered = [...services.filter((s) => !s.page), ...services.filter((s) => s.page)];
   const read = (path: string) => session.deps.read(session.worktree, path);
   // Every port first: a backend may need the page's URL (CORS), and the page starts last
@@ -365,6 +373,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
       byExamplePort,
       urlEnv: service.urlEnv,
       urls,
+      recipe: service.env,
       serviceOverrides: session.project.settings.previewServiceEnv?.[service.name],
       portEnv: service.portEnv ?? 'PORT',
       port: ports[service.name],
@@ -437,7 +446,7 @@ const UNREACHABLE_ERROR = new Set(['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH']
  * told so instead of looking at a blank page. Runs after "ready", never holds it up.
  */
 async function checkReachable(session: Session, url: string, files: string[]): Promise<void> {
-  const services = session.project.settings.previewServices ?? [];
+  const services = servicesOf(session);
   const page = services.find((s) => s.page);
   if (!page || !url) return;
   const backends = services.filter((s) => !s.page);
@@ -484,10 +493,32 @@ async function teardown(session: Session): Promise<void> {
 
 function failed(session: Session, error: unknown): PreviewStatus {
   const message = error instanceof Error ? error.message : String(error);
-  const { logTail, stoppedService } = error as { logTail?: string; stoppedService?: string };
-  emit(session, { stage: 'failed', message, logTail, stoppedService, url: undefined, origins: [] });
+  const { logTail, stoppedService, needsServices } = error as { logTail?: string; stoppedService?: string; needsServices?: true };
+  emit(session, { stage: 'failed', message, logTail, stoppedService, ...(needsServices ? { needsServices } : {}), url: undefined, origins: [] });
   if (current === session) current = null;
   return session.status;
+}
+
+const KIND_MESSAGE = {
+  desktop: 'This project is a desktop app. The preview shows web apps for now; see how to run it below.',
+  mobile: 'This project is a mobile app. The preview shows web apps for now; see how to run it below.',
+  none: 'This project has nothing to show in a preview. See how to run it below.',
+} as const;
+
+/**
+ * Works out the recipe from the worktree's files and says where it came from. A recipe the
+ * preview can't show (another kind than web), or one with no single page, ends the start
+ * here, before anything is installed or started.
+ */
+function useRecipe(session: Session, files: string[]): void {
+  const resolved = resolveRecipe({ files, read: (path) => session.deps.read(session.worktree, path), saved: session.project.settings.previewServices ?? [] });
+  session.resolved = resolved;
+  emit(session, { recipe: { source: resolved.source, ...(resolved.invalid ? { invalid: resolved.invalid } : {}) } });
+  const { kind } = resolved.recipe;
+  if (kind !== 'web') throw new Error(KIND_MESSAGE[kind]);
+  if (servicesOf(session).filter((service) => service.page).length !== 1) {
+    throw Object.assign(new Error('Choose exactly one service whose page the preview shows.'), { needsServices: true as const });
+  }
 }
 
 async function run(session: Session, resetData: boolean): Promise<PreviewStatus> {
@@ -503,6 +534,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       deps.cleanUpLeftovers(previewSpecDir(session.worktree));
       const files = await deps.listFiles(session.worktree);
       check(session);
+      useRecipe(session, files);
 
       await installNode(session, files, lockfileChanged);
       await installStacks(session, files);
@@ -535,7 +567,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       check(session);
       emit(session, { database: database.status, databaseReason: database.reason });
 
-      const examples = [...new Set(['', ...(project.settings.previewServices ?? []).map((s) => s.dir)])]
+      const examples = serviceDirs(session)
         .map((dir) => (dir ? `${dir}/.env.example` : '.env.example'))
         .filter((path) => files.includes(path))
         .map((path) => deps.read(session.worktree, path) ?? '')
@@ -545,7 +577,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       if (session.composePlanned.length) {
         emit(session, { stage: 'database', message: session.composePlanned.map((s) => s.name).join(', ') });
         // A compose service may have its compose port, but not one the project's own services run on
-        const ownPorts = (project.settings.previewServices ?? []).map((service) => examplePort(service, (path) => deps.read(session.worktree, path)));
+        const ownPorts = servicesOf(session).map((service) => examplePort(service, (path) => deps.read(session.worktree, path)));
         const compose = await deps.startCompose(session.composePlanned, {
           docker: deps.docker, labelKey: PREVIEW_LABEL, labelValue: key, network, buckets: bucketsOf(examples), signal: session.abort.signal, pickPort: deps.pickPort,
           hostPortFree: async (port) => !ownPorts.includes(port) && (await deps.portFree(port)),
@@ -570,8 +602,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       const sql = await runMigrations(session, files, true);
       if (sql && session.database?.fresh) {
         const manager = managerOf(files);
-        const dirs = ['', ...(project.settings.previewServices ?? []).map((s) => s.dir)];
-        for (const dir of [...new Set(dirs)]) {
+        for (const dir of serviceDirs(session)) {
           const command = seedCommand(deps.read(session.worktree, dir ? `${dir}/package.json` : 'package.json'), manager);
           if (!command) continue;
           emit(session, { stage: 'seed' });
@@ -641,12 +672,6 @@ export async function startPreview(
   await stopPreview();
   // A stopped session may still be winding down: it must be gone before this one touches the worktree or the volume
   await Promise.allSettled([...unfinished]);
-  const services = project.settings.previewServices ?? [];
-  if (services.filter((s) => s.page).length !== 1) {
-    const status: PreviewStatus = { projectId: project.id, ...(options.task ? { taskId: options.task.taskId } : {}), stage: 'failed', origins: [], message: 'Choose exactly one service whose page the preview shows.' };
-    onStatus(status);
-    return status;
-  }
   const session: Session = {
     project,
     deps: { ...defaultPreviewDeps(), ...deps },
@@ -654,6 +679,7 @@ export async function startPreview(
     abort: new AbortController(),
     task: options.task,
     worktree: options.task?.worktree ?? previewWorktreePath(deps.worktreesRoot, project.id),
+    resolved: NO_RECIPE,
     servers: [],
     logs: {},
     vars: {},
@@ -753,7 +779,7 @@ export function runningPreviewEnv(project: Project, taskId?: string): PreviewEnv
     mail: session.mailWanted,
     // Compose services that all failed for their own reasons aren't Docker's absence
     dockerUnavailable: session.database?.status === 'unavailable' || session.mail?.status === 'unavailable' || (session.compose?.status === 'unavailable' && !session.compose.failed.length),
-    services: (session.project.settings.previewServices ?? []).map((service) => ({ service: service.name, dir: service.dir, vars: session.vars[service.name] ?? [] })),
+    services: servicesOf(session).map((service) => ({ service: service.name, dir: service.dir, vars: session.vars[service.name] ?? [] })),
   };
 }
 

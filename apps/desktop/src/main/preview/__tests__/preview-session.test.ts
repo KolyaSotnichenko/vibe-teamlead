@@ -449,11 +449,12 @@ describe('a preview session', () => {
     expect(status.databaseReason).toBe("Docker isn't running.");
   });
 
-  it('refuses to start without a page service', async () => {
+  it('refuses to start without a page service, and asks for the services', async () => {
     const { d } = deps();
     const status = await startPreview(project('p1', [{ name: 'api', dir: 'apps/api', command: 'x' }]), () => {}, d);
-    expect(status.stage).toBe('failed');
-    expect(d.sync).not.toHaveBeenCalled();
+    expect(status).toMatchObject({ stage: 'failed', needsServices: true });
+    expect(d.install).not.toHaveBeenCalled();
+    expect(d.startServer).not.toHaveBeenCalled();
   });
 
   it('a settled merge of the previewed project re-syncs the worktree', async () => {
@@ -632,6 +633,69 @@ describe('a preview session', () => {
     const { d } = deps();
     await startPreview(project(), () => {}, d);
     expect(vi.mocked(d.sync).mock.calls[0][3]).toBe(join('/home/.vibe-teamlead/worktrees/preview', 'p1'));
+  });
+});
+
+describe('the recipe', () => {
+  const withFiles = (extra: Record<string, string>) => {
+    const files: Record<string, string> = { ...FILES, ...extra };
+    return { listFiles: () => Object.keys(files), read: (_root: string, path: string) => files[path] ?? null };
+  };
+  const RECIPE = {
+    version: 1, kind: 'web', env: { FEATURE_Y: 'recipe' },
+    services: [
+      { name: 'site', dir: 'apps/web', command: 'pnpm run dev --port {port}', port: 5173, page: true, env: { ONLY_SITE: '1' } },
+      { name: 'api', dir: 'apps/api', command: 'pnpm run start:dev', port: 3001 },
+    ],
+  };
+
+  it('starts the services preview.json names, on the ports it names when they are free, with its values', async () => {
+    const { d } = deps({ ...withFiles({ 'preview.json': JSON.stringify(RECIPE) }), portFree: vi.fn(async () => true) });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status).toMatchObject({ stage: 'ready', recipe: { source: 'file' } });
+    const started = vi.mocked(d.startServer).mock.calls.map(([o]) => o);
+    expect(started.map((o) => [o.name, o.port])).toEqual([['preview-api', 3001], ['preview-site', 5173]]);
+    expect(started[1].env).toMatchObject({ FEATURE_Y: 'recipe', ONLY_SITE: '1' });
+    expect(started[0].env).toMatchObject({ FEATURE_Y: 'recipe' });
+    expect(started[0].env).not.toHaveProperty('ONLY_SITE');
+  });
+
+  it('starts from the saved services and says so when preview.json cannot be used', async () => {
+    const { d } = deps(withFiles({ 'preview.json': '{"version":2}' }));
+    const status = await startPreview(project(), () => {}, d);
+    expect(status.stage).toBe('ready');
+    expect(status.recipe?.source).toBe('settings');
+    expect(status.recipe?.invalid).toMatch(/version/);
+  });
+
+  it('starts a project with nothing saved from an unambiguous proposal', async () => {
+    const files: Record<string, string> = { 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) };
+    const { d } = deps({ listFiles: () => Object.keys(files), read: (_root: string, path: string) => files[path] ?? null });
+    const status = await startPreview(project('p1', []), () => {}, d);
+    expect(status).toMatchObject({ stage: 'ready', recipe: { source: 'proposal' } });
+    expect(vi.mocked(d.startServer).mock.calls[0][0]).toMatchObject({ name: 'preview-web', command: 'npm run dev -- --port {port}' });
+  });
+
+  it('asks for services, and starts nothing, when no source gives a page', async () => {
+    const { d } = deps({ listFiles: () => ['README.md'], read: () => null });
+    const status = await startPreview(project('p1', []), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', needsServices: true, message: 'Choose exactly one service whose page the preview shows.' });
+    expect(d.install).not.toHaveBeenCalled();
+    expect(d.startServer).not.toHaveBeenCalled();
+  });
+
+  it('does not start a recipe of another kind, and says what it is', async () => {
+    const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"desktop"}' }));
+    const status = await startPreview(project(), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', message: 'This project is a desktop app. The preview shows web apps for now; see how to run it below.' });
+    expect(status.needsServices).toBeUndefined();
+    expect(d.startServer).not.toHaveBeenCalled();
+  });
+
+  it('says a project of kind none has nothing to show', async () => {
+    const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"none"}' }));
+    const status = await startPreview(project(), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', message: 'This project has nothing to show in a preview. See how to run it below.' });
   });
 });
 

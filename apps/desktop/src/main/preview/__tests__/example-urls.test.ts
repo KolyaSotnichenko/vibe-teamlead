@@ -5,6 +5,10 @@ import { examplePort, rewriteExampleUrls } from '../example-urls';
 const read = (files: Record<string, string>) => (path: string) => files[path] ?? null;
 
 describe('examplePort: where a service listens when run as its example says', () => {
+  it("takes the port the service's recipe names before anything the files say", () => {
+    expect(examplePort({ name: 'api', dir: 'apps/api', command: 'pnpm dev', port: 3001 }, () => 'PORT=4000\n')).toBe(3001);
+  });
+
   it("takes its port variable from its own .env.example", () => {
     const files = { 'apps/api/.env.example': 'PORT=3001\nX=1\n', 'apps/api/package.json': JSON.stringify({ scripts: { 'start:dev': 'nest start --watch' } }) };
     expect(examplePort({ name: 'api', dir: 'apps/api', command: 'pnpm run start:dev' }, read(files))).toBe(3001);

@@ -58,6 +58,8 @@ function devScript(text: string | null): string {
 
 /** The port the service listens on when run as the project describes it, if anything says. */
 export function examplePort(service: PreviewService, read: (path: string) => string | null): number | undefined {
+  // The recipe says: nothing to work out
+  if (service.port) return service.port;
   const inDir = (file: string) => (service.dir ? `${service.dir}/${file}` : file);
   const fromExample = asPort(exampleValue(read(inDir('.env.example')), service.portEnv ?? 'PORT'));
   if (fromExample) return fromExample;
