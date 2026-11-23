@@ -17,7 +17,7 @@ import { FORBIDDEN_ENV } from '../ai/dev-servers/forbidden-env';
 import { validateCommand } from '../ai/security/bash-validator';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
 import { say } from '../say';
-import { proposePreview } from './detect-services';
+import { proposeDesktop, proposePreview } from './detect-services';
 
 export const RECIPE_FILE = 'preview.json';
 
@@ -73,9 +73,13 @@ function staysInside(dir: string): boolean {
 /** The first thing wrong that the shape alone can't say, or null */
 function problemIn(recipe: PreviewRecipe): string | null {
   const services = recipe.services ?? [];
-  if (recipe.kind === 'web' && recipe.services) {
+  if ((recipe.kind === 'web' || recipe.kind === 'desktop') && recipe.services) {
     if (new Set(services.map((s) => s.name)).size !== services.length) return say('recipeSameName', 'services: two services have the same name.');
-    if (services.filter((s) => s.page).length !== 1) return say('recipeOnePage', 'services: exactly one service must be the page ("page": true).');
+    if (services.filter((s) => s.page).length !== 1) {
+      return recipe.kind === 'web'
+        ? say('recipeOnePage', 'services: exactly one service must be the page ("page": true).')
+        : say('recipeOneApp', 'services: exactly one service must be the app ("page": true): the process that opens its window.');
+    }
   }
   const commands: Array<{ at: string; dir: string; command: string }> = [
     ...services.map((s, i) => ({ at: `services[${i}]`, dir: s.dir, command: s.command })),
@@ -182,6 +186,9 @@ export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; c
   };
   /** A recipe that says what to run, from the app (`pending`) or from the file: its services, or the detected ones */
   const from = (recipe: PreviewRecipe, label: 'pending' | 'file'): ResolvedRecipe => {
+    // A desktop recipe that names no services: the app the files show
+    const app = recipe.kind === 'desktop' && !recipe.services ? proposeDesktop({ files, read }) : null;
+    if (app) return { recipe: { ...recipe, services: app.services }, source: label, servicesFrom: 'proposal' };
     if (recipe.kind !== 'web' || recipe.services) return { recipe, source: label, servicesFrom: recipe.services ? label : 'none' };
     const { services, source } = detected();
     return { recipe: { ...recipe, services }, source: source === 'none' ? 'none' : label, servicesFrom: source };
@@ -198,5 +205,8 @@ export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; c
   const invalid = reason ? { invalid: reason } : {};
   if (parsed?.ok && outside === undefined) return from(parsed.recipe, 'file');
   const { services, source } = detected();
+  // Nothing says which page: an app with its own window, when the files show one
+  const app = source === 'none' ? proposeDesktop({ files, read }) : null;
+  if (app) return { recipe: app, source: 'proposal', servicesFrom: 'proposal', ...invalid };
   return { recipe: { version: 1, kind: 'web', services }, source, servicesFrom: source, ...invalid };
 }

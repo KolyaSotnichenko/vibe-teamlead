@@ -1190,6 +1190,7 @@
       "recipeUnknownKeys": "{{at}} has keys a recipe does not have: {{keys}}.",
       "recipeSameName": "Two services have the same name.",
       "recipeOnePage": "Exactly one service must be the page (\"page\": true).",
+      "recipeOneApp": "Exactly one service must be the app (\"page\": true): the process that opens its window.",
       "recipeDir": "{{at}}.dir must be a folder inside the project, written with \"/\" from its root (\"\" for the root itself).",
       "recipeCommand": "{{at}}.command is not allowed: {{reason}}",
       "recipeVariable": "{{at}} can't be set: it changes what a command runs.",

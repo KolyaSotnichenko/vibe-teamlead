@@ -68,6 +68,7 @@ export const PREVIEW_SAY = {
   recipeUnknownKeys: ['at', 'keys'],
   recipeSameName: [],
   recipeOnePage: [],
+  recipeOneApp: [],
   recipeDir: ['at'],
   recipeCommand: ['at', 'reason'],
   recipeVariable: ['at'],

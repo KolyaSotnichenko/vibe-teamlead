@@ -173,6 +173,26 @@ describe('resolveRecipe', () => {
     expect(resolveRecipe({ files: [], read: () => null, saved: SAVED, pending: { recipe: linked, base: 'none' }, contained: (dir) => dir !== 'ext' })).toMatchObject({ source: 'settings' });
   });
 
+  it('refuses a desktop recipe without exactly one service marked as the app, and two services with one name', () => {
+    const app = { name: 'app', dir: '', command: 'npm run dev', page: true };
+    expect(parseRecipe(JSON.stringify({ version: 1, kind: 'desktop', services: [app] }))).toMatchObject({ ok: true });
+    expect(saidFor([(parseRecipe(JSON.stringify({ version: 1, kind: 'desktop', services: [{ ...app, page: undefined }] })) as { reason: string }).reason])).toMatchObject([{ key: 'recipeOneApp' }]);
+    expect(saidFor([(parseRecipe(JSON.stringify({ version: 1, kind: 'desktop', services: [app, { ...app, name: 'b' }] })) as { reason: string }).reason])).toMatchObject([{ key: 'recipeOneApp' }]);
+    expect(saidFor([(parseRecipe(JSON.stringify({ version: 1, kind: 'desktop', services: [app, { ...app, page: false }] })) as { reason: string }).reason])).toMatchObject([{ key: 'recipeSameName' }]);
+  });
+
+  it('proposes a desktop app when nothing else says what to run, and keeps a web proposal or saved services first', () => {
+    const shell = { 'package.json': JSON.stringify({ scripts: { dev: 'electron .' }, devDependencies: { electron: '1' } }) };
+    expect(resolve(shell)).toEqual({ recipe: { version: 1, kind: 'desktop', services: [{ name: 'app', dir: '', command: 'npm run dev', page: true }] }, source: 'proposal', servicesFrom: 'proposal' });
+    expect(resolve(shell, SAVED)).toMatchObject({ recipe: { kind: 'web', services: SAVED }, source: 'settings' });
+    expect(resolve(VITE)).toMatchObject({ recipe: { kind: 'web' }, source: 'proposal' });
+  });
+
+  it('gives a desktop preview.json without services the proposed app', () => {
+    const files = { 'preview.json': '{"version":1,"kind":"desktop"}', 'src-tauri/tauri.conf.json': '{}' };
+    expect(resolve(files)).toEqual({ recipe: { version: 1, kind: 'desktop', services: [{ name: 'app', dir: '', command: 'cargo tauri dev', page: true }] }, source: 'file', servicesFrom: 'proposal' });
+  });
+
   it('leaves a recipe of another kind as it is', () => {
     expect(resolve({ 'preview.json': '{"version":1,"kind":"desktop"}' }, SAVED)).toEqual({ recipe: { version: 1, kind: 'desktop' }, source: 'file', servicesFrom: 'none' });
   });
