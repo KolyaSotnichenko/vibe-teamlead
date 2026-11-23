@@ -10,20 +10,59 @@ While it is open, a merge into main moves it to the new code. Pages reload as th
 
 ## The first time
 
-The app reads the project's files and proposes what to run, for example `api` and `web` in a monorepo:
+The preview starts by itself. The app reads the project's files and works out what to run, for example `api` and `web` in a monorepo:
 
 - **JavaScript and TypeScript:** each package's `dev` (or `start:dev`) script; Next, Vite, Nuxt, SvelteKit, Astro, Angular and Remix frontends become pages.
 - **Python:** Django (`manage.py runserver`), FastAPI (`uvicorn`, with the module that creates the app) and Flask (`flask run`), run through uv or Poetry when the project uses them, otherwise a `.venv` of the preview's own.
 - **Ruby:** Rails (`bin/rails server`). **PHP:** Laravel (`php artisan serve`). **Go:** `go run` of the main package, at the root or under `cmd/`.
 
-Anything else that serves HTTP works too: add it under **Services** with a command that takes `{port}` or reads `PORT`. Check the list once:
+Anything else that serves HTTP works too: add it under **Services** with a command that takes `{port}` or reads `PORT`.
+
+You are asked only when the app can't tell which service is the page: two frontends, or nothing it recognises. Then, and under **Services** in the toolbar at any time, the list has:
 
 - **Folder:** where the command runs, relative to the project.
 - **Command:** the command itself. `{port}` becomes the port the app picked; the port is also in `PORT`.
 - **Page:** the service whose page the preview shows. Exactly one.
 - **Variables with another service's URL:** usually none. A local address in `.env.example`, such as `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`, is pointed at the preview's own port for the service that listens on 3001 in the project: the port from its `.env.example` (its folder's, then the root's), its `dev` script, or its framework's default. Name one here only when that can't be worked out, for example `NEXT_PUBLIC_API_URL=api`.
 
-Change the list later with **Services** in the toolbar. The list is kept in the project's settings in the app, not in the repository.
+A list you save is kept in the project's settings in the app, not in the repository.
+
+## The recipe: preview.json
+
+What the preview can't work out from the files can be written down once, in `preview.json` at the project's root, committed with the code. When the file is there, the preview runs the project by it:
+
+```json
+{
+  "version": 1,
+  "kind": "web",
+  "services": [
+    { "name": "api", "dir": "apps/api", "command": "pnpm run dev", "port": 3000, "ready": "/health", "env": { "AUTH_MODE": "dev" } },
+    { "name": "web", "dir": "apps/web", "command": "pnpm run dev --port {port}", "port": 5173, "page": true }
+  ],
+  "steps": {
+    "migrate": [{ "dir": "apps/api", "command": "pnpm exec prisma migrate deploy" }],
+    "seed": [{ "dir": "apps/api", "command": "pnpm run db:seed" }]
+  },
+  "env": { "FEATURE_X": "on" }
+}
+```
+
+- `kind`: `web` is what the preview shows. `desktop`, `mobile` and `none` say the project is something else; for those the preview shows how to run it by hand (`RUNNING.md`) for now.
+- `services`: as under **Services**, plus `port` (the port the project expects the service on), `ready` (a path that answers once the service is really up, such as `/health`) and `env` (values for that service).
+- `steps`: `install`, `build`, `migrate` and `seed`, each a list of commands with their folder. A list replaces what the preview would do at that stage, an empty list skips the stage, and a stage the file doesn't name is worked out as before. Dependencies are installed again only when the command, a lockfile or `package.json` in its folder changes; the seed runs only on a new, empty database.
+- `env`: values every service gets.
+
+Anything the file doesn't say is still worked out from the project's files. With a `preview.json`, **Services** shows its services, and they are changed in the file. A merge that changes the file restarts the running preview by the new one.
+
+The file comes from the repository, so the app checks it before using anything in it:
+
+- a folder can't lead out of the project, and a command must pass the same check agents' commands pass;
+- it can't set variables that change what a command runs (`PATH`, `NODE_OPTIONS` and the like);
+- its values replace only values from `.env.example`, or add new ones: never what the preview sets itself (the test database's address, a setting left empty on purpose) and never your own values.
+
+A file the app can't use is passed over: the preview works out what to run by itself, and a notice over the page says why.
+
+Migrations and seed commands, the recipe's and the detected ones alike, never get your own values from **Environment**: they run only against the database the preview started. When the recipe gives them a database on another machine, they are not run, and a notice says so.
 
 ## Where its code and data come from
 
@@ -80,6 +119,7 @@ Under that, one fold per service lists every setting with where its value came f
 - **test database started by the preview**, **test rabbitmq started by the preview** (any other compose service, by its name) or **mail catcher started by the preview**;
 - **left empty on purpose**: a connection setting the preview has no test service for, or whose test service didn't start, so the app can't reach a real one;
 - **address of another part of this preview** and **port chosen by the preview**;
+- **from the project's recipe (preview.json)**: a value the recipe sets, for all services or for this one;
 - **your value**: for this service, or for all services (the older project-wide setting).
 
 Empty settings come first with an **Empty** mark, and **Empty only** hides the rest. Values whose names look secret (`…_SECRET`, `…_KEY`, `…_TOKEN`, `…_PASSWORD`, `PRIVATE`) and connection addresses with a password are masked; the eye button shows one. The preview never reads `.env` or `.env.local`, and neither does this tab.
