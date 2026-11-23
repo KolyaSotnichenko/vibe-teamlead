@@ -180,6 +180,7 @@ export const IPC_CHANNELS = {
   USAGE_GET: 'usage:get',
   TASK_SECURITY_FOLLOWUP: 'task:securityFollowup',  // Where lesser Strix findings went
   TASK_VERIFICATION: 'task:verification',  // What the app's own checks found
+  TASK_VERIFY_AGAIN: 'task:verify-again',  // The owner runs the app's own checks again on a task in review
   TASK_MERGE_STATE: 'task:mergeState',  // Where the task's merge stands, for after its window closed
   TASK_SECURITY_QA_ERROR: 'task:securityQaError',  // Why the task's pentest did not finish, if it did not
   TASK_WORKSPACE_GET_IMAGE: 'task:workspaceGetImage',  // A diagram PNG of the spec dir as a data URL

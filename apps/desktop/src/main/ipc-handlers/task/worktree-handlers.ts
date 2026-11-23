@@ -1,4 +1,7 @@
 import { stopWorktreeContainers } from '../../ai/dev-servers/dev-servers';
+import { verifyAgain } from './verify-again';
+import { writeFileReplacing } from '../../ai/safe-write';
+import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { isTaskBranch } from '../../../shared/constants/config';
 import { appEvents } from '../../app-events';
 import { ipcMain, BrowserWindow, app } from 'electron';
@@ -1143,6 +1146,32 @@ export async function mergeTaskWorktree(
 export function registerWorktreeHandlers(
   getMainWindow: () => BrowserWindow | null
 ): void {
+  // The owner runs the app's own checks again on a task waiting for review
+  ipcMain.handle(IPC_CHANNELS.TASK_VERIFY_AGAIN, async (_, taskId: string, projectId?: string): Promise<IPCResult<VerificationSummary>> => {
+    try {
+      const { task, project } = findTaskAndProject(taskId, projectId);
+      if (!task || !project) return { success: false, error: 'Task not found' };
+      const specDir = path.join(project.path, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId);
+      const worktree = findTaskWorktree(project.path, task.specId);
+      const verification = projectVerification(project.path, project.settings);
+      if (!verification) return { success: false, error: "The app's checks are turned off for this project." };
+      const git = { git: getToolPath('git'), env: getIsolatedGitEnv() };
+      const baseRef = getTaskBaseBranch(specDir) || project.settings?.mainBranch || 'main';
+      const summary = await verifyAgain({
+        status: task.status,
+        worktree,
+        key: `${project.id}/${task.id}`,
+        stopContainers: () => (worktree ? stopWorktreeContainers(worktree) : Promise.resolve()),
+        verify: ({ fresh }) => verifyTask({ worktreePath: worktree as string, baseRef, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, previewServices: verification.previewServices, memory: appCheckMemory(), fresh, git: git.git, hostEnv: git.env }),
+        write: (written) => writeFileReplacing(path.join(specDir, 'verification.json'), JSON.stringify(written, null, 2), 'utf-8'),
+        regression: () => appEvents.emit('verification-regression', { taskId, projectId: project.id }),
+      });
+      return { success: true, data: summary };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   /**
    * Get the worktree status for a task
    * Per-spec architecture: Each spec has its own worktree at .vibe-teamlead/worktrees/tasks/{spec-name}/

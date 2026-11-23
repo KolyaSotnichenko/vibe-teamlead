@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Task } from '../../../../shared/types';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: { ports?: string }) => (params?.ports ? `${key}:${params.ports}` : key) }) }));
@@ -48,6 +48,35 @@ describe('VerificationNotice', () => {
   it('names the port that is in use, with or without a service', async () => {
     setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable', why: { reason: 'port', ports: [10000] } }] });
     expect(await screen.findByText('verification.startsWhy.port:10000')).toBeInTheDocument();
+  });
+
+  it('runs the checks again when they could not say everything, and shows what they find', async () => {
+    const { getTaskVerification } = setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable', why: { reason: 'port', ports: [10000] } }] });
+    const verifyTaskAgain = vi.fn(async () => ({ success: true, data: { status: 'passed', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'passed' }] } }));
+    (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { getTaskVerification, verifyTaskAgain };
+    fireEvent.click(await screen.findByRole('button', { name: 'verification.again' }));
+    expect(verifyTaskAgain).toHaveBeenCalledWith('t1', 'p1');
+    expect(await screen.findByText('verification.passedTitle')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'verification.again' })).not.toBeInTheDocument();
+  });
+
+  it('shows what the checks run again found broken, since no other panel says it then, and why a run could not start', async () => {
+    const { getTaskVerification } = setup({ status: 'not_verified', checks: [] });
+    const verifyTaskAgain = vi.fn()
+      .mockResolvedValueOnce({ success: false, error: 'The checks are already running for this task.' })
+      .mockResolvedValueOnce({ success: true, data: { status: 'regression', checks: [{ command: 'pnpm run test', outcome: 'failed', onBase: 'passed' }] } });
+    (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = { getTaskVerification, verifyTaskAgain };
+    fireEvent.click(await screen.findByRole('button', { name: 'verification.again' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The checks are already running for this task.');
+    fireEvent.click(screen.getByRole('button', { name: 'verification.again' }));
+    expect(await screen.findByText('verification.regressionTitle')).toBeInTheDocument();
+    expect(screen.getByText('verification.outcome.failed')).toBeInTheDocument();
+  });
+
+  it('offers no new run when the checks passed', async () => {
+    setup({ status: 'passed', checks: [{ command: 'pnpm run test', outcome: 'passed' }] });
+    expect(await screen.findByText('verification.passedTitle')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'verification.again' })).not.toBeInTheDocument();
   });
 
   it('calls the start-up check by what it means, not by a command', async () => {

@@ -677,6 +677,7 @@ export interface ElectronAPI {
   getTaskMergeState: (taskId: string, projectId?: string) => Promise<IPCResult<MergeState | null>>;
   getTaskSecurityFollowup: (taskId: string, projectId?: string) => Promise<IPCResult<{ specId: string; count: number } | null>>;
   getTaskVerification: (taskId: string, projectId?: string) => Promise<IPCResult<import('../utils/verification-summary').VerificationSummary | null>>;
+  verifyTaskAgain: (taskId: string, projectId?: string) => Promise<IPCResult<import('../utils/verification-summary').VerificationSummary>>;
   getMergeReviewDiff: (taskId: string, file: string, against: 'project' | 'task', projectId?: string) => Promise<IPCResult<{ diff: string; truncated: boolean }>>;
   getTaskWorkspaceImage: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult<string>>;
   openTaskWorkspaceFile: (taskId: string, relativePath: string, projectId?: string) => Promise<IPCResult>;

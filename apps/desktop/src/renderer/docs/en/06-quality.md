@@ -34,7 +34,8 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 - A commit that was already checked, with the same commands and settings, isn't checked a second time. QA rounds and restarts on a commit that hasn't moved use the result of the first run, and the log says when it ran. So does the check before a merge that brings nothing new into the task.
 - The result on the commit a task started from is kept too, for every task that starts from it.
 - A run that ran out of time, lacked a tool or had no database is never kept.
-- **Run QA again** always runs the checks anew.
+- **Run QA again** (shown when QA did not pass) always runs the checks anew.
+- **Check again**, in the task's window when the checks couldn't say everything, runs only the app's checks anew, with no agent and no model: the typecheck, the tests and the start. It first stops what the task's agents left running. When they now find that the task broke something, the window says so.
 - The results are kept while the app is open, on your computer in `~/.vibe-teamlead/check-results`, outside the folders agents work in. The app signs each one with a key that exists only in its memory, so a result written there by anything else is ignored, and after the app restarts a commit is checked once more.
 
 #### When a check can't say anything

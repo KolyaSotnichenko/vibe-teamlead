@@ -4,7 +4,10 @@
  * by the panel that says what to fix.
  */
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RotateCcw } from 'lucide-react';
+import { Button } from '../ui/button';
 import type { Task } from '../../../shared/types';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { useVerification } from './useVerification';
@@ -22,11 +25,37 @@ function outcomeKey(check: Check): string {
 
 export function VerificationNotice({ task }: { task: Task }) {
   const { t } = useTranslation('tasks');
-  const summary = useVerification(task);
-  if (!summary || summary.status === 'regression') return null;
+  const loaded = useVerification(task);
+  /** What a run the owner asked for here found: it replaces what was loaded */
+  const [again, setAgain] = useState<{ taskId: string; summary: VerificationSummary } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const summary = again?.taskId === task.id ? again.summary : loaded;
+  // A regression found at QA is listed by the panel that says what to fix; one found by a run asked for here, by nothing else
+  if (!summary || (summary.status === 'regression' && again?.taskId !== task.id)) return null;
+
+  const checkAgain = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await window.electronAPI.verifyTaskAgain(task.id, task.projectId);
+      if (result.success && result.data) setAgain({ taskId: task.id, summary: result.data });
+      else setError(result.error ?? '');
+    } catch (thrown) {
+      setError(thrown instanceof Error ? thrown.message : String(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const passed = summary.status === 'passed';
-  const title = passed ? 'verification.passedTitle' : summary.status === 'not_configured' ? 'verification.notConfiguredTitle' : 'verification.notVerifiedTitle';
+  const title = passed
+    ? 'verification.passedTitle'
+    : summary.status === 'regression'
+      ? 'verification.regressionTitle'
+      : summary.status === 'not_configured'
+        ? 'verification.notConfiguredTitle'
+        : 'verification.notVerifiedTitle';
 
   return (
     <section aria-labelledby="verification" className={`border-l-2 py-1 pl-4 ${passed ? 'border-l-border' : 'border-l-[var(--vt-signal)]'}`}>
@@ -51,6 +80,13 @@ export function VerificationNotice({ task }: { task: Task }) {
             </li>
           ))}
         </ul>
+      )}
+      {error && <p role="alert" className="mt-1 text-sm text-destructive">{error}</p>}
+      {!passed && summary.status !== 'not_configured' && (
+        <Button size="sm" variant="outline" className="mt-2" disabled={busy} onClick={() => void checkAgain()}>
+          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+          {t(busy ? 'verification.againRunning' : 'verification.again')}
+        </Button>
       )}
     </section>
   );
