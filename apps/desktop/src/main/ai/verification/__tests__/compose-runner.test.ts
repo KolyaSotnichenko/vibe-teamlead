@@ -10,11 +10,13 @@ import type { DockerRun } from '../test-services';
 const publishOf = (call: string[]) => call.filter((_, i) => call[i - 1] === '-p');
 
 /** A docker that answers like the real one, and records what it was asked */
-function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: boolean; exited?: boolean; bucketFails?: boolean; bindFails?: boolean } = {}) {
+function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: boolean; notReadyImage?: string; exited?: boolean; bucketFails?: boolean; bindFails?: boolean } = {}) {
   const calls: string[][] = [];
   let next = 0;
   /** Container port → the host port its run asked for, per container */
   const fixed = new Map<string, Record<string, string>>();
+  /** Containers of the image that never gets ready */
+  const neverReady = new Set<string>();
   const docker: DockerRun = vi.fn(async (args: string[]) => {
     calls.push(args);
     if (args[0] === 'info') return { ok: over.available !== false, stdout: '' };
@@ -25,13 +27,14 @@ function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: 
       if (over.bindFails && asked.length) return { ok: false, stdout: 'port is already allocated' };
       const id = `c${++next}`;
       fixed.set(id, Object.fromEntries(asked.map(([, host, container]) => [container, host])));
+      if (over.notReadyImage && args.includes(over.notReadyImage)) neverReady.add(id);
       return { ok: true, stdout: `${id}\n` };
     }
     if (args[0] === 'port') {
       const container = args[2].split('/')[0];
       return { ok: true, stdout: `127.0.0.1:${fixed.get(args[1])?.[container] ?? 50000 + (Number(container) % 1000)}\n` };
     }
-    if (args[0] === 'exec') return { ok: !(over.notReady || (over.bucketFails && args.includes('mb'))), stdout: '' };
+    if (args[0] === 'exec') return { ok: !(over.notReady || neverReady.has(args[1]) || (over.bucketFails && args.includes('mb'))), stdout: '' };
     if (args[0] === 'inspect') return { ok: true, stdout: over.exited ? 'false\n' : 'true\n' };
     return { ok: true, stdout: '' };
   });
@@ -275,12 +278,54 @@ describe("the compose file's host ports", () => {
     expect(run.moved).toEqual([{ name: 'azurite', wanted: 10000, got: 50000 }, { name: 'azurite', wanted: 10001, got: 50001 }]);
   });
 
-  it('gives a host port two services name to the first one only', async () => {
+  it('gives a host port two services name to the first one only, and says who has it', async () => {
     const { docker, calls } = fakeDocker();
     const two = 'services:\n  a:\n    image: nats:2\n    ports: ["4222:4222"]\n  b:\n    image: nats:2\n    ports: ["4222:4222"]\n';
     const run = await startComposeServices(composeServices([two]), options(docker, { hostPortFree: async () => true }));
     expect(runs(calls).map(publishOf)).toEqual([['127.0.0.1:4222:4222'], ['127.0.0.1::4222']]);
-    expect(run.moved).toEqual([{ name: 'b', wanted: 4222, got: 50222 }]);
+    expect(run.moved).toEqual([{ name: 'b', wanted: 4222, got: 50222, heldBy: 'a' }]);
+    expect(composeMovedNotice(run.moved[0])).toBe(
+      'b runs on port 50222 here: port 4222, which the compose file gives it, is the one a has in this preview. An address the project hard-codes for b reaches a instead.',
+    );
+  });
+
+  it('gives the port to the next service that names it when the first one did not come up', async () => {
+    const { docker, calls } = fakeDocker({ notReadyImage: 'example/broken' });
+    const two = 'services:\n  a:\n    image: example/broken\n    ports: ["4222:4222"]\n    healthcheck: { test: ["CMD", "check"] }\n  b:\n    image: nats:2\n    ports: ["4222:4222"]\n';
+    const run = await startComposeServices(composeServices([two]), options(docker, { hostPortFree: async () => true }));
+    expect(run.failed.map((f) => f.name)).toEqual(['a']);
+    expect(runs(calls).map(publishOf)).toEqual([['127.0.0.1:4222:4222'], ['127.0.0.1:4222:4222']]);
+    expect(run.moved).toEqual([]);
+  });
+
+  it('starts once more on free ports only when Docker refused the port, not for another failure', async () => {
+    const { docker, calls } = fakeDocker({ failImage: 'example/missing' });
+    const run = await startComposeServices(composeServices(['services:\n  a:\n    image: example/missing\n    ports: ["4222:4222"]\n']), options(docker, { hostPortFree: async () => true }));
+    expect(runs(calls)).toHaveLength(1);
+    expect(run.failed[0].reason).toMatch(/manifest unknown/);
+  });
+
+  it.each(['Bind for 127.0.0.1:4222 failed: port is already allocated', 'listen tcp4 127.0.0.1:4222: bind: address already in use', 'Ports are not available: exposing port TCP 127.0.0.1:4222'])('reads "%s" as a refused port', async (text) => {
+    const calls: string[][] = [];
+    let n = 0;
+    const docker: DockerRun = async (args) => {
+      calls.push(args);
+      if (args[0] === 'run') return publishOf(args).some((p) => /:4222:4222$/.test(p)) ? { ok: false, stdout: `docker: Error response from daemon: ${text}` } : { ok: true, stdout: `c${++n}\n` };
+      if (args[0] === 'port') return { ok: true, stdout: '127.0.0.1:50222\n' };
+      if (args[0] === 'inspect') return { ok: true, stdout: 'true\n' };
+      return { ok: true, stdout: '' };
+    };
+    const run = await startComposeServices(composeServices(['services:\n  a:\n    image: nats:2\n    ports: ["4222:4222"]\n']), options(docker, { hostPortFree: async () => true }));
+    expect(runs(calls)).toHaveLength(2);
+    expect(run.moved).toEqual([{ name: 'a', wanted: 4222, got: 50222 }]);
+  });
+
+  it('decides each port of a range on its own', async () => {
+    const { docker, calls } = fakeDocker();
+    const hostPortFree = vi.fn(async (port: number) => port !== 8001);
+    const run = await startComposeServices(composeServices(['services:\n  a:\n    image: example/app\n    ports: ["8000-8002:9000-9002"]\n']), options(docker, { hostPortFree }));
+    expect(publishOf(runs(calls)[0])).toEqual(['127.0.0.1:8000:9000', '127.0.0.1::9001', '127.0.0.1:8002:9002']);
+    expect(run.moved).toEqual([{ name: 'a', wanted: 8001, got: 50001 }]);
   });
 
   it('asks about no port and moves nothing for a service that publishes no host port', async () => {

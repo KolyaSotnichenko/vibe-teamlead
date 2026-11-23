@@ -41,7 +41,12 @@ export interface ComposeMovedPort {
   name: string;
   wanted: number;
   got: number;
+  /** The service of this same run that has the port, when it is one of them and not something else on the computer */
+  heldBy?: string;
 }
+
+/** Docker saying the host port could not be had (taken between the check and the bind), not some other failure */
+const PORT_REFUSED = /port is already allocated|address already in use|ports are not available|failed to bind|bind for/i;
 
 export interface ComposeRunOptions {
   docker: DockerRun;
@@ -141,7 +146,10 @@ export function composeDockerMissing(services: ComposeService[]): string {
 }
 
 /** What the owner is told when a service could not have the port its compose file gives it */
-export function composeMovedNotice({ name, wanted, got }: ComposeMovedPort): string {
+export function composeMovedNotice({ name, wanted, got, heldBy }: ComposeMovedPort): string {
+  if (heldBy) {
+    return `${name} runs on port ${got} here: port ${wanted}, which the compose file gives it, is the one ${heldBy} has in this preview. An address the project hard-codes for ${name} reaches ${heldBy} instead.`;
+  }
   return `${name} runs on port ${got} here: port ${wanted}, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for ${name} reaches that instead.`;
 }
 
@@ -200,8 +208,8 @@ export async function startComposeServices(services: ComposeService[], options: 
   const started: StartedComposeService[] = [];
   const failed: ComposeRun['failed'] = [];
   const moved: ComposeMovedPort[] = [];
-  /** Host ports this run has given out: a second service naming one gets another */
-  const given = new Set<number>();
+  /** Host ports this run has given out, and to whom: a second service naming one gets another */
+  const given = new Map<number, string>();
   const remove = async (id: string) => {
     ids.splice(ids.indexOf(id), 1);
     await docker(['rm', '-f', '-v', id]);
@@ -222,18 +230,23 @@ export async function startComposeServices(services: ComposeService[], options: 
     for (const { container, host } of wanted) {
       if (given.has(host) || !(await hostPortFree?.(host))) continue;
       hostPorts[container] = host;
-      given.add(host);
+      given.set(host, service.name);
     }
+    /** The ports this service was given go back: it does not have them after all */
+    const giveBack = () => {
+      for (const host of Object.values(hostPorts)) if (given.get(host) === service.name) given.delete(host);
+    };
     let spec = containerSpec(service, { hostPort, hostPorts, secret });
     let run = await docker(composeRunArgs(service, spec, { labels, network }));
-    // Taken between the check and Docker's bind: once more, on free ports
-    if (!run.ok && Object.keys(hostPorts).length) {
-      for (const host of Object.values(hostPorts)) given.delete(host);
+    // Taken between the check and Docker's bind: once more, on free ports. Any other failure is the service's.
+    if (!run.ok && Object.keys(hostPorts).length && PORT_REFUSED.test(run.stdout)) {
+      giveBack();
       spec = containerSpec(service, { hostPort, secret });
       run = await docker(composeRunArgs(service, spec, { labels, network }));
     }
     const id = lines(run.stdout).pop() ?? '';
     if (!run.ok || !id) {
+      giveBack();
       failed.push({ name: service.name, reason: `Docker could not start ${service.image}: ${run.stdout.trim().slice(0, REASON_CHARS)}` });
       continue;
     }
@@ -249,6 +262,7 @@ export async function startComposeServices(services: ComposeService[], options: 
       }
     }
     if (spec.publish.length && !Object.keys(ports).length) {
+      giveBack();
       await remove(id);
       failed.push({ name: service.name, reason: `Docker gave no port for ${service.image}.` });
       continue;
@@ -269,6 +283,7 @@ export async function startComposeServices(services: ComposeService[], options: 
       if (!exited) await new Promise((resolve) => setTimeout(resolve, pollMs));
     }
     if (!ready) {
+      giveBack();
       await remove(id);
       if (signal?.aborted) break;
       failed.push({ name: service.name, reason: exited ? `${service.name} (${service.image}) stopped right after it started.` : `${service.name} (${service.image}) did not get ready in time.` });
@@ -278,7 +293,9 @@ export async function startComposeServices(services: ComposeService[], options: 
     started.push(startedService);
     for (const { container, host } of wanted) {
       const got = ports[container];
-      if (got && got !== host) moved.push({ name: service.name, wanted: host, got });
+      if (!got || got === host) continue;
+      const holder = given.get(host);
+      moved.push({ name: service.name, wanted: host, got, ...(holder && holder !== service.name ? { heldBy: holder } : {}) });
     }
     if (service.kind === 's3' && buckets.length) {
       const missed = await setUpBuckets(docker, id, startedService, buckets, Date.now() + readyTimeoutMs, pollMs);
