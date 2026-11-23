@@ -18,6 +18,9 @@ import { QueueSettings } from '../QueueSettings';
 afterEach(cleanup);
 
 const WARNING = 'tasks:queue.settings.parallelWarning';
+const AUTO_MERGE = { name: 'tasks:queue.settings.autoMergeLabel' };
+const PREVIEW_HOLD = { name: 'tasks:queue.settings.previewHoldLabel' };
+const PREVIEW_FIX = { name: 'tasks:queue.settings.previewFixLabel' };
 
 function show(initial: Partial<ProjectSettings> = {}) {
   const latest: { settings: ProjectSettings } = { settings: initial as ProjectSettings };
@@ -34,13 +37,12 @@ describe('QueueSettings', () => {
   it('shows the saved values, the default limit when none is saved', () => {
     const { input } = show();
     expect(input).toHaveValue(1);
-    expect(screen.getByRole('switch')).not.toBeChecked();
+    expect(screen.getByRole('switch', AUTO_MERGE)).not.toBeChecked();
     cleanup();
     show({ maxParallelTasks: 2, autoMerge: true, previewBeforeAutoMerge: true });
     expect(screen.getByRole('spinbutton')).toHaveValue(2);
-    const [autoMerge, preview] = screen.getAllByRole('switch');
-    expect(autoMerge).toBeChecked();
-    expect(preview).toBeChecked();
+    expect(screen.getByRole('switch', AUTO_MERGE)).toBeChecked();
+    expect(screen.getByRole('switch', PREVIEW_HOLD)).toBeChecked();
   });
 
   it("shows the project's pipeline for tasks: Auto when none is saved, the saved one otherwise", () => {
@@ -74,17 +76,38 @@ describe('QueueSettings', () => {
   it('offers "UI tasks wait for my preview" only while auto-merge is on, off by default', () => {
     const { latest } = show();
     expect(screen.queryByText('tasks:queue.settings.previewHoldLabel')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('switch'));
+    fireEvent.click(screen.getByRole('switch', AUTO_MERGE));
     expect(latest.settings.autoMerge).toBe(true);
-    expect(screen.getAllByRole('switch')[1]).not.toBeChecked();
-    fireEvent.click(screen.getAllByRole('switch')[1]);
+    expect(screen.getByRole('switch', PREVIEW_HOLD)).not.toBeChecked();
+    fireEvent.click(screen.getByRole('switch', PREVIEW_HOLD));
     expect(latest.settings.previewBeforeAutoMerge).toBe(true);
   });
 
   it('drops the preview hold when auto-merge goes off', () => {
     const { latest } = show({ autoMerge: true, previewBeforeAutoMerge: true });
-    fireEvent.click(screen.getAllByRole('switch')[0]);
+    fireEvent.click(screen.getByRole('switch', AUTO_MERGE));
     expect(latest.settings).toMatchObject({ autoMerge: false, previewBeforeAutoMerge: false });
     expect(screen.queryByText('tasks:queue.settings.previewHoldLabel')).not.toBeInTheDocument();
+  });
+
+  it('lets a failed preview start ask the agent by itself, on by default and whatever auto-merge says', () => {
+    const { latest } = show();
+    expect(screen.getByText('tasks:queue.settings.previewFixHint')).toBeInTheDocument();
+    const fix = screen.getByRole('switch', PREVIEW_FIX);
+    expect(fix).toBeChecked();
+    fireEvent.click(fix);
+    expect(latest.settings.previewFixAutomatically).toBe(false);
+    expect(screen.getByRole('switch', PREVIEW_FIX)).not.toBeChecked();
+    fireEvent.click(screen.getByRole('switch', PREVIEW_FIX));
+    expect(latest.settings.previewFixAutomatically).toBe(true);
+    // Auto-merge doesn't take it away
+    fireEvent.click(screen.getByRole('switch', AUTO_MERGE));
+    fireEvent.click(screen.getByRole('switch', AUTO_MERGE));
+    expect(latest.settings.previewFixAutomatically).toBe(true);
+  });
+
+  it('shows the setting off when the project turned it off', () => {
+    show({ previewFixAutomatically: false });
+    expect(screen.getByRole('switch', PREVIEW_FIX)).not.toBeChecked();
   });
 });

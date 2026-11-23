@@ -1,6 +1,7 @@
 /**
  * Settings → Project → Queue: which pipeline the project's tasks run when they choose none,
- * how many tasks may be under way at once, and whether tasks QA approved merge by themselves. Edits the project's settings; they save with the section, and
+ * how many tasks may be under way at once, whether tasks QA approved merge by themselves, and whether
+ * a failed preview start asks the agent that fixes it by itself. Edits the project's settings; they save with the section, and
  * a limit out of range is refused then (`lib/queue-settings.ts`).
  */
 import { useTranslation } from 'react-i18next';
@@ -92,6 +93,19 @@ export function QueueSettings({ settings, setSettings }: QueueSettingsProps) {
           />
         </div>
       )}
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="previewFix">{t('tasks:queue.settings.previewFixLabel')}</Label>
+          <p className="text-sm text-muted-foreground">{t('tasks:queue.settings.previewFixHint')}</p>
+        </div>
+        <Switch
+          id="previewFix"
+          // Absent means on: a project that never chose gets the agent
+          checked={settings.previewFixAutomatically !== false}
+          onCheckedChange={(on) => setSettings((prev) => ({ ...prev, previewFixAutomatically: on }))}
+        />
+      </div>
     </div>
   );
 }
