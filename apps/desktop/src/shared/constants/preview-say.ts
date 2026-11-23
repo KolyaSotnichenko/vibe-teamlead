@@ -39,6 +39,18 @@ export const PREVIEW_SAY = {
   notReady: ['service', 'path', 'answer'],
   stoppedBeforeReady: ['service'],
   heldBack: ['names'],
+  // Why a project's preview.json was not used (preview/recipe.ts)
+  recipeTooLarge: [],
+  recipeNotJson: [],
+  recipeShape: ['at', 'problem'],
+  recipeUnknownKeys: ['at', 'keys'],
+  recipeSameName: [],
+  recipeOnePage: [],
+  recipeDir: ['at'],
+  recipeCommand: ['at', 'reason'],
+  recipeVariable: ['at'],
+  recipeUrlEnv: ['at', 'target'],
+  recipeLink: ['dir'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type PreviewSayKey = keyof typeof PREVIEW_SAY;

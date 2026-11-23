@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import type { PreviewService, PreviewStatus, Project } from '../../../../shared/types';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { reason?: string }) => (o?.reason ? `${key}:${o.reason}` : key), i18n: { language: 'en' } }) }));
 vi.mock('../../../stores/task-store', () => ({ createTask: vi.fn(), startTaskOrQueue: vi.fn(), submitReview: vi.fn() }));
 const store = vi.hoisted(() => ({ updateProjectSettings: vi.fn(async () => true) }));
 vi.mock('../../../stores/project-store', () => store);
@@ -77,7 +77,7 @@ describe('PreviewPage and the recipe', () => {
   it('says why preview.json was not used on the form too, when the owner is asked for the services', async () => {
     session.status = { projectId: 'p1', stage: 'failed', origins: [], needsServices: true, message: 'Choose exactly one service whose page the preview shows.', recipe: { source: 'none', kind: 'web', invalid: 'version must be 1.' } };
     render(<PreviewPage project={projectWith([])} />);
-    expect(await screen.findByText('preview.recipeInvalid')).toBeInTheDocument();
+    expect(await screen.findByText('preview.recipeInvalid:version must be 1.')).toBeInTheDocument();
   });
 
   it('keeps the preview running while the owner only looks at the services', async () => {
@@ -113,7 +113,7 @@ describe('PreviewPage and the recipe', () => {
   it('says when preview.json was not used', async () => {
     session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'settings', kind: 'web', invalid: 'version must be 1.' } };
     render(<PreviewPage project={projectWith(SAVED)} />);
-    expect(await screen.findByText('preview.recipeInvalid')).toBeInTheDocument();
+    expect(await screen.findByText('preview.recipeInvalid:version must be 1.')).toBeInTheDocument();
   });
 
   it('lets the owner change saved services when the preview.json names none of its own', async () => {
@@ -129,6 +129,13 @@ describe('PreviewPage and the recipe', () => {
     session.status = { projectId: 'p1', stage: 'failed', origins: [], message: 'This project is a desktop app. The preview shows web apps for now; see how to run it below.', recipe: { source: 'file', kind: 'desktop' } };
     render(<PreviewPage project={projectWith(SAVED)} />);
     expect(await screen.findByRole('alert')).toHaveTextContent('preview.kind.desktop');
+  });
+
+  it("says why preview.json was not used in the interface's language when the app made the reason", async () => {
+    const invalid = 'services[0].command is not allowed: sudo';
+    session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'settings', kind: 'web', invalid }, said: [{ key: 'recipeCommand', params: { at: 'services[0]', reason: 'sudo' }, text: invalid }] };
+    render(<PreviewPage project={projectWith(SAVED)} />);
+    expect(await screen.findByText('preview.recipeInvalid:preview.say.recipeCommand:sudo')).toBeInTheDocument();
   });
 
   it("Services shows a file recipe's services read-only, with a way back", async () => {

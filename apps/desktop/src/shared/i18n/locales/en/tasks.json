@@ -1131,7 +1131,18 @@
       "serviceNotStarted": "{{service}} did not start.",
       "notReady": "{{service}} did not get ready: {{path}} answered {{answer}}.",
       "stoppedBeforeReady": "{{service}} stopped before it was ready.",
-      "heldBack": "Migrations and seed data run only against what the preview started: they did not get your or the recipe's {{names}}."
+      "heldBack": "Migrations and seed data run only against what the preview started: they did not get your or the recipe's {{names}}.",
+      "recipeTooLarge": "The file is larger than 64 KiB.",
+      "recipeNotJson": "The file is not valid JSON.",
+      "recipeShape": "{{at}} is not written the way a recipe needs it ({{problem}}).",
+      "recipeUnknownKeys": "{{at}} has keys a recipe does not have: {{keys}}.",
+      "recipeSameName": "Two services have the same name.",
+      "recipeOnePage": "Exactly one service must be the page (\"page\": true).",
+      "recipeDir": "{{at}}.dir must be a folder inside the project, written with \"/\" from its root (\"\" for the root itself).",
+      "recipeCommand": "{{at}}.command is not allowed: {{reason}}.",
+      "recipeVariable": "{{at}} can't be set: it changes what a command runs.",
+      "recipeUrlEnv": "{{at}} names \"{{target}}\", which is not one of the services.",
+      "recipeLink": "The folder {{dir}} leads out of the project."
     },
     "kind": {
       "desktop": "This project is a desktop app. The preview shows web apps for now; see how to run it below.",

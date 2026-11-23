@@ -4,7 +4,7 @@
  * it is checked before anything in it is used: a strict shape with limits, folders that stay
  * inside the project, commands the Bash denylist allows (as agents' dev servers), and no
  * variable that changes what a command runs. An unusable file is passed over, with the
- * reason. Pure: no file access, no Electron imports.
+ * reason (a sentence the interface can translate: say.ts). No file access, no Electron imports.
  */
 
 import { z } from 'zod';
@@ -14,6 +14,7 @@ import type { PreviewService } from '../../shared/types/project';
 import { FORBIDDEN_ENV } from '../ai/dev-servers/forbidden-env';
 import { validateCommand } from '../ai/security/bash-validator';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
+import { say } from '../say';
 import { proposePreview } from './detect-services';
 
 export const RECIPE_FILE = 'preview.json';
@@ -71,17 +72,17 @@ function staysInside(dir: string): boolean {
 function problemIn(recipe: PreviewRecipe): string | null {
   const services = recipe.services ?? [];
   if (recipe.kind === 'web' && recipe.services) {
-    if (new Set(services.map((s) => s.name)).size !== services.length) return 'services: two services have the same name.';
-    if (services.filter((s) => s.page).length !== 1) return 'services: exactly one service must be the page ("page": true).';
+    if (new Set(services.map((s) => s.name)).size !== services.length) return say('recipeSameName', 'services: two services have the same name.');
+    if (services.filter((s) => s.page).length !== 1) return say('recipeOnePage', 'services: exactly one service must be the page ("page": true).');
   }
   const commands: Array<{ at: string; dir: string; command: string }> = [
     ...services.map((s, i) => ({ at: `services[${i}]`, dir: s.dir, command: s.command })),
     ...(['install', 'build', 'migrate', 'seed'] as const).flatMap((step) => (recipe.steps?.[step] ?? []).map((c, i) => ({ at: `steps.${step}[${i}]`, ...c }))),
   ];
   for (const { at, dir, command } of commands) {
-    if (!staysInside(dir)) return `${at}.dir must be a folder inside the project, written with "/" from its root ("" for the root itself).`;
+    if (!staysInside(dir)) return say('recipeDir', `${at}.dir must be a folder inside the project, written with "/" from its root ("" for the root itself).`, { at });
     const [allowed, reason] = validateCommand(command);
-    if (!allowed) return `${at}.command is not allowed: ${reason}`;
+    if (!allowed) return say('recipeCommand', `${at}.command is not allowed: ${reason}`, { at, reason: reason ?? '' });
   }
   const variables: Array<{ at: string; name: string }> = [
     ...Object.keys(recipe.env ?? {}).map((name) => ({ at: `env.${name}`, name })),
@@ -92,29 +93,36 @@ function problemIn(recipe: PreviewRecipe): string | null {
     ]),
   ];
   const forbidden = variables.find((v) => FORBIDDEN_ENV.test(v.name));
-  if (forbidden) return `${forbidden.at} can't be set: it changes what a command runs.`;
+  if (forbidden) return say('recipeVariable', `${forbidden.at} can't be set: it changes what a command runs.`, { at: forbidden.at });
   for (const [i, service] of services.entries()) {
     const missing = Object.entries(service.urlEnv ?? {}).find(([, target]) => !services.some((s) => s.name === target));
-    if (missing) return `services[${i}].urlEnv.${missing[0]} names "${missing[1]}", which is not one of the services.`;
+    if (missing) {
+      const at = `services[${i}].urlEnv.${missing[0]}`;
+      return say('recipeUrlEnv', `${at} names "${missing[1]}", which is not one of the services.`, { at, target: missing[1] });
+    }
   }
   return null;
 }
 
 /** `preview.json` as a recipe, or why it can't be used: one short sentence naming the first problem. */
 export function parseRecipe(text: string): ParsedRecipe {
-  if (Buffer.byteLength(text, 'utf-8') > MAX_BYTES) return { ok: false, reason: 'The file is larger than 64 KiB.' };
+  if (Buffer.byteLength(text, 'utf-8') > MAX_BYTES) return { ok: false, reason: say('recipeTooLarge', 'The file is larger than 64 KiB.') };
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
-    return { ok: false, reason: 'The file is not valid JSON.' };
+    return { ok: false, reason: say('recipeNotJson', 'The file is not valid JSON.') };
   }
   const parsed = Recipe.safeParse(json);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    const keys = issue.code === 'unrecognized_keys' ? ` (${issue.keys.join(', ')})` : '';
-    const at = pathOf(issue.path);
-    return { ok: false, reason: `${at ? `${at}: ` : ''}${issue.message}${keys}`.slice(0, 300) };
+    const at = pathOf(issue.path) || RECIPE_FILE;
+    if (issue.code === 'unrecognized_keys') {
+      const keys = issue.keys.join(', ').slice(0, 200);
+      return { ok: false, reason: say('recipeUnknownKeys', `${at} has keys a recipe does not have: ${keys}`, { at, keys }) };
+    }
+    const problem = issue.message.slice(0, 200);
+    return { ok: false, reason: say('recipeShape', `${at}: ${problem}`, { at, problem }) };
   }
   const recipe = parsed.data as PreviewRecipe;
   const problem = problemIn(recipe);
@@ -148,7 +156,7 @@ export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; c
   const { files, read, saved, contained } = input;
   const parsed = files.includes(RECIPE_FILE) ? parseRecipe(read(RECIPE_FILE) ?? '') : undefined;
   const outside = parsed?.ok && contained ? dirsOf(parsed.recipe).find((dir) => dir !== '' && !contained(dir)) : undefined;
-  const reason = parsed && !parsed.ok ? parsed.reason : outside !== undefined ? `The folder ${outside} leads out of the project.` : undefined;
+  const reason = parsed && !parsed.ok ? parsed.reason : outside !== undefined ? say('recipeLink', `The folder ${outside} leads out of the project.`, { dir: outside }) : undefined;
   const invalid = reason ? { invalid: reason } : {};
   const file = parsed?.ok && outside === undefined ? parsed.recipe : undefined;
   if (file && (file.kind !== 'web' || file.services)) return { recipe: file, source: 'file', servicesFrom: file.services ? 'file' : 'none' };

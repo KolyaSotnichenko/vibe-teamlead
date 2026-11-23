@@ -669,6 +669,7 @@ describe('the recipe', () => {
     expect(status.stage).toBe('ready');
     expect(status.recipe?.source).toBe('settings');
     expect(status.recipe?.invalid).toMatch(/version/);
+    expect(status.said).toMatchObject([{ key: 'recipeShape', text: status.recipe?.invalid }]);
   });
 
   it('starts a project with nothing saved from an unambiguous proposal', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PreviewService } from '../../../shared/types/project';
+import { saidFor } from '../../say';
 import { parseRecipe, resolveRecipe } from '../recipe';
 
 const WEB = { version: 1, kind: 'web', services: [{ name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', port: 5173, page: true }] };
@@ -44,6 +45,18 @@ describe('parseRecipe', () => {
     expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], page: undefined }] })).toMatch(/page/);
     expect(reasonOf({ ...WEB, services: [WEB.services[0], { ...WEB.services[0] }] })).toMatch(/page|name/);
     expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], name: 'my web' }] })).toMatch(/name/);
+  });
+
+  it('gives each reason with its key and values, so the interface can say it in its own language', () => {
+    const keyOf = (value: unknown) => saidFor([reasonOf(value)]).map(({ key, params }) => ({ key, params }));
+    expect(saidFor([(parseRecipe('{') as { reason: string }).reason])).toMatchObject([{ key: 'recipeNotJson' }]);
+    expect(keyOf({ ...WEB, version: 2 })).toEqual([{ key: 'recipeShape', params: { at: 'version', problem: expect.any(String) } }]);
+    expect(keyOf({ ...WEB, volumes: ['/:/host'] })).toEqual([{ key: 'recipeUnknownKeys', params: { at: 'preview.json', keys: 'volumes' } }]);
+    expect(keyOf({ ...WEB, services: [{ ...WEB.services[0], page: undefined }] })).toEqual([{ key: 'recipeOnePage', params: undefined }]);
+    expect(keyOf({ ...WEB, services: [{ ...WEB.services[0], dir: '../x' }] })).toEqual([{ key: 'recipeDir', params: { at: 'services[0]' } }]);
+    expect(keyOf({ ...WEB, services: [{ ...WEB.services[0], command: 'sudo make serve' }] })).toEqual([{ key: 'recipeCommand', params: { at: 'services[0]', reason: expect.any(String) } }]);
+    expect(keyOf({ ...WEB, env: { PATH: 'x' } })).toEqual([{ key: 'recipeVariable', params: { at: 'env.PATH' } }]);
+    expect(keyOf({ ...WEB, services: [{ ...WEB.services[0], urlEnv: { API_URL: 'nobody' } }] })).toEqual([{ key: 'recipeUrlEnv', params: { at: 'services[0].urlEnv.API_URL', target: 'nobody' } }]);
   });
 
   it('says how the root is written when a folder is refused', () => {
@@ -134,6 +147,7 @@ describe('resolveRecipe', () => {
     const r = resolveRecipe({ files: Object.keys(files), read: (p) => (files as Record<string, string>)[p] ?? null, saved: SAVED, contained: (dir) => dir !== 'ext/app' });
     expect(r.source).toBe('settings');
     expect(r.invalid).toMatch(/ext\/app.*out of the project/);
+    expect(saidFor([r.invalid])).toMatchObject([{ key: 'recipeLink', params: { dir: 'ext/app' } }]);
   });
 
   it('leaves a recipe of another kind as it is', () => {

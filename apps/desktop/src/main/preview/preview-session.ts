@@ -237,7 +237,7 @@ const depsFailed = (dir: string) => (dir ? say('depsFailed', `The dependencies i
  */
 function withSaid(status: PreviewStatus): PreviewStatus {
   const { said: _before, ...rest } = status;
-  const said = saidFor([status.stage === 'failed' ? status.message : undefined, status.databaseReason, status.mailReason, ...(status.servicesNotices ?? [])]);
+  const said = saidFor([status.stage === 'failed' ? status.message : undefined, status.databaseReason, status.mailReason, status.recipe?.invalid, ...(status.servicesNotices ?? [])]);
   return said.length ? { ...rest, said } : rest;
 }
 

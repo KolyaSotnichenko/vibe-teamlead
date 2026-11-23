@@ -98,7 +98,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
           <PreviewServicesForm
             initial={form.services}
             readOnly={form.readOnly}
-            notice={status?.recipe?.invalid ? t('preview.recipeInvalid', { reason: status.recipe.invalid }) : undefined}
+            notice={status?.recipe?.invalid ? t('preview.recipeInvalid', { reason: say(status.recipe.invalid) }) : undefined}
             // Asked because nothing says what to run: there is nothing to go back to
             onCancel={needsServices ? undefined : () => setEditing(false)}
             onSave={async (services) => {
@@ -135,7 +135,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
         <div className="px-4 pt-2"><Notice>{say(status.databaseReason)}</Notice></div>
       )}
       {status?.recipe?.invalid && (
-        <div className="px-4 pt-2"><Notice>{t('preview.recipeInvalid', { reason: status.recipe.invalid })}</Notice></div>
+        <div className="px-4 pt-2"><Notice>{t('preview.recipeInvalid', { reason: say(status.recipe.invalid) })}</Notice></div>
       )}
       {status?.servicesNotices?.map((notice) => (
         <div key={notice} className="px-4 pt-2"><Notice>{say(notice)}</Notice></div>
