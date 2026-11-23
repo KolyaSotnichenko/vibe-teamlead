@@ -1101,6 +1101,23 @@
     "startingBody": "The app from main is starting. It stops when you leave this page.",
     "serviceStopped": "The {{service}} service stopped unexpectedly. The last lines of its log are below.",
     "recipeInvalid": "preview.json was not used: {{reason}} The preview worked out what to run by itself.",
+    "fix": {
+      "running": "An agent is working out how to start this project.",
+      "tries": "Try {{n}} of {{max}}",
+      "stop": "Stop",
+      "fixed": "Started. What the agent changed: {{summary}}",
+      "dismiss": "Dismiss",
+      "codeTitle": "The project's code has to change before it can start here.",
+      "createTask": "Create a task to fix it",
+      "taskCreated": "The task is made and in the queue.",
+      "taskFailed": "The task could not be made. Try again.",
+      "missingTitle": "This project can't start here yet. Missing:",
+      "environment": "Open Environment",
+      "unknown": "The agent could not work out why it does not start.",
+      "ask": "Fix with an agent",
+      "askAgain": "Ask the agent again",
+      "tryAgain": "Try again"
+    },
     "say": {
       "composeDockerMissing": "This project's compose file names {{names}}, and Docker isn't running. Install or start Docker Desktop to have them started.",
       "composeNetworkFailed": "Docker could not create a network for the services: {{output}}",

@@ -21,6 +21,7 @@ import { LogsPanel } from './LogsPanel';
 import { EnvPanel } from './EnvPanel';
 import { MailPanel } from './MailPanel';
 import { RunningDoc, useRunningDoc } from './RunningDoc';
+import { StartFixPanel } from './StartFixPanel';
 import { notesImages, notesTask } from './notes-task';
 import { createTask, startTaskOrQueue, submitReview } from '../../stores/task-store';
 import { usePreviewSession } from './usePreviewSession';
@@ -47,6 +48,8 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   const [editing, setEditing] = useState(false);
   /** What the form shows: the services a start would run, or the proposal when nothing says */
   const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean; recipe: boolean; pending?: NonNullable<PreviewRecipeInfo['pending']> } | null>(null);
+  /** The agent's own words about the start it fixed, once the owner has put them away */
+  const [dismissedFix, setDismissedFix] = useState<string | null>(null);
   /** Why the last save of a recipe's services was refused, in the interface's language */
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
@@ -161,6 +164,18 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{say(status.databaseReason)}</Notice></div>
       )}
+      {ready && status.fix?.state === 'done' && status.fix.outcome === 'fixed' && dismissedFix !== status.fix.summary && (
+        <div className="px-4 pt-2">
+          <Notice>
+            <span className="flex items-start justify-between gap-4">
+              <span>{t('preview.fix.fixed', { summary: status.fix.summary })}</span>
+              <button type="button" className="shrink-0 underline" onClick={() => setDismissedFix(status.fix?.state === 'done' ? status.fix.summary : null)}>
+                {t('preview.fix.dismiss')}
+              </button>
+            </span>
+          </Notice>
+        </div>
+      )}
       {status?.recipe?.invalid && (
         <div className="px-4 pt-2"><Notice>{t('preview.recipeInvalid', { reason: say(status.recipe.invalid) })}</Notice></div>
       )}
@@ -188,10 +203,14 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
                     {status.stoppedService ? t('preview.serviceStopped', { service: status.stoppedService }) : (say(status.message) ?? t('preview.failed'))}
                   </p>
                   {status.logTail && <pre className="max-h-96 overflow-auto border border-border p-3 font-mono text-xs">{status.logTail}</pre>}
+                  {status.fix && <StartFixPanel projectId={project.id} fix={status.fix} onEnvironment={() => setSide('env')} />}
                   <RunningDoc projectId={project.id} doc={runningDoc} />
                 </div>
               ) : (
-                <EmptyState title={t(`preview.stage.${status?.stage ?? 'worktree'}`)} body={status?.message ?? t('preview.startingBody')} />
+                <div className="space-y-3">
+                  {status?.fix?.state === 'running' && <StartFixPanel projectId={project.id} fix={status.fix} onEnvironment={() => setSide('env')} />}
+                  <EmptyState title={t(`preview.stage.${status?.stage ?? 'worktree'}`)} body={status?.message ?? t('preview.startingBody')} />
+                </div>
               )}
             </div>
           )}
