@@ -1,0 +1,143 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import type { StartServicesDeps } from '../../../preview/start-services';
+import { startsCheck, type StartsCheckOptions } from '../starts-check';
+
+const RECIPE = {
+  version: 1, kind: 'web',
+  services: [
+    { name: 'api', dir: 'apps/api', command: 'pnpm run dev', port: 3001, ready: '/health' },
+    { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true },
+  ],
+};
+
+function setup(files: Record<string, string>, over: Partial<StartsCheckOptions> = {}, deps: Partial<StartServicesDeps> = {}) {
+  const alive = new Set<number>();
+  const started: string[] = [];
+  const stopped: string[] = [];
+  const serverDeps: StartServicesDeps = {
+    startServer: vi.fn(async (o: { name: string; port?: number }) => {
+      started.push(o.name);
+      const port = o.port ?? 4000 + started.length;
+      alive.add(port);
+      return { url: `http://localhost:${port}`, port, logPath: `/logs/${o.name}`, reused: false };
+    }),
+    stopServer: vi.fn(async (name: string) => { stopped.push(name); return true; }),
+    pickPort: vi.fn(async () => 4500 + started.length),
+    portFree: vi.fn(async (port: number) => !alive.has(port)),
+    probe: vi.fn(async () => ({ status: 200 })),
+    readLog: () => 'the log\n',
+    readyTimeouts: { timeoutMs: 20, pollMs: 1 },
+    ...deps,
+  };
+  const options: StartsCheckOptions = {
+    cwd: '/copy',
+    files: Object.keys(files),
+    read: (path) => files[path] ?? null,
+    saved: [],
+    started: [],
+    compose: { planned: [], started: [] },
+    runCommand: vi.fn(async () => ({ code: 0, output: '' })),
+    deps: serverDeps,
+    settleMs: 1,
+    ...over,
+  };
+  return { options, started, stopped, alive, serverDeps };
+}
+
+describe('the start-up check', () => {
+  it('passes when every service came up, the page answers, and they are still up a moment later; then stops them', async () => {
+    const { options, started, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) });
+    expect(await startsCheck(options)).toEqual({ outcome: 'passed' });
+    expect(started).toEqual(['starts-api', 'starts-web']);
+    expect(stopped.sort()).toEqual(['starts-api', 'starts-web']);
+  });
+
+  it('fails, naming the service, when one does not start', async () => {
+    const { options, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, {
+      startServer: vi.fn(async (o: { name: string }) => {
+        if (o.name === 'starts-web') throw new Error('web exited. Log:\nnpm error Missing script: "dev"');
+        return { url: 'http://localhost:3001', port: 3001, logPath: '/l', reused: false };
+      }),
+    });
+    const result = await startsCheck(options);
+    expect(result?.outcome).toBe('failed');
+    expect(result?.tail).toMatch(/web did not start[\s\S]*Missing script/);
+    expect(stopped).toContain('starts-api');
+  });
+
+  it('fails when the page answers with a server error', async () => {
+    const { options } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, { probe: vi.fn(async (url: string) => ({ status: url.endsWith('/health') ? 200 : 500 })) });
+    expect(await startsCheck(options)).toMatchObject({ outcome: 'failed', tail: expect.stringMatching(/page.*500/i) });
+  });
+
+  it('fails when a service is gone a moment after the page answered', async () => {
+    const box = setup({ 'preview.json': JSON.stringify(RECIPE) });
+    box.options.settleMs = 5;
+    const probe = box.serverDeps.probe;
+    box.serverDeps.probe = vi.fn(async (url: string) => {
+      const answer = await probe(url);
+      // The api dies right after the page's first answer
+      if (!url.endsWith('/health')) box.alive.delete(3001);
+      return answer;
+    });
+    expect(await startsCheck(box.options)).toMatchObject({ outcome: 'failed', tail: expect.stringMatching(/api stopped/) });
+  });
+
+  it("runs the recipe's build, migrate and seed in their folders first, and fails with the output of the one that failed", async () => {
+    const recipe = { ...RECIPE, steps: { build: [{ dir: 'packages/shared', command: 'make lib' }], migrate: [{ dir: 'apps/api', command: 'make migrate' }], seed: [{ dir: 'apps/api', command: 'make seed' }] } };
+    const runCommand = vi.fn(async (command: string, _cwd?: string) => ({ code: command === 'make migrate' ? 2 : 0, output: command === 'make migrate' ? 'relation "users" already exists' : '' }));
+    const { options, started } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand });
+    const result = await startsCheck(options);
+    expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make lib', '/copy/packages/shared'], ['make migrate', '/copy/apps/api']]);
+    expect(result).toMatchObject({ outcome: 'failed', tail: expect.stringContaining('relation "users" already exists') });
+    expect(started).toEqual([]);
+  });
+
+  it('cannot say anything when a tool it needs is not installed', async () => {
+    const { options } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, {
+      startServer: vi.fn(async () => { throw new Error('api exited. Log:\nsh: pnpm: command not found'); }),
+    });
+    expect(await startsCheck(options)).toMatchObject({ outcome: 'unavailable', tail: expect.stringContaining('command not found') });
+  });
+
+  it('cannot say anything, and starts nothing, when the run already knows it can\'t', async () => {
+    const { options, started } = setup({ 'preview.json': JSON.stringify(RECIPE) }, { cannot: 'Port 10000 is in use on this computer.' });
+    expect(await startsCheck(options)).toEqual({ outcome: 'unavailable', tail: 'Port 10000 is in use on this computer.' });
+    expect(started).toEqual([]);
+  });
+
+  it('has nothing to check for another kind of project, or one with no single page', async () => {
+    expect(await startsCheck(setup({ 'preview.json': '{"version":1,"kind":"desktop"}' }).options)).toBeNull();
+    expect(await startsCheck(setup({ 'README.md': '' }).options)).toBeNull();
+  });
+
+  it('starts what the project proposes when it has no recipe, and the services the owner saved', async () => {
+    const proposal = setup({ 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) });
+    expect(await startsCheck(proposal.options)).toEqual({ outcome: 'passed' });
+    expect(proposal.started).toEqual(['starts-web']);
+    const saved = setup({ 'README.md': '' }, { saved: [{ name: 'site', dir: '', command: 'make serve', page: true }] });
+    expect(await startsCheck(saved.options)).toEqual({ outcome: 'passed' });
+    expect(saved.started).toEqual(['starts-site']);
+  });
+
+  it("gives the services the copy's database, never a real one", async () => {
+    const files = { 'preview.json': JSON.stringify(RECIPE), 'apps/api/.env.example': 'DATABASE_URL=postgresql://u:p@db.example.com:5432/prod\n' };
+    const { options, serverDeps } = setup(files, { started: [{ kind: 'postgres', url: 'postgresql://verify:pw@127.0.0.1:55001/verify' }] });
+    await startsCheck(options);
+    const api = vi.mocked(serverDeps.startServer).mock.calls.find(([o]) => o.name === 'starts-api')?.[0];
+    expect(api?.env).toMatchObject({ DATABASE_URL: 'postgresql://verify:pw@127.0.0.1:55001/verify' });
+  });
+
+  it('stops everything it started when it is aborted mid-start', async () => {
+    const controller = new AbortController();
+    const { options, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) }, { signal: controller.signal }, {
+      startServer: vi.fn(async (o: { name: string; port?: number }) => {
+        controller.abort();
+        return { url: 'http://localhost:1', port: o.port ?? 1, logPath: '/l', reused: false };
+      }),
+    });
+    expect(await startsCheck(options)).toMatchObject({ outcome: 'unavailable' });
+    expect(stopped).toContain('starts-api');
+  });
+});
