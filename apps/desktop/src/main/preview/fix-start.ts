@@ -116,7 +116,10 @@ export function fixStartPrompt(options: Pick<FixStartOptions, 'failure' | 'recip
   const opening = check
     ? [
         `The app is about to start this project in its Preview. Before it does, check that it will really start and work: every service up, the database migrated and seeded as the project needs, nothing missing. ${check.first || !check.changed.length ? 'It has not been checked before.' : 'These files changed since the last check:'}`,
-        ...(check.first || !check.changed.length ? [] : ['', ...check.changed.slice(0, 60).map((file) => `- ${clean(file)}`)]),
+        // Names come from the repository: quoted, one per line, as data, so none can read as part of the request
+        ...(check.first || !check.changed.length
+          ? []
+          : ['', dataBlock({ tagPrefix: 'changed_files', source: 'git', notice: `File names from the project. ${notice}`, body: check.changed.slice(0, 60).map((file) => JSON.stringify(clean(file))).join('\n'), max: 8000 })]),
       ]
     : [
         `The app could not start this project in its Preview. It failed ${where || 'before any stage'}: ${failure.message ?? 'no message'}`,
