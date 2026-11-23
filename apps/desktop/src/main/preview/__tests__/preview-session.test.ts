@@ -775,6 +775,46 @@ describe('the recipe', () => {
     expect(status.servicesNotices).toContain('Migrations and seed data were not run: a connection setting has your own value, so they would run against a database the preview did not start.');
   });
 
+  it('restarts the services by the new recipe when a merge changed preview.json', async () => {
+    const files: Record<string, string> = { ...FILES };
+    const { d } = deps({ listFiles: () => Object.keys(files), read: (_root: string, path: string) => files[path] ?? null });
+    await startPreview(project(), () => {}, d);
+    files['preview.json'] = JSON.stringify({ version: 1, kind: 'web', services: [{ name: 'only', dir: '', command: 'make serve', page: true }] });
+    vi.mocked(d.startServer).mockClear();
+    await inMergeQueue('/projects/p1', 't', async () => {});
+    await vi.waitFor(() => expect(vi.mocked(d.startServer).mock.calls.map(([o]) => o.name)).toEqual(['preview-only']));
+    expect(d.stopServer).toHaveBeenCalledWith('preview-web');
+    await vi.waitFor(() => expect(currentPreview()).toMatchObject({ stage: 'ready', recipe: { source: 'file' } }));
+    expect(runningPreviewEnv(project())?.services.map((service) => service.service)).toEqual(['only']);
+  });
+
+  it('leaves the services running when a merge changed neither the recipe nor the lockfile', async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d);
+    vi.mocked(d.startServer).mockClear();
+    vi.mocked(d.runCommand).mockClear();
+    await inMergeQueue('/projects/p1', 't', async () => {});
+    await vi.waitFor(() => expect(d.runCommand).toHaveBeenCalled());
+    expect(d.startServer).not.toHaveBeenCalled();
+  });
+
+  it('fails the preview when a merge brings a recipe it cannot show', async () => {
+    const files: Record<string, string> = { ...FILES };
+    const { d } = deps({ listFiles: () => Object.keys(files), read: (_root: string, path: string) => files[path] ?? null });
+    await startPreview(project(), () => {}, d);
+    files['preview.json'] = '{"version":1,"kind":"mobile"}';
+    await inMergeQueue('/projects/p1', 't', async () => {});
+    await vi.waitFor(() => expect(d.stopServer).toHaveBeenCalledWith('preview-web'));
+  });
+
+  it('a restart of the services takes the services saved since', async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d);
+    vi.mocked(d.startServer).mockClear();
+    await restartPreviewServices(project('p1', [{ name: 'solo', dir: '', command: 'make serve', page: true }]));
+    expect(vi.mocked(d.startServer).mock.calls.map(([o]) => o.name)).toEqual(['preview-solo']);
+  });
+
   it('says a project of kind none has nothing to show', async () => {
     const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"none"}' }));
     const status = await startPreview(project(), () => {}, d);

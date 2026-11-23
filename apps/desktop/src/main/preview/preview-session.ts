@@ -744,8 +744,9 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
 
 /**
  * After a merge into the previewed project's main: move the worktree, rebuild the
- * workspace packages and apply new migrations; a new lockfile also reinstalls and
- * restarts the services. Hot reload covers the rest.
+ * workspace packages and apply new migrations; a new lockfile or a changed recipe also
+ * reinstalls (what its stamps say changed) and restarts the services by the recipe as it
+ * is now. Hot reload covers the rest.
  */
 async function afterMerge(session: Session): Promise<void> {
   if (cancelled(session)) return;
@@ -759,10 +760,15 @@ async function afterMerge(session: Session): Promise<void> {
     if (!moved) return;
     const files = await session.deps.listFiles(session.worktree);
     check(session);
-    if (lockfileChanged) {
+    const before = JSON.stringify(session.resolved.recipe);
+    // A recipe the preview can't show ends it here, as at a start
+    useRecipe(session, files);
+    if (lockfileChanged || JSON.stringify(session.resolved.recipe) !== before) {
       emit(session, { stage: 'install', message: undefined });
       await stopServers(session);
-      await install(session, files, true);
+      session.vars = {};
+      session.logs = {};
+      await install(session, files, lockfileChanged);
       await build(session, files, true);
       await migrate(session, files, true);
       ready(session, await startServices(session, files), files);
@@ -848,7 +854,7 @@ export async function releaseTaskPreview(
 
 /**
  * Restarts the running preview's services with the project's current settings (the owner's
- * new values); the database, mail catcher and worktree stay. Null when that preview isn't
+ * new values and services); the database, mail catcher and worktree stay. Null when that preview isn't
  * running and ready, so the caller starts it instead.
  */
 export async function restartPreviewServices(project: Project, taskId?: string): Promise<PreviewStatus | null> {
@@ -863,6 +869,8 @@ export async function restartPreviewServices(project: Project, taskId?: string):
       emit(session, { stage: 'services', url: undefined, origins: [], addressIssues: undefined, message: undefined });
       await stopServers(session);
       session.vars = {};
+      // The owner may have saved other services since the start
+      useRecipe(session, files);
       ready(session, await startServices(session, files), files);
     } catch (error) {
       if (error instanceof Cancelled || cancelled(session)) return;
