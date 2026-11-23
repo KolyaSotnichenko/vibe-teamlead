@@ -67,6 +67,8 @@ export interface ClaudeTaskOptions<T = unknown> {
     search: (query: string, limit?: number) => Promise<string>;
     remember: (memoryType: string, content: string, files?: string[]) => Promise<string>;
   };
+  /** For the agent that fixes a preview start: the app starts the preview by a recipe and says what happened */
+  tryPreviewRecipe?: (recipe: unknown) => Promise<string>;
   /** Override credentials (tests, or callers that already resolved them) */
   auth?: ClaudeAuth;
   /** Override bundled tool paths (tests) */
@@ -118,6 +120,7 @@ export async function runClaudeTask<T = unknown>(options: ClaudeTaskOptions<T>):
         securityProfile: tools.includes('Bash') ? getSecurityProfile(cwd) : (undefined as never),
         allowedWritePaths: options.allowedWritePaths,
         ...(options.memory ? { searchMemory: options.memory.search, remember: options.memory.remember } : {}),
+        ...(options.tryPreviewRecipe ? { tryPreviewRecipe: options.tryPreviewRecipe } : {}),
       },
       maxSteps: options.maxTurns ?? (tools.length > 0 ? 50 : 3),
       thinkingLevel: options.thinkingLevel,

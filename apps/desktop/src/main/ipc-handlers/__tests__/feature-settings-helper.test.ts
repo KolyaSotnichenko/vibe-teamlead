@@ -25,6 +25,15 @@ describe('getFeatureSettings', () => {
     expect(getFeatureSettings('utility').model).toBe('haiku');
   });
 
+  it("the agent that fixes a preview start runs on Sonnet with medium thinking, and reads the UX review's choice until it has its own", () => {
+    readSettingsFile.mockReturnValue({});
+    expect(getFeatureSettings('previewFix')).toEqual({ model: 'sonnet', thinkingLevel: 'medium' });
+    readSettingsFile.mockReturnValue({ featureModels: { uxReview: 'local-model' }, featureThinking: { uxReview: 'low' } });
+    expect(getFeatureSettings('previewFix')).toEqual({ model: 'local-model', thinkingLevel: 'low' });
+    readSettingsFile.mockReturnValue({ featureModels: { uxReview: 'local-model', previewFix: 'opus' } });
+    expect(getFeatureSettings('previewFix').model).toBe('opus');
+  });
+
   it("the UX review reads the design system's choice, and through it the roadmap's, until it has its own", () => {
     readSettingsFile.mockReturnValue({ featureModels: { roadmap: 'gpt-oss:120b' }, featureThinking: { roadmap: 'low' } });
     expect(getFeatureSettings('uxReview')).toEqual({ model: 'gpt-oss:120b', thinkingLevel: 'low' });

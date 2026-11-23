@@ -39,6 +39,8 @@ export interface ToolContext {
   searchMemory?: (query: string, limit?: number) => Promise<string>;
   /** Keep something for later agents in the project's memory */
   remember?: (memoryType: string, content: string, files?: string[]) => Promise<string>;
+  /** The app starts the preview by this recipe and says what happened (preview/fix-start.ts); for the agent that fixes a preview start */
+  tryPreviewRecipe?: (recipe: unknown) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

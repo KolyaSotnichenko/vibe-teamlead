@@ -1131,6 +1131,10 @@
       "label": "UX review",
       "description": "Reviews the running app in Preview as a person would use it"
     },
+    "previewFix": {
+      "label": "Preview start-up",
+      "description": "Works out why the project did not start in Preview and fixes its recipe"
+    },
     "designer": {
       "label": "Designer",
       "description": "Draws wireframes and screens before the code of tasks that change UI"

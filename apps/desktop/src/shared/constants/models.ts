@@ -154,6 +154,7 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelConfig = {
   briefImport: 'opus',    // Reads the whole spec document and the project
   designSystem: 'opus',   // Visual direction and a coherent token system
   uxReview: 'sonnet',     // Goes through the running app in a browser
+  previewFix: 'sonnet',   // Works out why the project did not start in Preview
   designer: 'sonnet',     // Wireframes and screens in the design system, as HTML
   deployReadiness: 'sonnet' // Reads the project for what keeps its CI from passing
 };
@@ -170,6 +171,7 @@ export const DEFAULT_FEATURE_THINKING: FeatureThinkingConfig = {
   briefImport: 'high',    // Splitting a spec into tasks needs deep thinking
   designSystem: 'high',   // Distinctive, consistent design choices
   uxReview: 'medium',     // Many pages and states, judged against checklists
+  previewFix: 'medium',   // Reads logs and configs, then a few tries
   designer: 'medium',     // Layout and states from the spec, then the design system
   deployReadiness: 'low'  // A read-only scan with a fixed checklist
 };
@@ -186,6 +188,7 @@ export const FEATURE_LABELS: Record<keyof FeatureModelConfig, { label: string; d
   briefImport: { label: 'Spec document import', description: 'Splits an uploaded spec document into tasks' },
   designSystem: { label: 'Design system', description: 'Extracts or designs the project design system' },
   uxReview: { label: 'UX review', description: "Reviews the running app in Preview as a person would use it" },
+  previewFix: { label: 'Preview start-up', description: 'Works out why the project did not start in Preview and fixes its recipe' },
   designer: { label: 'Designer', description: 'Draws wireframes and screens before the code of tasks that change UI' },
   deployReadiness: { label: 'CI readiness', description: 'Scans the project for what keeps its CI from passing' },
 };

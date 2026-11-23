@@ -48,6 +48,8 @@ const TOOL_UPDATE_QA_STATUS = 'mcp__vibe-teamlead__update_qa_status';
 /** Dev servers the app runs: free port, ready on return, kept for the task */
 const DEV_SERVER_TOOLS = ['mcp__vibe-teamlead__start_dev_server', 'mcp__vibe-teamlead__stop_dev_server'] as const;
 const TOOL_RENDER_DIAGRAM = 'mcp__vibe-teamlead__render_diagram';
+/** The app starts the preview by a recipe the agent proposes, and says what happened */
+const TOOL_TRY_PREVIEW_RECIPE = 'mcp__vibe-teamlead__try_preview_recipe';
 const TOOL_SEARCH_MEMORY = 'mcp__vibe-teamlead__search_memory';
 const TOOL_REMEMBER = 'mcp__vibe-teamlead__remember';
 /** Project memory: read what earlier agents learned, keep what the next ones should know */
@@ -172,6 +174,7 @@ export type AgentType =
   | 'deploy_readiness'
   | 'design_system'
   | 'ux_reviewer'
+  | 'preview_fixer'
   | 'designer';
 
 /** Configuration for a single agent type */
@@ -360,6 +363,14 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     tools: [...BASE_READ_TOOLS],
     mcpServers: ['playwright'],
     appTools: [],
+    thinkingDefault: 'medium',
+  },
+  preview_fixer: {
+    // Works out why the project did not start in Preview. It looks (reads, runs commands under the
+    // Bash rules) and proposes recipes; the app starts each one. No tool to edit files.
+    tools: [...BASE_READ_TOOLS, 'Bash'],
+    mcpServers: ['vibe-teamlead'],
+    appTools: [TOOL_TRY_PREVIEW_RECIPE],
     thinkingDefault: 'medium',
   },
   brief_analyst: {

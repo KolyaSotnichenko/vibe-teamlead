@@ -24,6 +24,7 @@ import {
   updateQaStatusTool,
   startDevServerTool,
   stopDevServerTool,
+  tryPreviewRecipeTool,
   updateSubtaskStatusTool,
 } from '../tools/app-tools';
 import { isPathContained } from '../security/path-containment';
@@ -131,6 +132,7 @@ const BUILD_TOOLS: readonly DefinedTool[] = [
   updateQaStatusTool,
   startDevServerTool,
   stopDevServerTool,
+  tryPreviewRecipeTool,
 ] as unknown as readonly DefinedTool[];
 
 function toText(output: unknown): string {
