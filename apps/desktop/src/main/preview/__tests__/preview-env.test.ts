@@ -129,6 +129,12 @@ describe("a recipe's values", () => {
     expect(vars.MODE).toMatchObject({ value: 'mine', source: 'override' });
   });
 
+  it("a recipe value never replaces a part of the preview's database address, even where the example has the same value", () => {
+    const vars = byName(baseEnvVars({ dir: '', rootExample: 'DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_NAME=app\n', dirExample: null, started: PG, recipe: { DB_HOST: 'db.internal', DB_PORT: '6543' } }));
+    expect(vars.DB_HOST).toMatchObject({ value: '127.0.0.1', source: 'database' });
+    expect(vars.DB_PORT).toMatchObject({ value: '55001', source: 'database' });
+  });
+
   it("a service's own recipe value wins over the recipe's shared one, and loses to another service's address and to the owner", () => {
     const base = baseEnvVars({ dir: 'apps/web', rootExample: null, dirExample: 'API_URL=http://localhost:3001\nMODE=a\nTHEME=x\n', started: [], recipe: { MODE: 'shared' } });
     const vars = byName(serviceEnvVars(base, {

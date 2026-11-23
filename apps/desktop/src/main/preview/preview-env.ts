@@ -15,7 +15,7 @@ import type { PreviewEnvService, PreviewEnvSource, PreviewEnvVar } from '../../s
 import type { ProjectSettings } from '../../shared/types/project';
 import { composeEnv, type ComposeWiring } from '../ai/verification/compose-env';
 import { composeServices } from '../ai/verification/compose-services';
-import { composeFilesInOrder, imagesFromComposeFiles, type StartedService, serviceEnv } from '../ai/verification/detect-checks';
+import { composeFilesInOrder, imagesFromComposeFiles, isConnectionSetting, type StartedService, serviceEnv } from '../ai/verification/detect-checks';
 import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
 import { mailEnv, needsMail } from './preview-mail';
 import { resolveRecipe } from './recipe';
@@ -81,6 +81,9 @@ export function baseEnvVars(input: BaseEnvInput): PreviewEnvVar[] {
     const fromCompose = wired.get(name);
     // A service that didn't start: empty on purpose, so the app can't reach a real one
     if (fromCompose) set(name, value, fromCompose.started || input.pending ? 'service' : 'blocked', fromCompose.service);
+    // A connection setting that is here at all is the preview's: serviceEnv keeps none of the examples'.
+    // So it is the database's also where the example happens to hold the same value (DB_HOST=127.0.0.1).
+    else if (isConnectionSetting(name, value)) set(name, value, 'database');
     else if (own.has(name) && own.get(name) === value) set(name, value, 'exampleDir');
     else if (!own.has(name) && root.has(name) && root.get(name) === value) set(name, value, 'example');
     else set(name, value, 'database');

@@ -21,7 +21,8 @@ import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../a
 import { onMergeSettled } from '../ai/merge/merge-queue';
 import { type ComposeRun, composeMovedNotice, createRunNetwork, type RunNetwork, startComposeServices } from '../ai/verification/compose-runner';
 import { bucketsOf, type ComposeService, composeNameOf, composeServices } from '../ai/verification/compose-services';
-import { composeFilesInOrder, detectChecks, imagesFromComposeFiles } from '../ai/verification/detect-checks';
+import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, isConnectionSetting } from '../ai/verification/detect-checks';
+import { isPathContained } from '../ai/security/path-containment';
 import { examplePort, previewAddressesByExamplePort } from './example-urls';
 import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
 import { type DisplacedPorts, findHardcodedAddresses, proxiedPaths } from './hardcoded-addresses';
@@ -73,6 +74,8 @@ export interface PreviewDeps {
   probe: (url: string) => Promise<ProbeResult>;
   /** How long a service's `ready` path is asked, and how often. For tests. */
   readyTimeouts?: { timeoutMs: number; pollMs: number };
+  /** Whether a folder of the worktree, followed through any links, is still inside it */
+  insideWorktree: (root: string, dir: string) => boolean;
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60_000;
@@ -128,7 +131,7 @@ const unfinished = new Set<Promise<unknown>>();
 const serverName = (service: PreviewService) => `preview-${service.name}`;
 /** The services this start runs, by its recipe */
 const servicesOf = (session: Session): PreviewService[] => session.resolved.recipe.services ?? [];
-const NO_RECIPE: ResolvedRecipe = { recipe: { version: 1, kind: 'web', services: [] }, source: 'none' };
+const NO_RECIPE: ResolvedRecipe = { recipe: { version: 1, kind: 'web', services: [] }, source: 'none', servicesFrom: 'none' };
 const tail = (text: string) => text.slice(-TAIL_CHARS);
 const cancelled = (session: Session) => session.abort.signal.aborted;
 
@@ -199,6 +202,7 @@ export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | '
       }),
     portFree: localPortFree,
     probe: probeThroughPage,
+    insideWorktree: (root, dir) => isPathContained(resolve(root, dir), root).contained,
   };
 }
 
@@ -255,17 +259,35 @@ function envFor(session: Session, dir: string, files: string[]): Record<string, 
   return envOf(varsFor(session, dir, files));
 }
 
+/** What the preview sets itself: the owner's value over one of these points the app somewhere else */
+const PREVIEWS_OWN = new Set<PreviewEnvVar['source']>(['database', 'service', 'mail', 'blocked']);
+
 /**
- * A folder's variables without the owner's own values: what migrations and seeds run with. The
- * owner may point the app at a database of their own (with a warning), and these commands
- * change a database: they only ever get the address of the one the preview started, or nothing.
- * A value the owner replaced is what the preview would have set; one they added is left out.
+ * What a migration or a seed runs with. These commands change a database, so the only
+ * connection settings they get are the preview's own: the address of what it started, or
+ * nothing. The owner may point the app at a database of their own (with a warning), and a
+ * recipe comes from the repository; a value of either that says where a database is (by its
+ * name, its scheme or its shape, on this machine or another), or that replaces what the
+ * preview set, is held back: the preview's value takes its place, or the variable is left out.
+ * Their other values (a secret key, a feature switch) pass. What was held back is said once.
  */
-function ownVarsFor(session: Session, dir: string, files: string[]): PreviewEnvVar[] {
-  return varsFor(session, dir, files).flatMap((v) => (v.source !== 'override' ? [v] : v.automatic ? [{ name: v.name, value: v.automatic.value, source: v.automatic.source }] : []));
+function databaseCommandEnv(session: Session, dir: string, files: string[]): Record<string, string> {
+  const held: string[] = [];
+  const vars = varsFor(session, dir, files).flatMap((v): PreviewEnvVar[] => {
+    if (v.source !== 'override' && v.source !== 'recipe') return [v];
+    const replacesOwn = v.automatic !== undefined && PREVIEWS_OWN.has(v.automatic.source);
+    if (!replacesOwn && !isConnectionSetting(v.name, v.value)) return [v];
+    held.push(v.name);
+    return v.automatic ? [{ name: v.name, value: v.automatic.value, source: v.automatic.source }] : [];
+  });
+  if (held.length) sayOnce(session, `Migrations and seed data run only against what the preview started: they did not get your or the recipe's ${held.join(', ')}.`);
+  return envOf(vars);
 }
 
-const ownEnvFor = (session: Session, dir: string, files: string[]) => envOf(ownVarsFor(session, dir, files));
+function sayOnce(session: Session, notice: string): void {
+  const notices = session.status.servicesNotices ?? [];
+  if (!notices.includes(notice)) emit(session, { servicesNotices: [...notices, notice] });
+}
 
 /** The workspace packages the services use from built output: a fresh worktree has no dist/ for them. */
 async function buildLibraries(session: Session, files: string[], report: boolean): Promise<void> {
@@ -280,8 +302,8 @@ async function buildLibraries(session: Session, files: string[], report: boolean
 }
 
 /**
- * Migrations, only ever on the preview's own database (they never get the owner's own values:
- * ownEnvFor): the project's (Prisma, Drizzle) on its SQL database, and each service folder's framework migrations (Django, Alembic, Rails,
+ * Migrations, only ever on the preview's own database (the only connection settings they get
+ * are the preview's: databaseCommandEnv): the project's (Prisma, Drizzle) on its SQL database, and each service folder's framework migrations (Django, Alembic, Rails,
  * Laravel) also when compose names no database, as those default to a local file. Returns
  * whether a SQL database is there, for the seed.
  */
@@ -303,7 +325,7 @@ async function runMigrations(session: Session, files: string[], report: boolean)
   }
   if (commands.length && report) emit(session, { stage: 'migrations' });
   for (const { dir, command } of commands) {
-    const result = await session.deps.runCommand(command, resolve(session.worktree, dir), ownEnvFor(session, dir, files), session.abort.signal);
+    const result = await session.deps.runCommand(command, resolve(session.worktree, dir), databaseCommandEnv(session, dir, files), session.abort.signal);
     check(session);
     if (result.code !== 0) throw Object.assign(new Error('The migrations failed'), { logTail: tail(result.output) });
   }
@@ -388,51 +410,18 @@ async function build(session: Session, files: string[], report: boolean): Promis
   }
 }
 
-/** A database's address, with the machine it is on */
-const DATABASE_ADDRESS = /^(?:jdbc:)?(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|sqlserver|mssql|oracle|cockroachdb|clickhouse):\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)/i;
-const THIS_MACHINE = new Set(['', 'localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
-
-/**
- * The recipe's variable that would send a migration or a seed to a database on another machine,
- * if any. The preview's own values and the examples' are its own business (an example's
- * connection setting is the preview's database or empty); a recipe's value comes from the
- * repository, so one that names another machine's database stops these commands.
- */
-function remoteDatabase(session: Session, files: string[], steps: PreviewRecipeCommand[]): string | undefined {
-  for (const step of steps) {
-    const found = ownVarsFor(session, step.dir, files).find((v) => {
-      const host = v.source === 'recipe' ? DATABASE_ADDRESS.exec(v.value)?.[1] : undefined;
-      return host !== undefined && !THIS_MACHINE.has(host.toLowerCase());
-    });
-    if (found) return found.name;
-  }
-  return undefined;
-}
-
-const remoteDatabaseNotice = (name: string) => `Migrations and seed data were not run: the recipe gives them a database on another machine (${name}).`;
-
-function sayOnce(session: Session, notice: string): void {
-  const notices = session.status.servicesNotices ?? [];
-  if (!notices.includes(notice)) emit(session, { servicesNotices: [...notices, notice] });
-}
-
 /**
  * Migrations: the recipe's `steps.migrate`, else the detected ones. The recipe's run whenever
- * Docker did not keep the preview's database from starting, with the preview's own values and
- * never the owner's, and not at all when the recipe names a database on another machine.
- * Returns whether a SQL database of the preview's is there.
+ * Docker did not keep the preview's database from starting, with the preview's own connection
+ * settings only (databaseCommandEnv). Returns whether a SQL database of the preview's is there.
  */
 async function migrate(session: Session, files: string[], report: boolean): Promise<boolean> {
   const steps = session.resolved.recipe.steps?.migrate;
   if (!steps) return runMigrations(session, files, report);
   const database = session.database;
   if (!database || database.status === 'unavailable') return false;
-  const remote = remoteDatabase(session, files, steps);
-  if (remote) sayOnce(session, remoteDatabaseNotice(remote));
-  else {
-    if (steps.length && report) emit(session, { stage: 'migrations' });
-    for (const step of steps) await runStep(session, files, step, 'The migrations failed', ownEnvFor(session, step.dir, files));
-  }
+  if (steps.length && report) emit(session, { stage: 'migrations' });
+  for (const step of steps) await runStep(session, files, step, 'The migrations failed', databaseCommandEnv(session, step.dir, files));
   return database.status === 'started' && database.started.some((s) => s.kind === 'postgres' || s.kind === 'mysql');
 }
 
@@ -442,10 +431,8 @@ async function seed(session: Session, files: string[], sql: boolean): Promise<vo
   const steps = session.resolved.recipe.steps?.seed;
   if (steps) {
     if (!steps.length) return;
-    const remote = remoteDatabase(session, files, steps);
-    if (remote) return sayOnce(session, remoteDatabaseNotice(remote));
     emit(session, { stage: 'seed' });
-    for (const step of steps) await runStep(session, files, step, 'The seed failed', ownEnvFor(session, step.dir, files));
+    for (const step of steps) await runStep(session, files, step, 'The seed failed', databaseCommandEnv(session, step.dir, files));
     return;
   }
   if (!sql) return;
@@ -454,7 +441,7 @@ async function seed(session: Session, files: string[], sql: boolean): Promise<vo
     const command = seedCommand(session.deps.read(session.worktree, dir ? `${dir}/package.json` : 'package.json'), manager);
     if (!command) continue;
     emit(session, { stage: 'seed' });
-    await runStep(session, files, { dir, command }, 'The seed failed', ownEnvFor(session, dir, files));
+    await runStep(session, files, { dir, command }, 'The seed failed', databaseCommandEnv(session, dir, files));
     break;
   }
 }
@@ -534,7 +521,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
       await session.deps.stopServer(name);
       throw new Cancelled();
     }
-    if (service.ready) await waitUntilReady(session, service.name, `${started.url}${service.ready}`, service.ready, started.logPath);
+    if (service.ready) await waitUntilReady(session, service.name, `${started.url}${service.ready}`, service.ready, started.logPath, started.port);
     actualPort = started.port;
     session.vars[service.name] = vars.map((v) => (v.source === 'port' ? { ...v, value: String(started.port) } : v));
     urls[service.name] = started.url;
@@ -559,7 +546,7 @@ function logEnd(session: Session, logPath: string | undefined): string {
  * (a framework may listen long before it can answer), so the path is asked until it answers
  * below 500. One that never does fails the start, with what the path last answered.
  */
-async function waitUntilReady(session: Session, service: string, url: string, path: string, logPath: string): Promise<void> {
+async function waitUntilReady(session: Session, service: string, url: string, path: string, logPath: string, port: number): Promise<void> {
   const { timeoutMs, pollMs } = session.deps.readyTimeouts ?? { timeoutMs: READY_TIMEOUT_MS, pollMs: READY_POLL_MS };
   const deadline = Date.now() + timeoutMs;
   let last = 'nothing';
@@ -568,6 +555,10 @@ async function waitUntilReady(session: Session, service: string, url: string, pa
     check(session);
     if (result.status !== undefined && result.status < 500) return;
     last = String(result.status ?? result.error ?? 'nothing');
+    // Nothing answered and nothing listens any more: it is gone, and waiting won't bring it back
+    if (result.status === undefined && (await session.deps.portFree(port))) {
+      throw Object.assign(new Error(`${service} stopped before it was ready`), { logTail: logEnd(session, logPath) });
+    }
     if (Date.now() >= deadline) break;
     await new Promise((resolveWait) => setTimeout(resolveWait, pollMs));
     check(session);
@@ -667,9 +658,16 @@ const KIND_MESSAGE = {
  * here, before anything is installed or started.
  */
 function resolveSessionRecipe(session: Session, files: string[]): void {
-  const resolved = resolveRecipe({ files, read: (path) => session.deps.read(session.worktree, path), saved: session.project.settings.previewServices ?? [] });
+  const resolved = resolveRecipe({
+    files,
+    read: (path) => session.deps.read(session.worktree, path),
+    saved: session.project.settings.previewServices ?? [],
+    contained: (dir) => session.deps.insideWorktree(session.worktree, dir),
+  });
   session.resolved = resolved;
-  emit(session, { recipe: { source: resolved.source, ...(resolved.invalid ? { invalid: resolved.invalid } : {}) } });
+  // Said only when it changed: every status of a ready preview loads its page again
+  const recipe: PreviewStatus['recipe'] = { source: resolved.source, kind: resolved.recipe.kind, ...(resolved.invalid ? { invalid: resolved.invalid } : {}) };
+  if (JSON.stringify(recipe) !== JSON.stringify(session.status.recipe)) emit(session, { recipe });
   const { kind } = resolved.recipe;
   if (kind !== 'web') throw new Error(KIND_MESSAGE[kind]);
   if (servicesOf(session).filter((service) => service.page).length !== 1) {

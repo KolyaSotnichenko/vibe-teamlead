@@ -60,7 +60,7 @@ export interface PreviewStatus {
   /** Why the page may not reach a service: an address the project hard-codes, or a failed request through the page */
   addressIssues?: PreviewAddressIssue[];
   /** Where the recipe this start uses came from, and why the project's preview.json was passed over, when it was */
-  recipe?: { source: PreviewRecipeSource; invalid?: string };
+  recipe?: { source: PreviewRecipeSource; kind: PreviewRecipeKind; invalid?: string };
   /** Failed because no source says which services to run, or which one is the page: the owner is asked */
   needsServices?: true;
 }
@@ -212,6 +212,8 @@ export interface PreviewEnvReport {
 /** The services a start would run, where they came from, and why the project's preview.json was passed over, when it was */
 export interface PreviewRecipeInfo {
   source: PreviewRecipeSource;
+  /** Where the services came from: a preview.json without services takes them from the saved ones or the proposal */
+  servicesFrom: PreviewRecipeSource;
   services: PreviewService[];
   invalid?: string;
 }

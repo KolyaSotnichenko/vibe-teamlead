@@ -1101,6 +1101,11 @@
     "startingBody": "The app from main is starting. It stops when you leave this page.",
     "serviceStopped": "The {{service}} service stopped unexpectedly. The last lines of its log are below.",
     "recipeInvalid": "preview.json was not used: {{reason}} The preview worked out what to run by itself.",
+    "kind": {
+      "desktop": "This project is a desktop app. The preview shows web apps for now; see how to run it below.",
+      "mobile": "This project is a mobile app. The preview shows web apps for now; see how to run it below.",
+      "none": "This project has nothing to show in a preview. See how to run it below."
+    },
     "failed": "The preview did not start.",
     "stage": {
       "worktree": "Updating to main",

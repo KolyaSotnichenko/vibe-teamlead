@@ -116,11 +116,16 @@ function candidateDirs(files: string[]): string[] {
   return [...dirs].sort();
 }
 
-/** Services in Python, Ruby, PHP and Go; the first one serving pages is the page. */
-export function proposeStackServices(project: ProjectFiles): PreviewService[] {
+/** Services in Python, Ruby, PHP and Go, each with whether it serves pages; the first one that does is the page. */
+export function proposeStack(project: ProjectFiles): Array<{ service: PreviewService; html: boolean }> {
   const proposals = candidateDirs(project.files).flatMap((dir) => proposalsIn(project, dir));
   const pageIndex = Math.max(0, proposals.findIndex((p) => p.html));
-  return proposals.map((p, i) => (i === pageIndex ? { ...p.service, page: true } : p.service));
+  return proposals.map((p, i) => ({ html: p.html, service: i === pageIndex ? { ...p.service, page: true } : p.service }));
+}
+
+/** Services in Python, Ruby, PHP and Go; the first one serving pages is the page. */
+export function proposeStackServices(project: ProjectFiles): PreviewService[] {
+  return proposeStack(project).map((proposal) => proposal.service);
 }
 
 /** Each folder's dependency install, for the folders given (the root and the services'). */

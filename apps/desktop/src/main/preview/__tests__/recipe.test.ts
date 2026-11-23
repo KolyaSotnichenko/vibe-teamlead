@@ -46,6 +46,10 @@ describe('parseRecipe', () => {
     expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], name: 'my web' }] })).toMatch(/name/);
   });
 
+  it('says how the root is written when a folder is refused', () => {
+    expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], dir: '.' }] })).toMatch(/"" for the root/);
+  });
+
   it.each(['../x', '/etc', 'a/../../b', 'a\\..\\b', './a/..'])('refuses the folder %s', (dir) => {
     expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], dir }] })).toMatch(/dir/);
     expect(reasonOf({ ...WEB, steps: { build: [{ dir, command: 'pnpm run build' }] } })).toMatch(/dir/);
@@ -75,11 +79,11 @@ describe('resolveRecipe', () => {
   const resolve = (files: Record<string, string>, saved: PreviewService[] = []) => resolveRecipe({ files: Object.keys(files), read: (p) => files[p] ?? null, saved });
 
   it('uses preview.json before the saved services', () => {
-    expect(resolve({ 'preview.json': JSON.stringify(WEB) }, SAVED)).toEqual({ recipe: WEB, source: 'file' });
+    expect(resolve({ 'preview.json': JSON.stringify(WEB) }, SAVED)).toEqual({ recipe: WEB, source: 'file', servicesFrom: 'file' });
   });
 
   it('uses the saved services when there is no file', () => {
-    expect(resolve(VITE, SAVED)).toEqual({ recipe: { version: 1, kind: 'web', services: SAVED }, source: 'settings' });
+    expect(resolve(VITE, SAVED)).toEqual({ recipe: { version: 1, kind: 'web', services: SAVED }, source: 'settings', servicesFrom: 'settings' });
   });
 
   it('uses the proposal without asking when it names exactly one page', () => {
@@ -89,7 +93,7 @@ describe('resolveRecipe', () => {
   });
 
   it('has no source for a project nothing proposes a page for', () => {
-    expect(resolve({ 'README.md': '' })).toEqual({ recipe: { version: 1, kind: 'web', services: [] }, source: 'none' });
+    expect(resolve({ 'README.md': '' })).toEqual({ recipe: { version: 1, kind: 'web', services: [] }, source: 'none', servicesFrom: 'none' });
   });
 
   it('says why an unusable file was passed over, and goes on to the saved services', () => {
@@ -100,14 +104,39 @@ describe('resolveRecipe', () => {
 
   it('fills a file recipe without services from the saved ones, and keeps its steps', () => {
     const file = { version: 1, kind: 'web', steps: { seed: [] } };
-    expect(resolve({ 'preview.json': JSON.stringify(file) }, SAVED)).toEqual({ recipe: { ...file, services: SAVED }, source: 'file' });
+    expect(resolve({ 'preview.json': JSON.stringify(file) }, SAVED)).toEqual({ recipe: { ...file, services: SAVED }, source: 'file', servicesFrom: 'settings' });
   });
 
   it('has no source for a file recipe without services when nothing else names them', () => {
     expect(resolve({ 'preview.json': '{"version":1,"kind":"web","env":{"A":"b"}}' })).toMatchObject({ source: 'none' });
   });
 
+  it('asks instead of choosing when two frontends could be the page', () => {
+    const two = { 'apps/admin/package.json': JSON.stringify({ scripts: { dev: 'vite' } }), 'apps/web/package.json': JSON.stringify({ scripts: { dev: 'vite' } }) };
+    expect(resolve(two)).toEqual({ recipe: { version: 1, kind: 'web', services: [] }, source: 'none', servicesFrom: 'none' });
+  });
+
+  it('does not ask for one frontend with a backend, or for a single service that is not a frontend', () => {
+    const pair = { 'apps/api/package.json': JSON.stringify({ scripts: { dev: 'tsx watch src/index.ts' } }), 'apps/web/package.json': JSON.stringify({ scripts: { dev: 'vite' } }) };
+    expect(resolve(pair)).toMatchObject({ source: 'proposal', servicesFrom: 'proposal' });
+    expect(resolve({ 'go.mod': 'module x', 'main.go': 'package main' })).toMatchObject({ source: 'proposal' });
+  });
+
+  it('says where the services came from, apart from where the recipe did', () => {
+    expect(resolve({ 'preview.json': JSON.stringify(WEB) }, SAVED).servicesFrom).toBe('file');
+    expect(resolve({ 'preview.json': '{"version":1,"kind":"web","steps":{"seed":[]}}' }, SAVED)).toMatchObject({ source: 'file', servicesFrom: 'settings' });
+    expect(resolve(VITE, SAVED).servicesFrom).toBe('settings');
+    expect(resolve(VITE).servicesFrom).toBe('proposal');
+  });
+
+  it('passes over a file whose folder is a link out of the project, and says so', () => {
+    const files = { 'preview.json': JSON.stringify({ ...WEB, services: [{ ...WEB.services[0], dir: 'ext/app' }] }) };
+    const r = resolveRecipe({ files: Object.keys(files), read: (p) => (files as Record<string, string>)[p] ?? null, saved: SAVED, contained: (dir) => dir !== 'ext/app' });
+    expect(r.source).toBe('settings');
+    expect(r.invalid).toMatch(/ext\/app.*out of the project/);
+  });
+
   it('leaves a recipe of another kind as it is', () => {
-    expect(resolve({ 'preview.json': '{"version":1,"kind":"desktop"}' }, SAVED)).toEqual({ recipe: { version: 1, kind: 'desktop' }, source: 'file' });
+    expect(resolve({ 'preview.json': '{"version":1,"kind":"desktop"}' }, SAVED)).toEqual({ recipe: { version: 1, kind: 'desktop' }, source: 'file', servicesFrom: 'none' });
   });
 });

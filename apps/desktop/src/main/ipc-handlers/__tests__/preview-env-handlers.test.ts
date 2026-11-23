@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,10 +50,10 @@ describe('preview IPC: Environment', () => {
   });
 
   it('recipe: says what the preview runs and where that came from: preview.json before the saved services', async () => {
-    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'settings', services: SETTINGS.previewServices } });
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'settings', servicesFrom: 'settings', services: SETTINGS.previewServices } });
     const site = { name: 'site', dir: '', command: 'make serve', port: 8080, page: true };
     writeFileSync(join(dirs.project, 'preview.json'), JSON.stringify({ version: 1, kind: 'web', services: [site] }));
-    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'file', services: [site] } });
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'file', servicesFrom: 'file', services: [site] } });
   });
 
   it('recipe: passes over a preview.json it cannot use and says why', async () => {
@@ -62,6 +62,22 @@ describe('preview IPC: Environment', () => {
     expect(result.data.source).toBe('settings');
     expect(result.data.invalid).toMatch(/version/);
     expect(result.data.services).toEqual(SETTINGS.previewServices);
+  });
+
+  it('recipe: accepts a real folder of the project, also when the project itself is reached through a link', async () => {
+    // The temp folder is such a path on macOS (/var is a link)
+    const site = { name: 'site', dir: 'api', command: 'make serve', page: true };
+    writeFileSync(join(dirs.project, 'preview.json'), JSON.stringify({ version: 1, kind: 'web', services: [site] }));
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'file', servicesFrom: 'file', services: [site] } });
+  });
+
+  it('recipe: passes over a preview.json whose folder is a link out of the project', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'vt-outside-'));
+    symlinkSync(outside, join(dirs.project, 'ext'));
+    writeFileSync(join(dirs.project, 'preview.json'), JSON.stringify({ version: 1, kind: 'web', services: [{ name: 'site', dir: 'ext', command: 'make serve', page: true }] }));
+    const result = (await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')) as { data: { source: string; invalid?: string } };
+    expect(result.data.source).toBe('settings');
+    expect(result.data.invalid).toMatch(/ext leads out of the project/);
   });
 
   it('recipe: an unknown project is an error', async () => {

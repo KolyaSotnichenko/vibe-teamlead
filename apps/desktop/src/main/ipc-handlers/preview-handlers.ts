@@ -21,6 +21,7 @@ import { proposePreviewServices } from '../preview/detect-services';
 import { currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
 import { plannedEnv } from '../preview/preview-env';
 import { resolveRecipe } from '../preview/recipe';
+import { isPathContained } from '../ai/security/path-containment';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
@@ -97,8 +98,14 @@ const safeRead = (dir: string) => (file: string): string | null => {
  */
 export function previewRecipeInfo(project: Project, dir: string, git?: string): PreviewRecipeInfo {
   const saved = project.settings.previewServices ?? [];
-  const resolved = resolveRecipe({ files: previewFiles(dir, saved.map((s) => s.dir), git), read: safeRead(dir), saved });
-  return { source: resolved.source, services: resolved.recipe.services ?? [], ...(resolved.invalid ? { invalid: resolved.invalid } : {}) };
+  const resolved = resolveRecipe({
+    files: previewFiles(dir, saved.map((s) => s.dir), git),
+    read: safeRead(dir),
+    saved,
+    // As a start does: a folder that is a link out of the project makes the file unusable
+    contained: (folder) => isPathContained(path.resolve(dir, folder), dir).contained,
+  });
+  return { source: resolved.source, servicesFrom: resolved.servicesFrom, services: resolved.recipe.services ?? [], ...(resolved.invalid ? { invalid: resolved.invalid } : {}) };
 }
 
 /**

@@ -14,7 +14,7 @@ import type { PreviewService } from '../../shared/types/project';
 import { FORBIDDEN_ENV } from '../ai/dev-servers/forbidden-env';
 import { validateCommand } from '../ai/security/bash-validator';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
-import { proposePreviewServices } from './detect-services';
+import { proposePreview } from './detect-services';
 
 export const RECIPE_FILE = 'preview.json';
 
@@ -79,7 +79,7 @@ function problemIn(recipe: PreviewRecipe): string | null {
     ...(['install', 'build', 'migrate', 'seed'] as const).flatMap((step) => (recipe.steps?.[step] ?? []).map((c, i) => ({ at: `steps.${step}[${i}]`, ...c }))),
   ];
   for (const { at, dir, command } of commands) {
-    if (!staysInside(dir)) return `${at}.dir must be a folder inside the project, written with "/" from its root.`;
+    if (!staysInside(dir)) return `${at}.dir must be a folder inside the project, written with "/" from its root ("" for the root itself).`;
     const [allowed, reason] = validateCommand(command);
     if (!allowed) return `${at}.command is not allowed: ${reason}`;
   }
@@ -124,30 +124,43 @@ export function parseRecipe(text: string): ParsedRecipe {
 export interface ResolvedRecipe {
   recipe: PreviewRecipe;
   source: PreviewRecipeSource;
+  /** Where the services came from: a file recipe without services takes them from the saved ones or the proposal */
+  servicesFrom: PreviewRecipeSource;
   /** preview.json is there and was not used: why */
   invalid?: string;
 }
+
+/** Every folder a recipe runs something in */
+const dirsOf = (recipe: PreviewRecipe): string[] => [
+  ...(recipe.services ?? []).map((service) => service.dir),
+  ...(['install', 'build', 'migrate', 'seed'] as const).flatMap((step) => (recipe.steps?.[step] ?? []).map((command) => command.dir)),
+];
 
 /**
  * The recipe a start uses, first that applies: the project's `preview.json`, the services the
  * owner saved, or the proposal from the project's files when it names exactly one page (so
  * nobody is asked). A file recipe without services takes them from the next two. `none`: no
- * source gives a page, and the owner is asked. An unusable file is passed over, with why.
+ * source gives a page, and the owner is asked. An unusable file is passed over, with why:
+ * one that doesn't parse, or one with a folder that is a link out of the project (`contained`,
+ * asked of the real folders by a caller that has them).
  */
-export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[] }): ResolvedRecipe {
-  const { files, read, saved } = input;
+export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; contained?: (dir: string) => boolean }): ResolvedRecipe {
+  const { files, read, saved, contained } = input;
   const parsed = files.includes(RECIPE_FILE) ? parseRecipe(read(RECIPE_FILE) ?? '') : undefined;
-  const invalid = parsed && !parsed.ok ? { invalid: parsed.reason } : {};
-  const file = parsed?.ok ? parsed.recipe : undefined;
-  if (file && (file.kind !== 'web' || file.services)) return { recipe: file, source: 'file' };
+  const outside = parsed?.ok && contained ? dirsOf(parsed.recipe).find((dir) => dir !== '' && !contained(dir)) : undefined;
+  const reason = parsed && !parsed.ok ? parsed.reason : outside !== undefined ? `The folder ${outside} leads out of the project.` : undefined;
+  const invalid = reason ? { invalid: reason } : {};
+  const file = parsed?.ok && outside === undefined ? parsed.recipe : undefined;
+  if (file && (file.kind !== 'web' || file.services)) return { recipe: file, source: 'file', servicesFrom: file.services ? 'file' : 'none' };
 
-  /** The saved services, else an unambiguous proposal */
+  /** The saved services, else a proposal that leaves nothing to choose: one service, or one that could be the page */
   const detected = (): { services: PreviewService[]; source: 'settings' | 'proposal' | 'none' } => {
     if (saved.length) return { services: saved, source: 'settings' };
-    const proposed = proposePreviewServices({ files, read });
-    return proposed.filter((service) => service.page).length === 1 ? { services: proposed, source: 'proposal' } : { services: [], source: 'none' };
+    const { services, pageCandidates } = proposePreview({ files, read });
+    const clear = services.filter((service) => service.page).length === 1 && (services.length === 1 || pageCandidates === 1);
+    return clear ? { services, source: 'proposal' } : { services: [], source: 'none' };
   };
   const { services, source } = detected();
-  if (file) return { recipe: { ...file, services }, source: source === 'none' ? 'none' : 'file' };
-  return { recipe: { version: 1, kind: 'web', services }, source, ...invalid };
+  if (file) return { recipe: { ...file, services }, source: source === 'none' ? 'none' : 'file', servicesFrom: source };
+  return { recipe: { version: 1, kind: 'web', services }, source, servicesFrom: source, ...invalid };
 }

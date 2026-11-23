@@ -165,13 +165,20 @@ const CONNECTION_NAME = /(^|_)(DB|DSN|DATABASE|SQL|MYSQL|MARIADB|POSTGRES|POSTGR
 /** Values that say so without a scheme: Go's DSN, libpq, ADO.NET, PDO */
 const CONNECTION_VALUE = /@tcp\(|(^|[\s;:])(host|hostaddr|dbname)=|(^|;)\s*(server|data source|database)=/i;
 
+/**
+ * Whether a setting says where a database, a broker or a store is: by its name, by its value's
+ * scheme (anything but http), or by a value written as a DSN. Wide on purpose. Pure.
+ */
+export function isConnectionSetting(name: string, value: string): boolean {
+  const scheme = /^["']?(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(value.trim())?.[1]?.toLowerCase();
+  return (!!scheme && scheme !== 'http' && scheme !== 'https') || CONNECTION_NAME.test(name) || CONNECTION_VALUE.test(value);
+}
+
 /** Whether an env file's text says where a database is. Pure. */
 export function namesDatabase(envText: string): boolean {
   return envText.split('\n').some((line) => {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
-    if (!match || !match[2].trim()) return false;
-    const scheme = /^["']?(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(match[2].trim())?.[1]?.toLowerCase();
-    return (!!scheme && scheme !== 'http' && scheme !== 'https') || CONNECTION_NAME.test(match[1]) || CONNECTION_VALUE.test(match[2]);
+    return !!match && !!match[2].trim() && isConnectionSetting(match[1], match[2]);
   });
 }
 

@@ -59,6 +59,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     pickPort: vi.fn(async () => 6000 + Math.floor(Math.random() * 1000)),
     portFree: vi.fn(async () => false),
     probe: vi.fn(async () => ({ status: 404 })),
+    insideWorktree: () => true,
     ...overrides,
   };
   return { d, order };
@@ -765,49 +766,72 @@ describe('the recipe', () => {
   const PREVIEW_DB = 'postgresql://verify:pw@127.0.0.1:55001/verify';
   const envOfCommand = (d: PreviewDeps, command: string) => vi.mocked(d.runCommand).mock.calls.find(([c]) => c === command)?.[2];
 
-  it("gives the recipe's migrations and seed the preview's own values, never the owner's", async () => {
+  it("gives migrations and seed the preview's own connection settings, never the owner's or the recipe's, and keeps the other values", async () => {
     const p = project();
     p.settings.previewEnv = { DATABASE_URL: 'postgresql://real/prod', REDIS_URL: 'redis://real:6379', EXTRA: 'mine' };
+    const withheld = { SHADOW_DATABASE_URL: 'postgresql://user:pw@db.example.com:5432/x', LOCAL_COPY: 'postgresql://localhost:5433/shadow', PGHOST: 'db.internal', LIBPQ: 'host=db.internal dbname=app', ASYNC_URL: 'postgresql+asyncpg://db.internal/app' };
     const { d } = deps(withFiles({
       '.env.example': 'REDIS_URL=redis://localhost:6379\n',
-      'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, steps: { install: [], build: [], migrate: [{ dir: 'apps/api', command: 'make migrate' }], seed: [{ dir: 'apps/api', command: 'make demo' }] } }),
+      'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, env: { ...withheld, FEATURE: 'on' }, steps: { install: [], build: [], migrate: [{ dir: 'apps/api', command: 'make migrate' }], seed: [{ dir: 'apps/api', command: 'make demo' }] } }),
     }));
     const status = await startPreview(p, () => {}, d);
     expect(status.stage).toBe('ready');
     for (const command of ['make migrate', 'make demo']) {
       const env = envOfCommand(d, command);
-      expect(env).toMatchObject({ DATABASE_URL: PREVIEW_DB, REDIS_URL: '' });
-      expect(env).not.toHaveProperty('EXTRA');
+      expect(env).toMatchObject({ DATABASE_URL: PREVIEW_DB, REDIS_URL: '', EXTRA: 'mine', FEATURE: 'on' });
+      for (const name of Object.keys(withheld)) expect(env).not.toHaveProperty(name);
     }
-    // The services still get what the owner set
+    const notice = status.servicesNotices?.find((n) => n.startsWith('Migrations and seed data run only against what the preview started'));
+    for (const name of ['DATABASE_URL', 'REDIS_URL', ...Object.keys(withheld)]) expect(notice).toContain(name);
+    expect(notice).not.toContain('EXTRA');
+    // The services still get what the owner and the recipe set
     const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o).find((o) => o.name === 'preview-api');
-    expect(api?.env).toMatchObject({ DATABASE_URL: 'postgresql://real/prod', EXTRA: 'mine' });
+    expect(api?.env).toMatchObject({ DATABASE_URL: 'postgresql://real/prod', EXTRA: 'mine', PGHOST: 'db.internal' });
   });
 
-  it('runs neither migrations nor seed, and says so, when the recipe gives them a database on another machine', async () => {
-    const recipe = { version: 1, kind: 'web', services: SERVICES, env: { SHADOW_DATABASE_URL: 'postgresql://user:pw@db.example.com:5432/x' }, steps: { install: [], build: [], migrate: [{ dir: '', command: 'make migrate' }], seed: [{ dir: '', command: 'make demo' }] } };
-    const { d } = deps(withFiles({ 'preview.json': JSON.stringify(recipe) }));
-    const status = await startPreview(project(), () => {}, d);
-    expect(status.stage).toBe('ready');
-    expect(commands(d)).toEqual([]);
-    expect(status.servicesNotices).toEqual(['Migrations and seed data were not run: the recipe gives them a database on another machine (SHADOW_DATABASE_URL).']);
-  });
-
-  it.each(['postgresql://localhost:5433/shadow', 'mysql://root@127.0.0.1/x', 'file:./dev.db', 'https://api.example.com'])('runs them when a recipe value is %s', async (value) => {
-    const recipe = { version: 1, kind: 'web', services: SERVICES, env: { OTHER: value }, steps: { install: [], build: [], seed: [], migrate: [{ dir: '', command: 'make migrate' }] } };
-    const { d } = deps(withFiles({ 'preview.json': JSON.stringify(recipe) }));
-    await startPreview(project(), () => {}, d);
-    expect(commands(d)).toEqual([['make migrate', ROOT]]);
-  });
-
-  it("gives the detected migrations and seed the preview's own values too", async () => {
+  it("gives the detected migrations and seed the preview's own database too, with the owner's other values, and never a recipe's database address", async () => {
     const p = project();
-    p.settings.previewEnv = { DATABASE_URL: 'postgresql://real/prod' };
-    const { d } = deps();
+    p.settings.previewEnv = { DATABASE_URL: 'postgresql://real/prod', SECRET_KEY: 's3' };
+    const { d } = deps(withFiles({ 'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, env: { APP_DATABASE_URL: 'postgresql://x@db.internal/app' } }) }));
     await startPreview(p, () => {}, d);
     const calls = vi.mocked(d.runCommand).mock.calls.filter(([command]) => /prisma|seed/.test(command));
     expect(calls.length).toBeGreaterThanOrEqual(2);
-    for (const [, , env] of calls) expect(env.DATABASE_URL).toBe(PREVIEW_DB);
+    for (const [, , env] of calls) {
+      expect(env).toMatchObject({ DATABASE_URL: PREVIEW_DB, SECRET_KEY: 's3' });
+      expect(env).not.toHaveProperty('APP_DATABASE_URL');
+    }
+  });
+
+  it('says nothing about migrations when nothing was held back', async () => {
+    const { d } = deps();
+    const status = await startPreview(project(), () => {}, d);
+    expect(status.servicesNotices).toBeUndefined();
+  });
+
+  it('passes over a preview.json whose folder is a link out of the project', async () => {
+    const { d } = deps({ ...withFiles({ 'preview.json': JSON.stringify(RECIPE) }), insideWorktree: (_root: string, dir: string) => dir !== 'apps/api' });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status.stage).toBe('ready');
+    expect(status.recipe).toMatchObject({ source: 'settings' });
+    expect(status.recipe?.invalid).toMatch(/apps\/api leads out of the project/);
+  });
+
+  it('stops waiting for a ready path once the service is gone', async () => {
+    const services = [{ ...SERVICES[0] }, { ...SERVICES[1], ready: '/health' }];
+    const { d } = deps({ probe: vi.fn(async () => ({ error: 'ECONNREFUSED' })), portFree: vi.fn(async () => true), readLog: () => 'crashed\n', readyTimeouts: { timeoutMs: 60_000, pollMs: 1 } });
+    const status = await startPreview(project('p1', services), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', message: 'api stopped before it was ready', logTail: 'crashed' });
+  });
+
+  it('a merge that changes nothing says nothing: the page is not loaded again', async () => {
+    const { d } = deps();
+    const statuses: PreviewStatus[] = [];
+    await startPreview(project(), (s) => statuses.push(s), d);
+    const before = statuses.length;
+    vi.mocked(d.runCommand).mockClear();
+    await inMergeQueue('/projects/p1', 't', async () => {});
+    await vi.waitFor(() => expect(d.runCommand).toHaveBeenCalledTimes(2));
+    expect(statuses.slice(before)).toEqual([]);
   });
 
   it('restarts the services by the new recipe when a merge changed preview.json', async () => {

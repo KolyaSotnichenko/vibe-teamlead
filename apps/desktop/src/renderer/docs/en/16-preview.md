@@ -18,7 +18,7 @@ The preview starts by itself. The app reads the project's files and works out wh
 
 Anything else that serves HTTP works too: add it under **Services** with a command that takes `{port}` or reads `PORT`.
 
-You are asked only when the app can't tell which service is the page: two frontends, or nothing it recognises. Then, and under **Services** in the toolbar at any time, the list has:
+You are asked only when the app can't tell which service is the page: two frontends, several backends and no frontend, or nothing it recognises. Then, and under **Services** in the toolbar at any time, the list has:
 
 - **Folder:** where the command runs, relative to the project.
 - **Command:** the command itself. `{port}` becomes the port the app picked; the port is also in `PORT`.
@@ -56,13 +56,13 @@ Anything the file doesn't say is still worked out from the project's files. With
 
 The file comes from the repository, so the app checks it before using anything in it:
 
-- a folder can't lead out of the project, and a command must pass the same check agents' commands pass;
+- a folder can't lead out of the project, by its path or through a link, and a command must pass the same check agents' commands pass;
 - it can't set variables that change what a command runs (`PATH`, `NODE_OPTIONS` and the like);
 - its values replace only values from `.env.example`, or add new ones: never what the preview sets itself (the test database's address, a setting left empty on purpose) and never your own values.
 
 A file the app can't use is passed over: the preview works out what to run by itself, and a notice over the page says why.
 
-Migrations and seed commands, the recipe's and the detected ones alike, never get your own values from **Environment**: they run only against the database the preview started. When the recipe gives them a database on another machine, they are not run, and a notice says so.
+Migrations and seed commands, the recipe's and the detected ones alike, run only against what the preview started: the only connection settings they get are the preview's own. A value of yours from **Environment**, or of the recipe, that says where a database is (by its name, such as `DATABASE_URL` or `PGHOST`, or by its value, on this computer or another) is held back from them, and a notice names what was held back. Your other values, such as a secret key, reach them. A command written into the recipe is the project's own code, like its dev scripts, and runs as written.
 
 ## Where its code and data come from
 

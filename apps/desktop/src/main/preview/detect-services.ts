@@ -7,7 +7,7 @@
 
 import type { PreviewService } from '../../shared/types/project';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
-import { proposeStackServices } from './stacks';
+import { proposeStack } from './stacks';
 
 /** First word of a `dev` script that marks a frontend dev server */
 const FRONTEND_TOOLS = new Set(['next', 'vite', 'nuxt', 'nuxi', 'svelte-kit', 'astro', 'ng', 'remix', 'react-scripts', 'react-router']);
@@ -38,18 +38,33 @@ const isFrontend = (script: string | undefined) => !!script && FRONTEND_TOOLS.ha
 /** npm needs `--` to pass flags to the script; pnpm, yarn and bun pass them as they are. */
 const withPort = (manager: Manager, script: string) => `${manager} run ${script}${manager === 'npm' ? ' -- --port {port}' : ' --port {port}'}`;
 
-export function proposePreviewServices({ files, read }: ProjectFiles): PreviewService[] {
+export interface PreviewProposal {
+  services: PreviewService[];
+  /**
+   * How many of them could be the page: the frontends, or, with no frontend, the backends that
+   * serve pages. The proposal marks the first; with more than one, only the owner knows.
+   */
+  pageCandidates: number;
+}
+
+export function proposePreviewServices(project: ProjectFiles): PreviewService[] {
+  return proposePreview(project).services;
+}
+
+export function proposePreview({ files, read }: ProjectFiles): PreviewProposal {
   const manager = managerOf(files);
   const packages = files
     .filter((file) => (file === 'package.json' || file.endsWith('/package.json')) && !SKIPPED.test(file))
     .sort();
   const services: PreviewService[] = [];
   let pageChosen = false;
+  let frontends = 0;
   for (const file of packages) {
     const dir = file === 'package.json' ? '' : file.slice(0, -'/package.json'.length);
     const scripts = scriptsOf(read(file));
     const name = dir ? dir.split('/').pop()!.replace(/[^\w-]/g, '-').slice(0, 40) : 'web';
     if (isFrontend(scripts.dev)) {
+      frontends += 1;
       services.push({ name, dir, command: withPort(manager, 'dev'), ...(pageChosen ? {} : { page: true }) });
       pageChosen = true;
     } else if ((scripts['start:dev'] || scripts.dev) && !(!dir && packages.length > 1 && RUNS_WORKSPACE.test(scripts.dev ?? ''))) {
@@ -58,13 +73,14 @@ export function proposePreviewServices({ files, read }: ProjectFiles): PreviewSe
   }
   // Python, Ruby, PHP and Go services; a JavaScript frontend stays the page when there is one
   const taken = new Set(services.map((s) => s.name));
-  for (const { page, ...service } of proposeStackServices({ files, read })) {
+  const stack = proposeStack({ files, read });
+  for (const { service: { page, ...service } } of stack) {
     let name = service.name;
     for (let n = 2; taken.has(name); n++) name = `${service.name}-${n}`;
     taken.add(name);
     services.push({ ...service, name, ...(page && !pageChosen ? { page: true } : {}) });
   }
-  return services;
+  return { services, pageCandidates: frontends || stack.filter((proposal) => proposal.html).length };
 }
 
 export interface WorkspaceLibrary {

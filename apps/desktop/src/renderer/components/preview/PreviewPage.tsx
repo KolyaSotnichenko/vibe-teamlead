@@ -72,7 +72,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       const recipe = await (taskId ? api.recipe(project.id, taskId) : api.recipe(project.id));
       const found = recipe.success && recipe.data ? recipe.data : null;
       if (found?.services.length) {
-        if (live) setForm({ services: found.services, readOnly: found.source === 'file' });
+        if (live) setForm({ services: found.services, readOnly: found.servicesFrom === 'file' });
         return;
       }
       // Nothing says what to run: what the project's files propose, for the owner to choose from
@@ -146,7 +146,13 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
             <div className="absolute inset-0 overflow-auto bg-background p-6">
               {status?.stage === 'failed' ? (
                 <div className="space-y-3">
-                  <p role="alert" className="text-sm font-semibold text-destructive">{status.stoppedService ? t('preview.serviceStopped', { service: status.stoppedService }) : (status.message ?? t('preview.failed'))}</p>
+                  <p role="alert" className="text-sm font-semibold text-destructive">
+                    {status.stoppedService
+                      ? t('preview.serviceStopped', { service: status.stoppedService })
+                      : status.recipe && status.recipe.kind !== 'web'
+                        ? t(`preview.kind.${status.recipe.kind}`)
+                        : (status.message ?? t('preview.failed'))}
+                  </p>
                   {status.logTail && <pre className="max-h-96 overflow-auto border border-border p-3 font-mono text-xs">{status.logTail}</pre>}
                   <RunningDoc projectId={project.id} doc={runningDoc} />
                 </div>
