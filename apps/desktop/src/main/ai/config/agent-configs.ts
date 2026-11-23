@@ -366,9 +366,9 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     thinkingDefault: 'medium',
   },
   preview_fixer: {
-    // Works out why the project did not start in Preview. It looks (reads, runs commands under the
-    // Bash rules) and proposes recipes; the app starts each one. No tool to edit files.
-    tools: [...BASE_READ_TOOLS, 'Bash'],
+    // Works out why the project did not start in Preview. It reads and proposes recipes; the app starts
+    // each one. It starts by itself on what the project's files say, so no shell and no tool to edit files.
+    tools: [...BASE_READ_TOOLS],
     mcpServers: ['vibe-teamlead'],
     appTools: [TOOL_TRY_PREVIEW_RECIPE],
     thinkingDefault: 'medium',

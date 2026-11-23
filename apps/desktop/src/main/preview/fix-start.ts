@@ -110,7 +110,7 @@ export function fixStartPrompt(options: Pick<FixStartOptions, 'failure' | 'recip
     '',
     '## What to do',
     '',
-    `Find out why it does not start and give the app a recipe that does. You are in the project's main branch, in a copy the app keeps for the Preview. Read the code, the scripts, the compose files, \`.env.example\`, \`RUNNING.md\`. You may run commands to look (versions, a script's help, a dry run). Do not edit any files and do not start servers yourself: the app starts the project.`,
+    `Find out why it does not start and give the app a recipe that does. You are in the project's main branch, in a copy the app keeps for the Preview. Read the code, the scripts, the compose files, \`.env.example\`, \`RUNNING.md\`. You have no shell: what the machine has (Docker, runtimes, tools) is in the facts above, and only the app runs anything. Do not edit any files: the app starts the project.`,
     '',
     `A recipe is the content of \`${RECIPE_FILE}\`:`,
     '',
@@ -174,7 +174,8 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
       prompt: fixStartPrompt(options),
       agentType: 'preview_fixer',
       // A tool list replaces the defaults; the app's own tool comes with the agent type
-      tools: ['Read', 'Glob', 'Grep', 'Bash'],
+      // No shell: the session starts by itself on what the project's files say, and they must not steer commands
+      tools: ['Read', 'Glob', 'Grep'],
       cwd: options.worktree,
       specDir: previewSpecDir(options.worktree),
       outputSchema: Output,

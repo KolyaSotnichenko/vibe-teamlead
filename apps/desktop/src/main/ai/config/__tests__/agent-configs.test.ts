@@ -77,7 +77,9 @@ describe('AGENT_CONFIGS', () => {
   // Spot-check specific agent configs match Python AGENT_CONFIGS
   it('gives the agent that fixes a preview start the tools to look and one tool to try a recipe, and none to edit', () => {
     const config = AGENT_CONFIGS.preview_fixer;
-    expect([...config.tools].sort()).toEqual(['Bash', 'Glob', 'Grep', 'Read']);
+    // It starts by itself on what the project's files say: no shell for text from the repository to steer
+    expect([...config.tools].sort()).toEqual(['Glob', 'Grep', 'Read']);
+    expect(config.tools).not.toContain('Bash');
     expect(config.tools).not.toContain('Write');
     expect(config.tools).not.toContain('Edit');
     expect(config.mcpServers).toEqual(['vibe-teamlead']);

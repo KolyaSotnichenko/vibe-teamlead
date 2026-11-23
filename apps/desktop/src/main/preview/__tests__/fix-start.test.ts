@@ -38,7 +38,7 @@ describe('fixStart', () => {
     });
     expect(await fixStart(options({ runTask, tryRecipe }))).toEqual({ outcome: 'fixed', recipe: GOOD, summary: 'Команду web виправлено на npm run dev.' });
     expect(tryRecipe).toHaveBeenCalledWith(GOOD);
-    expect(runTask.mock.calls[0][0]).toMatchObject({ agentType: 'preview_fixer', tools: ['Read', 'Glob', 'Grep', 'Bash'], cwd: '/wt', model: 'sonnet', thinkingLevel: 'medium' });
+    expect(runTask.mock.calls[0][0]).toMatchObject({ agentType: 'preview_fixer', tools: ['Read', 'Glob', 'Grep'], cwd: '/wt', model: 'sonnet', thinkingLevel: 'medium' });
   });
 
   it("does not take the agent's word: fixed with nothing up is not fixed", async () => {
@@ -208,6 +208,11 @@ describe('fixStartPrompt', () => {
     expect(prompt).toContain('On the search path: node, npm.');
     expect(prompt).toMatch(/Ukrainian/);
     expect(fixStartPrompt(options({ language: 'en' }))).toMatch(/English/);
+  });
+
+  it('does not offer commands to run: the app gives the facts, and only the app starts anything', () => {
+    expect(prompt).not.toMatch(/may run commands/i);
+    expect(prompt).toMatch(/you have no shell/i);
   });
 
   it('keeps the rules: the tool is the only proof, five tries, no edits, no invented secrets', () => {
