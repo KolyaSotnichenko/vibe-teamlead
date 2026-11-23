@@ -536,7 +536,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
     } catch (error) {
       if (cancelled(session)) throw new Cancelled();
       const message = error instanceof Error ? error.message : String(error);
-      throw Object.assign(new Error(say('serviceNotStarted', `${service.name} did not start`, { service: service.name })), { logTail: tail(message) });
+      throw Object.assign(new Error(say('serviceNotStarted', `${service.name} did not start`, { service: service.name })), { logTail: tail(message), service: service.name });
     }
     // A stop while it was starting found nothing to stop yet
     if (cancelled(session)) {
@@ -579,13 +579,13 @@ async function waitUntilReady(session: Session, service: string, url: string, pa
     last = String(result.status ?? result.error ?? 'nothing');
     // Nothing answered and nothing listens any more: it is gone, and waiting won't bring it back
     if (result.status === undefined && (await session.deps.portFree(port))) {
-      throw Object.assign(new Error(say('stoppedBeforeReady', `${service} stopped before it was ready`, { service })), { logTail: logEnd(session, logPath) });
+      throw Object.assign(new Error(say('stoppedBeforeReady', `${service} stopped before it was ready`, { service })), { logTail: logEnd(session, logPath), service });
     }
     if (Date.now() >= deadline) break;
     await new Promise((resolveWait) => setTimeout(resolveWait, pollMs));
     check(session);
   }
-  throw Object.assign(new Error(say('notReady', `${service} did not get ready: ${path} answered ${last}`, { service, path, answer: last })), { logTail: logEnd(session, logPath) });
+  throw Object.assign(new Error(say('notReady', `${service} did not get ready: ${path} answered ${last}`, { service, path, answer: last })), { logTail: logEnd(session, logPath), service });
 }
 
 /**
@@ -662,8 +662,14 @@ async function teardown(session: Session): Promise<void> {
 
 function failed(session: Session, error: unknown): PreviewStatus {
   const message = error instanceof Error ? error.message : String(error);
-  const { logTail, stoppedService, needsServices } = error as { logTail?: string; stoppedService?: string; needsServices?: true };
-  emit(session, { stage: 'failed', message, logTail, stoppedService, ...(needsServices ? { needsServices } : {}), url: undefined, origins: [] });
+  const { logTail, stoppedService, needsServices, service } = error as { logTail?: string; stoppedService?: string; needsServices?: true; service?: string };
+  // Where it was when it failed: what the agent that fixes a start is told, and what tells one failure from another
+  const failedAt = session.status.stage === 'failed' ? session.status.failedAt : session.status.stage;
+  const failedService = stoppedService ?? service;
+  emit(session, {
+    stage: 'failed', message, logTail, stoppedService, failedAt, failedService,
+    ...(needsServices ? { needsServices } : {}), url: undefined, origins: [],
+  });
   if (current === session) current = null;
   return session.status;
 }

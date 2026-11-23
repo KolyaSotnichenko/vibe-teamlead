@@ -310,7 +310,7 @@ describe('a preview session', () => {
       await startPreview(project(), (s) => statuses.push(s), d);
       exits.get('preview-api')?.(1);
       await vi.waitFor(() => expect(statuses.at(-1)?.stage).toBe('failed'));
-      expect(statuses.at(-1)).toMatchObject({ stage: 'failed', stoppedService: 'api', url: undefined, origins: [] });
+      expect(statuses.at(-1)).toMatchObject({ stage: 'failed', stoppedService: 'api', failedAt: 'ready', failedService: 'api', url: undefined, origins: [] });
       expect(statuses.at(-1)?.logTail?.endsWith('end')).toBe(true);
       expect(statuses.at(-1)?.logTail?.length).toBeLessThanOrEqual(2000);
       expect(d.readLog).toHaveBeenCalledWith('/logs/preview-api.log');
@@ -441,6 +441,7 @@ describe('a preview session', () => {
     expect(status.message).toContain('web');
     // The sentence comes with its key and values, so the interface says it in its own language
     expect(status.said).toEqual([{ key: 'serviceNotStarted', params: { service: 'web' }, text: 'web did not start' }]);
+    expect(status).toMatchObject({ failedAt: 'services', failedService: 'web' });
     expect(status.logTail).toContain('Cannot find module next');
     expect(d.stopServer).toHaveBeenCalledWith('preview-api');
     expect(db.stop).toHaveBeenCalled();
@@ -685,7 +686,8 @@ describe('the recipe', () => {
   it('asks for services, and starts nothing, when no source gives a page', async () => {
     const { d } = deps({ listFiles: () => ['README.md'], read: () => null });
     const status = await startPreview(project('p1', []), () => {}, d);
-    expect(status).toMatchObject({ stage: 'failed', needsServices: true, message: 'Choose exactly one service whose page the preview shows.' });
+    expect(status).toMatchObject({ stage: 'failed', needsServices: true, message: 'Choose exactly one service whose page the preview shows.', failedAt: 'worktree' });
+    expect(status.failedService).toBeUndefined();
     expect(d.install).not.toHaveBeenCalled();
     expect(d.startServer).not.toHaveBeenCalled();
   });
@@ -712,7 +714,7 @@ describe('the recipe', () => {
     const services = [{ ...SERVICES[0] }, { ...SERVICES[1], ready: '/health' }];
     const { d } = deps({ probe: vi.fn(async () => ({ status: 503 })), readLog: () => 'boom\n', readyTimeouts: { timeoutMs: 20, pollMs: 1 } });
     const status = await startPreview(project('p1', services), () => {}, d);
-    expect(status).toMatchObject({ stage: 'failed', message: 'api did not get ready: /health answered 503', logTail: 'boom' });
+    expect(status).toMatchObject({ stage: 'failed', message: 'api did not get ready: /health answered 503', logTail: 'boom', failedAt: 'services', failedService: 'api' });
     expect(d.stopServer).toHaveBeenCalledWith('preview-api');
   });
 
@@ -889,6 +891,13 @@ describe('the recipe', () => {
     const status = await startPreview(p, () => {}, d);
     expect(status).toMatchObject({ stage: 'ready', recipe: { source: 'pending' } });
     expect(vi.mocked(d.startServer).mock.calls.map(([o]) => o.name)).toEqual(['preview-mine']);
+  });
+
+  it('says which stage a start failed at, for a failure that is no one service', async () => {
+    const { d } = deps({ runCommand: vi.fn(async (command: string) => ({ code: command.includes('prisma') ? 1 : 0, output: 'P1001' })) });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', failedAt: 'migrations' });
+    expect(status.failedService).toBeUndefined();
   });
 
   it('says a project of kind none has nothing to show', async () => {

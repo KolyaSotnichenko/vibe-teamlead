@@ -62,6 +62,10 @@ export interface PreviewStatus {
   logTail?: string;
   /** A service that exited on its own after the preview was ready */
   stoppedService?: string;
+  /** On a failed status: the stage the start was in when it failed (`ready`: a service stopped after the preview was up) */
+  failedAt?: PreviewStage;
+  /** On a failed status: the service that did not start, did not get ready, or stopped, when it was one service */
+  failedService?: string;
   database?: 'none' | 'started' | 'unavailable';
   databaseReason?: string;
   /** The compose file's other services, when it names any */
