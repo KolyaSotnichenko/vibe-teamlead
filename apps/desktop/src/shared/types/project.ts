@@ -74,6 +74,12 @@ export interface PreviewService {
   page?: boolean;
   /** Variables that get another service's URL, e.g. { NEXT_PUBLIC_API_URL: 'api' } */
   urlEnv?: Record<string, string>;
+  /** The port the project expects it on; without it the Preview works it out from the project's files */
+  port?: number;
+  /** A path that answers below 500 once the service is up, e.g. `/health`; without it, the port accepting a connection */
+  ready?: string;
+  /** Values this service gets on top of `.env.example` (a recipe's; never over the Preview's own or the owner's) */
+  env?: Record<string, string>;
 }
 
 export interface NotificationSettings {

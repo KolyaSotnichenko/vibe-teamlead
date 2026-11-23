@@ -5,6 +5,29 @@
 import type { IPCResult } from './common';
 import type { PreviewService } from './project';
 
+/** One command of a recipe's step, run in `dir` (relative to the project root; '' for the root) */
+export interface PreviewRecipeCommand {
+  dir: string;
+  command: string;
+}
+
+/** What a recipe's project is: only `web` is shown in the Preview for now */
+export type PreviewRecipeKind = 'web' | 'desktop' | 'mobile' | 'none';
+
+/**
+ * How the Preview runs a project, from `preview.json` at its root (preview/recipe.ts). What it
+ * doesn't say is detected; what it says replaces the detection for that item.
+ */
+export interface PreviewRecipe {
+  version: 1;
+  kind: PreviewRecipeKind;
+  services?: PreviewService[];
+  /** Each list replaces its stage; an empty list skips it */
+  steps?: { install?: PreviewRecipeCommand[]; build?: PreviewRecipeCommand[]; migrate?: PreviewRecipeCommand[]; seed?: PreviewRecipeCommand[] };
+  /** Values every service gets; a service's own `env` wins */
+  env?: Record<string, string>;
+}
+
 export type PreviewStage = 'worktree' | 'install' | 'libraries' | 'database' | 'migrations' | 'seed' | 'services' | 'ready' | 'failed' | 'stopped';
 
 export interface PreviewStatus {

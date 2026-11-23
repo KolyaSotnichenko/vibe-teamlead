@@ -10,13 +10,11 @@ import { isAbsolute, resolve } from 'node:path';
 import { z } from 'zod/v3';
 
 import { startDevServer, stopAllDevServers, stopDevServer } from '../../dev-servers/dev-servers';
+import { FORBIDDEN_ENV } from '../../dev-servers/forbidden-env';
 import { validateCommand } from '../../security/bash-validator';
 import { isPathContained } from '../../security/path-containment';
 import { Tool } from '../define';
 import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
-
-/** These change what the command runs or loads, which the command check could not see. */
-const FORBIDDEN_ENV = /^(PATH|NODE_OPTIONS|NODE_PATH|LD_.*|DYLD_.*|BASH_ENV|BASH_FUNC_.*|ENV|SHELL|HOME|NPM_CONFIG_.*|GIT_.*|PYTHON.*|RUBY.*|PERL.*|JAVA_.*)$/i;
 
 export const startDevServerTool = Tool.define({
   metadata: {
