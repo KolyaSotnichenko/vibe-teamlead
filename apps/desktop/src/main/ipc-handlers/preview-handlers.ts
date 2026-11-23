@@ -366,21 +366,13 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     return { success: true };
   });
 
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, (_e, projectId: string): IPCResult<PreviewService[]> => {
+  // What the files of the folder a preview runs from propose: the task's for a task's preview
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewService[]> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
     try {
-      const files = execFileSync(getToolPath('git'), ['ls-files', '-z'], { cwd: project.path, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 })
-        .split('\0')
-        .filter(Boolean);
-      const read = (file: string) => {
-        try {
-          return readFileSync(path.join(project.path, file), 'utf-8');
-        } catch {
-          return null;
-        }
-      };
-      return { success: true, data: proposePreviewServices({ files, read }) };
+      const dir = previewDir(project, taskId);
+      return { success: true, data: proposePreviewServices({ files: previewFiles(dir, []), read: safeRead(dir) }) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }

@@ -29,6 +29,7 @@ const api = {
   resetData: vi.fn(),
   recipe: vi.fn(),
   proposeServices: vi.fn(),
+  restartServices: vi.fn(async () => ({ success: true })),
 };
 
 beforeEach(() => {
@@ -46,6 +47,7 @@ describe('PreviewPage and the recipe', () => {
   it('starts the preview on open for a project with no saved services, without the form', () => {
     render(<PreviewPage project={projectWith([])} />);
     expect(session.hook).toHaveBeenLastCalledWith('p1', true, undefined);
+    expect(session.hook.mock.calls.every(([, enabled]) => enabled === true)).toBe(true);
     expect(screen.queryByText('preview.services.intro')).not.toBeInTheDocument();
     expect(api.proposeServices).not.toHaveBeenCalled();
   });
@@ -55,12 +57,12 @@ describe('PreviewPage and the recipe', () => {
     session.status = { projectId: 'p1', stage: 'failed', origins: [], needsServices: true, message: 'Choose exactly one service whose page the preview shows.' };
     render(<PreviewPage project={projectWith([])} />);
     expect(await screen.findByDisplayValue('a')).toBeInTheDocument();
-    // The preview is stopped while the owner chooses
-    expect(session.hook).toHaveBeenLastCalledWith('p1', false, undefined);
     expect(screen.queryByRole('button', { name: 'preview.services.cancel' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'preview.services.save' }));
     await waitFor(() => expect(store.updateProjectSettings).toHaveBeenCalledWith('p1', { previewServices: expect.arrayContaining([expect.objectContaining({ name: 'a', page: true })]) }));
-    await waitFor(() => expect(session.hook).toHaveBeenLastCalledWith('p1', true, undefined));
+    // Saved: the preview starts by the new services, and the form is gone
+    await waitFor(() => expect(api.restartServices).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(screen.queryByDisplayValue('a')).not.toBeInTheDocument());
   });
 
   it('fills the form from the saved services when they have no single page', async () => {
@@ -70,6 +72,24 @@ describe('PreviewPage and the recipe', () => {
     render(<PreviewPage project={projectWith(saved)} />);
     expect(await screen.findByDisplayValue('api')).toBeInTheDocument();
     expect(api.proposeServices).not.toHaveBeenCalled();
+  });
+
+  it('says why preview.json was not used on the form too, when the owner is asked for the services', async () => {
+    session.status = { projectId: 'p1', stage: 'failed', origins: [], needsServices: true, message: 'Choose exactly one service whose page the preview shows.', recipe: { source: 'none', kind: 'web', invalid: 'version must be 1.' } };
+    render(<PreviewPage project={projectWith([])} />);
+    expect(await screen.findByText('preview.recipeInvalid')).toBeInTheDocument();
+  });
+
+  it('keeps the preview running while the owner only looks at the services', async () => {
+    api.recipe.mockResolvedValue({ success: true, data: { source: 'settings', servicesFrom: 'settings', services: SAVED } });
+    session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'settings', kind: 'web' } };
+    render(<PreviewPage project={projectWith(SAVED)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.toolbar.services' }));
+    expect(await screen.findByDisplayValue('web')).toBeInTheDocument();
+    expect(session.hook).toHaveBeenLastCalledWith('p1', true, undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'preview.services.cancel' }));
+    expect(await screen.findByRole('button', { name: 'preview.toolbar.services' })).toBeInTheDocument();
+    expect(api.restartServices).not.toHaveBeenCalled();
   });
 
   it('says when preview.json was not used', async () => {

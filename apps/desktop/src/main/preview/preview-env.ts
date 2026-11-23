@@ -128,7 +128,8 @@ export function serviceEnvVars(base: PreviewEnvVar[], input: ServiceEnvInput): P
     else address(v.name, rewritten[v.name]);
   }
   for (const [name, other] of Object.entries(input.urlEnv ?? {})) if (input.urls[other]) address(name, input.urls[other]);
-  applyRecipe(vars, input.recipe);
+  // The service's own recipe values: a local address among them is pointed at the preview's port, as the shared ones are
+  applyRecipe(vars, input.recipe ? rewriteExampleUrls(input.recipe, input.byExamplePort) : undefined);
   for (const [name, value] of Object.entries(input.serviceOverrides ?? {})) {
     const before = vars.get(name);
     vars.set(name, { name, value, source: 'serviceOverride', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });

@@ -48,7 +48,8 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean } | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
   const [side, setSide] = useState<PreviewSide>(null);
-  const { status, boxRef } = usePreviewSession(project.id, !editing, task?.id);
+  // The preview keeps running under the form: looking at the services costs nothing, and saving restarts them
+  const { status, boxRef } = usePreviewSession(project.id, true, task?.id);
   const needsServices = status?.stage === 'failed' && status.needsServices === true;
   // The preview could not tell what to run: the form opens, once for that answer
   const asked = useRef<PreviewStatus | null>(null);
@@ -76,7 +77,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
         return;
       }
       // Nothing says what to run: what the project's files propose, for the owner to choose from
-      const proposed = await api.proposeServices(project.id);
+      const proposed = await (taskId ? api.proposeServices(project.id, taskId) : api.proposeServices(project.id));
       if (live) setForm({ services: proposed.success && proposed.data ? proposed.data : [], readOnly: false });
     })();
     return () => { live = false; };
@@ -92,10 +93,15 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
           <PreviewServicesForm
             initial={form.services}
             readOnly={form.readOnly}
+            notice={status?.recipe?.invalid ? t('preview.recipeInvalid', { reason: status.recipe.invalid }) : undefined}
             // Asked because nothing says what to run: there is nothing to go back to
             onCancel={needsServices ? undefined : () => setEditing(false)}
             onSave={async (services) => {
-              if (await updateProjectSettings(project.id, { previewServices: services })) setEditing(false);
+              if (!(await updateProjectSettings(project.id, { previewServices: services }))) return;
+              setEditing(false);
+              // By the saved services: a running preview restarts them, one that could not start starts
+              const api = window.electronAPI.preview;
+              void (taskId ? api.restartServices(project.id, taskId) : api.restartServices(project.id));
             }}
           />
         )}

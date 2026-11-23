@@ -59,7 +59,7 @@ export function findHardcodedAddresses(services: PreviewService[], project: Proj
         for (const match of line.matchAll(LOCAL_ADDRESS)) {
           const target = byPort.get(Number(match[1]));
           if (!target || target.name === from.name) continue;
-          issues.push({ service: target.name, from: from.name, file, line: index + 1, address: match[0], ownPort: target.ownPort, previewPort: target.previewPort });
+          issues.push({ service: target.name, from: from.name, fromDir: from.dir, file, line: index + 1, address: match[0], ownPort: target.ownPort, previewPort: target.previewPort });
         }
       });
     }

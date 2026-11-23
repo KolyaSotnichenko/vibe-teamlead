@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { PreviewService } from '../../../shared/types';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Notice } from '../task-detail/workspace/workspace-ui';
 
 const NAME = /^[\w-]{1,40}$/;
 
@@ -29,7 +30,9 @@ function parseUrlEnv(text: string): PreviewService['urlEnv'] {
   return pairs.length ? Object.fromEntries(pairs.map(([k, v]) => [k.trim(), v.trim()])) : undefined;
 }
 
-export function PreviewServicesForm({ initial, onSave, onCancel, readOnly = false }: {
+export function PreviewServicesForm({ initial, onSave, onCancel, readOnly = false, notice }: {
+  /** Shown above the list: why the form is here, or what state its services are in */
+  notice?: string;
   initial: PreviewService[];
   onSave: (services: PreviewService[]) => void;
   onCancel?: () => void;
@@ -57,6 +60,7 @@ export function PreviewServicesForm({ initial, onSave, onCancel, readOnly = fals
 
   return (
     <div className="space-y-4">
+      {notice && <Notice>{notice}</Notice>}
       <p className="max-w-prose text-sm text-muted-foreground">{t(readOnly ? 'preview.services.fromFile' : 'preview.services.intro')}</p>
       <div className="space-y-3">
         {services.map((service, index) => (

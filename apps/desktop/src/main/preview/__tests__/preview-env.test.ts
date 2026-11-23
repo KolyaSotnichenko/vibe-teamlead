@@ -129,6 +129,15 @@ describe("a recipe's values", () => {
     expect(vars.MODE).toMatchObject({ value: 'mine', source: 'override' });
   });
 
+  it("points a local address in a service's own recipe values at the preview's port, as it does for the shared ones", () => {
+    const byExamplePort = new Map([[3001, 'http://localhost:4101']]);
+    const base = baseEnvVars({ dir: 'apps/web', rootExample: null, dirExample: null, started: [], recipe: { SHARED_API: 'http://localhost:3001/v1' } });
+    const vars = byName(serviceEnvVars(base, { byExamplePort, urls: {}, portEnv: 'PORT', port: 4102, recipe: { OWN_API: 'http://localhost:3001/v1', ELSEWHERE: 'https://example.com' } }));
+    expect(vars.SHARED_API.value).toBe('http://localhost:4101/v1');
+    expect(vars.OWN_API).toMatchObject({ value: 'http://localhost:4101/v1', source: 'recipe' });
+    expect(vars.ELSEWHERE.value).toBe('https://example.com');
+  });
+
   it("a recipe value never replaces a part of the preview's database address, even where the example has the same value", () => {
     const vars = byName(baseEnvVars({ dir: '', rootExample: 'DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_NAME=app\n', dirExample: null, started: PG, recipe: { DB_HOST: 'db.internal', DB_PORT: '6543' } }));
     expect(vars.DB_HOST).toMatchObject({ value: '127.0.0.1', source: 'database' });

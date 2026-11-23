@@ -27,6 +27,11 @@ afterEach(() => {
 });
 
 describe('addressTask: the fix as a task, without a model call', () => {
+  it("names the example settings of the folder the issue came from, also for services the owner never saved", () => {
+    const { description } = addressTask({ ...FOUND, fromDir: 'frontend' }, []);
+    expect(description).toContain('`frontend/.env.example`');
+  });
+
   it('asks to read the address from a variable with the current value as default, and to add it to .env.example', () => {
     const { title, description } = addressTask(FOUND, SERVICES);
     expect(title).toBe('Read the api address in apps/web/vite.config.ts from API_URL');

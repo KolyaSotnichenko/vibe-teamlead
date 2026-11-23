@@ -27,7 +27,7 @@ export function addressTask(issue: PreviewAddressIssue, services: PreviewService
   if (issue.file) {
     const file = projectValue(issue.file);
     const address = projectValue(issue.address, 80);
-    const example = exampleOf(services.find((s) => s.name === issue.from)?.dir);
+    const example = exampleOf(issue.fromDir ?? services.find((s) => s.name === issue.from)?.dir);
     return {
       title: `Read the ${service} address in ${file} from ${variable}`,
       description: [

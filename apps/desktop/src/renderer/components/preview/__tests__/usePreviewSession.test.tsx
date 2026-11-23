@@ -73,6 +73,21 @@ describe('usePreviewSession', () => {
     box.remove();
   });
 
+  it('takes the view off the screen while its box is not on the page, e.g. while the services form is shown', async () => {
+    const { result } = renderHook(() => usePreviewSession('p1', true));
+    const box = document.createElement('div');
+    box.getBoundingClientRect = () => ({ left: 10, top: 50, width: 800, height: 600 }) as DOMRect;
+    document.body.appendChild(box);
+    (result.current.boxRef as { current: HTMLDivElement | null }).current = box;
+    window.dispatchEvent(new Event('resize'));
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 50, width: 800, height: 600 }));
+
+    (result.current.boxRef as { current: HTMLDivElement | null }).current = null;
+    box.remove();
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith(null));
+    expect(preview.stop).not.toHaveBeenCalled();
+  });
+
   it('stays on screen inside the dialog it belongs to, a task window, and steps aside for any other', async () => {
     const { result } = renderHook(() => usePreviewSession('p1', true, 't23'));
     expect(preview.start).toHaveBeenCalledWith('p1', 't23');

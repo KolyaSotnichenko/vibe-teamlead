@@ -75,6 +75,8 @@ export interface PreviewAddressIssue {
   service?: string;
   /** The service whose config names the address */
   from?: string;
+  /** That service's folder ('' for the root): where the fix's example setting goes */
+  fromDir?: string;
   file?: string;
   line?: number;
   /** As written, e.g. `http://localhost:3000` */
@@ -225,7 +227,8 @@ export interface PreviewAPI {
   onStatus: (callback: (status: PreviewStatus) => void) => () => void;
   setBounds: (bounds: PreviewBounds | null) => Promise<IPCResult>;
   navigate: (navigation: PreviewNavigation) => Promise<IPCResult>;
-  proposeServices: (projectId: string) => Promise<IPCResult<PreviewService[]>>;
+  /** `taskId`: from that task's folder */
+  proposeServices: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewService[]>>;
   /** What the preview runs for this project (or that task) and where that came from */
   recipe: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewRecipeInfo>>;
   resetData: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;

@@ -187,7 +187,7 @@ describe('a preview session', () => {
       expect(portOf(d, 'preview-web')).toBe(5173);
       expect(status.stage).toBe('ready');
       expect(status.addressIssues).toEqual([
-        { service: 'api', from: 'web', file: 'apps/web/vite.config.ts', line: 3, address: 'http://localhost:3000', ownPort: 3000, previewPort: 55819 },
+        { service: 'api', from: 'web', fromDir: 'apps/web', file: 'apps/web/vite.config.ts', line: 3, address: 'http://localhost:3000', ownPort: 3000, previewPort: 55819 },
       ]);
       expect(statuses.find((s) => s.stage === 'ready')?.addressIssues).toHaveLength(1);
     });

@@ -15,7 +15,7 @@ const VITE = 'import { defineConfig } from "vite";\n\nconst apiTarget = "http://
 describe('findHardcodedAddresses: a config that sends to a service where the preview does not run it', () => {
   it("finds the planner-mhp proxy target, with its file and line", () => {
     const issues = findHardcodedAddresses(services, project({ 'apps/web/vite.config.ts': VITE }), { api: { ownPort: 3000, previewPort: 55819 } });
-    expect(issues).toEqual([{ service: 'api', from: 'web', file: 'apps/web/vite.config.ts', line: 3, address: 'http://localhost:3000', ownPort: 3000, previewPort: 55819 }]);
+    expect(issues).toEqual([{ service: 'api', from: 'web', fromDir: 'apps/web', file: 'apps/web/vite.config.ts', line: 3, address: 'http://localhost:3000', ownPort: 3000, previewPort: 55819 }]);
   });
 
   it('finds nothing when every service runs on its own port', () => {
@@ -40,6 +40,8 @@ describe('findHardcodedAddresses: a config that sends to a service where the pre
       'apps/web/vite.config.ts.bak': "'http://localhost:8000'\n",
     };
     const issues = findHardcodedAddresses(services, project(files), { api: { ownPort: 8000, previewPort: 61001 } });
+    // Each says which folder's config it is, for the task that fixes it
+    expect(new Set(issues.map((i) => i.fromDir))).toEqual(new Set(['apps/web']));
     expect(issues.map((i) => `${i.file}:${i.line} ${i.address}`).sort()).toEqual([
       'apps/web/next.config.mjs:1 http://127.0.0.1:8000',
       'apps/web/package.json:4 http://localhost:8000',
@@ -54,7 +56,7 @@ describe('findHardcodedAddresses: a config that sends to a service where the pre
       { name: 'api', dir: 'server', command: 'npm run dev' },
     ];
     const issues = findHardcodedAddresses(root, project({ 'vite.config.js': "export default { server: { proxy: { '/api': 'localhost:4000' } } }\n" }), { api: { ownPort: 4000, previewPort: 61001 } });
-    expect(issues).toEqual([{ service: 'api', from: 'web', file: 'vite.config.js', line: 1, address: 'localhost:4000', ownPort: 4000, previewPort: 61001 }]);
+    expect(issues).toEqual([{ service: 'api', from: 'web', fromDir: '', file: 'vite.config.js', line: 1, address: 'localhost:4000', ownPort: 4000, previewPort: 61001 }]);
   });
 });
 

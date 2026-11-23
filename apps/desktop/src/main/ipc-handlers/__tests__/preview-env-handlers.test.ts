@@ -10,7 +10,7 @@ import { IPC_CHANNELS } from '../../../shared/constants';
 import type { PreviewEnvReport, Project } from '../../../shared/types';
 
 const NO_DOCKER = async () => ({ ok: false, stdout: '' });
-const dirs = vi.hoisted(() => ({ project: '' }));
+const dirs = vi.hoisted(() => ({ project: '', taskWorktree: null as string | null }));
 const session = vi.hoisted(() => ({
   startPreview: vi.fn(async () => ({ projectId: 'p1', stage: 'ready', origins: [] })),
   stopPreview: vi.fn(async () => {}),
@@ -26,10 +26,10 @@ const SETTINGS = { previewServices: [{ name: 'api', dir: 'api', command: 'x', pa
 vi.mock('../../project-store', () => ({
   projectStore: {
     getProject: vi.fn((id: string) => (id === 'p1' ? { id: 'p1', path: dirs.project, settings: SETTINGS } : undefined)),
-    getTasks: vi.fn(() => []),
+    getTasks: vi.fn(() => (dirs.taskWorktree ? [{ id: 't1', specId: '001-task' }] : [])),
   },
 }));
-vi.mock('../../worktree-paths', () => ({ findTaskWorktree: vi.fn(() => null) }));
+vi.mock('../../worktree-paths', () => ({ findTaskWorktree: vi.fn(() => dirs.taskWorktree) }));
 vi.mock('../../cli-tool-manager', () => ({ getToolPath: () => 'git' }));
 
 import { previewEnvReport, registerPreviewHandlers } from '../preview-handlers';
@@ -42,6 +42,7 @@ describe('preview IPC: Environment', () => {
     vi.clearAllMocks();
     (ipcMain as unknown as { removeAllListeners: () => void }).removeAllListeners();
     dirs.project = mkdtempSync(join(tmpdir(), 'vt-env-'));
+    dirs.taskWorktree = null;
     mkdirSync(join(dirs.project, 'api'));
     writeFileSync(join(dirs.project, 'api', '.env.example'), 'AUTH_TEST_IDP_ENABLED=true\nSTRIPE_KEY=\n');
     writeFileSync(join(dirs.project, 'api', '.env'), 'REAL_SECRET=leak\n');
@@ -78,6 +79,13 @@ describe('preview IPC: Environment', () => {
     const result = (await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')) as { data: { source: string; invalid?: string } };
     expect(result.data.source).toBe('settings');
     expect(result.data.invalid).toMatch(/ext leads out of the project/);
+  });
+
+  it("proposes services from the task's own folder for a task's preview, not from the project's", async () => {
+    dirs.taskWorktree = mkdtempSync(join(tmpdir(), 'vt-task-'));
+    writeFileSync(join(dirs.taskWorktree, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }));
+    expect(await invoke(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, 'p1', 't1')).toEqual({ success: true, data: [{ name: 'web', dir: '', command: 'npm run dev -- --port {port}', page: true }] });
+    expect(await invoke(IPC_CHANNELS.PREVIEW_PROPOSE_SERVICES, 'p1')).toEqual({ success: true, data: [] });
   });
 
   it('recipe: an unknown project is an error', async () => {

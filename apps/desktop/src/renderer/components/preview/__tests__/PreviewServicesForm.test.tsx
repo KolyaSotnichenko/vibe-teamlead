@@ -24,6 +24,11 @@ describe('the preview services form', () => {
     expect(onSave).toHaveBeenCalledWith(PROPOSED);
   });
 
+  it('shows a notice above the list when it is given one', () => {
+    render(<PreviewServicesForm initial={PROPOSED} notice="preview.json was not used" onSave={vi.fn()} />);
+    expect(screen.getByText('preview.json was not used')).toBeTruthy();
+  });
+
   it("shows a recipe's services without letting them be changed, and says where they come from", () => {
     const onCancel = vi.fn();
     render(<PreviewServicesForm initial={PROPOSED} readOnly onSave={vi.fn()} onCancel={onCancel} />);

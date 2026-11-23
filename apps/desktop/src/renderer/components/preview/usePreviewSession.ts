@@ -31,11 +31,11 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
     const measure = () => {
       frame = 0;
       const box = boxRef.current;
-      if (!box) return;
-      const rect = box.getBoundingClientRect();
+      // No box on the page (the services form is shown instead): the view steps aside, the preview goes on
+      const rect = box?.isConnected ? box.getBoundingClientRect() : null;
       // A dialog the page sits in (the task's window) doesn't count; any other would be covered
-      const covered = Array.from(document.querySelectorAll(DIALOG)).some((dialog) => !dialog.contains(box));
-      const bounds = !covered && rect.width > 0 && rect.height > 0
+      const covered = !box || Array.from(document.querySelectorAll(DIALOG)).some((dialog) => !dialog.contains(box));
+      const bounds = rect && !covered && rect.width > 0 && rect.height > 0
         ? { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
         : null;
       const key = JSON.stringify(bounds);
