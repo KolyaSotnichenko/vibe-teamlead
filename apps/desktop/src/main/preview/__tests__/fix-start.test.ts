@@ -125,6 +125,46 @@ describe('fixStart', () => {
   });
 });
 
+describe('what reaches the model', () => {
+  const OWNERS = 'hunter2-owner-value';
+  const LEAKY = [
+    `connecting to postgresql://verify:dbpassw0rd@127.0.0.1:55001/verify`,
+    `STRIPE_SECRET_KEY=sk_live_abcdefghijklmnop1234`,
+    `using token ghp_abcdefghijklmnopqrstuvwxyz0123456789`,
+    `owner value: ${OWNERS}`,
+    'Error: listen EADDRINUSE :::3000',
+  ].join('\n');
+  const leaked = (text: string) => ['dbpassw0rd', 'sk_live_abcdefghijklmnop1234', 'ghp_abcdefghijklmnopqrstuvwxyz0123456789', OWNERS].filter((secret) => text.includes(secret));
+
+  it("keeps secrets a log printed out of the request: the owner's values, a password in an address, keys and tokens", async () => {
+    const runTask = agent(async () => ({ outcome: 'unknown', summary: 'x' }));
+    await fixStart(options({ runTask, failure: { stage: 'services', service: 'api', message: `api did not start (${OWNERS})`, logTail: LEAKY }, secrets: [OWNERS] }));
+    const prompt = runTask.mock.calls[0][0].prompt as string;
+    expect(leaked(prompt)).toEqual([]);
+    // What helps find the cause stays
+    expect(prompt).toContain('EADDRINUSE :::3000');
+    expect(prompt).toContain('postgresql://verify:[redacted]@127.0.0.1:55001/verify');
+  });
+
+  it('keeps them out of what a try answers with, too', async () => {
+    const answers: string[] = [];
+    const tryRecipe = vi.fn(async () => ({ ...FAILED, message: `web did not start (${OWNERS})`, logTail: LEAKY, servicesNotices: [`note ${OWNERS}`] }));
+    const runTask = agent(async (tool) => {
+      answers.push(await tool(GOOD));
+      return { outcome: 'unknown', summary: 'x' };
+    });
+    await fixStart(options({ runTask, tryRecipe, secrets: [OWNERS] }));
+    expect(leaked(answers.join('\n'))).toEqual([]);
+    expect(answers[0]).toContain('EADDRINUSE :::3000');
+  });
+
+  it('keeps them out of the facts as well, should one ever carry a value', async () => {
+    const runTask = agent(async () => ({ outcome: 'unknown', summary: 'x' }));
+    await fixStart(options({ runTask, facts: [`RUNNING.md says: export API_TOKEN=${OWNERS}`], secrets: [OWNERS] }));
+    expect(leaked(runTask.mock.calls[0][0].prompt as string)).toEqual([]);
+  });
+});
+
 describe('fixStartPrompt', () => {
   const prompt = fixStartPrompt(options());
 

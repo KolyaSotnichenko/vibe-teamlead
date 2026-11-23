@@ -103,6 +103,23 @@ describe('preview IPC: the agent that fixes a failed start', () => {
     await vi.waitFor(() => expect(execFileSync('git', ['show', 'main:preview.json'], { cwd: state.project, encoding: 'utf-8' })).toContain('npm run dev'));
   });
 
+  it("never sends the model a value the owner set, should a log have printed it", async () => {
+    state.settings.previewEnv = { STRIPE_SECRET_KEY: 'owner-set-stripe-value' };
+    state.settings.previewServiceEnv = { web: { SESSION_KEY: 'owner-set-session-value' } };
+    session.startPreview.mockImplementation(async (_project: Project, onStatus: (s: PreviewStatus) => void) => {
+      const failed = { ...FAILED, logTail: 'boot: stripe=owner-set-stripe-value session=owner-set-session-value\nError: boom' };
+      onStatus(failed);
+      return failed;
+    });
+    task.runClaudeTask.mockImplementation(async () => ({ text: '', output: { outcome: 'unknown', summary: 'x' } }));
+    await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+    await vi.waitFor(() => expect(task.runClaudeTask).toHaveBeenCalled());
+    const prompt = task.runClaudeTask.mock.calls[0][0].prompt as string;
+    expect(prompt).not.toContain('owner-set-stripe-value');
+    expect(prompt).not.toContain('owner-set-session-value');
+    expect(prompt).toContain('Error: boom');
+  });
+
   it('shows what was found for the same failure the next time, without another session', async () => {
     task.runClaudeTask.mockImplementation(async () => ({ text: '', output: { outcome: 'needs_owner', summary: 'Бракує Docker.', missing: [{ what: 'Docker', why: 'для бази' }] } }));
     session.startPreview.mockImplementation(async (_project: Project, onStatus: (s: PreviewStatus) => void) => {

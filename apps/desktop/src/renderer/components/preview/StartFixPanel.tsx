@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { PreviewFix } from '../../../shared/types';
-import { createTask, startTaskOrQueue } from '../../stores/task-store';
+import { createTask } from '../../stores/task-store';
 import { Button } from '../ui/button';
 
 /** How many recipes the agent may have the app try in one session (main: preview/fix-start.ts) */
@@ -36,14 +36,10 @@ export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: st
   }
   if (fix.state === 'done' && fix.outcome === 'fixed') return null;
 
+  // The task is an agent's text, written from what it read in the project: the owner sees all of it first,
+  // and it goes to Planning, where nothing works from it until the owner starts it
   const makeTask = async (title: string, description: string) => {
-    const created = await createTask(projectId, title, description, { sourceType: 'manual' });
-    if (!created) {
-      setTask('failed');
-      return;
-    }
-    setTask('created');
-    await startTaskOrQueue(created.id);
+    setTask((await createTask(projectId, title, description)) ? 'created' : 'failed');
   };
 
   return (
@@ -72,6 +68,10 @@ export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: st
         <div className="space-y-2">
           <p className="font-semibold text-foreground">{t('preview.fix.codeTitle')}</p>
           <p className="text-muted-foreground">{fix.summary}</p>
+          <div className="border border-border p-3">
+            <p className="font-semibold text-foreground">{fix.task.title}</p>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-sans text-muted-foreground">{fix.task.description}</pre>
+          </div>
           {task === 'created' ? (
             <p className="text-foreground">{t('preview.fix.taskCreated')}</p>
           ) : (

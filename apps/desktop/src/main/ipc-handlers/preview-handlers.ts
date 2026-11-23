@@ -219,6 +219,13 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       if (!project) throw new Error('Project not found');
       const dir = mainCopy(project);
       const runningMd = readRunningMd(dir);
+      const env = await previewEnvReport(project, dir);
+      // What must not reach the model whatever printed it: the owner's own values, and every value the preview set itself
+      const secrets = [
+        ...Object.values(project.settings.previewEnv ?? {}),
+        ...Object.values(project.settings.previewServiceEnv ?? {}).flatMap((values) => Object.values(values)),
+        ...env.services.flatMap((service) => service.vars.filter((v) => v.source !== 'example' && v.source !== 'exampleDir' && v.source !== 'port' && v.source !== 'address').map((v) => v.value)),
+      ].filter((value) => value.length >= 6);
       return fixStart({
         failure: run.failure,
         recipe: run.recipe,
@@ -226,7 +233,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
         facts: fixFacts({
           dockerAnswers: (await hostDocker(process.env)(['info']).catch(() => ({ ok: false }))).ok,
           onPath: (name) => findOnPath(name, searchPath()) !== undefined,
-          env: await previewEnvReport(project, dir),
+          env,
           runningMd: runningMd.exists ? runningMd.markdown : null,
         }),
         worktree: dir,
@@ -236,6 +243,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
         tryRecipe: run.tryRecipe,
         signal: run.signal,
         onTry: run.onTry,
+        secrets,
       });
     },
     tryStart: (project) => startPreview(project, onStatus, startDeps()),

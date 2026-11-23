@@ -1109,7 +1109,7 @@
       "dismiss": "Dismiss",
       "codeTitle": "The project's code has to change before it can start here.",
       "createTask": "Create a task to fix it",
-      "taskCreated": "The task is made and in the queue.",
+      "taskCreated": "The task is in Planning. Start it when you have read it.",
       "taskFailed": "The task could not be made. Try again.",
       "missingTitle": "This project can't start here yet. Missing:",
       "environment": "Open Environment",

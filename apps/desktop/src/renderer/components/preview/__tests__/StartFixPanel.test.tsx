@@ -75,13 +75,16 @@ describe('StartFixPanel', () => {
     expect(screen.queryByRole('button', { name: 'preview.fix.environment' })).not.toBeInTheDocument();
   });
 
-  it("makes the agent's task and starts it, once", async () => {
+  it("shows the agent's task in full before it is made, makes it in Planning, and never starts it", async () => {
     show({ state: 'done', outcome: 'needs_code_change', summary: 'Адреса зашита в коді.', task: { title: 'Read the API address from API_URL', description: 'The proxy…\n\n- AC-1: …' } });
     expect(screen.getByText('Адреса зашита в коді.')).toBeInTheDocument();
+    // An agent wrote it from what it read in the project: the owner reads it before anything works from it
+    expect(screen.getByText('Read the API address from API_URL')).toBeInTheDocument();
+    expect(screen.getByText(/The proxy…/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'preview.fix.createTask' }));
-    await waitFor(() => expect(tasks.createTask).toHaveBeenCalledWith('p1', 'Read the API address from API_URL', 'The proxy…\n\n- AC-1: …', { sourceType: 'manual' }));
-    await waitFor(() => expect(tasks.startTaskOrQueue).toHaveBeenCalledWith('t9'));
+    await waitFor(() => expect(tasks.createTask).toHaveBeenCalledWith('p1', 'Read the API address from API_URL', 'The proxy…\n\n- AC-1: …'));
     expect(await screen.findByText('preview.fix.taskCreated')).toBeInTheDocument();
+    expect(tasks.startTaskOrQueue).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'preview.fix.createTask' })).not.toBeInTheDocument();
   });
 
