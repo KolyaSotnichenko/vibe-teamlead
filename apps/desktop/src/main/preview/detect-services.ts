@@ -5,10 +5,8 @@
  * confirms or edits the list once. Pure: no Electron imports, no file access.
  */
 
-import type { PreviewRecipe } from '../../shared/types/preview';
 import type { PreviewService } from '../../shared/types/project';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
-import { getPlatformKey } from '../platform';
 import { proposeStack } from './stacks';
 
 /** First word of a `dev` script that marks a frontend dev server */
@@ -83,71 +81,6 @@ export function proposePreview({ files, read }: ProjectFiles): PreviewProposal {
     services.push({ ...service, name, ...(page && !pageChosen ? { page: true } : {}) });
   }
   return { services, pageCandidates: frontends || stack.filter((proposal) => proposal.html).length };
-}
-
-/** A name from the repository that goes into a command: plain letters, digits, `_` and `-` (as preview/stacks.ts) */
-const SAFE_NAME = /^[A-Za-z0-9_-]+$/;
-/** Packages that start Electron from a Vite or Forge dev script: the app, not a page */
-const ELECTRON_RUNNERS = ['electron-vite', 'vite-plugin-electron', '@electron-forge/cli', 'electron-forge'];
-
-function dependenciesOf(text: string | null): Record<string, unknown> {
-  try {
-    const json = JSON.parse(text ?? '') as { dependencies?: unknown; devDependencies?: unknown };
-    return { ...(json.dependencies as object), ...(json.devDependencies as object) } as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-const app = (dir: string, command: string): PreviewRecipe => ({ version: 1, kind: 'desktop', services: [{ name: 'app', dir, command, page: true }] });
-
-/**
- * An app with a window of its own, from the project's files, or null: Electron (its `dev`, else
- * `start` script, in the package that has it; one whose script only starts a web dev server is a
- * web project, unless a package that launches Electron from it is there), Tauri (its config), Flutter
- * (a folder for this computer's system) and .NET (a WinExe or MAUI project). Pure.
- */
-export function proposeDesktop({ files, read }: ProjectFiles, platform: 'darwin' | 'win32' | 'linux' = getPlatformKey()): PreviewRecipe | null {
-  const manager = managerOf(files);
-  const dirOf = (file: string, name: string) => (file === name ? '' : file.slice(0, -(name.length + 1)));
-  const kept = files.filter((file) => !SKIPPED.test(file)).sort();
-
-  for (const file of kept.filter((f) => f === 'package.json' || f.endsWith('/package.json'))) {
-    const text = read(file);
-    const deps = dependenciesOf(text);
-    if (!('electron' in deps)) continue;
-    const scripts = scriptsOf(text);
-    const script = scripts.dev ? 'dev' : scripts.start ? 'start' : undefined;
-    if (!script) continue;
-    const launches = ELECTRON_RUNNERS.some((name) => name in deps);
-    if (isFrontend(scripts[script]) && !launches) continue;
-    return app(dirOf(file, 'package.json'), `${manager} run ${script}`);
-  }
-
-  const tauri = kept.find((f) => /(^|\/)src-tauri\/(tauri\.conf\.json5?|Tauri\.toml)$/.test(f));
-  if (tauri) {
-    const dir = tauri.split('/').slice(0, tauri.split('/').indexOf('src-tauri')).join('/');
-    const pkgFile = dir ? `${dir}/package.json` : 'package.json';
-    const viaScript = files.includes(pkgFile) && !!scriptsOf(read(pkgFile)).tauri;
-    return app(dir, viaScript ? `${manager} run tauri dev` : 'cargo tauri dev');
-  }
-
-  const system = platform === 'win32' ? 'windows' : platform === 'darwin' ? 'macos' : null;
-  for (const pubspec of kept.filter((f) => f === 'pubspec.yaml' || f.endsWith('/pubspec.yaml'))) {
-    const dir = dirOf(pubspec, 'pubspec.yaml');
-    const prefix = dir ? `${dir}/` : '';
-    if (system && kept.some((f) => f.startsWith(`${prefix}${system}/`))) return app(dir, `flutter run -d ${system}`);
-  }
-
-  for (const project of kept.filter((f) => f.endsWith('.csproj'))) {
-    const name = project.split('/').pop()!.slice(0, -'.csproj'.length);
-    if (!SAFE_NAME.test(name)) continue;
-    const text = read(project) ?? '';
-    if (/<OutputType>\s*WinExe\s*<\/OutputType>/i.test(text) || /<UseMaui>\s*true\s*<\/UseMaui>/i.test(text)) {
-      return app(project.includes('/') ? project.slice(0, project.lastIndexOf('/')) : '', `dotnet run --project ${name}.csproj`);
-    }
-  }
-  return null;
 }
 
 export interface WorkspaceLibrary {

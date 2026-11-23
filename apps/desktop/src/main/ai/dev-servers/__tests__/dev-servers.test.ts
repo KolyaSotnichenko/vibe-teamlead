@@ -12,7 +12,6 @@ import {
   containersOfWorktree,
   isDevServerCommand,
   startDevServer,
-  startAppProcess,
   stopAllDevServers,
   stopDevServer,
 } from '../dev-servers';
@@ -54,53 +53,6 @@ describe('dev servers', () => {
     await stopDevServer('web');
     await new Promise((r) => setTimeout(r, 300));
     expect(stopped).toEqual([]);
-  });
-
-  describe('a process with no port (an app with its own window)', () => {
-    // An app that starts a helper of its own, as Electron does, and keeps running
-    const APP = `const { spawn } = require('child_process'); spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); console.log('app up ' + (process.env.GREETING || '')); setInterval(() => {}, 1000);`;
-    const app = () => {
-      const p = project();
-      writeFileSync(path.join(p.cwd, 'app.js'), APP);
-      writeFileSync(path.join(p.cwd, 'crash.js'), `console.error('Cannot find module electron'); process.exit(1);`);
-      return p;
-    };
-
-    it.skipIf(posixOnly)('answers once it has run for the settle time, with its log, and is in the list a crashed run cleans up', async () => {
-      const p = app();
-      const started = await startAppProcess({ ...p, name: 'app', command: 'node app.js', env: { GREETING: 'there' }, settleMs: 300 });
-      expect(started.reused).toBe(false);
-      await vi.waitFor(() => expect(readFileSync(started.logPath, 'utf-8')).toContain('app up there'));
-      const listed = JSON.parse(readFileSync(path.join(p.specDir, 'dev-servers', 'servers.json'), 'utf-8')) as Array<{ name: string; pid: number }>;
-      expect(listed.map((entry) => entry.name)).toEqual(['app']);
-      expect(alive(listed[0].pid)).toBe(true);
-    });
-
-    it.skipIf(posixOnly)("throws with the log's end when it exits before it settled, and leaves nothing listed", async () => {
-      const p = app();
-      const exits: unknown[] = [];
-      await expect(startAppProcess({ ...p, name: 'app', command: 'node crash.js', settleMs: 2000, onExit: (code) => exits.push(code) })).rejects.toThrow(/app exited as it started[\s\S]*Cannot find module electron/);
-      expect(JSON.parse(readFileSync(path.join(p.specDir, 'dev-servers', 'servers.json'), 'utf-8'))).toEqual([]);
-      // A failed start, not an app the owner closed
-      expect(exits).toEqual([]);
-    });
-
-    it.skipIf(posixOnly)('is stopped with what it started, and says nothing then; it says when it ends on its own', async () => {
-      const p = app();
-      const exits: unknown[] = [];
-      await startAppProcess({ ...p, name: 'app', command: 'node app.js', settleMs: 200, onExit: (code) => exits.push(code) });
-      const pid = JSON.parse(readFileSync(path.join(p.specDir, 'dev-servers', 'servers.json'), 'utf-8'))[0].pid as number;
-      expect(await stopDevServer('app')).toBe(true);
-      expect(alive(pid)).toBe(false);
-      await new Promise((r) => setTimeout(r, 300));
-      expect(exits).toEqual([]);
-      // The whole group, the helper it started too
-      expect(() => process.kill(-pid, 0)).toThrow();
-
-      writeFileSync(path.join(p.cwd, 'closes.js'), `setTimeout(() => process.exit(0), 400);`);
-      await startAppProcess({ ...p, name: 'closes', command: 'node closes.js', settleMs: 100, onExit: (code) => exits.push(code) });
-      await vi.waitFor(() => expect(exits).toEqual([0]));
-    });
   });
 
   it('starts on a free port, waits until it answers and passes the env', async () => {

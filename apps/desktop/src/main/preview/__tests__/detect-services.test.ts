@@ -1,53 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { proposeDesktop, proposePreviewServices, workspaceLibraries } from '../detect-services';
+import { proposePreviewServices, workspaceLibraries } from '../detect-services';
 
 function project(files: Record<string, string>) {
   return { files: Object.keys(files), read: (path: string) => files[path] ?? null };
 }
 const pkg = (scripts: Record<string, string>) => JSON.stringify({ scripts });
-
-const electron = (scripts: Record<string, string>, deps: Record<string, string> = { electron: '^33.0.0' }) => JSON.stringify({ scripts, devDependencies: deps });
-
-describe('proposeDesktop', () => {
-  it('proposes an Electron app by its dev script, else its start script, in its own folder, with the lockfile\'s manager', () => {
-    expect(proposeDesktop(project({ 'package.json': electron({ dev: 'electron .' }), 'pnpm-lock.yaml': '' }))).toEqual({
-      version: 1, kind: 'desktop', services: [{ name: 'app', dir: '', command: 'pnpm run dev', page: true }],
-    });
-    expect(proposeDesktop(project({ 'apps/shell/package.json': electron({ start: 'electron-forge start' }) }))?.services).toEqual([{ name: 'app', dir: 'apps/shell', command: 'npm run start', page: true }]);
-  });
-
-  it('proposes Electron with a Vite renderer as a desktop app (electron-vite, vite-plugin-electron)', () => {
-    expect(proposeDesktop(project({ 'package.json': electron({ dev: 'electron-vite dev' }, { electron: '1', 'electron-vite': '2' }) }))?.kind).toBe('desktop');
-    expect(proposeDesktop(project({ 'package.json': electron({ dev: 'vite' }, { electron: '1', 'vite-plugin-electron': '0.28' }) }))?.services?.[0].command).toBe('npm run dev');
-  });
-
-  it('leaves a web project that only has Electron among its dependencies to the web proposal', () => {
-    expect(proposeDesktop(project({ 'package.json': electron({ dev: 'vite' }) }))).toBeNull();
-    expect(proposeDesktop(project({ 'package.json': electron({ build: 'electron-builder' }) }))).toBeNull();
-  });
-
-  it('proposes Tauri by its config: the tauri script of the folder above, else cargo', () => {
-    expect(proposeDesktop(project({ 'src-tauri/tauri.conf.json': '{}', 'package.json': pkg({ tauri: 'tauri', dev: 'vite' }), 'yarn.lock': '' }))?.services).toEqual([{ name: 'app', dir: '', command: 'yarn run tauri dev', page: true }]);
-    expect(proposeDesktop(project({ 'desktop/src-tauri/Tauri.toml': '' }))?.services).toEqual([{ name: 'app', dir: 'desktop', command: 'cargo tauri dev', page: true }]);
-  });
-
-  it('proposes Flutter only when the app has a folder for this computer', () => {
-    const files = { 'pubspec.yaml': 'name: notes\n', 'macos/Runner.xcodeproj/project.pbxproj': '' };
-    expect(proposeDesktop(project(files), 'darwin')?.services).toEqual([{ name: 'app', dir: '', command: 'flutter run -d macos', page: true }]);
-    expect(proposeDesktop(project(files), 'win32')).toBeNull();
-    expect(proposeDesktop(project({ 'pubspec.yaml': '', 'windows/runner/main.cpp': '' }), 'win32')?.services?.[0].command).toBe('flutter run -d windows');
-  });
-
-  it('proposes a .NET desktop project (WinExe or MAUI) by its project file, and never a name that is not plain', () => {
-    expect(proposeDesktop(project({ 'src/Notes/Notes.csproj': '<Project><PropertyGroup><OutputType>WinExe</OutputType></PropertyGroup></Project>' }))?.services).toEqual([
-      { name: 'app', dir: 'src/Notes', command: 'dotnet run --project Notes.csproj', page: true },
-    ]);
-    expect(proposeDesktop(project({ 'App.csproj': '<Project><PropertyGroup><UseMaui>true</UseMaui></PropertyGroup></Project>' }))?.services?.[0].command).toBe('dotnet run --project App.csproj');
-    expect(proposeDesktop(project({ 'Api.csproj': '<Project><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup></Project>' }))).toBeNull();
-    expect(proposeDesktop(project({ 'x;rm -rf ~.csproj': '<OutputType>WinExe</OutputType>' }))).toBeNull();
-  });
-});
 
 describe('proposePreviewServices', () => {
   it('proposes the Next app of a pnpm monorepo as the page and the Nest app as a backend', () => {

@@ -255,86 +255,6 @@ export function serverEnv(extra: Record<string, string>): Record<string, string>
   return { ...env, ...extra };
 }
 
-/** The folder of logs and the list, after a crashed run's leftovers are gone (they may hold the port wanted) */
-function prepareFolder(specDir: string): string {
-  const folder = join(specDir, 'dev-servers');
-  mkdirSync(folder, { recursive: true });
-  if (!cleaned.has(specDir)) {
-    cleaned.add(specDir);
-    cleanUpLeftovers(specDir);
-  }
-  return folder;
-}
-
-/** Starts a command in its own process group, logged and listed; the list lets a crashed run's leftovers be cleaned up. */
-function spawnServer(o: { name: string; signature: string; command: string; cwd: string; specDir: string; port: number; env: Record<string, string>; onExit?: StartOptions['onExit'] }): { child: ChildProcess; logPath: string } {
-  const folder = prepareFolder(o.specDir);
-  const logPath = join(folder, `${o.name}.log`);
-  const log = openSync(logPath, 'w');
-  const shell = shellCommand(o.command);
-  const child = spawn(shell.file, shell.args, {
-    cwd: o.cwd,
-    // its own process group: stopping it reaches whatever it started (killTree on Windows)
-    detached: getPlatformKey() !== 'win32',
-    windowsHide: true,
-    stdio: ['ignore', log, log],
-    env: serverEnv(o.env),
-  });
-  closeSync(log);
-  child.once('error', () => {});
-  child.unref();
-
-  const pid = child.pid;
-  if (!pid) throw new Error(`Could not start ${o.name}`);
-  const server: Server = { name: o.name, signature: o.signature, pid, startedAt: host.startedAt(pid), port: o.port, logPath, specDir: o.specDir, child };
-  running.set(o.name, server);
-  saveList(o.specDir);
-  child.once('exit', (code, signal) => {
-    if (running.get(o.name) === server) o.onExit?.(code, signal);
-  });
-  return { child, logPath };
-}
-
-export interface AppProcessOptions {
-  name: string;
-  /** Shell command, run in `cwd` */
-  command: string;
-  cwd: string;
-  /** Holds the log and the list of running processes */
-  specDir: string;
-  env?: Record<string, string>;
-  /** How long it must keep running to count as started (default 4000) */
-  settleMs?: number;
-  /** Called when its process ends on its own after it started (the owner closed the window); not when it is stopped here */
-  onExit?: StartOptions['onExit'];
-}
-
-/**
- * A process that opens no port: an app with a window of its own (Electron, Tauri,
- * Flutter, .NET). Same group, log, list and `onExit` as a dev server; it counts as
- * started once it has kept running for `settleMs`. `stopDevServer` stops it.
- */
-export async function startAppProcess(options: AppProcessOptions): Promise<{ logPath: string; reused: boolean }> {
-  const { name, command, cwd, specDir, env = {}, settleMs = 4000 } = options;
-  const signature = JSON.stringify({ app: true, command, cwd, env, specDir });
-  const existing = running.get(name);
-  if (existing) {
-    if (existing.signature === signature && existing.child?.exitCode === null && existing.child.signalCode === null) return { logPath: existing.logPath, reused: true };
-    await stopDevServer(name);
-  }
-  // Ending before it settled is a failed start, said by the throw below, not an exit after it started
-  let started = false;
-  const { child, logPath } = spawnServer({ name, signature, command, cwd, specDir, port: 0, env, onExit: (code, signal) => { if (started) options.onExit?.(code, signal); } });
-  const ended = new Promise<void>((resolveEnd) => child.once('exit', () => resolveEnd()));
-  const settled = await Promise.race([ended.then(() => false), sleep(settleMs).then(() => true)]);
-  if (!settled) {
-    await stopDevServer(name);
-    throw new Error(`${name} exited as it started. Log (${logPath}):\n${logTail(logPath)}`);
-  }
-  started = true;
-  return { logPath, reused: false };
-}
-
 export async function startDevServer(options: StartOptions): Promise<StartResult> {
   const { name, command, cwd, specDir, portEnv = 'PORT', env = {}, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const signature = JSON.stringify({ command, cwd, portEnv, env, specDir });
@@ -347,9 +267,37 @@ export async function startDevServer(options: StartOptions): Promise<StartResult
     await stopDevServer(name);
   }
 
-  prepareFolder(specDir);
+  const folder = join(specDir, 'dev-servers');
+  mkdirSync(folder, { recursive: true });
+  if (!cleaned.has(specDir)) {
+    cleaned.add(specDir);
+    cleanUpLeftovers(specDir);
+  }
+
   const port = options.port && (await portFree(options.port)) ? options.port : await anyFreePort();
-  const { child, logPath } = spawnServer({ name, signature, command: command.replaceAll('{port}', String(port)), cwd, specDir, port, env: { ...env, [portEnv]: String(port) }, onExit: options.onExit });
+  const logPath = join(folder, `${name}.log`);
+  const log = openSync(logPath, 'w');
+  const shell = shellCommand(command.replaceAll('{port}', String(port)));
+  const child = spawn(shell.file, shell.args, {
+    cwd,
+    // its own process group: stopping it reaches whatever it started (killTree on Windows)
+    detached: getPlatformKey() !== 'win32',
+    windowsHide: true,
+    stdio: ['ignore', log, log],
+    env: serverEnv({ ...env, [portEnv]: String(port) }),
+  });
+  closeSync(log);
+  child.once('error', () => {});
+  child.unref();
+
+  const pid = child.pid;
+  if (!pid) throw new Error(`Could not start ${name}`);
+  const server: Server = { name, signature, pid, startedAt: host.startedAt(pid), port, logPath, specDir, child };
+  running.set(name, server);
+  saveList(specDir);
+  child.once('exit', (code, signal) => {
+    if (running.get(name) === server) options.onExit?.(code, signal);
+  });
 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
