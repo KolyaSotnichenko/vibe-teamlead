@@ -39,6 +39,8 @@ export const PREVIEW_SAY = {
   notReady: ['service', 'path', 'answer'],
   stoppedBeforeReady: ['service'],
   heldBack: ['names'],
+  // A recipe made in the app (preview/settle-pending-recipe.ts)
+  editDropped: [],
   // Why a project's preview.json was not used (preview/recipe.ts)
   recipeTooLarge: [],
   recipeNotJson: [],

@@ -18,7 +18,12 @@ import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult, PreviewBounds, PreviewEnvReport, PreviewRecipeInfo, Project, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
-import { currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
+import { addPreviewNotice, currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
+import { commitRecipeToMain, mainRecipeText } from '../preview/recipe-commit';
+import { createPendingRecipeSettler } from '../preview/settle-pending-recipe';
+import { inMergeQueue, onMergeSettled } from '../ai/merge/merge-queue';
+import { getIsolatedGitEnv } from '../utils/git-isolation';
+import { say } from '../say';
 import { plannedEnv } from '../preview/preview-env';
 import { resolveRecipe } from '../preview/recipe';
 import { isPathContained } from '../ai/security/path-containment';
@@ -129,6 +134,32 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     const window = getMainWindow();
     if (window && !window.isDestroyed()) window.webContents.send(IPC_CHANNELS.PREVIEW_STATUS, status);
   };
+  // A recipe made in the app that is not in main yet: settled at each start of the project's preview and after each merge
+  const mainBranchOf = (project: Project) => project.settings.mainBranch ?? 'main';
+  const settler = createPendingRecipeSettler({
+    getProject: (id) => projectStore.getProject(id),
+    updateSettings: (id, settings) => {
+      projectStore.updateProjectSettings(id, settings);
+    },
+    mainText: (project) => mainRecipeText(project.path, mainBranchOf(project), { git: getToolPath('git'), env: getIsolatedGitEnv() }),
+    commit: (project, text) =>
+      inMergeQueue(project.path, 'preview-recipe', () => commitRecipeToMain({ projectDir: project.path, mainBranch: mainBranchOf(project), text, git: getToolPath('git'), env: getIsolatedGitEnv() })),
+  });
+  /** An owner's edit that lost to a newer recipe in main is said once, over that project's running preview */
+  const sayDropped = (projectId: string) => {
+    const running = currentPreview();
+    if (running?.projectId !== projectId || running.taskId || running.stage === 'stopped') return;
+    if (settler.takeDropped(projectId)) addPreviewNotice(projectId, say('editDropped', 'Your change to the services was not kept: the recipe changed in the project since.'));
+  };
+  /** Never in the way of a start: the commit may wait in the merge queue behind a task */
+  const settleSoon = (projectId: string) => {
+    void settler.settle(projectId).then(() => sayDropped(projectId), () => {});
+  };
+  onMergeSettled((dir) => {
+    const merged = projectStore.getProjects().find((project) => path.resolve(project.path) === path.resolve(dir));
+    if (merged?.settings.previewPendingRecipe) settleSoon(merged.id);
+  });
+
   // One UX review at a time, on the running preview; it ends when the preview stops
   let uxReview: AbortController | null = null;
   const onStatus = (status: PreviewStatus) => {
@@ -168,7 +199,9 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     watchReloads();
     view.setWorktree(task?.worktree ?? previewWorktreePath(previewWorktreesRoot(), projectId));
     try {
+      if (!task) settleSoon(projectId);
       const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() }, { resetData, task });
+      if (!task) sayDropped(projectId);
       return { success: true, data: status };
     } catch (error) {
       view.destroy();

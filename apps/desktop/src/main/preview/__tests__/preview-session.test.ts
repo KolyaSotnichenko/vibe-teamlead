@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, PreviewService } from '../../../shared/types/project';
 import { inMergeQueue } from '../../ai/merge/merge-queue';
 import { previewTaskKey, type PreviewDatabase } from '../preview-database';
-import { type PreviewDeps, type PreviewStatus, currentPreview, previewLogs, previewMailPort, releaseTaskPreview, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview-session';
+import { type PreviewDeps, type PreviewStatus, addPreviewNotice, currentPreview, previewLogs, previewMailPort, releaseTaskPreview, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview-session';
 
 const SERVICES: PreviewService[] = [
   { name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', page: true, urlEnv: { NEXT_PUBLIC_API_URL: 'api' } },
@@ -1051,6 +1051,29 @@ describe("the compose file's other services", () => {
     const { hostPortFree } = vi.mocked(d.startCompose).mock.calls[0][1];
     expect(await hostPortFree?.(5672)).toBe(true);
     expect(await hostPortFree?.(3001)).toBe(false);
+  });
+
+  it("adds a notice to the running preview of that project, next to the preview's own, and to no other", async () => {
+    const { d } = deps({
+      read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,
+      listFiles: () => Object.keys(COMPOSE_FILES),
+      startCompose: vi.fn(async () => composeRun()),
+    });
+    const statuses: PreviewStatus[] = [];
+    await startPreview(project(), (s) => statuses.push(s), d);
+    expect(addPreviewNotice('other', 'x')).toBe(false);
+    expect(addPreviewNotice('p1', 'x')).toBe(true);
+    expect(statuses.at(-1)?.servicesNotices).toEqual(['search (getmeili/meilisearch) did not get ready in time.', 'x']);
+    expect(addPreviewNotice('p1', 'x')).toBe(true);
+    expect(currentPreview()?.servicesNotices).toHaveLength(2);
+    await stopPreview();
+    expect(addPreviewNotice('p1', 'y')).toBe(false);
+  });
+
+  it("does not add a project's notice to a task's preview", async () => {
+    const { d } = deps();
+    await startPreview(project(), () => {}, d, { task: { taskId: 't1', worktree: '/projects/p1/.vibe-teamlead/worktrees/tasks/001' } });
+    expect(addPreviewNotice('p1', 'x')).toBe(false);
   });
 
   it('says Docker is missing for them too', async () => {

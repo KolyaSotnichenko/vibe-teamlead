@@ -758,7 +758,8 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
         check(session);
         const notStarted = compose.failed.length ? compose.failed.map((f) => f.reason) : compose.status === 'unavailable' && compose.reason ? [compose.reason] : [];
         // A service that could not have its compose port: an address the project hard-codes misses it
-        const notices = [...notStarted, ...compose.moved.map(composeMovedNotice)];
+        // After what was already said (a notice added from outside), not in its place
+        const notices = [...(session.status.servicesNotices ?? []), ...notStarted, ...compose.moved.map(composeMovedNotice)];
         emit(session, { message: undefined, ...(compose.status === 'none' ? {} : { services: compose.status }), ...(notices.length ? { servicesNotices: notices } : {}) });
       }
 
@@ -948,6 +949,18 @@ export function runningPreviewEnv(project: Project, taskId?: string): PreviewEnv
     dockerUnavailable: session.database?.status === 'unavailable' || session.mail?.status === 'unavailable' || (session.compose?.status === 'unavailable' && !session.compose.failed.length),
     services: servicesOf(session).map((service) => ({ service: service.name, dir: service.dir, vars: session.vars[service.name] ?? [] })),
   };
+}
+
+/**
+ * Says one more thing over the running preview of a project (not a task's): something that
+ * happened outside the session, such as an edit of the owner's that could not be kept.
+ * False when that preview isn't running, so the caller can say it later.
+ */
+export function addPreviewNotice(projectId: string, notice: string): boolean {
+  const session = current;
+  if (!session || session.project.id !== projectId || session.task || cancelled(session)) return false;
+  sayOnce(session, notice);
+  return true;
 }
 
 /** Where the running preview's services log, for the Logs panel */

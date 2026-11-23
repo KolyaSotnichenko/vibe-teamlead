@@ -1132,6 +1132,7 @@
       "notReady": "{{service}} did not get ready: {{path}} answered {{answer}}.",
       "stoppedBeforeReady": "{{service}} stopped before it was ready.",
       "heldBack": "Migrations and seed data run only against what the preview started: they did not get your or the recipe's {{names}}.",
+      "editDropped": "Your change to the services was not kept: the recipe changed in the project since.",
       "recipeTooLarge": "The file is larger than 64 KiB.",
       "recipeNotJson": "The file is not valid JSON.",
       "recipeShape": "{{at}} is not written the way a recipe needs it ({{problem}}).",
