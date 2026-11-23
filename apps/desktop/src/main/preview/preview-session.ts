@@ -23,7 +23,8 @@ import { type ComposeRun, composeMovedNotice, createRunNetwork, type RunNetwork,
 import { bucketsOf, type ComposeService, composeNameOf, composeServices } from '../ai/verification/compose-services';
 import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, isConnectionSetting } from '../ai/verification/detect-checks';
 import { isPathContained } from '../ai/security/path-containment';
-import { examplePort, previewAddressesByExamplePort } from './example-urls';
+import { examplePort } from './example-urls';
+import { startRecipeServices } from './start-services';
 import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
 import { type DisplacedPorts, findHardcodedAddresses, proxiedPaths } from './hardcoded-addresses';
 import { localPortFree } from './preview-ports';
@@ -83,8 +84,6 @@ const COMMAND_TIMEOUT_MS = 10 * 60_000;
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const TAIL_CHARS = 2000;
 const SERVER_START_TIMEOUT_MS = 180_000;
-const READY_TIMEOUT_MS = 60_000;
-const READY_POLL_MS = 500;
 
 /** A task's preview: its worktree as it is, on a copy of the project's preview data */
 export interface PreviewTask {
@@ -474,85 +473,28 @@ interface StartedServices {
   issues: PreviewAddressIssue[];
 }
 
-/**
- * Each service on the port the project expects it on (its example, its dev script, its
- * framework's default) when that port is free, so addresses the project hard-codes still
- * work; a free port of the preview's choosing otherwise.
- */
-async function choosePort(session: Session, expected: number | undefined, taken: number[]): Promise<number> {
-  if (expected && !taken.includes(expected) && (await session.deps.portFree(expected))) return expected;
-  let port = await session.deps.pickPort();
-  while (taken.includes(port)) port = await session.deps.pickPort();
-  return port;
-}
-
 async function startServices(session: Session, files: string[]): Promise<StartedServices> {
-  const services = servicesOf(session);
-  const ordered = [...services.filter((s) => !s.page), ...services.filter((s) => s.page)];
   const read = (path: string) => session.deps.read(session.worktree, path);
-  // Every port first: a backend may need the page's URL (CORS), and the page starts last
-  const ports: Record<string, number> = {};
-  const urls: Record<string, string> = {};
-  const expected: Record<string, number | undefined> = {};
-  for (const service of ordered) {
-    expected[service.name] = examplePort(service, read);
-    const port = await choosePort(session, expected[service.name], Object.values(ports));
-    ports[service.name] = port;
-    urls[service.name] = `http://localhost:${port}`;
-  }
-  // Local addresses in the examples point at each service's preview port; urlEnv still wins
-  const byExamplePort = previewAddressesByExamplePort(ordered, urls, read);
-  let pageUrl = '';
-  const displaced: DisplacedPorts = {};
   emit(session, { stage: 'services' });
-  for (const service of ordered) {
-    check(session);
-    const vars = serviceEnvVars(varsFor(session, service.dir, files), {
-      byExamplePort,
-      urlEnv: service.urlEnv,
-      urls,
-      recipe: service.env,
-      serviceOverrides: session.project.settings.previewServiceEnv?.[service.name],
-      portEnv: service.portEnv ?? 'PORT',
-      port: ports[service.name],
-    });
-    const env = envOf(vars);
-    const name = serverName(service);
-    session.servers.push(name);
-    let started;
-    let actualPort = ports[service.name];
-    try {
-      started = await session.deps.startServer({
-        name,
-        command: service.command,
-        cwd: resolve(session.worktree, service.dir),
-        specDir: previewSpecDir(session.worktree),
-        port: ports[service.name],
-        portEnv: service.portEnv ?? 'PORT',
-        env,
-        timeoutMs: SERVER_START_TIMEOUT_MS,
-        onExit: () => void serviceExited(session, service.name, name, actualPort),
-      });
-    } catch (error) {
-      if (cancelled(session)) throw new Cancelled();
-      const message = error instanceof Error ? error.message : String(error);
-      throw Object.assign(new Error(say('serviceNotStarted', `${service.name} did not start`, { service: service.name })), { logTail: tail(message), service: service.name });
-    }
-    // A stop while it was starting found nothing to stop yet
-    if (cancelled(session)) {
-      await session.deps.stopServer(name);
-      throw new Cancelled();
-    }
-    if (service.ready) await waitUntilReady(session, service.name, `${started.url}${service.ready}`, service.ready, started.logPath, started.port);
-    actualPort = started.port;
-    session.vars[service.name] = vars.map((v) => (v.source === 'port' ? { ...v, value: String(started.port) } : v));
-    urls[service.name] = started.url;
-    session.logs[service.name] = started.logPath;
-    if (service.page) pageUrl = started.url;
-    const own = expected[service.name];
-    if (own && started.port !== own) displaced[service.name] = { ownPort: own, previewPort: started.port };
-  }
-  return { url: pageUrl, issues: findHardcodedAddresses(ordered, { files, read }, displaced) };
+  const started = await startRecipeServices(
+    {
+      services: servicesOf(session),
+      root: session.worktree,
+      specDir: previewSpecDir(session.worktree),
+      serverName,
+      read,
+      baseVars: (dir) => varsFor(session, dir, files),
+      serviceOverrides: session.project.settings.previewServiceEnv,
+      timeoutMs: SERVER_START_TIMEOUT_MS,
+      check: () => check(session),
+      onServer: (name) => session.servers.push(name),
+      onExit: (service, name, port) => void serviceExited(session, service.name, name, port),
+    },
+    session.deps,
+  );
+  session.vars = { ...session.vars, ...started.vars };
+  session.logs = { ...session.logs, ...started.logs };
+  return { url: started.url, issues: findHardcodedAddresses(started.ordered, { files, read }, started.displaced) };
 }
 
 const LOG_LINES = 30;
@@ -561,31 +503,6 @@ const LOG_LINES = 30;
 function logEnd(session: Session, logPath: string | undefined): string {
   const log = (logPath ? session.deps.readLog(logPath) : null) ?? '';
   return tail(log.split('\n').slice(-LOG_LINES).join('\n').trim());
-}
-
-/**
- * A service whose recipe names a `ready` path: its port accepting a connection is not enough
- * (a framework may listen long before it can answer), so the path is asked until it answers
- * below 500. One that never does fails the start, with what the path last answered.
- */
-async function waitUntilReady(session: Session, service: string, url: string, path: string, logPath: string, port: number): Promise<void> {
-  const { timeoutMs, pollMs } = session.deps.readyTimeouts ?? { timeoutMs: READY_TIMEOUT_MS, pollMs: READY_POLL_MS };
-  const deadline = Date.now() + timeoutMs;
-  let last = 'nothing';
-  for (;;) {
-    const result = await session.deps.probe(url);
-    check(session);
-    if (result.status !== undefined && result.status < 500) return;
-    last = String(result.status ?? result.error ?? 'nothing');
-    // Nothing answered and nothing listens any more: it is gone, and waiting won't bring it back
-    if (result.status === undefined && (await session.deps.portFree(port))) {
-      throw Object.assign(new Error(say('stoppedBeforeReady', `${service} stopped before it was ready`, { service })), { logTail: logEnd(session, logPath), service });
-    }
-    if (Date.now() >= deadline) break;
-    await new Promise((resolveWait) => setTimeout(resolveWait, pollMs));
-    check(session);
-  }
-  throw Object.assign(new Error(say('notReady', `${service} did not get ready: ${path} answered ${last}`, { service, path, answer: last })), { logTail: logEnd(session, logPath), service });
 }
 
 /**
