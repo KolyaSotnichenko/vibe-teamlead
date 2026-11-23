@@ -9,17 +9,26 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PREVIEW_FIX_MAX_TRIES } from '../../../shared/constants/preview-fix';
 import type { PreviewFix } from '../../../shared/types';
 import { createTask } from '../../stores/task-store';
 import { Button } from '../ui/button';
 
-/** How many recipes the agent may have the app try in one session (main: preview/fix-start.ts) */
-const MAX_TRIES = 5;
+const MAX_TRIES = PREVIEW_FIX_MAX_TRIES;
 
 export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: string; fix: PreviewFix; onEnvironment: () => void }) {
   const { t } = useTranslation(['tasks']);
   const [task, setTask] = useState<'created' | 'failed' | null>(null);
+  /** Why the agent could not be asked, in the interface's language */
+  const [askFailed, setAskFailed] = useState<string | null>(null);
   const api = window.electronAPI.preview;
+  const ask = async () => {
+    setAskFailed(null);
+    const result = await api.fix(projectId);
+    if (result.success) return;
+    const said = result.errorSaid;
+    setAskFailed(said ? t(`preview.say.${said.key}`, { ...said.params, defaultValue: said.text }) : (result.error ?? ''));
+  };
 
   if (fix.state === 'running') {
     return (
@@ -94,7 +103,7 @@ export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: st
       )}
       <div className="flex flex-wrap gap-2">
         {fix.state === 'idle' && (
-          <Button size="sm" onClick={() => void api.fix(projectId)}>
+          <Button size="sm" onClick={() => void ask()}>
             {t('preview.fix.ask')}
           </Button>
         )}
@@ -102,11 +111,12 @@ export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: st
           {t('preview.fix.tryAgain')}
         </Button>
         {fix.state === 'done' && (
-          <Button size="sm" variant="outline" onClick={() => void api.fix(projectId)}>
+          <Button size="sm" variant="outline" onClick={() => void ask()}>
             {t('preview.fix.askAgain')}
           </Button>
         )}
       </div>
+      {askFailed && <p role="alert" className="text-destructive">{askFailed}</p>}
     </div>
   );
 }

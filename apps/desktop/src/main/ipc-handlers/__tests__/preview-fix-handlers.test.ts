@@ -13,7 +13,7 @@ const GOOD = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', comma
 const FAILED: PreviewStatus = { projectId: 'p1', stage: 'failed', origins: [], message: 'web did not start', failedAt: 'services', failedService: 'web', recipe: { source: 'proposal', kind: 'web' }, logTail: 'npm error Missing script' };
 const READY: PreviewStatus = { projectId: 'p1', stage: 'ready', url: 'http://localhost:5173', origins: ['http://localhost:5173'], recipe: { source: 'pending', kind: 'web' } };
 
-const state = vi.hoisted(() => ({ project: '', settings: {} as Record<string, unknown>, starts: [] as Array<{ pending: unknown }>, credential: true }));
+const state = vi.hoisted(() => ({ project: '', home: '', settings: {} as Record<string, unknown>, starts: [] as Array<{ pending: unknown }>, credential: true }));
 const session = vi.hoisted(() => ({
   startPreview: vi.fn(),
   stopPreview: vi.fn(async () => {}),
@@ -27,6 +27,8 @@ const session = vi.hoisted(() => ({
 const task = vi.hoisted(() => ({ runClaudeTask: vi.fn() }));
 
 vi.mock('../../preview/preview-session', () => session);
+// The preview's copies of main live under the home folder: a scratch one, never the real one
+vi.mock('node:os', async (original) => ({ ...(await original<Record<string, unknown>>()), homedir: () => state.home }));
 vi.mock('../../ai/claude-code/task', () => task);
 vi.mock('../../ai/claude-code/credential', () => ({ getClaudeCredentialStatus: () => ({ configured: state.credential }) }));
 vi.mock('../feature-settings-helper', () => ({ getFeatureSettings: () => ({ model: 'sonnet', thinkingLevel: 'medium' }) }));
@@ -67,6 +69,10 @@ describe('preview IPC: the agent that fixes a failed start', () => {
     git('config', 'user.name', 't');
     git('add', '-A');
     git('commit', '-q', '-m', 'first');
+    // The preview's copy of main, which the agent works in
+    state.home = mkdtempSync(join(tmpdir(), 'vtl-fixhome-'));
+    const copy = join(state.home, '.vibe-teamlead', 'worktrees', 'preview', 'p1');
+    execFileSync('git', ['clone', '-q', state.project, copy], { stdio: 'ignore' });
     // The ledger of a run before must not answer for this one
     rmSync(join(app.getPath('userData'), 'preview', 'p1-start-fix.json'), { force: true });
     // The first start fails; each start after it is a try of the agent's recipe and comes up
@@ -136,8 +142,20 @@ describe('preview IPC: the agent that fixes a failed start', () => {
     await vi.waitFor(() => expect(task.runClaudeTask).toHaveBeenCalledTimes(2));
   });
 
-  it('has nothing to ask the agent about when no start of that project failed', async () => {
-    expect(await invoke(IPC_CHANNELS.PREVIEW_FIX, 'p1')).toMatchObject({ success: false });
+  it('has nothing to ask the agent about when no start of that project failed, and says so in words the page can translate', async () => {
+    expect(await invoke(IPC_CHANNELS.PREVIEW_FIX, 'p1')).toMatchObject({ success: false, errorSaid: { key: 'fixNothingToFix' } });
+  });
+
+  it("never runs the agent in the project's own folder: only in the preview's copy of main", async () => {
+    // A start that failed before the copy was made: nothing to work in
+    rmSync(join(state.home, '.vibe-teamlead'), { recursive: true, force: true });
+    session.startPreview.mockImplementation(async (_project: Project, onStatus: (s: PreviewStatus) => void) => {
+      onStatus(FAILED);
+      return FAILED;
+    });
+    await invoke(IPC_CHANNELS.PREVIEW_START, 'p1');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    for (const call of task.runClaudeTask.mock.calls) expect(call[0].cwd).not.toBe(state.project);
   });
 
   it('stops the agent when the owner stops it, and when the owner leaves the preview', async () => {
@@ -153,7 +171,7 @@ describe('preview IPC: the agent that fixes a failed start', () => {
     await vi.waitFor(() => expect(sent.at(-1)?.fix?.state).toBe('running'));
     expect(await invoke(IPC_CHANNELS.PREVIEW_FIX_CANCEL)).toEqual({ success: true });
     expect(aborted).toBe(1);
-    await vi.waitFor(() => expect(sent.at(-1)?.fix).toEqual({ state: 'idle' }));
+    await vi.waitFor(() => expect(sent.at(-1)?.fix).toMatchObject({ state: 'done', outcome: 'unknown', summarySaid: { key: 'fixStoppedByOwner' } }));
 
     expect(await invoke(IPC_CHANNELS.PREVIEW_FIX, 'p1')).toEqual({ success: true });
     await vi.waitFor(() => expect(sent.at(-1)?.fix?.state).toBe('running'));

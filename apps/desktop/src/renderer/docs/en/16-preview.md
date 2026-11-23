@@ -89,16 +89,16 @@ The preview names the service that didn't start and shows the end of its log. Th
 
 ### An agent works out why
 
-When the project's preview (not a task's) does not start, one agent session works out why. It reads the project's files, the end of the log and what the app knows about this computer: whether Docker runs, which runtimes and tools are installed, and each service's settings by name and where they come from. It never sees a setting's value, and logs pass through the app's redaction before they are sent (your own values, keys and tokens, passwords inside addresses). It has no shell and changes no files.
+When the project's preview (not a task's) does not start, one agent session works out why. It reads the project's files, the end of the log and what the app knows about this computer: whether Docker runs, which runtimes and tools are installed, and each service's settings by name and where they come from. It never sees a setting's value: it reads no secret file (`.env` and the like) and nothing outside the copy of main, and the logs, the recipe and everything else pass through the app's redaction before they are sent (your own values of four characters or more, numbers of six digits or more, keys and tokens, passwords inside addresses). It has no shell and changes no files.
 
-It proposes recipes (see "The recipe: preview.json"), and the app starts the project by each one, exactly as it starts any preview: at most five tries. While it works, the preview says so with the try it is on, and **Stop** ends it. What it ends with:
+It proposes recipes (see "The recipe: preview.json"), and the app starts the project by each one, exactly as it starts any preview: at most five tries. While it works, the preview says so with the try it is on, and **Stop** ends it; it then does not start again by itself for that failure. What it ends with:
 
 - **It started.** A recipe that came up is kept, used from then on, and written into the project's main branch by the app, as a change in **Services** is. A notice over the page says what the agent changed.
 - **The code has to change.** For example an address the code fixes, or a compose service that is missing. The agent writes a task, shown in full; **Create a task to fix it** puts it in Planning, and nothing works from it until you start it.
 - **Something is missing here.** A runtime to install, Docker to start, a value only you have. Each is listed, with **Open Environment** when it is a setting.
 - **It could not work it out.** What it found is shown.
 
-It starts by itself once for each distinct failure (the commit, the recipe, the stage and the service that failed) and at most three times a day per project. The same failure again shows what was found, with **Try again** (a new start, no agent) and **Ask the agent again**. To have only a button, turn off **Fix a failed preview start with an agent** in Settings → Project → Queue. It needs a Claude key (Settings → Claude); its model is under Settings → Feature models → Preview start-up.
+It starts by itself once for each distinct failure (the commit, the recipe, the stage and the service that failed) and at most three times a day per project; a session cut short because you left the preview counts too. A recipe by which the project came up and then stopped again is not kept. The same failure again shows what was found, with **Try again** (a new start, no agent) and **Ask the agent again**. To have only a button, turn off **Fix a failed preview start with an agent** in Settings → Project → Queue. It needs a Claude key (Settings → Claude); its model is under Settings → Feature models → Preview start-up.
 
 ## Ports, and a page that can't reach its API
 

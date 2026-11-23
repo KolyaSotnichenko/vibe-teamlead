@@ -14,10 +14,16 @@ import type { PreviewRecipe, PreviewRecipeSource, PreviewStage, PreviewStatus } 
 import { dataBlock } from '../ai/orchestration/message-data';
 import { redactSecrets } from '../telegram/redact';
 import { previewSpecDir } from './preview-worktree';
-import { parseRecipe, RECIPE_FILE, recipeFileText } from './recipe';
+import { parseRecipe, RECIPE_FILE, recipeDirs, recipeFileText } from './recipe';
+import { PREVIEW_FIX_MAX_TRIES } from '../../shared/constants/preview-fix';
+import { say } from '../say';
 import type { RunTask } from './ux-review';
 
-export const MAX_TRIES = 5;
+export const MAX_TRIES = PREVIEW_FIX_MAX_TRIES;
+/** A known value shorter than this is not looked for: it would match half the log */
+const SHORTEST_SECRET = 4;
+/** A number shorter than this is not looked for either: ports, counts and times are numbers */
+const SHORTEST_NUMBER_SECRET = 6;
 
 /** A password written into an address: `scheme://user:password@host`, also with no user and with any character but a space or `@` in it */
 const ADDRESS_PASSWORD = /([a-z][a-z0-9+.-]*:\/\/[^\s:@/]*):([^\s@]+)@/gi;
@@ -29,8 +35,12 @@ const ADDRESS_PASSWORD = /([a-z][a-z0-9+.-]*:\/\/[^\s:@/]*):([^\s@]+)@/gi;
  */
 export function redactForModel(text: string, secrets: readonly string[] = []): string {
   // The longest first: a value that contains another goes whole, not with its tail left behind
-  const known = [...new Set(secrets)].sort((a, b) => b.length - a.length);
-  return redactSecrets(text, known).replace(ADDRESS_PASSWORD, '$1:[redacted]@');
+  const known = [...new Set(secrets)]
+    .filter((value) => value.length >= (/^\d+$/.test(value) ? SHORTEST_NUMBER_SECRET : SHORTEST_SECRET))
+    .sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const value of known) out = out.split(value).join('[redacted]');
+  return redactSecrets(out).replace(ADDRESS_PASSWORD, '$1:[redacted]@');
 }
 export const TRY_TOOL = 'mcp__vibe-teamlead__try_preview_recipe';
 const MAX_TURNS = 80;
@@ -74,6 +84,8 @@ export interface FixStartOptions {
   onTry?: (n: number) => void;
   /** Values that must not reach the model whatever printed them: the owner's own, the preview's database and services */
   secrets?: readonly string[];
+  /** Whether a folder of the worktree, followed through any links, is inside it: a recipe whose folder is not is not tried */
+  contained?: (dir: string) => boolean;
 }
 
 const Output = z.object({
@@ -102,7 +114,7 @@ export function fixStartPrompt(options: Pick<FixStartOptions, 'failure' | 'recip
     '',
     `The app ran the project by this recipe (${source === 'file' ? `the project's ${RECIPE_FILE}` : source === 'pending' ? `a recipe made in the app, not in main yet` : source === 'settings' ? 'services the owner saved, the rest detected' : 'what it detected from the files'}):`,
     '',
-    dataBlock({ tagPrefix: 'recipe', source: RECIPE_FILE, notice, body: recipeFileText(recipe), max: 8000 }),
+    dataBlock({ tagPrefix: 'recipe', source: RECIPE_FILE, notice, body: clean(recipeFileText(recipe)), max: 8000 }),
     '',
     'What the app already knows:',
     '',
@@ -147,6 +159,8 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
   const tryPreviewRecipe = async (input: unknown): Promise<string> => {
     const parsed = parseRecipe(typeof input === 'string' ? input : JSON.stringify(input ?? null));
     if (!parsed.ok) return `Not tried: ${parsed.reason}`;
+    const outside = recipeDirs(parsed.recipe).find((dir) => dir !== '' && options.contained?.(dir) === false);
+    if (outside !== undefined) return `Not tried: the folder ${outside} leads out of the project (a link).`;
     if (tries >= MAX_TRIES) return 'No tries left. Give your result now.';
     tries += 1;
     options.onTry?.(tries);
@@ -154,6 +168,10 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
     const status = await options.tryRecipe(parsed.recipe);
     // What a try answers with goes to the model too
     const clean = (text: string) => redactForModel(text, options.secrets);
+    // Up by another recipe than this one: the app passed it over (a folder it can't use, a stale base)
+    if (status.stage === 'ready' && status.recipe?.source !== 'pending') {
+      return 'Not used: the app started the project by another recipe than this one, so this one proves nothing. Give a recipe the app can use.';
+    }
     if (status.stage === 'ready') {
       up = parsed.recipe;
       const notices = [...(status.servicesNotices ?? []), status.databaseReason, status.mailReason].filter((notice): notice is string => !!notice);
@@ -164,7 +182,22 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
     return [clean(`Did not start. Failed at ${where}: ${status.message ?? 'no message'}`), clean(status.logTail ?? '').slice(-LOG_CHARS)].filter(Boolean).join('\n');
   };
 
+  /** One try at a time: two starts at once would race for the one preview, and which came up would be a guess */
+  let queue: Promise<unknown> = Promise.resolve();
+  const oneAtATime = (input: unknown): Promise<string> => {
+    const next = queue.then(() => tryPreviewRecipe(input));
+    queue = next.catch(() => undefined);
+    return next;
+  };
+
   const fixed = (summary: string): FixOutcome | null => (up ? { outcome: 'fixed', recipe: up, summary } : null);
+  /** What is kept and shown carries no secret either: the agent may have written one it read */
+  const cleanOutcome = (outcome: FixOutcome): FixOutcome => {
+    const clean = (text: string) => redactForModel(text, options.secrets);
+    if (outcome.outcome === 'needs_code_change') return { ...outcome, summary: clean(outcome.summary), task: { title: clean(outcome.task.title), description: clean(outcome.task.description) } };
+    if (outcome.outcome === 'needs_owner') return { ...outcome, summary: clean(outcome.summary), missing: outcome.missing.map((item) => ({ ...item, what: clean(item.what), why: clean(item.why) })) };
+    return { ...outcome, summary: clean(outcome.summary) };
+  };
 
   let output: unknown;
   try {
@@ -184,21 +217,23 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
       maxTurns: MAX_TURNS,
       abortSignal: options.signal,
       onEvent: options.onEvent,
-      tryPreviewRecipe,
+      tryPreviewRecipe: oneAtATime,
     });
     output = result.output;
   } catch (error) {
     if (options.signal?.aborted) throw error;
     const reason = error instanceof Error ? error.message : String(error);
-    // A recipe that is up stays up: the session failing afterwards does not undo what the app saw start
-    return fixed(reason) ?? { outcome: 'unknown', summary: reason, sessionFailed: true };
+    // A recipe that is up stays up: the session failing afterwards does not undo what the app saw start.
+    // Its words are the app's then: the error is not what the agent changed.
+    const noSummary = say('fixNoSummary', "The app started the project by the agent's last recipe; the agent's session ended before it said what it changed.");
+    return fixed(noSummary) ?? cleanOutcome({ outcome: 'unknown', summary: reason, sessionFailed: true });
   }
 
   const parsed = Output.safeParse(output);
   const summary = parsed.success ? parsed.data.summary : '';
   const started = fixed(summary);
-  if (started) return started;
-  if (parsed.success && parsed.data.outcome === 'needs_code_change' && parsed.data.task) return { outcome: 'needs_code_change', summary, task: parsed.data.task };
-  if (parsed.success && parsed.data.outcome === 'needs_owner' && parsed.data.missing?.length) return { outcome: 'needs_owner', summary, missing: parsed.data.missing };
-  return { outcome: 'unknown', summary };
+  if (started) return cleanOutcome(started);
+  if (parsed.success && parsed.data.outcome === 'needs_code_change' && parsed.data.task) return cleanOutcome({ outcome: 'needs_code_change', summary, task: parsed.data.task });
+  if (parsed.success && parsed.data.outcome === 'needs_owner' && parsed.data.missing?.length) return cleanOutcome({ outcome: 'needs_owner', summary, missing: parsed.data.missing });
+  return cleanOutcome({ outcome: 'unknown', summary });
 }

@@ -96,3 +96,22 @@ describe('the readiness scan never reads secret files', () => {
     expect(grep({}, coder)).toBe(false);
   });
 });
+
+describe('the agent that fixes a preview start never reads secret files either', () => {
+  const fixer = { ...scan, agentType: 'preview_fixer' } as unknown as ToolContext;
+
+  it('is denied a secret file, by name or through a link, and anything outside its folder', () => {
+    expect(read('.env', fixer)).toBe(true);
+    expect(read(join(root, 'innocent.txt'), fixer)).toBe(true);
+    expect(read('/etc/hosts', fixer)).toBe(true);
+    expect(read(join(root, '..', 'elsewhere', '.env'), fixer)).toBe(true);
+    expect(read('.env.example', fixer)).toBe(false);
+    expect(read('src/app.ts', fixer)).toBe(false);
+  });
+
+  it('greps one file at a time, and never a secret one', () => {
+    expect(grep({ path: '.' }, fixer)).toBe(true);
+    expect(grep({ path: '.env' }, fixer)).toBe(true);
+    expect(grep({ path: 'src/app.ts' }, fixer)).toBe(false);
+  });
+});

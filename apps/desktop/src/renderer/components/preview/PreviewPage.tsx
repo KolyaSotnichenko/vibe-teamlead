@@ -164,11 +164,17 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{say(status.databaseReason)}</Notice></div>
       )}
+      {ready && status.fix?.state === 'running' && (
+        // One of the agent's tries is up: it is still at work, and may take this page down for its next try
+        <div className="px-4 pt-2">
+          <StartFixPanel projectId={project.id} fix={status.fix} onEnvironment={() => setSide('env')} />
+        </div>
+      )}
       {ready && status.fix?.state === 'done' && status.fix.outcome === 'fixed' && dismissedFix !== status.fix.summary && (
         <div className="px-4 pt-2">
           <Notice>
             <span className="flex items-start justify-between gap-4">
-              <span>{t('preview.fix.fixed', { summary: status.fix.summary })}</span>
+              <span>{t('preview.fix.fixed', { summary: said(status.fix.summarySaid) ?? status.fix.summary })}</span>
               <button type="button" className="shrink-0 underline" onClick={() => setDismissedFix(status.fix?.state === 'done' ? status.fix.summary : null)}>
                 {t('preview.fix.dismiss')}
               </button>

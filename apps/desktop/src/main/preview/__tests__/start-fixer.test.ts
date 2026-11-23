@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { PreviewRecipe, PreviewStatus } from '../../../shared/types/preview';
 import type { Project, ProjectSettings } from '../../../shared/types/project';
-import { saidFor } from '../../say';
+import { saidFor, say } from '../../say';
 import { openFixLedger } from '../fix-ledger';
 import type { FixOutcome } from '../fix-start';
-import { createStartFixer, type FixRun, type StartFixerDeps } from '../start-fixer';
+import { createStartFixer, type FailedStart, type FixRun, type StartFixerDeps } from '../start-fixer';
 
 const USED: PreviewRecipe = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', command: 'npm run wrong', page: true }] };
 const GOOD: PreviewRecipe = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', command: 'npm run dev', page: true }] };
@@ -171,7 +171,7 @@ describe('the fixer of a failed start', () => {
     expect(openFixLedger(dataDir, 'p1').get('k1')).toBeDefined();
   });
 
-  it('stops when the owner stops it: the session and the start are aborted, and nothing is kept', async () => {
+  it('stops when the owner stops it: the session and the start are aborted, and the stop is what is kept', async () => {
     let signal: AbortSignal | undefined;
     const { deps, fixer, sent, emit, dataDir } = setup({
       fix: vi.fn((run: FixRun) => new Promise<FixOutcome>((_resolve, reject) => {
@@ -184,10 +184,11 @@ describe('the fixer of a failed start', () => {
     await fixer.cancel();
     expect(signal?.aborted).toBe(true);
     expect(deps.stop).toHaveBeenCalledWith('p1');
-    await vi.waitFor(() => expect(sent.at(-1)?.fix).toEqual({ state: 'idle' }));
+    await vi.waitFor(() => expect(sent.at(-1)?.fix).toMatchObject({ state: 'done', outcome: 'unknown', summarySaid: { key: 'fixStoppedByOwner' } }));
     expect(sent.at(-1)).toMatchObject({ stage: 'failed', message: 'web did not start' });
     expect(fixer.running()).toBe(false);
-    expect(openFixLedger(dataDir, 'p1').get('k1')).toBeUndefined();
+    // So it does not start again by itself for this failure
+    expect(openFixLedger(dataDir, 'p1').get('k1')?.outcome).toMatchObject({ outcome: 'unknown' });
   });
 
   it('stops without a word when the preview itself is stopped, as when the owner leaves it', async () => {
@@ -219,6 +220,112 @@ describe('the fixer of a failed start', () => {
     expect(deps.fix).toHaveBeenCalledTimes(1);
     emit({ projectId: 'p1', stage: 'worktree', origins: [] });
     expect(sent.at(-1)?.fix).toBeUndefined();
+  });
+
+  it('does not keep a recipe whose preview came up and then stopped before the agent ended', async () => {
+    const { project, deps, sent, emit } = setup({
+      fix: vi.fn(async (run: FixRun) => {
+        await run.tryRecipe(GOOD);
+        // A service stops a few seconds after it was up, while the agent writes its summary
+        emit({ ...FAILED, failedAt: 'ready', message: 'api stopped', stoppedService: 'api' });
+        return { outcome: 'fixed' as const, recipe: GOOD, summary: 'Команду виправлено.' };
+      }),
+    });
+    emit(FAILED);
+    await vi.waitFor(() => expect(sent.at(-1)?.fix?.state).toBe('done'));
+    const fix = sent.at(-1)?.fix as { outcome: string; summarySaid?: { key: string } };
+    expect(fix.outcome).toBe('unknown');
+    expect(fix.summarySaid?.key).toBe('fixDidNotHold');
+    expect(sent.at(-1)).toMatchObject({ stage: 'failed', message: 'api stopped' });
+    expect(project.settings.previewPendingRecipe).toBeUndefined();
+    expect(deps.settle).not.toHaveBeenCalled();
+  });
+
+  it("says in the app's words what changed when the agent's own words are the app's", async () => {
+    const summary = say('fixNoSummary', "The app started the project by the agent's last recipe; the agent's session ended before it said what it changed.");
+    const { sent, emit } = setup({ fix: vi.fn(async (run: FixRun) => { await run.tryRecipe(GOOD); return { outcome: 'fixed' as const, recipe: GOOD, summary }; }) });
+    emit(FAILED);
+    await vi.waitFor(() => expect(sent.at(-1)?.fix?.state).toBe('done'));
+    expect(sent.at(-1)?.fix).toMatchObject({ outcome: 'fixed', summarySaid: { key: 'fixNoSummary' } });
+  });
+
+  it('counts a run stopped half-way toward the day, so leaving and coming back does not start one each time', async () => {
+    const { deps, fixer, sent, emit } = setup({
+      fix: vi.fn((run: FixRun) => new Promise<FixOutcome>((_resolve, reject) => { run.signal.addEventListener('abort', () => reject(new Error('aborted'))); })),
+    });
+    for (let i = 0; i < 4; i++) {
+      vi.mocked(deps.describe).mockResolvedValue({ key: `k${i}`, recipe: USED, source: 'file', base: 'none' });
+      emit({ ...FAILED });
+      if (i < 3) {
+        await vi.waitFor(() => expect(fixer.running()).toBe(true));
+        await fixer.previewStopped();
+      } else {
+        await vi.waitFor(() => expect(sent.at(-1)?.fix).toEqual({ state: 'idle' }));
+      }
+    }
+    expect(deps.fix).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not start by itself again for a failure the owner stopped it on', async () => {
+    const { deps, fixer, sent, emit } = setup({
+      fix: vi.fn((run: FixRun) => new Promise<FixOutcome>((_resolve, reject) => { run.signal.addEventListener('abort', () => reject(new Error('aborted'))); })),
+    });
+    emit(FAILED);
+    await vi.waitFor(() => expect(fixer.running()).toBe(true));
+    await fixer.cancel();
+    emit({ ...FAILED });
+    await vi.waitFor(() => expect(sent.at(-1)?.fix).toMatchObject({ state: 'done', outcome: 'unknown', summarySaid: { key: 'fixStoppedByOwner' } }));
+    expect(deps.fix).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for a try that is starting when it is stopped, then stops that preview, and starts no other', async () => {
+    let finishStart: (status: PreviewStatus) => void = () => {};
+    const order: string[] = [];
+    const { deps, fixer, emit } = setup({
+      tryStart: vi.fn(() => new Promise<PreviewStatus>((resolve) => { finishStart = (status) => { order.push('try ended'); resolve(status); }; })),
+      stop: vi.fn(async () => { order.push('stopped'); }),
+      fix: vi.fn(async (run: FixRun) => {
+        await run.tryRecipe(GOOD).catch(() => undefined);
+        // Asked again after the stop: refused, nothing starts
+        await run.tryRecipe(GOOD).catch(() => undefined);
+        return { outcome: 'unknown' as const, summary: 'x' };
+      }),
+    });
+    emit(FAILED);
+    await vi.waitFor(() => expect(deps.tryStart).toHaveBeenCalledTimes(1));
+    const stopped = fixer.previewStopped();
+    finishStart(READY);
+    await stopped;
+    expect(order).toEqual(['try ended', 'stopped']);
+    expect(deps.stop).toHaveBeenCalledWith('p1');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(deps.tryStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again about the failure the owner saw, not the last try of the run before', async () => {
+    const { deps, fixer, sent, emit } = setup({
+      tryStart: vi.fn(async () => ({ ...FAILED, failedAt: 'ready' as const, failedService: 'other', message: 'other stopped' })),
+      fix: vi.fn(async (run: FixRun) => {
+        await run.tryRecipe(GOOD);
+        return { outcome: 'unknown' as const, summary: 'x' };
+      }),
+    });
+    emit(FAILED);
+    await vi.waitFor(() => expect(sent.at(-1)?.fix?.state).toBe('done'));
+    expect(await fixer.ask('p1')).toBe(true);
+    const asked = vi.mocked(deps.describe).mock.calls.at(-1)?.[1];
+    expect(asked).toMatchObject({ failedAt: 'services', failedService: 'web', message: 'web did not start' });
+  });
+
+  it('starts nothing for a failure the owner left before it was looked up', async () => {
+    let answer: (info: { key: string; recipe: typeof USED; source: 'file'; base: string }) => void = () => {};
+    const { deps, fixer, emit } = setup({ describe: vi.fn(() => new Promise<FailedStart | null>((resolve) => { answer = resolve; })) });
+    emit(FAILED);
+    await vi.waitFor(() => expect(deps.describe).toHaveBeenCalled());
+    await fixer.previewStopped();
+    answer({ key: 'k1', recipe: USED, source: 'file', base: 'none' });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(deps.fix).not.toHaveBeenCalled();
   });
 
   it('keeps saying what the agent changed while the preview it fixed is up, and no longer after it stops', async () => {

@@ -106,6 +106,13 @@ describe('StartFixPanel', () => {
     expect(screen.getByText('preview.say.fixFailed:x')).toBeInTheDocument();
   });
 
+  it('says why when the agent could not be asked', async () => {
+    api.fix.mockResolvedValueOnce({ success: false, error: 'No failed start…', errorSaid: { key: 'fixNothingToFix', text: 'No failed start…' } } as never);
+    show({ state: 'idle' });
+    fireEvent.click(screen.getByRole('button', { name: 'preview.fix.ask' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('preview.say.fixNothingToFix');
+  });
+
   it('asks the agent again when the owner wants another look', () => {
     show({ state: 'done', outcome: 'unknown', summary: 's' });
     fireEvent.click(screen.getByRole('button', { name: 'preview.fix.askAgain' }));

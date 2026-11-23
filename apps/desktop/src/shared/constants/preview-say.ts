@@ -58,6 +58,9 @@ export const PREVIEW_SAY = {
   fixNoCredential: [],
   fixFailed: ['reason'],
   fixNothingToFix: [],
+  fixNoSummary: [],
+  fixDidNotHold: [],
+  fixStoppedByOwner: [],
   // Why a project's preview.json was not used (preview/recipe.ts)
   recipeTooLarge: [],
   recipeNotJson: [],

@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PreviewRecipe, PreviewStatus } from '../../../shared/types/preview';
+import { PREVIEW_FIX_MAX_TRIES } from '../../../shared/constants/preview-fix';
+import { saidFor } from '../../say';
 import { fixStart, fixStartPrompt, type FixStartOptions, MAX_TRIES, redactForModel } from '../fix-start';
 
 const BROKEN: PreviewRecipe = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', command: 'npm run wrong', page: true }] };
 const GOOD: PreviewRecipe = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', command: 'npm run dev', page: true }] };
-const READY: PreviewStatus = { projectId: 'p1', stage: 'ready', url: 'http://localhost:5173', origins: ['http://localhost:5173'] };
+const READY: PreviewStatus = { projectId: 'p1', stage: 'ready', url: 'http://localhost:5173', origins: ['http://localhost:5173'], recipe: { source: 'pending', kind: 'web' } };
 const FAILED: PreviewStatus = { projectId: 'p1', stage: 'failed', origins: [], message: 'web did not start', failedAt: 'services', failedService: 'web', logTail: 'npm error Missing script: "wrong"' };
 
 type Tool = (input: unknown) => Promise<string>;
@@ -125,6 +127,66 @@ describe('fixStart', () => {
   });
 });
 
+describe('what counts as a try that came up', () => {
+  it('is the same limit the page shows', () => {
+    expect(MAX_TRIES).toBe(PREVIEW_FIX_MAX_TRIES);
+  });
+
+  it("does not credit a recipe the app passed over: the start came up by another one", async () => {
+    // The app could not use the candidate (a folder that is a link out of the project, a stale base) and ran what it detected
+    const tryRecipe = vi.fn(async () => ({ ...READY, recipe: { source: 'proposal' as const, kind: 'web' as const } }));
+    const answers: string[] = [];
+    const runTask = agent(async (tool) => {
+      answers.push(await tool(GOOD));
+      return { outcome: 'fixed', summary: 'done' };
+    });
+    expect(await fixStart(options({ runTask, tryRecipe }))).toMatchObject({ outcome: 'unknown' });
+    expect(answers[0]).toMatch(/^Not used: /);
+  });
+
+  it('does not try a recipe whose folder leads out of the project, and does not count it', async () => {
+    const tryRecipe = vi.fn(async () => READY);
+    const answers: string[] = [];
+    const recipe = { ...GOOD, services: [{ name: 'web', dir: 'app', command: 'npm run dev', page: true }] };
+    const runTask = agent(async (tool) => {
+      answers.push(await tool(recipe));
+      return { outcome: 'unknown', summary: 'x' };
+    });
+    await fixStart(options({ runTask, tryRecipe, contained: (dir) => dir !== 'app' }));
+    expect(tryRecipe).not.toHaveBeenCalled();
+    expect(answers[0]).toMatch(/^Not tried: .*app.*out of the project/);
+  });
+
+  it('tries one recipe at a time, even when the agent asks for two at once', async () => {
+    let running = 0;
+    let most = 0;
+    const tryRecipe = vi.fn(async () => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      return READY;
+    });
+    const runTask = agent(async (tool) => {
+      await Promise.all([tool(GOOD), tool({ ...GOOD, env: { A: 'b' } })]);
+      return { outcome: 'fixed', summary: 'x' };
+    });
+    expect(await fixStart(options({ runTask, tryRecipe }))).toMatchObject({ outcome: 'fixed', recipe: { ...GOOD, env: { A: 'b' } } });
+    expect(most).toBe(1);
+  });
+
+  it('says in its own words, not the error, what happened when the session failed after a recipe came up', async () => {
+    const runTask = vi.fn(async (o: Record<string, unknown>) => {
+      await (o.tryPreviewRecipe as Tool)(GOOD);
+      throw new Error('Claude Code process exited with code 1');
+    });
+    const outcome = await fixStart(options({ runTask }));
+    expect(outcome).toMatchObject({ outcome: 'fixed', recipe: GOOD });
+    expect(outcome.summary).not.toContain('exited');
+    expect(saidFor([outcome.summary])).toMatchObject([{ key: 'fixNoSummary' }]);
+  });
+});
+
 describe('what reaches the model', () => {
   const OWNERS = 'hunter2-owner-value';
   const LEAKY = [
@@ -156,6 +218,24 @@ describe('what reaches the model', () => {
     await fixStart(options({ runTask, tryRecipe, secrets: [OWNERS] }));
     expect(leaked(answers.join('\n'))).toEqual([]);
     expect(answers[0]).toContain('EADDRINUSE :::3000');
+  });
+
+  it("keeps them out of the recipe it is shown, which comes from the project's file", async () => {
+    const runTask = agent(async () => ({ outcome: 'unknown', summary: 'x' }));
+    const recipe = { ...BROKEN, env: { DATABASE_URL: 'postgres://u:dbpassw0rd@db.internal/app', OWN: OWNERS } };
+    await fixStart(options({ runTask, recipe, secrets: [OWNERS] }));
+    expect(leaked(runTask.mock.calls[0][0].prompt as string)).toEqual([]);
+  });
+
+  it("keeps them out of what it keeps and shows, should the agent's own words carry one", async () => {
+    const runTask = agent(async () => ({ outcome: 'needs_code_change', summary: `found ${OWNERS}`, task: { title: `use ${OWNERS}`, description: `STRIPE_SECRET_KEY=sk_live_abcdefghijklmnop1234` } }));
+    const outcome = await fixStart(options({ runTask, secrets: [OWNERS] }));
+    expect(leaked(JSON.stringify(outcome))).toEqual([]);
+  });
+
+  it('catches a short value of the owner too, but not a short number, which a log is full of', () => {
+    expect(redactForModel('pin abcd, port 3000, user admin1', ['abcd', '3000', 'admin1'])).toBe('pin [redacted], port 3000, user [redacted]');
+    expect(redactForModel('a ab abc', ['a', 'ab', 'abc'])).toBe('a ab abc');
   });
 
   it('keeps them out of the facts as well, should one ever carry a value', async () => {

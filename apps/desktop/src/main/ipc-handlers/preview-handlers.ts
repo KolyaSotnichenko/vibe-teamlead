@@ -183,10 +183,13 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
   let uxReview: AbortController | null = null;
   // The agent that fixes a failed start of a project's preview: every status passes through it on its way to the page
   const startDeps = () => ({ git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() });
-  /** Where the project's preview runs from: its copy of main, or the project's folder before the first start made one */
-  const mainCopy = (project: Project) => {
+  /**
+   * The preview's copy of main, the only folder the agent works in; null before the first start made
+   * one. Never the project's own folder: its `.env` and the owner's uncommitted work are there.
+   */
+  const mainCopy = (project: Project): string | null => {
     const copy = previewWorktreePath(previewWorktreesRoot(), project.id);
-    return existsSync(copy) ? copy : project.path;
+    return existsSync(copy) ? copy : null;
   };
   const fixer = createStartFixer({
     getProject: (id) => projectStore.getProject(id),
@@ -195,6 +198,8 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     },
     describe: async (project, failed) => {
       const dir = mainCopy(project);
+      // A start that failed before there was a copy of main: nothing for the agent to work in
+      if (!dir) return null;
       const saved = project.settings.previewServices ?? [];
       const resolved = resolveRecipe({
         files: previewFiles(dir, saved.map((s) => s.dir)),
@@ -218,6 +223,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       const project = projectStore.getProject(run.projectId);
       if (!project) throw new Error('Project not found');
       const dir = mainCopy(project);
+      if (!dir) throw new Error("The preview has no copy of the project's main branch to work in.");
       const runningMd = readRunningMd(dir);
       const env = await previewEnvReport(project, dir);
       // What must not reach the model whatever printed it: the owner's own values, and every value the preview set itself
@@ -225,7 +231,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
         ...Object.values(project.settings.previewEnv ?? {}),
         ...Object.values(project.settings.previewServiceEnv ?? {}).flatMap((values) => Object.values(values)),
         ...env.services.flatMap((service) => service.vars.filter((v) => v.source !== 'example' && v.source !== 'exampleDir' && v.source !== 'port' && v.source !== 'address').map((v) => v.value)),
-      ].filter((value) => value.length >= 6);
+      ];
       return fixStart({
         failure: run.failure,
         recipe: run.recipe,
@@ -244,6 +250,8 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
         signal: run.signal,
         onTry: run.onTry,
         secrets,
+        // A recipe whose folder is a link out of the copy is not tried
+        contained: (folder) => isPathContained(path.resolve(dir, folder), dir).contained,
       });
     },
     tryStart: (project) => startPreview(project, onStatus, startDeps()),
@@ -270,8 +278,9 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     window.webContents.on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) {
         view.destroy();
-        fixer.previewStopped();
         void stopPreview();
+        // A try of the agent's that was starting is stopped once it has
+        void fixer.previewStopped().then(() => stopPreview());
       }
     });
   };
@@ -288,8 +297,9 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       task = { taskId, worktree };
     }
     watchReloads();
-    // A start the owner asked for takes over from an agent that was working on the one before
-    fixer.previewStopped();
+    // A start the owner asked for takes over from an agent that was working on the one before:
+    // a try of the agent's that is starting is waited for and stopped first, so two never race
+    await fixer.previewStopped();
     view.setWorktree(task?.worktree ?? previewWorktreePath(previewWorktreesRoot(), projectId));
     try {
       if (!task) settleSoon(projectId);
@@ -521,9 +531,10 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
   }));
 
   // The owner asks the agent to look at the project's last failed start, or stops it
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_FIX, async (_e, projectId: string): Promise<IPCResult> => {
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_FIX, async (_e, projectId: string): Promise<IPCResult & { errorSaid?: SaidText }> => {
     if (await fixer.ask(projectId)) return { success: true };
-    return { success: false, error: say('fixNothingToFix', "No failed start of this project's preview is waiting to be looked at.") };
+    const error = say('fixNothingToFix', "No failed start of this project's preview is waiting to be looked at.");
+    return { success: false, error, errorSaid: saidFor([error])[0] };
   });
   ipcMain.handle(IPC_CHANNELS.PREVIEW_FIX_CANCEL, async (): Promise<IPCResult> => {
     await fixer.cancel();
@@ -535,7 +546,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     if (uxReview) cleanUpBrowserOrphansSoon(bundledBrowserServers);
     uxReview?.abort();
     view.destroy();
-    fixer.previewStopped();
+    await fixer.previewStopped();
     await stopPreview();
     return { success: true };
   });

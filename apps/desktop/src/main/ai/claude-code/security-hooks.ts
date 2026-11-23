@@ -148,7 +148,7 @@ export function isSecretFileName(name: string): boolean {
   return SECRET_NAMES.has(n) || /^id_(rsa|ed25519|ecdsa|dsa)/.test(n) || /\.(pem|key|p12|pfx)$/.test(n);
 }
 
-const SCAN_SECRET_RULE = 'The readiness scan never reads secret files (.env*, *.pem, *.key, *.p12, *.pfx, SSH keys, credentials) or anything outside the project. Take variable names from the example env files and the code.';
+const SCAN_SECRET_RULE = 'This session never reads secret files (.env*, *.pem, *.key, *.p12, *.pfx, SSH keys, credentials) or anything outside the project. Take variable names from the example env files and the code.';
 
 const SCAN_GREP_RULE = 'List files with Glob and Read or Grep one file at a time; .env files are off-limits.';
 
@@ -181,7 +181,7 @@ function isFile(target: string): boolean {
 }
 
 /**
- * Read, Glob and Grep of the readiness scan. Read: a non-secret file inside the project (realpath).
+ * Read, Glob and Grep of the readiness scan and of the agent that fixes a preview start. Read: a non-secret file inside the project (realpath).
  * Grep: only one existing regular file of that kind; never a folder (a glob can't be trusted to
  * leave secret files out). Glob lists names only; a secret path is still denied.
  */
@@ -222,7 +222,9 @@ export function evaluatePreToolUse(
   toolInput: Record<string, unknown> | null,
   context: ToolContext,
 ): HookJSONOutput {
-  if (context.agentType === 'deploy_readiness') {
+  // Sessions that read a project to report on it and never need its secrets: the readiness scan, and
+  // the agent that fixes a preview start (it starts by itself on what the project's files say)
+  if (context.agentType === 'deploy_readiness' || context.agentType === 'preview_fixer') {
     const scanned = evaluateScanRead(toolName, toolInput, context);
     if (scanned) return scanned;
   }

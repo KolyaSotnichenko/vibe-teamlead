@@ -43,6 +43,8 @@ export interface FixLedger {
   get: (key: string) => FixRecord | undefined;
   /** Whether the agent may start by itself for this failure now */
   mayRunAutomatically: (key: string, now?: Date) => boolean;
+  /** An automatic run begins: it counts toward the day's bound from now, whether it finishes or not */
+  begin: (now?: Date) => void;
   record: (key: string, outcome: FixOutcome, auto: boolean, now?: Date) => void;
 }
 
@@ -58,6 +60,10 @@ export function openFixLedger(dataDir: string, projectId: string): FixLedger {
       return { records: [], autoRuns: [] };
     }
   };
+  const write = (ledger: LedgerFile) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileReplacingSync(file, JSON.stringify(ledger, null, 2));
+  };
   const within = (at: string, now: Date) => {
     const time = Date.parse(at);
     return Number.isFinite(time) && now.getTime() - time < DAY_MS;
@@ -70,13 +76,14 @@ export function openFixLedger(dataDir: string, projectId: string): FixLedger {
       if (ledger.records.some((record) => record.key === key)) return false;
       return ledger.autoRuns.filter((at) => within(at, now)).length < AUTO_RUNS_PER_DAY;
     },
+    begin: (now = new Date()) => {
+      const ledger = read();
+      write({ records: ledger.records, autoRuns: [...ledger.autoRuns.filter((run) => within(run, now)), now.toISOString()] });
+    },
     record: (key, outcome, auto, now = new Date()) => {
       const ledger = read();
-      const at = now.toISOString();
-      const records = [...ledger.records.filter((record) => record.key !== key), { key, at, auto, outcome }].slice(-MAX_RECORDS);
-      const autoRuns = [...ledger.autoRuns.filter((run) => within(run, now)), ...(auto ? [at] : [])];
-      mkdirSync(dir, { recursive: true });
-      writeFileReplacingSync(file, JSON.stringify({ records, autoRuns } satisfies LedgerFile, null, 2));
+      const records = [...ledger.records.filter((record) => record.key !== key), { key, at: now.toISOString(), auto, outcome }].slice(-MAX_RECORDS);
+      write({ records, autoRuns: ledger.autoRuns.filter((run) => within(run, now)) });
     },
   };
 }

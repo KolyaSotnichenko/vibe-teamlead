@@ -54,6 +54,19 @@ describe('PreviewPage and the agent that fixes a start', () => {
     expect(screen.queryByText('preview.fix.fixed:Команду виправлено.')).not.toBeInTheDocument();
   });
 
+  it('keeps saying the agent is at work, with Stop, while one of its tries is up', () => {
+    session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', fix: { state: 'running', tries: 2 } };
+    render(<PreviewPage project={PROJECT} />);
+    expect(screen.getByText('preview.fix.running')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'preview.fix.stop' })).toBeInTheDocument();
+  });
+
+  it("says what changed in the app's words when the agent's session ended without them", () => {
+    session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', fix: { state: 'done', outcome: 'fixed', summary: 'The app started…', summarySaid: { key: 'fixNoSummary', text: 'The app started…' } } };
+    render(<PreviewPage project={PROJECT} />);
+    expect(screen.getByText('preview.fix.fixed:preview.say.fixNoSummary')).toBeInTheDocument();
+  });
+
   it('shows no panel for a failed start the agent has nothing to do with', () => {
     session.status = { projectId: 'p1', stage: 'failed', origins: [], message: 'web did not start' };
     render(<PreviewPage project={PROJECT} />);

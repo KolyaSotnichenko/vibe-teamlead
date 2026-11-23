@@ -121,7 +121,7 @@ export type PreviewFix =
   | { state: 'running'; tries: number }
   /** Nothing ran for this failure: the owner may ask */
   | { state: 'idle' }
-  | { state: 'done'; outcome: 'fixed'; summary: string }
+  | { state: 'done'; outcome: 'fixed'; summary: string; summarySaid?: SaidText }
   | { state: 'done'; outcome: 'needs_code_change'; summary: string; task: { title: string; description: string } }
   | { state: 'done'; outcome: 'needs_owner'; summary: string; missing: Array<{ what: string; why: string; variable?: string }> }
   | { state: 'done'; outcome: 'unknown'; summary: string; summarySaid?: SaidText };
@@ -282,7 +282,7 @@ export interface PreviewAPI {
   uxReview: (projectId: string) => Promise<IPCResult<UxReviewResult>>;
   cancelUxReview: () => Promise<IPCResult>;
   /** Asks the agent that fixes a start to look at the project's last failed start (one session) */
-  fix: (projectId: string) => Promise<IPCResult>;
+  fix: (projectId: string) => Promise<IPCResult & { errorSaid?: SaidText }>;
   /** Stops that agent: its session and the start it is trying end */
   cancelFix: () => Promise<IPCResult>;
   /** The last review of this project, if any */

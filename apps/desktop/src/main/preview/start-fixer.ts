@@ -60,10 +60,14 @@ export interface StartFixer {
   onStatus: (status: PreviewStatus) => PreviewStatus;
   /** The owner asks for the agent on the project's last failed start. False when there is none, or one is running. */
   ask: (projectId: string) => Promise<boolean>;
-  /** The owner stops it: the session and the start end, the failed start is shown again */
+  /** The owner stops it: the session and the start end, the failed start is shown again, and it does not start by itself for that failure again */
   cancel: () => Promise<void>;
-  /** The preview was stopped from outside (the owner left it): the session ends without a word */
-  previewStopped: () => void;
+  /**
+   * The preview is being stopped or replaced from outside (the owner left it, or started a preview):
+   * the session ends without a word, a try that is starting is waited for and stopped. Await it
+   * before starting another preview.
+   */
+  previewStopped: () => Promise<void>;
   running: () => boolean;
 }
 
@@ -71,9 +75,14 @@ interface Running {
   projectId: string;
   controller: AbortController;
   tries: number;
+  /** The failure the owner saw: what the run is about, and what asking again is about */
   failed: PreviewStatus;
-  /** Stopped by the owner: `cancel` says what is shown next */
-  cancelling: boolean;
+  info: FailedStart;
+  auto: boolean;
+  /** The latest status of the project's preview while the run lasts, the tries' own included */
+  latest: PreviewStatus;
+  /** The start of a try that is under way */
+  trying: Promise<unknown> | null;
 }
 
 /** What the agent can do something about: a failed start of the project's own preview, of a recipe the preview can show */
@@ -86,11 +95,11 @@ const appSaid = (summary: string): { summary: string; summarySaid?: SaidText } =
 
 /** What the page shows for what the agent found */
 function shownFor(outcome: FixOutcome): PreviewFix {
-  if (outcome.outcome === 'fixed') return { state: 'done', outcome: 'fixed', summary: outcome.summary };
+  if (outcome.outcome === 'fixed') return { state: 'done', outcome: 'fixed', ...appSaid(outcome.summary) };
   if (outcome.outcome === 'needs_code_change') return { state: 'done', outcome: 'needs_code_change', summary: outcome.summary, task: outcome.task };
   if (outcome.outcome === 'needs_owner') return { state: 'done', outcome: 'needs_owner', summary: outcome.summary, missing: outcome.missing };
   if (outcome.sessionFailed) return { state: 'done', outcome: 'unknown', ...appSaid(say('fixFailed', `The agent's session failed: ${outcome.summary}`, { reason: outcome.summary })) };
-  return { state: 'done', outcome: 'unknown', summary: outcome.summary };
+  return { state: 'done', outcome: 'unknown', ...appSaid(outcome.summary) };
 }
 
 export function createStartFixer(deps: StartFixerDeps): StartFixer {
@@ -98,6 +107,7 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
   let run: Running | null = null;
   /** What the page is shown for each project's preview, next to its status */
   const shown = new Map<string, PreviewFix>();
+  /** The failed start of each project the agent may be asked about */
   const lastFailed = new Map<string, PreviewStatus>();
 
   const attach = (status: PreviewStatus): PreviewStatus => {
@@ -105,6 +115,14 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
     if (run?.projectId === status.projectId) return { ...status, fix: { state: 'running', tries: run.tries } };
     const fix = shown.get(status.projectId);
     return fix ? { ...status, fix } : status;
+  };
+
+  /** Ends a run from outside: the session is aborted, a try that is starting is waited for, then its preview is stopped */
+  const end = async (mine: Running): Promise<void> => {
+    if (run === mine) run = null;
+    mine.controller.abort();
+    if (mine.trying) await mine.trying.catch(() => undefined);
+    await deps.stop(mine.projectId).catch(() => undefined);
   };
 
   const start = async (project: Project, failed: PreviewStatus, info: FailedStart, auto: boolean): Promise<void> => {
@@ -115,12 +133,14 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
       deps.send(attach(failed));
       return;
     }
-    const mine: Running = { projectId: id, controller: new AbortController(), tries: 0, failed, cancelling: false };
+    const ledger = deps.ledger(id);
+    // Counted now: a run the owner leaves half-way costs as much as one that finishes
+    if (auto) ledger.begin(now());
+    const mine: Running = { projectId: id, controller: new AbortController(), tries: 0, failed, info, auto, latest: failed, trying: null };
     run = mine;
     shown.delete(id);
+    lastFailed.set(id, failed);
     deps.send(attach(failed));
-    /** The status the last start ended in: a failed try replaces the failure the owner saw */
-    let last = failed;
     const pendingOf = (recipe: PreviewRecipe) => ({ recipe, base: info.base, origin: 'agent' as const, at: now().toISOString() });
     try {
       const outcome = await deps.fix({
@@ -131,36 +151,44 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
         signal: mine.controller.signal,
         onTry: (n) => {
           mine.tries = n;
-          deps.send(attach(last));
+          deps.send(attach(mine.latest));
         },
         // The app's own start, with the candidate as the project's recipe that is not in main yet
         tryRecipe: async (recipe) => {
-          last = await deps.tryStart({ ...project, settings: { ...project.settings, previewPendingRecipe: pendingOf(recipe) } });
-          return last;
+          if (mine.controller.signal.aborted) throw new Error('The agent was stopped.');
+          const trying = deps.tryStart({ ...project, settings: { ...project.settings, previewPendingRecipe: pendingOf(recipe) } });
+          mine.trying = trying;
+          try {
+            mine.latest = await trying;
+          } finally {
+            if (mine.trying === trying) mine.trying = null;
+          }
+          return mine.latest;
         },
       });
-      if (mine.controller.signal.aborted) return;
+      if (mine.controller.signal.aborted || run !== mine) return;
       run = null;
-      deps.ledger(id).record(info.key, outcome, auto, now());
-      shown.set(id, shownFor(outcome));
-      if (outcome.outcome === 'fixed') {
-        deps.updateSettings(id, { previewPendingRecipe: pendingOf(outcome.recipe) });
+      // Up when the agent said so, but stopped since: the recipe did not hold
+      const held = outcome.outcome !== 'fixed' || mine.latest.stage === 'ready';
+      const kept: FixOutcome = held ? outcome : { outcome: 'unknown', summary: say('fixDidNotHold', "The project came up by the agent's recipe, then stopped again, so the recipe was not kept.") };
+      ledger.record(info.key, kept, auto, now());
+      shown.set(id, shownFor(kept));
+      if (kept.outcome === 'fixed') {
+        lastFailed.delete(id);
+        deps.updateSettings(id, { previewPendingRecipe: pendingOf(kept.recipe) });
         deps.settle(id);
-        deps.send(attach(last));
+        deps.send(attach(mine.latest));
         return;
       }
-      const end = last.stage === 'failed' ? last : failed;
-      lastFailed.set(id, end);
-      deps.send(attach(end));
+      deps.send(attach(mine.latest.stage === 'failed' ? mine.latest : failed));
     } catch (error) {
-      if (mine.controller.signal.aborted) return;
+      if (mine.controller.signal.aborted || run !== mine) return;
       run = null;
       const reason = error instanceof Error ? error.message : String(error);
-      shown.set(id, shownFor({ outcome: 'unknown', summary: reason, sessionFailed: true }));
-      deps.send(attach(last.stage === 'failed' ? last : failed));
-    } finally {
-      // A stopped run: `cancel` shows the failed start again; a preview stopped from outside shows nothing
-      if (run === mine && !mine.cancelling) run = null;
+      const kept: FixOutcome = { outcome: 'unknown', summary: reason, sessionFailed: true };
+      ledger.record(info.key, kept, auto, now());
+      shown.set(id, shownFor(kept));
+      deps.send(attach(mine.latest.stage === 'failed' ? mine.latest : failed));
     }
   };
 
@@ -169,7 +197,7 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
     const project = deps.getProject(id);
     if (!project) return;
     const info = await deps.describe(project, status).catch(() => null);
-    // A newer status, or a run, has taken over meanwhile
+    // A newer status, a stop, or a run has taken over meanwhile
     if (!info || lastFailed.get(id) !== status || run) return;
     const ledger = deps.ledger(id);
     const kept = ledger.get(info.key);
@@ -191,8 +219,11 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
     onStatus: (status) => {
       if (status.taskId) return status;
       const id = status.projectId;
-      // The run's own tries
-      if (run?.projectId === id) return attach(status);
+      // The run's own tries: what they end in is what the run goes by
+      if (run?.projectId === id) {
+        run.latest = status;
+        return attach(status);
+      }
       if (status.stage === 'failed') {
         shown.delete(id);
         if (fixable(status)) {
@@ -219,6 +250,7 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
       const failed = lastFailed.get(projectId);
       const project = deps.getProject(projectId);
       if (!failed || !project || run) return false;
+      // The failure the owner saw, not the last try of a run before
       const info = await deps.describe(project, failed).catch(() => null);
       if (!info || run || lastFailed.get(projectId) !== failed) return false;
       void start(project, failed, info, false);
@@ -227,21 +259,20 @@ export function createStartFixer(deps: StartFixerDeps): StartFixer {
     cancel: async () => {
       const mine = run;
       if (!mine) return;
-      mine.cancelling = true;
-      mine.controller.abort();
-      await deps.stop(mine.projectId).catch(() => {});
-      if (run === mine) run = null;
-      shown.set(mine.projectId, { state: 'idle' });
+      await end(mine);
+      // The owner's choice for this failure: it does not start again by itself, and asking again stays open
+      const stopped: FixOutcome = { outcome: 'unknown', summary: say('fixStoppedByOwner', 'You stopped the agent. It does not start again by itself for this failure; ask it again when you want.') };
+      deps.ledger(mine.projectId).record(mine.info.key, stopped, mine.auto, now());
+      shown.set(mine.projectId, shownFor(stopped));
       lastFailed.set(mine.projectId, mine.failed);
       deps.send(attach(mine.failed));
     },
-    previewStopped: () => {
+    previewStopped: async () => {
+      // A failure looked up while the owner leaves starts nothing afterwards
+      lastFailed.clear();
+      shown.clear();
       const mine = run;
-      if (!mine) return;
-      run = null;
-      mine.controller.abort();
-      shown.delete(mine.projectId);
-      lastFailed.delete(mine.projectId);
+      if (mine) await end(mine);
     },
     running: () => run !== null,
   };

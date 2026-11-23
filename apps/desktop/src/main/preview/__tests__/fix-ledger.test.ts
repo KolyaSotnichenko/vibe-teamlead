@@ -27,6 +27,17 @@ describe('the ledger of fixed starts', () => {
     expect(key()).toMatch(/^[0-9a-f]{32,}$/);
   });
 
+  it('counts a run when it begins, not when it is recorded, so a stopped one counts and a finished one only once', () => {
+    const ledger = openFixLedger(dataDir, 'p1');
+    for (let i = 0; i < AUTO_RUNS_PER_DAY; i++) ledger.begin(at(i / 10));
+    expect(ledger.mayRunAutomatically(key({ commit: 'new' }), at(1))).toBe(false);
+    const other = openFixLedger(mkdtempSync(join(tmpdir(), 'vtl-fix-')), 'p1');
+    other.begin(at(0));
+    other.record(key(), UNKNOWN, true, at(0));
+    other.record(key({ commit: 'b' }), UNKNOWN, true, at(0));
+    expect(other.mayRunAutomatically(key({ commit: 'c' }), at(1))).toBe(true);
+  });
+
   it('lets a failure be worked on by itself once, and keeps what was found', () => {
     const ledger = openFixLedger(dataDir, 'p1');
     expect(ledger.get(key())).toBeUndefined();
@@ -41,7 +52,8 @@ describe('the ledger of fixed starts', () => {
     const ledger = openFixLedger(dataDir, 'p1');
     for (let i = 0; i < AUTO_RUNS_PER_DAY; i++) {
       expect(ledger.mayRunAutomatically(key({ commit: `c${i}` }), at(i))).toBe(true);
-      ledger.record(key({ commit: `c${i}` }), UNKNOWN, true, at(i));
+      // Counted when it starts: a run stopped half-way costs as much as one that finished
+      ledger.begin(at(i));
     }
     expect(ledger.mayRunAutomatically(key({ commit: 'next' }), at(5))).toBe(false);
     expect(ledger.mayRunAutomatically(key({ commit: 'next' }), at(23.9))).toBe(false);
