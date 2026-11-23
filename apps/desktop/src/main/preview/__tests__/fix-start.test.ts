@@ -104,7 +104,7 @@ describe('fixStart', () => {
     const runTask = vi.fn(async () => {
       throw new Error('No Claude credential is set.');
     });
-    expect(await fixStart(options({ runTask }))).toEqual({ outcome: 'unknown', summary: 'No Claude credential is set.' });
+    expect(await fixStart(options({ runTask }))).toEqual({ outcome: 'unknown', summary: 'No Claude credential is set.', sessionFailed: true });
   });
 
   it('keeps a recipe that came up even when the session failed afterwards', async () => {

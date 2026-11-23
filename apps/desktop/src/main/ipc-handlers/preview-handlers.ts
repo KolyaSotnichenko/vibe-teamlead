@@ -36,6 +36,13 @@ import { previewWorktreePath } from '../preview/preview-worktree';
 import { readRunningMd } from '../preview/running-md';
 import { runClaudeTask } from '../ai/claude-code/task';
 import { getFeatureSettings } from './feature-settings-helper';
+import { getClaudeCredentialStatus } from '../ai/claude-code/credential';
+import { findOnPath, searchPath } from '../platform/exec';
+import { fixFacts } from '../preview/fix-facts';
+import { failureKey, openFixLedger } from '../preview/fix-ledger';
+import { fixStart } from '../preview/fix-start';
+import { createStartFixer } from '../preview/start-fixer';
+import { readSettingsFile } from '../settings-utils';
 import { PreviewView } from '../preview/preview-view';
 import { projectStore } from '../project-store';
 import { findTaskWorktree } from '../worktree-paths';
@@ -174,12 +181,75 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
 
   // One UX review at a time, on the running preview; it ends when the preview stops
   let uxReview: AbortController | null = null;
+  // The agent that fixes a failed start of a project's preview: every status passes through it on its way to the page
+  const startDeps = () => ({ git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() });
+  /** Where the project's preview runs from: its copy of main, or the project's folder before the first start made one */
+  const mainCopy = (project: Project) => {
+    const copy = previewWorktreePath(previewWorktreesRoot(), project.id);
+    return existsSync(copy) ? copy : project.path;
+  };
+  const fixer = createStartFixer({
+    getProject: (id) => projectStore.getProject(id),
+    updateSettings: (id, settings) => {
+      projectStore.updateProjectSettings(id, settings);
+    },
+    describe: async (project, failed) => {
+      const dir = mainCopy(project);
+      const saved = project.settings.previewServices ?? [];
+      const resolved = resolveRecipe({
+        files: previewFiles(dir, saved.map((s) => s.dir)),
+        read: safeRead(dir),
+        saved,
+        pending: project.settings.previewPendingRecipe,
+        contained: (folder) => isPathContained(path.resolve(dir, folder), dir).contained,
+      });
+      let commit = '';
+      try {
+        commit = execFileSync(getToolPath('git'), ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      } catch {
+        // Not a repository yet: the recipe, the stage and the service still tell failures apart
+      }
+      const mainText = await mainRecipeText(project.path, mainBranchOf(project), { git: getToolPath('git'), env: getIsolatedGitEnv() });
+      return { key: failureKey({ commit, recipe: resolved.recipe, stage: failed.failedAt, service: failed.failedService }), recipe: resolved.recipe, source: resolved.source, base: recipeHash(mainText) };
+    },
+    ledger: (projectId) => openFixLedger(app.getPath('userData'), projectId),
+    hasCredential: () => getClaudeCredentialStatus().configured,
+    fix: async (run) => {
+      const project = projectStore.getProject(run.projectId);
+      if (!project) throw new Error('Project not found');
+      const dir = mainCopy(project);
+      const runningMd = readRunningMd(dir);
+      return fixStart({
+        failure: run.failure,
+        recipe: run.recipe,
+        source: run.source,
+        facts: fixFacts({
+          dockerAnswers: (await hostDocker(process.env)(['info']).catch(() => ({ ok: false }))).ok,
+          onPath: (name) => findOnPath(name, searchPath()) !== undefined,
+          env: await previewEnvReport(project, dir),
+          runningMd: runningMd.exists ? runningMd.markdown : null,
+        }),
+        worktree: dir,
+        language: (readSettingsFile()?.language as string | undefined) ?? 'en',
+        runTask: (options) => runClaudeTask(options as unknown as Parameters<typeof runClaudeTask>[0]),
+        model: getFeatureSettings('previewFix'),
+        tryRecipe: run.tryRecipe,
+        signal: run.signal,
+        onTry: run.onTry,
+      });
+    },
+    tryStart: (project) => startPreview(project, onStatus, startDeps()),
+    stop: (projectId) => stopPreview(projectId),
+    settle: (projectId) => settleSoon(projectId),
+    send: (status) => send(status),
+  });
+
   const onStatus = (status: PreviewStatus) => {
     if (status.stage !== 'ready') uxReview?.abort();
     if (status.stage === 'ready' && status.url) view.show(status.projectId, status.url, status.origins);
     else if (status.stage === 'stopped' || status.stage === 'failed') view.destroy();
     else view.hide();
-    send(status);
+    send(fixer.onStatus(status));
   };
 
   // A reload of the app's own page leaves nobody to stop the preview: stop it then.
@@ -192,6 +262,7 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     window.webContents.on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) {
         view.destroy();
+        fixer.previewStopped();
         void stopPreview();
       }
     });
@@ -209,10 +280,12 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       task = { taskId, worktree };
     }
     watchReloads();
+    // A start the owner asked for takes over from an agent that was working on the one before
+    fixer.previewStopped();
     view.setWorktree(task?.worktree ?? previewWorktreePath(previewWorktreesRoot(), projectId));
     try {
       if (!task) settleSoon(projectId);
-      const status = await startPreview(project, onStatus, { git: getToolPath('git'), secretsDir: path.join(app.getPath('userData'), 'preview'), worktreesRoot: previewWorktreesRoot() }, { resetData, task });
+      const status = await startPreview(project, onStatus, startDeps(), { resetData, task });
       if (!task) sayDropped(projectId);
       return { success: true, data: status };
     } catch (error) {
@@ -439,11 +512,22 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     data: readLastUxReview(app.getPath('userData'), projectId),
   }));
 
+  // The owner asks the agent to look at the project's last failed start, or stops it
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_FIX, async (_e, projectId: string): Promise<IPCResult> => {
+    if (await fixer.ask(projectId)) return { success: true };
+    return { success: false, error: say('fixNothingToFix', "No failed start of this project's preview is waiting to be looked at.") };
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_FIX_CANCEL, async (): Promise<IPCResult> => {
+    await fixer.cancel();
+    return { success: true };
+  });
+
   ipcMain.handle(IPC_CHANNELS.PREVIEW_STOP, async (): Promise<IPCResult> => {
     // A UX review stopped mid-way can leave its Playwright behind
     if (uxReview) cleanUpBrowserOrphansSoon(bundledBrowserServers);
     uxReview?.abort();
     view.destroy();
+    fixer.previewStopped();
     await stopPreview();
     return { success: true };
   });

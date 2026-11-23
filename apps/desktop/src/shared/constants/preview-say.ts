@@ -54,6 +54,10 @@ export const PREVIEW_SAY = {
   recipeNoRepo: [],
   recipeNotTaken: [],
   projectNotFound: [],
+  // The agent that fixes a failed start (preview/start-fixer.ts)
+  fixNoCredential: [],
+  fixFailed: ['reason'],
+  fixNothingToFix: [],
   // Why a project's preview.json was not used (preview/recipe.ts)
   recipeTooLarge: [],
   recipeNotJson: [],

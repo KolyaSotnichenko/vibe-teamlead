@@ -81,6 +81,8 @@ export interface PreviewStatus {
   recipe?: { source: PreviewRecipeSource; kind: PreviewRecipeKind; invalid?: string };
   /** Failed because no source says which services to run, or which one is the page: the owner is asked */
   needsServices?: true;
+  /** The agent that fixes a failed start (preview/start-fixer.ts): running, what it found, or that the owner may ask for it */
+  fix?: PreviewFix;
   /**
    * Which of this status's sentences (its failure message, its reasons and notices) the app
    * made itself, with the key and values to say each in the interface's language
@@ -109,6 +111,20 @@ export interface PreviewAddressIssue {
   /** The path requested through the page and what came back: a status or an error code */
   unreachable?: { path: string; result: string };
 }
+
+/**
+ * The agent that fixes a failed start of the project's preview. `summary` is what the agent
+ * wrote for the owner, in the interface's language; `summarySaid` is set instead when the app
+ * made the sentence itself (no key, a session that failed).
+ */
+export type PreviewFix =
+  | { state: 'running'; tries: number }
+  /** Nothing ran for this failure: the owner may ask */
+  | { state: 'idle' }
+  | { state: 'done'; outcome: 'fixed'; summary: string }
+  | { state: 'done'; outcome: 'needs_code_change'; summary: string; task: { title: string; description: string } }
+  | { state: 'done'; outcome: 'needs_owner'; summary: string; missing: Array<{ what: string; why: string; variable?: string }> }
+  | { state: 'done'; outcome: 'unknown'; summary: string; summarySaid?: SaidText };
 
 export interface PreviewBounds {
   x: number;
@@ -265,6 +281,10 @@ export interface PreviewAPI {
   /** Reviews the running preview's pages as a person would use them (one agent session) */
   uxReview: (projectId: string) => Promise<IPCResult<UxReviewResult>>;
   cancelUxReview: () => Promise<IPCResult>;
+  /** Asks the agent that fixes a start to look at the project's last failed start (one session) */
+  fix: (projectId: string) => Promise<IPCResult>;
+  /** Stops that agent: its session and the start it is trying end */
+  cancelFix: () => Promise<IPCResult>;
   /** The last review of this project, if any */
   lastUxReview: (projectId: string) => Promise<IPCResult<UxReviewResult | null>>;
   /** The end of each running service's log */

@@ -35,7 +35,8 @@ export type FixOutcome =
   | { outcome: 'fixed'; recipe: PreviewRecipe; summary: string }
   | { outcome: 'needs_code_change'; summary: string; task: { title: string; description: string } }
   | { outcome: 'needs_owner'; summary: string; missing: Array<{ what: string; why: string; variable?: string }> }
-  | { outcome: 'unknown'; summary: string };
+  /** `sessionFailed`: the session itself failed (no answer from the model); `summary` is the error */
+  | { outcome: 'unknown'; summary: string; sessionFailed?: true };
 
 export interface FixStartOptions {
   failure: FixFailure;
@@ -165,7 +166,7 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
     if (options.signal?.aborted) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     // A recipe that is up stays up: the session failing afterwards does not undo what the app saw start
-    return fixed(reason) ?? { outcome: 'unknown', summary: reason };
+    return fixed(reason) ?? { outcome: 'unknown', summary: reason, sessionFailed: true };
   }
 
   const parsed = Output.safeParse(output);

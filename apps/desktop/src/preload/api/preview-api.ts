@@ -21,6 +21,8 @@ export const createPreviewAPI = (): PreviewAPI => ({
   resetData: (projectId, taskId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_RESET_DATA, projectId, taskId),
   uxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW, projectId),
   cancelUxReview: () => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_CANCEL),
+  fix: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_FIX, projectId),
+  cancelFix: () => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_FIX_CANCEL),
   lastUxReview: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_UX_REVIEW_LAST, projectId),
   logs: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_LOGS, projectId),
   mailList: (projectId) => ipcRenderer.invoke(IPC_CHANNELS.PREVIEW_MAIL_LIST, projectId),

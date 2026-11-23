@@ -143,6 +143,8 @@ export const IPC_CHANNELS = {
   PREVIEW_PROPOSE_SERVICES: 'preview:proposeServices',
   PREVIEW_RECIPE: 'preview:recipe',
   PREVIEW_SAVE_RECIPE_SERVICES: 'preview:saveRecipeServices',
+  PREVIEW_FIX: 'preview:fix',
+  PREVIEW_FIX_CANCEL: 'preview:fixCancel',
   PREVIEW_UX_REVIEW: 'preview:uxReview',
   PREVIEW_NOTES_MODE: 'preview:notesMode',
   PREVIEW_LOGS: 'preview:logs',
