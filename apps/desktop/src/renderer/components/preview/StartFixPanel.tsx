@@ -39,7 +39,7 @@ export function StartFixPanel({ projectId, fix, onEnvironment }: { projectId: st
   // The task is an agent's text, written from what it read in the project: the owner sees all of it first,
   // and it goes to Planning, where nothing works from it until the owner starts it
   const makeTask = async (title: string, description: string) => {
-    setTask((await createTask(projectId, title, description)) ? 'created' : 'failed');
+    setTask((await createTask(projectId, title, description, { sourceType: 'preview-fix' })) ? 'created' : 'failed');
   };
 
   return (

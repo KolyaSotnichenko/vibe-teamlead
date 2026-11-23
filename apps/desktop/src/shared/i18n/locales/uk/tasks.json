@@ -750,7 +750,11 @@
         "roadmap": "Дорожня карта",
         "linear": "Linear",
         "github": "Issue на GitHub",
-        "gitlab": "Issue на GitLab"
+        "gitlab": "Issue на GitLab",
+        "brief": "Документ зі специфікацією",
+        "base-fix": "Виправлення main застосунком",
+        "deploy": "Налаштування CI",
+        "preview-fix": "Агент запуску перегляду"
       }
     },
     "subtasks": {

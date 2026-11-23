@@ -82,7 +82,8 @@ describe('StartFixPanel', () => {
     expect(screen.getByText('Read the API address from API_URL')).toBeInTheDocument();
     expect(screen.getByText(/The proxy…/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'preview.fix.createTask' }));
-    await waitFor(() => expect(tasks.createTask).toHaveBeenCalledWith('p1', 'Read the API address from API_URL', 'The proxy…\n\n- AC-1: …'));
+    // Marked as the fixing agent's, so it stays traceable
+    await waitFor(() => expect(tasks.createTask).toHaveBeenCalledWith('p1', 'Read the API address from API_URL', 'The proxy…\n\n- AC-1: …', { sourceType: 'preview-fix' }));
     expect(await screen.findByText('preview.fix.taskCreated')).toBeInTheDocument();
     expect(tasks.startTaskOrQueue).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'preview.fix.createTask' })).not.toBeInTheDocument();

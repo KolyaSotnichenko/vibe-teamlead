@@ -734,7 +734,11 @@
         "roadmap": "Roadmap",
         "linear": "Linear",
         "github": "GitHub issue",
-        "gitlab": "GitLab issue"
+        "gitlab": "GitLab issue",
+        "brief": "Spec document",
+        "base-fix": "Repair of main by the app",
+        "deploy": "CI setup",
+        "preview-fix": "Preview start-up agent"
       }
     },
     "subtasks": {
