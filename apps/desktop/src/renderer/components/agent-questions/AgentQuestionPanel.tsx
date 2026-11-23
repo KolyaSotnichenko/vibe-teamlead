@@ -169,6 +169,8 @@ export function AgentQuestionPanel() {
 
   return (
     <aside
+      // Floats over the page: the Preview's page, drawn above the app, steps aside while it is open
+      data-over-preview=""
       aria-labelledby="agent-question-title"
       className="fixed right-6 bottom-9 z-50 flex max-h-[calc(100vh-60px)] w-[440px] max-w-[calc(100vw-32px)] flex-col border border-foreground bg-card text-card-foreground"
     >

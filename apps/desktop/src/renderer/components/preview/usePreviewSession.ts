@@ -2,10 +2,12 @@
  * The Preview runs only while its page is on screen: mounting starts it, and
  * unmounting, or another project, stops it. The box the page reserves is where
  * the main process places the preview's view. The view is drawn above the
- * app's own page, so it steps aside while any of the app's dialogs is open.
+ * app's own page, so it steps aside while any of the app's dialogs, or a panel
+ * that floats over the page, is open.
  */
 
-const DIALOG = '[role="dialog"], [role="alertdialog"]';
+/** The app's dialogs, and its panels that float over the page (`data-over-preview`: an agent's question) */
+const DIALOG = '[role="dialog"], [role="alertdialog"], [data-over-preview]';
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -56,7 +58,7 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report);
     window.addEventListener('resize', report);
     const dialogs = typeof MutationObserver === 'undefined' ? null : new MutationObserver(report);
-    dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
+    dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'data-over-preview'] });
 
     void (taskId ? api.start(projectId, taskId) : api.start(projectId)).then((result) => {
       // A start refused before any status (a task without a worktree) still says why

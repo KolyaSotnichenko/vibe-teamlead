@@ -32,7 +32,8 @@ export function GlobalDownloadIndicator() {
   const hasActive = activeDownloads.length > 0;
 
   return (
-    <div className="fixed bottom-10 right-4 z-50 max-w-sm">
+    // data-over-preview: the Preview's page, drawn above the app, steps aside while this shows
+    <div data-over-preview="" className="fixed bottom-10 right-4 z-50 max-w-sm">
       <div className="rounded-lg border border-border bg-card shadow-lg overflow-hidden">
         {/* Header */}
         <button

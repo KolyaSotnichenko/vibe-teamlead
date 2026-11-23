@@ -73,6 +73,23 @@ describe('usePreviewSession', () => {
     box.remove();
   });
 
+  it("hides the view while a panel of the app floats over it, such as an agent's question", async () => {
+    const { result } = renderHook(() => usePreviewSession('p1', true));
+    const box = document.createElement('div');
+    box.getBoundingClientRect = () => ({ left: 10, top: 50, width: 800, height: 600 }) as DOMRect;
+    document.body.appendChild(box);
+    (result.current.boxRef as { current: HTMLDivElement | null }).current = box;
+
+    const panel = document.createElement('aside');
+    panel.setAttribute('data-over-preview', '');
+    document.body.appendChild(panel);
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith(null));
+
+    panel.remove();
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 50, width: 800, height: 600 }));
+    box.remove();
+  });
+
   it('takes the view off the screen while its box is not on the page, e.g. while the services form is shown', async () => {
     const { result } = renderHook(() => usePreviewSession('p1', true));
     const box = document.createElement('div');
