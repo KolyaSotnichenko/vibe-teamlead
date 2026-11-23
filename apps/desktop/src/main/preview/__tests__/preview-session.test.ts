@@ -779,6 +779,20 @@ describe("the compose file's other services", () => {
     ]);
   });
 
+  it("lets a compose service have its compose port when it is free, but never a port one of the project's own services expects", async () => {
+    const files: Record<string, string> = { ...COMPOSE_FILES, 'apps/api/.env.example': `${COMPOSE_FILES['apps/api/.env.example']}PORT=3001\n` };
+    const { d } = deps({
+      read: (_root: string, path: string) => files[path] ?? null,
+      listFiles: () => Object.keys(files),
+      startCompose: vi.fn(async () => composeRun()),
+      portFree: vi.fn(async () => true),
+    });
+    await startPreview(project(), () => {}, d);
+    const { hostPortFree } = vi.mocked(d.startCompose).mock.calls[0][1];
+    expect(await hostPortFree?.(5672)).toBe(true);
+    expect(await hostPortFree?.(3001)).toBe(false);
+  });
+
   it('says Docker is missing for them too', async () => {
     const { d } = deps({
       read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,

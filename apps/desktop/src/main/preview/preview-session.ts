@@ -544,8 +544,11 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       // The compose file's other services, after the database: its start clears the label's leftovers
       if (session.composePlanned.length) {
         emit(session, { stage: 'database', message: session.composePlanned.map((s) => s.name).join(', ') });
+        // A compose service may have its compose port, but not one the project's own services run on
+        const ownPorts = (project.settings.previewServices ?? []).map((service) => examplePort(service, (path) => deps.read(session.worktree, path)));
         const compose = await deps.startCompose(session.composePlanned, {
           docker: deps.docker, labelKey: PREVIEW_LABEL, labelValue: key, network, buckets: bucketsOf(examples), signal: session.abort.signal, pickPort: deps.pickPort,
+          hostPortFree: async (port) => !ownPorts.includes(port) && (await deps.portFree(port)),
         });
         session.compose = compose;
         check(session);

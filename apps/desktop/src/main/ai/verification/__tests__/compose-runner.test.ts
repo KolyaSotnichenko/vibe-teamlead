@@ -298,6 +298,22 @@ describe("the compose file's host ports", () => {
     expect(run.moved).toEqual([]);
   });
 
+  it('takes no host port from the compose file unless the caller says which are free', async () => {
+    const { docker, calls } = fakeDocker();
+    const run = await startComposeServices(composeServices([AZURITE]), { ...options(docker), hostPortFree: undefined });
+    expect(publishOf(runs(calls)[0])).toEqual(['127.0.0.1::10000', '127.0.0.1::10001']);
+    expect(run.moved).toEqual([]);
+  });
+
+  it('leaves a host port below 1024 alone: no question, no fixed port, no notice', async () => {
+    const { docker, calls } = fakeDocker();
+    const hostPortFree = vi.fn(async () => true);
+    const run = await startComposeServices(composeServices(['services:\n  proxy:\n    image: example/gateway\n    ports: ["80:8080", "8443:8443"]\n']), options(docker, { hostPortFree }));
+    expect(publishOf(runs(calls)[0])).toEqual(['127.0.0.1::8080', '127.0.0.1:8443:8443']);
+    expect(hostPortFree.mock.calls).toEqual([[8443]]);
+    expect(run.moved).toEqual([]);
+  });
+
   it('says in plain words which address misses a moved service', () => {
     expect(composeMovedNotice({ name: 'azurite', wanted: 10000, got: 50000 })).toBe(
       'azurite runs on port 50000 here: port 10000, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for azurite reaches that instead.',

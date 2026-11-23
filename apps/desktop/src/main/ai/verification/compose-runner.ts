@@ -1,10 +1,11 @@
 /**
  * The compose file's infrastructure services as throwaway containers, for one preview session
  * or one check run: on the run's network, with its databases (so they find each other by
- * their compose names), each port published on 127.0.0.1 only, nothing mounted, removed afterwards. A
- * port the compose file publishes goes on that same host port when it is free, so an address the
- * project or a library hard-codes (Azurite's 127.0.0.1:10000) reaches the container; a taken one
- * gets a free port, and the run says which ports moved. A service is ready when its compose healthcheck passes, or else when its port holds a
+ * their compose names), each port published on 127.0.0.1 only, nothing mounted, removed afterwards. For
+ * a caller that says which host ports are free (the preview; app checks don't, so two runs never
+ * compete for one), a port the compose file publishes goes on that same host port, so an address
+ * the project or a library hard-codes (Azurite's 127.0.0.1:10000) reaches the container; a taken
+ * one gets a free port, and the run says which ports moved. A service is ready when its compose healthcheck passes, or else when its port holds a
  * connection; one that doesn't come up is reported and the rest go on. Buckets the example
  * settings name are created in S3 stand-ins. Leftovers of a run that died are removed by
  * label first. No Electron imports: docker is passed in.
@@ -13,7 +14,6 @@
 import { randomBytes } from 'node:crypto';
 import { connect, createServer } from 'node:net';
 
-import { localPortFree } from '../../preview/preview-ports';
 import { adapterOf, type ComposeService, composeRunArgs, containerSpec, dependencyOrder, type StartedComposeService } from './compose-services';
 import type { DockerRun } from './test-services';
 
@@ -59,7 +59,10 @@ export interface ComposeRunOptions {
   pickPort?: () => Promise<number>;
   /** Whether a local port accepts a connection and keeps it */
   portOpen?: (port: number) => Promise<boolean>;
-  /** Whether nothing on this computer holds a host port the compose file names */
+  /**
+   * Whether a host port the compose file names may be taken for its service. Without it every
+   * port is published on a free one and nothing is reported as moved.
+   */
   hostPortFree?: (port: number) => Promise<boolean>;
   signal?: AbortSignal;
   readyTimeoutMs?: number;
@@ -98,6 +101,9 @@ function freePort(): Promise<number> {
     });
   });
 }
+
+/** A host port this process could take: below 1024 the system keeps them, so they are never asked for or reported */
+const ownable = (port: number | undefined): port is number => port !== undefined && port >= 1024;
 
 const lines = (text: string) => text.split('\n').map((line) => line.trim()).filter(Boolean);
 const runKey = (labelKey: string, labelValue: string) => `${labelKey}-${labelValue}`.replace(/[^\w.-]/g, '_');
@@ -164,7 +170,7 @@ async function setUpBuckets(docker: DockerRun, id: string, started: StartedCompo
 export async function startComposeServices(services: ComposeService[], options: ComposeRunOptions): Promise<ComposeRun> {
   const {
     docker, labelKey, labelValue, network: shared, buckets = [], signal,
-    pickPort = freePort, portOpen = (port: number) => tcpHolds(port), hostPortFree = localPortFree,
+    pickPort = freePort, portOpen = (port: number) => tcpHolds(port), hostPortFree,
     readyTimeoutMs = READY_TIMEOUT_MS, pollMs = POLL_MS, secret = () => randomBytes(16).toString('hex'),
   } = options;
   const nothing = async () => {};
@@ -212,12 +218,11 @@ export async function startComposeServices(services: ComposeService[], options: 
     const hostPort = adapter.fixedHostPort ? await pickPort() : undefined;
     // The compose file's own host port for each port it publishes, when nothing holds it
     const hostPorts: Record<number, number> = {};
-    if (!adapter.fixedHostPort) {
-      for (const { container, host } of service.ports) {
-        if (host === undefined || given.has(host) || !(await hostPortFree(host))) continue;
-        hostPorts[container] = host;
-        given.add(host);
-      }
+    const wanted = hostPortFree && !adapter.fixedHostPort ? service.ports.filter((p): p is { container: number; host: number } => ownable(p.host)) : [];
+    for (const { container, host } of wanted) {
+      if (given.has(host) || !(await hostPortFree?.(host))) continue;
+      hostPorts[container] = host;
+      given.add(host);
     }
     let spec = containerSpec(service, { hostPort, hostPorts, secret });
     let run = await docker(composeRunArgs(service, spec, { labels, network }));
@@ -271,11 +276,9 @@ export async function startComposeServices(services: ComposeService[], options: 
     }
     const startedService: StartedComposeService = { name: service.name, kind: service.kind, image: service.image, ports, env: spec.env };
     started.push(startedService);
-    if (!adapter.fixedHostPort) {
-      for (const { container, host } of service.ports) {
-        const got = ports[container];
-        if (host !== undefined && got && got !== host) moved.push({ name: service.name, wanted: host, got });
-      }
+    for (const { container, host } of wanted) {
+      const got = ports[container];
+      if (got && got !== host) moved.push({ name: service.name, wanted: host, got });
     }
     if (service.kind === 's3' && buckets.length) {
       const missed = await setUpBuckets(docker, id, startedService, buckets, Date.now() + readyTimeoutMs, pollMs);
