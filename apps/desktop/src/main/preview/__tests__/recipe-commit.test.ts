@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { isWindowsHost } from '../../platform/__tests__/host';
+import { saidFor } from '../../say';
 import { commitRecipeToMain, mainRecipeText, RECIPE_BRANCH } from '../recipe-commit';
 
 const TEXT = '{\n  "version": 1,\n  "kind": "none"\n}\n';
@@ -45,6 +46,9 @@ describe('the app commits a recipe into main', () => {
     expect(git('show', 'main:preview.json') + '\n').toBe(TEXT);
     expect(readFileSync(join(repo, 'preview.json'), 'utf-8')).toBe(TEXT);
     expect(git('log', '-1', '--format=%s')).toBe('Preview recipe: preview.json');
+    // One commit on top of main, not a commit and a merge of it
+    expect(git('rev-list', '--count', 'main')).toBe('2');
+    expect(git('log', '-1', '--format=%P').split(' ')).toHaveLength(1);
     expect(git('status', '--porcelain')).toBe('');
     expect(leftovers()).toEqual({ branch: '', index: [] });
   });
@@ -76,7 +80,8 @@ describe('the app commits a recipe into main', () => {
     const before = state();
     const result = await commit(TEXT);
     expect(result.status).toBe('refused');
-    expect(result.message).toMatch(/feature/);
+    expect(result.message).toBe('The project\'s folder is on "feature". The recipe goes into "main" once the folder is back on it.');
+    expect(saidFor([result.message])).toMatchObject([{ key: 'recipeOtherBranch', params: { current: 'feature', main: 'main' } }]);
     expect(state()).toEqual(before);
     expect(leftovers()).toEqual({ branch: '', index: [] });
   });
@@ -105,7 +110,9 @@ describe('the app commits a recipe into main', () => {
       // the conflict this test needs
     }
     const before = state();
-    expect((await commit(TEXT)).status).toBe('refused');
+    const result = await commit(TEXT);
+    expect(result.status).toBe('refused');
+    expect(saidFor([result.message])).toMatchObject([{ key: 'recipeMidMerge' }]);
     expect(state()).toEqual(before);
     expect(leftovers()).toEqual({ branch: '', index: [] });
   });
@@ -129,7 +136,7 @@ describe('the app commits a recipe into main', () => {
     const env = { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(home, 'none') };
     for (const name of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'EMAIL']) delete (env as Record<string, string | undefined>)[name];
     expect(await commit(TEXT, { env })).toEqual({ status: 'merged' });
-    expect(git('log', '-1', '--format=%an <%ae>', 'main^2')).toBe('Vibe Teamlead <vibe-teamlead@localhost>');
+    expect(git('log', '-1', '--format=%an <%ae>', 'main')).toBe('Vibe Teamlead <vibe-teamlead@localhost>');
   });
 
   it.skipIf(isWindowsHost)("runs none of the repository's hooks", async () => {

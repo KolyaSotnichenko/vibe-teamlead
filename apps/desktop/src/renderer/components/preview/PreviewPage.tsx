@@ -8,7 +8,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { PreviewNote, PreviewService, PreviewStatus, Project, Task } from '../../../shared/types';
+import type { SaidText } from '../../../shared/constants/preview-say';
+import type { PreviewNote, PreviewRecipeInfo, PreviewService, PreviewStatus, Project, Task } from '../../../shared/types';
 import { updateProjectSettings } from '../../stores/project-store';
 import { EmptyState, Notice } from '../task-detail/workspace/workspace-ui';
 import { PreviewServicesForm } from './PreviewServicesForm';
@@ -45,7 +46,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   const saved = project.settings.previewServices ?? [];
   const [editing, setEditing] = useState(false);
   /** What the form shows: the services a start would run, or the proposal when nothing says */
-  const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean; recipe: boolean; pending?: { refusal?: string } } | null>(null);
+  const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean; recipe: boolean; pending?: NonNullable<PreviewRecipeInfo['pending']> } | null>(null);
   /** Why the last save of a recipe's services was refused, in the interface's language */
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
@@ -53,10 +54,12 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   // The preview keeps running under the form: looking at the services costs nothing, and saving restarts them
   const { status, boxRef } = usePreviewSession(project.id, true, task?.id);
   const needsServices = status?.stage === 'failed' && status.needsServices === true;
+  /** A sentence the app made, in the interface's language */
+  const said = (text: SaidText | undefined): string | undefined => (text ? t(`preview.say.${text.key}`, { ...text.params, defaultValue: text.text }) : undefined);
   /** A sentence from the main process in the interface's language, when the app made it; a tool's own words as they are */
   const say = (text: string | undefined): string | undefined => {
     const known = text ? status?.said?.find((said) => said.text === text) : undefined;
-    return known ? t(`preview.say.${known.key}`, { ...known.params, defaultValue: known.text }) : text;
+    return said(known) ?? text;
   };
   // The preview could not tell what to run: the form opens, once for that answer
   const asked = useRef<PreviewStatus | null>(null);
@@ -107,7 +110,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
             notice={
               saveFailed ??
               (form.pending
-                ? (form.pending.refusal ? t('preview.services.notSavedReason', { reason: form.pending.refusal }) : t('preview.services.notSaved'))
+                ? (form.pending.refusal ? t('preview.services.notSavedReason', { reason: said(form.pending.refusalSaid) ?? form.pending.refusal }) : t('preview.services.notSaved'))
                 : status?.recipe?.invalid
                   ? t('preview.recipeInvalid', { reason: say(status.recipe.invalid) })
                   : undefined)
@@ -119,7 +122,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
                 // The project's recipe: the app keeps the change and writes it into main itself
                 const saved = await window.electronAPI.preview.saveRecipeServices(project.id, services);
                 if (!saved.success) {
-                  const reason = saved.errorSaid ? t(`preview.say.${saved.errorSaid.key}`, { ...saved.errorSaid.params, defaultValue: saved.errorSaid.text }) : (saved.error ?? '');
+                  const reason = said(saved.errorSaid) ?? saved.error ?? '';
                   setSaveFailed(t('preview.services.saveFailed', { reason }));
                   return;
                 }

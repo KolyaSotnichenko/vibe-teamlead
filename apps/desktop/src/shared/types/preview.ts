@@ -238,7 +238,7 @@ export interface PreviewRecipeInfo {
   services: PreviewService[];
   invalid?: string;
   /** Set when the recipe in use was made in the app and is not in main yet: whose it is, and why the last try to write it was refused */
-  pending?: { origin: 'owner' | 'agent'; refusal?: string };
+  pending?: { origin: 'owner' | 'agent'; refusal?: string; refusalSaid?: SaidText };
 }
 
 export interface PreviewAPI {

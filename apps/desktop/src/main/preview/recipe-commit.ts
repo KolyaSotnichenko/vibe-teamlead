@@ -1,10 +1,11 @@
 /**
  * The app writes a recipe into a project's main branch itself: one commit of `preview.json`,
  * with no task and no model call. The commit is built with git's plumbing on an index of its
- * own, so no checkout is touched until the merge, and the merge is the one tasks go through
- * (mergeTaskBranch): it refuses, and leaves the project exactly as it was, while the owner's
- * folder is on another branch, in the middle of a merge, or has changes in the way. Nothing is
- * pushed. No hooks run. No Electron imports.
+ * own, on top of main, so no checkout is touched until it is taken in; taking it in is a
+ * fast-forward (`git merge --ff-only`), which either moves main and the owner's folder to
+ * that one commit or does nothing at all. It is refused, with the project exactly as it was,
+ * while the owner's folder is on another branch, in the middle of a merge, or has changes in
+ * the way. Nothing is pushed. No hooks run. No Electron imports.
  */
 
 import { execFile } from 'node:child_process';
@@ -12,7 +13,8 @@ import { randomBytes } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { mergeTaskBranch, withoutGitHooks } from '../ai/merge/git-merge';
+import { withoutGitHooks } from '../ai/merge/git-merge';
+import { say } from '../say';
 import { RECIPE_FILE } from './recipe';
 
 /** Where the recipe's commit sits until it is merged; removed afterwards, whatever happened */
@@ -84,14 +86,22 @@ export async function commitRecipeToMain(options: RecipeCommitOptions): Promise<
   const refused = (why: string): RecipeCommitResult => ({ status: 'refused', message: why });
 
   const main = (await probe(['rev-parse', '--verify', '--quiet', `${mainBranch}^{commit}`])).stdout;
-  if (!main) return refused(`The branch "${mainBranch}" was not found in the project.`);
+  if (!main) return refused(say('recipeNoMain', `The branch "${mainBranch}" was not found in the project.`, { main: mainBranch }));
   const current = await probe(['show', `${mainBranch}:${RECIPE_FILE}`]);
   if (current.ok && current.raw === text) return { status: 'up_to_date' };
+  // Said before anything is made: the owner's folder has to be on main, and not in the middle of a merge
+  const branch = (await probe(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout;
+  if (branch !== mainBranch) {
+    return refused(say('recipeOtherBranch', `The project's folder is on "${branch}". The recipe goes into "${mainBranch}" once the folder is back on it.`, { current: branch, main: mainBranch }));
+  }
+  if ((await probe(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])).ok || (await probe(['ls-files', '--unmerged'])).stdout) {
+    return refused(say('recipeMidMerge', 'The project is in the middle of a merge. The recipe goes in once the merge is finished or dropped.'));
+  }
 
   const env = { ...baseEnv, ...(await identityEnv(probe, baseEnv)) };
   const run = runner(projectDir, git, env);
   const gitDir = (await run(['rev-parse', '--absolute-git-dir'])).stdout;
-  if (!gitDir) return refused('The project is not a git repository.');
+  if (!gitDir) return refused(say('recipeNoRepo', 'The project is not a git repository.'));
   // An index of its own: the owner's index and working tree are not read or written here
   const index = { GIT_INDEX_FILE: join(gitDir, `vibe-teamlead-recipe-index-${randomBytes(6).toString('hex')}`) };
   try {
@@ -108,9 +118,9 @@ export async function commitRecipeToMain(options: RecipeCommitOptions): Promise<
     const branched = await run(['update-ref', `refs/heads/${RECIPE_BRANCH}`, commit.stdout]);
     if (!branched.ok) return refused(branched.output);
 
-    const merged = await mergeTaskBranch({ projectDir, branch: RECIPE_BRANCH, baseBranch: mainBranch, message, stageOnly: false, git, env });
-    if (merged.status === 'merged' || merged.status === 'up_to_date') return { status: merged.status };
-    return refused(merged.message ?? 'The project could not take the change.');
+    // One commit on top of main: main and the owner's folder move to it, or git changes nothing and says why
+    const taken = await run(['merge', '--ff-only', '--no-edit', RECIPE_BRANCH]);
+    return taken.ok ? { status: 'merged' } : refused(taken.output.slice(0, 600));
   } finally {
     rmSync(index.GIT_INDEX_FILE, { force: true });
     rmSync(`${index.GIT_INDEX_FILE}.lock`, { force: true });

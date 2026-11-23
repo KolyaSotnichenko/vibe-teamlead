@@ -351,7 +351,8 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     const pending = project.settings.previewPendingRecipe;
     if (info.source !== 'pending' || !pending) return info;
     const refusal = settler.refusal(project.id);
-    return { ...info, pending: { origin: pending.origin, ...(refusal ? { refusal } : {}) } };
+    const refusalSaid = refusal ? saidFor([refusal])[0] : undefined;
+    return { ...info, pending: { origin: pending.origin, ...(refusal ? { refusal } : {}), ...(refusalSaid ? { refusalSaid } : {}) } };
   };
   ipcMain.handle(IPC_CHANNELS.PREVIEW_RECIPE, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewRecipeInfo> => {
     const project = projectStore.getProject(projectId);

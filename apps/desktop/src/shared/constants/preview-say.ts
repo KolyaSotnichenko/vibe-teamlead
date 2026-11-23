@@ -42,6 +42,11 @@ export const PREVIEW_SAY = {
   // A recipe made in the app (preview/settle-pending-recipe.ts)
   editDropped: [],
   noRecipeToChange: [],
+  // Why a recipe is not in the project's main branch yet (preview/recipe-commit.ts)
+  recipeNoMain: ['main'],
+  recipeOtherBranch: ['current', 'main'],
+  recipeMidMerge: [],
+  recipeNoRepo: [],
   // Why a project's preview.json was not used (preview/recipe.ts)
   recipeTooLarge: [],
   recipeNotJson: [],
