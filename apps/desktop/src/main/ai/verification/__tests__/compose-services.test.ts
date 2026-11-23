@@ -218,6 +218,16 @@ describe('containerSpec', () => {
     expect(containerSpec(one('services:\n  x:\n    image: nats:2\n    expose: ["4222", "8222"]\n'), { secret }).publish).toEqual([{ container: 4222 }, { container: 8222 }]);
   });
 
+  it('publishes a container port on the host port it is given, and the others on any', () => {
+    const service = one('services:\n  azurite:\n    image: mcr.microsoft.com/azure-storage/azurite\n    ports: ["10000:10000", "10001:10001"]\n');
+    expect(containerSpec(service, { secret, hostPorts: { 10000: 10000 } }).publish).toEqual([{ container: 10000, host: 10000 }, { container: 10001 }]);
+  });
+
+  it('a kind that needs its host port first ignores the given ones', () => {
+    const service = one('services:\n  kafka:\n    image: apache/kafka:3.7.0\n    ports: ["9092:9092"]\n');
+    expect(containerSpec(service, { secret, hostPort: 41000, hostPorts: { 9092: 9092 } }).publish).toEqual([{ container: 41000, host: 41000 }]);
+  });
+
   it('runs Elasticsearch as one node without security, and OpenSearch too', () => {
     const es = containerSpec(one('services:\n  es:\n    image: elasticsearch:8.13.0\n    environment:\n      xpack.security.enabled: "true"\n'), { secret });
     expect(es.env).toMatchObject({ 'discovery.type': 'single-node', 'xpack.security.enabled': 'false' });

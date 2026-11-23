@@ -455,12 +455,15 @@ export interface ContainerSpec {
   env: Record<string, string>;
   command?: string[];
   entrypoint?: string[];
-  /** Each container port, on a random host port on 127.0.0.1, or on `host` when it must be known first */
+  /**
+   * Each container port on 127.0.0.1: on a random host port, on the compose file's own when the
+   * caller found it free, or on `host` when the service must know it before it starts
+   */
   publish: ComposePort[];
 }
 
 /** What the container is started with: compose's safe settings, adjusted for its kind. Pure. */
-export function containerSpec(service: ComposeService, context: { hostPort?: number; secret: () => string }): ContainerSpec {
+export function containerSpec(service: ComposeService, context: { hostPort?: number; hostPorts?: Record<number, number>; secret: () => string }): ContainerSpec {
   const adapter = ADAPTERS[service.kind];
   const spec: { env: Record<string, string>; command?: string[]; image: string } = {
     env: { ...service.env },
@@ -471,7 +474,7 @@ export function containerSpec(service: ComposeService, context: { hostPort?: num
   const containerPorts = service.ports.length ? service.ports.map((p) => p.container) : adapter.ports;
   const publish = adapter.fixedHostPort && context.hostPort
     ? [{ container: context.hostPort, host: context.hostPort }]
-    : containerPorts.map((container) => ({ container }));
+    : containerPorts.map((container) => (context.hostPorts?.[container] ? { container, host: context.hostPorts[container] } : { container }));
   return {
     env: spec.env,
     ...(spec.command ? { command: spec.command } : {}),
