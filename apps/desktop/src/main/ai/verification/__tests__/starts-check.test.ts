@@ -59,6 +59,15 @@ describe('the start-up check', () => {
     expect(started).toEqual(['starts-a1b2c3-api', 'starts-a1b2c3-web']);
   });
 
+  it("can't say everything when a service the base starts is no longer found, as when its dev script was renamed", async () => {
+    // No recipe: what starts is what the files propose, and only the page is proposed now
+    const files = { 'apps/web/package.json': JSON.stringify({ scripts: { dev: 'vite' } }), 'apps/api/package.json': JSON.stringify({ scripts: { 'start-dev': 'tsx src/index.ts' } }) };
+    const { options } = setup(files, { expectServices: ['api', 'web'] });
+    expect(await startsCheck(options)).toEqual({ outcome: 'unavailable', tail: 'The project started, but without api, which the commit this task started from starts. Its start may be gone (a renamed dev script?), or it was removed on purpose: look at it.' });
+    // Nothing missing: a plain pass
+    expect(await startsCheck(setup(files, { expectServices: ['web'] }).options)).toEqual({ outcome: 'passed' });
+  });
+
   it('fails, naming the service, when one does not start', async () => {
     const { options, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, {
       startServer: vi.fn(async (o: { name: string }) => {

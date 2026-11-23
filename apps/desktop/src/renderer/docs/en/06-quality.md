@@ -77,6 +77,7 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 - It counts like any check: a task that makes the project stop starting is blocked only if the project starts on the commit the task started from, each copy by its own recipe. A project that doesn't start on main gets the task that fixes main.
 - It can't say anything, and blocks nothing, when a tool is missing, Docker isn't running, or a port the compose file names is in use on this computer (an open Preview of the project, or your own `docker compose up`).
 - The compose file's ports: when all of them are free, both copies run its services on those ports, so an address the project hard-codes (Azurite's `127.0.0.1:10000`) reaches them; otherwise both run them on free ports. A copy that had to move one anyway is not compared with the other.
+- Without a `preview.json` the app starts what it recognises in the files. When a service the base starts is no longer recognised on the task (its `dev` script was renamed, for example), the check doesn't pass: it says the service is missing and that it couldn't say everything, and blocks nothing, since the service may have been removed on purpose. With a `preview.json` that names the service, a service that doesn't start is a failure.
 - It doesn't run for a project with nothing to start, or for a desktop or mobile app.
 - A changed `preview.json` is listed for the reviewer as a file that decides how checks run.
 

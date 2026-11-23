@@ -241,6 +241,8 @@ describe('verifyTask', () => {
       expect(readInCopy).toBe('yes\n');
       expect(given.saved).toEqual(saved);
       expect(given.cannot).toMatch(/Port 10000 is in use/);
+      // What the base starts by its files, so a service that is no longer found is noticed
+      expect(given.expectServices).toEqual(['site'])
       // Its own name for this run's servers
       expect(given.runId).toMatch(/^[0-9a-f]{6,}$/);
     });
@@ -268,6 +270,13 @@ describe('verifyTask', () => {
       expect(issue).toMatchObject({ title: 'The project no longer starts: it starts on the commit this task started from' });
       expect(issue?.description).toContain('Missing script');
       expect(issue?.fix_required).toMatch(/preview\.json/);
+    });
+
+    it("never blocks on a start it could not judge on the task, even when the base started: a service may be gone on purpose", async () => {
+      const startsCheck = startsBy((cwd) => (existsSync(join(cwd, 'task.txt')) ? { outcome: 'unavailable', tail: 'The project started, but without api' } : { outcome: 'passed' }));
+      const report = await verify({ startsCheck });
+      expect(report.status).toBe('not_verified');
+      expect(verificationIssues(report)).toEqual([]);
     });
 
     it("makes no QA issue of a new project's own start", async () => {

@@ -18,7 +18,9 @@ import { basename, delimiter, dirname, join } from 'node:path';
 import { pathValue, WINDOWS_HOST_ENV } from '../../platform/env';
 import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
-import { gitRunner, type GitRun } from '../merge/git-merge';
+import { gitRunner, type GitRun, withoutGitHooks } from '../merge/git-merge';
+import { execFileSync } from 'node:child_process';
+import { resolveRecipe } from '../../preview/recipe';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
 import { ago, type CheckMemory, type CheckMemoryPlace, memoryKey, openCheckMemory } from './check-memory';
 import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
@@ -545,6 +547,24 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   };
 
   const startsCheck = options.startsCheck ?? realStartsCheck;
+  /** The names of the services a commit starts, by its recipe (read from git, without a copy) */
+  const servicesAt = (at: string): string[] => {
+    const show = (args: string[]) => execFileSync(git, args, { cwd: worktreePath, env: withoutGitHooks(hostEnv), encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      const atFiles = show(['ls-tree', '-r', '-z', '--name-only', at]).split('\0').filter(Boolean);
+      const atRead = (file: string) => {
+        try {
+          return show(['show', `${at}:${file}`]);
+        } catch {
+          return null;
+        }
+      };
+      const { recipe } = resolveRecipe({ files: atFiles, read: atRead, saved: options.previewServices ?? [] });
+      return recipe.kind === 'web' ? (recipe.services ?? []).map((service) => service.name) : [];
+    } catch {
+      return [];
+    }
+  };
   /** This run's own servers: another project's run may be starting its project at the same time */
   const runId = randomBytes(4).toString('hex');
   /** The project started in this copy, by its recipe; once more when it failed only for a port in use */
@@ -557,8 +577,10 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         return null;
       }
     };
+    // On the task's copy: what the base starts, so a service that is no longer found is noticed
+    const expectServices = at === commit && at !== baseCommit ? servicesAt(baseCommit) : undefined;
     const once = () => startsCheck({
-      cwd, files, read, runId, saved: options.previewServices ?? [], started: services.started, compose: services.compose,
+      cwd, files, read, runId, ...(expectServices ? { expectServices } : {}), saved: options.previewServices ?? [], started: services.started, compose: services.compose,
       ...(startsCannot ? { cannot: startsCannot } : {}),
       runCommand: async (command, dir, variables) => {
         const result = await runShell(command, { cwd: dir, env: verificationEnv(hostEnv, { ...variables, ...options.env }), timeoutMs: installTimeout, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024 });
@@ -671,11 +693,25 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   }
 
   // A new project's first task is not blocked by its start alone: there is no base that started to compare with
-  const broke = failed.some((result) => (source ? blocksOnItsOwn(result) && result.name !== STARTS_CHECK.name : result.onBase === 'passed'));
+  const broke = failed.some(blocks(source));
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
   const report: VerificationReport = { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
   if (memory && isAnAnswer(report) && !portsMoved) memory.keepReport(reportKey, report);
   return report;
+}
+
+/**
+ * Whether a check that did not pass blocks the task. On a new project's first task its own checks
+ * do (there is no base), but not its start alone. Otherwise when it passes on the base, except a
+ * start the check could not judge on the task (a service no longer found, a port in use): it may be
+ * gone on purpose, and the reviewer is told instead. Pure.
+ */
+function blocks(source: VerificationReport['source']): (check: CheckResult) => boolean {
+  return (check) => {
+    const starts = check.name === STARTS_CHECK.name;
+    if (source) return blocksOnItsOwn(check) && !starts;
+    return check.onBase === 'passed' && !(starts && check.outcome === 'unavailable');
+  };
 }
 
 /**
@@ -775,7 +811,7 @@ export function failureSummary(tail: string): string {
 
 export function verificationIssues(report: VerificationReport): { key: string; type: 'critical'; title: string; description: string; location?: string; fix_required: string }[] {
   return [
-    ...report.checks.filter((check) => (report.source ? blocksOnItsOwn(check) && check.name !== STARTS_CHECK.name : check.outcome !== 'passed' && check.onBase === 'passed')).map((check) => check.name === STARTS_CHECK.name ? startsIssue(check) : ({
+    ...report.checks.filter((check) => check.outcome !== 'passed' && blocks(report.source)(check)).map((check) => check.name === STARTS_CHECK.name ? startsIssue(check) : ({
       key: `check:${check.command}`,
       type: 'critical' as const,
       title: report.source

@@ -44,6 +44,11 @@ export interface StartsCheckOptions {
   compose: ComposeWiring;
   /** A reason the check can't say anything this run (a compose port it needs is taken) */
   cannot?: string;
+  /**
+   * The services the commit the task started from starts. Without a recipe of its own the task
+   * starts what its files propose, and a service that is no longer found would not be missed.
+   */
+  expectServices?: string[];
   /** Goes into the servers' names: the app's dev servers are told apart by name, and two runs may be at work at once */
   runId?: string;
   runCommand: (command: string, cwd: string, env: Record<string, string>) => Promise<{ code: number; output: string; timedOut?: boolean }>;
@@ -66,7 +71,7 @@ const tail = (text: string) => text.slice(-TAIL_CHARS);
 /** Null: there is nothing to start here (another kind of project, or no single page). */
 export async function startsCheck(options: StartsCheckOptions): Promise<StartsResult | null> {
   const { cwd, files, read } = options;
-  const { recipe } = resolveRecipe({ files, read, saved: options.saved, contained: (dir) => isPathContained(resolve(cwd, dir), cwd).contained });
+  const { recipe, servicesFrom } = resolveRecipe({ files, read, saved: options.saved, contained: (dir) => isPathContained(resolve(cwd, dir), cwd).contained });
   const services = recipe.kind === 'web' ? (recipe.services ?? []) : [];
   if (services.filter((service) => service.page).length !== 1) return null;
   if (options.cannot) return { outcome: 'unavailable', tail: options.cannot };
@@ -134,6 +139,14 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
         const log = options.deps.readLog(started.logs[service.name]) ?? '';
         return { outcome: 'failed', tail: tail(`${service.name} stopped right after it started\n${log}`) };
       }
+    }
+    // Services the project's own recipe names are what it means to start; detected ones may just not be found any more
+    const missing = servicesFrom === 'file' ? [] : (options.expectServices ?? []).filter((name) => !services.some((service) => service.name === name));
+    if (missing.length) {
+      return {
+        outcome: 'unavailable',
+        tail: `The project started, but without ${missing.join(', ')}, which the commit this task started from starts. Its start may be gone (a renamed dev script?), or it was removed on purpose: look at it.`,
+      };
     }
     return { outcome: 'passed' };
   } catch (error) {
