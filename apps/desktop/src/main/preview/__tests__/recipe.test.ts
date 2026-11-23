@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseRecipe } from '../recipe';
+import type { PreviewService } from '../../../shared/types/project';
+import { parseRecipe, resolveRecipe } from '../recipe';
 
 const WEB = { version: 1, kind: 'web', services: [{ name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', port: 5173, page: true }] };
 const parse = (value: unknown) => parseRecipe(JSON.stringify(value));
@@ -65,5 +66,48 @@ describe('parseRecipe', () => {
     expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], port: 70000 }] })).toMatch(/port/);
     expect(reasonOf({ ...WEB, services: [{ ...WEB.services[0], ready: 'health' }] })).toMatch(/ready/);
     expect(parseRecipe(JSON.stringify({ ...WEB, env: { A: 'x'.repeat(70_000) } })).ok).toBe(false);
+  });
+});
+
+describe('resolveRecipe', () => {
+  const SAVED: PreviewService[] = [{ name: 'app', dir: '', command: 'npm run dev', page: true }];
+  const VITE = { 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) };
+  const resolve = (files: Record<string, string>, saved: PreviewService[] = []) => resolveRecipe({ files: Object.keys(files), read: (p) => files[p] ?? null, saved });
+
+  it('uses preview.json before the saved services', () => {
+    expect(resolve({ 'preview.json': JSON.stringify(WEB) }, SAVED)).toEqual({ recipe: WEB, source: 'file' });
+  });
+
+  it('uses the saved services when there is no file', () => {
+    expect(resolve(VITE, SAVED)).toEqual({ recipe: { version: 1, kind: 'web', services: SAVED }, source: 'settings' });
+  });
+
+  it('uses the proposal without asking when it names exactly one page', () => {
+    const r = resolve(VITE);
+    expect(r.source).toBe('proposal');
+    expect(r.recipe.services).toEqual([{ name: 'web', dir: '', command: 'npm run dev -- --port {port}', page: true }]);
+  });
+
+  it('has no source for a project nothing proposes a page for', () => {
+    expect(resolve({ 'README.md': '' })).toEqual({ recipe: { version: 1, kind: 'web', services: [] }, source: 'none' });
+  });
+
+  it('says why an unusable file was passed over, and goes on to the saved services', () => {
+    const r = resolve({ 'preview.json': '{"version":2}' }, SAVED);
+    expect(r.source).toBe('settings');
+    expect(r.invalid).toMatch(/version/);
+  });
+
+  it('fills a file recipe without services from the saved ones, and keeps its steps', () => {
+    const file = { version: 1, kind: 'web', steps: { seed: [] } };
+    expect(resolve({ 'preview.json': JSON.stringify(file) }, SAVED)).toEqual({ recipe: { ...file, services: SAVED }, source: 'file' });
+  });
+
+  it('has no source for a file recipe without services when nothing else names them', () => {
+    expect(resolve({ 'preview.json': '{"version":1,"kind":"web","env":{"A":"b"}}' })).toMatchObject({ source: 'none' });
+  });
+
+  it('leaves a recipe of another kind as it is', () => {
+    expect(resolve({ 'preview.json': '{"version":1,"kind":"desktop"}' }, SAVED)).toEqual({ recipe: { version: 1, kind: 'desktop' }, source: 'file' });
   });
 });

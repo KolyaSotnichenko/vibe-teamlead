@@ -9,9 +9,12 @@
 
 import { z } from 'zod';
 
-import type { PreviewRecipe } from '../../shared/types/preview';
+import type { PreviewRecipe, PreviewRecipeSource } from '../../shared/types/preview';
+import type { PreviewService } from '../../shared/types/project';
 import { FORBIDDEN_ENV } from '../ai/dev-servers/forbidden-env';
 import { validateCommand } from '../ai/security/bash-validator';
+import type { ProjectFiles } from '../ai/verification/detect-checks';
+import { proposePreviewServices } from './detect-services';
 
 export const RECIPE_FILE = 'preview.json';
 
@@ -116,4 +119,35 @@ export function parseRecipe(text: string): ParsedRecipe {
   const recipe = parsed.data as PreviewRecipe;
   const problem = problemIn(recipe);
   return problem ? { ok: false, reason: problem } : { ok: true, recipe };
+}
+
+export interface ResolvedRecipe {
+  recipe: PreviewRecipe;
+  source: PreviewRecipeSource;
+  /** preview.json is there and was not used: why */
+  invalid?: string;
+}
+
+/**
+ * The recipe a start uses, first that applies: the project's `preview.json`, the services the
+ * owner saved, or the proposal from the project's files when it names exactly one page (so
+ * nobody is asked). A file recipe without services takes them from the next two. `none`: no
+ * source gives a page, and the owner is asked. An unusable file is passed over, with why.
+ */
+export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[] }): ResolvedRecipe {
+  const { files, read, saved } = input;
+  const parsed = files.includes(RECIPE_FILE) ? parseRecipe(read(RECIPE_FILE) ?? '') : undefined;
+  const invalid = parsed && !parsed.ok ? { invalid: parsed.reason } : {};
+  const file = parsed?.ok ? parsed.recipe : undefined;
+  if (file && (file.kind !== 'web' || file.services)) return { recipe: file, source: 'file' };
+
+  /** The saved services, else an unambiguous proposal */
+  const detected = (): { services: PreviewService[]; source: 'settings' | 'proposal' | 'none' } => {
+    if (saved.length) return { services: saved, source: 'settings' };
+    const proposed = proposePreviewServices({ files, read });
+    return proposed.filter((service) => service.page).length === 1 ? { services: proposed, source: 'proposal' } : { services: [], source: 'none' };
+  };
+  const { services, source } = detected();
+  if (file) return { recipe: { ...file, services }, source: source === 'none' ? 'none' : 'file' };
+  return { recipe: { version: 1, kind: 'web', services }, source, ...invalid };
 }

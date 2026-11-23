@@ -28,6 +28,12 @@ export interface PreviewRecipe {
   env?: Record<string, string>;
 }
 
+/**
+ * Where the recipe a start uses came from: the project's `preview.json`, the services the owner
+ * saved, the proposal from the project's files (one page, nothing to ask), or nothing
+ */
+export type PreviewRecipeSource = 'file' | 'settings' | 'proposal' | 'none';
+
 export type PreviewStage = 'worktree' | 'install' | 'libraries' | 'database' | 'migrations' | 'seed' | 'services' | 'ready' | 'failed' | 'stopped';
 
 export interface PreviewStatus {
