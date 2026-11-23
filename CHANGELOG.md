@@ -2,6 +2,17 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.62 - 2026-11-23
+
+- **The Preview starts projects by a recipe.** `preview.json` at the project's root says what to install, build, migrate and seed, and which services to run on which ports; the app runs it with no model call. Without one, the app uses the services you saved or what it recognises in the files. A recipe you change in the app goes into main as one commit of its own. The Preview's **Services** panel shows what the recipe runs.
+- **Compose services on the ports the project expects.** A service from the compose file gets the host port the file names when it is free, so an address the project hard-codes (Azurite's `127.0.0.1:10000`) reaches it. When it isn't free, a notice names the service and the port it got instead.
+- **An agent works out a failed start.** When the Preview can't start a project, one agent session reads the code (it has no shell and never sees a secret) and proposes recipes; the app starts each one itself and keeps only one that comes up. It runs at most three times a day by itself; Settings → Project → Queue turns that off, and you can always ask it from the failed preview. The page shows what it tried and found.
+- A failed start says at which stage and which service it failed.
+- **App checks start the project.** Before every QA review and after a merge, the app starts the project by its recipe on a clean copy, with its throwaway database and services, and checks that the page answers and everything stays up. A task that breaks the start is blocked when the project starts on the commit it began from. When the start can't be judged (a port in use, Docker not running, a service main starts is no longer found), the task's window says why and nothing is blocked.
+- A recipe's migrations and seed only ever run on the copy's own throwaway database, never one your settings name.
+- Agents keep `preview.json` true with `RUNNING.md`, and QA checks it against the change.
+- Dev servers the app started for its checks are stopped when you quit it.
+
 ## 2.0.0-beta.61 - 2026-11-20
 
 - **Agents start with the code they work on.** Before a coder, planner, architect, designer or QA session the app looks up the files that work names and puts them in the agent's first message: a small file to change whole, a large one as CodeGraph's map of its symbols with line numbers and the files that use it, so the agent reads the lines it needs instead of the whole file. Before, the coder got parts of its files with gaps and read more than half of them again, and agents asked CodeGraph themselves in fewer than a third of their sessions. The task log says what each session was given ("Code context for …").
