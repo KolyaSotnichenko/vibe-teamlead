@@ -766,6 +766,19 @@ describe("the compose file's other services", () => {
     expect(events).toContain('compose stopped');
   });
 
+  it('says which compose service runs on another port than the compose file gives it', async () => {
+    const { d } = deps({
+      read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,
+      listFiles: () => Object.keys(COMPOSE_FILES),
+      startCompose: vi.fn(async () => ({ ...composeRun(), failed: [], moved: [{ name: 'rabbitmq', wanted: 5672, got: 50672 }] })),
+    });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status.stage).toBe('ready');
+    expect(status.servicesNotices).toEqual([
+      'rabbitmq runs on port 50672 here: port 5672, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for rabbitmq reaches that instead.',
+    ]);
+  });
+
   it('says Docker is missing for them too', async () => {
     const { d } = deps({
       read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,

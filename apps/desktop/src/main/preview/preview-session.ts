@@ -18,7 +18,7 @@ import type { PreviewAddressIssue, PreviewEnvReport, PreviewEnvVar, PreviewStatu
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
-import { type ComposeRun, createRunNetwork, type RunNetwork, startComposeServices } from '../ai/verification/compose-runner';
+import { type ComposeRun, composeMovedNotice, createRunNetwork, type RunNetwork, startComposeServices } from '../ai/verification/compose-runner';
 import { bucketsOf, type ComposeService, composeNameOf, composeServices } from '../ai/verification/compose-services';
 import { composeFilesInOrder, detectChecks, imagesFromComposeFiles } from '../ai/verification/detect-checks';
 import { examplePort, previewAddressesByExamplePort } from './example-urls';
@@ -549,7 +549,9 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
         });
         session.compose = compose;
         check(session);
-        const notices = compose.failed.length ? compose.failed.map((f) => f.reason) : compose.status === 'unavailable' && compose.reason ? [compose.reason] : [];
+        const notStarted = compose.failed.length ? compose.failed.map((f) => f.reason) : compose.status === 'unavailable' && compose.reason ? [compose.reason] : [];
+        // A service that could not have its compose port: an address the project hard-codes misses it
+        const notices = [...notStarted, ...compose.moved.map(composeMovedNotice)];
         emit(session, { message: undefined, ...(compose.status === 'none' ? {} : { services: compose.status }), ...(notices.length ? { servicesNotices: notices } : {}) });
       }
 
