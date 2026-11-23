@@ -4,9 +4,11 @@
  * the two never differ. Sources, in the order they apply: the root's and the service folder's
  * `.env.example`, the preview's database (connection settings it has no database for set
  * empty, so the app can't reach a real one), the compose file's other services it started
- * (queues, storage, search: compose-env.ts), its mail catcher, the owner's values for all
- * services, the other services' preview addresses, the owner's values for this service, and
- * the port. Never `.env`. Pure: no file access.
+ * (queues, storage, search: compose-env.ts), its mail catcher, the recipe's values (preview.json),
+ * the owner's values for all services, the other services' preview addresses, the service's own
+ * recipe values, the owner's values for this service, and the port. A recipe value only replaces
+ * an example's value or adds a variable: never what the preview set itself, never the owner's.
+ * Never `.env`. Pure: no file access.
  */
 
 import type { PreviewEnvService, PreviewEnvSource, PreviewEnvVar } from '../../shared/types/preview';
@@ -29,6 +31,17 @@ function exampleValues(text: string | null): Map<string, string> {
   return values;
 }
 
+/** What a recipe value may replace: an example's value, or another recipe value. Everything else stays. */
+const RECIPE_REPLACES = new Set<PreviewEnvSource>(['example', 'exampleDir', 'recipe']);
+
+function applyRecipe(vars: Map<string, PreviewEnvVar>, recipe: Record<string, string> | undefined): void {
+  for (const [name, value] of Object.entries(recipe ?? {})) {
+    const before = vars.get(name);
+    if (before && !RECIPE_REPLACES.has(before.source)) continue;
+    vars.set(name, { name, value, source: 'recipe', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });
+  }
+}
+
 export interface BaseEnvInput {
   /** The service's folder, '' for the root */
   dir: string;
@@ -42,6 +55,8 @@ export interface BaseEnvInput {
   compose?: ComposeWiring;
   /** The mail catcher's SMTP port, when it runs */
   mailPort?: number;
+  /** The recipe's values for every service (`env` in preview.json) */
+  recipe?: Record<string, string>;
   /** The owner's values for every service (`previewEnv`) */
   overrides?: Record<string, string>;
   /** Before the start: the database's and the mail catcher's values aren't known yet */
@@ -73,6 +88,7 @@ export function baseEnvVars(input: BaseEnvInput): PreviewEnvVar[] {
   if (input.mailPort) for (const [name, value] of Object.entries(mailEnv(examples, input.mailPort))) set(name, value, 'mail');
   // For a service in a folder: what only the root's example names, which every service gets
   if (input.dir) for (const [name, v] of vars) if (root.has(name) && !own.has(name)) vars.set(name, { ...v, shared: true });
+  applyRecipe(vars, input.recipe);
   for (const [name, value] of Object.entries(input.overrides ?? {})) {
     const before = vars.get(name);
     vars.set(name, { name, value, source: 'override', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });
@@ -86,6 +102,8 @@ export interface ServiceEnvInput {
   urlEnv?: Record<string, string>;
   /** Each service's preview address */
   urls: Record<string, string>;
+  /** The recipe's values for this service (its `env` in preview.json) */
+  recipe?: Record<string, string>;
   /** The owner's values for this service (`previewServiceEnv`) */
   serviceOverrides?: Record<string, string>;
   portEnv: string;
@@ -106,6 +124,7 @@ export function serviceEnvVars(base: PreviewEnvVar[], input: ServiceEnvInput): P
     else address(v.name, rewritten[v.name]);
   }
   for (const [name, other] of Object.entries(input.urlEnv ?? {})) if (input.urls[other]) address(name, input.urls[other]);
+  applyRecipe(vars, input.recipe);
   for (const [name, value] of Object.entries(input.serviceOverrides ?? {})) {
     const before = vars.get(name);
     vars.set(name, { name, value, source: 'serviceOverride', ...(before ? { automatic: { value: before.value, source: before.source } } : {}) });

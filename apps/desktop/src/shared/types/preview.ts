@@ -164,9 +164,10 @@ export type PreviewRunningDoc = ({ exists: false } | { exists: true; markdown: s
  * service's folder), the preview's own database, another compose service it started (a
  * queue, storage, search: `service` names it) or its mail catcher, left empty on purpose (it
  * would connect to a real service), another service's preview address, the port the
- * preview chose, or the owner's value (for all services or this one).
+ * preview chose, the project's recipe (preview.json), or the owner's value (for all services
+ * or this one).
  */
-export type PreviewEnvSource = 'example' | 'exampleDir' | 'database' | 'service' | 'mail' | 'blocked' | 'address' | 'port' | 'override' | 'serviceOverride';
+export type PreviewEnvSource = 'example' | 'exampleDir' | 'database' | 'service' | 'mail' | 'blocked' | 'address' | 'port' | 'recipe' | 'override' | 'serviceOverride';
 
 export interface PreviewEnvVar {
   name: string;

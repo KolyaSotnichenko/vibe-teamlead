@@ -112,6 +112,35 @@ describe('serviceEnvVars', () => {
   });
 });
 
+describe("a recipe's values", () => {
+  it("a recipe value replaces an example value and adds a new one, marked as the recipe's", () => {
+    const vars = baseEnvVars({ dir: '', rootExample: 'AUTH_MODE=sso\n', dirExample: null, started: [], recipe: { AUTH_MODE: 'dev', FEATURE_X: 'on' } });
+    expect(vars).toContainEqual({ name: 'AUTH_MODE', value: 'dev', source: 'recipe', automatic: { value: 'sso', source: 'example' } });
+    expect(vars).toContainEqual({ name: 'FEATURE_X', value: 'on', source: 'recipe' });
+  });
+
+  it("a recipe value never replaces the preview's database address, a setting left empty on purpose, or the owner's value", () => {
+    const vars = byName(baseEnvVars({
+      dir: '', rootExample: 'DATABASE_URL=postgresql://u:p@localhost:5432/x\nREDIS_URL=redis://localhost:6379\nMODE=a\n', dirExample: null, started: PG,
+      recipe: { DATABASE_URL: 'postgresql://real/prod', REDIS_URL: 'redis://real:6379', MODE: 'b' }, overrides: { MODE: 'mine' },
+    }));
+    expect(vars.DATABASE_URL).toMatchObject({ value: 'postgresql://verify:pw@127.0.0.1:55001/verify', source: 'database' });
+    expect(vars.REDIS_URL).toMatchObject({ value: '', source: 'blocked' });
+    expect(vars.MODE).toMatchObject({ value: 'mine', source: 'override' });
+  });
+
+  it("a service's own recipe value wins over the recipe's shared one, and loses to another service's address and to the owner", () => {
+    const base = baseEnvVars({ dir: 'apps/web', rootExample: null, dirExample: 'API_URL=http://localhost:3001\nMODE=a\nTHEME=x\n', started: [], recipe: { MODE: 'shared' } });
+    const vars = byName(serviceEnvVars(base, {
+      byExamplePort: new Map([[3001, 'http://localhost:4101']]), urls: {}, portEnv: 'PORT', port: 4102,
+      recipe: { MODE: 'own', API_URL: 'http://elsewhere', THEME: 'y' }, serviceOverrides: { THEME: 'mine' },
+    }));
+    expect(vars.MODE).toMatchObject({ value: 'own', source: 'recipe' });
+    expect(vars.API_URL).toMatchObject({ value: 'http://localhost:4101', source: 'address' });
+    expect(vars.THEME).toMatchObject({ value: 'mine', source: 'serviceOverride' });
+  });
+});
+
 describe('plannedEnv', () => {
   const FILES: Record<string, string> = {
     'docker-compose.yml': 'services:\n  db:\n    image: postgres:18-alpine\n  queue:\n    image: rabbitmq:3\n',

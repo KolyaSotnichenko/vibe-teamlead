@@ -1284,6 +1284,7 @@
         "blocked": "left empty on purpose: it would connect to a real service",
         "address": "address of another part of this preview",
         "port": "port chosen by the preview",
+        "recipe": "from the project's recipe (preview.json)",
         "override": "your value (all services)",
         "serviceOverride": "your value"
       }
