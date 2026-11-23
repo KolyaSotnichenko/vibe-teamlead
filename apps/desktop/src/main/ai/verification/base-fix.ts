@@ -11,6 +11,7 @@ import path from 'node:path';
 import { dataBlock } from '../orchestration/message-data';
 import { writeFileReplacingSync } from '../safe-write';
 import { failureSummary, type VerificationReport } from './verify-task';
+import { STARTS_CHECK_COMMAND } from '../../../shared/utils/verification-summary';
 
 const APP_DIR = '.vibe-teamlead';
 const LEDGER = 'base-fixes.json';
@@ -31,12 +32,16 @@ export function baseFailures(report: VerificationReport): BaseFailure[] {
 
 /** The task that fixes main. Pure. */
 export function baseFixTask(failures: BaseFailure[], baseCommit: string, branch = 'main'): { title: string; description: string } {
-  const commands = failures.map((f) => `\`${f.command}\``);
-  const title = `Fix ${branch}: ${commands.join(', ')} ${failures.length > 1 ? 'fail' : 'fails'}`;
+  const start = failures.find((f) => f.command === STARTS_CHECK_COMMAND);
+  const checks = failures.filter((f) => f !== start);
+  const commands = checks.map((f) => `\`${f.command}\``);
+  const title = !checks.length
+    ? `Fix ${branch}: the project does not start`
+    : `Fix ${branch}: ${commands.join(', ')} ${checks.length > 1 ? 'fail' : 'fails'}${start ? ', and the project does not start' : ''}`;
   const sections = failures.map((failure) => {
     const summary = failureSummary(failure.tail);
     return [
-      `## \`${failure.command}\``,
+      failure === start ? '## The project does not start' : `## \`${failure.command}\``,
       '',
       summary ? `What failed:\n${summary}\n` : '',
       dataBlock({
@@ -48,11 +53,20 @@ export function baseFixTask(failures: BaseFailure[], baseCommit: string, branch 
       }),
     ].filter(Boolean).join('\n');
   });
+  const startText = start
+    ? [
+        `The project does not start on ${branch} (commit ${baseCommit.slice(0, 7)}). Before every QA review the app starts it on a clean copy by \`preview.json\` (or, without one, by what it works out from the files), with a throwaway database and the compose file's services, without the owner's keys; while it doesn't start on ${branch}, it can't tell whether a task breaks the start.`,
+        '',
+        `Find why it doesn't start and fix whichever is wrong: the code, or \`preview.json\` (a command, folder, port or ready path that no longer matches), and \`RUNNING.md\` with it. If it needs a key or account only the owner has, make it start without one (a local or mock mode), or say in \`RUNNING.md\` what is needed; never put a value in \`preview.json\`. Change nothing beyond what makes it start.`,
+        '',
+      ]
+    : [];
   const description = [
-    `${commands.join(', ')} ${failures.length > 1 ? 'fail' : 'fails'} on ${branch} (commit ${baseCommit.slice(0, 7)}), before any task's changes. The app runs it before every QA review on a clean copy of the committed code, with a throwaway database; while it fails on ${branch}, it can't tell whether a task breaks it.`,
+    ...startText,
+    ...(checks.length ? [`${commands.join(', ')} ${checks.length > 1 ? 'fail' : 'fails'} on ${branch} (commit ${baseCommit.slice(0, 7)}), before any task's changes. The app runs it before every QA review on a clean copy of the committed code, with a throwaway database; while it fails on ${branch}, it can't tell whether a task breaks it.`,
     '',
     `Find why it fails and fix it so it passes on ${branch}. Fix whichever is wrong: the code, or a test that no longer matches what the code is meant to do (for example one that hard-codes the latest migration). Don't delete, skip or weaken tests to make it pass, and change nothing beyond what makes it pass.`,
-    '',
+    ''] : []),
     ...sections,
   ].join('\n');
   return { title, description };

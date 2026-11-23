@@ -53,6 +53,8 @@ export interface StartServicesInput {
   check: () => void;
   /** A server's name, just before it starts: the caller stops it when anything goes wrong */
   onServer?: (name: string) => void;
+  /** A service is up: its log and values, before the next one starts (the Logs panel shows it at once) */
+  onStarted?: (service: PreviewService, started: { logPath: string; vars: PreviewEnvVar[] }) => void;
   /** A started server's process ended on its own */
   onExit?: (service: PreviewService, name: string, port: number) => void;
 }
@@ -174,6 +176,7 @@ export async function startRecipeServices(input: StartServicesInput, deps: Start
     vars[service.name] = own.map((v) => (v.source === 'port' ? { ...v, value: String(started.port) } : v));
     urls[service.name] = started.url;
     logs[service.name] = started.logPath;
+    input.onStarted?.(service, { logPath: started.logPath, vars: vars[service.name] });
     if (service.page) url = started.url;
     const wanted = expected[service.name];
     if (wanted && started.port !== wanted) displaced[service.name] = { ownPort: wanted, previewPort: started.port };

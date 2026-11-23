@@ -488,6 +488,10 @@ async function startServices(session: Session, files: string[]): Promise<Started
       timeoutMs: SERVER_START_TIMEOUT_MS,
       check: () => check(session),
       onServer: (name) => session.servers.push(name),
+      onStarted: (service, up) => {
+        session.logs = { ...session.logs, [service.name]: up.logPath };
+        session.vars = { ...session.vars, [service.name]: up.vars };
+      },
       onExit: (service, name, port) => void serviceExited(session, service.name, name, port),
     },
     session.deps,

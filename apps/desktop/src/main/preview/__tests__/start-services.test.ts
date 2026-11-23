@@ -57,6 +57,17 @@ describe('startRecipeServices', () => {
     expect(started.logs).toEqual({ api: '/logs/check-api', web: '/logs/check-web' });
   });
 
+  it("hands over each service's log and values as soon as it is up, before the next one starts", async () => {
+    const seen: string[] = [];
+    const { deps, options } = setup({}, { onStarted: (service, started) => seen.push(`${service.name}:${started.logPath}:${started.vars.length > 0}`) });
+    vi.mocked(deps.startServer).mockImplementation(async (o: { name: string; port?: number }) => {
+      seen.push(`start ${o.name}`);
+      return { url: `http://localhost:${o.port ?? 4200}`, port: o.port ?? 4200, logPath: `/logs/${o.name}`, reused: false };
+    });
+    await startRecipeServices(options, deps);
+    expect(seen).toEqual(['start check-api', 'api:/logs/check-api:true', 'start check-web', 'web:/logs/check-web:true']);
+  });
+
   it('picks another port when the expected one is taken, and says which moved', async () => {
     const { deps, options } = setup({ portFree: vi.fn(async (port: number) => port !== 3001) });
     const started = await startRecipeServices(options, deps);

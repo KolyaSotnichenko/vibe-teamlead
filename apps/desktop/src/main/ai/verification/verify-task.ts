@@ -10,6 +10,7 @@
  * It is no sandbox. No Electron imports: this runs in the worker too.
  */
 
+import type { StartsWhy } from '../../../shared/utils/verification-summary';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,7 @@ import { pathValue, WINDOWS_HOST_ENV } from '../../platform/env';
 import { runShell, searchPath } from '../../platform/exec';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { gitRunner, type GitRun, withoutGitHooks } from '../merge/git-merge';
-import { execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { resolveRecipe } from '../../preview/recipe';
 import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
 import { ago, type CheckMemory, type CheckMemoryPlace, memoryKey, openCheckMemory } from './check-memory';
@@ -49,6 +50,8 @@ export interface CheckResult extends Check {
   onBase?: CheckOutcome;
   /** The end of its output there, when it failed there too */
   tailOnBase?: string;
+  /** The start-up check: why it could not judge the task */
+  why?: StartsWhy;
 }
 
 export interface TamperFinding {
@@ -316,6 +319,41 @@ async function detectAt(run: GitRun, commit: string): Promise<{ detected: Detect
   };
 }
 
+/** What the start-up check's outcome reads as in the task's log */
+const STARTS_WORDS: Record<CheckOutcome, string> = { passed: 'started', failed: 'did not start', timed_out: 'ran out of time starting', unavailable: 'could not be judged' };
+
+/** The files a recipe, or what the app proposes without one, is read from */
+const RECIPE_INPUT = /(^|\/)(preview\.json|package\.json|pyproject\.toml|requirements\.txt|Pipfile|Gemfile|[^/]+\.py)$/;
+const MAX_RECIPE_INPUTS = 2000;
+
+/** Files of a commit, read in one git process that doesn't block: `git cat-file --batch` */
+function readAt(git: string, cwd: string, env: NodeJS.ProcessEnv, commit: string, files: string[]): Promise<Map<string, string>> {
+  return new Promise((resolveRead) => {
+    const out = new Map<string, string>();
+    if (!files.length) return resolveRead(out);
+    const child = spawn(git, ['cat-file', '--batch'], { cwd, env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const chunks: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+    child.on('error', () => resolveRead(out));
+    child.on('close', () => {
+      const data = Buffer.concat(chunks);
+      let at = 0;
+      for (const file of files) {
+        const end = data.indexOf(10, at);
+        if (end < 0) break;
+        const header = data.subarray(at, end).toString('utf-8');
+        at = end + 1;
+        const size = /^\S+ blob (\d+)$/.exec(header)?.[1];
+        if (size === undefined) continue;
+        out.set(file, data.subarray(at, at + Number(size)).toString('utf-8'));
+        at += Number(size) + 1;
+      }
+      resolveRead(out);
+    });
+    child.stdin.end(files.map((file) => `${commit}:${file}`).join('\n') + '\n');
+  });
+}
+
 /** A failure of the start-up check that says only that a port was taken: it is run once more */
 const PORT_IN_USE = /EADDRINUSE|address already in use|port is already allocated/i;
 
@@ -342,7 +380,11 @@ function anyFreePort(): Promise<number> {
 /** What the start-up check starts servers with: the app's dev-server manager, with the copy's short environment */
 function startsDeps(hostEnv: NodeJS.ProcessEnv, projectEnv: Record<string, string>): StartsCheckOptions['deps'] {
   return {
-    startServer: (start) => startDevServer({ ...start, env: { ...(verificationEnv(hostEnv, projectEnv) as Record<string, string>), ...start.env } }),
+    startServer: (start) => {
+      // As for every check: the copy's values, then the owner's. CI is for test runners: some dev servers change under it.
+      const { CI: _ci, ...env } = verificationEnv(hostEnv, { ...start.env, ...projectEnv }) as Record<string, string>;
+      return startDevServer({ ...start, env });
+    },
     stopServer: stopDevServer,
     pickPort: anyFreePort,
     portFree: localPortFree,
@@ -364,7 +406,9 @@ function startsDeps(hostEnv: NodeJS.ProcessEnv, projectEnv: Record<string, strin
  */
 function isAnAnswer(report: VerificationReport): boolean {
   const ran = (outcome: CheckOutcome | undefined) => outcome === undefined || outcome === 'passed' || outcome === 'failed';
-  return report.services?.status !== 'unavailable' && report.checks.every((check) => ran(check.outcome) && ran(check.onBase));
+  // A start that failed for a port in use says something about this computer at that moment, not the commit
+  const portRace = report.checks.some((check) => check.name === STARTS_CHECK.name && check.outcome === 'failed' && PORT_IN_USE.test(check.tail ?? ''));
+  return !portRace && report.services?.status !== 'unavailable' && report.checks.every((check) => ran(check.outcome) && ran(check.onBase));
 }
 
 function took(ms: number): string {
@@ -460,6 +504,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   };
   /** Whether the last copy had to do without a database or service it needs: its failures may be only that */
   let copyWithoutServices = false;
+  /** Why, in the copy's own words */
+  let copyServicesReason = '';
   /** A clean copy of a commit, gone afterwards */
   const inCopy = async <T>(at: string, work: (cwd: string, services: { started: StartedService[]; compose: ComposeWiring }) => Promise<T>): Promise<T> => {
     const parent = mkdtempSync(join(tmpdir(), 'vibe-teamlead-verify-'));
@@ -493,8 +539,9 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       try {
         const statuses = [started.status, compose.status].filter((status) => status !== 'none');
         copyWithoutServices = statuses.includes('unavailable');
+        const reason = [started.reason, compose.status === 'unavailable' ? compose.reason : undefined].filter(Boolean).join(' ');
+        copyServicesReason = copyWithoutServices ? reason : '';
         if (statuses.length) {
-          const reason = [started.reason, compose.status === 'unavailable' ? compose.reason : undefined].filter(Boolean).join(' ');
           services ??= {
             status: statuses.includes('unavailable') ? 'unavailable' : 'started',
             images: [...from.images.map((image) => image.image), ...from.compose.map((service) => service.image)],
@@ -547,23 +594,30 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   };
 
   const startsCheck = options.startsCheck ?? realStartsCheck;
-  /** The names of the services a commit starts, by its recipe (read from git, without a copy) */
-  const servicesAt = (at: string): string[] => {
-    const show = (args: string[]) => execFileSync(git, args, { cwd: worktreePath, env: withoutGitHooks(hostEnv), encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
-    try {
-      const atFiles = show(['ls-tree', '-r', '-z', '--name-only', at]).split('\0').filter(Boolean);
-      const atRead = (file: string) => {
-        try {
-          return show(['show', `${at}:${file}`]);
-        } catch {
-          return null;
-        }
-      };
-      const { recipe } = resolveRecipe({ files: atFiles, read: atRead, saved: options.previewServices ?? [] });
-      return recipe.kind === 'web' ? (recipe.services ?? []).map((service) => service.name) : [];
-    } catch {
-      return [];
+  /**
+   * The names of the services a commit starts, by its recipe: read from git, without a copy, and
+   * without blocking (this runs in the main process after a merge). A folder that is a link in the
+   * commit counts as leading out, as it does in a copy. Empty when it starts nothing with one page.
+   */
+  const servicesAt = async (at: string): Promise<string[]> => {
+    const listed = (await run(['ls-tree', '-r', '-z', at])).raw.split('\0').filter(Boolean);
+    const atFiles: string[] = [];
+    const links: string[] = [];
+    for (const entry of listed) {
+      const tab = entry.indexOf('\t');
+      const path = entry.slice(tab + 1);
+      atFiles.push(path);
+      if (entry.startsWith('120000 ')) links.push(path);
     }
+    const contents = await readAt(git, worktreePath, withoutGitHooks(hostEnv), at, atFiles.filter((file) => RECIPE_INPUT.test(file)).slice(0, MAX_RECIPE_INPUTS));
+    const { recipe } = resolveRecipe({
+      files: atFiles,
+      read: (file) => contents.get(file) ?? null,
+      saved: options.previewServices ?? [],
+      contained: (dir) => !links.some((link) => dir === link || dir.startsWith(`${link}/`)),
+    });
+    const services = recipe.kind === 'web' ? (recipe.services ?? []) : [];
+    return services.filter((service) => service.page).length === 1 ? services.map((service) => service.name) : [];
   };
   /** This run's own servers: another project's run may be starting its project at the same time */
   const runId = randomBytes(4).toString('hex');
@@ -578,13 +632,23 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       }
     };
     // On the task's copy: what the base starts, so a service that is no longer found is noticed
-    const expectServices = at === commit && at !== baseCommit ? servicesAt(baseCommit) : undefined;
+    const expectServices = at === commit && at !== baseCommit ? await servicesAt(baseCommit).catch(() => []) : undefined;
+    // A copy without the database or services its project needs proves nothing about its start
+    const cannot = startsCannot ?? (copyWithoutServices ? `The copy ran without the database or services the project needs: ${copyServicesReason || "Docker isn't running"}.` : undefined);
     const once = () => startsCheck({
       cwd, files, read, runId, ...(expectServices ? { expectServices } : {}), saved: options.previewServices ?? [], started: services.started, compose: services.compose,
-      ...(startsCannot ? { cannot: startsCannot } : {}),
+      ...(cannot ? { cannot, cannotWhy: { reason: startsCannot ? 'port' : 'services' } } : {}),
+      // The recipe's migrations and seed, by the rule the detected ones follow: only the copy's own throwaway database
+      migratable,
+      timeoutMs: checkTimeout,
       runCommand: async (command, dir, variables) => {
-        const result = await runShell(command, { cwd: dir, env: verificationEnv(hostEnv, { ...variables, ...options.env }), timeoutMs: installTimeout, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024 });
-        return { code: result.code, output: `${result.stdout}${result.stderr}`, timedOut: result.timedOut };
+        let output = '';
+        const result = await runShell(command, {
+          cwd: dir, env: verificationEnv(hostEnv, { ...variables, ...options.env }), timeoutMs: checkTimeout, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024,
+          // The end, where the error is, and line by line through the redaction, as for the other checks
+          onLine: (line) => { output = `${output}${redact(line)}\n`.slice(-TAIL_CHARS); },
+        });
+        return { code: result.code, output, timedOut: result.timedOut };
       },
       deps: startsDeps(hostEnv, options.env),
       signal,
@@ -604,8 +668,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         flaky = true;
       }
     }
-    say(`the project ${result.outcome === 'passed' ? 'started' : result.outcome.replace('_', ' ')} in ${took(Date.now() - startedAt)}`);
-    return { ...STARTS_CHECK, outcome: result.outcome, ...(result.tail ? { tail: redact(result.tail) } : {}), ...(flaky ? { flaky } : {}) };
+    say(`the project ${STARTS_WORDS[result.outcome]} in ${took(Date.now() - startedAt)}`);
+    return { ...STARTS_CHECK, outcome: result.outcome, ...(result.why ? { why: result.why } : {}), ...(result.tail ? { tail: redact(result.tail) } : {}), ...(flaky ? { flaky } : {}) };
   };
 
   const results = await inCopy(commit, async (cwd, services) => {
@@ -647,7 +711,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     }
   }
   // With the task's own commands there is nothing on the base to compare with
-  const unknown = source ? [] : failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`));
+  // A start not judged on the task blocks nothing whatever the base says: no copy of the base for it
+  const unknown = source ? [] : failed.filter((result) => !baseResults.has(`${baseCommit}\0${result.command}`) && !(result.name === STARTS_CHECK.name && result.outcome === 'unavailable'));
   if (unknown.length) {
     for (const result of unknown) say(`${result.command} ${result.outcome.replace('_', ' ')}: running it on ${baseRef} to see whether the task broke it`);
     await inCopy(baseCommit, async (cwd, services) => {
@@ -693,6 +758,8 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   }
 
   // A new project's first task is not blocked by its start alone: there is no base that started to compare with
+  // Nothing ran at all (no checks, nothing to start): that is not a pass
+  if (!results.length) return { status: tamper.length ? 'regression' : 'not_configured', commit, baseCommit, checks: [], tamper, runnerConfigChanged };
   const broke = failed.some(blocks(source));
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
   const report: VerificationReport = { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
@@ -735,7 +802,8 @@ export function verificationSummary(report: VerificationReport): VerificationSum
   return {
     status: report.status,
     commit: report.commit,
-    checks: report.checks.map(({ command, outcome, onBase }) => ({ command, outcome, ...(onBase ? { onBase } : {}) })),
+    // Why the start could not be judged: the task window says it in the owner's language
+    checks: report.checks.map(({ command, outcome, onBase, why }) => ({ command, outcome, ...(onBase ? { onBase } : {}), ...(why && outcome === 'unavailable' ? { why } : {}) })),
     ...(report.services ? { services: { status: report.services.status, images: report.services.images } } : {}),
     ...(report.migrationsSkipped ? { migrationsSkipped: true } : {}),
     ...(report.source ? { source: report.source } : {}),
@@ -749,11 +817,12 @@ export function describeVerification(report: VerificationReport): string {
   const runner = report.runnerConfigChanged.length ? [`The task also changed files that decide how checks run, so look at these before trusting a pass: ${report.runnerConfigChanged.join(', ')}`] : [];
   if (report.status === 'not_configured' && !report.tamper.length) return ['The app found no checks to run for this project, so it verified nothing.', ...runner].join('\n');
   const lines = report.checks.map((check) => {
-    const base = check.onBase === undefined ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (the same on the base: says nothing about this task)';
+    const notJudged = check.name === STARTS_CHECK.name && check.outcome === 'unavailable';
+    const base = check.onBase === undefined || notJudged ? '' : check.onBase === 'passed' ? ' (passes on the base: this task broke it)' : ' (the same on the base: says nothing about this task)';
     const starts = check.name === STARTS_CHECK.name;
     const what = starts ? 'The project starts' : check.command;
     // Not started for a reason outside the task (a port in use, Docker): the reason, not "a tool is missing"
-    const outcome = starts && check.outcome === 'unavailable' ? `could not be tried here${check.tail ? `: ${check.tail.split('\n')[0]}` : ''}` : OUTCOME_WORDS[check.outcome];
+    const outcome = starts && check.outcome === 'unavailable' ? `could not be judged${check.tail ? `: ${check.tail.split('\n')[0]}` : ''}` : OUTCOME_WORDS[check.outcome];
     return `- ${what}: ${outcome}${check.exitCode === undefined ? '' : ` (exit ${check.exitCode})`}${check.flaky ? ' (failed once, then passed: flaky)' : ''}${base}`;
   });
   if (report.migrationsSkipped) runner.push('The migrations were not run: there was no temporary database to run them on, and they could change a real one.');

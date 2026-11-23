@@ -34,6 +34,12 @@ describe('VerificationNotice', () => {
     expect(screen.getByText('verification.outcome.sameOnBase')).toBeInTheDocument();
   });
 
+  it('says why the start could not be judged, naming the services, not that it could not be tried', async () => {
+    setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable', why: { reason: 'missing', names: ['api', 'worker'] } }] });
+    expect(await screen.findByText('verification.startsWhy.missing')).toBeInTheDocument();
+    expect(screen.queryByText('verification.outcome.notTried')).not.toBeInTheDocument();
+  });
+
   it('calls the start-up check by what it means, not by a command', async () => {
     setup({ status: 'not_verified', checks: [{ command: 'pnpm run test', outcome: 'passed' }, { command: STARTS_CHECK_COMMAND, outcome: 'failed', onBase: 'failed' }] });
     expect(await screen.findByText('verification.startsCheck')).toBeInTheDocument();

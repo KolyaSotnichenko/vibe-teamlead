@@ -3,6 +3,7 @@
 // require-in-the-middle hooks. Sentry's hooks expect require.cache to exist,
 // which is only available in CommonJS. Without this, node-pty native module
 // loading fails with "ReferenceError: require is not defined".
+import { killAllDevServersNow } from './ai/dev-servers/dev-servers';
 import { stopAllStorybooks } from './design/storybook-service';
 import { removePreviewLeftovers } from './preview/preview-database';
 import { cleanUpPreviewLeftovers } from './preview/preview-worktree';
@@ -723,6 +724,8 @@ app.on('before-quit', (event) => {
 
       // The preview's servers and database container; bounded so a hung docker can't hold the quit
       await Promise.race([stopPreview().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 5000))]);
+      // After the Preview's own stop: dev servers the app started for itself (an app check's start after a merge) don't outlive it
+      killAllDevServersNow();
 
       // The Telegram bot's long poll; bounded like the preview
       await Promise.race([stopTelegram().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 2000))]);

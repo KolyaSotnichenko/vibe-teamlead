@@ -9,10 +9,21 @@ export type VerificationOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailab
 /** The app check that starts the project by its recipe (main: ai/verification/starts-check.ts), told apart by this command */
 export const STARTS_CHECK_COMMAND = 'start the project by its recipe';
 
+/**
+ * Why the start-up check could not judge the task: a service the base starts is missing, nothing
+ * could be started, a port the project expects is in use, the copy had no database or services,
+ * a tool is missing, or the check was stopped. Names are the services concerned.
+ */
+export interface StartsWhy {
+  reason: 'missing' | 'nothing' | 'port' | 'services' | 'tool' | 'stopped';
+  names?: string[];
+}
+const STARTS_REASONS: StartsWhy['reason'][] = ['missing', 'nothing', 'port', 'services', 'tool', 'stopped'];
+
 export interface VerificationSummary {
   status: 'passed' | 'regression' | 'not_verified' | 'not_configured';
   commit?: string;
-  checks: { command: string; outcome: VerificationOutcome; onBase?: VerificationOutcome }[];
+  checks: { command: string; outcome: VerificationOutcome; onBase?: VerificationOutcome; why?: StartsWhy }[];
   services?: { status: 'started' | 'unavailable'; images: string[] };
   migrationsSkipped?: boolean;
   /** 'task': the base had no checks, so the commands came from the task itself */
@@ -38,7 +49,13 @@ export function parseVerificationSummary(text: string): VerificationSummary | nu
     const check = entry as Record<string, unknown> | null;
     if (typeof check?.command !== 'string' || typeof check.outcome !== 'string' || !OUTCOMES.includes(check.outcome)) continue;
     const onBase = typeof check.onBase === 'string' && OUTCOMES.includes(check.onBase) ? (check.onBase as VerificationOutcome) : undefined;
-    checks.push({ command: check.command, outcome: check.outcome as VerificationOutcome, ...(onBase ? { onBase } : {}) });
+    const why = check.why as { reason?: unknown; names?: unknown } | undefined;
+    const validWhy = typeof why?.reason === 'string' && STARTS_REASONS.includes(why.reason as StartsWhy['reason']);
+    const names = validWhy && Array.isArray(why.names) ? why.names.filter((name): name is string => typeof name === 'string').slice(0, 20) : [];
+    checks.push({
+      command: check.command, outcome: check.outcome as VerificationOutcome, ...(onBase ? { onBase } : {}),
+      ...(validWhy ? { why: { reason: why.reason as StartsWhy['reason'], ...(names.length ? { names } : {}) } } : {}),
+    });
   }
 
   const services = raw.services as { status?: unknown; images?: unknown } | undefined;

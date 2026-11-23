@@ -265,7 +265,7 @@ describe('verifyTask', () => {
       const report = await verify({ startsCheck });
       expect(describeVerification(report)).toMatch(/- The project starts: FAILED \(passes on the base: this task broke it\)/);
       const unavailable = await verify({ startsCheck: startsBy(() => ({ outcome: 'unavailable', tail: 'Port 10000 is in use' })) });
-      expect(describeVerification(unavailable)).toMatch(/- The project starts: could not be tried here: Port 10000 is in use/);
+      expect(describeVerification(unavailable)).toMatch(/- The project starts: could not be judged: Port 10000 is in use/);
       const issue = verificationIssues(report).find((i) => i.key === 'check:start the project by its recipe');
       expect(issue).toMatchObject({ title: 'The project no longer starts: it starts on the commit this task started from' });
       expect(issue?.description).toContain('Missing script');
@@ -277,6 +277,63 @@ describe('verifyTask', () => {
       const report = await verify({ startsCheck });
       expect(report.status).toBe('not_verified');
       expect(verificationIssues(report)).toEqual([]);
+    });
+
+    it("tells the check whether the copy may be migrated: never when the owner's settings name a database", async () => {
+      const startsCheck = startsBy(() => ({ outcome: 'passed' }));
+      await verify({ startsCheck, env: { DATABASE_URL: 'postgres://owners-dev-db' } });
+      expect(startsCheck.mock.calls[0][0].migratable).toBe(false);
+    });
+
+    it('gives the check the run\'s time for checks', async () => {
+      const startsCheck = startsBy(() => ({ outcome: 'passed' }));
+      await verify({ startsCheck, checkTimeoutMs: 12_345 });
+      expect(startsCheck.mock.calls[0][0].timeoutMs).toBe(12_345);
+    });
+
+    it('says nothing was checked, not that checks passed, when there was nothing to run and nothing started', async () => {
+      writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'a-library' }));
+      commit(repo, 'a library');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      const report = await verify({ commands: undefined, detected: { install: [], checks: [] }, startsCheck: startsBy(() => null) });
+      expect(report.status).toBe('not_configured');
+    });
+
+    it("keeps the end of a recipe step's output, where the error is, and keeps the project's values out of it", async () => {
+      let output = '';
+      const startsCheck = vi.fn<Starts>(async (o) => {
+        const result = await o.runCommand(`printf 'banner\\n%.0s' $(seq 1 400); echo "secret is $OWN"; echo the real error`, o.cwd, {});
+        output = result.output;
+        return { outcome: 'passed' };
+      });
+      await verify({ startsCheck, env: { OWN: 'owner-value-123' } });
+      expect(output).toContain('the real error');
+      expect(output).not.toContain('owner-value-123');
+    });
+
+    it("can't say anything about the start when the copy is without the database or services it needs", async () => {
+      writeFileSync(join(repo, 'docker-compose.yml'), 'services:\n  db:\n    image: postgres:18-alpine\n');
+      commit(repo, 'compose');
+      git(wt, 'merge', '-q', '--no-edit', 'main');
+      const startsCheck = startsBy(() => ({ outcome: 'passed' }));
+      await verify({ startsCheck, docker: async () => ({ ok: false, stdout: '' }) });
+      expect(startsCheck.mock.calls[0][0].cannot).toMatch(/Docker/);
+      expect(startsCheck.mock.calls[0][0].cannotWhy).toEqual({ reason: 'services' });
+    });
+
+    it('does not make a copy of the base for a start it could not judge on the task', async () => {
+      const startsCheck = startsBy(() => ({ outcome: 'unavailable', tail: 'Port 10000 is in use' }));
+      await verify({ startsCheck });
+      expect(startsCheck).toHaveBeenCalledTimes(1);
+    });
+
+    it('names in the report why a start could not be judged, without calling it the task\'s fault', async () => {
+      const startsCheck = startsBy((cwd) => (existsSync(join(cwd, 'task.txt')) ? { outcome: 'unavailable', why: { reason: 'missing', names: ['api'] }, tail: 'The project started, but without api' } : { outcome: 'passed' }));
+      const report = await verify({ startsCheck });
+      const text = describeVerification(report);
+      expect(text).toMatch(/- The project starts: could not be judged: The project started, but without api/);
+      expect(text).not.toMatch(/The project starts[^\n]*this task broke it/);
+      expect(verificationSummary(report).checks.find((c) => c.command === 'start the project by its recipe')).toEqual({ command: 'start the project by its recipe', outcome: 'unavailable', why: { reason: 'missing', names: ['api'] } });
     });
 
     it("makes no QA issue of a new project's own start", async () => {

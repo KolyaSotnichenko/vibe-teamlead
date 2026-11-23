@@ -15,6 +15,7 @@ function setup(files: Record<string, string>, over: Partial<StartsCheckOptions> 
   const alive = new Set<number>();
   const started: string[] = [];
   const stopped: string[] = [];
+  let picked = 0;
   const serverDeps: StartServicesDeps = {
     startServer: vi.fn(async (o: { name: string; port?: number }) => {
       started.push(o.name);
@@ -23,7 +24,7 @@ function setup(files: Record<string, string>, over: Partial<StartsCheckOptions> 
       return { url: `http://localhost:${port}`, port, logPath: `/logs/${o.name}`, reused: false };
     }),
     stopServer: vi.fn(async (name: string) => { stopped.push(name); return true; }),
-    pickPort: vi.fn(async () => 4500 + started.length),
+    pickPort: vi.fn(async () => 4500 + (picked += 1)),
     portFree: vi.fn(async (port: number) => !alive.has(port)),
     probe: vi.fn(async () => ({ status: 200 })),
     readLog: () => 'the log\n',
@@ -40,6 +41,7 @@ function setup(files: Record<string, string>, over: Partial<StartsCheckOptions> 
     runCommand: vi.fn(async () => ({ code: 0, output: '' })),
     deps: serverDeps,
     settleMs: 1,
+    migratable: true,
     ...over,
   };
   return { options, started, stopped, alive, serverDeps };
@@ -63,7 +65,7 @@ describe('the start-up check', () => {
     // No recipe: what starts is what the files propose, and only the page is proposed now
     const files = { 'apps/web/package.json': JSON.stringify({ scripts: { dev: 'vite' } }), 'apps/api/package.json': JSON.stringify({ scripts: { 'start-dev': 'tsx src/index.ts' } }) };
     const { options } = setup(files, { expectServices: ['api', 'web'] });
-    expect(await startsCheck(options)).toEqual({ outcome: 'unavailable', tail: 'The project started, but without api, which the commit this task started from starts. Its start may be gone (a renamed dev script?), or it was removed on purpose: look at it.' });
+    expect(await startsCheck(options)).toEqual({ outcome: 'unavailable', why: { reason: 'missing', names: ['api'] }, tail: 'The project started, but without api, which the commit this task started from starts. Its start may be gone (a renamed dev script?), or it was removed on purpose: look at it.' });
     // Nothing missing: a plain pass
     expect(await startsCheck(setup(files, { expectServices: ['web'] }).options)).toEqual({ outcome: 'passed' });
   });
@@ -107,6 +109,43 @@ describe('the start-up check', () => {
     expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make lib', '/copy/packages/shared'], ['make migrate', '/copy/apps/api']]);
     expect(result).toMatchObject({ outcome: 'failed', tail: expect.stringContaining('relation "users" already exists') });
     expect(started).toEqual([]);
+  });
+
+  it("never runs the recipe's migrations or seed unless the copy has a throwaway database of its own", async () => {
+    const recipe = { ...RECIPE, steps: { install: [], build: [], migrate: [{ dir: 'apps/api', command: 'make migrate' }], seed: [{ dir: 'apps/api', command: 'make seed' }] } };
+    const runCommand = vi.fn(async (_command: string, _cwd?: string) => ({ code: 0, output: '' }));
+    const { options } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand, migratable: false });
+    await startsCheck(options);
+    expect(runCommand.mock.calls.map(([command]) => command)).toEqual([]);
+  });
+
+  it("runs the recipe's install first, in its folder", async () => {
+    const recipe = { ...RECIPE, steps: { install: [{ dir: 'apps/api', command: 'make deps' }], build: [] } };
+    const runCommand = vi.fn(async (_command: string, _cwd?: string) => ({ code: 0, output: '' }));
+    const { options } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand });
+    expect(await startsCheck(options)).toEqual({ outcome: 'passed' });
+    expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make deps', '/copy/apps/api']]);
+  });
+
+  it('runs out of time as a whole, and stops what it started', async () => {
+    const { options, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) }, { timeoutMs: 30 }, {
+      probe: vi.fn(async () => { await new Promise((resolve) => setTimeout(resolve, 15)); return { status: 503 }; }),
+      readyTimeouts: { timeoutMs: 10_000, pollMs: 1 },
+    });
+    expect(await startsCheck(options)).toMatchObject({ outcome: 'timed_out' });
+    expect(stopped).toContain('starts-api');
+  });
+
+  it("can't say anything when a service could not have the port the project expects: an address it hard-codes reaches something else", async () => {
+    const { options } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, { portFree: vi.fn(async (port: number) => port !== 3001) });
+    const result = await startsCheck(options);
+    expect(result).toMatchObject({ outcome: 'unavailable', why: { reason: 'port', names: ['api'] } });
+    expect(result?.tail).toMatch(/api.*3001.*in use/);
+  });
+
+  it("names what the base starts when nothing can be started on the task, as when the page's dev script was renamed", async () => {
+    const { options } = setup({ 'package.json': JSON.stringify({ scripts: { serve: 'vite' } }) }, { expectServices: ['web'] });
+    expect(await startsCheck(options)).toEqual({ outcome: 'unavailable', why: { reason: 'nothing', names: ['web'] }, tail: 'Nothing could be started, while the commit this task started from starts web. Its start may be gone (a renamed dev script?): look at it.' });
   });
 
   it('cannot say anything when a tool it needs is not installed', async () => {

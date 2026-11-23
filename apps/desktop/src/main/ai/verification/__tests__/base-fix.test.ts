@@ -31,6 +31,15 @@ describe('a check that fails on main too', () => {
     expect(task.description).toMatch(/don't delete, skip or weaken/i);
   });
 
+  it("words a start that fails on main as the project's start, with preview.json and what only the owner has", () => {
+    const task = baseFixTask([{ command: 'start the project by its recipe', tail: 'api did not start\nError: Cannot find module' }], 'b0f1e2d3c4', 'main');
+    expect(task.title).toBe('Fix main: the project does not start');
+    expect(task.description).toContain('preview.json');
+    expect(task.description).toContain('Cannot find module');
+    expect(task.description).toMatch(/a key or account only the owner has/i);
+    expect(task.description).not.toContain('`start the project by its recipe`');
+  });
+
   it('starts one task per failing command: another task finding it while that one is open does nothing', () => {
     const project = mkdtempSync(path.join(tmpdir(), 'vtl-basefix-'));
     expect(openBaseFix(project, ['pnpm run test'], () => true)).toBeNull();

@@ -45,7 +45,9 @@ export function VerificationNotice({ task }: { task: Task }) {
               ) : (
                 <span className="break-all font-mono text-foreground">{check.command}</span>
               )}
-              <span className="text-muted-foreground">{t(outcomeKey(check))}</span>
+              <span className="text-muted-foreground">
+                {check.why ? t(`verification.startsWhy.${check.why.reason}`, { names: (check.why.names ?? []).join(', ') }) : t(outcomeKey(check))}
+              </span>
             </li>
           ))}
         </ul>

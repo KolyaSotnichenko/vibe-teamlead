@@ -35,7 +35,7 @@ export function runningTask(): { title: string; description: string } {
       '- AC-2: Every command in it was run and worked, or is marked "not checked" with the reason.',
       '- AC-3: It has no real secrets: variables come from `.env.example`, with placeholders.',
       "- AC-4: The project's code is unchanged; the task adds only `RUNNING.md` and `preview.json`.",
-      "- AC-5: `preview.json` exists at the project root, and the app's check \"The project starts\" starts the project by it.",
+      "- AC-5: `preview.json` exists at the project root, and the app's check \"The project starts\" starts the project by it; for a project with no page to start (a desktop or mobile app, a library) the check doesn't run, and `preview.json` names its kind.",
     ].join('\n'),
   };
 }

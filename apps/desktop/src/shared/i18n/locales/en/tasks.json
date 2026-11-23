@@ -1083,6 +1083,14 @@
       "notTried": "couldn't be tried here",
       "timedOut": "ran out of time",
       "sameOnBase": "fails without this task too, so it says nothing about it. A task that fixes main starts on its own"
+    },
+    "startsWhy": {
+      "missing": "not judged: {{names}} no longer started, which main starts (a renamed dev script, or removed on purpose?)",
+      "nothing": "not judged: nothing could be started, while main starts {{names}}",
+      "port": "not judged: a port {{names}} needs is in use on this computer",
+      "services": "not judged: the copy ran without the database or services the project needs",
+      "tool": "not judged: a tool it needs is not installed",
+      "stopped": "not judged: the check was stopped"
     }
   },
   "mergeState": {
