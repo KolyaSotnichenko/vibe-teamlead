@@ -48,7 +48,7 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     needsInstall: () => false,
     install: vi.fn(async () => { order.push('install'); }),
     startDatabase: vi.fn(async () => { order.push('database'); return database(); }),
-    startCompose: vi.fn(async () => ({ status: 'none' as const, started: [], failed: [], stop: async () => {} })),
+    startCompose: vi.fn(async () => ({ status: 'none' as const, started: [], failed: [], moved: [], stop: async () => {} })),
     runCommand: vi.fn(async (command: string, cwd: string) => { order.push(command.includes('seed') ? 'seed' : command.endsWith('run build') ? `build:${cwd.split(/[\\/]/).pop()}` : 'migrations'); return { code: 0, output: '' }; }),
     startServer: vi.fn(async (o: { name: string }) => { order.push(`server:${o.name}`); port += 1; return { url: `http://localhost:${port}`, port, logPath: '/log', reused: false }; }),
     stopServer: vi.fn(async () => true),
@@ -707,6 +707,7 @@ describe("the compose file's other services", () => {
     status: 'started' as const,
     started: [{ name: 'rabbitmq', kind: 'rabbitmq' as const, image: 'rabbitmq:3', ports: { 5672: 50001 }, env: {} }],
     failed: [{ name: 'search', reason: 'search (getmeili/meilisearch) did not get ready in time.' }],
+    moved: [] as Array<{ name: string; wanted: number; got: number }>,
     stop,
   });
 
@@ -769,7 +770,7 @@ describe("the compose file's other services", () => {
     const { d } = deps({
       read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,
       listFiles: () => Object.keys(COMPOSE_FILES),
-      startCompose: vi.fn(async () => ({ status: 'unavailable' as const, started: [], failed: [], reason: "Docker isn't running.", stop: async () => {} })),
+      startCompose: vi.fn(async () => ({ status: 'unavailable' as const, started: [], failed: [], moved: [], reason: "Docker isn't running.", stop: async () => {} })),
     });
     const status = await startPreview(project(), () => {}, d);
     expect(status).toMatchObject({ services: 'unavailable', servicesNotices: ["Docker isn't running."] });

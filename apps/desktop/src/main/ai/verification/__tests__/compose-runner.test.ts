@@ -2,23 +2,35 @@ import { createServer, type Server } from 'node:net';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPOSE_LABEL, createRunNetwork, removeComposeLeftovers, startComposeServices, tcpHolds } from '../compose-runner';
+import { COMPOSE_LABEL, composeMovedNotice, createRunNetwork, removeComposeLeftovers, startComposeServices, tcpHolds } from '../compose-runner';
 import { composeServices } from '../compose-services';
 import type { DockerRun } from '../test-services';
 
+/** The `-p` values of a docker call */
+const publishOf = (call: string[]) => call.filter((_, i) => call[i - 1] === '-p');
+
 /** A docker that answers like the real one, and records what it was asked */
-function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: boolean; exited?: boolean; bucketFails?: boolean } = {}) {
+function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: boolean; exited?: boolean; bucketFails?: boolean; bindFails?: boolean } = {}) {
   const calls: string[][] = [];
   let next = 0;
+  /** Container port → the host port its run asked for, per container */
+  const fixed = new Map<string, Record<string, string>>();
   const docker: DockerRun = vi.fn(async (args: string[]) => {
     calls.push(args);
     if (args[0] === 'info') return { ok: over.available !== false, stdout: '' };
     if (args[0] === 'ps') return { ok: true, stdout: 'old-one\n' };
     if (args[0] === 'run') {
       if (over.failImage && args.includes(over.failImage)) return { ok: false, stdout: 'manifest unknown' };
-      return { ok: true, stdout: `c${++next}\n` };
+      const asked = publishOf(args).map((value) => /^127\.0\.0\.1:(\d+):(\d+)$/.exec(value)).filter((match) => match !== null);
+      if (over.bindFails && asked.length) return { ok: false, stdout: 'port is already allocated' };
+      const id = `c${++next}`;
+      fixed.set(id, Object.fromEntries(asked.map(([, host, container]) => [container, host])));
+      return { ok: true, stdout: `${id}\n` };
     }
-    if (args[0] === 'port') return { ok: true, stdout: `127.0.0.1:${50000 + Number(args[2].split('/')[0]) % 1000}\n` };
+    if (args[0] === 'port') {
+      const container = args[2].split('/')[0];
+      return { ok: true, stdout: `127.0.0.1:${fixed.get(args[1])?.[container] ?? 50000 + (Number(container) % 1000)}\n` };
+    }
     if (args[0] === 'exec') return { ok: !(over.notReady || (over.bucketFails && args.includes('mb'))), stdout: '' };
     if (args[0] === 'inspect') return { ok: true, stdout: over.exited ? 'false\n' : 'true\n' };
     return { ok: true, stdout: '' };
@@ -28,7 +40,9 @@ function fakeDocker(over: { available?: boolean; failImage?: string; notReady?: 
 
 const options = (docker: DockerRun, extra: Partial<Parameters<typeof startComposeServices>[1]> = {}) => ({
   docker, labelKey: 'vibe-teamlead-verify', labelValue: 'proj', readyTimeoutMs: 20, pollMs: 1,
-  portOpen: async () => true, pickPort: async () => 41000, secret: () => 'key', ...extra,
+  portOpen: async () => true, pickPort: async () => 41000, secret: () => 'key',
+  // The machine's own ports stay out of these tests: no host port is free unless a test says so
+  hostPortFree: async () => false, ...extra,
 });
 const runs = (calls: string[][]) => calls.filter((call) => call[0] === 'run');
 
@@ -237,5 +251,56 @@ describe('tcpHolds', () => {
   it('is false when the connection is closed at once, as Docker\'s proxy does before the service listens', async () => {
     const port = await listen((socket) => socket.destroy());
     expect(await tcpHolds(port, 200)).toBe(false);
+  });
+});
+
+describe("the compose file's host ports", () => {
+  const AZURITE = 'services:\n  azurite:\n    image: mcr.microsoft.com/azure-storage/azurite\n    ports: ["10000:10000", "10001:10001"]\n';
+
+  it('publishes a port on the host port the compose file names when it is free', async () => {
+    const { docker, calls } = fakeDocker();
+    const hostPortFree = vi.fn(async (port: number) => port === 10000);
+    const run = await startComposeServices(composeServices([AZURITE]), options(docker, { hostPortFree }));
+    expect(publishOf(runs(calls)[0])).toEqual(['127.0.0.1:10000:10000', '127.0.0.1::10001']);
+    expect(run.started[0].ports).toEqual({ 10000: 10000, 10001: 50001 });
+    expect(run.moved).toEqual([{ name: 'azurite', wanted: 10001, got: 50001 }]);
+  });
+
+  it('starts once more on free ports when Docker refuses the host port', async () => {
+    const { docker, calls } = fakeDocker({ bindFails: true });
+    const run = await startComposeServices(composeServices([AZURITE]), options(docker, { hostPortFree: async () => true }));
+    expect(runs(calls).map(publishOf)).toEqual([['127.0.0.1:10000:10000', '127.0.0.1:10001:10001'], ['127.0.0.1::10000', '127.0.0.1::10001']]);
+    expect(run.status).toBe('started');
+    expect(run.failed).toEqual([]);
+    expect(run.moved).toEqual([{ name: 'azurite', wanted: 10000, got: 50000 }, { name: 'azurite', wanted: 10001, got: 50001 }]);
+  });
+
+  it('gives a host port two services name to the first one only', async () => {
+    const { docker, calls } = fakeDocker();
+    const two = 'services:\n  a:\n    image: nats:2\n    ports: ["4222:4222"]\n  b:\n    image: nats:2\n    ports: ["4222:4222"]\n';
+    const run = await startComposeServices(composeServices([two]), options(docker, { hostPortFree: async () => true }));
+    expect(runs(calls).map(publishOf)).toEqual([['127.0.0.1:4222:4222'], ['127.0.0.1::4222']]);
+    expect(run.moved).toEqual([{ name: 'b', wanted: 4222, got: 50222 }]);
+  });
+
+  it('asks about no port and moves nothing for a service that publishes no host port', async () => {
+    const { docker } = fakeDocker();
+    const hostPortFree = vi.fn(async () => true);
+    const run = await startComposeServices(composeServices(['services:\n  nats:\n    image: nats:2\n    expose: ["4222"]\n']), options(docker, { hostPortFree }));
+    expect(hostPortFree).not.toHaveBeenCalled();
+    expect(run.moved).toEqual([]);
+  });
+
+  it('leaves a kind that needs its host port first on the port the app picks, and reports nothing moved', async () => {
+    const { docker } = fakeDocker();
+    const run = await startComposeServices(composeServices(['services:\n  kafka:\n    image: apache/kafka:3.7.0\n    ports: ["9092:9092"]\n']), options(docker, { hostPortFree: async () => true }));
+    expect(run.started[0].ports[9092]).toBe(41000);
+    expect(run.moved).toEqual([]);
+  });
+
+  it('says in plain words which address misses a moved service', () => {
+    expect(composeMovedNotice({ name: 'azurite', wanted: 10000, got: 50000 })).toBe(
+      'azurite runs on port 50000 here: port 10000, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for azurite reaches that instead.',
+    );
   });
 });
