@@ -2,6 +2,14 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.63 - 2026-11-23
+
+- **Migrations run for more projects.** A package's own migration script now runs in the Preview and in app checks when it uses node-pg-migrate, Knex, Sequelize, TypeORM or Kysely (for example `migrate:up` running `node-pg-migrate up`). Before, such a project started on an empty database and its API failed on its first query.
+- **A service that logs a fatal error has not started.** The Preview reads the services' logs before it is shown and twice in the first half minute; a table or database that isn't there, a wrong database password, a module that isn't installed, an import that can't be resolved or an uncaught promise fails the start, names the service and the error, and the agent that fixes starts takes it. The start-up check in app checks fails on them too.
+- **The agent checks the project before a start.** When the project's manifests, lockfiles, compose files, example settings, `RUNNING.md` or migrations changed since the last check, or it was never checked, the start-up agent checks the project against its recipe and tries it before the preview is shown. Nothing changed: the preview starts at once, with no agent. It shares the three sessions a day and the switch, now **Check and fix preview starts with an agent**.
+- **Check again** in a task's window runs only the app's checks again, with no model, when they couldn't say everything.
+- Before app checks, the app stops the dev servers and the containers a task's agents left running in its folder: they held the ports the project expects, and the start could not be judged. The window now names the port in use.
+
 ## 2.0.0-beta.62 - 2026-11-23
 
 - **The Preview starts projects by a recipe.** `preview.json` at the project's root says what to install, build, migrate and seed, and which services to run on which ports; the app runs it with no model call. Without one, the app uses the services you saved or what it recognises in the files. A recipe you change in the app goes into main as one commit of its own. The Preview's **Services** panel shows what the recipe runs.
