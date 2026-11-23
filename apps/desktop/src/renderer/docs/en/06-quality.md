@@ -70,6 +70,16 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 - Settings in `.env.example` that point at one of them (by its compose name, or localhost with its port) point at its container instead, with the credentials it started with. S3 settings get the stand-in's keys and path style, and the buckets the example names are created.
 - A service that doesn't come up is named in the log, and the settings that point at it stay empty; the checks still run.
 
+#### The project starts
+
+- After the tests, the app starts the project in the same clean copy, with the same throwaway database and services, by its recipe: the `preview.json` in that commit, the services saved for the Preview, or what it works out from the files (see "Preview").
+- It runs the recipe's build, migrations and seed, starts every service, and passes when every service came up, the page answers, and five seconds later every service still runs. Everything it started is stopped afterwards.
+- It counts like any check: a task that makes the project stop starting is blocked only if the project starts on the commit the task started from, each copy by its own recipe. A project that doesn't start on main gets the task that fixes main.
+- It can't say anything, and blocks nothing, when a tool is missing, Docker isn't running, or a port the compose file names is in use on this computer (an open Preview of the project, or your own `docker compose up`).
+- The compose file's ports: when all of them are free, both copies run its services on those ports, so an address the project hard-codes (Azurite's `127.0.0.1:10000`) reaches them; otherwise both run them on free ports. A copy that had to move one anyway is not compared with the other.
+- It doesn't run for a project with nothing to start, or for a desktop or mobile app.
+- A changed `preview.json` is listed for the reviewer as a file that decides how checks run.
+
 #### Where you see the result
 
 - The task's window shows what passed.
