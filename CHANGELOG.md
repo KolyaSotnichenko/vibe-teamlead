@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.64 - 2026-11-23
+
+- **Check again** keeps its result where the task's window reads it: leaving the card no longer brings back the result from before.
+
 ## 2.0.0-beta.63 - 2026-11-23
 
 - **Migrations run for more projects.** A package's own migration script now runs in the Preview and in app checks when it uses node-pg-migrate, Knex, Sequelize, TypeORM or Kysely (for example `migrate:up` running `node-pg-migrate up`). Before, such a project started on an empty database and its API failed on its first query.
