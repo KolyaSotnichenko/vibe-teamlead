@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.65 - 2026-11-23
+
+- A task's card on the board shows what **Check again** found at once, instead of "checks incomplete" until a restart.
+- The Preview's page steps aside while an agent's question (or the download indicator) is open over it: it no longer cuts the question off where the page begins.
+
 ## 2.0.0-beta.64 - 2026-11-23
 
 - **Check again** keeps its result where the task's window reads it: leaving the card no longer brings back the result from before.
