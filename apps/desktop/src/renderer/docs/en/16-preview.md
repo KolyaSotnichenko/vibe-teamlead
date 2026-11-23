@@ -52,7 +52,9 @@ What the preview can't work out from the files can be written down once, in `pre
 - `steps`: `install`, `build`, `migrate` and `seed`, each a list of commands with their folder. A list replaces what the preview would do at that stage, an empty list skips the stage, and a stage the file doesn't name is worked out as before. Dependencies are installed again only when the command, a lockfile or `package.json` in its folder changes; the seed runs only on a new, empty database.
 - `env`: values every service gets.
 
-Anything the file doesn't say is still worked out from the project's files. With a `preview.json`, **Services** shows its services, and they are changed in the file. A merge that changes the file restarts the running preview by the new one.
+Anything the file doesn't say is still worked out from the project's files. A merge that changes the file restarts the running preview by the new one.
+
+With a `preview.json`, **Services** shows its services, and you can change them there. A change you save is used at once, and the app writes it into the project's main branch itself, as one small commit of `preview.json`; it is not pushed on its own. While your project folder is on another branch, in the middle of a merge, or has changes in the way, the change waits: the form says "Not saved to the repository yet" with the reason, and the preview runs by it meanwhile. It is tried again at each start of the preview and after each merge. If a task changes `preview.json` in main first, the task's version wins, and the preview says once that your change was not kept. In a task's preview the recipe's services are shown and not changed. Looking at **Services** doesn't stop the preview; saving restarts its services.
 
 The file comes from the repository, so the app checks it before using anything in it:
 
