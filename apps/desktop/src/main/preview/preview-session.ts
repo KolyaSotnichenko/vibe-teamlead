@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 
-import type { PreviewAddressIssue, PreviewEnvReport, PreviewEnvVar, PreviewStatus } from '../../shared/types/preview';
+import type { PreviewAddressIssue, PreviewEnvReport, PreviewEnvVar, PreviewRecipeCommand, PreviewStatus } from '../../shared/types/preview';
 import type { Project, PreviewService } from '../../shared/types/project';
 import { cleanUpLeftovers, serverEnv, startDevServer, stopDevServer } from '../ai/dev-servers/dev-servers';
 import { onMergeSettled } from '../ai/merge/merge-queue';
@@ -35,7 +35,7 @@ import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stack
 import { PREVIEW_LABEL, type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
 import { type ResolvedRecipe, resolveRecipe } from './recipe';
 import { needsMail, type PreviewMail, startPreviewMail } from './preview-mail';
-import { previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
+import { LOCKFILES, previewSpecDir, previewWorktreePath, syncPreviewWorktree } from './preview-worktree';
 
 export type { PreviewStage, PreviewStatus } from '../../shared/types/preview';
 
@@ -334,6 +334,103 @@ async function installNode(session: Session, files: string[], lockfileChanged: b
   check(session);
 }
 
+/** One command of a recipe's step, in its folder with that folder's variables. A failure is the stage's, with the output's end. */
+async function runStep(session: Session, files: string[], step: PreviewRecipeCommand, failure: string): Promise<void> {
+  const result = await session.deps.runCommand(step.command, resolve(session.worktree, step.dir), envFor(session, step.dir, files), session.abort.signal);
+  check(session);
+  if (result.code !== 0) throw Object.assign(new Error(failure), { logTail: tail(result.output) });
+}
+
+/**
+ * Dependencies. With `steps.install` in the recipe, its commands in place of everything the
+ * preview would detect; each runs again only when the command, or a lockfile or package.json
+ * directly in its folder, changed. Without it, Node at the root and the other stacks' own tools.
+ */
+async function install(session: Session, files: string[], lockfileChanged: boolean): Promise<void> {
+  const steps = session.resolved.recipe.steps?.install;
+  if (!steps) {
+    await installNode(session, files, lockfileChanged);
+    await installStacks(session, files);
+    return;
+  }
+  const read = (p: string) => session.deps.read(session.worktree, p);
+  for (const step of steps) {
+    const prefix = step.dir ? `${step.dir}/` : '';
+    const watched = files.filter((file) => file.startsWith(prefix) && !file.slice(prefix.length).includes('/') && (LOCKFILES.has(file.slice(prefix.length)) || file.slice(prefix.length) === 'package.json')).sort();
+    const stamp = createHash('sha256').update([step.command, ...watched.map((f) => `${f}\0${read(f) ?? ''}`)].join('\0')).digest('hex');
+    const stampPath = installStampPath(`${step.dir}\0${step.command}`);
+    if (read(stampPath) === stamp) continue;
+    emit(session, { stage: 'install', message: `${step.dir || '.'}: ${step.command}` });
+    await runStep(session, files, step, `The dependencies in ${step.dir || 'the project root'} did not install`);
+    session.deps.writeFile(session.worktree, stampPath, stamp);
+  }
+}
+
+/** What the services need built first: the recipe's `steps.build`, else the workspace packages used from built output. */
+async function build(session: Session, files: string[], report: boolean): Promise<void> {
+  const steps = session.resolved.recipe.steps?.build;
+  if (!steps) return buildLibraries(session, files, report);
+  for (const step of steps) {
+    if (report) emit(session, { stage: 'libraries', message: step.command });
+    await runStep(session, files, step, `${step.command} failed`);
+  }
+}
+
+const OWN_DATABASE_NOTICE = 'Migrations and seed data were not run: a connection setting has your own value, so they would run against a database the preview did not start.';
+
+/**
+ * Whether a recipe's migrations and seed would reach a database the preview did not start: the
+ * owner filled in, for the command's folder, a connection setting the preview left empty on purpose.
+ */
+function pointsAtOwnDatabase(session: Session, files: string[], steps: PreviewRecipeCommand[]): boolean {
+  return steps.some((step) => varsFor(session, step.dir, files).some((v) => v.source === 'override' && v.automatic?.source === 'blocked'));
+}
+
+function sayOnce(session: Session, notice: string): void {
+  const notices = session.status.servicesNotices ?? [];
+  if (!notices.includes(notice)) emit(session, { servicesNotices: [...notices, notice] });
+}
+
+/**
+ * Migrations: the recipe's `steps.migrate`, else the detected ones. The recipe's run whenever
+ * Docker did not keep the preview's database from starting, and never against a database the
+ * owner pointed the preview at. Returns whether a SQL database of the preview's is there.
+ */
+async function migrate(session: Session, files: string[], report: boolean): Promise<boolean> {
+  const steps = session.resolved.recipe.steps?.migrate;
+  if (!steps) return runMigrations(session, files, report);
+  const database = session.database;
+  if (!database || database.status === 'unavailable') return false;
+  if (steps.length && pointsAtOwnDatabase(session, files, steps)) sayOnce(session, OWN_DATABASE_NOTICE);
+  else {
+    if (steps.length && report) emit(session, { stage: 'migrations' });
+    for (const step of steps) await runStep(session, files, step, 'The migrations failed');
+  }
+  return database.status === 'started' && database.started.some((s) => s.kind === 'postgres' || s.kind === 'mysql');
+}
+
+/** Seed data, on a database this start created: the recipe's `steps.seed`, else the project's seed script on its SQL database. */
+async function seed(session: Session, files: string[], sql: boolean): Promise<void> {
+  if (!session.database?.fresh) return;
+  const steps = session.resolved.recipe.steps?.seed;
+  if (steps) {
+    if (!steps.length) return;
+    if (pointsAtOwnDatabase(session, files, steps)) return sayOnce(session, OWN_DATABASE_NOTICE);
+    emit(session, { stage: 'seed' });
+    for (const step of steps) await runStep(session, files, step, 'The seed failed');
+    return;
+  }
+  if (!sql) return;
+  const manager = managerOf(files);
+  for (const dir of serviceDirs(session)) {
+    const command = seedCommand(session.deps.read(session.worktree, dir ? `${dir}/package.json` : 'package.json'), manager);
+    if (!command) continue;
+    emit(session, { stage: 'seed' });
+    await runStep(session, files, { dir, command }, 'The seed failed');
+    break;
+  }
+}
+
 interface StartedServices {
   url: string;
   /** Addresses the project hard-codes for a service the preview runs on another port */
@@ -567,10 +664,9 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       check(session);
       useRecipe(session, files);
 
-      await installNode(session, files, lockfileChanged);
-      await installStacks(session, files);
+      await install(session, files, lockfileChanged);
 
-      await buildLibraries(session, files, true);
+      await build(session, files, true);
 
       emit(session, { stage: 'database', message: undefined });
       // The main compose file first; an override can add a kind the main file doesn't name
@@ -630,19 +726,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
         emit(session, { mail: session.mail.status, mailReason: session.mail.reason });
       }
 
-      const sql = await runMigrations(session, files, true);
-      if (sql && session.database?.fresh) {
-        const manager = managerOf(files);
-        for (const dir of serviceDirs(session)) {
-          const command = seedCommand(deps.read(session.worktree, dir ? `${dir}/package.json` : 'package.json'), manager);
-          if (!command) continue;
-          emit(session, { stage: 'seed' });
-          const result = await deps.runCommand(command, resolve(session.worktree, dir), envFor(session, dir, files), session.abort.signal);
-          check(session);
-          if (result.code !== 0) throw Object.assign(new Error('The seed failed'), { logTail: tail(result.output) });
-          break;
-        }
-      }
+      await seed(session, files, await migrate(session, files, true));
 
       ready(session, await startServices(session, files), files);
     });
@@ -678,14 +762,13 @@ async function afterMerge(session: Session): Promise<void> {
     if (lockfileChanged) {
       emit(session, { stage: 'install', message: undefined });
       await stopServers(session);
-      await installNode(session, files, true);
-      await installStacks(session, files);
-      await buildLibraries(session, files, true);
-      await runMigrations(session, files, true);
+      await install(session, files, true);
+      await build(session, files, true);
+      await migrate(session, files, true);
       ready(session, await startServices(session, files), files);
     } else {
-      await buildLibraries(session, files, false);
-      await runMigrations(session, files, false);
+      await build(session, files, false);
+      await migrate(session, files, false);
     }
   } catch (error) {
     if (error instanceof Cancelled || cancelled(session)) return;

@@ -709,6 +709,72 @@ describe('the recipe', () => {
     expect(d.stopServer).toHaveBeenCalledWith('preview-api');
   });
 
+  const steps = (s: object) => withFiles({ 'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, steps: s }) });
+  const commands = (d: PreviewDeps) => vi.mocked(d.runCommand).mock.calls.map(([command, cwd]) => [command, cwd]);
+  const ROOT = resolve('/home/.vibe-teamlead/worktrees/preview/p1');
+
+  it("runs the recipe's install, build, migrate and seed in place of what it would detect", async () => {
+    const { d } = deps({
+      ...steps({ install: [{ dir: '', command: 'make deps' }], build: [{ dir: 'packages/shared', command: 'make lib' }], migrate: [{ dir: 'apps/api', command: 'make migrate' }], seed: [{ dir: 'apps/api', command: 'make demo' }] }),
+      needsInstall: () => true,
+    });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status.stage).toBe('ready');
+    expect(commands(d)).toEqual([['make deps', ROOT], ['make lib', resolve(ROOT, 'packages/shared')], ['make migrate', resolve(ROOT, 'apps/api')], ['make demo', resolve(ROOT, 'apps/api')]]);
+    expect(d.install).not.toHaveBeenCalled();
+  });
+
+  it('skips a stage whose list is empty and detects one the recipe does not name', async () => {
+    const { d, order } = deps(steps({ build: [], seed: [] }));
+    await startPreview(project(), () => {}, d);
+    expect(order).not.toContain('build:shared');
+    expect(order).not.toContain('seed');
+    expect(order).toContain('migrations');
+  });
+
+  it('does not install again while the command and the lockfiles are the same, and does when a lockfile changes', async () => {
+    const written = new Map<string, string>();
+    const files = steps({ install: [{ dir: '', command: 'make deps' }], build: [], migrate: [], seed: [] });
+    let lock = 'v1';
+    const { d } = deps({
+      listFiles: files.listFiles,
+      writeFile: (_root: string, path: string, text: string) => { written.set(path, text); },
+      read: (root: string, path: string) => (path === 'pnpm-lock.yaml' ? lock : (written.get(path) ?? files.read(root, path))),
+    });
+    await startPreview(project(), () => {}, d);
+    await startPreview(project(), () => {}, d);
+    expect(commands(d)).toEqual([['make deps', ROOT]]);
+    lock = 'v2';
+    await startPreview(project(), () => {}, d);
+    expect(commands(d)).toEqual([['make deps', ROOT], ['make deps', ROOT]]);
+  });
+
+  it('seeds only a fresh database', async () => {
+    const { d } = deps({ ...steps({ seed: [{ dir: '', command: 'make demo' }] }), startDatabase: vi.fn(async () => database({ fresh: false })) });
+    await startPreview(project(), () => {}, d);
+    expect(commands(d).map(([command]) => command)).not.toContain('make demo');
+  });
+
+  it('a recipe step that fails fails the preview with its output', async () => {
+    const { d } = deps({ ...steps({ install: [], build: [{ dir: '', command: 'make lib' }] }), runCommand: vi.fn(async () => ({ code: 2, output: 'no rule to make target' })) });
+    const status = await startPreview(project(), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', message: 'make lib failed', logTail: 'no rule to make target' });
+    expect(d.startServer).not.toHaveBeenCalled();
+  });
+
+  it('runs neither migrations nor seed against a database the owner pointed the preview at', async () => {
+    const p = project();
+    p.settings.previewEnv = { REDIS_URL: 'redis://real:6379' };
+    const { d } = deps(withFiles({
+      '.env.example': 'REDIS_URL=redis://localhost:6379\n',
+      'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, steps: { install: [], build: [], migrate: [{ dir: '', command: 'make migrate' }], seed: [{ dir: '', command: 'make demo' }] } }),
+    }));
+    const status = await startPreview(p, () => {}, d);
+    expect(status.stage).toBe('ready');
+    expect(commands(d)).toEqual([]);
+    expect(status.servicesNotices).toContain('Migrations and seed data were not run: a connection setting has your own value, so they would run against a database the preview did not start.');
+  });
+
   it('says a project of kind none has nothing to show', async () => {
     const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"none"}' }));
     const status = await startPreview(project(), () => {}, d);

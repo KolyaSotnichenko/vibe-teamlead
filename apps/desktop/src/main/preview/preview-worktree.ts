@@ -18,7 +18,7 @@ import { worktreeAddArgs, worktreeConfigCommands } from '../platform/git-env';
 
 const run = promisify(execFile);
 
-const LOCKFILES = new Set([
+export const LOCKFILES = new Set([
   'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb', 'bun.lock',
   'uv.lock', 'poetry.lock', 'requirements.txt', 'Pipfile.lock', 'pyproject.toml',
   'Gemfile.lock', 'composer.lock', 'go.sum',
