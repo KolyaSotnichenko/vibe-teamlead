@@ -310,6 +310,66 @@ describe('verifyTask', () => {
       expect(calls).toContainEqual(['network', 'rm', expect.stringMatching(/^vibe-teamlead-verify-/)]);
     });
 
+    describe("the compose file's own ports", () => {
+      const AZURITE = 'services:\n  azurite:\n    image: mcr.microsoft.com/azure-storage/azurite\n    ports: ["10000:10000"]\n    healthcheck: { test: ["CMD", "true"] }\n';
+      /** A docker that publishes what it is asked to, and can refuse a fixed port in the base's copy */
+      const portDocker = (refuseInCopy?: number) => {
+        const calls: string[][] = [];
+        let next = 0;
+        let composeRuns = 0;
+        const fixed = new Map<string, string>();
+        const docker: DockerRun = async (args) => {
+          calls.push(args);
+          if (args[0] === 'run') {
+            const publish = args.filter((_, i) => args[i - 1] === '-p');
+            if (args.includes('mcr.microsoft.com/azure-storage/azurite')) {
+              const wantsFixed = publish.some((p) => /^127\.0\.0\.1:\d+:\d+$/.test(p));
+              if (wantsFixed) composeRuns += 1;
+              if (wantsFixed && refuseInCopy === composeRuns) return { ok: false, stdout: 'Bind for 127.0.0.1:10000 failed: port is already allocated' };
+            }
+            const id = `container-${++next}`;
+            const own = publish.map((p) => /^127\.0\.0\.1:(\d+):(\d+)$/.exec(p)).find(Boolean);
+            if (own) fixed.set(id, own[1]);
+            return { ok: true, stdout: `${id}\n` };
+          }
+          if (args[0] === 'port') return { ok: true, stdout: `127.0.0.1:${fixed.get(args[1]) ?? '50000'}\n` };
+          return { ok: true, stdout: '' };
+        };
+        return { docker, calls, publishes: () => calls.filter((c) => c[0] === 'run' && c.includes('mcr.microsoft.com/azure-storage/azurite')).map((c) => c.filter((_, i) => c[i - 1] === '-p')) };
+      };
+
+      beforeEach(() => {
+        writeFileSync(join(repo, 'docker-compose.yml'), AZURITE);
+        commit(repo, 'azurite');
+        git(wt, 'merge', '-q', '--no-edit', 'main');
+        // The task breaks the check, so the base's copy runs too
+        unlinkSync(join(wt, 'good.txt'));
+        commit(wt, 'broke');
+      });
+
+      it('puts both copies on the ports the compose file names when all are free', async () => {
+        const { docker, publishes } = portDocker();
+        const report = await verify({ docker, hostPortFree: async () => true });
+        expect(publishes()).toEqual([['127.0.0.1:10000:10000'], ['127.0.0.1:10000:10000']]);
+        expect(report.status).toBe('regression');
+      });
+
+      it('keeps free ports for both copies when one the compose file names is in use', async () => {
+        const { docker, publishes } = portDocker();
+        await verify({ docker, hostPortFree: async (port) => port !== 10000 });
+        expect(publishes()).toEqual([['127.0.0.1::10000'], ['127.0.0.1::10000']]);
+      });
+
+      it("does not call it the task's fault when the base's copy had to move a port: the two ran apart", async () => {
+        const { docker } = portDocker(2);
+        const lines: string[] = [];
+        const report = await verify({ docker, hostPortFree: async () => true, onLog: (line) => lines.push(line) });
+        expect(report.status).toBe('not_verified');
+        expect(report.checks[0]).toMatchObject({ outcome: 'failed', onBase: 'unavailable' });
+        expect(lines.some((line) => /10000/.test(line) && /moved|another port/i.test(line))).toBe(true);
+      });
+    });
+
     it("puts the database and the other services on one network of the run's, each under its compose name, and removes it", async () => {
       writeFileSync(join(repo, 'docker-compose.yml'), 'services:\n  postgres:\n    image: postgres:18-alpine\n  keycloak:\n    image: quay.io/keycloak/keycloak:26\n    environment: { KC_DB_URL: "jdbc:postgresql://postgres:5432/kc" }\n');
       commit(repo, 'keycloak');

@@ -23,7 +23,8 @@ import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, ima
 import { ago, type CheckMemory, type CheckMemoryPlace, memoryKey, openCheckMemory } from './check-memory';
 import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
 import { createRunNetwork, startComposeServices } from './compose-runner';
-import { bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
+import { adapterOf, bucketsOf, type ComposeService, composeSecrets, composeServices } from './compose-services';
+import { localPortFree } from '../../preview/preview-ports';
 
 export type CheckOutcome = 'passed' | 'failed' | 'timed_out' | 'unavailable';
 
@@ -99,6 +100,8 @@ export interface VerifyTaskOptions {
   killGraceMs?: number;
   /** Instead of the machine's docker. For tests. */
   docker?: DockerRun;
+  /** Whether nothing on this computer holds a local port. Default: a real look. For tests. */
+  hostPortFree?: (port: number) => Promise<boolean>;
   installTimeoutMs?: number;
   git?: string;
   hostEnv?: NodeJS.ProcessEnv;
@@ -352,6 +355,23 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   }
 
   const docker = options.docker ?? hostDocker(hostEnv, signal);
+  // The compose file's host ports, decided once for the run and the same for both copies: on them when
+  // all are free (an address the project hard-codes then reaches its service), on free ports otherwise
+  const wantedPorts = [...new Set(from.compose.filter((service) => !adapterOf(service.kind).fixedHostPort).flatMap((service) => service.ports.map((port) => port.host)))]
+    .filter((port): port is number => port !== undefined && port >= 1024);
+  const portFree = options.hostPortFree ?? localPortFree;
+  let takenPort: number | undefined;
+  for (const port of wantedPorts) {
+    if (!(await portFree(port))) {
+      takenPort = port;
+      break;
+    }
+  }
+  const ownPorts = wantedPorts.length > 0 && takenPort === undefined;
+  /** Why starting the project can't tell anything this run: a port it may need is someone else's */
+  const startsCannot = takenPort === undefined ? undefined : `Port ${takenPort} is in use on this computer (an open preview of this project, or something else), so the project could not be started on the ports it expects.`;
+  /** A copy had to put a compose service on another port than the other copy: comparing the two says nothing */
+  let portsMoved = false;
   const serviceLabel = basename(dirname(dirname(options.lockDir))).replace(/[^\w.-]/g, '_') || 'project';
   let services: VerificationReport['services'];
   /** Set for each copy: every copy gets its own database */
@@ -396,7 +416,12 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       if (from.compose.length) say(`starting ${composeNames} for this copy`);
       const compose = await startComposeServices(from.compose, {
         docker, labelKey: VERIFY_LABEL, labelValue: serviceLabel, network: network?.name, buckets: bucketsOf(from.example), signal,
+        ...(ownPorts ? { hostPortFree: async (port: number) => wantedPorts.includes(port) } : {}),
       });
+      for (const moved of compose.moved) {
+        portsMoved = true;
+        say(`${moved.name} had to move to another port (${moved.got}, not ${moved.wanted}): failures here are not compared with the other copy`);
+      }
       if (compose.started.length) say(`${compose.started.map((service) => service.name).join(', ')} up`);
       for (const failure of compose.failed) say(`${failure.name}: ${failure.reason}`);
       if (compose.status === 'unavailable' && compose.reason && !compose.failed.length) say(`no ${composeNames}: ${compose.reason}`);
@@ -515,7 +540,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       }
     });
     // Kept only when it is an answer: not a run out of time, a missing tool or a missing database
-    if (memory && !copyWithoutServices) {
+    if (memory && !copyWithoutServices && !portsMoved) {
       for (const result of unknown) {
         const key = `${baseCommit}\0${result.command}`;
         const outcome = baseResults.get(key);
@@ -526,13 +551,15 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
   for (const result of failed) {
     const key = `${baseCommit}\0${result.command}`;
     result.onBase = baseResults.get(key);
+    // A pass on a base that ran with other ports than the task proves nothing
+    if (portsMoved && result.onBase === 'passed') result.onBase = 'unavailable';
     if (result.onBase !== 'passed' && baseTails.has(key)) result.tailOnBase = baseTails.get(key);
   }
 
   const broke = failed.some((result) => (source ? blocksOnItsOwn(result) : result.onBase === 'passed'));
   const status = broke || tamper.length ? 'regression' : results.every((result) => result.outcome === 'passed') ? 'passed' : 'not_verified';
   const report: VerificationReport = { status, commit, baseCommit, checks: results, tamper, runnerConfigChanged, ...(services ? { services } : {}), ...(migrationsSkipped ? { migrationsSkipped } : {}), ...(source ? { source } : {}) };
-  if (memory && isAnAnswer(report)) memory.keepReport(reportKey, report);
+  if (memory && isAnAnswer(report) && !portsMoved) memory.keepReport(reportKey, report);
   return report;
 }
 
