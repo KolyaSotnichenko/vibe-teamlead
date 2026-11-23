@@ -54,6 +54,8 @@ export interface ProjectSettings {
   previewEnv?: Record<string, string>;
   /** The owner's values for one service, by service name; they win over `previewEnv`. Never the project's `.env`. */
   previewServiceEnv?: Record<string, Record<string, string>>;
+  /** A recipe made in the app that the app has not written into the project's main branch yet */
+  previewPendingRecipe?: import('./preview').PendingRecipe;
   /** Placeholders the owner said to leave, as `file\ntext` (loose-ends.ts) */
   ignoredLooseEnds?: string[];
   /** CI setup: what has been set up (the GitHub repository) */

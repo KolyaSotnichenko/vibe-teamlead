@@ -175,11 +175,11 @@ export interface PlannedEnv {
  * and the ports are pending. Pure.
  */
 export function plannedEnv(
-  settings: Pick<ProjectSettings, 'previewServices' | 'previewEnv' | 'previewServiceEnv'>,
+  settings: Pick<ProjectSettings, 'previewServices' | 'previewEnv' | 'previewServiceEnv' | 'previewPendingRecipe'>,
   files: string[],
   read: (path: string) => string | null,
 ): PlannedEnv {
-  const { recipe } = resolveRecipe({ files, read, saved: settings.previewServices ?? [] });
+  const { recipe } = resolveRecipe({ files, read, saved: settings.previewServices ?? [], pending: settings.previewPendingRecipe });
   const services = recipe.kind === 'web' ? (recipe.services ?? []) : [];
   const composeContents = composeFilesInOrder(files).map((file) => read(file) ?? '');
   const kinds = imagesFromComposeFiles(composeContents).map((image) => image.kind);

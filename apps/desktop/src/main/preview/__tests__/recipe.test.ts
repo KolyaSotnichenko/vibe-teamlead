@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PreviewService } from '../../../shared/types/project';
 import { saidFor } from '../../say';
+import { recipeHash } from '../pending-recipe';
 import { parseRecipe, resolveRecipe } from '../recipe';
 
 const WEB = { version: 1, kind: 'web', services: [{ name: 'web', dir: 'apps/web', command: 'pnpm run dev --port {port}', port: 5173, page: true }] };
@@ -148,6 +149,28 @@ describe('resolveRecipe', () => {
     expect(r.source).toBe('settings');
     expect(r.invalid).toMatch(/ext\/app.*out of the project/);
     expect(saidFor([r.invalid])).toMatchObject([{ key: 'recipeLink', params: { dir: 'ext/app' } }]);
+  });
+
+  it('uses a pending recipe before the file it was made against, and only that file', () => {
+    const fileText = JSON.stringify(WEB);
+    const mine = { version: 1 as const, kind: 'web' as const, services: [{ name: 'mine', dir: '', command: 'make serve', page: true }] };
+    const withPending = (text: string | null, base: string) => resolveRecipe({ files: text === null ? [] : ['preview.json'], read: () => text, saved: SAVED, pending: { recipe: mine, base } });
+    expect(withPending(fileText, recipeHash(fileText))).toEqual({ recipe: mine, source: 'pending', servicesFrom: 'pending' });
+    expect(withPending(null, 'none')).toEqual({ recipe: mine, source: 'pending', servicesFrom: 'pending' });
+    expect(withPending(fileText, recipeHash('something else'))).toMatchObject({ source: 'file', recipe: WEB });
+    expect(withPending(null, recipeHash(fileText))).toMatchObject({ source: 'settings' });
+  });
+
+  it('fills a pending recipe without services from the saved ones', () => {
+    const r = resolveRecipe({ files: [], read: () => null, saved: SAVED, pending: { recipe: { version: 1, kind: 'web', env: { A: 'b' } }, base: 'none' } });
+    expect(r).toEqual({ recipe: { version: 1, kind: 'web', env: { A: 'b' }, services: SAVED }, source: 'pending', servicesFrom: 'settings' });
+  });
+
+  it('ignores a pending recipe that would not pass as a file, or whose folder is a link out of the project', () => {
+    const bad = { version: 1 as const, kind: 'web' as const, services: [{ name: 'x', dir: '../out', command: 'make serve', page: true }] };
+    expect(resolveRecipe({ files: [], read: () => null, saved: SAVED, pending: { recipe: bad, base: 'none' } })).toMatchObject({ source: 'settings' });
+    const linked = { version: 1 as const, kind: 'web' as const, services: [{ name: 'x', dir: 'ext', command: 'make serve', page: true }] };
+    expect(resolveRecipe({ files: [], read: () => null, saved: SAVED, pending: { recipe: linked, base: 'none' }, contained: (dir) => dir !== 'ext' })).toMatchObject({ source: 'settings' });
   });
 
   it('leaves a recipe of another kind as it is', () => {

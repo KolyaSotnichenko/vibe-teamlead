@@ -30,10 +30,23 @@ export interface PreviewRecipe {
 }
 
 /**
- * Where the recipe a start uses came from: the project's `preview.json`, the services the owner
- * saved, the proposal from the project's files (one page, nothing to ask), or nothing
+ * Where the recipe a start uses came from: one made in the app that is not in main yet, the
+ * project's `preview.json`, the services the owner saved, the proposal from the project's files
+ * (one page, nothing to ask), or nothing
  */
-export type PreviewRecipeSource = 'file' | 'settings' | 'proposal' | 'none';
+export type PreviewRecipeSource = 'pending' | 'file' | 'settings' | 'proposal' | 'none';
+
+/**
+ * A recipe made in the app that is not in the project's main branch yet (preview/pending-recipe.ts):
+ * used at once, and written into main by the app
+ */
+export interface PendingRecipe {
+  recipe: PreviewRecipe;
+  /** The hash of the preview.json it replaces, 'none' when there was none */
+  base: string;
+  origin: 'owner' | 'agent';
+  at: string;
+}
 
 export type PreviewStage = 'worktree' | 'install' | 'libraries' | 'database' | 'migrations' | 'seed' | 'services' | 'ready' | 'failed' | 'stopped';
 

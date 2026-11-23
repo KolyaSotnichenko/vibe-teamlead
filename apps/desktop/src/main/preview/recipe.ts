@@ -7,9 +7,11 @@
  * reason (a sentence the interface can translate: say.ts). No file access, no Electron imports.
  */
 
+import { createHash } from 'node:crypto';
+
 import { z } from 'zod';
 
-import type { PreviewRecipe, PreviewRecipeSource } from '../../shared/types/preview';
+import type { PendingRecipe, PreviewRecipe, PreviewRecipeSource } from '../../shared/types/preview';
 import type { PreviewService } from '../../shared/types/project';
 import { FORBIDDEN_ENV } from '../ai/dev-servers/forbidden-env';
 import { validateCommand } from '../ai/security/bash-validator';
@@ -129,6 +131,16 @@ export function parseRecipe(text: string): ParsedRecipe {
   return problem ? { ok: false, reason: problem } : { ok: true, recipe };
 }
 
+/** A recipe as the text of its file: indented, with a final newline */
+export function recipeFileText(recipe: PreviewRecipe): string {
+  return `${JSON.stringify(recipe, null, 2)}\n`;
+}
+
+/** What tells one preview.json from another: the hash of its text, 'none' for no file */
+export function recipeHash(text: string | null): string {
+  return text === null ? 'none' : createHash('sha256').update(text).digest('hex');
+}
+
 export interface ResolvedRecipe {
   recipe: PreviewRecipe;
   source: PreviewRecipeSource;
@@ -145,22 +157,18 @@ const dirsOf = (recipe: PreviewRecipe): string[] => [
 ];
 
 /**
- * The recipe a start uses, first that applies: the project's `preview.json`, the services the
+ * The recipe a start uses, first that applies: a recipe made in the app that is not in main yet
+ * (while the folder's `preview.json` is still the one it was made against, and it passes the
+ * checks a file passes), the project's `preview.json`, the services the
  * owner saved, or the proposal from the project's files when it names exactly one page (so
  * nobody is asked). A file recipe without services takes them from the next two. `none`: no
  * source gives a page, and the owner is asked. An unusable file is passed over, with why:
  * one that doesn't parse, or one with a folder that is a link out of the project (`contained`,
  * asked of the real folders by a caller that has them).
  */
-export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; contained?: (dir: string) => boolean }): ResolvedRecipe {
-  const { files, read, saved, contained } = input;
-  const parsed = files.includes(RECIPE_FILE) ? parseRecipe(read(RECIPE_FILE) ?? '') : undefined;
-  const outside = parsed?.ok && contained ? dirsOf(parsed.recipe).find((dir) => dir !== '' && !contained(dir)) : undefined;
-  const reason = parsed && !parsed.ok ? parsed.reason : outside !== undefined ? say('recipeLink', `The folder ${outside} leads out of the project.`, { dir: outside }) : undefined;
-  const invalid = reason ? { invalid: reason } : {};
-  const file = parsed?.ok && outside === undefined ? parsed.recipe : undefined;
-  if (file && (file.kind !== 'web' || file.services)) return { recipe: file, source: 'file', servicesFrom: file.services ? 'file' : 'none' };
-
+export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; contained?: (dir: string) => boolean; pending?: Pick<PendingRecipe, 'recipe' | 'base'> }): ResolvedRecipe {
+  const { files, read, saved, contained, pending } = input;
+  const fileText = files.includes(RECIPE_FILE) ? (read(RECIPE_FILE) ?? '') : null;
   /** The saved services, else a proposal that leaves nothing to choose: one service, or one that could be the page */
   const detected = (): { services: PreviewService[]; source: 'settings' | 'proposal' | 'none' } => {
     if (saved.length) return { services: saved, source: 'settings' };
@@ -168,7 +176,23 @@ export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; c
     const clear = services.filter((service) => service.page).length === 1 && (services.length === 1 || pageCandidates === 1);
     return clear ? { services, source: 'proposal' } : { services: [], source: 'none' };
   };
+  /** A recipe that says what to run, from the app (`pending`) or from the file: its services, or the detected ones */
+  const from = (recipe: PreviewRecipe, label: 'pending' | 'file'): ResolvedRecipe => {
+    if (recipe.kind !== 'web' || recipe.services) return { recipe, source: label, servicesFrom: recipe.services ? label : 'none' };
+    const { services, source } = detected();
+    return { recipe: { ...recipe, services }, source: source === 'none' ? 'none' : label, servicesFrom: source };
+  };
+
+  if (pending && recipeHash(fileText) === pending.base) {
+    const checked = parseRecipe(recipeFileText(pending.recipe));
+    if (checked.ok && !(contained && dirsOf(checked.recipe).some((dir) => dir !== '' && !contained(dir)))) return from(checked.recipe, 'pending');
+  }
+
+  const parsed = fileText === null ? undefined : parseRecipe(fileText);
+  const outside = parsed?.ok && contained ? dirsOf(parsed.recipe).find((dir) => dir !== '' && !contained(dir)) : undefined;
+  const reason = parsed && !parsed.ok ? parsed.reason : outside !== undefined ? say('recipeLink', `The folder ${outside} leads out of the project.`, { dir: outside }) : undefined;
+  const invalid = reason ? { invalid: reason } : {};
+  if (parsed?.ok && outside === undefined) return from(parsed.recipe, 'file');
   const { services, source } = detected();
-  if (file) return { recipe: { ...file, services }, source: source === 'none' ? 'none' : 'file', servicesFrom: source };
   return { recipe: { version: 1, kind: 'web', services }, source, servicesFrom: source, ...invalid };
 }

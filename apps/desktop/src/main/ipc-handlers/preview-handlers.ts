@@ -102,6 +102,7 @@ export function previewRecipeInfo(project: Project, dir: string, git?: string): 
     files: previewFiles(dir, saved.map((s) => s.dir), git),
     read: safeRead(dir),
     saved,
+    pending: project.settings.previewPendingRecipe,
     // As a start does: a folder that is a link out of the project makes the file unusable
     contained: (folder) => isPathContained(path.resolve(dir, folder), dir).contained,
   });

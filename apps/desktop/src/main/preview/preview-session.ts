@@ -680,6 +680,7 @@ function resolveSessionRecipe(session: Session, files: string[]): void {
     files,
     read: (path) => session.deps.read(session.worktree, path),
     saved: session.project.settings.previewServices ?? [],
+    pending: session.project.settings.previewPendingRecipe,
     contained: (dir) => session.deps.insideWorktree(session.worktree, dir),
   });
   session.resolved = resolved;

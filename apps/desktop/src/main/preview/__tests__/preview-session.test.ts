@@ -877,6 +877,15 @@ describe('the recipe', () => {
     expect(vi.mocked(d.startServer).mock.calls.map(([o]) => o.name)).toEqual(['preview-solo']);
   });
 
+  it('starts by a recipe made in the app that is not in main yet', async () => {
+    const p = project();
+    p.settings.previewPendingRecipe = { recipe: { version: 1, kind: 'web', services: [{ name: 'mine', dir: '', command: 'make serve', page: true }] }, base: 'none', origin: 'owner', at: '2026-11-23T10:00:00.000Z' };
+    const { d } = deps();
+    const status = await startPreview(p, () => {}, d);
+    expect(status).toMatchObject({ stage: 'ready', recipe: { source: 'pending' } });
+    expect(vi.mocked(d.startServer).mock.calls.map(([o]) => o.name)).toEqual(['preview-mine']);
+  });
+
   it('says a project of kind none has nothing to show', async () => {
     const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"none"}' }));
     const status = await startPreview(project(), () => {}, d);
