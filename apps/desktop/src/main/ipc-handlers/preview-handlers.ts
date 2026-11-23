@@ -20,13 +20,13 @@ import type { IPCResult, PreviewBounds, PreviewEnvReport, PreviewRecipe, Preview
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
 import { addPreviewNotice, currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
-import { commitRecipeToMain, mainRecipeText } from '../preview/recipe-commit';
+import { commitRecipeToMain, mainBranchExists, mainRecipeText } from '../preview/recipe-commit';
 import { createPendingRecipeSettler } from '../preview/settle-pending-recipe';
 import { inMergeQueue, onMergeSettled } from '../ai/merge/merge-queue';
 import { getIsolatedGitEnv } from '../utils/git-isolation';
 import { saidFor, say } from '../say';
 import { plannedEnv } from '../preview/preview-env';
-import { parseRecipe, recipeFileText, recipeHash, resolveRecipe } from '../preview/recipe';
+import { parseRecipe, RECIPE_FILE, recipeHash, resolveRecipe } from '../preview/recipe';
 import { isPathContained } from '../ai/security/path-containment';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { getMail, listMail } from '../preview/preview-mail';
@@ -105,11 +105,15 @@ const safeRead = (dir: string) => (file: string): string | null => {
  * What a start would run from this folder, and where that came from: the project's
  * preview.json, the saved services, or the proposal (preview/recipe.ts). For the Services form.
  */
-export function previewRecipeInfo(project: Project, dir: string, git?: string): PreviewRecipeInfo {
+export function previewRecipeInfo(project: Project, dir: string, git?: string, main?: { text: string | null }): PreviewRecipeInfo {
   const saved = project.settings.previewServices ?? [];
+  const inFolder = previewFiles(dir, saved.map((s) => s.dir), git);
+  const readFolder = safeRead(dir);
+  // `main`: the recipe is the one main has, not the folder's (the owner's uncommitted edit, another branch, a copy not moved yet)
+  const files = main ? [...inFolder.filter((file) => file !== RECIPE_FILE), ...(main.text === null ? [] : [RECIPE_FILE])] : inFolder;
   const resolved = resolveRecipe({
-    files: previewFiles(dir, saved.map((s) => s.dir), git),
-    read: safeRead(dir),
+    files,
+    read: (file) => (main && file === RECIPE_FILE ? main.text : readFolder(file)),
     saved,
     pending: project.settings.previewPendingRecipe,
     // As a start does: a folder that is a link out of the project makes the file unusable
@@ -146,8 +150,12 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       projectStore.updateProjectSettings(id, settings);
     },
     mainText: (project) => mainRecipeText(project.path, mainBranchOf(project), { git: getToolPath('git'), env: getIsolatedGitEnv() }),
-    commit: (project, text) =>
-      inMergeQueue(project.path, 'preview-recipe', () => commitRecipeToMain({ projectDir: project.path, mainBranch: mainBranchOf(project), text, git: getToolPath('git'), env: getIsolatedGitEnv() })),
+    // Its place in the queue is the project's own: another project's commit never stands for it
+    commit: (project, text, base) =>
+      inMergeQueue(project.path, `preview-recipe:${project.id}`, () =>
+        commitRecipeToMain({ projectDir: project.path, mainBranch: mainBranchOf(project), text, expectedBase: base, git: getToolPath('git'), env: getIsolatedGitEnv() }),
+      ),
+    contained: (project, dir) => isPathContained(path.resolve(project.path, dir), project.path).contained,
   });
   /** An owner's edit that lost to a newer recipe in main is said once, over that project's running preview */
   const sayDropped = (projectId: string) => {
@@ -346,28 +354,41 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     }
   });
   /** What a start would run, and, when that is a recipe not in main yet, whose it is and why it is still waiting */
-  const recipeInfo = (project: Project, taskId?: unknown): PreviewRecipeInfo => {
-    const info = previewRecipeInfo(project, previewDir(project, taskId));
+  const gitOf = () => ({ git: getToolPath('git'), env: getIsolatedGitEnv() });
+  /** main's preview.json for a project that has that branch; undefined where it has none (a folder that is no repository yet) */
+  const mainRecipe = async (project: Project): Promise<{ text: string | null } | undefined> =>
+    (await mainBranchExists(project.path, mainBranchOf(project), gitOf())) ? { text: await mainRecipeText(project.path, mainBranchOf(project), gitOf()) } : undefined;
+  const recipeInfo = async (project: Project, taskId?: unknown): Promise<PreviewRecipeInfo> => {
+    // A task's preview runs the task's own folder; the project's runs main
+    const ofTask = typeof taskId === 'string' && !!taskId;
+    const info = previewRecipeInfo(project, previewDir(project, taskId), undefined, ofTask ? undefined : await mainRecipe(project));
     const pending = project.settings.previewPendingRecipe;
     if (info.source !== 'pending' || !pending) return info;
     const refusal = settler.refusal(project.id);
     const refusalSaid = refusal ? saidFor([refusal])[0] : undefined;
     return { ...info, pending: { origin: pending.origin, ...(refusal ? { refusal } : {}), ...(refusalSaid ? { refusalSaid } : {}) } };
   };
-  ipcMain.handle(IPC_CHANNELS.PREVIEW_RECIPE, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewRecipeInfo> => {
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_RECIPE, async (_e, projectId: string, taskId?: unknown): Promise<IPCResult<PreviewRecipeInfo>> => {
     const project = projectStore.getProject(projectId);
     if (!project) return { success: false, error: 'Project not found' };
     try {
-      return { success: true, data: recipeInfo(project, taskId) };
+      return { success: true, data: await recipeInfo(project, taskId) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }
   });
+  /** By the project's settings as they are now: a running preview restarts its services, one that is not running starts */
+  const restartOrStart = async (projectId: string, taskId?: unknown): Promise<IPCResult<PreviewStatus>> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    const restarted = await restartPreviewServices(project, draftTask(taskId));
+    return restarted ? { success: true, data: restarted } : start(projectId, false, taskId);
+  };
   // The owner changed the services of the project's recipe: used at once, and written into main by the app
   ipcMain.handle(IPC_CHANNELS.PREVIEW_SAVE_RECIPE_SERVICES, async (_e, projectId: string, services: unknown): Promise<IPCResult<PreviewRecipeInfo> & { errorSaid?: SaidText }> => {
     const project = projectStore.getProject(projectId);
-    if (!project) return { success: false, error: 'Project not found' };
     const refuse = (error: string) => ({ success: false as const, error, errorSaid: saidFor([error])[0] });
+    if (!project) return refuse(say('projectNotFound', 'The project was not found.'));
     try {
       const mainText = await mainRecipeText(project.path, mainBranchOf(project), { git: getToolPath('git'), env: getIsolatedGitEnv() });
       // The recipe in use for main: one made in the app while main's file is still the one it was made against, else main's file
@@ -379,20 +400,20 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
       const checked = parseRecipe(JSON.stringify({ ...base, services }));
       if (!checked.ok) return refuse(checked.reason);
       projectStore.updateProjectSettings(projectId, { previewPendingRecipe: { recipe: checked.recipe, base: recipeHash(mainText), origin: 'owner', at: new Date().toISOString() } });
+      // Used at once: the running preview restarts its services by it, one that is not running starts. Once, here:
+      // the commit that follows changes nothing the preview has not got already.
+      void restartOrStart(projectId).catch(() => {});
       // Usually a moment; behind a task's merge it goes on in the background, and the form says it is not in the repository yet
       await Promise.race([settler.settle(projectId), new Promise((resolve) => setTimeout(resolve, SAVE_WAIT_MS))]);
       const saved = projectStore.getProject(projectId) ?? project;
-      return { success: true, data: recipeInfo(saved) };
+      return { success: true, data: await recipeInfo(saved) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }
   });
   // Apply and restart: the running services restart with the saved values; a preview that isn't running starts
   ipcMain.handle(IPC_CHANNELS.PREVIEW_RESTART_SERVICES, async (_e, projectId: string, taskId?: unknown): Promise<IPCResult<PreviewStatus>> => {
-    const project = projectStore.getProject(projectId);
-    if (!project) return { success: false, error: 'Project not found' };
-    const restarted = await restartPreviewServices(project, draftTask(taskId));
-    return restarted ? { success: true, data: restarted } : start(projectId, false, taskId);
+    return restartOrStart(projectId, taskId);
   });
 
   // How to run the project, for when the preview can't: the task's worktree for a task's preview

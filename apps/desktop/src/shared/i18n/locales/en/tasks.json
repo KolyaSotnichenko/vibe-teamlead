@@ -1121,6 +1121,9 @@
       "mailNotStarted": "Docker could not start {{image}}.",
       "mailNoPorts": "Docker gave no ports for the mail catcher.",
       "needsServices": "Choose exactly one service whose page the preview shows.",
+      "kindDesktop": "This project is a desktop app. The preview shows web apps for now; see how to run it below.",
+      "kindMobile": "This project is a mobile app. The preview shows web apps for now; see how to run it below.",
+      "kindNone": "This project has nothing to show in a preview. See how to run it below.",
       "installFailed": "Installing the dependencies with {{tool}} failed.",
       "libraryFailed": "{{name}} did not build.",
       "migrationsFailed": "The migrations failed.",
@@ -1138,6 +1141,10 @@
       "recipeOtherBranch": "The project's folder is on \"{{current}}\". The recipe goes into \"{{main}}\" once the folder is back on it.",
       "recipeMidMerge": "The project is in the middle of a merge. The recipe goes in once the merge is finished or dropped.",
       "recipeNoRepo": "The project is not a git repository.",
+      "recipeDetached": "The project's folder is not on a branch. The recipe goes into \"{{main}}\" once the folder is back on it.",
+      "recipeFileInTheWay": "The project's folder has a preview.json of its own that is not committed. The recipe goes in once that file is committed or removed.",
+      "recipeNotTaken": "The project could not take the change.",
+      "projectNotFound": "The project was not found.",
       "recipeTooLarge": "The file is larger than 64 KiB.",
       "recipeNotJson": "The file is not valid JSON.",
       "recipeShape": "{{at}} is not written the way a recipe needs it ({{problem}}).",
@@ -1145,15 +1152,10 @@
       "recipeSameName": "Two services have the same name.",
       "recipeOnePage": "Exactly one service must be the page (\"page\": true).",
       "recipeDir": "{{at}}.dir must be a folder inside the project, written with \"/\" from its root (\"\" for the root itself).",
-      "recipeCommand": "{{at}}.command is not allowed: {{reason}}.",
+      "recipeCommand": "{{at}}.command is not allowed: {{reason}}",
       "recipeVariable": "{{at}} can't be set: it changes what a command runs.",
       "recipeUrlEnv": "{{at}} names \"{{target}}\", which is not one of the services.",
       "recipeLink": "The folder {{dir}} leads out of the project."
-    },
-    "kind": {
-      "desktop": "This project is a desktop app. The preview shows web apps for now; see how to run it below.",
-      "mobile": "This project is a mobile app. The preview shows web apps for now; see how to run it below.",
-      "none": "This project has nothing to show in a preview. See how to run it below."
     },
     "failed": "The preview did not start.",
     "stage": {

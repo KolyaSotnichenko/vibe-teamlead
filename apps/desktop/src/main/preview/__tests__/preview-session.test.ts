@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Project, PreviewService } from '../../../shared/types/project';
 import { inMergeQueue } from '../../ai/merge/merge-queue';
+import { composeMovedNotice } from '../../ai/verification/compose-runner';
+import { say } from '../../say';
 import { previewTaskKey, type PreviewDatabase } from '../preview-database';
 import { type PreviewDeps, type PreviewStatus, addPreviewNotice, currentPreview, previewLogs, previewMailPort, releaseTaskPreview, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview-session';
 
@@ -692,6 +694,7 @@ describe('the recipe', () => {
     const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"desktop"}' }));
     const status = await startPreview(project(), () => {}, d);
     expect(status).toMatchObject({ stage: 'failed', message: 'This project is a desktop app. The preview shows web apps for now; see how to run it below.' });
+    expect(status.said).toMatchObject([{ key: 'kindDesktop', text: status.message }]);
     expect(status.needsServices).toBeUndefined();
     expect(d.startServer).not.toHaveBeenCalled();
   });
@@ -762,7 +765,9 @@ describe('the recipe', () => {
   it('a recipe step that fails fails the preview with its output', async () => {
     const { d } = deps({ ...steps({ install: [], build: [{ dir: '', command: 'make lib' }] }), runCommand: vi.fn(async () => ({ code: 2, output: 'no rule to make target' })) });
     const status = await startPreview(project(), () => {}, d);
-    expect(status).toMatchObject({ stage: 'failed', message: 'make lib failed', logTail: 'no rule to make target' });
+    // Not "<command> failed": an install by a tool says that, and the two must not read the same
+    expect(status).toMatchObject({ stage: 'failed', message: 'This command failed: make lib', logTail: 'no rule to make target' });
+    expect(status.said).toMatchObject([{ key: 'commandFailed', params: { command: 'make lib' } }]);
     expect(d.startServer).not.toHaveBeenCalled();
   });
 
@@ -1068,6 +1073,22 @@ describe("the compose file's other services", () => {
     expect(currentPreview()?.servicesNotices).toHaveLength(2);
     await stopPreview();
     expect(addPreviewNotice('p1', 'y')).toBe(false);
+  });
+
+  it('keeps saying a notice in the interface\'s language however much the app has said since', async () => {
+    const { d } = deps({
+      read: (_root: string, path: string) => COMPOSE_FILES[path] ?? null,
+      listFiles: () => Object.keys(COMPOSE_FILES),
+      startCompose: vi.fn(async () => ({ ...composeRun(), failed: [], moved: [], reasonless: true })),
+    });
+    await startPreview(project(), () => {}, d);
+    const moved = composeMovedNotice({ name: 'rabbitmq', wanted: 5672, got: 50672 });
+    expect(addPreviewNotice('p1', moved)).toBe(true);
+    expect(currentPreview()?.said).toMatchObject([{ key: 'composeMoved' }]);
+    // Hundreds of other sentences later (app checks, other projects), the next status still knows it
+    for (let i = 0; i < 700; i++) say('migrationsFailed', `The migrations failed, run ${i}`);
+    expect(addPreviewNotice('p1', 'another, in a tool\'s own words')).toBe(true);
+    expect(currentPreview()?.said).toMatchObject([{ key: 'composeMoved', text: moved }]);
   });
 
   it("does not add a project's notice to a task's preview", async () => {

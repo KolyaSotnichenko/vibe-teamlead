@@ -21,6 +21,10 @@ describe('a pending recipe', () => {
     expect(recipeHash('a')).not.toBe(recipeHash('b'));
   });
 
+  it('hashes a file the same whether it was checked out with Windows line endings or not', () => {
+    expect(recipeHash('{\r\n  "version": 1\r\n}\r\n')).toBe(recipeHash('{\n  "version": 1\n}\n'));
+  });
+
   it('is pending while main still has the file it was made against', () => {
     expect(pendingState(pending('none'), null)).toBe('pending');
     expect(pendingState(pending(recipeHash('{"version":1,"kind":"none"}')), '{"version":1,"kind":"none"}')).toBe('pending');

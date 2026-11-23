@@ -236,8 +236,12 @@ const depsFailed = (dir: string) => (dir ? say('depsFailed', `The dependencies i
  * the reasons and the notices. A progress line (an install's output) is a tool's own words.
  */
 function withSaid(status: PreviewStatus): PreviewStatus {
-  const { said: _before, ...rest } = status;
-  const said = saidFor([status.stage === 'failed' ? status.message : undefined, status.databaseReason, status.mailReason, status.recipe?.invalid, ...(status.servicesNotices ?? [])]);
+  const { said: before = [], ...rest } = status;
+  const texts = [status.stage === 'failed' ? status.message : undefined, status.databaseReason, status.mailReason, status.recipe?.invalid, ...(status.servicesNotices ?? [])];
+  const now = saidFor(texts);
+  // What an earlier status already knew stays known: the app's memory of its sentences is short, a preview's notices are not
+  const kept = before.filter((said) => texts.includes(said.text) && !now.some((known) => known.text === said.text));
+  const said = [...kept, ...now];
   return said.length ? { ...rest, said } : rest;
 }
 
@@ -424,7 +428,7 @@ async function build(session: Session, files: string[], report: boolean): Promis
   if (!steps) return buildLibraries(session, files, report);
   for (const step of steps) {
     if (report) emit(session, { stage: 'libraries', message: step.command });
-    await runStep(session, files, step, say('commandFailed', `${step.command} failed`, { command: step.command }));
+    await runStep(session, files, step, say('commandFailed', `This command failed: ${step.command}`, { command: step.command }));
   }
 }
 
@@ -664,10 +668,11 @@ function failed(session: Session, error: unknown): PreviewStatus {
   return session.status;
 }
 
+/** What a recipe of another kind than web is answered with, until the preview can show it */
 const KIND_MESSAGE = {
-  desktop: 'This project is a desktop app. The preview shows web apps for now; see how to run it below.',
-  mobile: 'This project is a mobile app. The preview shows web apps for now; see how to run it below.',
-  none: 'This project has nothing to show in a preview. See how to run it below.',
+  desktop: () => say('kindDesktop', 'This project is a desktop app. The preview shows web apps for now; see how to run it below.'),
+  mobile: () => say('kindMobile', 'This project is a mobile app. The preview shows web apps for now; see how to run it below.'),
+  none: () => say('kindNone', 'This project has nothing to show in a preview. See how to run it below.'),
 } as const;
 
 /**
@@ -688,7 +693,7 @@ function resolveSessionRecipe(session: Session, files: string[]): void {
   const recipe: PreviewStatus['recipe'] = { source: resolved.source, kind: resolved.recipe.kind, ...(resolved.invalid ? { invalid: resolved.invalid } : {}) };
   if (JSON.stringify(recipe) !== JSON.stringify(session.status.recipe)) emit(session, { recipe });
   const { kind } = resolved.recipe;
-  if (kind !== 'web') throw new Error(KIND_MESSAGE[kind]);
+  if (kind !== 'web') throw new Error(KIND_MESSAGE[kind]());
   if (servicesOf(session).filter((service) => service.page).length !== 1) {
     throw Object.assign(new Error(say('needsServices', 'Choose exactly one service whose page the preview shows.')), { needsServices: true as const });
   }

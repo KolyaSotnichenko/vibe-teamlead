@@ -133,6 +133,42 @@ describe('preview IPC: Environment', () => {
       expect(JSON.parse(git('show', 'main:preview.json')).services[0].command).toBe('make serve-faster');
     });
 
+    it('restarts the running preview by the saved recipe itself, or starts it, exactly once', async () => {
+      asRepo();
+      const changed = [{ ...SITE, command: 'make serve-fast' }];
+      // What the preview is restarted with, as it was at that moment: the recipe is taken out of the settings once it is in main
+      let restartedWith: unknown;
+      session.restartPreviewServices.mockImplementationOnce((async (project: { settings: { previewPendingRecipe?: { recipe: { services: unknown[] } } } }) => {
+        restartedWith = JSON.parse(JSON.stringify(project.settings.previewPendingRecipe?.recipe.services ?? null));
+        return null;
+      }) as never);
+      await save(changed);
+      expect(session.restartPreviewServices).toHaveBeenCalledTimes(1);
+      expect(restartedWith).toEqual(changed);
+      // Not running (the stand-in answers null): it is started instead
+      await vi.waitFor(() => expect(session.startPreview).toHaveBeenCalledTimes(1));
+    });
+
+    it("shows main's recipe, not an edit of the file the owner has not committed", async () => {
+      asRepo();
+      writeFileSync(join(dirs.project, 'preview.json'), JSON.stringify({ version: 1, kind: 'web', services: [{ ...SITE, name: 'local-edit' }] }));
+      const info = (await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')) as { data: { source: string; services: Array<{ name: string }> } };
+      expect(info.data.source).toBe('file');
+      expect(info.data.services.map((s) => s.name)).toEqual(['site']);
+    });
+
+    it('says a recipe is still waiting also where the folder has another branch checked out', async () => {
+      asRepo();
+      git('checkout', '-q', '-b', 'feature');
+      git('rm', '-q', 'preview.json');
+      git('commit', '-q', '-m', 'no recipe on this branch');
+      const result = await save([{ ...SITE, command: 'make serve-fast' }]);
+      expect(result.data).toMatchObject({ source: 'pending', pending: { origin: 'owner' } });
+      const info = (await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')) as { data: { source: string; pending?: { refusalSaid?: { key: string } } } };
+      expect(info.data.source).toBe('pending');
+      expect(info.data.pending?.refusalSaid?.key).toBe('recipeOtherBranch');
+    });
+
     it('refuses services a recipe may not have, and stores nothing', async () => {
       asRepo();
       const result = await save([{ ...SITE, command: 'sudo make serve' }]);
@@ -151,8 +187,8 @@ describe('preview IPC: Environment', () => {
       expect(SETTINGS.previewPendingRecipe).toBeUndefined();
     });
 
-    it('is an error for an unknown project', async () => {
-      expect(await invoke(IPC_CHANNELS.PREVIEW_SAVE_RECIPE_SERVICES, 'nope', [SITE])).toMatchObject({ success: false });
+    it('is an error for an unknown project, in a sentence the interface can translate', async () => {
+      expect(await invoke(IPC_CHANNELS.PREVIEW_SAVE_RECIPE_SERVICES, 'nope', [SITE])).toMatchObject({ success: false, errorSaid: { key: 'projectNotFound' } });
     });
   });
 

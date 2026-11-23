@@ -119,14 +119,17 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
             onCancel={needsServices ? undefined : () => setEditing(false)}
             onSave={async (services) => {
               if (form.recipe) {
-                // The project's recipe: the app keeps the change and writes it into main itself
+                // The project's recipe: the app keeps the change, restarts the preview by it and writes it into main itself
                 const saved = await window.electronAPI.preview.saveRecipeServices(project.id, services);
                 if (!saved.success) {
                   const reason = said(saved.errorSaid) ?? saved.error ?? '';
                   setSaveFailed(t('preview.services.saveFailed', { reason }));
                   return;
                 }
-              } else if (!(await updateProjectSettings(project.id, { previewServices: services }))) return;
+                setEditing(false);
+                return;
+              }
+              if (!(await updateProjectSettings(project.id, { previewServices: services }))) return;
               setEditing(false);
               // By the saved services: a running preview restarts them, one that could not start starts
               const api = window.electronAPI.preview;
@@ -182,11 +185,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
               {status?.stage === 'failed' ? (
                 <div className="space-y-3">
                   <p role="alert" className="text-sm font-semibold text-destructive">
-                    {status.stoppedService
-                      ? t('preview.serviceStopped', { service: status.stoppedService })
-                      : status.recipe && status.recipe.kind !== 'web'
-                        ? t(`preview.kind.${status.recipe.kind}`)
-                        : (say(status.message) ?? t('preview.failed'))}
+                    {status.stoppedService ? t('preview.serviceStopped', { service: status.stoppedService }) : (say(status.message) ?? t('preview.failed'))}
                   </p>
                   {status.logTail && <pre className="max-h-96 overflow-auto border border-border p-3 font-mono text-xs">{status.logTail}</pre>}
                   <RunningDoc projectId={project.id} doc={runningDoc} />

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { PendingRecipe, PreviewRecipe } from '../../../shared/types/preview';
 import type { Project, ProjectSettings } from '../../../shared/types/project';
+import { saidFor } from '../../say';
 import { recipeFileText, recipeHash } from '../pending-recipe';
 import { createPendingRecipeSettler, type SettleDeps } from '../settle-pending-recipe';
 
@@ -32,7 +33,8 @@ describe('settling a pending recipe', () => {
   it('commits it as the text of its file, and takes it out of the settings', async () => {
     const { project, deps, settler } = setup(pendingOf());
     expect(await settler.settle('p1')).toBe('committed');
-    expect(deps.commit).toHaveBeenCalledWith(project, recipeFileText(RECIPE));
+    // With the file it was made against, so the commit can tell when a task changed main first
+    expect(deps.commit).toHaveBeenCalledWith(project, recipeFileText(RECIPE), 'none');
     expect(project.settings.previewPendingRecipe).toBeUndefined();
     expect(settler.refusal('p1')).toBeUndefined();
   });
@@ -69,6 +71,49 @@ describe('settling a pending recipe', () => {
     expect(agent.settler.takeDropped('p1')).toBe(false);
   });
 
+  it("drops it when the commit finds a task changed main's recipe first, and says so once for an owner's edit", async () => {
+    const { project, settler } = setup(pendingOf(), { commit: vi.fn(async () => ({ status: 'replaced' as const })) });
+    expect(await settler.settle('p1')).toBe('replaced');
+    expect(project.settings.previewPendingRecipe).toBeUndefined();
+    expect(settler.takeDropped('p1')).toBe(true);
+  });
+
+  it("commits a newer edit saved while the first was being committed, on top of the first, and never calls it dropped", async () => {
+    const newer = pendingOf({ at: '2026-11-23T11:00:00.000Z', recipe: { version: 1, kind: 'none' } });
+    let main: string | null = null;
+    const commit = vi.fn(async (_project: Project, text: string, base: string) => {
+      // The owner saves again while the first commit runs: made against the same main as the first
+      if (commit.mock.calls.length === 1) project.settings.previewPendingRecipe = newer;
+      if (recipeHash(main) !== base) return { status: 'replaced' as const };
+      main = text;
+      return { status: 'merged' as const };
+    });
+    const { project, settler } = setup(pendingOf(), { commit, mainText: vi.fn(async () => main) });
+    expect(await settler.settle('p1')).toBe('committed');
+    expect(commit).toHaveBeenCalledTimes(2);
+    expect(main).toBe(recipeFileText(newer.recipe));
+    expect(project.settings.previewPendingRecipe).toBeUndefined();
+    expect(settler.takeDropped('p1')).toBe(false);
+  });
+
+  it('throws away, without a commit, a stored recipe that would not pass as a file or whose folder leads out of the project', async () => {
+    const bad = setup(pendingOf({ recipe: { version: 1, kind: 'web', services: [{ name: 'x', dir: '../out', command: 'make serve', page: true }] } }));
+    expect(await bad.settler.settle('p1')).toBe('none');
+    expect(bad.deps.commit).not.toHaveBeenCalled();
+    expect(bad.project.settings.previewPendingRecipe).toBeUndefined();
+
+    const linked = setup(pendingOf({ recipe: { version: 1, kind: 'web', services: [{ name: 'x', dir: 'ext', command: 'make serve', page: true }] } }), { contained: (_project, dir) => dir !== 'ext' });
+    expect(await linked.settler.settle('p1')).toBe('none');
+    expect(linked.deps.commit).not.toHaveBeenCalled();
+    expect(linked.project.settings.previewPendingRecipe).toBeUndefined();
+  });
+
+  it('says in a sentence the interface can translate why it was refused when git gave no reason', async () => {
+    const { settler } = setup(pendingOf(), { commit: vi.fn(async () => ({ status: 'refused' as const })) });
+    await settler.settle('p1');
+    expect(saidFor([settler.refusal('p1')])).toMatchObject([{ key: 'recipeNotTaken' }]);
+  });
+
   it('makes one commit for two calls at once', async () => {
     let release: (value: { status: 'merged' }) => void = () => {};
     const commit = vi.fn(() => new Promise<{ status: 'merged' }>((resolve) => { release = resolve; }));
@@ -81,16 +126,22 @@ describe('settling a pending recipe', () => {
     expect(commit).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves a recipe saved while the commit ran', async () => {
+  it('keeps a newer edit, moved onto the first, when its own commit is refused', async () => {
     const newer = pendingOf({ at: '2026-11-23T11:00:00.000Z', recipe: { version: 1, kind: 'none' } });
-    const { project, settler } = setup(pendingOf(), {
-      commit: vi.fn(async () => {
+    let main: string | null = null;
+    const commit = vi.fn(async (_project: Project, text: string) => {
+      if (commit.mock.calls.length === 1) {
         project.settings.previewPendingRecipe = newer;
+        main = text;
         return { status: 'merged' as const };
-      }),
+      }
+      return { status: 'refused' as const, message: 'The project is on "feature".' };
     });
-    expect(await settler.settle('p1')).toBe('committed');
-    expect(project.settings.previewPendingRecipe).toEqual(newer);
+    const { project, settler } = setup(pendingOf(), { commit, mainText: vi.fn(async () => main) });
+    expect(await settler.settle('p1')).toBe('refused');
+    expect(project.settings.previewPendingRecipe).toEqual({ ...newer, base: recipeHash(recipeFileText(RECIPE)) });
+    expect(settler.refusal('p1')).toBe('The project is on "feature".');
+    expect(settler.takeDropped('p1')).toBe(false);
   });
 
   it('says refused, and keeps the recipe, when reading main or committing throws', async () => {

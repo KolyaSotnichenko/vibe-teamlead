@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { recipeHash } from '../recipe';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -113,6 +114,65 @@ describe('the app commits a recipe into main', () => {
     const result = await commit(TEXT);
     expect(result.status).toBe('refused');
     expect(saidFor([result.message])).toMatchObject([{ key: 'recipeMidMerge' }]);
+    expect(state()).toEqual(before);
+    expect(leftovers()).toEqual({ branch: '', index: [] });
+  });
+
+  it("leaves main alone when its preview.json is no longer the one the recipe was made against: a task's change came first", async () => {
+    await commit(TEXT);
+    const main = git('rev-parse', 'main');
+    // Made against a main without the file; main has TEXT by now
+    expect(await commit(OTHER, { expectedBase: 'none' })).toEqual({ status: 'replaced' });
+    expect(git('rev-parse', 'main')).toBe(main);
+    expect(await mainRecipeText(repo, 'main')).toBe(TEXT);
+    // Made against what main has: it goes in
+    expect(await commit(OTHER, { expectedBase: recipeHash(TEXT) })).toEqual({ status: 'merged' });
+  });
+
+  it('says the folder is not a git repository when it is not one', async () => {
+    repo = realpathSync(mkdtempSync(join(tmpdir(), 'vtl-plain-')));
+    const result = await commit(TEXT);
+    expect(result.status).toBe('refused');
+    expect(saidFor([result.message])).toMatchObject([{ key: 'recipeNoRepo' }]);
+  });
+
+  it('says so in its own words when the folder is on no branch at all', async () => {
+    git('checkout', '-q', '--detach');
+    const before = state();
+    const result = await commit(TEXT);
+    expect(result.status).toBe('refused');
+    expect(saidFor([result.message])).toMatchObject([{ key: 'recipeDetached', params: { main: 'main' } }]);
+    expect(state()).toEqual(before);
+  });
+
+  it("refuses rather than overwrite a preview.json of the owner's that git ignores", async () => {
+    writeFileSync(join(repo, '.git', 'info', 'exclude'), 'preview.json\n');
+    writeFileSync(join(repo, 'preview.json'), '{ "mine": true }\n');
+    const before = state();
+    const result = await commit(TEXT);
+    expect(result.status).toBe('refused');
+    expect(saidFor([result.message])).toMatchObject([{ key: 'recipeFileInTheWay' }]);
+    expect(readFileSync(join(repo, 'preview.json'), 'utf-8')).toBe('{ "mine": true }\n');
+    expect(state()).toEqual(before);
+  });
+
+  it('clears away what an attempt that died left behind, and leaves nothing of its own', async () => {
+    git('update-ref', `refs/heads/${RECIPE_BRANCH}`, git('rev-parse', 'main'));
+    writeFileSync(join(repo, '.git', 'vibe-teamlead-recipe-index'), 'left over');
+    expect(await commit(TEXT)).toEqual({ status: 'merged' });
+    expect(leftovers()).toEqual({ branch: '', index: [] });
+  });
+
+  it.skipIf(isWindowsHost)("signs the commit when the owner's git signs commits, and refuses with nothing changed when signing fails", async () => {
+    const signer = join(repo, '.git', 'no-signer.sh');
+    writeFileSync(signer, '#!/bin/sh\necho "signing is not possible here" >&2\nexit 1\n');
+    chmodSync(signer, 0o755);
+    git('config', 'commit.gpgsign', 'true');
+    git('config', 'gpg.program', signer);
+    const before = state();
+    const result = await commit(TEXT);
+    expect(result.status).toBe('refused');
+    expect(result.message).toBeTruthy();
     expect(state()).toEqual(before);
     expect(leftovers()).toEqual({ branch: '', index: [] });
   });

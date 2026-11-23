@@ -88,6 +88,39 @@ describe('usePreviewSession', () => {
     expect(preview.stop).not.toHaveBeenCalled();
   });
 
+  it('watches the size of the box that is on the page now, not the one that was there at first', async () => {
+    const observed: Element[] = [];
+    const unobserved: Element[] = [];
+    class FakeResizeObserver {
+      observe(element: Element) { observed.push(element); }
+      unobserve(element: Element) { unobserved.push(element); }
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const { result } = renderHook(() => usePreviewSession('p1', true));
+      const ref = result.current.boxRef as { current: HTMLDivElement | null };
+      const first = document.createElement('div');
+      first.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect;
+      document.body.appendChild(first);
+      ref.current = first;
+      window.dispatchEvent(new Event('resize'));
+      await vi.waitFor(() => expect(observed).toContain(first));
+
+      // The services form was shown and closed: the page has a new box
+      const second = document.createElement('div');
+      second.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100 }) as DOMRect;
+      first.remove();
+      document.body.appendChild(second);
+      ref.current = second;
+      await vi.waitFor(() => expect(observed).toContain(second));
+      expect(unobserved).toContain(first);
+      second.remove();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('stays on screen inside the dialog it belongs to, a task window, and steps aside for any other', async () => {
     const { result } = renderHook(() => usePreviewSession('p1', true, 't23'));
     expect(preview.start).toHaveBeenCalledWith('p1', 't23');

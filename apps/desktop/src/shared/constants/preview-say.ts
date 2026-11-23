@@ -28,6 +28,9 @@ export const PREVIEW_SAY = {
   mailNoPorts: [],
   // A start that failed, and what it left out (preview/preview-session.ts)
   needsServices: [],
+  kindDesktop: [],
+  kindMobile: [],
+  kindNone: [],
   installFailed: ['tool'],
   libraryFailed: ['name'],
   migrationsFailed: [],
@@ -45,8 +48,12 @@ export const PREVIEW_SAY = {
   // Why a recipe is not in the project's main branch yet (preview/recipe-commit.ts)
   recipeNoMain: ['main'],
   recipeOtherBranch: ['current', 'main'],
+  recipeDetached: ['main'],
   recipeMidMerge: [],
+  recipeFileInTheWay: [],
   recipeNoRepo: [],
+  recipeNotTaken: [],
+  projectNotFound: [],
   // Why a project's preview.json was not used (preview/recipe.ts)
   recipeTooLarge: [],
   recipeNotJson: [],

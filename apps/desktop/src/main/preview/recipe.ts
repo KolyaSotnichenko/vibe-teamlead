@@ -136,9 +136,13 @@ export function recipeFileText(recipe: PreviewRecipe): string {
   return `${JSON.stringify(recipe, null, 2)}\n`;
 }
 
-/** What tells one preview.json from another: the hash of its text, 'none' for no file */
+/**
+ * What tells one preview.json from another: the hash of its text, 'none' for no file. Line
+ * endings don't count: git on Windows checks a file out with CRLF, and the same file read
+ * from the repository has LF.
+ */
 export function recipeHash(text: string | null): string {
-  return text === null ? 'none' : createHash('sha256').update(text).digest('hex');
+  return text === null ? 'none' : createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
 }
 
 export interface ResolvedRecipe {
@@ -151,7 +155,7 @@ export interface ResolvedRecipe {
 }
 
 /** Every folder a recipe runs something in */
-const dirsOf = (recipe: PreviewRecipe): string[] => [
+export const recipeDirs = (recipe: PreviewRecipe): string[] => [
   ...(recipe.services ?? []).map((service) => service.dir),
   ...(['install', 'build', 'migrate', 'seed'] as const).flatMap((step) => (recipe.steps?.[step] ?? []).map((command) => command.dir)),
 ];
@@ -185,11 +189,11 @@ export function resolveRecipe(input: ProjectFiles & { saved: PreviewService[]; c
 
   if (pending && recipeHash(fileText) === pending.base) {
     const checked = parseRecipe(recipeFileText(pending.recipe));
-    if (checked.ok && !(contained && dirsOf(checked.recipe).some((dir) => dir !== '' && !contained(dir)))) return from(checked.recipe, 'pending');
+    if (checked.ok && !(contained && recipeDirs(checked.recipe).some((dir) => dir !== '' && !contained(dir)))) return from(checked.recipe, 'pending');
   }
 
   const parsed = fileText === null ? undefined : parseRecipe(fileText);
-  const outside = parsed?.ok && contained ? dirsOf(parsed.recipe).find((dir) => dir !== '' && !contained(dir)) : undefined;
+  const outside = parsed?.ok && contained ? recipeDirs(parsed.recipe).find((dir) => dir !== '' && !contained(dir)) : undefined;
   const reason = parsed && !parsed.ok ? parsed.reason : outside !== undefined ? say('recipeLink', `The folder ${outside} leads out of the project.`, { dir: outside }) : undefined;
   const invalid = reason ? { invalid: reason } : {};
   if (parsed?.ok && outside === undefined) return from(parsed.recipe, 'file');

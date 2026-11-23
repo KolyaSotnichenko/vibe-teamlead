@@ -28,9 +28,16 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
     // Sent only when it changed, at most once a frame: the dialog watch sees every DOM change
     let last: string | undefined;
     let frame = 0;
+    /** The box whose size is watched: the page mounts a new one after the services form */
+    let watched: Element | null = null;
     const measure = () => {
       frame = 0;
       const box = boxRef.current;
+      if (box !== watched) {
+        if (watched) observer?.unobserve(watched);
+        if (box) observer?.observe(box);
+        watched = box;
+      }
       // No box on the page (the services form is shown instead): the view steps aside, the preview goes on
       const rect = box?.isConnected ? box.getBoundingClientRect() : null;
       // A dialog the page sits in (the task's window) doesn't count; any other would be covered
@@ -47,7 +54,6 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
       if (!frame) frame = requestAnimationFrame(measure);
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report);
-    if (boxRef.current) observer?.observe(boxRef.current);
     window.addEventListener('resize', report);
     const dialogs = typeof MutationObserver === 'undefined' ? null : new MutationObserver(report);
     dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });

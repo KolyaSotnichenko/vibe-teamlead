@@ -56,11 +56,13 @@ export type GitRun = ReturnType<typeof gitRunner>;
 
 export function gitRunner(projectDir: string, git: string, baseEnv: NodeJS.ProcessEnv) {
   const env = withoutGitHooks(baseEnv);
-  return (args: string[], cwd = projectDir) =>
+  /** `input`: what the command reads; `env`: more variables for this one command (an index of its own, an identity) */
+  return (args: string[], cwd = projectDir, options: { input?: string; env?: NodeJS.ProcessEnv } = {}) =>
     new Promise<{ ok: boolean; raw: string; stdout: string; output: string }>((resolve) => {
-      execFile(git, args, { cwd, env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+      const child = execFile(git, args, { cwd, env: options.env ? { ...env, ...options.env } : env, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
         resolve({ ok: !error, raw: stdout, stdout: stdout.trim(), output: `${stderr}\n${stdout}`.trim() });
       });
+      if (options.input !== undefined) child.stdin?.end(options.input);
     });
 }
 

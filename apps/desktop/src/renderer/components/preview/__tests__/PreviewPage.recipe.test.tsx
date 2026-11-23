@@ -127,9 +127,10 @@ describe('PreviewPage and the recipe', () => {
   });
 
   it('says in the app\'s language what a project of another kind is', async () => {
-    session.status = { projectId: 'p1', stage: 'failed', origins: [], message: 'This project is a desktop app. The preview shows web apps for now; see how to run it below.', recipe: { source: 'file', kind: 'desktop' } };
+    const message = 'This project is a desktop app. The preview shows web apps for now; see how to run it below.';
+    session.status = { projectId: 'p1', stage: 'failed', origins: [], message, recipe: { source: 'file', kind: 'desktop' }, said: [{ key: 'kindDesktop', text: message }] };
     render(<PreviewPage project={projectWith(SAVED)} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('preview.kind.desktop');
+    expect(await screen.findByRole('alert')).toHaveTextContent('preview.say.kindDesktop');
   });
 
   it("says why preview.json was not used in the interface's language when the app made the reason", async () => {
@@ -152,8 +153,9 @@ describe('PreviewPage and the recipe', () => {
     fireEvent.click(screen.getByRole('button', { name: 'preview.services.save' }));
     await waitFor(() => expect(api.saveRecipeServices).toHaveBeenCalledWith('p1', [SITE]));
     expect(store.updateProjectSettings).not.toHaveBeenCalled();
-    await waitFor(() => expect(api.restartServices).toHaveBeenCalledWith('p1'));
     await waitFor(() => expect(screen.queryByDisplayValue('site')).not.toBeInTheDocument());
+    // The main process restarts the services by the saved recipe itself: asking again would restart them twice
+    expect(api.restartServices).not.toHaveBeenCalled();
   });
 
   it('keeps the form open and says why when the change could not be saved', async () => {
