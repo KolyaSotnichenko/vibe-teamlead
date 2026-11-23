@@ -1,5 +1,6 @@
 import { stopWorktreeContainers } from '../../ai/dev-servers/dev-servers';
 import { verifyAgain } from './verify-again';
+import { resolveSpecDir } from './workspace-handlers';
 import { writeFileReplacing } from '../../ai/safe-write';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
 import { isTaskBranch } from '../../../shared/constants/config';
@@ -1163,7 +1164,8 @@ export function registerWorktreeHandlers(
         key: `${project.id}/${task.id}`,
         stopContainers: () => (worktree ? stopWorktreeContainers(worktree) : Promise.resolve()),
         verify: ({ fresh }) => verifyTask({ worktreePath: worktree as string, baseRef, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, previewServices: verification.previewServices, memory: appCheckMemory(), fresh, git: git.git, hostEnv: git.env }),
-        write: (written) => writeFileReplacing(path.join(specDir, 'verification.json'), JSON.stringify(written, null, 2), 'utf-8'),
+        // Where the window reads it: the task's own copy of its spec folder while it has one (QA writes there)
+        write: (written) => writeFileReplacing(path.join(resolveSpecDir(taskId, projectId) ?? specDir, 'verification.json'), JSON.stringify(written, null, 2), 'utf-8'),
         regression: () => appEvents.emit('verification-regression', { taskId, projectId: project.id }),
       });
       return { success: true, data: summary };
