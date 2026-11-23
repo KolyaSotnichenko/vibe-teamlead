@@ -692,6 +692,23 @@ describe('the recipe', () => {
     expect(d.startServer).not.toHaveBeenCalled();
   });
 
+  it("waits until a service's ready path answers below 500", async () => {
+    const probe = vi.fn().mockResolvedValueOnce({ error: 'ECONNREFUSED' }).mockResolvedValueOnce({ status: 503 }).mockResolvedValue({ status: 200 });
+    const services = [{ ...SERVICES[0] }, { ...SERVICES[1], ready: '/health' }];
+    const { d } = deps({ probe, readyTimeouts: { timeoutMs: 1000, pollMs: 1 } });
+    const status = await startPreview(project('p1', services), () => {}, d);
+    expect(status.stage).toBe('ready');
+    expect(probe.mock.calls.slice(0, 3).map(([url]) => url)).toEqual(['http://localhost:4101/health', 'http://localhost:4101/health', 'http://localhost:4101/health']);
+  });
+
+  it('fails with the service and what its ready path answered when it never gets ready', async () => {
+    const services = [{ ...SERVICES[0] }, { ...SERVICES[1], ready: '/health' }];
+    const { d } = deps({ probe: vi.fn(async () => ({ status: 503 })), readLog: () => 'boom\n', readyTimeouts: { timeoutMs: 20, pollMs: 1 } });
+    const status = await startPreview(project('p1', services), () => {}, d);
+    expect(status).toMatchObject({ stage: 'failed', message: 'api did not get ready: /health answered 503', logTail: 'boom' });
+    expect(d.stopServer).toHaveBeenCalledWith('preview-api');
+  });
+
   it('says a project of kind none has nothing to show', async () => {
     const { d } = deps(withFiles({ 'preview.json': '{"version":1,"kind":"none"}' }));
     const status = await startPreview(project(), () => {}, d);

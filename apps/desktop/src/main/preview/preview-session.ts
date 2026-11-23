@@ -71,12 +71,16 @@ export interface PreviewDeps {
   portFree: (port: number) => Promise<boolean>;
   /** One request through the running page, to see whether what it proxies answers */
   probe: (url: string) => Promise<ProbeResult>;
+  /** How long a service's `ready` path is asked, and how often. For tests. */
+  readyTimeouts?: { timeoutMs: number; pollMs: number };
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60_000;
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const TAIL_CHARS = 2000;
 const SERVER_START_TIMEOUT_MS = 180_000;
+const READY_TIMEOUT_MS = 60_000;
+const READY_POLL_MS = 500;
 
 /** A task's preview: its worktree as it is, on a copy of the project's preview data */
 export interface PreviewTask {
@@ -405,6 +409,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
       await session.deps.stopServer(name);
       throw new Cancelled();
     }
+    if (service.ready) await waitUntilReady(session, service.name, `${started.url}${service.ready}`, service.ready, started.logPath);
     actualPort = started.port;
     session.vars[service.name] = vars.map((v) => (v.source === 'port' ? { ...v, value: String(started.port) } : v));
     urls[service.name] = started.url;
@@ -417,6 +422,33 @@ async function startServices(session: Session, files: string[]): Promise<Started
 }
 
 const LOG_LINES = 30;
+
+/** The last lines of a service's log */
+function logEnd(session: Session, logPath: string | undefined): string {
+  const log = (logPath ? session.deps.readLog(logPath) : null) ?? '';
+  return tail(log.split('\n').slice(-LOG_LINES).join('\n').trim());
+}
+
+/**
+ * A service whose recipe names a `ready` path: its port accepting a connection is not enough
+ * (a framework may listen long before it can answer), so the path is asked until it answers
+ * below 500. One that never does fails the start, with what the path last answered.
+ */
+async function waitUntilReady(session: Session, service: string, url: string, path: string, logPath: string): Promise<void> {
+  const { timeoutMs, pollMs } = session.deps.readyTimeouts ?? { timeoutMs: READY_TIMEOUT_MS, pollMs: READY_POLL_MS };
+  const deadline = Date.now() + timeoutMs;
+  let last = 'nothing';
+  for (;;) {
+    const result = await session.deps.probe(url);
+    check(session);
+    if (result.status !== undefined && result.status < 500) return;
+    last = String(result.status ?? result.error ?? 'nothing');
+    if (Date.now() >= deadline) break;
+    await new Promise((resolveWait) => setTimeout(resolveWait, pollMs));
+    check(session);
+  }
+  throw Object.assign(new Error(`${service} did not get ready: ${path} answered ${last}`), { logTail: logEnd(session, logPath) });
+}
 
 /**
  * A service's process ended on its own. Before "ready" start-up reports it; after, the preview
@@ -431,8 +463,7 @@ async function serviceExited(session: Session, service: string, name: string, po
   if (port !== undefined && !(await session.deps.portFree(port))) return;
   // The check took time: a stop or a restart may have happened meanwhile
   if (!listening()) return;
-  const log = (logPath ? session.deps.readLog(logPath) : null) ?? '';
-  const logTail = tail(log.split('\n').slice(-LOG_LINES).join('\n').trim());
+  const logTail = logEnd(session, logPath);
   await teardown(session);
   failed(session, Object.assign(new Error(`${service} stopped`), { logTail, stoppedService: service }));
 }
