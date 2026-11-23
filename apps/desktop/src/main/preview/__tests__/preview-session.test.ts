@@ -762,17 +762,52 @@ describe('the recipe', () => {
     expect(d.startServer).not.toHaveBeenCalled();
   });
 
-  it('runs neither migrations nor seed against a database the owner pointed the preview at', async () => {
+  const PREVIEW_DB = 'postgresql://verify:pw@127.0.0.1:55001/verify';
+  const envOfCommand = (d: PreviewDeps, command: string) => vi.mocked(d.runCommand).mock.calls.find(([c]) => c === command)?.[2];
+
+  it("gives the recipe's migrations and seed the preview's own values, never the owner's", async () => {
     const p = project();
-    p.settings.previewEnv = { REDIS_URL: 'redis://real:6379' };
+    p.settings.previewEnv = { DATABASE_URL: 'postgresql://real/prod', REDIS_URL: 'redis://real:6379', EXTRA: 'mine' };
     const { d } = deps(withFiles({
       '.env.example': 'REDIS_URL=redis://localhost:6379\n',
-      'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, steps: { install: [], build: [], migrate: [{ dir: '', command: 'make migrate' }], seed: [{ dir: '', command: 'make demo' }] } }),
+      'preview.json': JSON.stringify({ version: 1, kind: 'web', services: SERVICES, steps: { install: [], build: [], migrate: [{ dir: 'apps/api', command: 'make migrate' }], seed: [{ dir: 'apps/api', command: 'make demo' }] } }),
     }));
     const status = await startPreview(p, () => {}, d);
     expect(status.stage).toBe('ready');
+    for (const command of ['make migrate', 'make demo']) {
+      const env = envOfCommand(d, command);
+      expect(env).toMatchObject({ DATABASE_URL: PREVIEW_DB, REDIS_URL: '' });
+      expect(env).not.toHaveProperty('EXTRA');
+    }
+    // The services still get what the owner set
+    const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o).find((o) => o.name === 'preview-api');
+    expect(api?.env).toMatchObject({ DATABASE_URL: 'postgresql://real/prod', EXTRA: 'mine' });
+  });
+
+  it('runs neither migrations nor seed, and says so, when the recipe gives them a database on another machine', async () => {
+    const recipe = { version: 1, kind: 'web', services: SERVICES, env: { SHADOW_DATABASE_URL: 'postgresql://user:pw@db.example.com:5432/x' }, steps: { install: [], build: [], migrate: [{ dir: '', command: 'make migrate' }], seed: [{ dir: '', command: 'make demo' }] } };
+    const { d } = deps(withFiles({ 'preview.json': JSON.stringify(recipe) }));
+    const status = await startPreview(project(), () => {}, d);
+    expect(status.stage).toBe('ready');
     expect(commands(d)).toEqual([]);
-    expect(status.servicesNotices).toContain('Migrations and seed data were not run: a connection setting has your own value, so they would run against a database the preview did not start.');
+    expect(status.servicesNotices).toEqual(['Migrations and seed data were not run: the recipe gives them a database on another machine (SHADOW_DATABASE_URL).']);
+  });
+
+  it.each(['postgresql://localhost:5433/shadow', 'mysql://root@127.0.0.1/x', 'file:./dev.db', 'https://api.example.com'])('runs them when a recipe value is %s', async (value) => {
+    const recipe = { version: 1, kind: 'web', services: SERVICES, env: { OTHER: value }, steps: { install: [], build: [], seed: [], migrate: [{ dir: '', command: 'make migrate' }] } };
+    const { d } = deps(withFiles({ 'preview.json': JSON.stringify(recipe) }));
+    await startPreview(project(), () => {}, d);
+    expect(commands(d)).toEqual([['make migrate', ROOT]]);
+  });
+
+  it("gives the detected migrations and seed the preview's own values too", async () => {
+    const p = project();
+    p.settings.previewEnv = { DATABASE_URL: 'postgresql://real/prod' };
+    const { d } = deps();
+    await startPreview(p, () => {}, d);
+    const calls = vi.mocked(d.runCommand).mock.calls.filter(([command]) => /prisma|seed/.test(command));
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const [, , env] of calls) expect(env.DATABASE_URL).toBe(PREVIEW_DB);
   });
 
   it('restarts the services by the new recipe when a merge changed preview.json', async () => {

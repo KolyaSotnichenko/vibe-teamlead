@@ -255,6 +255,18 @@ function envFor(session: Session, dir: string, files: string[]): Record<string, 
   return envOf(varsFor(session, dir, files));
 }
 
+/**
+ * A folder's variables without the owner's own values: what migrations and seeds run with. The
+ * owner may point the app at a database of their own (with a warning), and these commands
+ * change a database: they only ever get the address of the one the preview started, or nothing.
+ * A value the owner replaced is what the preview would have set; one they added is left out.
+ */
+function ownVarsFor(session: Session, dir: string, files: string[]): PreviewEnvVar[] {
+  return varsFor(session, dir, files).flatMap((v) => (v.source !== 'override' ? [v] : v.automatic ? [{ name: v.name, value: v.automatic.value, source: v.automatic.source }] : []));
+}
+
+const ownEnvFor = (session: Session, dir: string, files: string[]) => envOf(ownVarsFor(session, dir, files));
+
 /** The workspace packages the services use from built output: a fresh worktree has no dist/ for them. */
 async function buildLibraries(session: Session, files: string[], report: boolean): Promise<void> {
   const root = session.worktree;
@@ -268,8 +280,8 @@ async function buildLibraries(session: Session, files: string[], report: boolean
 }
 
 /**
- * Migrations, only ever on the preview's own database: the project's (Prisma, Drizzle) on its
- * SQL database, and each service folder's framework migrations (Django, Alembic, Rails,
+ * Migrations, only ever on the preview's own database (they never get the owner's own values:
+ * ownEnvFor): the project's (Prisma, Drizzle) on its SQL database, and each service folder's framework migrations (Django, Alembic, Rails,
  * Laravel) also when compose names no database, as those default to a local file. Returns
  * whether a SQL database is there, for the seed.
  */
@@ -291,7 +303,7 @@ async function runMigrations(session: Session, files: string[], report: boolean)
   }
   if (commands.length && report) emit(session, { stage: 'migrations' });
   for (const { dir, command } of commands) {
-    const result = await session.deps.runCommand(command, resolve(session.worktree, dir), envFor(session, dir, files), session.abort.signal);
+    const result = await session.deps.runCommand(command, resolve(session.worktree, dir), ownEnvFor(session, dir, files), session.abort.signal);
     check(session);
     if (result.code !== 0) throw Object.assign(new Error('The migrations failed'), { logTail: tail(result.output) });
   }
@@ -335,8 +347,8 @@ async function installNode(session: Session, files: string[], lockfileChanged: b
 }
 
 /** One command of a recipe's step, in its folder with that folder's variables. A failure is the stage's, with the output's end. */
-async function runStep(session: Session, files: string[], step: PreviewRecipeCommand, failure: string): Promise<void> {
-  const result = await session.deps.runCommand(step.command, resolve(session.worktree, step.dir), envFor(session, step.dir, files), session.abort.signal);
+async function runStep(session: Session, files: string[], step: PreviewRecipeCommand, failure: string, env = envFor(session, step.dir, files)): Promise<void> {
+  const result = await session.deps.runCommand(step.command, resolve(session.worktree, step.dir), env, session.abort.signal);
   check(session);
   if (result.code !== 0) throw Object.assign(new Error(failure), { logTail: tail(result.output) });
 }
@@ -376,15 +388,28 @@ async function build(session: Session, files: string[], report: boolean): Promis
   }
 }
 
-const OWN_DATABASE_NOTICE = 'Migrations and seed data were not run: a connection setting has your own value, so they would run against a database the preview did not start.';
+/** A database's address, with the machine it is on */
+const DATABASE_ADDRESS = /^(?:jdbc:)?(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|sqlserver|mssql|oracle|cockroachdb|clickhouse):\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)/i;
+const THIS_MACHINE = new Set(['', 'localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 
 /**
- * Whether a recipe's migrations and seed would reach a database the preview did not start: the
- * owner filled in, for the command's folder, a connection setting the preview left empty on purpose.
+ * The recipe's variable that would send a migration or a seed to a database on another machine,
+ * if any. The preview's own values and the examples' are its own business (an example's
+ * connection setting is the preview's database or empty); a recipe's value comes from the
+ * repository, so one that names another machine's database stops these commands.
  */
-function pointsAtOwnDatabase(session: Session, files: string[], steps: PreviewRecipeCommand[]): boolean {
-  return steps.some((step) => varsFor(session, step.dir, files).some((v) => v.source === 'override' && v.automatic?.source === 'blocked'));
+function remoteDatabase(session: Session, files: string[], steps: PreviewRecipeCommand[]): string | undefined {
+  for (const step of steps) {
+    const found = ownVarsFor(session, step.dir, files).find((v) => {
+      const host = v.source === 'recipe' ? DATABASE_ADDRESS.exec(v.value)?.[1] : undefined;
+      return host !== undefined && !THIS_MACHINE.has(host.toLowerCase());
+    });
+    if (found) return found.name;
+  }
+  return undefined;
 }
+
+const remoteDatabaseNotice = (name: string) => `Migrations and seed data were not run: the recipe gives them a database on another machine (${name}).`;
 
 function sayOnce(session: Session, notice: string): void {
   const notices = session.status.servicesNotices ?? [];
@@ -393,18 +418,20 @@ function sayOnce(session: Session, notice: string): void {
 
 /**
  * Migrations: the recipe's `steps.migrate`, else the detected ones. The recipe's run whenever
- * Docker did not keep the preview's database from starting, and never against a database the
- * owner pointed the preview at. Returns whether a SQL database of the preview's is there.
+ * Docker did not keep the preview's database from starting, with the preview's own values and
+ * never the owner's, and not at all when the recipe names a database on another machine.
+ * Returns whether a SQL database of the preview's is there.
  */
 async function migrate(session: Session, files: string[], report: boolean): Promise<boolean> {
   const steps = session.resolved.recipe.steps?.migrate;
   if (!steps) return runMigrations(session, files, report);
   const database = session.database;
   if (!database || database.status === 'unavailable') return false;
-  if (steps.length && pointsAtOwnDatabase(session, files, steps)) sayOnce(session, OWN_DATABASE_NOTICE);
+  const remote = remoteDatabase(session, files, steps);
+  if (remote) sayOnce(session, remoteDatabaseNotice(remote));
   else {
     if (steps.length && report) emit(session, { stage: 'migrations' });
-    for (const step of steps) await runStep(session, files, step, 'The migrations failed');
+    for (const step of steps) await runStep(session, files, step, 'The migrations failed', ownEnvFor(session, step.dir, files));
   }
   return database.status === 'started' && database.started.some((s) => s.kind === 'postgres' || s.kind === 'mysql');
 }
@@ -415,9 +442,10 @@ async function seed(session: Session, files: string[], sql: boolean): Promise<vo
   const steps = session.resolved.recipe.steps?.seed;
   if (steps) {
     if (!steps.length) return;
-    if (pointsAtOwnDatabase(session, files, steps)) return sayOnce(session, OWN_DATABASE_NOTICE);
+    const remote = remoteDatabase(session, files, steps);
+    if (remote) return sayOnce(session, remoteDatabaseNotice(remote));
     emit(session, { stage: 'seed' });
-    for (const step of steps) await runStep(session, files, step, 'The seed failed');
+    for (const step of steps) await runStep(session, files, step, 'The seed failed', ownEnvFor(session, step.dir, files));
     return;
   }
   if (!sql) return;
@@ -426,7 +454,7 @@ async function seed(session: Session, files: string[], sql: boolean): Promise<vo
     const command = seedCommand(session.deps.read(session.worktree, dir ? `${dir}/package.json` : 'package.json'), manager);
     if (!command) continue;
     emit(session, { stage: 'seed' });
-    await runStep(session, files, { dir, command }, 'The seed failed');
+    await runStep(session, files, { dir, command }, 'The seed failed', ownEnvFor(session, dir, files));
     break;
   }
 }
