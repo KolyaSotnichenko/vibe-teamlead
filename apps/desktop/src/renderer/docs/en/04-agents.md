@@ -17,6 +17,7 @@ Each agent is a Claude Code session with its own prompt (`apps/desktop/prompts/`
 | **QA reviewer** | Checks ACs, tests, UI (browser), security, and that `RUNNING.md` matches the change; writes the report; checks off the spec checkboxes. |
 | **QA fixer** | Fixes QA issues. |
 | **UX reviewer** | Goes through the running app in Preview as a person would, and lists what blocks people (see "Preview"). QA runs the same review on the pages a task changed. |
+| **Preview start-up** | When the project does not start in Preview, works out why and proposes recipes that the app starts; ends with a recipe that came up, a task for the code, or what is missing (see "Preview"). No shell, no file edits. |
 | **CI readiness** | Reads the project for what keeps its GitHub Actions CI from passing; the blockers become tasks (see "CI"). |
 | **Merge integrator** | Brings the latest main branch into a task before it merges: resolves conflicts, runs the project's checks, fixes what the merge broke. |
 | **Commit message / PR description generators** | Write the commit message and the PR text. |
