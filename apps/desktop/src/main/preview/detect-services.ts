@@ -8,6 +8,7 @@
 import type { PreviewRecipe } from '../../shared/types/preview';
 import type { PreviewService } from '../../shared/types/project';
 import type { ProjectFiles } from '../ai/verification/detect-checks';
+import { getPlatformKey } from '../platform';
 import { proposeStack } from './stacks';
 
 /** First word of a `dev` script that marks a frontend dev server */
@@ -106,7 +107,7 @@ const app = (dir: string, command: string): PreviewRecipe => ({ version: 1, kind
  * web project, unless a package that launches Electron from it is there), Tauri (its config), Flutter
  * (a folder for this computer's system) and .NET (a WinExe or MAUI project). Pure.
  */
-export function proposeDesktop({ files, read }: ProjectFiles, platform: 'darwin' | 'win32' | 'linux' = process.platform as 'darwin' | 'win32' | 'linux'): PreviewRecipe | null {
+export function proposeDesktop({ files, read }: ProjectFiles, platform: 'darwin' | 'win32' | 'linux' = getPlatformKey()): PreviewRecipe | null {
   const manager = managerOf(files);
   const dirOf = (file: string, name: string) => (file === name ? '' : file.slice(0, -(name.length + 1)));
   const kept = files.filter((file) => !SKIPPED.test(file)).sort();
