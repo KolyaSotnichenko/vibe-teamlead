@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PreviewRecipe, PreviewStatus } from '../../../shared/types/preview';
-import { fixStart, fixStartPrompt, type FixStartOptions, MAX_TRIES } from '../fix-start';
+import { fixStart, fixStartPrompt, type FixStartOptions, MAX_TRIES, redactForModel } from '../fix-start';
 
 const BROKEN: PreviewRecipe = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', command: 'npm run wrong', page: true }] };
 const GOOD: PreviewRecipe = { version: 1, kind: 'web', services: [{ name: 'web', dir: '', command: 'npm run dev', page: true }] };
@@ -162,6 +162,34 @@ describe('what reaches the model', () => {
     const runTask = agent(async () => ({ outcome: 'unknown', summary: 'x' }));
     await fixStart(options({ runTask, facts: [`RUNNING.md says: export API_TOKEN=${OWNERS}`], secrets: [OWNERS] }));
     expect(leaked(runTask.mock.calls[0][0].prompt as string)).toEqual([]);
+  });
+});
+
+describe('redactForModel', () => {
+  it('takes a password out of an address with no user, and one with a slash in it', () => {
+    expect(redactForModel('redis://:s3cretpw@cache:6379')).toBe('redis://:[redacted]@cache:6379');
+    expect(redactForModel('postgres://app:pa/ss+word@db:5432/x')).toBe('postgres://app:[redacted]@db:5432/x');
+    expect(redactForModel('see http://localhost:3000/a:b and mail me@example.com')).toBe('see http://localhost:3000/a:b and mail me@example.com');
+  });
+
+  it('takes a known value out whole when a shorter known value is part of it, whatever the order', () => {
+    for (const known of [['abcdef', 'abcdef-and-more'], ['abcdef-and-more', 'abcdef'], ['abcdef', 'abcdef', 'abcdef-and-more']]) {
+      const out = redactForModel('first abcdef-and-more then abcdef', known);
+      expect(out).toBe('first [redacted] then [redacted]');
+    }
+  });
+
+  it('leaves no part of a secret at the edge of a log that is cut after it was cleaned', async () => {
+    const secret = 'owner-value-that-is-long';
+    // The cut (the last 4000 characters) would fall in the middle of the secret
+    const logTail = `${'x'.repeat(100)}${secret}${'y'.repeat(4000 - secret.length / 2)}`;
+    const answers: string[] = [];
+    const runTask = agent(async (tool) => {
+      answers.push(await tool(GOOD));
+      return { outcome: 'unknown', summary: 'x' };
+    });
+    await fixStart(options({ runTask, tryRecipe: vi.fn(async () => ({ ...FAILED, logTail })), secrets: [secret] }));
+    for (let cut = 6; cut <= secret.length; cut++) expect(answers[0]).not.toContain(secret.slice(-cut));
   });
 });
 

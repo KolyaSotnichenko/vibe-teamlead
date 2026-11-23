@@ -19,8 +19,8 @@ import type { RunTask } from './ux-review';
 
 export const MAX_TRIES = 5;
 
-/** A password written into an address: `scheme://user:password@host` */
-const ADDRESS_PASSWORD = /([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+):([^\s@/]+)@/gi;
+/** A password written into an address: `scheme://user:password@host`, also with no user and with any character but a space or `@` in it */
+const ADDRESS_PASSWORD = /([a-z][a-z0-9+.-]*:\/\/[^\s:@/]*):([^\s@]+)@/gi;
 
 /**
  * What goes to the model never carries a secret: a log may have printed one. The values the
@@ -28,7 +28,9 @@ const ADDRESS_PASSWORD = /([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+):([^\s@/]+)@/gi;
  * `SECRET_NAME=value` pairs (telegram/redact.ts) and a password inside an address are replaced.
  */
 export function redactForModel(text: string, secrets: readonly string[] = []): string {
-  return redactSecrets(text, [...secrets]).replace(ADDRESS_PASSWORD, '$1:[redacted]@');
+  // The longest first: a value that contains another goes whole, not with its tail left behind
+  const known = [...new Set(secrets)].sort((a, b) => b.length - a.length);
+  return redactSecrets(text, known).replace(ADDRESS_PASSWORD, '$1:[redacted]@');
 }
 export const TRY_TOOL = 'mcp__vibe-teamlead__try_preview_recipe';
 const MAX_TURNS = 80;
@@ -158,7 +160,8 @@ export async function fixStart(options: FixStartOptions): Promise<FixOutcome> {
       return clean([`Started: the page answers at ${status.url ?? 'its address'}.`, ...notices.map((notice) => `Note: ${notice}`)].join('\n'));
     }
     const where = [status.failedAt ?? 'an unknown stage', status.failedService ? `service ${status.failedService}` : ''].filter(Boolean).join(', ');
-    return clean([`Did not start. Failed at ${where}: ${status.message ?? 'no message'}`, (status.logTail ?? '').slice(-LOG_CHARS)].filter(Boolean).join('\n'));
+    // Cleaned whole, then cut: a cut first could leave half a secret that no longer matches
+    return [clean(`Did not start. Failed at ${where}: ${status.message ?? 'no message'}`), clean(status.logTail ?? '').slice(-LOG_CHARS)].filter(Boolean).join('\n');
   };
 
   const fixed = (summary: string): FixOutcome | null => (up ? { outcome: 'fixed', recipe: up, summary } : null);
