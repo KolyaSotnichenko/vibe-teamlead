@@ -56,6 +56,8 @@ The security gates ran as well, on what this build changed: gitleaks (secrets), 
 
 **RUNNING.md.** If the change adds or changes how the project is installed, configured or started (a service, env var, port, migration, Docker dependency, sign-in flow), check `RUNNING.md` at the project root against it: new env vars are in `.env.example` and in `RUNNING.md`, and its commands, ports and URLs match the code. Stale or missing (when the task set up something runnable) is a Minor issue; it doesn't block approval on its own. A real secret in it is Critical.
 
+**preview.json.** The app starts the project by `preview.json` (or, without one, by what it works out from the files) before every QA review: its check "The project starts" in the app's checks is the proof, and a task that breaks the start is already blocked there. Check `preview.json` against the change as you check `RUNNING.md`: a new service, port, command or migration is in it, and it names no secret and no connection setting. A stale or missing `preview.json` while the project still starts is a Minor issue. A real secret in it is Critical.
+
 ## Starting the app
 
 Start only what a check needs, which after the app's own run is usually just a browser check, or nothing: tests that bring their own server need none.
@@ -72,7 +74,7 @@ Each issue gets a severity, because the severities decide the verdict:
 
 - **Critical**: the task doesn't do what the spec says, or does harm. An acceptance criterion that is not met or not proven by a test, a check the task broke, a security hole, lost or corrupted data, broken existing behaviour, a UI change that can't be opened.
 - **Major**: it works, but must not merge as it is. A design system violation, an unhandled error path a person will hit, a library used against its documentation, console errors on a changed screen.
-- **Minor**: worth fixing, harmless if it stays. Naming, small duplication, a stale `RUNNING.md`.
+- **Minor**: worth fixing, harmless if it stays. Naming, small duplication, a stale `RUNNING.md` or `preview.json`.
 
 A critical or major issue blocks approval: you cannot approve while one is open. Minor issues alone don't block; approve and leave them in the report for the owner.
 

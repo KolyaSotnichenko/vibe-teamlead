@@ -24,6 +24,13 @@ describe('the "write RUNNING.md" task', () => {
     expect(task.description).toMatch(/never real values/);
   });
 
+  it('writes preview.json too, and has the app start the project by it', () => {
+    expect(task.title).toMatch(/preview\.json/);
+    expect(task.description).toMatch(/`preview\.json`/);
+    expect(task.description).toMatch(/- AC-\d+: `preview\.json` exists[^\n]*starts/);
+    expect(task.description).not.toMatch(/adds `RUNNING\.md` and nothing else/);
+  });
+
   it('has acceptance criteria with ids, as every task does', () => {
     expect(task.description).toMatch(/## Acceptance criteria/);
     expect(task.description).toMatch(/- AC-1: /);

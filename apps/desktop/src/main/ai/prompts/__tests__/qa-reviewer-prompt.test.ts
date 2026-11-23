@@ -28,6 +28,12 @@ describe('QA reviewer prompt', () => {
     expect(reviewer).toMatch(/destructive/i);
   });
 
+  it("checks preview.json against the change, with the app's start-up check as the proof", () => {
+    expect(reviewer).toMatch(/preview\.json/);
+    expect(reviewer).toMatch(/The project starts/);
+    expect(reviewer).toMatch(/preview\.json[^\n]*Minor/);
+  });
+
   it('checks RUNNING.md against the change, as a minor issue: stale run instructions do not block sign-off', () => {
     expect(reviewer).toMatch(/RUNNING\.md/);
     expect(reviewer).toMatch(/RUNNING\.md[^\n]*Minor/);

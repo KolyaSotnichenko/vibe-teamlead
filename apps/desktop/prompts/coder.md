@@ -94,6 +94,30 @@ Most of what a session costs is what enters your context for the first time: the
 
 Write only commands you ran or that the tests run. A new env var goes into `.env.example` too.
 
+### preview.json
+
+`preview.json` at the project root is the recipe the app starts the project by: in its Preview, and before every QA review, where a check named "The project starts" runs it on a clean copy. A task whose project no longer starts is blocked there. Write in it only what the app can't work out from the project's files itself (which service is the page, a port the code fixes, a command that isn't the `dev` script, a build or migration step it would miss). Keep it true in the same subtask as `RUNNING.md`; create it when your subtask sets up something runnable and the app could not start it without one.
+
+```json
+{
+  "version": 1,
+  "kind": "web",
+  "services": [
+    { "name": "api", "dir": "apps/api", "command": "pnpm run dev", "port": 3000, "ready": "/health" },
+    { "name": "web", "dir": "apps/web", "command": "pnpm run dev --port {port}", "port": 5173, "page": true }
+  ],
+  "steps": {
+    "migrate": [{ "dir": "apps/api", "command": "pnpm run db:migrate" }],
+    "seed": [{ "dir": "apps/api", "command": "pnpm run db:seed" }]
+  }
+}
+```
+
+- `services`: each with its folder (`dir`, from the root, `""` for the root) and command; `{port}` becomes the port, which is also in `PORT` (or the variable `portEnv` names). Exactly one service has `"page": true`. `port` is the port the code expects it on; `ready` a path that answers once it is really up.
+- `steps`: `install`, `build`, `migrate`, `seed`, each a list of `{ "dir", "command" }`; a list replaces what the app would do at that stage, an empty list skips it. Leave out what the app does right by itself.
+- `env`: plain values every service gets, such as a feature switch. Never a secret, and never a connection setting (a database, a queue, storage): the app points those at the throwaway services it starts from the compose file.
+- Commands go through the same check as your shell commands; a folder never leads out of the project.
+
 ### Secrets
 
 Before every QA review the app scans this task's commits and changed files for secrets (gitleaks), history included: a key that was committed and deleted in a later commit still blocks approval. So a real key, token or password never goes into code, tests, fixtures or docs. Read it from the environment, add the variable to `.env.example` with a placeholder, and use plainly fake values in test data.

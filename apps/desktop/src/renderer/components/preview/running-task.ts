@@ -8,11 +8,13 @@ export const RUNNING_MD_SECTIONS = ['Prerequisites', 'Setup', 'Database', 'Start
 
 export function runningTask(): { title: string; description: string } {
   return {
-    title: 'Write RUNNING.md: how to run this project',
+    title: 'Write RUNNING.md and preview.json: how to run this project',
     description: [
       'Write `RUNNING.md` at the project root: how a developer runs this project on their own machine, from a fresh clone. The app shows it in Preview when it cannot start the project itself, and agents keep it up to date from now on.',
       '',
-      "Read the project first: package files, scripts, compose files, `.env.example`, configs, the README. Don't change the project's code; this task adds `RUNNING.md` and nothing else (if `.env.example` lacks a variable the project needs, list it in `RUNNING.md` and say it is missing there).",
+      "Read the project first: package files, scripts, compose files, `.env.example`, configs, the README. Don't change the project's code; this task adds `RUNNING.md` and `preview.json` and nothing else (if `.env.example` lacks a variable the project needs, list it in `RUNNING.md` and say it is missing there).",
+      '',
+      "Also write `preview.json` at the project root: the recipe the app starts the project by, in its Preview and before every QA review (the coder prompt's section \"preview.json\" has its shape). Write in it only what the app can't work out from the files, and no secret or connection setting.",
       '',
       'Check every command you document: run it where it is safe (installs, builds, starting a service and stopping it again, migrations against a local throwaway database). Never run anything against a shared or production system. A command you could not run is marked "not checked" with the reason.',
       '',
@@ -32,7 +34,8 @@ export function runningTask(): { title: string; description: string } {
       `- AC-1: \`RUNNING.md\` exists at the project root with the sections ${RUNNING_MD_SECTIONS.join(', ')}, in that order.`,
       '- AC-2: Every command in it was run and worked, or is marked "not checked" with the reason.',
       '- AC-3: It has no real secrets: variables come from `.env.example`, with placeholders.',
-      "- AC-4: The project's code is unchanged; the task adds only `RUNNING.md`.",
+      "- AC-4: The project's code is unchanged; the task adds only `RUNNING.md` and `preview.json`.",
+      "- AC-5: `preview.json` exists at the project root, and the app's check \"The project starts\" starts the project by it.",
     ].join('\n'),
   };
 }

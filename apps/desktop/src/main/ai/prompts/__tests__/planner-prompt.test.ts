@@ -19,6 +19,10 @@ describe('planner prompt', () => {
     expect(planner).toMatch(/never a reason to leave an AC unmapped/);
   });
 
+  it('puts preview.json in the subtask that changes how the project is started, next to RUNNING.md', () => {
+    expect(planner).toMatch(/preview\.json[^\n]*(files_to_modify|files_to_create)|(files_to_modify|files_to_create)[^\n]*preview\.json/);
+  });
+
   it('puts RUNNING.md in the subtask that changes how the project is installed, configured or started', () => {
     expect(planner).toMatch(/RUNNING\.md/);
     expect(planner).toMatch(/files_to_modify/);
