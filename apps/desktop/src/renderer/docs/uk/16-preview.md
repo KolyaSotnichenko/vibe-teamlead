@@ -40,7 +40,7 @@
     { "name": "web", "dir": "apps/web", "command": "pnpm run dev --port {port}", "port": 5173, "page": true }
   ],
   "steps": {
-    "migrate": [{ "dir": "apps/api", "command": "pnpm exec prisma migrate deploy" }],
+    "migrate": [{ "dir": "apps/api", "command": "pnpm run db:migrate" }],
     "seed": [{ "dir": "apps/api", "command": "pnpm run db:seed" }]
   },
   "env": { "FEATURE_X": "on" }
