@@ -15,11 +15,12 @@ import path from 'node:path';
 import { app, type BrowserWindow, ipcMain } from 'electron';
 
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, PreviewBounds, PreviewEnvReport, Project, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
+import type { IPCResult, PreviewBounds, PreviewEnvReport, PreviewRecipeInfo, Project, PreviewNavigation, PreviewService, PreviewMailMessage, PreviewMailSummary, PreviewNote, PreviewRunningDoc, PreviewStatus, UxReviewResult } from '../../shared/types';
 import { getToolPath } from '../cli-tool-manager';
 import { proposePreviewServices } from '../preview/detect-services';
 import { currentPreview, previewLogs, previewMailPort, restartPreviewServices, runningPreviewEnv, startPreview, stopPreview } from '../preview/preview-session';
 import { plannedEnv } from '../preview/preview-env';
+import { resolveRecipe } from '../preview/recipe';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { getMail, listMail } from '../preview/preview-mail';
 import { readLastUxReview, runUxReview } from '../preview/ux-review';
@@ -80,6 +81,26 @@ export function previewFiles(dir: string, serviceDirs: string[], git = getToolPa
   }
 }
 
+/** A file of the folder a preview runs from; `.env` and its variants are never read */
+const safeRead = (dir: string) => (file: string): string | null => {
+  if (SECRET_ENV_FILE.test(file)) return null;
+  try {
+    return readFileSync(path.join(dir, file), 'utf-8');
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * What a start would run from this folder, and where that came from: the project's
+ * preview.json, the saved services, or the proposal (preview/recipe.ts). For the Services form.
+ */
+export function previewRecipeInfo(project: Project, dir: string, git?: string): PreviewRecipeInfo {
+  const saved = project.settings.previewServices ?? [];
+  const resolved = resolveRecipe({ files: previewFiles(dir, saved.map((s) => s.dir), git), read: safeRead(dir), saved });
+  return { source: resolved.source, services: resolved.recipe.services ?? [], ...(resolved.invalid ? { invalid: resolved.invalid } : {}) };
+}
+
 /**
  * What each service of a preview gets: what the running services got, or what they will get
  * at the next start, worked out from the worktree's files the way the preview does it.
@@ -88,15 +109,7 @@ export async function previewEnvReport(project: Project, dir: string, taskId?: s
   const running = runningPreviewEnv(project, taskId);
   if (running) return running;
   const files = previewFiles(dir, (project.settings.previewServices ?? []).map((s) => s.dir), git);
-  const read = (file: string) => {
-    if (SECRET_ENV_FILE.test(file)) return null;
-    try {
-      return readFileSync(path.join(dir, file), 'utf-8');
-    } catch {
-      return null;
-    }
-  };
-  const planned = plannedEnv(project.settings, files, read);
+  const planned = plannedEnv(project.settings, files, safeRead(dir));
   // Only asked when the preview would need it: the test database, the other compose services and the mail catcher run in Docker
   const needsDocker = planned.databases.length > 0 || planned.composeServices.length > 0 || planned.mail;
   const dockerUnavailable = needsDocker ? !(await docker(['info']).catch(() => ({ ok: false }))).ok : false;
@@ -283,6 +296,15 @@ export function registerPreviewHandlers(getMainWindow: () => BrowserWindow | nul
     if (!project) return { success: false, error: 'Project not found' };
     try {
       return { success: true, data: await previewEnvReport(project, previewDir(project, taskId), draftTask(taskId)) };
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.PREVIEW_RECIPE, (_e, projectId: string, taskId?: unknown): IPCResult<PreviewRecipeInfo> => {
+    const project = projectStore.getProject(projectId);
+    if (!project) return { success: false, error: 'Project not found' };
+    try {
+      return { success: true, data: previewRecipeInfo(project, previewDir(project, taskId)) };
     } catch (error) {
       return { success: false, error: errorMessage(error) };
     }

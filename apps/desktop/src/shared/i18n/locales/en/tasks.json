@@ -1100,6 +1100,7 @@
     "title": "Preview",
     "startingBody": "The app from main is starting. It stops when you leave this page.",
     "serviceStopped": "The {{service}} service stopped unexpectedly. The last lines of its log are below.",
+    "recipeInvalid": "preview.json was not used: {{reason}} The preview worked out what to run by itself.",
     "failed": "The preview did not start.",
     "stage": {
       "worktree": "Updating to main",
@@ -1137,6 +1138,7 @@
     "services": {
       "intro": "What the preview runs, from main, while this page is open. The app proposed these from the project's files. Pick the one whose page it shows. Settings come from .env.example and the preview's own database, never from .env.",
       "looking": "Looking at the project's files…",
+      "fromFile": "These come from preview.json in the project. Change them there; a task can do it.",
       "name": "Name",
       "dir": "Folder",
       "command": "Command ({port} is the port)",

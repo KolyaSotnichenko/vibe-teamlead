@@ -209,6 +209,13 @@ export interface PreviewEnvReport {
   services: PreviewEnvService[];
 }
 
+/** The services a start would run, where they came from, and why the project's preview.json was passed over, when it was */
+export interface PreviewRecipeInfo {
+  source: PreviewRecipeSource;
+  services: PreviewService[];
+  invalid?: string;
+}
+
 export interface PreviewAPI {
   /** `taskId`: that task's worktree instead of main */
   start: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
@@ -217,6 +224,8 @@ export interface PreviewAPI {
   setBounds: (bounds: PreviewBounds | null) => Promise<IPCResult>;
   navigate: (navigation: PreviewNavigation) => Promise<IPCResult>;
   proposeServices: (projectId: string) => Promise<IPCResult<PreviewService[]>>;
+  /** What the preview runs for this project (or that task) and where that came from */
+  recipe: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewRecipeInfo>>;
   resetData: (projectId: string, taskId?: string) => Promise<IPCResult<PreviewStatus>>;
   /** Reviews the running preview's pages as a person would use them (one agent session) */
   uxReview: (projectId: string) => Promise<IPCResult<UxReviewResult>>;

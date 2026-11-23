@@ -49,6 +49,25 @@ describe('preview IPC: Environment', () => {
     registerPreviewHandlers(() => null, { onOverlayEvent: vi.fn(() => () => {}), setWorktree: vi.fn(), destroy: vi.fn(), show: vi.fn(), hide: vi.fn() } as never);
   });
 
+  it('recipe: says what the preview runs and where that came from: preview.json before the saved services', async () => {
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'settings', services: SETTINGS.previewServices } });
+    const site = { name: 'site', dir: '', command: 'make serve', port: 8080, page: true };
+    writeFileSync(join(dirs.project, 'preview.json'), JSON.stringify({ version: 1, kind: 'web', services: [site] }));
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')).toEqual({ success: true, data: { source: 'file', services: [site] } });
+  });
+
+  it('recipe: passes over a preview.json it cannot use and says why', async () => {
+    writeFileSync(join(dirs.project, 'preview.json'), '{"version":2}');
+    const result = (await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'p1')) as { success: boolean; data: { source: string; invalid?: string; services: unknown[] } };
+    expect(result.data.source).toBe('settings');
+    expect(result.data.invalid).toMatch(/version/);
+    expect(result.data.services).toEqual(SETTINGS.previewServices);
+  });
+
+  it('recipe: an unknown project is an error', async () => {
+    expect(await invoke(IPC_CHANNELS.PREVIEW_RECIPE, 'nope')).toMatchObject({ success: false });
+  });
+
   it('before the start, shows what each service will get from the example settings and never reads .env', async () => {
     const result = (await invoke(IPC_CHANNELS.PREVIEW_ENV, 'p1')) as { success: boolean; data: PreviewEnvReport };
     expect(result.success).toBe(true);

@@ -18,6 +18,7 @@ import { composeServices } from '../ai/verification/compose-services';
 import { composeFilesInOrder, imagesFromComposeFiles, type StartedService, serviceEnv } from '../ai/verification/detect-checks';
 import { previewAddressesByExamplePort, rewriteExampleUrls } from './example-urls';
 import { mailEnv, needsMail } from './preview-mail';
+import { resolveRecipe } from './recipe';
 
 const LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
 
@@ -164,16 +165,18 @@ export interface PlannedEnv {
 }
 
 /**
- * What each service will get at the next start, from the project's files alone: the database
- * kinds and the other services compose names, the mail catcher when the examples configure
- * SMTP; their addresses and the ports are pending. Pure.
+ * What each service will get at the next start, from the project's files alone: the services
+ * and values of the recipe a start would use (recipe.ts), the database kinds and the other
+ * services compose names, the mail catcher when the examples configure SMTP; their addresses
+ * and the ports are pending. Pure.
  */
 export function plannedEnv(
   settings: Pick<ProjectSettings, 'previewServices' | 'previewEnv' | 'previewServiceEnv'>,
   files: string[],
   read: (path: string) => string | null,
 ): PlannedEnv {
-  const services = settings.previewServices ?? [];
+  const { recipe } = resolveRecipe({ files, read, saved: settings.previewServices ?? [] });
+  const services = recipe.kind === 'web' ? (recipe.services ?? []) : [];
   const composeContents = composeFilesInOrder(files).map((file) => read(file) ?? '');
   const kinds = imagesFromComposeFiles(composeContents).map((image) => image.kind);
   const compose = { planned: composeServices(composeContents), started: [] };
@@ -194,8 +197,8 @@ export function plannedEnv(
       service: service.name,
       dir: service.dir,
       vars: serviceEnvVars(
-        baseEnvVars({ dir: service.dir, ...exampleTexts(files, read, service.dir), started, compose, mailPort: mail ? 1 : undefined, overrides: settings.previewEnv, pending: true }),
-        { byExamplePort, urlEnv: service.urlEnv, urls, serviceOverrides: settings.previewServiceEnv?.[service.name], portEnv: service.portEnv ?? 'PORT', pending: true },
+        baseEnvVars({ dir: service.dir, ...exampleTexts(files, read, service.dir), started, compose, mailPort: mail ? 1 : undefined, recipe: recipe.env, overrides: settings.previewEnv, pending: true }),
+        { byExamplePort, urlEnv: service.urlEnv, urls, recipe: service.env, serviceOverrides: settings.previewServiceEnv?.[service.name], portEnv: service.portEnv ?? 'PORT', pending: true },
       ),
     })),
   };

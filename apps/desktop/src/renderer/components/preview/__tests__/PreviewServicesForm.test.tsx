@@ -24,6 +24,19 @@ describe('the preview services form', () => {
     expect(onSave).toHaveBeenCalledWith(PROPOSED);
   });
 
+  it("shows a recipe's services without letting them be changed, and says where they come from", () => {
+    const onCancel = vi.fn();
+    render(<PreviewServicesForm initial={PROPOSED} readOnly onSave={vi.fn()} onCancel={onCancel} />);
+    expect(screen.getByText('preview.services.fromFile')).toBeTruthy();
+    for (const input of screen.getAllByRole('textbox')) expect((input as HTMLInputElement).disabled).toBe(true);
+    for (const radio of screen.getAllByRole('radio')) expect((radio as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /preview.services.save/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /preview.services.add/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /preview.services.remove/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /preview.services.cancel/ }));
+    expect(onCancel).toHaveBeenCalled();
+  });
+
   it('refuses no page, two pages and a bad name', () => {
     expect(servicesProblem([{ ...PROPOSED[0] }])).toBe('page');
     expect(servicesProblem(PROPOSED.map((s) => ({ ...s, page: true })))).toBe('page');

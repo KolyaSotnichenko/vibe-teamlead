@@ -666,7 +666,7 @@ const KIND_MESSAGE = {
  * preview can't show (another kind than web), or one with no single page, ends the start
  * here, before anything is installed or started.
  */
-function useRecipe(session: Session, files: string[]): void {
+function resolveSessionRecipe(session: Session, files: string[]): void {
   const resolved = resolveRecipe({ files, read: (path) => session.deps.read(session.worktree, path), saved: session.project.settings.previewServices ?? [] });
   session.resolved = resolved;
   emit(session, { recipe: { source: resolved.source, ...(resolved.invalid ? { invalid: resolved.invalid } : {}) } });
@@ -690,7 +690,7 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
       deps.cleanUpLeftovers(previewSpecDir(session.worktree));
       const files = await deps.listFiles(session.worktree);
       check(session);
-      useRecipe(session, files);
+      resolveSessionRecipe(session, files);
 
       await install(session, files, lockfileChanged);
 
@@ -790,7 +790,7 @@ async function afterMerge(session: Session): Promise<void> {
     check(session);
     const before = JSON.stringify(session.resolved.recipe);
     // A recipe the preview can't show ends it here, as at a start
-    useRecipe(session, files);
+    resolveSessionRecipe(session, files);
     if (lockfileChanged || JSON.stringify(session.resolved.recipe) !== before) {
       emit(session, { stage: 'install', message: undefined });
       await stopServers(session);
@@ -898,7 +898,7 @@ export async function restartPreviewServices(project: Project, taskId?: string):
       await stopServers(session);
       session.vars = {};
       // The owner may have saved other services since the start
-      useRecipe(session, files);
+      resolveSessionRecipe(session, files);
       ready(session, await startServices(session, files), files);
     } catch (error) {
       if (error instanceof Cancelled || cancelled(session)) return;

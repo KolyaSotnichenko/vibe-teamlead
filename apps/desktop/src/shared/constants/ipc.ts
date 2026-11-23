@@ -141,6 +141,7 @@ export const IPC_CHANNELS = {
   PREVIEW_SET_BOUNDS: 'preview:setBounds',
   PREVIEW_NAVIGATE: 'preview:navigate',
   PREVIEW_PROPOSE_SERVICES: 'preview:proposeServices',
+  PREVIEW_RECIPE: 'preview:recipe',
   PREVIEW_UX_REVIEW: 'preview:uxReview',
   PREVIEW_NOTES_MODE: 'preview:notesMode',
   PREVIEW_LOGS: 'preview:logs',

@@ -150,6 +150,15 @@ describe('plannedEnv', () => {
   };
   const read = (path: string) => FILES[path] ?? null;
 
+  it("plans from the project's preview.json when it has one: its services and its values", () => {
+    const recipe = { version: 1, kind: 'web', env: { FEATURE_Y: 'on' }, services: [{ name: 'site', dir: '', command: 'make serve', page: true, env: { ONLY_SITE: '1' } }] };
+    const planned = plannedEnv({ previewServices: [] }, ['preview.json'], (path) => (path === 'preview.json' ? JSON.stringify(recipe) : null));
+    expect(planned.services.map((s) => s.service)).toEqual(['site']);
+    const vars = byName(planned.services[0].vars);
+    expect(vars.FEATURE_Y).toMatchObject({ value: 'on', source: 'recipe' });
+    expect(vars.ONLY_SITE).toMatchObject({ value: '1', source: 'recipe' });
+  });
+
   it('lists what each service will get before the start, without ever reading .env', () => {
     const seen: string[] = [];
     const planned = plannedEnv(

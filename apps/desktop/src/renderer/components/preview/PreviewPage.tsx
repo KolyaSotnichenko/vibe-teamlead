@@ -1,13 +1,14 @@
 /**
  * Sidebar → Preview: the project's app from main, inside the window. It starts
- * when this page opens and stops when it goes away. The first time, the owner
- * confirms which services it runs.
+ * when this page opens and stops when it goes away. What it runs comes from the
+ * project's recipe, its saved services or its files; the owner is asked only when
+ * none of them says which service is the page.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { PreviewNote, PreviewService, Project, Task } from '../../../shared/types';
+import type { PreviewNote, PreviewService, PreviewStatus, Project, Task } from '../../../shared/types';
 import { updateProjectSettings } from '../../stores/project-store';
 import { EmptyState, Notice } from '../task-detail/workspace/workspace-ui';
 import { PreviewServicesForm } from './PreviewServicesForm';
@@ -42,34 +43,57 @@ async function sendBack(task: Task, notes: PreviewNote[]): Promise<boolean> {
 export function PreviewPage({ project, task }: { project: Project; task?: Task }) {
   const { t } = useTranslation(['tasks']);
   const saved = project.settings.previewServices ?? [];
-  const [editing, setEditing] = useState(saved.length === 0);
-  const [proposed, setProposed] = useState<PreviewService[] | null>(null);
+  const [editing, setEditing] = useState(false);
+  /** What the form shows: the services a start would run, or the proposal when nothing says */
+  const [form, setForm] = useState<{ services: PreviewService[]; readOnly: boolean } | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
   const [side, setSide] = useState<PreviewSide>(null);
-  const { status, boxRef } = usePreviewSession(project.id, !editing && saved.length > 0, task?.id);
+  const { status, boxRef } = usePreviewSession(project.id, !editing, task?.id);
+  const needsServices = status?.stage === 'failed' && status.needsServices === true;
+  // The preview could not tell what to run: the form opens, once for that answer
+  const asked = useRef<PreviewStatus | null>(null);
+  useEffect(() => {
+    if (!needsServices || asked.current === status) return;
+    asked.current = status;
+    setEditing(true);
+  }, [needsServices, status]);
   // How to run it by hand: read again when the preview fails or comes up, the moments it is shown
   const runningDoc = useRunningDoc(project.id, task?.id, status?.stage === 'failed' || status?.stage === 'ready' ? status.stage : null);
 
+  const taskId = task?.id;
   useEffect(() => {
-    if (!editing || saved.length) return;
+    if (!editing) {
+      setForm(null);
+      return;
+    }
     let live = true;
-    void window.electronAPI.preview.proposeServices(project.id).then((result) => {
-      if (live) setProposed(result.success && result.data ? result.data : []);
-    });
+    void (async () => {
+      const api = window.electronAPI.preview;
+      const recipe = await (taskId ? api.recipe(project.id, taskId) : api.recipe(project.id));
+      const found = recipe.success && recipe.data ? recipe.data : null;
+      if (found?.services.length) {
+        if (live) setForm({ services: found.services, readOnly: found.source === 'file' });
+        return;
+      }
+      // Nothing says what to run: what the project's files propose, for the owner to choose from
+      const proposed = await api.proposeServices(project.id);
+      if (live) setForm({ services: proposed.success && proposed.data ? proposed.data : [], readOnly: false });
+    })();
     return () => { live = false; };
-  }, [editing, saved.length, project.id]);
+  }, [editing, project.id, taskId]);
 
   if (editing) {
-    const initial = saved.length ? saved : proposed;
     return (
       <div className="h-full overflow-auto p-6">
         <h2 className="mb-4 text-lg font-semibold">{t('preview.title')}</h2>
-        {initial === null ? (
+        {form === null ? (
           <p className="text-sm text-muted-foreground">{t('preview.services.looking')}</p>
         ) : (
           <PreviewServicesForm
-            initial={initial}
-            onCancel={saved.length ? () => setEditing(false) : undefined}
+            initial={form.services}
+            readOnly={form.readOnly}
+            // Asked because nothing says what to run: there is nothing to go back to
+            onCancel={needsServices ? undefined : () => setEditing(false)}
             onSave={async (services) => {
               if (await updateProjectSettings(project.id, { previewServices: services })) setEditing(false);
             }}
@@ -98,6 +122,9 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       />
       {status?.database === 'unavailable' && status.databaseReason && (
         <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
+      )}
+      {status?.recipe?.invalid && (
+        <div className="px-4 pt-2"><Notice>{t('preview.recipeInvalid', { reason: status.recipe.invalid })}</Notice></div>
       )}
       {status?.servicesNotices?.map((notice) => (
         <div key={notice} className="px-4 pt-2"><Notice>{notice}</Notice></div>
