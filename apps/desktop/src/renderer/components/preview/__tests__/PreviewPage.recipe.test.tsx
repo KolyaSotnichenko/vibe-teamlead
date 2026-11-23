@@ -92,6 +92,24 @@ describe('PreviewPage and the recipe', () => {
     expect(api.restartServices).not.toHaveBeenCalled();
   });
 
+  it("says the main process's sentences by their keys, and leaves a tool's own output as it is", async () => {
+    session.status = {
+      projectId: 'p1', stage: 'failed', origins: [], message: 'api did not start', logTail: 'Error: boom',
+      servicesNotices: ['search (x) did not get ready in time.', 'something a tool printed'],
+      database: 'unavailable', databaseReason: 'postgres:16 did not get ready in time.',
+      said: [
+        { key: 'serviceNotStarted', params: { service: 'api' }, text: 'api did not start' },
+        { key: 'composeNotReady', params: { name: 'search', image: 'x' }, text: 'search (x) did not get ready in time.' },
+        { key: 'imageNotReady', params: { image: 'postgres:16' }, text: 'postgres:16 did not get ready in time.' },
+      ],
+    };
+    render(<PreviewPage project={projectWith(SAVED)} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('preview.say.serviceNotStarted');
+    expect(screen.getByText('preview.say.composeNotReady')).toBeInTheDocument();
+    expect(screen.getByText('preview.say.imageNotReady')).toBeInTheDocument();
+    expect(screen.getByText('something a tool printed')).toBeInTheDocument();
+  });
+
   it('says when preview.json was not used', async () => {
     session.status = { projectId: 'p1', stage: 'ready', origins: [], url: 'http://localhost:1', recipe: { source: 'settings', kind: 'web', invalid: 'version must be 1.' } };
     render(<PreviewPage project={projectWith(SAVED)} />);

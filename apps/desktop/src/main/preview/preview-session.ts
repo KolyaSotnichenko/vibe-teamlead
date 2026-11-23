@@ -31,6 +31,7 @@ import { probeThroughPage, type ProbeResult } from './probe';
 import { type DockerRun, hostDocker } from '../ai/verification/test-services';
 import { needsInstall, packageManagerOf } from '../design/storybook-service';
 import { findOnPath, runProcess, runShell, searchPath } from '../platform/exec';
+import { saidFor, say } from '../say';
 import { workspaceLibraries } from './detect-services';
 import { frameworkMigrations, migratesOnLocalFile, stackInstalls } from './stacks';
 import { PREVIEW_LABEL, type PreviewDatabase, previewTaskKey, removeTaskPreviewVolumes, startPreviewDatabase } from './preview-database';
@@ -167,7 +168,7 @@ export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | '
         onLine: (line) => line.trim() && onLine(line.trim().slice(0, 200)),
       });
       if (result.aborted) throw new Cancelled();
-      if (result.code !== 0) throw Object.assign(new Error(`${pm} install failed`), { logTail: tail(`${result.stdout}${result.stderr}`) });
+      if (result.code !== 0) throw Object.assign(new Error(say('installFailed', `${pm} install failed`, { tool: pm })), { logTail: tail(`${result.stdout}${result.stderr}`) });
     },
     startDatabase: startPreviewDatabase,
     startCompose: startComposeServices,
@@ -226,10 +227,24 @@ function managerOf(files: string[]): string {
   return 'npm';
 }
 
+const MIGRATIONS_FAILED = () => say('migrationsFailed', 'The migrations failed');
+const SEED_FAILED = () => say('seedFailed', 'The seed failed');
+const depsFailed = (dir: string) => (dir ? say('depsFailed', `The dependencies in ${dir} did not install`, { dir }) : say('depsFailedRoot', 'The dependencies in the project root did not install'));
+
+/**
+ * The status with which of its sentences the app made itself (say.ts): the failure message,
+ * the reasons and the notices. A progress line (an install's output) is a tool's own words.
+ */
+function withSaid(status: PreviewStatus): PreviewStatus {
+  const { said: _before, ...rest } = status;
+  const said = saidFor([status.stage === 'failed' ? status.message : undefined, status.databaseReason, status.mailReason, ...(status.servicesNotices ?? [])]);
+  return said.length ? { ...rest, said } : rest;
+}
+
 /** A stopped session is silent: stopPreview has already said "stopped" for it. */
 function emit(session: Session, patch: Partial<PreviewStatus>): void {
   if (cancelled(session)) return;
-  session.status = { ...session.status, ...patch };
+  session.status = withSaid({ ...session.status, ...patch });
   session.onStatus(session.status);
 }
 
@@ -280,7 +295,10 @@ function databaseCommandEnv(session: Session, dir: string, files: string[]): Rec
     held.push(v.name);
     return v.automatic ? [{ name: v.name, value: v.automatic.value, source: v.automatic.source }] : [];
   });
-  if (held.length) sayOnce(session, `Migrations and seed data run only against what the preview started: they did not get your or the recipe's ${held.join(', ')}.`);
+  if (held.length) {
+    const names = held.join(', ');
+    sayOnce(session, say('heldBack', `Migrations and seed data run only against what the preview started: they did not get your or the recipe's ${names}.`, { names }));
+  }
   return envOf(vars);
 }
 
@@ -297,7 +315,7 @@ async function buildLibraries(session: Session, files: string[], report: boolean
     if (report) emit(session, { stage: 'libraries', message: library.name });
     const result = await session.deps.runCommand(library.command, resolve(root, library.dir), envFor(session, library.dir, files), session.abort.signal);
     check(session);
-    if (result.code !== 0) throw Object.assign(new Error(`${library.name} did not build`), { logTail: tail(result.output) });
+    if (result.code !== 0) throw Object.assign(new Error(say('libraryFailed', `${library.name} did not build`, { name: library.name })), { logTail: tail(result.output) });
   }
 }
 
@@ -327,7 +345,7 @@ async function runMigrations(session: Session, files: string[], report: boolean)
   for (const { dir, command } of commands) {
     const result = await session.deps.runCommand(command, resolve(session.worktree, dir), databaseCommandEnv(session, dir, files), session.abort.signal);
     check(session);
-    if (result.code !== 0) throw Object.assign(new Error('The migrations failed'), { logTail: tail(result.output) });
+    if (result.code !== 0) throw Object.assign(new Error(MIGRATIONS_FAILED()), { logTail: tail(result.output) });
   }
   return sql;
 }
@@ -354,7 +372,7 @@ async function installStacks(session: Session, files: string[]): Promise<void> {
     const result = await session.deps.runCommand(install.command, resolve(session.worktree, install.dir), envFor(session, install.dir, files), session.abort.signal);
     check(session);
     if (result.code !== 0) {
-      throw Object.assign(new Error(`The dependencies in ${install.dir || 'the project root'} did not install`), { logTail: tail(result.output) });
+      throw Object.assign(new Error(depsFailed(install.dir)), { logTail: tail(result.output) });
     }
     session.deps.writeFile(session.worktree, stampPath, stamp);
   }
@@ -395,7 +413,7 @@ async function install(session: Session, files: string[], lockfileChanged: boole
     const stampPath = installStampPath(`${step.dir}\0${step.command}`);
     if (read(stampPath) === stamp) continue;
     emit(session, { stage: 'install', message: `${step.dir || '.'}: ${step.command}` });
-    await runStep(session, files, step, `The dependencies in ${step.dir || 'the project root'} did not install`);
+    await runStep(session, files, step, depsFailed(step.dir));
     session.deps.writeFile(session.worktree, stampPath, stamp);
   }
 }
@@ -406,7 +424,7 @@ async function build(session: Session, files: string[], report: boolean): Promis
   if (!steps) return buildLibraries(session, files, report);
   for (const step of steps) {
     if (report) emit(session, { stage: 'libraries', message: step.command });
-    await runStep(session, files, step, `${step.command} failed`);
+    await runStep(session, files, step, say('commandFailed', `${step.command} failed`, { command: step.command }));
   }
 }
 
@@ -421,7 +439,7 @@ async function migrate(session: Session, files: string[], report: boolean): Prom
   const database = session.database;
   if (!database || database.status === 'unavailable') return false;
   if (steps.length && report) emit(session, { stage: 'migrations' });
-  for (const step of steps) await runStep(session, files, step, 'The migrations failed', databaseCommandEnv(session, step.dir, files));
+  for (const step of steps) await runStep(session, files, step, MIGRATIONS_FAILED(), databaseCommandEnv(session, step.dir, files));
   return database.status === 'started' && database.started.some((s) => s.kind === 'postgres' || s.kind === 'mysql');
 }
 
@@ -432,7 +450,7 @@ async function seed(session: Session, files: string[], sql: boolean): Promise<vo
   if (steps) {
     if (!steps.length) return;
     emit(session, { stage: 'seed' });
-    for (const step of steps) await runStep(session, files, step, 'The seed failed', databaseCommandEnv(session, step.dir, files));
+    for (const step of steps) await runStep(session, files, step, SEED_FAILED(), databaseCommandEnv(session, step.dir, files));
     return;
   }
   if (!sql) return;
@@ -441,7 +459,7 @@ async function seed(session: Session, files: string[], sql: boolean): Promise<vo
     const command = seedCommand(session.deps.read(session.worktree, dir ? `${dir}/package.json` : 'package.json'), manager);
     if (!command) continue;
     emit(session, { stage: 'seed' });
-    await runStep(session, files, { dir, command }, 'The seed failed', databaseCommandEnv(session, dir, files));
+    await runStep(session, files, { dir, command }, SEED_FAILED(), databaseCommandEnv(session, dir, files));
     break;
   }
 }
@@ -514,7 +532,7 @@ async function startServices(session: Session, files: string[]): Promise<Started
     } catch (error) {
       if (cancelled(session)) throw new Cancelled();
       const message = error instanceof Error ? error.message : String(error);
-      throw Object.assign(new Error(`${service.name} did not start`), { logTail: tail(message) });
+      throw Object.assign(new Error(say('serviceNotStarted', `${service.name} did not start`, { service: service.name })), { logTail: tail(message) });
     }
     // A stop while it was starting found nothing to stop yet
     if (cancelled(session)) {
@@ -557,13 +575,13 @@ async function waitUntilReady(session: Session, service: string, url: string, pa
     last = String(result.status ?? result.error ?? 'nothing');
     // Nothing answered and nothing listens any more: it is gone, and waiting won't bring it back
     if (result.status === undefined && (await session.deps.portFree(port))) {
-      throw Object.assign(new Error(`${service} stopped before it was ready`), { logTail: logEnd(session, logPath) });
+      throw Object.assign(new Error(say('stoppedBeforeReady', `${service} stopped before it was ready`, { service })), { logTail: logEnd(session, logPath) });
     }
     if (Date.now() >= deadline) break;
     await new Promise((resolveWait) => setTimeout(resolveWait, pollMs));
     check(session);
   }
-  throw Object.assign(new Error(`${service} did not get ready: ${path} answered ${last}`), { logTail: logEnd(session, logPath) });
+  throw Object.assign(new Error(say('notReady', `${service} did not get ready: ${path} answered ${last}`, { service, path, answer: last })), { logTail: logEnd(session, logPath) });
 }
 
 /**
@@ -671,7 +689,7 @@ function resolveSessionRecipe(session: Session, files: string[]): void {
   const { kind } = resolved.recipe;
   if (kind !== 'web') throw new Error(KIND_MESSAGE[kind]);
   if (servicesOf(session).filter((service) => service.page).length !== 1) {
-    throw Object.assign(new Error('Choose exactly one service whose page the preview shows.'), { needsServices: true as const });
+    throw Object.assign(new Error(say('needsServices', 'Choose exactly one service whose page the preview shows.')), { needsServices: true as const });
   }
 }
 
@@ -855,7 +873,7 @@ export async function stopPreview(projectId?: string): Promise<void> {
   const session = current;
   if (!session || (projectId && session.project.id !== projectId)) return;
   current = null;
-  session.status = { ...session.status, stage: 'stopped', url: undefined, origins: [] };
+  session.status = withSaid({ ...session.status, stage: 'stopped', url: undefined, origins: [] });
   session.abort.abort();
   session.onStatus(session.status);
   await teardown(session);

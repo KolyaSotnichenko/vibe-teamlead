@@ -11,6 +11,7 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { writeFileReplacingSync } from '../ai/safe-write';
+import { say } from '../say';
 import type { ServiceImage, StartedService } from '../ai/verification/detect-checks';
 import { COMPOSE_LABEL, removeComposeLeftovers } from '../ai/verification/compose-runner';
 import { type DockerRun, dockerMissingReason, networkArgs, RECIPES } from '../ai/verification/test-services';
@@ -83,7 +84,7 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
   const nothing = async () => {};
   if (!images.length) return { status: 'none', started: [], fresh: false, stop: nothing };
   if (!(await docker(['info'])).ok) {
-    return { status: 'unavailable', started: [], fresh: false, reason: dockerMissingReason(images, 'app', 'to see it with its data'), stop: nothing };
+    return { status: 'unavailable', started: [], fresh: false, reason: say('dbDockerMissing', dockerMissingReason(images, 'app', 'to see it with its data'), { kinds: images.map((image) => image.kind).join(', ') }), stop: nothing };
   }
 
   const label = `${PREVIEW_LABEL}=${projectId}`;
@@ -109,11 +110,14 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
   for (const { kind, image, name } of images) {
     const recipe = RECIPES[kind];
     const volume = previewVolume(projectId, kind);
-    if (signal?.aborted) return gaveUp('The preview was stopped.');
+    if (signal?.aborted) return gaveUp(say('previewStopped', 'The preview was stopped.'));
     if (reset) {
       const removed = await docker(['volume', 'rm', '-f', volume]);
       // A new password for old data would lock every later open out
-      if (!removed.ok) return gaveUp(`The preview's data could not be reset: ${removed.stdout.trim().slice(0, REASON_CHARS)}`);
+      if (!removed.ok) {
+        const output = removed.stdout.trim().slice(0, REASON_CHARS);
+        return gaveUp(say('resetFailed', `The preview's data could not be reset: ${output}`, { output }));
+      }
       delete secrets.passwords[kind];
     }
     let existed = (await docker(['volume', 'inspect', volume])).ok;
@@ -145,21 +149,24 @@ export async function startPreviewDatabase(images: ServiceImage[], options: Prev
       image,
     ]);
     const id = run.stdout.trim().split('\n').pop() ?? '';
-    if (!run.ok || !id) return gaveUp(`Docker could not start ${image}: ${run.stdout.trim().slice(0, REASON_CHARS)}`);
+    if (!run.ok || !id) {
+      const output = run.stdout.trim().slice(0, REASON_CHARS);
+      return gaveUp(say('dockerNotStarted', `Docker could not start ${image}: ${output}`, { image, output }));
+    }
     ids.push(id);
-    if (signal?.aborted) return gaveUp('The preview was stopped.');
+    if (signal?.aborted) return gaveUp(say('previewStopped', 'The preview was stopped.'));
 
     const port = (await docker(['port', id, `${recipe.port}/tcp`])).stdout.trim().split('\n')[0]?.split(':').pop() ?? '';
-    if (!port) return gaveUp(`Docker gave no port for ${image}.`);
+    if (!port) return gaveUp(say('dockerNoPort', `Docker gave no port for ${image}.`, { image }));
 
     const deadline = Date.now() + readyTimeoutMs;
     let ready = false;
     while (!ready && Date.now() < deadline) {
-      if (signal?.aborted) return gaveUp('The preview was stopped.');
+      if (signal?.aborted) return gaveUp(say('previewStopped', 'The preview was stopped.'));
       ready = (await docker(['exec', id, ...recipe.ready(password)])).ok;
       if (!ready) await new Promise((resolve) => setTimeout(resolve, pollMs));
     }
-    if (!ready) return gaveUp(`${image} did not get ready in time.`);
+    if (!ready) return gaveUp(say('imageNotReady', `${image} did not get ready in time.`, { image }));
     started.push({ kind, url: recipe.url(password, port) });
   }
   return { status: 'started', started, fresh, stop };

@@ -8,6 +8,7 @@
 
 import { type DockerRun, networkArgs } from '../ai/verification/test-services';
 import type { PreviewMailMessage, PreviewMailSummary } from '../../shared/types/preview';
+import { say } from '../say';
 
 /** Pinned: a preview never pulls whatever "latest" is that day */
 export const MAILPIT_IMAGE = 'axllent/mailpit:v1.33';
@@ -54,10 +55,10 @@ export interface PreviewMail {
 /** Mailpit on local ports, labelled like the preview's database so the same cleanup removes it; on the session's network when given */
 export async function startPreviewMail(docker: DockerRun, key: string, join?: { network: string; alias: string }): Promise<PreviewMail> {
   const nothing = async () => {};
-  if (!(await docker(['info'])).ok) return { status: 'unavailable', reason: 'Docker is not running, so the app\'s mail can\'t be caught.', stop: nothing };
+  if (!(await docker(['info'])).ok) return { status: 'unavailable', reason: say('mailDockerMissing', "Docker is not running, so the app's mail can't be caught."), stop: nothing };
   const run = await docker(['run', '-d', '--rm', '--label', `${LABEL}=${key}`, ...networkArgs(join?.network, join?.alias ?? 'mailpit'), '-p', `127.0.0.1::${SMTP_PORT}`, '-p', `127.0.0.1::${HTTP_PORT}`, MAILPIT_IMAGE]);
   const id = run.stdout.trim().split('\n').pop() ?? '';
-  if (!run.ok || !id) return { status: 'unavailable', reason: `Docker could not start ${MAILPIT_IMAGE}.`, stop: nothing };
+  if (!run.ok || !id) return { status: 'unavailable', reason: say('mailNotStarted', `Docker could not start ${MAILPIT_IMAGE}.`, { image: MAILPIT_IMAGE }), stop: nothing };
   const stop = async () => {
     await docker(['rm', '-f', id]);
   };
@@ -66,7 +67,7 @@ export async function startPreviewMail(docker: DockerRun, key: string, join?: { 
   const httpPort = await portOf(HTTP_PORT);
   if (!smtpPort || !httpPort) {
     await stop();
-    return { status: 'unavailable', reason: 'Docker gave no ports for the mail catcher.', stop: nothing };
+    return { status: 'unavailable', reason: say('mailNoPorts', 'Docker gave no ports for the mail catcher.'), stop: nothing };
   }
   return { status: 'started', smtpPort, httpPort, stop };
 }

@@ -15,6 +15,7 @@ import { randomBytes } from 'node:crypto';
 import { connect, createServer } from 'node:net';
 
 import { adapterOf, type ComposeService, composeRunArgs, containerSpec, dependencyOrder, type StartedComposeService } from './compose-services';
+import { say } from '../../say';
 import type { DockerRun } from './test-services';
 
 /** On every compose container and network, with the run's key: what a run that died left is found by it */
@@ -142,15 +143,16 @@ export async function createRunNetwork(docker: DockerRun, labelKey: string, labe
 
 /** Why the services can't start without Docker, in words a user can act on */
 export function composeDockerMissing(services: ComposeService[]): string {
-  return `This project's compose file names ${services.map((s) => s.name).join(', ')}, and Docker isn't running. Install or start Docker Desktop to have them started.`;
+  const names = services.map((s) => s.name).join(', ');
+  return say('composeDockerMissing', `This project's compose file names ${names}, and Docker isn't running. Install or start Docker Desktop to have them started.`, { names });
 }
 
 /** What the owner is told when a service could not have the port its compose file gives it */
 export function composeMovedNotice({ name, wanted, got, heldBy }: ComposeMovedPort): string {
   if (heldBy) {
-    return `${name} runs on port ${got} here: port ${wanted}, which the compose file gives it, is the one ${heldBy} has in this preview. An address the project hard-codes for ${name} reaches ${heldBy} instead.`;
+    return say('composeMovedSibling', `${name} runs on port ${got} here: port ${wanted}, which the compose file gives it, is the one ${heldBy} has in this preview. An address the project hard-codes for ${name} reaches ${heldBy} instead.`, { name, wanted, got, heldBy });
   }
-  return `${name} runs on port ${got} here: port ${wanted}, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for ${name} reaches that instead.`;
+  return say('composeMoved', `${name} runs on port ${got} here: port ${wanted}, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for ${name} reaches that instead.`, { name, wanted, got });
 }
 
 async function setUpBuckets(docker: DockerRun, id: string, started: StartedComposeService, buckets: string[], deadline: number, pollMs: number): Promise<string[]> {
@@ -196,7 +198,8 @@ export async function startComposeServices(services: ComposeService[], options: 
     await docker(['network', 'rm', network]);
     const created = await docker(['network', 'create', ...labels.flatMap((label) => ['--label', label]), network]);
     if (!created.ok) {
-      return { status: 'unavailable', started: [], failed: [], moved: [], reason: `Docker could not create a network for the services: ${created.stdout.trim().slice(0, REASON_CHARS)}`, stop: nothing };
+      const output = created.stdout.trim().slice(0, REASON_CHARS);
+      return { status: 'unavailable', started: [], failed: [], moved: [], reason: say('composeNetworkFailed', `Docker could not create a network for the services: ${output}`, { output }), stop: nothing };
     }
   }
 
@@ -219,7 +222,7 @@ export async function startComposeServices(services: ComposeService[], options: 
     if (signal?.aborted) break;
     const missing = service.dependsOn.find((dep) => failed.some((f) => f.name === dep));
     if (missing) {
-      failed.push({ name: service.name, reason: `${service.name} needs ${missing}, which did not start.` });
+      failed.push({ name: service.name, reason: say('composeNeeds', `${service.name} needs ${missing}, which did not start.`, { name: service.name, missing }) });
       continue;
     }
     const adapter = adapterOf(service.kind);
@@ -247,7 +250,8 @@ export async function startComposeServices(services: ComposeService[], options: 
     const id = lines(run.stdout).pop() ?? '';
     if (!run.ok || !id) {
       giveBack();
-      failed.push({ name: service.name, reason: `Docker could not start ${service.image}: ${run.stdout.trim().slice(0, REASON_CHARS)}` });
+      const output = run.stdout.trim().slice(0, REASON_CHARS);
+      failed.push({ name: service.name, reason: say('dockerNotStarted', `Docker could not start ${service.image}: ${output}`, { image: service.image, output }) });
       continue;
     }
     ids.push(id);
@@ -264,7 +268,7 @@ export async function startComposeServices(services: ComposeService[], options: 
     if (spec.publish.length && !Object.keys(ports).length) {
       giveBack();
       await remove(id);
-      failed.push({ name: service.name, reason: `Docker gave no port for ${service.image}.` });
+      failed.push({ name: service.name, reason: say('dockerNoPort', `Docker gave no port for ${service.image}.`, { image: service.image }) });
       continue;
     }
 
@@ -286,7 +290,13 @@ export async function startComposeServices(services: ComposeService[], options: 
       giveBack();
       await remove(id);
       if (signal?.aborted) break;
-      failed.push({ name: service.name, reason: exited ? `${service.name} (${service.image}) stopped right after it started.` : `${service.name} (${service.image}) did not get ready in time.` });
+      const values = { name: service.name, image: service.image };
+      failed.push({
+        name: service.name,
+        reason: exited
+          ? say('composeStoppedAtStart', `${service.name} (${service.image}) stopped right after it started.`, values)
+          : say('composeNotReady', `${service.name} (${service.image}) did not get ready in time.`, values),
+      });
       continue;
     }
     const startedService: StartedComposeService = { name: service.name, kind: service.kind, image: service.image, ports, env: spec.env };
@@ -299,13 +309,13 @@ export async function startComposeServices(services: ComposeService[], options: 
     }
     if (service.kind === 's3' && buckets.length) {
       const missed = await setUpBuckets(docker, id, startedService, buckets, Date.now() + readyTimeoutMs, pollMs);
-      for (const bucket of missed) failed.push({ name: service.name, reason: `The bucket ${bucket} could not be created in ${service.name}.` });
+      for (const bucket of missed) failed.push({ name: service.name, reason: say('composeBucketFailed', `The bucket ${bucket} could not be created in ${service.name}.`, { bucket, name: service.name }) });
     }
   }
 
   if (signal?.aborted) {
     await stop();
-    return { status: 'unavailable', started: [], failed, moved: [], reason: 'The run was stopped.', stop: nothing };
+    return { status: 'unavailable', started: [], failed, moved: [], reason: say('runStopped', 'The run was stopped.'), stop: nothing };
   }
   if (!started.length) {
     await stop();

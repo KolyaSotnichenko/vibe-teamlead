@@ -3,6 +3,7 @@
  */
 
 import type { IPCResult } from './common';
+import type { SaidText } from '../constants/preview-say';
 import type { PreviewService } from './project';
 
 /** One command of a recipe's step, run in `dir` (relative to the project root; '' for the root) */
@@ -63,6 +64,11 @@ export interface PreviewStatus {
   recipe?: { source: PreviewRecipeSource; kind: PreviewRecipeKind; invalid?: string };
   /** Failed because no source says which services to run, or which one is the page: the owner is asked */
   needsServices?: true;
+  /**
+   * Which of this status's sentences (its failure message, its reasons and notices) the app
+   * made itself, with the key and values to say each in the interface's language
+   */
+  said?: SaidText[];
 }
 
 /**

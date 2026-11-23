@@ -51,6 +51,11 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   // The preview keeps running under the form: looking at the services costs nothing, and saving restarts them
   const { status, boxRef } = usePreviewSession(project.id, true, task?.id);
   const needsServices = status?.stage === 'failed' && status.needsServices === true;
+  /** A sentence from the main process in the interface's language, when the app made it; a tool's own words as they are */
+  const say = (text: string | undefined): string | undefined => {
+    const known = text ? status?.said?.find((said) => said.text === text) : undefined;
+    return known ? t(`preview.say.${known.key}`, { ...known.params, defaultValue: known.text }) : text;
+  };
   // The preview could not tell what to run: the form opens, once for that answer
   const asked = useRef<PreviewStatus | null>(null);
   useEffect(() => {
@@ -127,13 +132,13 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
         howToRun={runningDoc !== null}
       />
       {status?.database === 'unavailable' && status.databaseReason && (
-        <div className="px-4 pt-2"><Notice>{status.databaseReason}</Notice></div>
+        <div className="px-4 pt-2"><Notice>{say(status.databaseReason)}</Notice></div>
       )}
       {status?.recipe?.invalid && (
         <div className="px-4 pt-2"><Notice>{t('preview.recipeInvalid', { reason: status.recipe.invalid })}</Notice></div>
       )}
       {status?.servicesNotices?.map((notice) => (
-        <div key={notice} className="px-4 pt-2"><Notice>{notice}</Notice></div>
+        <div key={notice} className="px-4 pt-2"><Notice>{say(notice)}</Notice></div>
       ))}
       {ready && status.addressIssues && status.addressIssues.length > 0 && (
         <div className="px-4 pt-2">
@@ -157,7 +162,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
                       ? t('preview.serviceStopped', { service: status.stoppedService })
                       : status.recipe && status.recipe.kind !== 'web'
                         ? t(`preview.kind.${status.recipe.kind}`)
-                        : (status.message ?? t('preview.failed'))}
+                        : (say(status.message) ?? t('preview.failed'))}
                   </p>
                   {status.logTail && <pre className="max-h-96 overflow-auto border border-border p-3 font-mono text-xs">{status.logTail}</pre>}
                   <RunningDoc projectId={project.id} doc={runningDoc} />
@@ -191,7 +196,7 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       )}
       {side === 'mail' && (
         <aside aria-label={t('preview.toolbar.mail')} className="w-96 shrink-0 border-l border-border bg-background">
-          <MailPanel projectId={project.id} mail={status?.mail} reason={status?.mailReason} />
+          <MailPanel projectId={project.id} mail={status?.mail} reason={say(status?.mailReason)} />
         </aside>
       )}
       {side === 'running' && runningDoc && (

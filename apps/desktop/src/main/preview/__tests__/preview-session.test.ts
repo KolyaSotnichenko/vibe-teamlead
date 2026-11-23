@@ -437,6 +437,8 @@ describe('a preview session', () => {
     const status = await startPreview(project(), () => {}, d);
     expect(status.stage).toBe('failed');
     expect(status.message).toContain('web');
+    // The sentence comes with its key and values, so the interface says it in its own language
+    expect(status.said).toEqual([{ key: 'serviceNotStarted', params: { service: 'web' }, text: 'web did not start' }]);
     expect(status.logTail).toContain('Cannot find module next');
     expect(d.stopServer).toHaveBeenCalledWith('preview-api');
     expect(db.stop).toHaveBeenCalled();
@@ -972,6 +974,7 @@ describe("the compose file's other services", () => {
     expect(services.map((s) => s.name)).toEqual(['rabbitmq', 'search']);
     expect(options).toMatchObject({ labelKey: 'vibe-teamlead-preview', labelValue: 'p1' });
     expect(status).toMatchObject({ services: 'started', servicesNotices: ['search (getmeili/meilisearch) did not get ready in time.'] });
+    expect(status.said).toBeUndefined(); // this run's reason came from a stand-in, not from the app's own sentences
     const api = vi.mocked(d.startServer).mock.calls.map(([o]) => o as { name: string; env: Record<string, string> }).find((c) => c.name === 'preview-api')!;
     expect(api.env.AMQP_URL).toBe('amqp://127.0.0.1:50001');
     expect(api.env.MEILI_HOST).toBe('');
@@ -1023,6 +1026,7 @@ describe("the compose file's other services", () => {
     expect(status.servicesNotices).toEqual([
       'rabbitmq runs on port 50672 here: port 5672, which the compose file gives it, is taken by something else on this computer. An address the project hard-codes for rabbitmq reaches that instead.',
     ]);
+    expect(status.said).toEqual([{ key: 'composeMoved', params: { name: 'rabbitmq', wanted: 5672, got: 50672 }, text: status.servicesNotices?.[0] }]);
   });
 
   it("lets a compose service have its compose port when it is free, but never a port one of the project's own services expects", async () => {
