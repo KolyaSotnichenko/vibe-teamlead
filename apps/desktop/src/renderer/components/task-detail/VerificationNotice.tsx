@@ -10,7 +10,7 @@ import { RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 import type { Task } from '../../../shared/types';
 import type { VerificationSummary } from '../../../shared/utils/verification-summary';
-import { useVerification } from './useVerification';
+import { useVerification, verificationChanged } from './useVerification';
 import { STARTS_CHECK_COMMAND } from '../../../shared/utils/verification-summary';
 
 type Check = VerificationSummary['checks'][number];
@@ -39,7 +39,11 @@ export function VerificationNotice({ task }: { task: Task }) {
     setError('');
     try {
       const result = await window.electronAPI.verifyTaskAgain(task.id, task.projectId);
-      if (result.success && result.data) setAgain({ taskId: task.id, summary: result.data });
+      if (result.success && result.data) {
+        setAgain({ taskId: task.id, summary: result.data });
+        // The card on the board shows it too
+        verificationChanged(task.id);
+      }
       else setError(result.error ?? '');
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : String(thrown));
