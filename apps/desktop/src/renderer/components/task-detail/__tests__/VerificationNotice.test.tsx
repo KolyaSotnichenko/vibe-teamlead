@@ -6,7 +6,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { Task } from '../../../../shared/types';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: { ports?: string }) => (params?.ports ? `${key}:${params.ports}` : key) }) }));
 
 import { STARTS_CHECK_COMMAND } from '../../../../shared/utils/verification-summary';
 import { VerificationNotice } from '../VerificationNotice';
@@ -38,6 +38,16 @@ describe('VerificationNotice', () => {
     setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable', why: { reason: 'missing', names: ['api', 'worker'] } }] });
     expect(await screen.findByText('verification.startsWhy.missing')).toBeInTheDocument();
     expect(screen.queryByText('verification.outcome.notTried')).not.toBeInTheDocument();
+  });
+
+  it('says a port is in use without a number when a report kept before had none', async () => {
+    setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable', why: { reason: 'port' } }] });
+    expect(await screen.findByText('verification.startsWhy.portUnnamed')).toBeInTheDocument();
+  });
+
+  it('names the port that is in use, with or without a service', async () => {
+    setup({ status: 'not_verified', checks: [{ command: STARTS_CHECK_COMMAND, outcome: 'unavailable', why: { reason: 'port', ports: [10000] } }] });
+    expect(await screen.findByText('verification.startsWhy.port:10000')).toBeInTheDocument();
   });
 
   it('calls the start-up check by what it means, not by a command', async () => {

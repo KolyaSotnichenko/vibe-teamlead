@@ -13,6 +13,11 @@ describe('parseVerificationSummary', () => {
     expect(parseVerificationSummary(text)).toBeNull();
   });
 
+  it('reads why a start was not judged, with the ports, and drops what is not a port', () => {
+    const parsed = parseVerificationSummary(JSON.stringify({ status: 'not_verified', checks: [{ command: 'start the project by its recipe', outcome: 'unavailable', why: { reason: 'port', ports: [10000, 'x', 70000, 3000.5] } }] }));
+    expect(parsed?.checks[0].why).toEqual({ reason: 'port', ports: [10000] });
+  });
+
   it('drops malformed checks rather than showing them', () => {
     const parsed = parseVerificationSummary(JSON.stringify({ status: 'passed', checks: [{ command: 'ok', outcome: 'passed' }, { command: 1 }, { command: 'x', outcome: 'made-up' }] }));
     expect(parsed?.checks).toEqual([{ command: 'ok', outcome: 'passed' }]);

@@ -241,6 +241,7 @@ describe('verifyTask', () => {
       expect(readInCopy).toBe('yes\n');
       expect(given.saved).toEqual(saved);
       expect(given.cannot).toMatch(/Port 10000 is in use/);
+      expect(given.cannotWhy).toEqual({ reason: 'port', ports: [10000] });
       // What the base starts by its files, so a service that is no longer found is noticed
       expect(given.expectServices).toEqual(['site'])
       // Its own name for this run's servers

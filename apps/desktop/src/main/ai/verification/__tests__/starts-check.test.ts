@@ -147,7 +147,7 @@ describe('the start-up check', () => {
   it("can't say anything when a service could not have the port the project expects: an address it hard-codes reaches something else", async () => {
     const { options } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, { portFree: vi.fn(async (port: number) => port !== 3001) });
     const result = await startsCheck(options);
-    expect(result).toMatchObject({ outcome: 'unavailable', why: { reason: 'port', names: ['api'] } });
+    expect(result).toMatchObject({ outcome: 'unavailable', why: { reason: 'port', names: ['api'], ports: [3001] } });
     expect(result?.tail).toMatch(/api.*3001.*in use/);
   });
 

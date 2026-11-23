@@ -1299,6 +1299,9 @@ async function runQualityAssurance(
 
     runVerification: verification
       ? async ({ fresh }) => {
+          // What the task's agents left running (a dev server, the containers of a `docker compose up`)
+          // holds the ports the project expects: the app's own start of it would be judged by them
+          await releaseTaskResources(session);
           const report = await verifyTask({
             worktreePath: session.projectDir,
             baseRef: await requireBaseRef(session.projectDir),

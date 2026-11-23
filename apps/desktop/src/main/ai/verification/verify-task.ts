@@ -637,7 +637,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
     const cannot = startsCannot ?? (copyWithoutServices ? `The copy ran without the database or services the project needs: ${copyServicesReason || "Docker isn't running"}.` : undefined);
     const once = () => startsCheck({
       cwd, files, read, runId, ...(expectServices ? { expectServices } : {}), saved: options.previewServices ?? [], started: services.started, compose: services.compose,
-      ...(cannot ? { cannot, cannotWhy: { reason: startsCannot ? 'port' : 'services' } } : {}),
+      ...(cannot ? { cannot, cannotWhy: startsCannot && takenPort !== undefined ? { reason: 'port', ports: [takenPort] } : { reason: 'services' } } : {}),
       // The recipe's migrations and seed, by the rule the detected ones follow: only the copy's own throwaway database
       migratable,
       timeoutMs: checkTimeout,

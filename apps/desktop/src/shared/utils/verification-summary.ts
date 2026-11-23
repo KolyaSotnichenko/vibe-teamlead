@@ -17,6 +17,8 @@ export const STARTS_CHECK_COMMAND = 'start the project by its recipe';
 export interface StartsWhy {
   reason: 'missing' | 'nothing' | 'port' | 'services' | 'tool' | 'stopped';
   names?: string[];
+  /** The ports in use, for `port` */
+  ports?: number[];
 }
 const STARTS_REASONS: StartsWhy['reason'][] = ['missing', 'nothing', 'port', 'services', 'tool', 'stopped'];
 
@@ -49,12 +51,13 @@ export function parseVerificationSummary(text: string): VerificationSummary | nu
     const check = entry as Record<string, unknown> | null;
     if (typeof check?.command !== 'string' || typeof check.outcome !== 'string' || !OUTCOMES.includes(check.outcome)) continue;
     const onBase = typeof check.onBase === 'string' && OUTCOMES.includes(check.onBase) ? (check.onBase as VerificationOutcome) : undefined;
-    const why = check.why as { reason?: unknown; names?: unknown } | undefined;
+    const why = check.why as { reason?: unknown; names?: unknown; ports?: unknown } | undefined;
     const validWhy = typeof why?.reason === 'string' && STARTS_REASONS.includes(why.reason as StartsWhy['reason']);
     const names = validWhy && Array.isArray(why.names) ? why.names.filter((name): name is string => typeof name === 'string').slice(0, 20) : [];
+    const ports = validWhy && Array.isArray(why.ports) ? why.ports.filter((port): port is number => Number.isInteger(port) && port > 0 && port < 65536).slice(0, 20) : [];
     checks.push({
       command: check.command, outcome: check.outcome as VerificationOutcome, ...(onBase ? { onBase } : {}),
-      ...(validWhy ? { why: { reason: why.reason as StartsWhy['reason'], ...(names.length ? { names } : {}) } } : {}),
+      ...(validWhy ? { why: { reason: why.reason as StartsWhy['reason'], ...(names.length ? { names } : {}), ...(ports.length ? { ports } : {}) } } : {}),
     });
   }
 

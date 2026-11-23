@@ -1,3 +1,4 @@
+import { stopWorktreeContainers } from '../../ai/dev-servers/dev-servers';
 import { isTaskBranch } from '../../../shared/constants/config';
 import { appEvents } from '../../app-events';
 import { ipcMain, BrowserWindow, app } from 'electron';
@@ -751,6 +752,8 @@ export async function mergeTaskWorktree(
         ? async () => {
             if (!worktreePath) return { ok: true, summary: '' };
             emitProgress('validating', 70, 'The app is running the checks itself');
+            // Containers the task's agents started in its worktree hold the ports the project expects
+            await stopWorktreeContainers(worktreePath).catch(() => {});
             // The commit QA approved, when the merge brought nothing new into the task, is not checked twice
             const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, previewServices: verification.previewServices, memory: appCheckMemory(), git: git.git, hostEnv: git.env });
             const summary = describeVerification(report);

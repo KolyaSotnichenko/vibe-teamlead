@@ -156,7 +156,7 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
     // A service on another port than the project expects: an address the project hard-codes reaches whatever holds that port
     const moved = Object.entries(started.displaced);
     if (moved.length) {
-      return { outcome: 'unavailable', why: { reason: 'port', names: moved.map(([name]) => name) }, tail: moved.map(([name, ports]) => `${name} could not have port ${ports.ownPort}, which is in use on this computer (an open preview, your own dev server…), so the project could not be started as it expects.`).join('\n') };
+      return { outcome: 'unavailable', why: { reason: 'port', names: moved.map(([name]) => name), ports: moved.map(([, ports]) => ports.ownPort) }, tail: moved.map(([name, ports]) => `${name} could not have port ${ports.ownPort}, which is in use on this computer (an open preview, your own dev server…), so the project could not be started as it expects.`).join('\n') };
     }
     const page = await options.deps.probe(`${started.url}/`);
     check();
