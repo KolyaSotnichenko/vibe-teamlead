@@ -112,6 +112,29 @@ describe('detectChecks: migrations', () => {
     expect(project(files as Record<string, string>).prepare).toEqual([command]);
   });
 
+  it("runs a package's own migration script when it runs a known migration tool, in that package's folder", () => {
+    const found = project({
+      'package.json': pkg({ test: 'x' }),
+      'pnpm-lock.yaml': '',
+      'apps/api/package.json': pkg({ dev: 'tsx watch src/index.ts', 'migrate:up': 'node-pg-migrate up -m migrations --envPath ../../.env', 'migrate:down': 'node-pg-migrate down -m migrations' }),
+    });
+    expect(found.prepare).toEqual(['cd apps/api && pnpm run migrate:up']);
+  });
+
+  it.each([
+    ['Knex', { 'db:migrate': 'knex migrate:latest' }, 'npm run db:migrate'],
+    ['Sequelize', { 'db:migrate': 'sequelize-cli db:migrate' }, 'npm run db:migrate'],
+    ['TypeORM', { 'migration:run': 'typeorm-ts-node-commonjs migration:run -d src/data-source.ts' }, 'npm run migration:run'],
+    ['node-pg-migrate by the name migrate', { migrate: 'node-pg-migrate up' }, 'npm run migrate'],
+  ])('%s', (_name, scripts, command) => {
+    expect(project({ 'package.json': pkg({ test: 'x', ...scripts }) }).prepare).toEqual([command]);
+  });
+
+  it("never runs a script that only says migrate, or one that goes down or makes a migration", () => {
+    expect(project({ 'package.json': pkg({ migrate: 'node scripts/sync-everything.js' }) }).prepare).toEqual([]);
+    expect(project({ 'package.json': pkg({ 'migrate:down': 'node-pg-migrate down', 'migrate:create': 'node-pg-migrate create' }) }).prepare).toEqual([]);
+  });
+
   it('no prepare step without a migration tool', () => {
     expect(project({ 'go.mod': '' }).prepare).toEqual([]);
   });

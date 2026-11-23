@@ -57,7 +57,7 @@ The app itself runs the project's typecheck and tests on a clean copy of what is
 #### Databases
 
 - If the project's compose file names a database (Postgres, MySQL, Redis, Mongo) and Docker is running, the app starts an empty temporary one for each run.
-- It applies the migrations (Prisma, Drizzle, Django, Alembic, Rails, Laravel), takes settings from `.env.example` and removes the database afterwards. There is nothing to set up.
+- It applies the migrations (Prisma, Drizzle, Django, Alembic, Rails, Laravel, or a package script that runs node-pg-migrate, Knex, Sequelize, TypeORM or Kysely), takes settings from `.env.example` and removes the database afterwards. There is nothing to set up.
 - Migrations only ever run on that temporary database.
 - Settings in `.env.example` that point at any other database are left out.
 - Without Docker the log says the check couldn't be completed, and the task isn't blocked.

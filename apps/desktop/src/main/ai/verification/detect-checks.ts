@@ -51,6 +51,11 @@ function json(text: string | null): Record<string, unknown> {
 
 const record = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' ? (value as Record<string, unknown>) : {});
 
+/** Script names a project migrates its database forward with, first that runs a known tool wins */
+const MIGRATION_SCRIPTS = ['migrate:up', 'migrate:latest', 'db:migrate', 'migration:run', 'migrations:run', 'migrate'];
+/** The forward command of a migration tool, maybe through the package manager: never down, never a new migration */
+const MIGRATES_UP = /^\s*(?:(?:npx|pnpm(?:\s+exec)?|yarn|bunx)\s+)?(?:node-pg-migrate\s+up\b|knex\s+migrate:latest\b|sequelize(?:-cli)?\s+db:migrate(?!:undo)\b|typeorm(?:-ts-node-(?:commonjs|esm))?\s+migration:run\b|kysely\s+migrate:latest\b)/;
+
 export function detectChecks({ files, read }: ProjectFiles): DetectedChecks {
   const has = (path: string) => files.includes(path);
   const atRoot = (pattern: RegExp) => files.some((file) => !file.includes('/') && pattern.test(file));
@@ -69,6 +74,13 @@ export function detectChecks({ files, read }: ProjectFiles): DetectedChecks {
   if (has('alembic.ini')) prepare.push(`${pythonPrefix}alembic upgrade head`);
   if (has('Gemfile') && has('config/database.yml')) prepare.push('bundle exec rails db:prepare');
   if (has('artisan')) prepare.push('php artisan migrate --force');
+  // A package's own script that runs a known migration tool forward (node-pg-migrate, Knex, Sequelize, TypeORM, Kysely)
+  const scriptManager = has('pnpm-lock.yaml') ? 'pnpm' : has('yarn.lock') ? 'yarn' : has('bun.lock') || has('bun.lockb') ? 'bun' : 'npm';
+  for (const file of files.filter((f) => (f === 'package.json' || f.endsWith('/package.json')) && !/(^|\/)node_modules\//.test(f)).sort()) {
+    const scripts = record(json(read(file)).scripts);
+    const name = MIGRATION_SCRIPTS.find((script) => typeof scripts[script] === 'string' && MIGRATES_UP.test(scripts[script] as string));
+    if (name) prepare.push(inFolder(file === 'package.json' ? '' : file.slice(0, -'/package.json'.length), `${scriptManager} run ${name}`));
+  }
 
   if (has('package.json')) {
     const scripts = record(json(read('package.json')).scripts);
