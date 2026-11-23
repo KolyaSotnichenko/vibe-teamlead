@@ -48,6 +48,14 @@ function setup(files: Record<string, string>, over: Partial<StartsCheckOptions> 
 }
 
 describe('the start-up check', () => {
+  it("fails when a service logs a fatal error as it starts, though its port answers", async () => {
+    const { options, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, { readLog: (path: string) => (path.endsWith('starts-api') ? 'error: relation "users" does not exist\nlistening\n' : 'ok\n') });
+    const result = await startsCheck(options);
+    expect(result?.outcome).toBe('failed');
+    expect(result?.tail).toMatch(/^api reported an error as it started: relation "users" does not exist/);
+    expect(stopped).toEqual(expect.arrayContaining(['starts-api', 'starts-web']));
+  });
+
   it('passes when every service came up, the page answers, and they are still up a moment later; then stops them', async () => {
     const { options, started, stopped } = setup({ 'preview.json': JSON.stringify(RECIPE) });
     expect(await startsCheck(options)).toEqual({ outcome: 'passed' });

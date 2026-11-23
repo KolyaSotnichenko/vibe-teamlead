@@ -24,6 +24,7 @@ import { bucketsOf, type ComposeService, composeNameOf, composeServices } from '
 import { composeFilesInOrder, detectChecks, imagesFromComposeFiles, isConnectionSetting } from '../ai/verification/detect-checks';
 import { isPathContained } from '../ai/security/path-containment';
 import { examplePort } from './example-urls';
+import { errorInLog } from './log-errors';
 import { startRecipeServices } from './start-services';
 import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
 import { type DisplacedPorts, findHardcodedAddresses, proxiedPaths } from './hardcoded-addresses';
@@ -78,12 +79,20 @@ export interface PreviewDeps {
   readyTimeouts?: { timeoutMs: number; pollMs: number };
   /** Whether a folder of the worktree, followed through any links, is still inside it */
   insideWorktree: (root: string, dir: string) => boolean;
+  /**
+   * How the services' logs are read for an error that means the project did not really start:
+   * once, `settleMs` after they are up and before the preview is shown, then at each of `laterMs`
+   * after it is shown. None: logs are not read.
+   */
+  logWatch?: { settleMs: number; laterMs: number[] };
 }
 
 const COMMAND_TIMEOUT_MS = 10 * 60_000;
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const TAIL_CHARS = 2000;
 const SERVER_START_TIMEOUT_MS = 180_000;
+/** A server logs most start-up errors within a moment of listening; some on its first jobs a little later */
+const LOG_WATCH = { settleMs: 2000, laterMs: [10_000, 30_000] };
 
 /** A task's preview: its worktree as it is, on a copy of the project's preview data */
 export interface PreviewTask {
@@ -182,6 +191,7 @@ export function defaultPreviewDeps(): Omit<PreviewDeps, 'git' | 'secretsDir' | '
     },
     startServer: startDevServer,
     stopServer: stopDevServer,
+    logWatch: LOG_WATCH,
     readLog: (path) => {
       try {
         return readFileSync(path, 'utf-8');
@@ -553,9 +563,49 @@ async function checkReachable(session: Session, url: string, files: string[]): P
   }
 }
 
+/** The first fatal error a service of the session logged, with that service and the end of its log */
+function errorInLogs(session: Session): { service: string; error: string; logTail: string } | null {
+  for (const service of servicesOf(session)) {
+    const logPath = session.logs[service.name];
+    const error = errorInLog((logPath ? session.deps.readLog(logPath) : null) ?? '');
+    if (error) return { service: service.name, error, logTail: logEnd(session, logPath) };
+  }
+  return null;
+}
+
+const logFailure = (found: { service: string; error: string; logTail: string }) =>
+  Object.assign(new Error(say('errorInLog', `${found.service} reported an error as it started: ${found.error}`, { service: found.service, error: found.error })), { logTail: found.logTail, service: found.service });
+
+/** Up is not enough: a service whose log says it can't work (a table that isn't there) fails the start */
+async function checkLogs(session: Session): Promise<void> {
+  const watch = session.deps.logWatch;
+  if (!watch) return;
+  await new Promise((resolveWait) => setTimeout(resolveWait, watch.settleMs));
+  check(session);
+  const found = errorInLogs(session);
+  if (found) throw logFailure(found);
+}
+
+/** After the preview is shown, a few more looks at the logs: an error then fails it, as a service that stops does */
+function watchLogs(session: Session): void {
+  const at = session.status.url;
+  for (const delay of session.deps.logWatch?.laterMs ?? []) {
+    setTimeout(() => {
+      const still = () => current === session && !cancelled(session) && session.status.stage === 'ready' && session.status.url === at;
+      if (!still()) return;
+      const found = errorInLogs(session);
+      if (!found) return;
+      void teardown(session).then(() => {
+        if (current === session && !cancelled(session)) failed(session, logFailure(found));
+      });
+    }, delay).unref?.();
+  }
+}
+
 /** Ready with the page's URL; the reachability check follows when the scan found nothing */
 function ready(session: Session, started: StartedServices, files: string[]): void {
   emit(session, { stage: 'ready', url: started.url, origins: [new URL(started.url).origin], message: undefined, logTail: undefined, addressIssues: started.issues });
+  watchLogs(session);
   if (!started.issues.length) void checkReachable(session, started.url, files).catch(() => {});
 }
 
@@ -706,7 +756,9 @@ async function run(session: Session, resetData: boolean): Promise<PreviewStatus>
 
       await seed(session, files, await migrate(session, files, true));
 
-      ready(session, await startServices(session, files), files);
+      const started = await startServices(session, files);
+      await checkLogs(session);
+      ready(session, started, files);
     });
     if (session.mergePending) {
       session.mergePending = false;
@@ -749,7 +801,9 @@ async function afterMerge(session: Session): Promise<void> {
       await install(session, files, lockfileChanged);
       await build(session, files, true);
       await migrate(session, files, true);
-      ready(session, await startServices(session, files), files);
+      const started = await startServices(session, files);
+      await checkLogs(session);
+      ready(session, started, files);
     } else {
       await build(session, files, false);
       await migrate(session, files, false);
@@ -849,7 +903,9 @@ export async function restartPreviewServices(project: Project, taskId?: string):
       session.vars = {};
       // The owner may have saved other services since the start
       resolveSessionRecipe(session, files);
-      ready(session, await startServices(session, files), files);
+      const started = await startServices(session, files);
+      await checkLogs(session);
+      ready(session, started, files);
     } catch (error) {
       if (error instanceof Cancelled || cancelled(session)) return;
       await teardown(session);

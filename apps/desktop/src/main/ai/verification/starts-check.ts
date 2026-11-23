@@ -7,6 +7,7 @@
  * service still runs. Everything it started is stopped, whatever happens. No Electron imports.
  */
 
+import { errorInLog } from '../../preview/log-errors';
 import type { StartsWhy } from '../../../shared/utils/verification-summary';
 import { resolve } from 'node:path';
 
@@ -170,6 +171,12 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
         const log = options.deps.readLog(started.logs[service.name]) ?? '';
         return { outcome: 'failed', tail: tail(`${service.name} stopped right after it started\n${log}`) };
       }
+    }
+    // A port that answers is not enough: a service whose log says it can't work has not really started
+    for (const service of started.ordered) {
+      const log = options.deps.readLog(started.logs[service.name]) ?? '';
+      const error = errorInLog(log);
+      if (error) return { outcome: 'failed', tail: tail(`${service.name} reported an error as it started: ${error}\n${log}`) };
     }
     // Services the project's own recipe names are what it means to start; detected ones may just not be found any more
     const missing = servicesFrom === 'file' ? [] : (options.expectServices ?? []).filter((name) => !services.some((service) => service.name === name));

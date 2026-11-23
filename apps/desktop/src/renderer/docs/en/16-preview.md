@@ -85,7 +85,9 @@ The page runs in a view of its own, separate from the app: no access to your fil
 
 ## When it does not start
 
-The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped. Below the log, the preview shows how to run the project by hand (see "How to run it by hand").
+The preview names the service that didn't start and shows the end of its log. The ones that already started are stopped.
+
+A service that answers but logs an error it can't work with counts as not started too: a table or database that isn't there, a wrong database password, a module that isn't installed, an import that can't be resolved, a promise nobody caught. The app reads the logs two seconds after the services are up, before the preview is shown, and twice more in the first half minute; the preview then names the service and the error. Below the log, the preview shows how to run the project by hand (see "How to run it by hand").
 
 ### An agent works out why
 

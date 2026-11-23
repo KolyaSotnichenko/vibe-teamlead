@@ -62,6 +62,8 @@ function deps(overrides: Partial<PreviewDeps> = {}) {
     portFree: vi.fn(async () => false),
     probe: vi.fn(async () => ({ status: 404 })),
     insideWorktree: () => true,
+    // The app's own log watch waits seconds: tests that read logs say how long
+    logWatch: undefined,
     ...overrides,
   };
   return { d, order };
@@ -285,6 +287,40 @@ describe('a preview session', () => {
       expect(status.stage).toBe('failed');
       expect(status.message).toContain('backend');
       expect(status.logTail).toContain('python3: command not found');
+    });
+  });
+
+  describe('an error a service logs as it starts', () => {
+    const DB_ERROR = '[15:35:34] ERROR: stale sending recovery failed\n  "message": "relation \\"notification_deliveries\\" does not exist",\nServer listening at http://127.0.0.1:3000\n';
+
+    it('fails the start, naming the service and the error, before the preview is shown', async () => {
+      const { d } = deps({ readLog: (path: string) => (path.includes('preview-api') ? DB_ERROR : 'ready\n'), logWatch: { settleMs: 1, laterMs: [] } });
+      vi.mocked(d.startServer).mockImplementation(async (o: { name: string }) => ({ url: `http://localhost:${o.name.length + 4000}`, port: o.name.length + 4000, logPath: `/logs/${o.name}.log`, reused: false }));
+      const status = await startPreview(project(), () => {}, d);
+      expect(status).toMatchObject({ stage: 'failed', failedService: 'api', failedAt: 'services' });
+      expect(status.message).toBe('api reported an error as it started: relation "notification_deliveries" does not exist');
+      expect(status.said).toMatchObject([{ key: 'errorInLog', params: { service: 'api', error: 'relation "notification_deliveries" does not exist' } }]);
+      expect(status.logTail).toContain('notification_deliveries');
+      expect(d.stopServer).toHaveBeenCalledWith('preview-web');
+    });
+
+    it('fails a preview that was ready when a service logs one a little later, and not after the watch is over', async () => {
+      let log = 'ready\n';
+      const { d } = deps({ readLog: () => log, logWatch: { settleMs: 1, laterMs: [30] } });
+      const statuses: PreviewStatus[] = [];
+      await startPreview(project(), (st) => statuses.push(st), d);
+      expect(statuses.at(-1)?.stage).toBe('ready');
+      log = "Error: Cannot find module 'zod'\n";
+      await vi.waitFor(() => expect(statuses.at(-1)?.stage).toBe('failed'));
+      expect(statuses.at(-1)).toMatchObject({ failedAt: 'ready', message: expect.stringContaining("Cannot find module 'zod'") });
+    });
+
+    it('starts as before when the logs hold nothing fatal', async () => {
+      const { d } = deps({ readLog: () => 'Server listening\nGET /api 404\n', logWatch: { settleMs: 1, laterMs: [1] } });
+      const statuses: PreviewStatus[] = [];
+      expect(await startPreview(project(), (st) => statuses.push(st), d)).toMatchObject({ stage: 'ready' });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(statuses.at(-1)?.stage).toBe('ready');
     });
   });
 

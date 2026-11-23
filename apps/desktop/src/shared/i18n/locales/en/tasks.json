@@ -1167,6 +1167,7 @@
       "serviceNotStarted": "{{service}} did not start.",
       "notReady": "{{service}} did not get ready: {{path}} answered {{answer}}.",
       "stoppedBeforeReady": "{{service}} stopped before it was ready.",
+      "errorInLog": "{{service}} reported an error as it started: {{error}}",
       "heldBack": "Migrations and seed data run only against what the preview started: they did not get your or the recipe's {{names}}.",
       "fixNoCredential": "No Claude key is set (Settings → Claude), so the agent could not look at why the project does not start.",
       "fixFailed": "The agent's session failed: {{reason}}",

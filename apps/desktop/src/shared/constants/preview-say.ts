@@ -41,6 +41,7 @@ export const PREVIEW_SAY = {
   serviceNotStarted: ['service'],
   notReady: ['service', 'path', 'answer'],
   stoppedBeforeReady: ['service'],
+  errorInLog: ['service', 'error'],
   heldBack: ['names'],
   // A recipe made in the app (preview/settle-pending-recipe.ts)
   editDropped: [],
