@@ -67,9 +67,20 @@ ${FIND}
 /** The script that hides the parts that change on their own, before the picture. */
 export function maskScript(selectors: string[]): string {
   return `(async () => {
+  const hidden = new Set();
   for (const selector of ${JSON.stringify(selectors)}) {
-    try { document.querySelectorAll(selector).forEach((el) => { el.style.visibility = 'hidden'; }); } catch (e) {}
+    try { document.querySelectorAll(selector).forEach((el) => hidden.add(el)); } catch (e) {}
   }
+  // A mask that hides most of the page would hide every difference with it: the screen fails instead
+  const page = Math.max(1, document.documentElement.scrollWidth * document.documentElement.scrollHeight);
+  let covered = 0;
+  for (const el of hidden) {
+    if (el === document.documentElement || el === document.body) return { ok: false, error: 'a mask hides the whole page' };
+    const r = el.getBoundingClientRect();
+    covered += Math.max(0, r.width) * Math.max(0, r.height);
+  }
+  if (covered > page / 2) return { ok: false, error: 'the masks hide most of the page' };
+  hidden.forEach((el) => { el.style.visibility = 'hidden'; });
   return { ok: true };
 })()`;
 }

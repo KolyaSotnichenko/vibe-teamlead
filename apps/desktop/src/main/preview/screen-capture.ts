@@ -125,7 +125,13 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
           continue;
         }
         await sleep(SETTLE_MS);
-        if (screen.mask.length) await run(win, maskScript(screen.mask));
+        if (screen.mask.length) {
+          const masked = await run(win, maskScript(screen.mask));
+          if (!masked.ok) {
+            shots.push({ id: screen.id, width: screen.width, error: masked.error ?? 'the masks failed' });
+            continue;
+          }
+        }
         const height = Number(await within(win.webContents.executeJavaScript('Math.ceil(document.documentElement.scrollHeight)', true), SCRIPT_TIMEOUT_MS, 'the page').catch(() => VIEW_HEIGHT));
         const pageHeight = Math.min(MAX_HEIGHT, Math.max(VIEW_HEIGHT, Number.isFinite(height) ? height : VIEW_HEIGHT));
         win.setContentSize(screen.width, pageHeight);

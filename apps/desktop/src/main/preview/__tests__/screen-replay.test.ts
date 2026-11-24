@@ -50,6 +50,12 @@ describe('the steps, run in the page', () => {
     expect(document.querySelector('p')!.style.visibility).toBe('');
   });
 
+  it('refuses a mask that hides the whole page', async () => {
+    document.body.innerHTML = '<p>content</p>';
+    expect((await run(maskScript(['body']))).ok).toBe(false);
+    expect(document.body.style.visibility).toBe('');
+  });
+
   it('moves to a path inside the app without reloading it, so a sign-in kept in memory stays', async () => {
     const seen: string[] = [];
     window.addEventListener('popstate', () => seen.push(location.pathname));
