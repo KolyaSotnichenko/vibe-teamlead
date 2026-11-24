@@ -2,6 +2,14 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.66 - 2026-11-24
+
+- QA approves a task with a design only after seeing it in the running app. The reviewer must show every frame of the design (each screen at each width) next to the built page: a screenshot taken after the last commit, or a reason the frame couldn't be shown. The app checks this itself and refuses the approval otherwise, or while a blocking difference is left. A frame QA couldn't show keeps the task from merging by itself: it waits for you, and the Design tab lists it as **Not seen in the app** with the reason. Before, QA could approve without opening the app at all.
+- The app lists what a person can use on each screen of the design (buttons, links, fields, tabs, switches). The planner gives every one of them to a subtask, and QA looks for each in the built page, so a feature drawn on a screen is no longer dropped because no acceptance criterion named it.
+- The planner no longer gives the coder a browser check: the coder has no browser, and stopped there. QA checks the screens.
+- Design check: with an imported design-system package, a stylesheet of the package (tokens or components) that no file of the app loads is a finding. Without it every page loses its fonts and component styles while the tests still pass.
+- Insights: the model sees the screenshot you attach. Before, only a thumbnail was kept and the model was told an image was attached without seeing it.
+
 ## 2.0.0-beta.65 - 2026-11-23
 
 - A task's card on the board shows what **Check again** found at once, instead of "checks incomplete" until a restart.
