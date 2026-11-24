@@ -78,7 +78,8 @@ export async function checkDesignStylesheets(projectDir: string, pkg: Pick<Desig
     // Agents can write the repository's git config: no hook, fsmonitor or other command of theirs runs here
     const listed = await runProcess('git', readOnlyGitArgs(['ls-files', '-z', '--cached', '--others', '--exclude-standard']), {
       cwd: projectDir,
-      env: withoutGitLocation(),
+      // Nor a fetch from a remote (a partial clone fetches missing objects on demand)
+      env: { ...withoutGitLocation(), GIT_NO_LAZY_FETCH: '1', GIT_ALLOW_PROTOCOL: '' },
       timeoutMs: 30_000,
     });
     if (listed.code !== 0) return [];

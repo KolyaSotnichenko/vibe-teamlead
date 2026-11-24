@@ -24,7 +24,7 @@ let specDir: string;
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 
 /** A screenshot under qa-browser/, taken at `at` */
-function shot(name: string, at = SINCE + 60_000, bytes: Buffer | string = PNG): string {
+function shot(name: string, at = SINCE + 60_000, bytes: Buffer | string = Buffer.concat([PNG, Buffer.from(name)])): string {
   const file = path.join(specDir, 'qa-browser', name);
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, bytes);
@@ -136,6 +136,13 @@ describe('checkVisualEvidence', () => {
     compare([
       { file: 'screens/board.html', width: 1280, built: first },
       { file: 'screens/card.html', width: 1280, built: 'qa-browser/two.png' },
+    ]);
+    expect(check(frames).problems).toEqual([expect.stringMatching(/already the screenshot of screens\/board\.html/)]);
+
+    // A copy under another name is the same picture too
+    compare([
+      { file: 'screens/board.html', width: 1280, built: shot('a.png', SINCE + 60_000, PNG) },
+      { file: 'screens/card.html', width: 1280, built: shot('b.png', SINCE + 60_000, PNG) },
     ]);
     expect(check(frames).problems).toEqual([expect.stringMatching(/already the screenshot of screens\/board\.html/)]);
   });

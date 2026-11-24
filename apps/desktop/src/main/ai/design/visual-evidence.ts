@@ -8,6 +8,7 @@
  * from merging by itself (qa-approval.ts). No Electron imports.
  */
 
+import { createHash } from 'node:crypto';
 import { closeSync, lstatSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -83,11 +84,13 @@ function realScreenshotDir(specDir: string): boolean {
   }
 }
 
-/** The file's identity, the same under every name (a hard link, `./`), or the path when it can't be read. */
-function fileIdentity(full: string): string {
+const MAX_HASHED = 64 * 1024 * 1024;
+
+/** What the picture is, the same under every name (a hard link, a copy), or the path when it can't be read. */
+function pictureIdentity(full: string): string {
   try {
-    const stat = statSync(full, { bigint: true });
-    return `${stat.dev}:${stat.ino}`;
+    if (statSync(full).size > MAX_HASHED) return full;
+    return createHash('sha256').update(readFileSync(full)).digest('hex');
   } catch {
     return full;
   }
@@ -146,7 +149,7 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
     const built = text(entry.built, 300);
     const reason = text(entry.notShown);
     if (built) {
-      const key = fileIdentity(path.resolve(specDir, built));
+      const key = pictureIdentity(path.resolve(specDir, built));
       const earlier = used.get(key);
       const problem = earlier
         ? `${built} is already the screenshot of ${label(earlier)}: each frame needs its own`
