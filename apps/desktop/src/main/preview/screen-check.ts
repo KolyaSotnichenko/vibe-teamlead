@@ -6,7 +6,7 @@
  * capture itself is Electron's (screen-capture.ts), passed in; this file has no Electron imports.
  */
 
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { type ScreenCatalog, screenFile } from '../ai/design/screen-catalog';
@@ -48,6 +48,10 @@ export async function runScreenCheck(
   const screens = input.catalog.screens.filter((s) => !input.exclude?.has(s.id));
   if (!screens.length) return result;
 
+  // The folder is in the spec directory, which agents write: a link put in its place is removed, never followed
+  if (lstatSync(input.outDir, { throwIfNoEntry: false })?.isSymbolicLink()) rmSync(input.outDir, { force: true });
+  mkdirSync(input.outDir, { recursive: true });
+  if (!lstatSync(input.outDir).isDirectory()) throw new Error(`${input.outDir} is not a folder`);
   const afterDir = path.join(input.outDir, 'after');
   const beforeDir = path.join(input.outDir, 'before');
   rmSync(afterDir, { recursive: true, force: true });

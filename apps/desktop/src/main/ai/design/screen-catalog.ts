@@ -47,6 +47,9 @@ const MAX_SELECTOR = 300;
 const MAX_TEXT = 500;
 const MAX_MASKS = 20;
 
+/** Masks that would hide the whole page, and with it every difference */
+const WHOLE_PAGE = /^\s*(html|body|:root|\*|#root|#app|#__next|main)\s*$/i;
+
 const text = (value: unknown, max: number): string | undefined => (typeof value === 'string' && value.trim() && value.length <= max ? value : undefined);
 
 /** A path inside the app: from its root, no scheme, no other host. */
@@ -104,7 +107,7 @@ export function parseScreens(raw: unknown): ScreenCatalog {
     const at = appPath(s.path);
     const width = typeof s.width === 'number' && Number.isInteger(s.width) && s.width >= 320 && s.width <= 2560 ? s.width : undefined;
     if (!id || !at || !width) continue;
-    const mask = (Array.isArray(s.mask) ? s.mask : []).map((m) => text(m, MAX_SELECTOR)).filter((m): m is string => !!m).slice(0, MAX_MASKS);
+    const mask = (Array.isArray(s.mask) ? s.mask : []).map((m) => text(m, MAX_SELECTOR)).filter((m): m is string => !!m && !WHOLE_PAGE.test(m)).slice(0, MAX_MASKS);
     catalog.screens.push({ id, width, path: at, steps: steps(s.steps), mask });
   }
   return catalog;

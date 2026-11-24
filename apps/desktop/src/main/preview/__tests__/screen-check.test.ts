@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -78,6 +78,15 @@ describe('runScreenCheck', () => {
     expect(result.changed).toEqual([]);
     expect(result.added).toHaveLength(4);
     expect(existsSync(path.join(out, 'after', 'screens_gantt.html@1280.png'))).toBe(true);
+  });
+
+  it("writes only into a real folder: a link an agent put in its place is removed, never followed", async () => {
+    const spec = mkdtempSync(path.join(tmpdir(), 'vt-spec-'));
+    const elsewhere = mkdtempSync(path.join(tmpdir(), 'vt-elsewhere-'));
+    symlinkSync(elsewhere, path.join(spec, 'regression'));
+    await runScreenCheck({ baseUrl: 'http://localhost:5173', catalog, outDir: path.join(spec, 'regression') }, deps({}));
+    expect(lstatSync(path.join(spec, 'regression')).isSymbolicLink()).toBe(false);
+    expect(readdirSync(elsewhere)).toEqual([]);
   });
 
   it('captures nothing for an empty catalog', async () => {

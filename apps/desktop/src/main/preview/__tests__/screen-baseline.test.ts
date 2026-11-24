@@ -18,7 +18,9 @@ describe("the merge's pictures", () => {
     const specDir = mkdtempSync(path.join(tmpdir(), 'vt-spec-'));
     writeFileSync(path.join(specDir, 'screens.json'), JSON.stringify({ screens: [{ id: 'screens/a.html', width: 1280, path: '/a' }] }));
 
-    const catalog = mergedCatalogFor(place, [specDir, '/nowhere']);
+    writeFileSync(path.join(specDir, 'screens.json'), JSON.stringify({ screens: [{ id: 'screens/a.html', width: 1280, path: '/a' }, { id: 'screens/not-this-task.html', width: 1280, path: '/b' }] }));
+    // Only the task's own frames: a task can't rewrite how other screens are reached
+    const catalog = mergedCatalogFor(place, [specDir, '/nowhere'], new Set(['screens/a.html']));
     expect(catalog.screens.map((s) => s.id)).toEqual(['screens/a.html']);
     // Nothing is kept before the merge has succeeded
     expect(readCatalog(place).screens).toEqual([]);

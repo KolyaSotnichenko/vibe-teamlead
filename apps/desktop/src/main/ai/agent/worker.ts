@@ -1369,8 +1369,10 @@ async function runQualityAssurance(
             onAppUp: async (url) => {
               qaLog('Screen check: taking the pictures of the project\'s screens');
               const exclude = evidenceFrames.map((f) => screenId(f.file)).filter((id): id is string => id !== null);
-              lastScreenCheck = await screenCheckViaMain(url, session.specDir, exclude);
-              if (lastScreenCheck) qaLog(`Screen check: ${lastScreenCheck.changed.length} changed, ${lastScreenCheck.unchanged} unchanged, ${lastScreenCheck.added.length} without an earlier picture, ${lastScreenCheck.failed.length} could not be reached`);
+              const result = await screenCheckViaMain(url, session.specDir, exclude);
+              if (!result) qaLog('Screen check: could not take the pictures this time; the last ones stand');
+              lastScreenCheck = result ?? lastScreenCheck;
+              if (result) qaLog(`Screen check: ${result.changed.length} changed, ${result.unchanged} unchanged, ${result.added.length} without an earlier picture, ${result.failed.length} could not be reached`);
             },
             fresh,
             signal: abortController.signal,

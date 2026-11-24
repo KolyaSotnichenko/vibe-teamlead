@@ -38,7 +38,8 @@ import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
 import { inMergeQueue, isMergeQueued } from '../../ai/merge/merge-queue';
 import { approvedAsItIs, autoMergeRefusal, PREVIEW_HOLD } from '../../ai/orchestration/qa-approval';
-import { catalogPlace } from '../../ai/design/screen-catalog';
+import { catalogPlace, screenId } from '../../ai/design/screen-catalog';
+import { taskEvidenceFrames } from '../../ai/design/visual-evidence';
 import { runScreenCheck } from '../../preview/screen-check';
 import { electronScreenDeps } from '../../preview/screen-capture';
 import { mergedCatalogFor, promoteMergeScreens } from '../../preview/screen-baseline';
@@ -748,7 +749,8 @@ export async function mergeTaskWorktree(
     // The screen check: the catalog with what QA recorded for this task; the merge's check takes its pictures
     const screensPlace = catalogPlace(project.path);
     const taskSpecDirs = [...(worktreePath ? [path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId)] : []), specDir];
-    const mergeCatalog = mergedCatalogFor(screensPlace, taskSpecDirs);
+    const ownScreens = new Set(taskSpecDirs.flatMap((dir) => taskEvidenceFrames(dir)).map((f) => screenId(f.file)).filter((id): id is string => id !== null));
+    const mergeCatalog = mergedCatalogFor(screensPlace, taskSpecDirs, ownScreens);
     let mergeScreensTaken = false;
     const mergeResult = await inMergeQueue(project.path, taskId, () => integrateAndMerge({
       ...taskBranch,

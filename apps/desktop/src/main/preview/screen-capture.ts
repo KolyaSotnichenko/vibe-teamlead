@@ -15,6 +15,10 @@ import type { ScreenCheckDeps, ScreenShot } from './screen-check';
 import { maskScript, navigateScript, stepScript } from './screen-replay';
 
 const VIEW_HEIGHT = 900;
+/** A page script that doesn't answer in this time fails its screen */
+const SCRIPT_TIMEOUT_MS = 20_000;
+/** The whole capture: past it, the screens left fail */
+const CAPTURE_TIMEOUT_MS = 10 * 60_000;
 const MAX_HEIGHT = 4000;
 const LOAD_TIMEOUT_MS = 30_000;
 const SETTLE_MS = 700;
@@ -35,9 +39,18 @@ function nextPaint(win: BrowserWindow, timeoutMs: number): Promise<void> {
   });
 }
 
+/** A promise, or a rejection after `ms`. */
+function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} took longer than ${Math.round(ms / 1000)} s`)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
 async function run(win: BrowserWindow, script: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    return (await win.webContents.executeJavaScript(script, true)) as { ok: boolean; error?: string };
+    return (await within(win.webContents.executeJavaScript(script, true), SCRIPT_TIMEOUT_MS, 'the page')) as { ok: boolean; error?: string };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -68,9 +81,25 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
   const shots: ScreenShot[] = [];
   try {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    win.webContents.on('will-navigate', (event, url) => {
-      if (new URL(url).origin !== origin) event.preventDefault();
-    });
+    // Never leave the app: a link, a redirect or a frame elsewhere is stopped
+    const guard = (event: { preventDefault: () => void }, url: string) => {
+      try {
+        if (new URL(url).origin !== origin) event.preventDefault();
+      } catch {
+        event.preventDefault();
+      }
+    };
+    win.webContents.on('will-navigate', guard);
+    win.webContents.on('will-redirect', guard);
+    win.webContents.on('will-frame-navigate', (event) => guard(event, event.url));
+    const onApp = () => {
+      try {
+        return new URL(win.webContents.getURL()).origin === origin;
+      } catch {
+        return false;
+      }
+    };
+    const deadline = Date.now() + CAPTURE_TIMEOUT_MS;
     const start = new URL(catalog.signIn?.path ?? '/', origin).toString();
     await Promise.race([win.loadURL(start), sleep(LOAD_TIMEOUT_MS).then(() => Promise.reject(new Error('the app did not load')))]);
     await sleep(SETTLE_MS);
@@ -82,6 +111,10 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
 
     for (const screen of catalog.screens) {
       if (signal?.aborted) break;
+      if (Date.now() > deadline) {
+        shots.push({ id: screen.id, width: screen.width, error: 'the screen check ran out of time' });
+        continue;
+      }
       try {
         win.setContentSize(screen.width, VIEW_HEIGHT);
         await run(win, navigateScript(screen.path));
@@ -93,12 +126,16 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
         }
         await sleep(SETTLE_MS);
         if (screen.mask.length) await run(win, maskScript(screen.mask));
-        const height = Number(await win.webContents.executeJavaScript('Math.ceil(document.documentElement.scrollHeight)', true).catch(() => VIEW_HEIGHT));
+        const height = Number(await within(win.webContents.executeJavaScript('Math.ceil(document.documentElement.scrollHeight)', true), SCRIPT_TIMEOUT_MS, 'the page').catch(() => VIEW_HEIGHT));
         const pageHeight = Math.min(MAX_HEIGHT, Math.max(VIEW_HEIGHT, Number.isFinite(height) ? height : VIEW_HEIGHT));
         win.setContentSize(screen.width, pageHeight);
         await nextPaint(win, 1500);
         await sleep(300);
-        const image = await win.webContents.capturePage({ x: 0, y: 0, width: screen.width, height: pageHeight });
+        if (!onApp()) {
+          shots.push({ id: screen.id, width: screen.width, error: 'the page left the app' });
+          continue;
+        }
+        const image = await within(win.webContents.capturePage({ x: 0, y: 0, width: screen.width, height: pageHeight }), SCRIPT_TIMEOUT_MS, 'the picture');
         shots.push(image.isEmpty() ? { id: screen.id, width: screen.width, error: 'the picture was empty' } : { id: screen.id, width: screen.width, png: image.toPNG() });
       } catch (error) {
         shots.push({ id: screen.id, width: screen.width, error: error instanceof Error ? error.message : String(error) });

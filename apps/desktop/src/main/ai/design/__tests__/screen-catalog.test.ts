@@ -64,6 +64,13 @@ describe('screenId', () => {
   });
 });
 
+describe("what a task may put in the catalog", () => {
+  it("drops masks that would hide the whole page", () => {
+    const catalog = parseScreens({ screens: [{ id: 'screens/a.html', width: 1280, path: '/a', mask: ['body', 'html', ':root', '*', '#root', '#app', 'main', '.due-date'] }] });
+    expect(catalog.screens[0].mask).toEqual(['.due-date']);
+  });
+});
+
 describe('mergeCatalog', () => {
   it("adds a task's recipes, replacing the same screen at the same width, and takes its newer sign-in", () => {
     const old = { signIn: { path: '/old', steps: [] }, screens: [{ id: 'screens/a.html', width: 1280, path: '/a', steps: [], mask: [] }, { id: 'screens/b.html', width: 1280, path: '/b', steps: [], mask: [] }] };

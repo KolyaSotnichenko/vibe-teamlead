@@ -9,12 +9,17 @@ import path from 'node:path';
 
 import { type CatalogPlace, type ScreenCatalog, mergeCatalog, readCatalog, readTaskScreens, writeCatalog } from '../ai/design/screen-catalog';
 
-/** The project's catalog with what QA recorded for the task (the first spec folder that has it). Never throws. */
-export function mergedCatalogFor(place: CatalogPlace, specDirs: string[]): ScreenCatalog {
+/**
+ * The project's catalog with what QA recorded for the task (the first spec folder that has it),
+ * only for the task's own screens (`own`, library ids): a task can't rewrite how other screens are
+ * reached. Never throws.
+ */
+export function mergedCatalogFor(place: CatalogPlace, specDirs: string[], own: Set<string>): ScreenCatalog {
   const current = readCatalog(place);
   for (const dir of specDirs) {
     const task = readTaskScreens(dir);
-    if (task.screens.length || task.signIn) return mergeCatalog(current, task);
+    const screens = task.screens.filter((s) => own.has(s.id));
+    if (screens.length) return mergeCatalog(current, { ...task, screens });
   }
   return current;
 }
