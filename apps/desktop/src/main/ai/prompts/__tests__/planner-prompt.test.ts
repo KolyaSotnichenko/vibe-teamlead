@@ -27,4 +27,9 @@ describe('planner prompt', () => {
     expect(planner).toMatch(/RUNNING\.md/);
     expect(planner).toMatch(/files_to_modify/);
   });
+
+  it('gives the coder no browser check: coders have no browser, QA checks every screen in the running app', () => {
+    expect(planner).toMatch(/No browser checks in subtasks/);
+    expect(planner).toMatch(/coder has no browser/);
+  });
 });

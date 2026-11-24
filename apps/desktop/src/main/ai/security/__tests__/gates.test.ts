@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { changedFiles, formatGateReport, isLockfile, parseGitleaks, parseOsv, parseSemgrep, resolveBaseRef, runSecurityGates, semgrepPacks } from '../gates';
+import { changedFiles, commitTime, formatGateReport, isLockfile, parseGitleaks, parseOsv, parseSemgrep, resolveBaseRef, runSecurityGates, semgrepPacks } from '../gates';
 import { isWindowsHost } from '../../../platform/__tests__/host';
 
 function repo(): string {
@@ -34,6 +34,15 @@ function fakeScanner(dir: string, name: string, script: string): string {
   chmodSync(path, 0o755);
   return path;
 }
+
+describe('commitTime', () => {
+  it("is the time of HEAD's commit in milliseconds, or 0 when there is none", async () => {
+    const dir = repo();
+    const seconds = Number(execFileSync('git', ['log', '-1', '--format=%ct'], { cwd: dir }).toString().trim());
+    expect(await commitTime(dir)).toBe(seconds * 1000);
+    expect(await commitTime(mkdtempSync(join(tmpdir(), 'vtl-norepo-')))).toBe(0);
+  });
+});
 
 describe('gate parsers', () => {
   it('parses gitleaks findings', () => {

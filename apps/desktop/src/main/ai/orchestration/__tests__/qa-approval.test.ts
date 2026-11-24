@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal, PREVIEW_HOLD, SECRET_IN_HISTORY_HOLD } from '../qa-approval';
+import { approvalHolds, approvedAsItIs, clearApproval, recordApproval, workTreeFingerprint, autoMergeRefusal, PREVIEW_HOLD, SECRET_IN_HISTORY_HOLD, UNSEEN_SCREENS_HOLD } from '../qa-approval';
 
 const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'vtl-approval-')));
 
@@ -60,6 +60,14 @@ describe('the approval record', () => {
     expect(await autoMergeRefusal({ auto: false }, '/p', '001', approved, undefined, dir)).toBeNull();
     recordApproval(dir, '/p', '/p/specs/001', 'code-1');
     expect(await autoMergeRefusal({ auto: true }, '/p', '001', approved, undefined, dir)).toBeNull();
+  });
+
+  it("an approval with screens QA could not show in the app doesn't merge by itself: the owner looks first", async () => {
+    const dir = tmp();
+    recordApproval(dir, '/p', '/p/specs/001', 'code-1', { unseenScreens: 2 });
+    const approved = async () => true;
+    expect(await autoMergeRefusal({ auto: true }, '/p', '001', approved, undefined, dir)).toBe(UNSEEN_SCREENS_HOLD);
+    expect(await autoMergeRefusal({ auto: false }, '/p', '001', approved, undefined, dir)).toBeNull();
   });
 
   it('never throws: a run must not fail over it', () => {

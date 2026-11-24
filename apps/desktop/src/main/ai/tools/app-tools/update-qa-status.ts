@@ -21,6 +21,7 @@ import { DEFAULT_EXECUTION_OPTIONS, ToolPermission } from '../types';
 import { safeParseJson } from '../../../utils/json-repair';
 import { QASignoffSchema } from '../../schema/qa-signoff';
 import { writeFileReplacingSync } from '../../safe-write';
+import { checkVisualEvidence, evidenceRefusal } from '../../design/visual-evidence';
 
 // ---------------------------------------------------------------------------
 // Input Schema
@@ -81,6 +82,11 @@ export const updateQaStatusTool = Tool.define({
     const { status, issues: issuesStr, tests_passed: testsStr } = input;
     if (status === 'approved' && context.agentType === 'qa_fixer') {
       return "Error: only the QA reviewer can approve. Use status 'fixes_applied'; the reviewer checks your fixes next.";
+    }
+    // A task with a design is approved only with the design shown in the running app
+    if (status === 'approved' && context.visualEvidence) {
+      const { problems } = checkVisualEvidence({ specDir: context.specDir, ...context.visualEvidence });
+      if (problems.length) return evidenceRefusal(problems);
     }
     const planFile = path.join(context.specDir, 'implementation_plan.json');
 

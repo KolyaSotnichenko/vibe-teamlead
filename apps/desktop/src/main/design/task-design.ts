@@ -66,7 +66,8 @@ export function designSkipNote(state: DesignState | undefined, taskLogs: string 
 }
 
 export interface DesignCompare {
-  screens: Array<{ file: string; width: number; built?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }>;
+  /** `notShown`: why QA could not open this frame in the running app (the task then waits for the owner) */
+  screens: Array<{ file: string; width: number; built?: string; notShown?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }>;
 }
 
 /** QA's comparison of the built pages with the design, or null. */
@@ -87,6 +88,7 @@ export function parseCompare(raw: string): DesignCompare | null {
         file: s.file,
         width: typeof s.width === 'number' && Number.isFinite(s.width) ? s.width : 0,
         ...(typeof s.built === 'string' && s.built ? { built: s.built } : {}),
+        ...(typeof s.notShown === 'string' && s.notShown.trim() ? { notShown: s.notShown.replace(/\s+/g, ' ').trim().slice(0, 500) } : {}),
         differences,
       });
     }

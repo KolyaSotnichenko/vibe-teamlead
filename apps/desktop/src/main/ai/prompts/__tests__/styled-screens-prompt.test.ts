@@ -28,3 +28,10 @@ describe('the designer writes each thing once', () => {
     expect(text).toMatch(/Don't Read a file you have just written/);
   });
 });
+
+// The app lists what a person can use on each screen from the HTML; notes about the prototype are not part of it
+describe("the designer's notes about the prototype", () => {
+  it('go in <aside class="proto">, which the app leaves out', () => {
+    expect(prompt('designer.md')).toContain('<aside class="proto">');
+  });
+});

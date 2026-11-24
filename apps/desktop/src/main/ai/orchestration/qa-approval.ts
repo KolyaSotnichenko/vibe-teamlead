@@ -24,9 +24,9 @@ function recordFile(dir: string, projectDir: string, specDir: string): string {
   return join(dir, `${task}.json`);
 }
 
-function readRecord(dir: string, projectDir: string, specDir: string): { fingerprint?: unknown; secretInHistory?: unknown } | undefined {
+function readRecord(dir: string, projectDir: string, specDir: string): { fingerprint?: unknown; secretInHistory?: unknown; unseenScreens?: unknown } | undefined {
   try {
-    return JSON.parse(readFileSync(recordFile(dir, projectDir, specDir), 'utf-8')) as { fingerprint?: unknown; secretInHistory?: unknown };
+    return JSON.parse(readFileSync(recordFile(dir, projectDir, specDir), 'utf-8')) as { fingerprint?: unknown; secretInHistory?: unknown; unseenScreens?: unknown };
   } catch {
     return undefined;
   }
@@ -62,7 +62,10 @@ export async function autoMergeRefusal(
   if (!options?.auto) return null;
   if (!worktreePath || !(await approved(worktreePath, specId))) return 'QA did not approve this exact code, so the merge waits for you.';
   // The app's own record (agents can't write it): a key once committed stays in the history that merges
-  if (readRecord(approvalsDir, worktreePath, specId)?.secretInHistory === true) return SECRET_IN_HISTORY_HOLD;
+  const record = readRecord(approvalsDir, worktreePath, specId);
+  if (record?.secretInHistory === true) return SECRET_IN_HISTORY_HOLD;
+  // Frames of the design QA could not show in the running app: the owner looks at them first
+  if (typeof record?.unseenScreens === 'number' && record.unseenScreens > 0) return UNSEEN_SCREENS_HOLD;
   if (touchesUi && (await touchesUi()) !== false) return PREVIEW_HOLD;
   return null;
 }
@@ -70,6 +73,10 @@ export async function autoMergeRefusal(
 /** Why an approved task with a key in an earlier commit did not merge by itself */
 export const SECRET_IN_HISTORY_HOLD =
   'A key was in an earlier commit of this task. It is gone from the code but stays in the history that merges, so the merge waits for you: if it was a real key, rotate it.';
+
+/** Why an approved task with frames of its design QA did not see in the app did not merge by itself */
+export const UNSEEN_SCREENS_HOLD =
+  'QA could not show some screens of the design in the running app (the Design tab lists them, with the reasons), so the merge waits for you to look at them.';
 
 /** Why an approved UI task did not merge by itself: the owner looks at it first */
 export const PREVIEW_HOLD = 'This task changed UI, so it waits for your preview before it merges.';
@@ -80,12 +87,17 @@ export function recordApproval(
   projectDir: string,
   specDir: string,
   fingerprint: string | undefined,
-  extra: { secretInHistory?: boolean } = {},
+  extra: { secretInHistory?: boolean; unseenScreens?: number } = {},
 ): void {
   if (!fingerprint) return;
   try {
     mkdirSync(dir, { recursive: true });
-    const record = { fingerprint, at: new Date().toISOString(), ...(extra.secretInHistory ? { secretInHistory: true } : {}) };
+    const record = {
+      fingerprint,
+      at: new Date().toISOString(),
+      ...(extra.secretInHistory ? { secretInHistory: true } : {}),
+      ...(extra.unseenScreens ? { unseenScreens: extra.unseenScreens } : {}),
+    };
     writeFileReplacingSync(recordFile(dir, projectDir, specDir), JSON.stringify(record));
   } catch {
     // informational

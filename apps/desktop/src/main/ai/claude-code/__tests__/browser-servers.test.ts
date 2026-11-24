@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { cliStarts, removeBrokenBrowserServers } from '../browser-servers';
+import { cliStarts, hasBrowserServer, removeBrokenBrowserServers } from '../browser-servers';
 
 const stdio = (cli: string) => ({ type: 'stdio' as const, command: 'node', args: [cli, '--headless'], env: { X: '1' } });
 
@@ -24,6 +24,15 @@ describe('removeBrokenBrowserServers', () => {
     const servers = { context7: stdio('c7.js'), 'vibe-teamlead': { type: 'sdk' } as never };
     expect(Object.keys(removeBrokenBrowserServers(servers, () => {}, canStart))).toEqual(['context7', 'vibe-teamlead']);
     expect(canStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('hasBrowserServer', () => {
+  it('is whether the session can open the app: Playwright, Chrome DevTools or Electron', () => {
+    expect(hasBrowserServer(['vibe-teamlead', 'playwright'])).toBe(true);
+    expect(hasBrowserServer(['electron'])).toBe(true);
+    expect(hasBrowserServer(['chrome-devtools'])).toBe(true);
+    expect(hasBrowserServer(['vibe-teamlead', 'context7'])).toBe(false);
   });
 });
 

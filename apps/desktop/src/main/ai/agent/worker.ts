@@ -55,7 +55,10 @@ import { type BuildOutcome, BuildOrchestrator, type QAPhaseHooks } from '../orch
 import { sessionCodeContext, subtaskCodeContext } from '../orchestration/code-context';
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
-import { currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
+import { commitTime, currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
+import { checkVisualEvidence, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
+import { designInventories } from '../design/design-inventory';
+import { checkDesignStylesheets } from '../design/stylesheet-check';
 import { type CheckOutcome, verifyTask } from '../verification/verify-task';
 import { baseFailures } from '../verification/base-fix';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
@@ -710,10 +713,19 @@ async function assemblePrompt(
   });
   const design = designSection(promptName, session, subtask, taskTouchesUi);
   // The task's approved wireframes or screens (design before code), for the roles that build or check to them
-  const taskDesign = designReferencePrompt(promptName, session.specDir, readDesignCanvas(session.specDir).frames, readDesignState(session.specDir));
+  const frames = readDesignCanvas(session.specDir).frames;
+  const designState = readDesignState(session.specDir);
+  // What a person can use on each screen: the planner gives each to a subtask, QA looks for each one
+  const inventory = INVENTORY_ROLES.has(promptName) && designState && designState.stage !== 'skipped'
+    ? designInventories(session.specDir, requiredFrames(frames))
+    : [];
+  const taskDesign = designReferencePrompt(promptName, session.specDir, frames, designState, inventory);
   const memory = await memorySection(session, memoryFocus, phaseOfPrompt(promptName));
   return [prompt, design, taskDesign, memory].filter(Boolean).join('\n\n');
 }
+
+/** Roles told what a person can use on each screen of the task's design */
+const INVENTORY_ROLES = new Set(['planner', 'architect', 'qa_reviewer']);
 
 /** Agents that shape or check UI get the design system (and anti-slop rules for UI projects). */
 const DESIGN_BUILDERS = new Set(['spec_writer', 'spec_quick', 'spec_critic', 'architect', 'planner', 'coder', 'qa_fixer', 'followup_planner', 'designer']);
@@ -1331,10 +1343,20 @@ async function runQualityAssurance(
           const mode = session.designSystem?.qaMode ?? 'off';
           if (!tokens) return { findings: [], mode };
           const files = await addedUiLines(session.projectDir, await resolveBaseRef(session.projectDir));
-          return { findings: lintAddedLines(files, tokens), mode };
+          // A task that changed UI: the app must load the design system's stylesheets, or no page looks like the design
+          const pkg = session.designSystem?.package;
+          const sheets = files.length && pkg ? await checkDesignStylesheets(session.projectDir, pkg) : [];
+          return { findings: [...sheets, ...lintAddedLines(files, tokens)], mode };
         }
       : undefined,
 
+    // A task with a design is approved only with each frame shown in the running app
+    visualEvidence: async () => {
+      if ((await uiChangedSince(() => changedFilesSinceBase(session.projectDir))) === false) return undefined;
+      const frames = taskEvidenceFrames(session.specDir);
+      if (!frames.length) return undefined;
+      return checkVisualEvidence({ specDir: session.specDir, frames, since: await commitTime(session.projectDir), browser: false });
+    },
     currentCommit: () => currentCommit(session.projectDir),
     approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
     workTreeSnapshot: () => takeWorkTreeSnapshot(session.projectDir),
@@ -1353,6 +1375,11 @@ async function runQualityAssurance(
       const touchesUi = await uiChangedSince(() => changedFilesSinceBase(session.projectDir));
       if (touchesUi === false) qaLog(`Browser tools are off for this ${runConfig.agentType} session: no UI file changed in this task.`);
       const qaSession = touchesUi === undefined ? session : { ...session, mcpOptions: { ...session.mcpOptions, taskTouchesUi: touchesUi } };
+      // The reviewer's verdict tool refuses an approval that doesn't show the design in the running app
+      const frames = runConfig.agentType === 'qa_reviewer' && touchesUi !== false ? taskEvidenceFrames(session.specDir) : [];
+      const sessionToolContext = frames.length
+        ? { ...toolContext, visualEvidence: { frames, since: await commitTime(session.projectDir), browser: true } }
+        : toolContext;
       const firstMessage = [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
         .filter(Boolean)
         .join('\n\n');
@@ -1365,7 +1392,7 @@ async function runQualityAssurance(
         runConfig.sessionNumber,
         undefined,
         qaSession,
-        toolContext,
+        sessionToolContext,
         // A session that only records the verdict (its own kickoff) reads no code
         runConfig.kickoffMessage ? firstMessage : await withCodeContext(runConfig.agentType, firstMessage, session, toolContext, 'qa'),
         true, // skipPhaseLogging — the caller manages QA phase logging

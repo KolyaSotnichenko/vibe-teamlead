@@ -212,6 +212,12 @@ export interface QALoopConfig {
    * only reported (design_check.md in the spec dir).
    */
   runDesignCheck?: () => Promise<{ findings: DesignFinding[]; mode: DesignQaMode }>;
+  /**
+   * For a task with a design: whether the approval shows each frame of the design in the running
+   * app (design/visual-evidence.ts). Problems make the approval not count; frames QA could not
+   * show keep the task from merging by itself. undefined: the task has no design to check.
+   */
+  visualEvidence?: () => Promise<{ problems: string[]; notShown: unknown[] } | undefined>;
   /** HEAD of the build, so a later review can look at what changed since this one */
   currentCommit?: () => Promise<string | undefined>;
   /** Where approvals are recorded and the state of the code they hold for; see qa-approval.ts */
@@ -640,6 +646,19 @@ export class QALoop extends EventEmitter {
           await this.clearQASignoff();
           signoff = null;
         }
+        // The verdict tool refuses such an approval; this catches one written into the plan by hand
+        let unseenScreens = 0;
+        if (this.resolveQAStatus(signoff) === 'approved' && this.config.visualEvidence) {
+          const evidence = await this.config.visualEvidence().catch(() => undefined);
+          if (evidence?.problems.length) {
+            this.signoffProblem = `the approval does not show the design in the running app: ${evidence.problems.join('; ')}`;
+            await this.clearQASignoff();
+            signoff = null;
+          } else {
+            unseenScreens = evidence?.notShown.length ?? 0;
+            if (unseenScreens) this.emitTyped('log', `QA could not show ${unseenScreens} frame(s) of the design in the running app; the merge will wait for the owner`);
+          }
+        }
         const status = this.resolveQAStatus(signoff);
         const issues = signoff?.issues_found ?? [];
 
@@ -665,7 +684,7 @@ export class QALoop extends EventEmitter {
           if (this.config.approvals) {
             const fingerprint = await this.config.approvals.fingerprint();
             if (fingerprint === reviewStartFingerprint) {
-              recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint, { secretInHistory: this.secretInHistory });
+              recordApproval(this.config.approvals.dir, this.config.projectDir, this.config.specDir, fingerprint, { secretInHistory: this.secretInHistory, unseenScreens });
             } else {
               this.emitTyped('log', 'The code changed during the review, so this approval will not be reused by a later run');
             }

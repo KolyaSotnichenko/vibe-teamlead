@@ -129,6 +129,13 @@ export async function currentCommit(cwd: string): Promise<string | undefined> {
   return head.code === 0 ? head.stdout.trim() || undefined : undefined;
 }
 
+/** When HEAD was committed, in milliseconds; 0 when git can't say. */
+export async function commitTime(cwd: string): Promise<number> {
+  const result = await git(['log', '-1', '--format=%ct', 'HEAD'], cwd);
+  const seconds = result.code === 0 ? Number(result.stdout.trim()) : NaN;
+  return Number.isFinite(seconds) ? seconds * 1000 : 0;
+}
+
 export async function resolveBaseRef(cwd: string): Promise<string | undefined> {
   const candidates: string[] = [];
   const originHead = await git(['rev-parse', '--abbrev-ref', 'origin/HEAD'], cwd);

@@ -27,7 +27,7 @@ import { isSubscriptionToken } from './auth';
 import { CODEGRAPH_SERVER_KEY, codegraphMcpServer, ensureCodegraphIndex } from './codegraph';
 import { SessionAccumulator } from './event-mapper';
 import { buildMcpServers } from './mcp-servers';
-import { removeBrokenBrowserServers } from './browser-servers';
+import { hasBrowserServer, removeBrokenBrowserServers } from './browser-servers';
 import { recordTurnLimit } from './turn-limits';
 import { autoCompactWindow, compactionLogLine, compactSettings } from './compaction';
 import { buildSecurityHooks } from './security-hooks';
@@ -261,20 +261,24 @@ export function buildQueryOptions(
   const hasDevServerTool = getAgentConfig(config.agentType).appTools?.includes('mcp__vibe-teamlead__start_dev_server') === true;
 
   // Tool-less sessions (plain text generation) get no MCP servers either.
-  const mcpServers =
-    tools.length === 0
-      ? {}
-      : removeBrokenBrowserServers(buildMcpServers(config.agentType, config.toolContext, config.mcpOptions, {
-          specDir: config.specDir,
-          memoryMcpUrl: config.memoryMcpUrl,
-          linearApiKey: config.linearApiKey,
-          bundled: {
-            playwrightMcpCli: bundled.playwrightMcpCli,
-            chromeDevtoolsMcpCli: bundled.chromeDevtoolsMcpCli,
-            nodeRuntime: bundled.nodeRuntime,
-          },
-          browserOutputDir: config.specDir ? join(config.specDir, 'qa-browser') : undefined,
-        }), extras.onProblem);
+  const servers = (toolContext: typeof config.toolContext, onProblem?: (message: string) => void) =>
+    removeBrokenBrowserServers(buildMcpServers(config.agentType, toolContext, config.mcpOptions, {
+      specDir: config.specDir,
+      memoryMcpUrl: config.memoryMcpUrl,
+      linearApiKey: config.linearApiKey,
+      bundled: {
+        playwrightMcpCli: bundled.playwrightMcpCli,
+        chromeDevtoolsMcpCli: bundled.chromeDevtoolsMcpCli,
+        nodeRuntime: bundled.nodeRuntime,
+      },
+      browserOutputDir: config.specDir ? join(config.specDir, 'qa-browser') : undefined,
+    }), onProblem);
+  let mcpServers = tools.length === 0 ? {} : servers(config.toolContext, extras.onProblem);
+  // A QA approval asks for a screenshot of the app only when the session can take one
+  const evidence = config.toolContext.visualEvidence;
+  if (tools.length > 0 && evidence?.browser && !hasBrowserServer(Object.keys(mcpServers))) {
+    mcpServers = servers({ ...config.toolContext, visualEvidence: { ...evidence, browser: false } });
+  }
   // TerraVision: only the architect of a cloud-infrastructure task (decided in the worker)
   const cloudDiagrams = config.agentType === 'architect' && tools.length > 0 ? config.cloudDiagrams : undefined;
   if (cloudDiagrams) mcpServers[TERRAVISION_SERVER_KEY] = cloudDiagrams.server;

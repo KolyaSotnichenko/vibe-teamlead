@@ -47,7 +47,7 @@ vi.mock('../../schema', () => ({
 
 import { validateStructuredOutput } from '../../schema';
 import { designIssues, gateIssues, QALoop, qaRoundData, qaRoundSection } from '../qa-loop';
-import { approvalHolds, recordApproval, SECRET_IN_HISTORY_HOLD, autoMergeRefusal } from '../qa-approval';
+import { approvalHolds, recordApproval, SECRET_IN_HISTORY_HOLD, UNSEEN_SCREENS_HOLD, autoMergeRefusal } from '../qa-approval';
 import type { QALoopConfig, QASessionRunConfig } from '../qa-loop';
 import type { SessionResult } from '../../session/types';
 
@@ -223,6 +223,42 @@ describe('QALoop', () => {
       expect(outcome.approved).toBe(true);
       expect(approvalHolds(store.dir, PROJECT_DIR, SPEC_DIR, 'code-1')).toBe(true);
       expect(await autoMergeRefusal({ auto: true }, PROJECT_DIR, SPEC_DIR, async () => true, undefined, store.dir)).toBe(SECRET_IN_HISTORY_HOLD);
+    });
+
+    it('an approval that does not show the design in the running app does not count: the review runs again with the reason', async () => {
+      const store = await approvals();
+      const { approve } = planSays(completedPlan());
+      const runSession = vi.fn(async () => {
+        approve();
+        return makeSessionResult('completed');
+      });
+      const visualEvidence = vi
+        .fn()
+        .mockResolvedValueOnce({ problems: ['No screenshot and no reason for 1 frame(s): screens/board.html at 1280 px'], notShown: [] })
+        .mockResolvedValue({ problems: [], notShown: [] });
+      const generatePrompt = vi.fn().mockResolvedValue('system prompt');
+
+      const outcome = await new QALoop(makeConfig({ runSession, approvals: store, visualEvidence, generatePrompt })).run();
+
+      expect(outcome.approved).toBe(true);
+      expect(runSession).toHaveBeenCalledTimes(2);
+      // The second review is told why the first approval did not count
+      expect(JSON.stringify(generatePrompt.mock.calls[1])).toContain('screens/board.html at 1280 px');
+    });
+
+    it('an approval with frames QA could not show waits for the owner before it merges', async () => {
+      const store = await approvals();
+      const { approve } = planSays(completedPlan());
+      const runSession = vi.fn(async () => {
+        approve();
+        return makeSessionResult('completed');
+      });
+      const visualEvidence = async () => ({ problems: [], notShown: [{ file: 'screens/card.html', width: 390, reason: 'needs two devices' }] });
+
+      const outcome = await new QALoop(makeConfig({ runSession, approvals: store, visualEvidence })).run();
+
+      expect(outcome.approved).toBe(true);
+      expect(await autoMergeRefusal({ auto: true }, PROJECT_DIR, SPEC_DIR, async () => true, undefined, store.dir)).toBe(UNSEEN_SCREENS_HOLD);
     });
 
     it('an approval is recorded only for the code the review started on', async () => {

@@ -33,6 +33,11 @@ function cachedCliStarts(command: string, cli: string, env: Record<string, strin
   return works;
 }
 
+/** Whether a session with these MCP servers can open the app and take screenshots */
+export function hasBrowserServer(serverKeys: string[]): boolean {
+  return serverKeys.some((key) => BROWSER_SERVERS.has(key) || key === 'electron');
+}
+
 interface MaybeStdio {
   type?: string;
   command?: string;

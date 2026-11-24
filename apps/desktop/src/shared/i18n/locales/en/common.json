@@ -1223,7 +1223,7 @@
       "none": "none",
       "banned": "Never",
       "qaTitle": "QA design check",
-      "qaBody": "Before every QA review the app checks the lines the task added to UI files: colours outside the palette, Tailwind's default colours, radii, shadows and gradients the system doesn't have, and the banned patterns. QA also reviews screenshots against the document.",
+      "qaBody": "Before every QA review the app checks the lines the task added to UI files: colours outside the palette, Tailwind's default colours, radii, shadows and gradients the system doesn't have, and the banned patterns; with an imported package, also that the app loads its stylesheets. QA also reviews screenshots against the document.",
       "qaModes": {
         "block": "Block",
         "blockHint": "QA can't approve with findings",
@@ -1338,7 +1338,8 @@
           "radius": "radii",
           "shadow": "shadows",
           "gradient": "gradients",
-          "banned": "banned patterns"
+          "banned": "banned patterns",
+          "stylesheet-not-loaded": "stylesheets not loaded"
         }
       },
       "start": {

@@ -270,6 +270,12 @@ export function DesignTab({ task }: { task: Task }) {
                     className="max-h-48 w-full border border-border object-contain object-top"
                   />
                 )}
+                {s.notShown && (
+                  <p className="flex gap-2 text-sm">
+                    <span className="shrink-0 font-mono text-[11px] uppercase text-destructive">{t('design.compare.notShown')}</span>
+                    <span className="text-foreground">{s.notShown}</span>
+                  </p>
+                )}
                 {s.differences.length ? (
                   <ul className="space-y-1 text-sm">
                     {s.differences.map((d) => (
@@ -279,7 +285,7 @@ export function DesignTab({ task }: { task: Task }) {
                       </li>
                     ))}
                   </ul>
-                ) : (
+                ) : s.notShown ? null : (
                   <p className="text-xs text-muted-foreground">{t('design.compare.matches')}</p>
                 )}
               </div>

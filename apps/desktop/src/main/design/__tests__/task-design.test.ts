@@ -34,6 +34,11 @@ describe("the owner's answer on the Design tab", () => {
     expect(compare).toEqual({ screens: [{ file: 'screens/roadmap-phone.html', width: 390, built: 'qa/roadmap-390.png', differences: [{ severity: 'blocking', text: 'No stage tabs' }, { severity: 'minor', text: 'x' }] }] });
     expect(parseCompare('not json')).toBeNull();
   });
+
+  it("keeps why QA could not show a frame in the running app, for the owner", () => {
+    const compare = parseCompare(JSON.stringify({ screens: [{ file: 'screens/card.html', width: 1280, notShown: '  The conflict state needs two devices  ' }] }));
+    expect(compare?.screens[0]).toEqual({ file: 'screens/card.html', width: 1280, notShown: 'The conflict state needs two devices', differences: [] });
+  });
 });
 
 describe('a design the designer could not make', () => {

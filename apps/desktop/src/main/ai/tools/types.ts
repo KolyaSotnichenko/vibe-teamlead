@@ -41,6 +41,12 @@ export interface ToolContext {
   remember?: (memoryType: string, content: string, files?: string[]) => Promise<string>;
   /** The app starts the preview by this recipe and says what happened (preview/fix-start.ts); for the agent that fixes a preview start */
   tryPreviewRecipe?: (recipe: unknown) => Promise<string>;
+  /**
+   * For the QA reviewer of a task with a design that changed UI: the frames an approval must show
+   * in the running app (design/visual-evidence.ts), screenshots newer than `since` (the last commit),
+   * and whether the session has browser tools
+   */
+  visualEvidence?: { frames: Array<{ file: string; width: number }>; since: number; browser: boolean };
 }
 
 // ---------------------------------------------------------------------------

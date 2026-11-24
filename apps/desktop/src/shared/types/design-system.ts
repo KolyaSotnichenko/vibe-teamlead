@@ -102,7 +102,7 @@ export interface TaskDesign {
   /** Why a skipped design was skipped, when not for want of UI */
   skipNote?: { by: 'owner' | 'designer'; reason: string } | null;
   /** QA's comparison of the built pages with the design */
-  compare: { screens: Array<{ file: string; width: number; built?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }> } | null;
+  compare: { screens: Array<{ file: string; width: number; built?: string; notShown?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }> } | null;
   settings: { mode: 'off' | 'wireframes' | 'full'; approval: 'owner' | 'auto' };
   /** Browser preview only: a frame's page as a data: URL instead of vt-design:// */
   frameSrc?: Record<string, string>;
@@ -311,7 +311,7 @@ export interface DesignBrief {
 
 /** One design-check finding (QA) */
 export interface DesignFinding {
-  rule: 'off-palette-color' | 'arbitrary-value' | 'radius' | 'shadow' | 'gradient' | 'banned';
+  rule: 'off-palette-color' | 'arbitrary-value' | 'radius' | 'shadow' | 'gradient' | 'banned' | 'stylesheet-not-loaded';
   file: string;
   line: number;
   /** The offending text */
