@@ -155,6 +155,16 @@ describe('the design checked in the running app', () => {
     expect(text).toMatch(/"mask"/);
   });
 
+  // planner-mhp: "the busy state passes too fast", "the same markup as at 390": frames left to the owner
+  it('QA holds states that pass quickly, shows error and offline states, and shoots every width', () => {
+    const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory);
+    expect(text).toContain('browser_evaluate');
+    expect(text).toMatch(/window\.fetch/);
+    expect(text).toContain('browser_route');
+    expect(text).toContain('browser_network_state_set');
+    expect(text).toMatch(/each width is its own screenshot/i);
+  });
+
   it('QA looks for each element of a screen in the built page; one missing is blocking', () => {
     const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory);
     expect(text).toContain('button «Додати задачу»');

@@ -120,8 +120,10 @@ function bundledNodeServer(
 
 /** Playwright MCP (Microsoft, Apache-2.0): drive the app under test as a user would. */
 function createPlaywrightServer(cli: string, runtime: string, outputDir?: string): McpServerConfig {
-  // Screenshots go to files, not into the conversation: every turn would re-send the image otherwise
-  const args = ['--headless', '--isolated', '--browser', 'chrome', '--caps', 'testing', '--image-responses', 'omit'];
+  // Screenshots go to files, not into the conversation: every turn would re-send the image otherwise.
+  // network: browser_route answers a request with an error, browser_network_state_set goes offline,
+  // so QA can show the error and offline states a design draws (declarative, no code runs in the server)
+  const args = ['--headless', '--isolated', '--browser', 'chrome', '--caps', 'testing,network', '--image-responses', 'omit'];
   if (outputDir) args.push('--output-dir', outputDir);
   return bundledNodeServer('playwright', 'Playwright', 'Browser automation for end-to-end validation', cli, args, runtime);
 }
