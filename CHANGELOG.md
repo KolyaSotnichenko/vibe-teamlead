@@ -2,6 +2,11 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.67 - 2026-11-24
+
+- A task that changes existing screens (a redesign, a fix to the board) names them from the project's design library in its plan: each UI subtask lists the design files it builds to. The coder gets those files with what a person can use on each and is told the subtask isn't done while the page lacks something its design shows; QA must show every one of them in the running app before it can approve, not only the screens the task's own design drew. Before, a redesign task could pass with its board, task card and Gantt chart untouched.
+- Sample data: specs ask for the project's seed script to create what the task's screens show, with a test user for each role for the one-click test sign-in, and the planner puts the seed in the subtask that adds the data, so the preview and QA have something to show.
+
 ## 2.0.0-beta.66 - 2026-11-24
 
 - QA approves a task with a design only after seeing it in the running app. The reviewer must show every frame of the design (each screen at each width) next to the built page: a screenshot taken after the last commit, or a reason the frame couldn't be shown. The app checks this itself and refuses the approval otherwise, or while a blocking difference is left. A frame QA couldn't show keeps the task from merging by itself: it waits for you, and the Design tab lists it as **Not seen in the app** with the reason. Before, QA could approve without opening the app at all.
