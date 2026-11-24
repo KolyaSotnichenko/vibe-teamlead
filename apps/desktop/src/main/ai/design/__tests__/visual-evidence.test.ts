@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -116,6 +116,28 @@ describe('checkVisualEvidence', () => {
       { file: 'screens/card.html', width: 1280, built: 'qa-browser/same.png' },
     ]);
     expect(check(frames).problems).toEqual([expect.stringMatching(/same\.png is already the screenshot of screens\/board\.html/)]);
+  });
+
+  it('refuses screenshots when qa-browser itself is a link to elsewhere, and one picture under two names', () => {
+    const elsewhere = mkdtempSync(path.join(tmpdir(), 'vt-elsewhere-'));
+    writeFileSync(path.join(elsewhere, 'board.png'), PNG);
+    writeFileSync(path.join(elsewhere, 'card.png'), PNG);
+    rmSync(path.join(specDir, 'qa-browser'), { recursive: true, force: true });
+    symlinkSync(elsewhere, path.join(specDir, 'qa-browser'));
+    compare([
+      { file: 'screens/board.html', width: 1280, built: 'qa-browser/board.png' },
+      { file: 'screens/card.html', width: 1280, built: 'qa-browser/card.png' },
+    ]);
+    expect(check(frames).problems).toHaveLength(2);
+
+    rmSync(path.join(specDir, 'qa-browser'));
+    const first = shot('one.png');
+    linkSync(path.join(specDir, first), path.join(specDir, 'qa-browser', 'two.png'));
+    compare([
+      { file: 'screens/board.html', width: 1280, built: first },
+      { file: 'screens/card.html', width: 1280, built: 'qa-browser/two.png' },
+    ]);
+    expect(check(frames).problems).toEqual([expect.stringMatching(/already the screenshot of screens\/board\.html/)]);
   });
 
   it('refuses a path that climbs out of the spec directory', () => {

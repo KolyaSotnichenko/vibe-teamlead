@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+
+import { isWindowsHost } from '../../../platform/__tests__/host';
 
 import { checkDesignStylesheets, unloadedStylesheets } from '../stylesheet-check';
 
@@ -64,6 +66,19 @@ describe('checkDesignStylesheets', () => {
     const findings = await checkDesignStylesheets(dir, { componentCss: sheets[0].path, tokensCss: sheets[1].path });
 
     expect(findings.map((f) => f.match)).toEqual(['bundle.css']);
+  });
+
+  it.skipIf(isWindowsHost)("runs no command an agent put in the repository's git config", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'vt-sheets-hooks-'));
+    mkdirSync(path.join(dir, 'ds'), { recursive: true });
+    writeFileSync(path.join(dir, 'ds', 'bundle.css'), BUNDLE);
+    execFileSync('git', ['init', '-q'], { cwd: dir });
+    const marker = path.join(dir, 'ran');
+    execFileSync('git', ['config', 'core.fsmonitor', `touch ${marker}; false`], { cwd: dir });
+
+    await checkDesignStylesheets(dir, { componentCss: 'ds/bundle.css' });
+
+    expect(existsSync(marker)).toBe(false);
   });
 
   it('says nothing for a package without stylesheets, or one that cannot be read', async () => {

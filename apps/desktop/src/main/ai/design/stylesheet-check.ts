@@ -11,6 +11,8 @@ import path from 'node:path';
 
 import type { DesignFinding, DesignPackageInfo } from '../../../shared/types';
 import { runProcess } from '../../platform/exec';
+import { withoutGitLocation } from '../../platform/git-env';
+import { readOnlyGitArgs } from '../orchestration/reviewer-changes';
 
 /** Text files that can load a stylesheet */
 const SOURCE = /\.(m?[jt]sx?|cjs|css|scss|sass|less|html?|vue|svelte|astro)$/i;
@@ -73,7 +75,12 @@ export async function checkDesignStylesheets(projectDir: string, pkg: Pick<Desig
       if (content !== null) sheets.push({ path: sheet, content });
     }
     if (!sheets.length) return [];
-    const listed = await runProcess('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: projectDir, timeoutMs: 30_000 });
+    // Agents can write the repository's git config: no hook, fsmonitor or other command of theirs runs here
+    const listed = await runProcess('git', readOnlyGitArgs(['ls-files', '-z', '--cached', '--others', '--exclude-standard']), {
+      cwd: projectDir,
+      env: withoutGitLocation(),
+      timeoutMs: 30_000,
+    });
     if (listed.code !== 0) return [];
     const paths = [...new Set(listed.stdout.split('\0'))].filter((p) => p && SOURCE.test(p) && !SKIPPED.test(`/${p}`)).slice(0, MAX_FILES);
     const files: Array<{ path: string; text: string }> = [];

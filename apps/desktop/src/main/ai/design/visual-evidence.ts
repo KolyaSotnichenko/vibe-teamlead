@@ -8,7 +8,7 @@
  * from merging by itself (qa-approval.ts). No Electron imports.
  */
 
-import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, lstatSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { readDesignCanvas, readDesignState, realFileInside, type DesignFrame } from './design-step';
@@ -73,6 +73,26 @@ function looksLikeImage(full: string): boolean {
   return png || jpeg || webp;
 }
 
+/** Whether qa-browser/ is a folder of the spec directory itself, not a link to one elsewhere. */
+function realScreenshotDir(specDir: string): boolean {
+  try {
+    const root = path.join(specDir, SCREENSHOT_DIR);
+    return lstatSync(root).isDirectory() && realpathSync(root) === path.join(realpathSync(specDir), SCREENSHOT_DIR);
+  } catch {
+    return false;
+  }
+}
+
+/** The file's identity, the same under every name (a hard link, `./`), or the path when it can't be read. */
+function fileIdentity(full: string): string {
+  try {
+    const stat = statSync(full, { bigint: true });
+    return `${stat.dev}:${stat.ino}`;
+  } catch {
+    return full;
+  }
+}
+
 /** Why `built` is not a screenshot of this review, or null. */
 function screenshotProblem(specDir: string, built: string, since: number): string | null {
   const root = path.resolve(specDir, SCREENSHOT_DIR);
@@ -85,8 +105,8 @@ function screenshotProblem(specDir: string, built: string, since: number): strin
   } catch {
     return `${built} does not exist`;
   }
-  // A link could point at any picture: only a real file the browser saved here counts
-  if (!stat.isFile() || !realFileInside(root, full)) return `${built} is not a file saved under ${SCREENSHOT_DIR}/`;
+  // A link could point at any picture: only a real file the browser saved here counts, in a real folder of the spec
+  if (!stat.isFile() || !realScreenshotDir(specDir) || !realFileInside(root, full)) return `${built} is not a file saved under ${SCREENSHOT_DIR}/`;
   if (!looksLikeImage(full)) return `${built} is not an image (png, jpg or webp)`;
   if (stat.mtimeMs < since) return `${built} was taken before the last commit, so it shows older code: take it again`;
   return null;
@@ -126,7 +146,7 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
     const built = text(entry.built, 300);
     const reason = text(entry.notShown);
     if (built) {
-      const key = path.resolve(specDir, built);
+      const key = fileIdentity(path.resolve(specDir, built));
       const earlier = used.get(key);
       const problem = earlier
         ? `${built} is already the screenshot of ${label(earlier)}: each frame needs its own`
