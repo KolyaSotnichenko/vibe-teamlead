@@ -4,6 +4,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.71 - 2026-11-24
 
+- QA reviews against the whole app started for it: the app starts the task's code by the Preview recipe, with a fresh database (migrated and seeded) and the compose file's other services, instead of QA starting databases itself.
 - QA shows the design's loading, busy, error and offline states itself (it holds a request in the page, answers one with an error, or goes offline) and every width, instead of leaving those frames for you to check.
 - Task window: the notices above the tabs (screens to check, the app's checks, CI) fold to one line of their titles, so the task stays in sight; the choice is remembered.
 - Preview: **Full screen**, the last button of the toolbar, shows the preview with its toolbar and side panels (notes, logs, environment, mail) over the whole app, like a browser's full screen, on the Preview page and in a task's Workspace. Esc or the same button brings it back.
