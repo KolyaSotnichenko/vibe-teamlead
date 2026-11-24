@@ -1,9 +1,10 @@
 /**
- * Tasks the last session left running. Quitting stops the agents (the quit dialog says the
- * tasks stay unfinished and can be resumed), but their files still say "in progress", so the
- * card used to sit there until the stuck check offered Recover. At launch each such task is
- * stopped the way Stop stops it: to review with Resume when it has a plan, back to the backlog
- * when not. Nothing is restarted, so nothing spends tokens without the owner.
+ * Tasks the last session left running. Quitting stops the agents (an update quits too), but
+ * their files still say "in progress", so the card used to sit there until the stuck check
+ * offered Recover. At launch each such task goes back in the queue (task-state-manager.ts
+ * requeueInterrupted): it is the oldest there, so it starts first and goes on from where it
+ * stopped. When they went to Planning or review instead, the queue started the next task and an
+ * update changed the order the owner had set (planner-mhp).
  */
 
 import type { Project, Task } from '../shared/types';

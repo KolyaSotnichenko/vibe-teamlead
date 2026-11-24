@@ -589,6 +589,28 @@ describe('TaskStateManager', () => {
   });
 });
 
+// planner-mhp: an update stopped a task in progress; it went to Planning and the queue started the next one
+describe('TaskStateManager.requeueInterrupted', () => {
+  it.each([
+    ['without a plan (stopped during its spec)', false, 'backlog'],
+    ['with a plan (stopped while coding)', true, 'human_review'],
+  ])('puts a task the last session left running back in the queue, %s', async (_label, hasPlan, machine) => {
+    const { safeSendToRenderer } = await import('../ipc-handlers/utils');
+    const { persistPlanStatusAndReasonSync } = await import('../ipc-handlers/task/plan-file-utils');
+    const manager = new TaskStateManager();
+    manager.configure(() => ({}) as never);
+    const task = createMockTask({ status: 'in_progress', executionProgress: { phase: hasPlan ? 'coding' : 'planning' } as Task['executionProgress'] });
+    vi.clearAllMocks();
+
+    manager.requeueInterrupted(task.id, task, createMockProject(), hasPlan);
+
+    expect(persistPlanStatusAndReasonSync).toHaveBeenLastCalledWith('/mock/path/implementation_plan.json', 'queue', undefined, 'test-project-id', machine, 'idle');
+    const statuses = (safeSendToRenderer as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[3]);
+    expect(statuses.at(-1)).toBe('queue');
+    manager.clearAllTasks();
+  });
+});
+
 describe('TaskStateManager.stopTask', () => {
   it('moves a task whose machine state drifted (thought it was in the backlog) out of in progress', async () => {
     const { safeSendToRenderer } = await import('../ipc-handlers/utils');

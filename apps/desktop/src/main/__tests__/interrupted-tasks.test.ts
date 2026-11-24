@@ -17,7 +17,7 @@ describe('tasks the last session left running', () => {
     expect(interruptedTasks(tasks).map((t: { id: string }) => t.id)).toEqual(['a', 'b']);
   });
 
-  it('at launch are stopped the way Stop stops them, so they can be resumed, and never restarted', () => {
+  it('at launch each one not running is settled once (back in the queue, in index.ts), and running ones are left alone', () => {
     const stop = vi.fn();
     const projects = [{ id: 'p1' }, { id: 'p2' }] as never[];
     const tasksOf = (id: string) => (id === 'p1' ? [task('a', 'in_progress'), task('c', 'human_review')] : [task('b', 'ai_review')]);

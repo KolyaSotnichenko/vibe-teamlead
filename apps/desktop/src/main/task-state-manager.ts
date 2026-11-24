@@ -120,6 +120,20 @@ export class TaskStateManager {
     this.emitStatus(taskId, status, reviewReason, project.id);
   }
 
+  /**
+   * A task the last session left running, at launch: stopped as Stop stops it, then back in the
+   * queue, where it is the oldest and starts first, going on from where it stopped. Before, it
+   * went to Planning (or to review) and the queue started the next task: an update changed the
+   * order the owner had set. The queue is outside the machine: the machine stays where Stop put it
+   * (backlog, or review with the plan), and the queue's start resumes it from there.
+   */
+  requeueInterrupted(taskId: string, task: Task, project: Project, hasPlan: boolean): void {
+    this.stopTask(taskId, task, project, hasPlan);
+    const machine = this.getCurrentState(taskId) ?? (hasPlan ? 'human_review' : 'backlog');
+    this.persistStatus(task, project, 'queue', undefined, machine, 'idle');
+    this.emitStatus(taskId, 'queue', undefined, project.id);
+  }
+
   handleUiEvent(taskId: string, event: TaskEvent, task: Task, project: Project): void {
     console.debug(`[TaskStateManager] handleUiEvent: ${event.type} for task ${taskId}`);
     this.setTaskContext(taskId, task, project);

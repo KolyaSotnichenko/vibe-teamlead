@@ -70,7 +70,7 @@ The task logs should contain the line "CodeGraph: index ready / attached"; if it
 
 ## Closing the app while agents work
 
-Closing the window quits the app, and nothing keeps working in the background. Quitting stops the agents, so while a task runs the app asks first: keep working, or close and stop. A stopped task can be resumed later.
+Closing the window quits the app, and nothing keeps working in the background. Quitting stops the agents, so while a task runs the app asks first: keep working, or close and stop. A task stopped this way (or by an update) goes back in the queue when the app starts again, first, and goes on from where it stopped: the order you set stays.
 
 ## Windows: agents can't run commands
 

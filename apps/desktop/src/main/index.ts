@@ -616,14 +616,14 @@ app.whenReady().then(() => {
     console.warn('[main] Failed to start the Telegram bot:', error);
   }
 
-  // Tasks the last session left running: stopped the way Stop stops them, so their cards offer Resume
+  // Tasks the last session left running (a quit, an update): back in the queue, first, going on from where they stopped
   try {
     settleInterruptedTasks({
       projects: projectStore.getProjects(),
       tasksOf: (projectId) => projectStore.getTasks(projectId),
       hasPlan: hasPlanWithSubtasks,
       isRunning: (taskId) => agentManager?.isRunning(taskId) ?? false,
-      stop: (taskId, task, project, hasPlan) => taskStateManager.stopTask(taskId, task, project, hasPlan),
+      stop: (taskId, task, project, hasPlan) => taskStateManager.requeueInterrupted(taskId, task, project, hasPlan),
     });
   } catch (error) {
     console.warn('[main] Failed to settle interrupted tasks:', error);
