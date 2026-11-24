@@ -4,6 +4,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 
 ## 2.0.0-beta.70 - 2026-11-24
 
+- Preview in a task's window: the page stays inside the window and moves with its scroll. It used to run past the bottom, over the window's buttons and past its edge.
 - A task stopped by an update or by quitting goes back in the queue when the app starts, first, and goes on from where it stopped. Before, it went to Planning (or to review) and the queue started the next task, so an update changed the order you had set.
 
 ## 2.0.0-beta.69 - 2026-11-24
