@@ -163,6 +163,18 @@ describe('the start-up check', () => {
     expect(env.FEATURE_X).toBe('on');
   });
 
+  it("gives the owner's values to every step, and holds back from migrations one that says where a database is", async () => {
+    const recipe = { ...RECIPE, steps: { install: [], build: [{ dir: '', command: 'make build' }], migrate: [{ dir: 'apps/api', command: 'make migrate' }] } };
+    const runCommand = vi.fn(async (_command: string, _cwd?: string, _env?: Record<string, string>) => ({ code: 0, output: '' }));
+    const ownerEnv = { PROD_CONN: 'postgres://me:pw@prod.example.com/app', API_KEY: 'k-123' };
+    const { options } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand, ownerEnv, started: [{ kind: 'postgres', url: 'postgres://t:t@127.0.0.1:55432/t' }] });
+    await startsCheck(options);
+    const envOf = (name: string) => runCommand.mock.calls.find(([command]) => command === name)?.[2] ?? {};
+    expect(envOf('make build')).toMatchObject(ownerEnv);
+    expect(envOf('make migrate').PROD_CONN).toBeUndefined();
+    expect(envOf('make migrate').API_KEY).toBe('k-123');
+  });
+
   it("runs the recipe's install first, in its folder", async () => {
     const recipe = { ...RECIPE, steps: { install: [{ dir: 'apps/api', command: 'make deps' }], build: [] } };
     const runCommand = vi.fn(async (_command: string, _cwd?: string) => ({ code: 0, output: '' }));

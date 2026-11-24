@@ -18,7 +18,7 @@ import { type StartServicesDeps, startRecipeServices } from '../../preview/start
 import { isPathContained } from '../security/path-containment';
 import { composeMovedNotice, createRunNetwork, startComposeServices } from '../verification/compose-runner';
 import { bucketsOf, composeSecrets, composeServices } from '../verification/compose-services';
-import { composeFilesInOrder, imagesFromComposeFiles, isConnectionSetting, namesDatabase, ownDatabaseSetting } from '../verification/detect-checks';
+import { composeFilesInOrder, imagesFromComposeFiles, namesDatabase, ownDatabaseSetting } from '../verification/detect-checks';
 import { type DockerRun, startTestServices, VERIFY_LABEL } from '../verification/test-services';
 
 export interface TaskAppDeps {
@@ -154,15 +154,14 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
       check();
       const notices = [...others.failed.map((failure) => `${failure.name}: ${failure.reason}`), ...others.moved.map(composeMovedNotice)];
       const wiring = { planned: compose, started: others.started };
-      const varsFor = (dir: string) => baseEnvVars({ dir, ...exampleTexts(files, read, dir), started: database.started, compose: wiring, recipe: recipe.env });
-      const envFor = (dir: string) => ({ ...envOf(varsFor(dir)), ...projectEnv });
+      const varsFor = (dir: string) => baseEnvVars({ dir, ...exampleTexts(files, read, dir), started: database.started, compose: wiring, recipe: recipe.env, overrides: projectEnv });
+      const envFor = (dir: string) => envOf(varsFor(dir));
       // A migration or a seed changes a database: no address from the recipe or the owner, only the fresh one's
       const heldBack = new Set<string>();
       const databaseEnvFor = (dir: string) => {
         const { vars, held } = databaseStepVars(varsFor(dir));
         for (const name of held) heldBack.add(name);
-        const owners = Object.fromEntries(Object.entries(projectEnv).filter(([name, value]) => !isConnectionSetting(name, value)));
-        return { ...envOf(vars), ...owners };
+        return envOf(vars);
       };
 
       // Migrations and seed only on this fresh database: an address the owner's settings or a committed
@@ -185,7 +184,7 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
         }
       }
 
-      if (heldBack.size) notices.push(`Migrations and seed ran only against the fresh database: they did not get ${[...heldBack].join(', ')} from the recipe.`);
+      if (heldBack.size) notices.push(`Migrations and seed ran only against the fresh database: they did not get ${[...heldBack].join(', ')} from the recipe or your settings.`);
 
       const up = await startRecipeServices(
         {

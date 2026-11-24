@@ -152,6 +152,14 @@ describe('the app QA works against', () => {
     expect(result).toMatchObject({ ok: true, notices: [expect.stringMatching(/PROD_CONN/)] });
   });
 
+  it("holds back from migrations an owner's value that replaces what the app set, and gives the others", async () => {
+    const { deps, commands } = setup();
+    // VITE_AUTH_MODE comes from the example; the owner's FEATURE_X is theirs alone
+    await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa', projectEnv: { FEATURE_X: 'on' } }, deps).start();
+    expect(commands.map((c) => c.env.FEATURE_X)).toEqual(['on', 'on']);
+    expect(commands[0].env.DATABASE_URL).toMatch(/55432/);
+  });
+
   it("runs the recipe's own install step", async () => {
     const recipe = { ...RECIPE, steps: { ...RECIPE.steps, install: [{ dir: 'apps/api', command: 'make deps' }] } };
     const { deps, commands } = setup({ 'package.json': '{}', 'preview.json': JSON.stringify(recipe), 'docker-compose.yml': COMPOSE });

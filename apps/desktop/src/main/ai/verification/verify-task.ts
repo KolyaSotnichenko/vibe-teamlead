@@ -642,12 +642,14 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       ...(cannot ? { cannot, cannotWhy: startsCannot && takenPort !== undefined ? { reason: 'port', ports: [takenPort] } : { reason: 'services' } } : {}),
       // The recipe's migrations and seed, by the rule the detected ones follow: only the copy's own throwaway database
       migratable,
+      ownerEnv: options.env,
       ...(at === commit && options.onAppUp ? { onUp: options.onAppUp } : {}),
       timeoutMs: checkTimeout,
       runCommand: async (command, dir, variables) => {
         let output = '';
         const result = await runShell(command, {
-          cwd: dir, env: verificationEnv(hostEnv, { ...variables, ...options.env }), timeoutMs: checkTimeout, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024,
+          // The owner's values came in `variables`, held back from migrations where they would point them elsewhere
+          cwd: dir, env: verificationEnv(hostEnv, variables), timeoutMs: checkTimeout, signal, killGroup: true, killGraceMs: options.killGraceMs, maxOutput: 1024,
           // The end, where the error is, and line by line through the redaction, as for the other checks
           onLine: (line) => { output = `${output}${redact(line)}\n`.slice(-TAIL_CHARS); },
         });

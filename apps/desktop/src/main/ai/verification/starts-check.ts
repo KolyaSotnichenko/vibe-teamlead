@@ -57,6 +57,9 @@ export interface StartsCheckOptions {
   expectServices?: string[];
   /** Goes into the servers' names: the app's dev servers are told apart by name, and two runs may be at work at once */
   runId?: string;
+  /** The owner's values (Settings): every step gets them, but a migration or seed only through databaseStepVars */
+  ownerEnv?: Record<string, string>;
+  /** Runs a step with exactly `env`: the owner's values are in it already, where they may be */
   runCommand: (command: string, cwd: string, env: Record<string, string>) => Promise<{ code: number; output: string; timedOut?: boolean }>;
   deps: StartServicesDeps;
   /** How long the services must stay up after the page answered */
@@ -106,7 +109,7 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
 
   /** A folder's variables: its examples, the copy's own database and services, the recipe's values. Never `.env`. */
   const varsFor = (dir: string) =>
-    baseEnvVars({ dir, ...exampleTexts(files, read, dir), started: options.started, compose: options.compose, recipe: recipe.env });
+    baseEnvVars({ dir, ...exampleTexts(files, read, dir), started: options.started, compose: options.compose, recipe: recipe.env, overrides: options.ownerEnv });
   const check = () => {
     if (options.signal?.aborted) throw new Aborted();
     if (Date.now() > deadline) throw new OutOfTime();
