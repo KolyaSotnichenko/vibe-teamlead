@@ -1226,6 +1226,8 @@
       "reload": "Reload",
       "signOut": "Reset session",
       "signOutHint": "Sign out of the app: clear its cookies and storage and reload. Stopping the preview does this too.",
+      "fullScreen": "Full screen",
+      "exitFullScreen": "Leave full screen (Esc)",
       "address": "Address",
       "width": "Width",
       "full": "Full",

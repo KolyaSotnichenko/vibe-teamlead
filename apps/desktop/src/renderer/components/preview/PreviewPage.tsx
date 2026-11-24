@@ -5,7 +5,8 @@
  * none of them says which service is the page.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import type { SaidText } from '../../../shared/constants/preview-say';
@@ -25,6 +26,7 @@ import { StartFixPanel } from './StartFixPanel';
 import { notesImages, notesTask } from './notes-task';
 import { createTask, startTaskOrQueue, submitReview } from '../../stores/task-store';
 import { usePreviewSession } from './usePreviewSession';
+import { PreviewFullScreenContext } from './preview-fullscreen';
 
 /** Notes as one task, in the queue: it starts when a slot is free */
 async function sendNotes(projectId: string, notes: PreviewNote[], title: string, quickFix: boolean): Promise<boolean> {
@@ -54,6 +56,25 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [width, setWidth] = useState<PreviewWidth>(null);
   const [side, setSide] = useState<PreviewSide>(null);
+  /** The preview on the whole screen, with its toolbar and side panels */
+  const [fullScreen, setFullScreen] = useState(false);
+  /** Where the page sits when it isn't on the whole screen: its window, when it has one */
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const tellWindow = useContext(PreviewFullScreenContext);
+  useEffect(() => {
+    tellWindow?.(fullScreen);
+    if (!fullScreen) return;
+    // Esc leaves the full screen, not the task's window under it
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopImmediatePropagation();
+      event.preventDefault();
+      setFullScreen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [fullScreen, tellWindow]);
+  useEffect(() => () => tellWindow?.(false), [tellWindow]);
   // The preview keeps running under the form: looking at the services costs nothing, and saving restarts them
   const { status, boxRef } = usePreviewSession(project.id, true, task?.id);
   const needsServices = status?.stage === 'failed' && status.needsServices === true;
@@ -145,9 +166,14 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
   }
 
   const ready = status?.stage === 'ready';
-  return (
-    <div className="flex h-full flex-col">
+  const page = (
+    <div
+      className={fullScreen ? 'fixed inset-0 z-[60] flex flex-col bg-background' : 'flex h-full flex-col'}
+      {...(fullScreen ? { 'data-preview-fullscreen': '' } : {})}
+    >
       <PreviewToolbar
+        fullScreen={fullScreen}
+        onFullScreen={setFullScreen}
         url={status?.url}
         width={width}
         onWidth={setWidth}
@@ -259,5 +285,14 @@ export function PreviewPage({ project, task }: { project: Project; task?: Task }
       )}
       </div>
     </div>
+  );
+  // On the whole screen: in the window it sits in (a task's window, grown to the screen; outside it a
+  // click would close that window), or over the app. The session goes on: it lives in this component.
+  const host = fullScreen ? (anchorRef.current?.closest('[role="dialog"]') ?? document.body) : null;
+  return (
+    <>
+      <span ref={anchorRef} hidden />
+      {host ? createPortal(page, host) : page}
+    </>
   );
 }

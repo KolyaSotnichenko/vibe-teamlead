@@ -1,6 +1,6 @@
 /** Above the preview: history, resetting the session, address, width presets, and resetting the preview's data. */
 
-import { ArrowLeft, ArrowRight, LogOut, RotateCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LogOut, Maximize2, Minimize2, RotateCw } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +14,7 @@ export type PreviewWidth = (typeof PREVIEW_WIDTHS)[number];
 /** What the side panel shows, or null when it is closed */
 export type PreviewSide = 'notes' | 'ux' | 'logs' | 'env' | 'mail' | 'running' | null;
 
-export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide, uxReview = true, howToRun = false }: {
+export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEditServices, disabled, side, onSide, uxReview = true, howToRun = false, fullScreen = false, onFullScreen }: {
   url?: string;
   width: PreviewWidth;
   onWidth: (width: PreviewWidth) => void;
@@ -28,6 +28,9 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
   uxReview?: boolean;
   /** The project has RUNNING.md: a button shows it */
   howToRun?: boolean;
+  /** The preview fills the screen */
+  fullScreen?: boolean;
+  onFullScreen?: (full: boolean) => void;
 }) {
   const { t } = useTranslation(['tasks']);
   const [address, setAddress] = useState(url ?? '');
@@ -88,6 +91,17 @@ export function PreviewToolbar({ url, width, onWidth, onNavigate, onReset, onEdi
         </Button>
       )}
       <Button variant="ghost" size="sm" onClick={onEditServices}>{t('preview.toolbar.services')}</Button>
+      {onFullScreen && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t(fullScreen ? 'preview.toolbar.exitFullScreen' : 'preview.toolbar.fullScreen')}
+          title={t(fullScreen ? 'preview.toolbar.exitFullScreen' : 'preview.toolbar.fullScreen')}
+          onClick={() => onFullScreen(!fullScreen)}
+        >
+          {fullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
+      )}
     </div>
   );
 }

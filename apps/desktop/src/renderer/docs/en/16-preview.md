@@ -81,7 +81,7 @@ Without Docker, the services still start, without a database, and the preview sa
 
 It opens the project's home page, `/`. When that page is still a placeholder, type the path you want in the address field, for example `/login`.
 
-The page runs in a view of its own, separate from the app: no access to your files, and its cookies are kept apart. It stays on its own address; links to other sites open in your browser. The toolbar has back, forward, reload, the address, and widths of 375, 768 and 1280 pixels or the full window.
+The page runs in a view of its own, separate from the app: no access to your files, and its cookies are kept apart. It stays on its own address; links to other sites open in your browser. The toolbar has back, forward, reload, the address, and widths of 375, 768 and 1280 pixels or the full window. **Full screen** (the last button) puts the preview, its toolbar and the side panels (notes, logs, environment, mail) over the whole app, like a browser's full screen; in a task's window the window grows to the screen with it. Esc or the same button brings it back, without closing the task's window.
 
 ## When it does not start
 

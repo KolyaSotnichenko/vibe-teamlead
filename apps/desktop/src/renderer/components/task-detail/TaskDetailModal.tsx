@@ -40,6 +40,7 @@ import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
 import { DesignTab } from './design/DesignTab';
+import { PreviewFullScreenContext } from '../preview/preview-fullscreen';
 import { ScreensToCheckNotice } from './ScreensToCheckNotice';
 import { CiNotice } from './CiNotice';
 import type { DeployTarget } from '../../../shared/types/deploy';
@@ -84,6 +85,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
   const { toast } = useToast();
   const state = useTaskDetail({ task });
   const [mergeReviewKey, setMergeReviewKey] = useState(0);
+  /** The preview of Workspace → Preview fills the screen: the window grows to it */
+  const [previewFullScreen, setPreviewFullScreen] = useState(false);
   const mergeState = useMergeState(task);
   const activeProject = useProjectStore(s => s.getActiveProject());
   const showFilesTab = isFilesTabEnabled();
@@ -400,6 +403,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
 
   return (
+    <PreviewFullScreenContext.Provider value={setPreviewFullScreen}>
     <TooltipProvider delayDuration={300}>
       <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
         <DialogPrimitive.Portal>
@@ -415,10 +419,8 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
           {/* Full-height centered modal content */}
           <DialogPrimitive.Content
             className={cn(
-              'fixed left-[50%] top-4 z-50',
-              'translate-x-[-50%]',
-              'w-[95vw] h-[calc(100vh-32px)]',
-              'max-w-6xl', // one width for every tab, so the close buttons don't jump
+              // The preview on the whole screen (Workspace → Preview): the window grows to the screen under it
+              previewFullScreen ? 'fixed inset-0 z-50 w-screen h-screen' : 'fixed left-[50%] top-4 z-50 translate-x-[-50%] w-[95vw] h-[calc(100vh-32px)] max-w-6xl', // one width for every tab, so the close buttons don't jump
               'bg-card border border-foreground',
               'overflow-hidden flex flex-col',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -704,5 +706,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
         onDeleted={() => onOpenChange(false)}
       />
     </TooltipProvider>
+    </PreviewFullScreenContext.Provider>
   );
 }
