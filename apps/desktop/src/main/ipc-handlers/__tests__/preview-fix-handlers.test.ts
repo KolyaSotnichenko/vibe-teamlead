@@ -124,8 +124,9 @@ describe('preview IPC: the agent that fixes a failed start', () => {
     expect(prompt).toMatch(/Ukrainian/);
     expect(task.runClaudeTask.mock.calls[0][0]).toMatchObject({ agentType: 'preview_fixer', model: 'sonnet' });
     // Kept: the recipe is the project's from now on (and goes on to main)
-    await vi.waitFor(() => expect(execFileSync('git', ['show', 'main:preview.json'], { cwd: state.project, encoding: 'utf-8' })).toContain('npm run dev'));
-  });
+    // The commit to main takes a while on Windows runners: wait for it, not just a second
+    await vi.waitFor(() => expect(execFileSync('git', ['show', 'main:preview.json'], { cwd: state.project, encoding: 'utf-8' })).toContain('npm run dev'), { timeout: 20_000, interval: 200 });
+  }, 40_000);
 
   it("never sends the model a value the owner set, should a log have printed it", async () => {
     state.settings.previewEnv = { STRIPE_SECRET_KEY: 'owner-set-stripe-value' };
