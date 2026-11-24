@@ -89,7 +89,6 @@ const MAX_HASHED = 64 * 1024 * 1024;
 /** What the picture is, the same under every name (a hard link, a copy), or the path when it can't be read. */
 function pictureIdentity(full: string): string {
   try {
-    if (statSync(full).size > MAX_HASHED) return full;
     return createHash('sha256').update(readFileSync(full)).digest('hex');
   } catch {
     return full;
@@ -110,6 +109,7 @@ function screenshotProblem(specDir: string, built: string, since: number): strin
   }
   // A link could point at any picture: only a real file the browser saved here counts, in a real folder of the spec
   if (!stat.isFile() || !realScreenshotDir(specDir) || !realFileInside(root, full)) return `${built} is not a file saved under ${SCREENSHOT_DIR}/`;
+  if (stat.size > MAX_HASHED) return `${built} is larger than a screenshot can be`;
   if (!looksLikeImage(full)) return `${built} is not an image (png, jpg or webp)`;
   if (stat.mtimeMs < since) return `${built} was taken before the last commit, so it shows older code: take it again`;
   return null;
@@ -149,12 +149,14 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
     const built = text(entry.built, 300);
     const reason = text(entry.notShown);
     if (built) {
-      const key = pictureIdentity(path.resolve(specDir, built));
-      const earlier = used.get(key);
-      const problem = earlier
-        ? `${built} is already the screenshot of ${label(earlier)}: each frame needs its own`
-        : screenshotProblem(specDir, built, since);
-      used.set(key, earlier ?? f);
+      // Only a file that passed the checks is read, to tell one picture from another
+      let problem = screenshotProblem(specDir, built, since);
+      if (!problem) {
+        const key = pictureIdentity(path.resolve(specDir, built));
+        const earlier = used.get(key);
+        if (earlier) problem = `${built} is already the screenshot of ${label(earlier)}: each frame needs its own`;
+        else used.set(key, f);
+      }
       if (problem) problems.push(`${label(f)}: ${problem}`);
       else shown++;
     } else if (reason) {
