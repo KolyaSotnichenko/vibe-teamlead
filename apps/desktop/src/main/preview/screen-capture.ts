@@ -12,7 +12,7 @@ import { BrowserWindow, nativeImage, session } from 'electron';
 import type { ScreenCatalog, ScreenStep } from '../ai/design/screen-catalog';
 import type { Bitmap } from './screen-compare';
 import type { ScreenCheckDeps, ScreenShot } from './screen-check';
-import { maskScript, navigateScript, stepScript } from './screen-replay';
+import { maskScript, navigateScript, stepScript, unmaskScript } from './screen-replay';
 
 const VIEW_HEIGHT = 900;
 /** A page script that doesn't answer in this time fails its screen */
@@ -145,6 +145,9 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
         shots.push(image.isEmpty() ? { id: screen.id, width: screen.width, error: 'the picture was empty' } : { id: screen.id, width: screen.width, png: image.toPNG() });
       } catch (error) {
         shots.push({ id: screen.id, width: screen.width, error: error instanceof Error ? error.message : String(error) });
+      } finally {
+        // The next screen is in the same page: what this one hid is shown again
+        if (screen.mask.length) await run(win, unmaskScript());
       }
     }
   } catch (error) {

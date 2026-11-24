@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { maskScript, navigateScript, stepScript } from '../screen-replay';
+import { maskScript, navigateScript, stepScript, unmaskScript } from '../screen-replay';
 
 const run = (script: string) => (0, eval)(script) as Promise<{ ok: boolean; error?: string }>;
 
@@ -48,6 +48,13 @@ describe('the steps, run in the page', () => {
     await run(maskScript(['.due']));
     expect([...document.querySelectorAll<HTMLElement>('.due')].map((e) => e.style.visibility)).toEqual(['hidden', 'hidden']);
     expect(document.querySelector('p')!.style.visibility).toBe('');
+  });
+
+  it("shows again what a screen's masks hid, so the next screen is pictured whole", async () => {
+    document.body.innerHTML = '<span class="due">24.11</span><header>shell</header>';
+    await run(maskScript(['.due']));
+    await run(unmaskScript());
+    expect(document.querySelector<HTMLElement>('.due')!.style.visibility).toBe('');
   });
 
   it('refuses a mask that hides the whole page', async () => {

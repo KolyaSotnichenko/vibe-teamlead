@@ -80,7 +80,17 @@ export function maskScript(selectors: string[]): string {
     covered += Math.max(0, r.width) * Math.max(0, r.height);
   }
   if (covered > page / 2) return { ok: false, error: 'the masks hide most of the page' };
-  hidden.forEach((el) => { el.style.visibility = 'hidden'; });
+  const kept = (window.__vtMasked = window.__vtMasked || []);
+  hidden.forEach((el) => { kept.push([el, el.style.visibility]); el.style.visibility = 'hidden'; });
+  return { ok: true };
+})()`;
+}
+
+/** The script that shows again what the masks hid: the app is not reloaded between screens. */
+export function unmaskScript(): string {
+  return `(async () => {
+  for (const [el, visibility] of (window.__vtMasked || [])) el.style.visibility = visibility;
+  window.__vtMasked = [];
   return { ok: true };
 })()`;
 }
