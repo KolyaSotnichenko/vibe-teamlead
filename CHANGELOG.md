@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.71 - 2026-11-24
+
+- Preview: **Full screen**, the last button of the toolbar, shows the preview with its toolbar and side panels (notes, logs, environment, mail) over the whole app, like a browser's full screen, on the Preview page and in a task's Workspace. Esc or the same button brings it back.
+
 ## 2.0.0-beta.70 - 2026-11-24
 
 - A merge held because QA couldn't show some screens of the design now says which: each screen with its width and QA's reason, and what to do, in the notice (no longer an error) and in the task's window, with a link to the Design tab.
