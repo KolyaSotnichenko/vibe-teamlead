@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PreviewService } from '../../../shared/types/project';
@@ -51,7 +52,7 @@ describe('startRecipeServices', () => {
     const { deps, options, servers } = setup();
     const started = await startRecipeServices(options, deps);
     const calls = vi.mocked(deps.startServer).mock.calls.map(([o]) => o);
-    expect(calls.map((o) => [o.name, o.port, o.cwd])).toEqual([['check-api', 3001, '/wt/apps/api'], ['check-web', expect.any(Number), '/wt/apps/web']]);
+    expect(calls.map((o) => [o.name, o.port, o.cwd])).toEqual([['check-api', 3001, path.resolve('/wt/apps/api')], ['check-web', expect.any(Number), path.resolve('/wt/apps/web')]]);
     expect(servers).toEqual(['check-api', 'check-web']);
     expect(started.url).toMatch(/^http:\/\/localhost:\d+$/);
     expect(started.logs).toEqual({ api: '/logs/check-api', web: '/logs/check-web' });

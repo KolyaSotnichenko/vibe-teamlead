@@ -238,7 +238,8 @@ describe('verifyTask', () => {
       await verify({ startsCheck, docker, previewServices: saved, hostPortFree: async (port) => port !== 10000 });
       const given = startsCheck.mock.calls[0][0];
       expect(given.files).toEqual(expect.arrayContaining(['good.txt', 'task.txt', 'docker-compose.yml']));
-      expect(readInCopy).toBe('yes\n');
+      // git on Windows may check text out with CRLF
+      expect(readInCopy?.replace(/\r\n/g, '\n')).toBe('yes\n');
       expect(given.saved).toEqual(saved);
       expect(given.cannot).toMatch(/Port 10000 is in use/);
       expect(given.cannotWhy).toEqual({ reason: 'port', ports: [10000] });

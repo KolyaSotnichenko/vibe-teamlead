@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StartServicesDeps } from '../../../preview/start-services';
@@ -114,7 +115,7 @@ describe('the start-up check', () => {
     const runCommand = vi.fn(async (command: string, _cwd?: string) => ({ code: command === 'make migrate' ? 2 : 0, output: command === 'make migrate' ? 'relation "users" already exists' : '' }));
     const { options, started } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand });
     const result = await startsCheck(options);
-    expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make lib', '/copy/packages/shared'], ['make migrate', '/copy/apps/api']]);
+    expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make lib', path.resolve('/copy/packages/shared')], ['make migrate', path.resolve('/copy/apps/api')]]);
     expect(result).toMatchObject({ outcome: 'failed', tail: expect.stringContaining('relation "users" already exists') });
     expect(started).toEqual([]);
   });
@@ -132,7 +133,7 @@ describe('the start-up check', () => {
     const runCommand = vi.fn(async (_command: string, _cwd?: string) => ({ code: 0, output: '' }));
     const { options } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand });
     expect(await startsCheck(options)).toEqual({ outcome: 'passed' });
-    expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make deps', '/copy/apps/api']]);
+    expect(runCommand.mock.calls.map(([command, cwd]) => [command, cwd])).toEqual([['make deps', path.resolve('/copy/apps/api')]]);
   });
 
   it('runs out of time as a whole, and stops what it started', async () => {
