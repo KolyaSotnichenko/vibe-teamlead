@@ -472,6 +472,8 @@ export interface WorktreeMergeResult {
   message: string;
   /** Auto-merge held it for the owner's preview: not a failure */
   heldForPreview?: boolean;
+  /** Auto-merge held it: frames of the design QA could not show, for the owner to check (not a failure) */
+  heldForScreens?: Array<{ file: string; width: number; title: string; reason: string }>;
   merged?: boolean;
   conflictFiles?: string[];
   /** The model resolved conflicts: staged, and the commit waits for the user */

@@ -93,6 +93,25 @@ describe('merging a task by itself', () => {
   });
 });
 
+describe('a task held for screens QA could not show', () => {
+  it('hands the owner the screens to check, and is not reported as a failed merge', async () => {
+    const screens = [{ file: 'screens/busy.html', width: 1280, title: 'Sign-in · busy', reason: 'answers instantly' }];
+    const onScreens = vi.fn();
+    const task = { id: 't', projectId: 'p', status: 'human_review', reviewReason: 'completed' };
+    const onProblem = vi.fn();
+    const api = {
+      getTaskMergeState: vi.fn(async () => ({ success: true, data: null })),
+      getTaskSecurityQaError: vi.fn(async () => ({ success: true, data: null })),
+      getTaskVerification: vi.fn(async () => passed),
+      mergeWorktree: vi.fn(async () => ({ success: true, data: { success: false, message: 'waits', heldForScreens: screens } })),
+    } as unknown as AutoMergeApi;
+    const auto = createAutoMerge({ api, getTask: () => task as never, isEnabled: () => true, onProblem, onScreens });
+    await auto.statusChanged('t', 'ai_review', 'human_review');
+    expect(onScreens).toHaveBeenCalledWith('t', screens);
+    expect(onProblem).not.toHaveBeenCalled();
+  });
+});
+
 describe('a UI task held for the preview', () => {
   it('is marked as waiting for the owner, not reported as a failed merge', async () => {
     const { auto, onProblem, onHeld } = setup({

@@ -144,6 +144,11 @@
       "defaultPipelineHint": "The pipeline of every task that chooses none of its own, tasks from a spec document included. A task can still choose another in its form. It does not apply to tasks the architect designs, quick fixes from the preview and tasks the app makes to repair main."
     },
     "autoMergeFailed": "Couldn't merge \"{{title}}\" automatically",
+    "screensToCheck_one": "Check {{count}} screen of “{{title}}” before it merges",
+    "screensToCheck_other": "Check {{count}} screens of “{{title}}” before it merges",
+    "screensToCheckHow": "QA couldn't open these in the running app. Open the task → Workspace → Preview, look at each next to its frame on the Design tab, then merge.",
+    "screenToCheck": "{{title}} · {{width}} px",
+    "screenToCheckWhy": "QA: {{reason}}",
     "mergeWaiting": {
       "title_one": "Merge the {{count}} task that already waits?",
       "title_other": "Merge the {{count}} tasks that already wait?",
@@ -1496,6 +1501,12 @@
       "stop": "Stop waiting",
       "stopHint": "The task stops in Human Review now: try the design again later, or build without it. The designer waits at most an hour in all."
     }
+  },
+  "taskScreens": {
+    "title_one": "Check {{count}} screen before merging",
+    "title_other": "Check {{count}} screens before merging",
+    "how": "QA couldn't open these in the running app, so the task waits for you. Open Workspace → Preview, look at each next to its frame on the Design tab, then merge — or send the task back.",
+    "openDesign": "Open the Design tab"
   },
   "taskCi": {
     "title": "CI",

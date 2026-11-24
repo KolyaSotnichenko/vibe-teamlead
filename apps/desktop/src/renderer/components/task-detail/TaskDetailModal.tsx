@@ -40,6 +40,7 @@ import { TaskWorkspacePanel } from './workspace/TaskWorkspacePanel';
 import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
 import { DesignTab } from './design/DesignTab';
+import { ScreensToCheckNotice } from './ScreensToCheckNotice';
 import { CiNotice } from './CiNotice';
 import type { DeployTarget } from '../../../shared/types/deploy';
 import type { FailedSubtaskDecision, Task, WorktreeCreatePROptions } from '../../../shared/types';
@@ -494,6 +495,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
               {/* Warnings - compact inline */}
               <div className="mt-3 space-y-3 empty:hidden">
+                <ScreensToCheckNotice task={task} onOpenDesign={() => state.setActiveTab('design')} />
                 {!state.workspaceError && <MergeStateNotice task={task} />}
                 <VerificationNotice task={task} />
                 <SecurityFollowupNotice task={task} />

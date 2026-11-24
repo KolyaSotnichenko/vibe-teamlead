@@ -7,11 +7,19 @@
  */
 import type { Task, TaskStatus } from '../../shared/types';
 
+/** A frame of the design QA could not show in the running app */
+export interface UnseenScreen {
+  file: string;
+  width: number;
+  title: string;
+  reason: string;
+}
+
 export interface AutoMergeApi {
   getTaskMergeState: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskSecurityQaError: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: unknown }>;
   getTaskVerification: (taskId: string, projectId?: string) => Promise<{ success: boolean; data?: { status?: string; source?: string } | null }>;
-  mergeWorktree: (taskId: string, options: { auto: true; projectId?: string }) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string; heldForPreview?: boolean } }>;
+  mergeWorktree: (taskId: string, options: { auto: true; projectId?: string }) => Promise<{ success: boolean; error?: string; data?: { success?: boolean; message?: string; heldForPreview?: boolean; heldForScreens?: UnseenScreen[] } }>;
 }
 
 interface AutoMergeOptions {
@@ -22,11 +30,13 @@ interface AutoMergeOptions {
   onProblem: (taskId: string, message: string) => void;
   /** Held for the owner's preview ("UI tasks wait for my preview"): it waits, nothing failed */
   onHeld?: (taskId: string) => void;
+  /** Held for frames of the design QA could not show: the owner checks these, then merges */
+  onScreens?: (taskId: string, screens: UnseenScreen[]) => void;
   /** It left review: a hold no longer applies */
   onLeft?: (taskId: string) => void;
 }
 
-export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, onLeft }: AutoMergeOptions) {
+export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, onLeft, onScreens }: AutoMergeOptions) {
   const tried = new Set<string>();
 
   const clean = async (task: Task): Promise<boolean> => {
@@ -46,6 +56,7 @@ export function createAutoMerge({ api, getTask, isEnabled, onProblem, onHeld, on
       if (!(await clean(task))) return;
       const result = await api.mergeWorktree(task.id, { auto: true, projectId: task.projectId });
       if (result.data?.heldForPreview) onHeld?.(task.id);
+      else if (result.data?.heldForScreens?.length) onScreens?.(task.id, result.data.heldForScreens);
       else if (!result.success || !result.data?.success) onProblem(task.id, result.data?.message ?? result.error ?? '');
     } catch (error) {
       onProblem(task.id, error instanceof Error ? error.message : String(error));

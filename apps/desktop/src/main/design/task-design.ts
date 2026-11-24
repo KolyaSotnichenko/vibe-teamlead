@@ -1,10 +1,13 @@
 /**
  * The Design tab's side of design before code (ai/design/design-step.ts): what the owner's
  * approval and comments do to the design state, and QA's comparison of the built pages with the
- * design (design_compare.json, written by the QA reviewer). Pure.
+ * design (design_compare.json, written by the QA reviewer). Pure, but for unseenScreensOf.
  */
 
-import type { DesignComment, DesignState } from '../ai/design/design-step';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+import { type DesignComment, type DesignState, readDesignCanvas } from '../ai/design/design-step';
 
 const MAX_COMMENTS = 40;
 const MAX_TEXT = 2000;
@@ -109,4 +112,30 @@ export function parseCompare(raw: string): DesignCompare | null {
   } catch {
     return null;
   }
+}
+
+/** A frame of the design QA could not show in the running app: what the owner checks before merging */
+export interface UnseenScreen {
+  file: string;
+  width: number;
+  /** The frame's title on the canvas, or its file */
+  title: string;
+  reason: string;
+}
+
+/** The frames QA marked "not shown" in the task's design_compare.json, with their titles. Never throws. */
+export function unseenScreensOf(specDir: string): UnseenScreen[] {
+  let compare: DesignCompare | null = null;
+  try {
+    compare = parseCompare(readFileSync(path.join(specDir, 'design_compare.json'), 'utf-8'));
+  } catch {
+    return [];
+  }
+  if (!compare) return [];
+  const frames = readDesignCanvas(specDir).frames;
+  const titleOf = (file: string, width: number) =>
+    frames.find((f) => f.file === file && f.width === width)?.title ?? frames.find((f) => f.file === file)?.title ?? file;
+  return compare.screens
+    .filter((s) => s.notShown)
+    .map((s) => ({ file: s.file, width: s.width, title: titleOf(s.file, s.width), reason: s.notShown as string }));
 }

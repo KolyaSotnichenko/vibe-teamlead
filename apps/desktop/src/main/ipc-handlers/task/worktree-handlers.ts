@@ -37,7 +37,8 @@ import { taskDiffBase } from '../../utils/task-diff-base';
 import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
 import { inMergeQueue, isMergeQueued } from '../../ai/merge/merge-queue';
-import { approvedAsItIs, autoMergeRefusal, PREVIEW_HOLD } from '../../ai/orchestration/qa-approval';
+import { approvedAsItIs, autoMergeRefusal, PREVIEW_HOLD, UNSEEN_SCREENS_HOLD } from '../../ai/orchestration/qa-approval';
+import { unseenScreensOf } from '../../design/task-design';
 import { catalogPlace, screenId } from '../../ai/design/screen-catalog';
 import { taskEvidenceFrames } from '../../ai/design/visual-evidence';
 import { runScreenCheck } from '../../preview/screen-check';
@@ -732,6 +733,12 @@ export async function mergeTaskWorktree(
     if (refusal === PREVIEW_HOLD) {
       await markWaitingForPreview([path.join(specDir, 'implementation_plan.json'), ...(worktreePath ? [path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId, 'implementation_plan.json')] : [])]);
       return { success: true, data: { success: false, message: refusal, heldForPreview: true } };
+    }
+    // Frames of the design QA could not show: the owner is told which, and why, to check them
+    if (refusal === UNSEEN_SCREENS_HOLD) {
+      const taskSpec = worktreePath ? path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId) : specDir;
+      const screens = unseenScreensOf(taskSpec);
+      return { success: true, data: { success: false, message: refusal, heldForScreens: screens.length ? screens : unseenScreensOf(specDir) } };
     }
     if (refusal) {
       return { success: true, data: { success: false, message: refusal } };

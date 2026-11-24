@@ -75,3 +75,26 @@ describe('a design the designer could not make', () => {
     expect(designSkipNote(undefined, '{ not json')).toBeNull();
   });
 });
+
+describe('the screens the owner is asked to check', () => {
+  it("are the frames QA could not show, with the frame's title and QA's reason", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+    const { unseenScreensOf } = await import('../task-design');
+    const spec = mkdtempSync(path.join(tmpdir(), 'vt-unseen-'));
+    mkdirSync(path.join(spec, 'design', 'screens'), { recursive: true });
+    writeFileSync(path.join(spec, 'design', 'screens', 'busy.html'), '<!doctype html>');
+    writeFileSync(path.join(spec, 'design', 'canvas.json'), JSON.stringify({ frames: [{ file: 'screens/busy.html', title: 'Тестовий вхід · Входимо…', kind: 'screen', width: 1280, height: 900, x: 0, y: 0 }] }));
+    writeFileSync(path.join(spec, 'design_compare.json'), JSON.stringify({ screens: [
+      { file: 'screens/busy.html', width: 1280, notShown: 'The token request answers instantly' },
+      { file: 'screens/busy.html', width: 390, notShown: 'Same' },
+      { file: 'screens/ok.html', width: 1280, built: 'qa-browser/ok.png' },
+    ] }));
+    expect(unseenScreensOf(spec)).toEqual([
+      { file: 'screens/busy.html', width: 1280, title: 'Тестовий вхід · Входимо…', reason: 'The token request answers instantly' },
+      { file: 'screens/busy.html', width: 390, title: 'Тестовий вхід · Входимо…', reason: 'Same' },
+    ]);
+    expect(unseenScreensOf(path.join(spec, 'nowhere'))).toEqual([]);
+  });
+});
