@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -21,11 +21,13 @@ const SINCE = Date.parse('2026-11-24T10:00:00Z');
 
 let specDir: string;
 
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+
 /** A screenshot under qa-browser/, taken at `at` */
-function shot(name: string, at = SINCE + 60_000): string {
+function shot(name: string, at = SINCE + 60_000, bytes: Buffer | string = PNG): string {
   const file = path.join(specDir, 'qa-browser', name);
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, 'png');
+  writeFileSync(file, bytes);
   utimesSync(file, new Date(at), new Date(at));
   return `qa-browser/${name}`;
 }
@@ -91,6 +93,29 @@ describe('checkVisualEvidence', () => {
     const problems = check(frames).problems;
     expect(problems[0]).toMatch(/before the last commit/);
     expect(problems[1]).toMatch(/not an image/);
+  });
+
+  it('refuses a file that is not really an image, a link to elsewhere, and one screenshot used for two frames', () => {
+    compare([
+      { file: 'screens/board.html', width: 1280, built: shot('board.png', SINCE + 60_000, 'not a picture') },
+      { file: 'screens/card.html', width: 1280, built: shot('card.png') },
+    ]);
+    expect(check(frames).problems).toEqual([expect.stringMatching(/board\.png is not an image/)]);
+
+    const outside = path.join(mkdtempSync(path.join(tmpdir(), 'vt-outside-')), 'x.png');
+    writeFileSync(outside, PNG);
+    symlinkSync(outside, path.join(specDir, 'qa-browser', 'link.png'));
+    compare([
+      { file: 'screens/board.html', width: 1280, built: 'qa-browser/link.png' },
+      { file: 'screens/card.html', width: 1280, built: shot('card.png') },
+    ]);
+    expect(check(frames).problems).toHaveLength(1);
+
+    compare([
+      { file: 'screens/board.html', width: 1280, built: shot('same.png') },
+      { file: 'screens/card.html', width: 1280, built: 'qa-browser/same.png' },
+    ]);
+    expect(check(frames).problems).toEqual([expect.stringMatching(/same\.png is already the screenshot of screens\/board\.html/)]);
   });
 
   it('refuses a path that climbs out of the spec directory', () => {

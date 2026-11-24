@@ -8,10 +8,10 @@
  * from merging by itself (qa-approval.ts). No Electron imports.
  */
 
-import { readFileSync, statSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { readDesignCanvas, readDesignState, type DesignFrame } from './design-step';
+import { readDesignCanvas, readDesignState, realFileInside, type DesignFrame } from './design-step';
 
 /** A frame QA must show: one file at one width */
 export interface EvidenceFrame {
@@ -55,6 +55,24 @@ const label = (f: EvidenceFrame) => `${f.file} at ${f.width} px`;
 
 const text = (value: unknown, max = 500) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
+/** Whether the file starts like a PNG, JPEG or WebP picture. */
+function looksLikeImage(full: string): boolean {
+  const head = Buffer.alloc(12);
+  let fd: number | undefined;
+  try {
+    fd = openSync(full, 'r');
+    if (readSync(fd, head, 0, 12, 0) < 12) return false;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+  const png = head.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  const jpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+  const webp = head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP';
+  return png || jpeg || webp;
+}
+
 /** Why `built` is not a screenshot of this review, or null. */
 function screenshotProblem(specDir: string, built: string, since: number): string | null {
   const root = path.resolve(specDir, SCREENSHOT_DIR);
@@ -67,7 +85,9 @@ function screenshotProblem(specDir: string, built: string, since: number): strin
   } catch {
     return `${built} does not exist`;
   }
-  if (!stat.isFile()) return `${built} is not a file`;
+  // A link could point at any picture: only a real file the browser saved here counts
+  if (!stat.isFile() || !realFileInside(root, full)) return `${built} is not a file saved under ${SCREENSHOT_DIR}/`;
+  if (!looksLikeImage(full)) return `${built} is not an image (png, jpg or webp)`;
   if (stat.mtimeMs < since) return `${built} was taken before the last commit, so it shows older code: take it again`;
   return null;
 }
@@ -96,6 +116,7 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
   const notShown: NotShownFrame[] = [];
   const missing: EvidenceFrame[] = [];
   let shown = 0;
+  const used = new Map<string, EvidenceFrame>();
   for (const f of frames) {
     const entry = entries.find((e) => e.file === f.file && e.width === f.width);
     if (!entry) {
@@ -105,7 +126,12 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
     const built = text(entry.built, 300);
     const reason = text(entry.notShown);
     if (built) {
-      const problem = screenshotProblem(specDir, built, since);
+      const key = path.resolve(specDir, built);
+      const earlier = used.get(key);
+      const problem = earlier
+        ? `${built} is already the screenshot of ${label(earlier)}: each frame needs its own`
+        : screenshotProblem(specDir, built, since);
+      used.set(key, earlier ?? f);
       if (problem) problems.push(`${label(f)}: ${problem}`);
       else shown++;
     } else if (reason) {

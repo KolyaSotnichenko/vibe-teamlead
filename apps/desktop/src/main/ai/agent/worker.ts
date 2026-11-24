@@ -1291,6 +1291,11 @@ async function runQualityAssurance(
   const verificationBaseResults = new Map<string, CheckOutcome>();
   // A task one session built has no QA reviewer: the app's checks, then the owner (qa-loop.ts `review`)
   const review = ((await taskPipeline(session))?.kind ?? 'full') !== 'single';
+  // The design's frames, fixed before any review: the reviewer can write in the spec folder, design/ included
+  const evidenceFrames = taskEvidenceFrames(session.specDir);
+  const qaStartedAt = Date.now();
+  // Screenshots must be newer than the last commit; when git can't say, newer than this QA run
+  const evidenceSince = async () => (await commitTime(session.projectDir)) || qaStartedAt;
   const qaLoop = new QALoop({
     review,
     specDir: session.specDir,
@@ -1353,9 +1358,8 @@ async function runQualityAssurance(
     // A task with a design is approved only with each frame shown in the running app
     visualEvidence: async () => {
       if ((await uiChangedSince(() => changedFilesSinceBase(session.projectDir))) === false) return undefined;
-      const frames = taskEvidenceFrames(session.specDir);
-      if (!frames.length) return undefined;
-      return checkVisualEvidence({ specDir: session.specDir, frames, since: await commitTime(session.projectDir), browser: false });
+      if (!evidenceFrames.length) return undefined;
+      return checkVisualEvidence({ specDir: session.specDir, frames: evidenceFrames, since: await evidenceSince(), browser: false });
     },
     currentCommit: () => currentCommit(session.projectDir),
     approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
@@ -1376,9 +1380,9 @@ async function runQualityAssurance(
       if (touchesUi === false) qaLog(`Browser tools are off for this ${runConfig.agentType} session: no UI file changed in this task.`);
       const qaSession = touchesUi === undefined ? session : { ...session, mcpOptions: { ...session.mcpOptions, taskTouchesUi: touchesUi } };
       // The reviewer's verdict tool refuses an approval that doesn't show the design in the running app
-      const frames = runConfig.agentType === 'qa_reviewer' && touchesUi !== false ? taskEvidenceFrames(session.specDir) : [];
+      const frames = runConfig.agentType === 'qa_reviewer' && touchesUi !== false ? evidenceFrames : [];
       const sessionToolContext = frames.length
-        ? { ...toolContext, visualEvidence: { frames, since: await commitTime(session.projectDir), browser: true } }
+        ? { ...toolContext, visualEvidence: { frames, since: await evidenceSince(), browser: true } }
         : toolContext;
       const firstMessage = [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
         .filter(Boolean)

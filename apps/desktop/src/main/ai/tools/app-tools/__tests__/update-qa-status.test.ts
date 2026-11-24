@@ -76,7 +76,7 @@ describe('update_qa_status with a design', () => {
   it('records the approval once every frame has a fresh screenshot', async () => {
     const t = setupWithDesign({ visualEvidence: visual() });
     mkdirSync(path.join(t.specDir, 'qa-browser'));
-    writeFileSync(path.join(t.specDir, 'qa-browser', 'board.png'), 'png');
+    writeFileSync(path.join(t.specDir, 'qa-browser', 'board.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]));
     writeFileSync(
       path.join(t.specDir, 'design_compare.json'),
       JSON.stringify({ screens: [{ file: 'screens/board.html', width: 1280, built: 'qa-browser/board.png', differences: [] }] }),
