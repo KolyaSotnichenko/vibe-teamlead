@@ -59,6 +59,9 @@ import { commitTime, currentCommit, resolveBaseRef, runSecurityGates } from '../
 import { checkVisualEvidence, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
 import { designInventories } from '../design/design-inventory';
 import { checkDesignStylesheets } from '../design/stylesheet-check';
+import { screenId } from '../design/screen-catalog';
+import { screenCheckSection } from '../design/screen-regression-prompt';
+import type { ScreenCheckResult } from '../../preview/screen-check';
 import { type CheckOutcome, verifyTask } from '../verification/verify-task';
 import { baseFailures } from '../verification/base-fix';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
@@ -181,6 +184,8 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
     pendingQuestions.delete(msg.questionId);
   } else if (msg.type === 'render-result') {
     pendingRenders.get(msg.requestId)?.(msg);
+  } else if (msg.type === 'screen-check-result') {
+    pendingScreenChecks.get(msg.requestId)?.(msg);
   } else if (msg.type === 'memory-result') {
     pendingMemory.get(msg.requestId)?.(msg);
   } else if (msg.type === 'design-stop-wait') {
@@ -425,6 +430,32 @@ function renderDiagramViaMain(path: string): Promise<{ pngPath: string; width: n
     abortController.signal.addEventListener('abort', onAbort, { once: true });
     pendingRenders.set(requestId, settle);
     postMessage({ type: 'render-diagram', taskId: config.taskId, requestId, path });
+  });
+}
+
+// =============================================================================
+// Screen check (the app's check started the task's code → main process → pictures)
+// =============================================================================
+
+type ScreenCheckReply = Extract<MainToWorkerMessage, { type: 'screen-check-result' }>;
+const pendingScreenChecks = new Map<string, (reply: ScreenCheckReply) => void>();
+const SCREEN_CHECK_TIMEOUT_MS = 15 * 60_000;
+
+/** The catalog's screens of the running app, compared with the last merge's; undefined when it couldn't run. Never rejects. */
+function screenCheckViaMain(url: string, specDir: string, exclude: string[]): Promise<ScreenCheckResult | undefined> {
+  return new Promise((resolve) => {
+    const requestId = randomUUID();
+    const settle = (reply: ScreenCheckReply) => {
+      clearTimeout(timer);
+      abortController.signal.removeEventListener('abort', onAbort);
+      pendingScreenChecks.delete(requestId);
+      resolve(reply.ok ? reply.result : undefined);
+    };
+    const onAbort = () => settle({ type: 'screen-check-result', requestId, ok: false, error: 'Cancelled' });
+    const timer = setTimeout(() => settle({ type: 'screen-check-result', requestId, ok: false, error: 'timed out' }), SCREEN_CHECK_TIMEOUT_MS);
+    abortController.signal.addEventListener('abort', onAbort, { once: true });
+    pendingScreenChecks.set(requestId, settle);
+    postMessage({ type: 'screen-check', taskId: config.taskId, requestId, url, specDir, exclude });
   });
 }
 
@@ -1298,6 +1329,9 @@ async function runQualityAssurance(
   const qaStartedAt = Date.now();
   // Screenshots must be newer than the last commit; when git can't say, newer than this QA run
   const evidenceSince = async () => (await commitTime(session.projectDir)) || qaStartedAt;
+  /** The last screen check of this QA run: screens outside the task that changed since the last merge */
+  let lastScreenCheck: ScreenCheckResult | undefined;
+  const changedScreens = () => lastScreenCheck?.changed.map(({ id, width }) => ({ id, width })) ?? [];
   const qaLoop = new QALoop({
     review,
     specDir: session.specDir,
@@ -1331,6 +1365,13 @@ async function runQualityAssurance(
             baseResults: verificationBaseResults,
             // A commit already checked is not checked again, unless the user asked to run QA again
             memory: verification.memory,
+            // While the task's code runs: the app takes the project's catalog of screens and compares them with the last merge's
+            onAppUp: async (url) => {
+              qaLog('Screen check: taking the pictures of the project\'s screens');
+              const exclude = evidenceFrames.map((f) => screenId(f.file)).filter((id): id is string => id !== null);
+              lastScreenCheck = await screenCheckViaMain(url, session.specDir, exclude);
+              if (lastScreenCheck) qaLog(`Screen check: ${lastScreenCheck.changed.length} changed, ${lastScreenCheck.unchanged} unchanged, ${lastScreenCheck.added.length} without an earlier picture, ${lastScreenCheck.failed.length} could not be reached`);
+            },
             fresh,
             signal: abortController.signal,
             // Into the task's QA log: these checks take minutes, and a silent log looks stuck
@@ -1359,9 +1400,10 @@ async function runQualityAssurance(
 
     // A task with a design is approved only with each frame shown in the running app
     visualEvidence: async () => {
-      if ((await uiChangedSince(() => changedFilesSinceBase(session.projectDir))) === false) return undefined;
-      if (!evidenceFrames.length) return undefined;
-      return checkVisualEvidence({ specDir: session.specDir, frames: evidenceFrames, since: await evidenceSince(), browser: false });
+      // A task that changed no UI file has no frames to show, but can still have broken a screen
+      const frames = (await uiChangedSince(() => changedFilesSinceBase(session.projectDir))) === false ? [] : evidenceFrames;
+      if (!frames.length && !changedScreens().length) return undefined;
+      return checkVisualEvidence({ specDir: session.specDir, frames, since: await evidenceSince(), browser: false, changed: changedScreens() });
     },
     currentCommit: () => currentCommit(session.projectDir),
     approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
@@ -1372,7 +1414,9 @@ async function runQualityAssurance(
       // A task that changed no UI file: QA gets a pointer to the design system, not the whole document
       const touchesUi = await uiChangedSince(() => changedFilesSinceBase(session.projectDir));
       const prompt = await assemblePrompt(agentType === 'qa_fixer' ? 'qa_fixer' : 'qa_reviewer', session, undefined, undefined, touchesUi);
-      return [prompt, qaRoundSection(agentType, context)].filter(Boolean).join('\n\n');
+      // The reviewer judges the project's other screens that changed since the last merge
+      const screens = agentType === 'qa_reviewer' ? screenCheckSection(lastScreenCheck) : '';
+      return [prompt, screens, qaRoundSection(agentType, context)].filter(Boolean).join('\n\n');
     },
 
     runSession: async (runConfig) => {
@@ -1383,8 +1427,9 @@ async function runQualityAssurance(
       const qaSession = touchesUi === undefined ? session : { ...session, mcpOptions: { ...session.mcpOptions, taskTouchesUi: touchesUi } };
       // The reviewer's verdict tool refuses an approval that doesn't show the design in the running app
       const frames = runConfig.agentType === 'qa_reviewer' && touchesUi !== false ? evidenceFrames : [];
-      const sessionToolContext = frames.length
-        ? { ...toolContext, visualEvidence: { frames, since: await evidenceSince(), browser: true } }
+      const changed = runConfig.agentType === 'qa_reviewer' ? changedScreens() : [];
+      const sessionToolContext = frames.length || changed.length
+        ? { ...toolContext, visualEvidence: { frames, since: await evidenceSince(), browser: true, changed } }
         : toolContext;
       const firstMessage = [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
         .filter(Boolean)

@@ -1444,6 +1444,9 @@
     "sendHint": "Sending: one designer session changes only what you commented on.",
     "compare": {
       "title": "Built vs design",
+      "otherScreens": "Other screens that changed",
+      "expected": "Expected",
+      "regression": "Regression",
       "notShown": "Not seen in the app",
       "built": "The built page at {{width}} px",
       "blocking": "Blocks",

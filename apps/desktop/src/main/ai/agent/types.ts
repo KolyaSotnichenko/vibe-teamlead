@@ -134,6 +134,7 @@ export type WorkerMessage =
   | WorkerQuestionMessage
   | WorkerQuestionCancelledMessage
   | WorkerRenderDiagramMessage
+  | WorkerScreenCheckMessage
   | WorkerMemoryRequestMessage
   | WorkerBaseFailuresMessage
   | WorkerSessionEndedMessage;
@@ -183,6 +184,19 @@ export interface WorkerRenderDiagramMessage {
   taskId: string;
   requestId: string;
   path: string;
+}
+
+/** The app's check started the task's code: the main process takes the catalog's screens (preview/screen-check.ts). */
+export interface WorkerScreenCheckMessage {
+  type: 'screen-check';
+  taskId: string;
+  requestId: string;
+  /** The running app's page */
+  url: string;
+  /** Where the pictures go: <specDir>/regression */
+  specDir: string;
+  /** The task's own screens (library ids): QA shows them itself */
+  exclude: string[];
 }
 
 /** An agent asked the user something; the worker waits for a 'user-answer'. */
@@ -254,7 +268,8 @@ export type MainToWorkerMessage =
       height?: number;
       error?: string;
     }
-  | { type: 'memory-result'; requestId: string; ok: boolean; text?: string; error?: string };
+  | { type: 'memory-result'; requestId: string; ok: boolean; text?: string; error?: string }
+  | { type: 'screen-check-result'; requestId: string; ok: boolean; result?: import('../../preview/screen-check').ScreenCheckResult; error?: string };
 
 // =============================================================================
 // Serialized Security Profile

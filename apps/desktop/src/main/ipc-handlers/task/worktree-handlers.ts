@@ -38,6 +38,10 @@ import { excludeFromGit } from '../../utils/git-exclude';
 import { cancelIntegrationReview, integrateAndMerge } from '../../ai/merge/integrate-task';
 import { inMergeQueue, isMergeQueued } from '../../ai/merge/merge-queue';
 import { approvedAsItIs, autoMergeRefusal, PREVIEW_HOLD } from '../../ai/orchestration/qa-approval';
+import { catalogPlace } from '../../ai/design/screen-catalog';
+import { runScreenCheck } from '../../preview/screen-check';
+import { electronScreenDeps } from '../../preview/screen-capture';
+import { mergedCatalogFor, promoteMergeScreens } from '../../preview/screen-baseline';
 import { changedFilesSinceBase, uiChangedSince } from '../../ai/orchestration/qa-browser-scope';
 import { markWaitingForPreview } from './preview-hold';
 import { taskStateManager } from '../../task-state-manager';
@@ -741,6 +745,11 @@ export async function mergeTaskWorktree(
     const verification = projectVerification(project.path, project.settings);
     emitProgress('analyzing', 0, 'Starting the merge');
 
+    // The screen check: the catalog with what QA recorded for this task; the merge's check takes its pictures
+    const screensPlace = catalogPlace(project.path);
+    const taskSpecDirs = [...(worktreePath ? [path.join(worktreePath, project.autoBuildPath || '.vibe-teamlead', 'specs', task.specId)] : []), specDir];
+    const mergeCatalog = mergedCatalogFor(screensPlace, taskSpecDirs);
+    let mergeScreensTaken = false;
     const mergeResult = await inMergeQueue(project.path, taskId, () => integrateAndMerge({
       ...taskBranch,
       baseBranch: effectiveBaseBranch,
@@ -759,7 +768,17 @@ export async function mergeTaskWorktree(
             // Containers the task's agents started in its worktree hold the ports the project expects
             await stopWorktreeContainers(worktreePath).catch(() => {});
             // The commit QA approved, when the merge brought nothing new into the task, is not checked twice
-            const report = await verifyTask({ worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, previewServices: verification.previewServices, memory: appCheckMemory(), git: git.git, hostEnv: git.env });
+            const report = await verifyTask({
+              worktreePath, baseRef: effectiveBaseBranch, commands: verification.commands, env: verification.env, lockDir: verification.lockDir, previewServices: verification.previewServices, memory: appCheckMemory(), git: git.git, hostEnv: git.env,
+              // The code that becomes main: its pictures become the next tasks' baseline when the merge succeeds
+              onAppUp: mergeCatalog.screens.length
+                ? async (url) => {
+                    emitProgress('validating', 75, 'Taking pictures of the project\'s screens');
+                    await runScreenCheck({ baseUrl: url, catalog: mergeCatalog, outDir: screensPlace.pending }, electronScreenDeps);
+                    mergeScreensTaken = true;
+                  }
+                : undefined,
+            });
             const summary = describeVerification(report);
             if (report.status === 'regression') appEvents.emit('verification-regression', { taskId, projectId: project.id });
             return { ok: report.status !== 'regression', summary };
@@ -907,6 +926,8 @@ export async function mergeTaskWorktree(
             message = 'Changes merged successfully';
             staged = false;
             appEvents.emit('task-merged', { taskId, projectId: project.id });
+            // The screen check's catalog and baseline follow main
+            promoteMergeScreens(screensPlace, mergeCatalog, mergeScreensTaken);
 
             // Deploy: send the new main to GitHub (fire and forget; never blocks or fails the merge)
             void pushMainAfterMerge(

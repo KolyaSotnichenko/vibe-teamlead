@@ -68,6 +68,11 @@ export interface StartsCheckOptions {
    * for migrations): only then do the recipe's migrations and seed run. They can destroy data.
    */
   migratable?: boolean;
+  /**
+   * Called with the page's address once the project has started and passed, before anything is
+   * stopped: the screen check takes its pictures here. What it does never changes the outcome.
+   */
+  onUp?: (url: string) => Promise<void>;
   signal?: AbortSignal;
 }
 
@@ -187,6 +192,7 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
         tail: `The project started, but without ${missing.join(', ')}, which the commit this task started from starts. Its start may be gone (a renamed dev script?), or it was removed on purpose: look at it.`,
       };
     }
+    if (options.onUp) await options.onUp(started.url).catch(() => {});
     return { outcome: 'passed' };
   } catch (error) {
     if (error instanceof Aborted) return { outcome: 'unavailable', why: { reason: 'stopped' }, tail: 'The check was stopped.' };

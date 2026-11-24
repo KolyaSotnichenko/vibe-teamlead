@@ -260,3 +260,36 @@ describe('the design files a plan names', () => {
     ]);
   });
 });
+
+describe('screens changed outside the task', () => {
+  const frames = [frame('screens/roles.html', 1280)];
+  const changed = [{ id: 'screens/my-tasks.html', width: 1280 }];
+  const withRegressions = (regressions: unknown[]) =>
+    compare([{ file: 'screens/roles.html', width: 1280, built: shot('roles.png') }].concat([]), regressions);
+  function compare(screens: unknown[], regressions: unknown[]): void {
+    writeFileSync(path.join(specDir, 'design_compare.json'), JSON.stringify({ screens, regressions }));
+  }
+  const check = () => checkVisualEvidence({ specDir, frames: requiredFrames(frames), since: SINCE, browser: true, changed });
+
+  it('need a verdict each: expected, with why', () => {
+    withRegressions([]);
+    expect(check().problems).toEqual([expect.stringMatching(/screens\/my-tasks\.html at 1280 px.*changed/)]);
+    withRegressions([{ id: 'screens/my-tasks.html', width: 1280, verdict: 'expected', why: 'The task restyled the shared filter button' }]);
+    expect(check()).toEqual({ problems: [], notShown: [], expected: [{ id: 'screens/my-tasks.html', width: 1280, why: 'The task restyled the shared filter button' }] });
+  });
+
+  it('a regression is a reason to reject, not to approve', () => {
+    withRegressions([{ id: 'screens/my-tasks.html', width: 1280, verdict: 'regression', why: 'The list lost its group headers' }]);
+    expect(check().problems).toEqual([expect.stringMatching(/regression.*reject/i)]);
+  });
+
+  it('an expected change needs its reason', () => {
+    withRegressions([{ id: 'screens/my-tasks.html', width: 1280, verdict: 'expected' }]);
+    expect(check().problems).toHaveLength(1);
+  });
+
+  it('are asked for even when the task has no design of its own', () => {
+    withRegressions([]);
+    expect(checkVisualEvidence({ specDir, frames: [], since: SINCE, browser: true, changed }).problems).toHaveLength(1);
+  });
+});

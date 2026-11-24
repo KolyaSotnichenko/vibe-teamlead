@@ -145,6 +145,16 @@ describe('the design checked in the running app', () => {
     expect(text).toMatch(/waits for the owner/);
   });
 
+  it('QA records how it reached each frame in screens.json, for the app to replay after later merges', () => {
+    const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory);
+    expect(text).toContain(path.join('/s', 'screens.json'));
+    expect(text).toContain('"signIn"');
+    expect(text).toMatch(/"click"/);
+    expect(text).toMatch(/"fill"/);
+    expect(text).toMatch(/"wait"/);
+    expect(text).toMatch(/"mask"/);
+  });
+
   it('QA looks for each element of a screen in the built page; one missing is blocking', () => {
     const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory);
     expect(text).toContain('button «Додати задачу»');

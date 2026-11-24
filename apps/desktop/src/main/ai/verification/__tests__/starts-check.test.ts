@@ -64,6 +64,30 @@ describe('the start-up check', () => {
     expect(stopped.sort()).toEqual(['starts-api', 'starts-web']);
   });
 
+  it('gives the running app to onUp once it passed, before anything is stopped, and not when it failed', async () => {
+    const seen: Array<{ url: string; stoppedSoFar: number }> = [];
+    const passing = setup({ 'preview.json': JSON.stringify(RECIPE) });
+    passing.options.onUp = async (url) => {
+      seen.push({ url, stoppedSoFar: passing.stopped.length });
+    };
+    expect(await startsCheck(passing.options)).toEqual({ outcome: 'passed' });
+    expect(seen).toEqual([{ url: expect.stringMatching(/^http:\/\/localhost:\d+$/), stoppedSoFar: 0 }]);
+
+    const failing = setup({ 'preview.json': JSON.stringify(RECIPE) }, {}, { probe: vi.fn(async () => ({ status: 500 })) });
+    const onUp = vi.fn(async () => {});
+    failing.options.onUp = onUp;
+    expect((await startsCheck(failing.options))?.outcome).toBe('failed');
+    expect(onUp).not.toHaveBeenCalled();
+  });
+
+  it("an onUp that throws doesn't change the outcome", async () => {
+    const { options } = setup({ 'preview.json': JSON.stringify(RECIPE) });
+    options.onUp = async () => {
+      throw new Error('camera broke');
+    };
+    expect(await startsCheck(options)).toEqual({ outcome: 'passed' });
+  });
+
   it("names its servers after the run, so two runs at once don't stop each other's", async () => {
     const { options, started } = setup({ 'preview.json': JSON.stringify(RECIPE) }, { runId: 'a1b2c3' });
     await startsCheck(options);

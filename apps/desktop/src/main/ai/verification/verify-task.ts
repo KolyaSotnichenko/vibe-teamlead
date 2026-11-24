@@ -119,6 +119,8 @@ export interface VerifyTaskOptions {
   previewServices?: PreviewService[];
   /** Instead of starting the project for real. For tests. */
   startsCheck?: (options: StartsCheckOptions) => Promise<StartsResult | null>;
+  /** The task's code started and passed: its page's address, while it runs (the screen check). Not for the base's run. */
+  onAppUp?: (url: string) => Promise<void>;
   installTimeoutMs?: number;
   git?: string;
   hostEnv?: NodeJS.ProcessEnv;
@@ -640,6 +642,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
       ...(cannot ? { cannot, cannotWhy: startsCannot && takenPort !== undefined ? { reason: 'port', ports: [takenPort] } : { reason: 'services' } } : {}),
       // The recipe's migrations and seed, by the rule the detected ones follow: only the copy's own throwaway database
       migratable,
+      ...(at === commit && options.onAppUp ? { onUp: options.onAppUp } : {}),
       timeoutMs: checkTimeout,
       runCommand: async (command, dir, variables) => {
         let output = '';

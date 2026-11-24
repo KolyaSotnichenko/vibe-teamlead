@@ -224,6 +224,15 @@ describe('verifyTask', () => {
       expect(unavailable.checks.find((c) => c.name === 'starts')).toMatchObject({ outcome: 'unavailable' });
     });
 
+    it("hands the screen check the task's running app, never the base's", async () => {
+      const onAppUp = vi.fn(async () => {});
+      const startsCheck = vi.fn<Starts>(async () => ({ outcome: 'passed' }));
+      await verify({ startsCheck, onAppUp, previewServices: [{ name: 'site', dir: '', command: 'make serve', page: true }] });
+      const withHook = startsCheck.mock.calls.filter(([o]) => o.onUp !== undefined);
+      expect(withHook).toHaveLength(1);
+      expect(withHook[0][0].onUp).toBe(onAppUp);
+    });
+
     it("gives the check the copy's files, the saved services, and why it can't say anything when a compose port is taken", async () => {
       writeFileSync(join(repo, 'docker-compose.yml'), 'services:\n  azurite:\n    image: mcr.microsoft.com/azure-storage/azurite\n    ports: ["10000:10000"]\n    healthcheck: { test: ["CMD", "true"] }\n');
       commit(repo, 'azurite');

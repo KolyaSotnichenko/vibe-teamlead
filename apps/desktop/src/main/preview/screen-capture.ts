@@ -1,0 +1,125 @@
+/**
+ * The screen check's camera: a hidden, sandboxed window on a session of its own (nothing kept,
+ * no permissions, no downloads, never leaving the app's origin) opens the running app, signs in by
+ * the catalog's steps, and for each screen moves to its path inside the app, follows its steps,
+ * hides the parts that change on their own and takes a picture of the whole page at its width.
+ */
+
+import { randomUUID } from 'node:crypto';
+
+import { BrowserWindow, nativeImage, session } from 'electron';
+
+import type { ScreenCatalog, ScreenStep } from '../ai/design/screen-catalog';
+import type { Bitmap } from './screen-compare';
+import type { ScreenCheckDeps, ScreenShot } from './screen-check';
+import { maskScript, navigateScript, stepScript } from './screen-replay';
+
+const VIEW_HEIGHT = 900;
+const MAX_HEIGHT = 4000;
+const LOAD_TIMEOUT_MS = 30_000;
+const SETTLE_MS = 700;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Resolves after the window paints a frame, or after `timeoutMs`. */
+function nextPaint(win: BrowserWindow, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, timeoutMs);
+    function done() {
+      clearTimeout(timer);
+      win.webContents.removeListener('paint', done);
+      resolve();
+    }
+    win.webContents.once('paint', done);
+    win.webContents.invalidate();
+  });
+}
+
+async function run(win: BrowserWindow, script: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    return (await win.webContents.executeJavaScript(script, true)) as { ok: boolean; error?: string };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function runSteps(win: BrowserWindow, steps: ScreenStep[]): Promise<string | undefined> {
+  for (const step of steps) {
+    const result = await run(win, stepScript(step));
+    if (!result.ok) return result.error ?? 'a step failed';
+    await sleep(250);
+  }
+  return undefined;
+}
+
+/** Captures every screen of the catalog at `baseUrl`. One window, screens one after another. Never throws. */
+export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, signal?: AbortSignal): Promise<ScreenShot[]> {
+  const origin = new URL(baseUrl).origin;
+  const partition = `screen-check-${randomUUID()}`;
+  const own = session.fromPartition(partition, { cache: false });
+  own.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  own.on('will-download', (event) => event.preventDefault());
+  const win = new BrowserWindow({
+    show: false,
+    width: 1280,
+    height: VIEW_HEIGHT,
+    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, partition },
+  });
+  const shots: ScreenShot[] = [];
+  try {
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', (event, url) => {
+      if (new URL(url).origin !== origin) event.preventDefault();
+    });
+    const start = new URL(catalog.signIn?.path ?? '/', origin).toString();
+    await Promise.race([win.loadURL(start), sleep(LOAD_TIMEOUT_MS).then(() => Promise.reject(new Error('the app did not load')))]);
+    await sleep(SETTLE_MS);
+    const signInError = catalog.signIn ? await runSteps(win, catalog.signIn.steps) : undefined;
+    if (signInError) {
+      return catalog.screens.map((s) => ({ id: s.id, width: s.width, error: `sign-in failed: ${signInError}` }));
+    }
+    await sleep(SETTLE_MS);
+
+    for (const screen of catalog.screens) {
+      if (signal?.aborted) break;
+      try {
+        win.setContentSize(screen.width, VIEW_HEIGHT);
+        await run(win, navigateScript(screen.path));
+        await sleep(SETTLE_MS);
+        const stepError = await runSteps(win, screen.steps);
+        if (stepError) {
+          shots.push({ id: screen.id, width: screen.width, error: stepError });
+          continue;
+        }
+        await sleep(SETTLE_MS);
+        if (screen.mask.length) await run(win, maskScript(screen.mask));
+        const height = Number(await win.webContents.executeJavaScript('Math.ceil(document.documentElement.scrollHeight)', true).catch(() => VIEW_HEIGHT));
+        const pageHeight = Math.min(MAX_HEIGHT, Math.max(VIEW_HEIGHT, Number.isFinite(height) ? height : VIEW_HEIGHT));
+        win.setContentSize(screen.width, pageHeight);
+        await nextPaint(win, 1500);
+        await sleep(300);
+        const image = await win.webContents.capturePage({ x: 0, y: 0, width: screen.width, height: pageHeight });
+        shots.push(image.isEmpty() ? { id: screen.id, width: screen.width, error: 'the picture was empty' } : { id: screen.id, width: screen.width, png: image.toPNG() });
+      } catch (error) {
+        shots.push({ id: screen.id, width: screen.width, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const done = new Set(shots.map((s) => `${s.id}@${s.width}`));
+    for (const s of catalog.screens) if (!done.has(`${s.id}@${s.width}`)) shots.push({ id: s.id, width: s.width, error: message });
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+    await own.clearStorageData().catch(() => {});
+  }
+  return shots;
+}
+
+/** A PNG's pixels, through Electron's image decoder */
+export function pngBitmap(png: Buffer): Bitmap {
+  const image = nativeImage.createFromBuffer(png);
+  const { width, height } = image.getSize();
+  return { width, height, data: new Uint8Array(image.toBitmap()) };
+}
+
+export const electronScreenDeps: ScreenCheckDeps = { capture: captureScreens, bitmap: pngBitmap };

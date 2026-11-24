@@ -46,7 +46,7 @@ export interface ToolContext {
    * in the running app (design/visual-evidence.ts), screenshots newer than `since` (the last commit),
    * and whether the session has browser tools
    */
-  visualEvidence?: { frames: Array<{ file: string; width: number }>; since: number; browser: boolean };
+  visualEvidence?: { frames: Array<{ file: string; width: number }>; since: number; browser: boolean; changed?: Array<{ id: string; width: number }> };
 }
 
 // ---------------------------------------------------------------------------

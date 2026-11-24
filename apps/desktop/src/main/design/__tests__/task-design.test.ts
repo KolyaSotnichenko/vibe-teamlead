@@ -35,6 +35,11 @@ describe("the owner's answer on the Design tab", () => {
     expect(parseCompare('not json')).toBeNull();
   });
 
+  it("keeps QA's verdicts on the project's other screens that changed", () => {
+    const compare = parseCompare(JSON.stringify({ screens: [], regressions: [{ id: 'screens/my-tasks.html', width: 1280, verdict: 'expected', why: ' Shared button restyled ' }, { id: 'x', verdict: 'nope' }] }));
+    expect(compare?.regressions).toEqual([{ id: 'screens/my-tasks.html', width: 1280, verdict: 'expected', why: 'Shared button restyled' }]);
+  });
+
   it("keeps why QA could not show a frame in the running app, for the owner", () => {
     const compare = parseCompare(JSON.stringify({ screens: [{ file: 'screens/card.html', width: 1280, notShown: '  The conflict state needs two devices  ' }] }));
     expect(compare?.screens[0]).toEqual({ file: 'screens/card.html', width: 1280, notShown: 'The conflict state needs two devices', differences: [] });

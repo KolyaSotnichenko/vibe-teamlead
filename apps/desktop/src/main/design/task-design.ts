@@ -68,6 +68,8 @@ export function designSkipNote(state: DesignState | undefined, taskLogs: string 
 export interface DesignCompare {
   /** `notShown`: why QA could not open this frame in the running app (the task then waits for the owner) */
   screens: Array<{ file: string; width: number; built?: string; notShown?: string; differences: Array<{ severity: 'blocking' | 'minor'; text: string }> }>;
+  /** The project's other screens that changed since the last merge, with QA's verdict (the screen check) */
+  regressions?: Array<{ id: string; width: number; verdict: 'expected' | 'regression'; why: string }>;
 }
 
 /** QA's comparison of the built pages with the design, or null. */
@@ -92,7 +94,18 @@ export function parseCompare(raw: string): DesignCompare | null {
         differences,
       });
     }
-    return { screens };
+    const regressions: NonNullable<DesignCompare['regressions']> = [];
+    for (const item of (Array.isArray((parsed as { regressions?: unknown }).regressions) ? (parsed as { regressions: unknown[] }).regressions : []).slice(0, 60)) {
+      const r = (item ?? {}) as Record<string, unknown>;
+      if (typeof r.id !== 'string' || !r.id || (r.verdict !== 'expected' && r.verdict !== 'regression')) continue;
+      regressions.push({
+        id: r.id.slice(0, 200),
+        width: typeof r.width === 'number' && Number.isFinite(r.width) ? r.width : 0,
+        verdict: r.verdict,
+        why: typeof r.why === 'string' ? r.why.replace(/\s+/g, ' ').trim().slice(0, 500) : '',
+      });
+    }
+    return regressions.length ? { screens, regressions } : { screens };
   } catch {
     return null;
   }

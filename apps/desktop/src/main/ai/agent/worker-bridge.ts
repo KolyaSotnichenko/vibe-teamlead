@@ -313,6 +313,9 @@ export class WorkerBridge extends EventEmitter {
       case 'render-diagram':
         void this.renderDiagram(message.requestId, message.path);
         break;
+      case 'screen-check':
+        void this.screenCheck(message.requestId, message.url, message.specDir, message.exclude);
+        break;
 
       case 'memory-request':
         void this.handleMemoryRequest(message.requestId, message.specId, message.request);
@@ -346,6 +349,30 @@ export class WorkerBridge extends EventEmitter {
       reply = { type: 'render-result', requestId, ok: true, ...rendered };
     } catch (error) {
       reply = { type: 'render-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    this.worker?.postMessage(reply);
+  }
+
+  /**
+   * The catalog's screens of the task's running app, compared with the last merge's pictures
+   * (preview/screen-check.ts); always replies, never throws.
+   */
+  private async screenCheck(requestId: string, url: string, specDir: string, exclude: string[]): Promise<void> {
+    let reply: MainToWorkerMessage;
+    try {
+      const project = this.projectId ? projectStore.getProject(this.projectId) : undefined;
+      if (!project) throw new Error('No project for this task');
+      const { catalogPlace, readCatalog } = await import('../design/screen-catalog');
+      const { runScreenCheck } = await import('../../preview/screen-check');
+      const { electronScreenDeps } = await import('../../preview/screen-capture');
+      const place = catalogPlace(project.path);
+      const result = await runScreenCheck(
+        { baseUrl: url, catalog: readCatalog(place), baselineDir: place.baseline, outDir: path.join(specDir, 'regression'), exclude: new Set(exclude) },
+        electronScreenDeps,
+      );
+      reply = { type: 'screen-check-result', requestId, ok: true, result };
+    } catch (error) {
+      reply = { type: 'screen-check-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
     }
     this.worker?.postMessage(reply);
   }

@@ -64,6 +64,15 @@ describe('DesignTab', () => {
     expect(screen.queryByText('design.compare.matches')).not.toBeInTheDocument();
   });
 
+  it("lists the project's other screens that changed, with QA's reason", async () => {
+    setup(
+      design({ waiting: null, compare: { screens: [], regressions: [{ id: 'screens/my-tasks.html', width: 1280, verdict: 'expected', why: 'Shared button restyled' }] } }),
+      { status: 'human_review' },
+    );
+    expect(await screen.findByText('design.compare.otherScreens')).toBeInTheDocument();
+    expect(screen.getByText('Shared button restyled')).toBeInTheDocument();
+  });
+
   it('approves the wireframes the task waits at', async () => {
     const api = setup(design());
     fireEvent.click(await screen.findByRole('button', { name: 'design.approveWireframes' }));

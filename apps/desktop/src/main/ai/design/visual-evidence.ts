@@ -30,6 +30,8 @@ export interface VisualEvidence {
   problems: string[];
   /** Frames left out with a reason: the owner looks at them before the task merges */
   notShown: NotShownFrame[];
+  /** Screens outside the task that changed, which QA judged the task meant to change (when any were given) */
+  expected?: Array<{ id: string; width: number; why: string }>;
 }
 
 export const COMPARE_FILE = 'design_compare.json';
@@ -120,14 +122,24 @@ function screenshotProblem(specDir: string, built: string, since: number): strin
  * time of the last commit (screenshots older than it show older code); `browser` is whether the
  * session had browser tools: with them at least one frame must be a real screenshot. Never throws.
  */
-export function checkVisualEvidence(options: { specDir: string; frames: EvidenceFrame[]; since: number; browser: boolean }): VisualEvidence {
+export function checkVisualEvidence(options: {
+  specDir: string;
+  frames: EvidenceFrame[];
+  since: number;
+  browser: boolean;
+  /** Screens of the project's catalog outside this task that look different since the last merge (screen check) */
+  changed?: Array<{ id: string; width: number }>;
+}): VisualEvidence {
   const { specDir, frames, since, browser } = options;
-  if (!frames.length) return { problems: [], notShown: [] };
+  const changed = options.changed ?? [];
+  if (!frames.length && !changed.length) return { problems: [], notShown: [], ...(options.changed ? { expected: [] } : {}) };
 
   let entries: Array<Record<string, unknown>> | null = null;
+  let regressions: Array<Record<string, unknown>> = [];
   try {
-    const parsed = JSON.parse(readFileSync(path.join(specDir, COMPARE_FILE), 'utf-8')) as { screens?: unknown };
-    if (Array.isArray(parsed?.screens)) entries = parsed.screens.map((s) => (s ?? {}) as Record<string, unknown>);
+    const parsed = JSON.parse(readFileSync(path.join(specDir, COMPARE_FILE), 'utf-8')) as { screens?: unknown; regressions?: unknown };
+    entries = Array.isArray(parsed?.screens) ? parsed.screens.map((s) => (s ?? {}) as Record<string, unknown>) : frames.length ? null : [];
+    if (Array.isArray(parsed?.regressions)) regressions = parsed.regressions.map((r) => (r ?? {}) as Record<string, unknown>);
   } catch {
     // missing or not JSON
   }
@@ -174,10 +186,21 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
     const more = missing.length > MAX_LISTED ? ` and ${missing.length - MAX_LISTED} more` : '';
     problems.push(`No screenshot and no reason for ${missing.length} frame(s): ${listed}${more}`);
   }
-  if (browser && shown === 0 && !problems.length) {
+  if (browser && frames.length && shown === 0 && !problems.length) {
     problems.push('No screen was opened in the running app. Start it, sign in with its test sign-in, make the data a screen needs, and take the screenshots; if the app cannot start, that is a critical issue: reject the task');
   }
-  return { problems, notShown };
+  // Screens the task never named that look different since the last merge: each judged
+  const expected: Array<{ id: string; width: number; why: string }> = [];
+  for (const c of changed) {
+    const verdict = regressions.find((r) => r.id === c.id && r.width === c.width);
+    const why = text(verdict?.why);
+    const where = `${c.id} at ${c.width} px`;
+    if (!verdict) problems.push(`${where} changed since the last merge and has no verdict in "regressions"`);
+    else if (verdict.verdict === 'regression') problems.push(`${where} is marked a regression: reject the task with it as an issue instead`);
+    else if (verdict.verdict !== 'expected' || !why) problems.push(`${where}: a verdict is "expected" with why the task changed it, or "regression"`);
+    else expected.push({ ...c, why });
+  }
+  return { problems, notShown, ...(options.changed ? { expected } : {}) };
 }
 
 const DESIGN_REF = /^(base\/)?(wireframes|screens)\/[A-Za-z0-9_][A-Za-z0-9._-]{0,120}\.html$/;

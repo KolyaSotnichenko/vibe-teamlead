@@ -255,6 +255,21 @@ export function DesignTab({ task }: { task: Task }) {
           </>
         )}
 
+        {design.compare?.regressions && design.compare.regressions.length > 0 && (
+          <section aria-labelledby="design-other-screens" className="space-y-2 border-t border-foreground pt-4">
+            <h3 id="design-other-screens" className="font-mono text-xs uppercase text-muted-foreground">{t('design.compare.otherScreens')}</h3>
+            <ul className="space-y-1 text-sm">
+              {design.compare.regressions.map((r) => (
+                <li key={`${r.id}-${r.width}`} className="flex gap-2">
+                  <span className={cn('shrink-0 font-mono text-[11px] uppercase', r.verdict === 'regression' ? 'text-destructive' : 'text-muted-foreground')}>{t(`design.compare.${r.verdict}`)}</span>
+                  <span className="text-foreground">{r.id} · {r.width}px</span>
+                  <span className="text-muted-foreground">{r.why}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {design.compare && design.compare.screens.length > 0 && (
           <section aria-labelledby="design-compare" className="space-y-3 border-t border-foreground pt-4">
             <h3 id="design-compare" className="font-mono text-xs uppercase text-muted-foreground">{t('design.compare.title')}</h3>
