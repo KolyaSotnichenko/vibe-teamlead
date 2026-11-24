@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.70 - 2026-11-24
+
+- A task stopped by an update or by quitting goes back in the queue when the app starts, first, and goes on from where it stopped. Before, it went to Planning (or to review) and the queue started the next task, so an update changed the order you had set.
+
 ## 2.0.0-beta.69 - 2026-11-24
 
 - Pipelines: Auto no longer decides from a task's words. It ran the full pipeline for any task whose text said auth, token or migration, which made every repair of main full (its text is the failing output), and for every task from a spec document whatever its size. Now the complexity assessor reads each task, those from a spec document included, and chooses: a task that changes sign-in or access, money, personal data or the database schema is full, judged by what it changes. Quick fixes from the preview and repairs of main run the short pipeline, with its QA review.
