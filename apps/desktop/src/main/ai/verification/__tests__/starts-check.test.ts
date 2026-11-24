@@ -152,6 +152,17 @@ describe('the start-up check', () => {
     expect(runCommand.mock.calls.map(([command]) => command)).toEqual([]);
   });
 
+  // The recipe comes from the repository: an address of its own would send the migrations elsewhere
+  it("gives the migrations and seed no database address from the recipe, only the copy's own", async () => {
+    const recipe = { ...RECIPE, env: { PROD_CONN: 'postgres://me:pw@prod.example.com/app', FEATURE_X: 'on' }, steps: { install: [], build: [], migrate: [{ dir: 'apps/api', command: 'make migrate' }] } };
+    const runCommand = vi.fn(async (_command: string, _cwd?: string, _env?: Record<string, string>) => ({ code: 0, output: '' }));
+    const { options } = setup({ 'preview.json': JSON.stringify(recipe) }, { runCommand, started: [{ kind: 'postgres', url: 'postgres://t:t@127.0.0.1:55432/t' }] });
+    await startsCheck(options);
+    const env = runCommand.mock.calls.find(([command]) => command === 'make migrate')?.[2] ?? {};
+    expect(JSON.stringify(env)).not.toContain('prod.example.com');
+    expect(env.FEATURE_X).toBe('on');
+  });
+
   it("runs the recipe's install first, in its folder", async () => {
     const recipe = { ...RECIPE, steps: { install: [{ dir: 'apps/api', command: 'make deps' }], build: [] } };
     const runCommand = vi.fn(async (_command: string, _cwd?: string) => ({ code: 0, output: '' }));

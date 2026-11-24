@@ -26,7 +26,7 @@ import { isPathContained } from '../ai/security/path-containment';
 import { examplePort } from './example-urls';
 import { errorInLog } from './log-errors';
 import { startRecipeServices } from './start-services';
-import { baseEnvVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
+import { baseEnvVars, databaseStepVars, envOf, exampleTexts, serviceEnvVars } from './preview-env';
 import { type DisplacedPorts, findHardcodedAddresses, proxiedPaths } from './hardcoded-addresses';
 import { localPortFree } from './preview-ports';
 import { probeThroughPage, type ProbeResult } from './probe';
@@ -287,9 +287,6 @@ function envFor(session: Session, dir: string, files: string[]): Record<string, 
   return envOf(varsFor(session, dir, files));
 }
 
-/** What the preview sets itself: the owner's value over one of these points the app somewhere else */
-const PREVIEWS_OWN = new Set<PreviewEnvVar['source']>(['database', 'service', 'mail', 'blocked']);
-
 /**
  * What a migration or a seed runs with. These commands change a database, so the only
  * connection settings they get are the preview's own: the address of what it started, or
@@ -300,14 +297,7 @@ const PREVIEWS_OWN = new Set<PreviewEnvVar['source']>(['database', 'service', 'm
  * Their other values (a secret key, a feature switch) pass. What was held back is said once.
  */
 function databaseCommandEnv(session: Session, dir: string, files: string[]): Record<string, string> {
-  const held: string[] = [];
-  const vars = varsFor(session, dir, files).flatMap((v): PreviewEnvVar[] => {
-    if (v.source !== 'override' && v.source !== 'recipe') return [v];
-    const replacesOwn = v.automatic !== undefined && PREVIEWS_OWN.has(v.automatic.source);
-    if (!replacesOwn && !isConnectionSetting(v.name, v.value)) return [v];
-    held.push(v.name);
-    return v.automatic ? [{ name: v.name, value: v.automatic.value, source: v.automatic.source }] : [];
-  });
+  const { vars, held } = databaseStepVars(varsFor(session, dir, files));
   if (held.length) {
     const names = held.join(', ');
     sayOnce(session, say('heldBack', `Migrations and seed data run only against what the preview started: they did not get your or the recipe's ${names}.`, { names }));

@@ -143,6 +143,35 @@ describe('the app QA works against', () => {
     expect(docker.mock.calls.some(([args]) => args[0] === 'ps' && args.join(' ').includes('label=vibe-teamlead-verify=qa-7'))).toBe(true);
   });
 
+  it("gives the migrations and seed no database address from the recipe, and says so", async () => {
+    const recipe = { ...RECIPE, env: { PROD_CONN: 'postgres://me:pw@prod.example.com/app' } };
+    const { deps, commands } = setup({ 'package.json': '{}', 'preview.json': JSON.stringify(recipe), 'docker-compose.yml': COMPOSE });
+    const result = await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps).start();
+    expect(commands.map((c) => c.command)).toEqual(['pnpm migrate:up', 'pnpm db:seed']);
+    expect(commands.every((c) => !JSON.stringify(c.env).includes('prod.example.com'))).toBe(true);
+    expect(result).toMatchObject({ ok: true, notices: [expect.stringMatching(/PROD_CONN/)] });
+  });
+
+  it("runs the recipe's own install step", async () => {
+    const recipe = { ...RECIPE, steps: { ...RECIPE.steps, install: [{ dir: 'apps/api', command: 'make deps' }] } };
+    const { deps, commands } = setup({ 'package.json': '{}', 'preview.json': JSON.stringify(recipe), 'docker-compose.yml': COMPOSE });
+    await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps).start();
+    expect(commands[0].command).toBe('make deps');
+  });
+
+  it("a secret cut through by a server's log tail never shows", async () => {
+    const { deps } = setup();
+    const secret = 'S3CRET-VALUE-0123456789';
+    deps.servers.startServer = vi.fn(async () => {
+      // A log tail cut through the value, as dev-servers gives it
+      throw new Error(`app-api did not listen. Log:\n${secret.slice(5)} rest of the line\nnext line`);
+    });
+    const result = await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa', projectEnv: { API_TOKEN: secret } }, deps).start();
+    const reason = result.ok ? '' : result.reason;
+    expect(reason).not.toMatch(/0123456789/);
+    expect(reason).toContain('next line');
+  });
+
   it('starts once when asked twice at the same time', async () => {
     const { deps, started } = setup();
     const app = createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps);

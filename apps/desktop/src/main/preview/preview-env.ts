@@ -207,3 +207,25 @@ export function plannedEnv(
     })),
   };
 }
+
+/** What the app sets itself: a value of the owner's or the recipe's over one of these points the app somewhere else */
+const APPS_OWN = new Set<PreviewEnvSource>(['database', 'service', 'mail', 'blocked']);
+
+/**
+ * What a migration or a seed runs with. These commands change a database, so the only connection
+ * settings they get are those of what the app started, or nothing. A value of the owner's or the
+ * recipe's (from the repository) that says where a database is (by its name, its scheme or its
+ * shape, on this machine or another), or that replaces what the app set, is held back: the app's
+ * value takes its place, or the variable is left out. Their other values pass. Pure.
+ */
+export function databaseStepVars(vars: PreviewEnvVar[]): { vars: PreviewEnvVar[]; held: string[] } {
+  const held: string[] = [];
+  const kept = vars.flatMap((v): PreviewEnvVar[] => {
+    if (v.source !== 'override' && v.source !== 'recipe') return [v];
+    const replacesOwn = v.automatic !== undefined && APPS_OWN.has(v.automatic.source);
+    if (!replacesOwn && !isConnectionSetting(v.name, v.value)) return [v];
+    held.push(v.name);
+    return v.automatic ? [{ name: v.name, value: v.automatic.value, source: v.automatic.source }] : [];
+  });
+  return { vars: kept, held };
+}

@@ -16,7 +16,7 @@ import { STARTS_CHECK_COMMAND } from '../../../shared/utils/verification-summary
 import type { PreviewService } from '../../../shared/types/project';
 import { isPathContained } from '../security/path-containment';
 import { workspaceLibraries } from '../../preview/detect-services';
-import { baseEnvVars, envOf, exampleTexts } from '../../preview/preview-env';
+import { baseEnvVars, databaseStepVars, envOf, exampleTexts } from '../../preview/preview-env';
 import { resolveRecipe } from '../../preview/recipe';
 import { startRecipeServices, type StartServicesDeps } from '../../preview/start-services';
 import type { ComposeWiring } from './compose-env';
@@ -116,9 +116,11 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
     for (const name of servers.splice(0).reverse()) await options.deps.stopServer(name).catch(() => false);
   };
 
-  const step = async (command: PreviewRecipeCommand): Promise<StartsResult | null> => {
+  /** A migration or a seed changes a database: it gets no address from the recipe, only the copy's own (databaseStepVars) */
+  const step = async (command: PreviewRecipeCommand, changesDatabase = false): Promise<StartsResult | null> => {
     check();
-    const result = await options.runCommand(command.command, resolve(cwd, command.dir), envOf(varsFor(command.dir)));
+    const vars = varsFor(command.dir);
+    const result = await options.runCommand(command.command, resolve(cwd, command.dir), envOf(changesDatabase ? databaseStepVars(vars).vars : vars));
     check();
     if (result.timedOut) return { outcome: 'timed_out', tail: tail(`${command.command}\n${result.output}`) };
     if (result.code === 0) return null;
@@ -131,8 +133,12 @@ export async function startsCheck(options: StartsCheckOptions): Promise<StartsRe
     // recipe's migrations and seed: only on the copy's own throwaway database, never one the owner pointed at
     const build: PreviewRecipeCommand[] = recipe.steps?.build ?? workspaceLibraries({ files, read }, services).map((library) => ({ dir: library.dir, command: library.command }));
     const database = options.migratable ? [...(recipe.steps?.migrate ?? []), ...(recipe.steps?.seed ?? [])] : [];
-    for (const command of [...(recipe.steps?.install ?? []), ...build, ...database]) {
+    for (const command of [...(recipe.steps?.install ?? []), ...build]) {
       const failed = await step(command);
+      if (failed) return failed;
+    }
+    for (const command of database) {
+      const failed = await step(command, true);
       if (failed) return failed;
     }
 

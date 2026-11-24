@@ -12,13 +12,13 @@ import { resolve } from 'node:path';
 import type { PreviewService } from '../../../shared/types/project';
 import { workspaceLibraries } from '../../preview/detect-services';
 import { examplePort } from '../../preview/example-urls';
-import { baseEnvVars, envOf, exampleTexts } from '../../preview/preview-env';
+import { baseEnvVars, databaseStepVars, envOf, exampleTexts } from '../../preview/preview-env';
 import { resolveRecipe } from '../../preview/recipe';
 import { type StartServicesDeps, startRecipeServices } from '../../preview/start-services';
 import { isPathContained } from '../security/path-containment';
 import { composeMovedNotice, createRunNetwork, startComposeServices } from '../verification/compose-runner';
 import { bucketsOf, composeSecrets, composeServices } from '../verification/compose-services';
-import { composeFilesInOrder, imagesFromComposeFiles, namesDatabase, ownDatabaseSetting } from '../verification/detect-checks';
+import { composeFilesInOrder, imagesFromComposeFiles, isConnectionSetting, namesDatabase, ownDatabaseSetting } from '../verification/detect-checks';
 import { type DockerRun, startTestServices, VERIFY_LABEL } from '../verification/test-services';
 
 export interface TaskAppDeps {
@@ -50,6 +50,8 @@ export type TaskAppResult =
 
 const SERVER_TIMEOUT_MS = 180_000;
 const TAIL = 2000;
+/** The shortest end of a value masked at the start of a line */
+const PART = 6;
 /** A real env file in the repository: tools may read it before anything the app sets */
 const COMMITTED_ENV = /(^|\/)\.env(\.[\w-]+)?$/;
 
@@ -71,9 +73,23 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
   const stops: Array<() => Promise<void>> = [];
   /** Values never shown: the owner's, and those of the containers a start made */
   const secrets: string[] = Object.values(projectEnv);
-  /** On the whole text, before any cut: a cut through a value would leave a part no match finds. Longest first. */
-  const redact = (text: string) =>
-    [...secrets].sort((a, b) => b.length - a.length).reduce((out, value) => (value.length >= 4 ? out.split(value).join('***') : out), text);
+  /**
+   * Longest first. A text that was cut before it got here (a server's log tail) may begin a line with
+   * the end of a value: such a start of a line is masked too.
+   */
+  const redact = (text: string) => {
+    const values = [...secrets].filter((value) => value.length >= 4).sort((a, b) => b.length - a.length);
+    const whole = values.reduce((out, value) => out.split(value).join('***'), text);
+    return whole
+      .split('\n')
+      .map((line) => {
+        for (const value of values) {
+          for (let size = value.length - 1; size >= PART; size -= 1) if (line.startsWith(value.slice(-size))) return `***${line.slice(size)}`;
+        }
+        return line;
+      })
+      .join('\n');
+  };
   /** The end of a text, masked first */
   const tailOf = (text: string) => redact(text).slice(-TAIL);
 
@@ -140,6 +156,14 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
       const wiring = { planned: compose, started: others.started };
       const varsFor = (dir: string) => baseEnvVars({ dir, ...exampleTexts(files, read, dir), started: database.started, compose: wiring, recipe: recipe.env });
       const envFor = (dir: string) => ({ ...envOf(varsFor(dir)), ...projectEnv });
+      // A migration or a seed changes a database: no address from the recipe or the owner, only the fresh one's
+      const heldBack = new Set<string>();
+      const databaseEnvFor = (dir: string) => {
+        const { vars, held } = databaseStepVars(varsFor(dir));
+        for (const name of held) heldBack.add(name);
+        const owners = Object.fromEntries(Object.entries(projectEnv).filter(([name, value]) => !isConnectionSetting(name, value)));
+        return { ...envOf(vars), ...owners };
+      };
 
       // Migrations and seed only on this fresh database: an address the owner's settings or a committed
       // env file give may be any database, so it is left alone (as the app's checks do)
@@ -149,15 +173,19 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
       if (ownedBy) notices.push(`${ownedBy} names a database, so the app uses that one: no migration or seed was run.`);
       const install = files.includes('package.json') ? deps.installCommand() : null;
       const build = recipe.steps?.build ?? workspaceLibraries({ files, read }, services).map((library) => ({ dir: library.dir, command: library.command }));
-      const steps = [...(install ? [{ dir: '', command: install }] : []), ...build, ...(fresh ? [...(recipe.steps?.migrate ?? []), ...(recipe.steps?.seed ?? [])] : [])];
+      const changesDatabase = (fresh ? [...(recipe.steps?.migrate ?? []), ...(recipe.steps?.seed ?? [])] : []).map((step) => ({ ...step, database: true }));
+      const steps = [...(install ? [{ dir: '', command: install }] : []), ...(recipe.steps?.install ?? []), ...build, ...changesDatabase];
       for (const step of steps) {
-        const result = await deps.runCommand(step.command, resolve(worktree, step.dir), envFor(step.dir));
+        const env = 'database' in step ? databaseEnvFor(step.dir) : envFor(step.dir);
+        const result = await deps.runCommand(step.command, resolve(worktree, step.dir), env);
         check();
         if (result.code !== 0) {
           await release();
           return { ok: false, reason: `${redact(step.command)} failed (exit ${result.code}):\n${tailOf(result.output)}` };
         }
       }
+
+      if (heldBack.size) notices.push(`Migrations and seed ran only against the fresh database: they did not get ${[...heldBack].join(', ')} from the recipe.`);
 
       const up = await startRecipeServices(
         {
