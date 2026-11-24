@@ -16,9 +16,9 @@ import { baseEnvVars, envOf, exampleTexts } from '../../preview/preview-env';
 import { resolveRecipe } from '../../preview/recipe';
 import { type StartServicesDeps, startRecipeServices } from '../../preview/start-services';
 import { isPathContained } from '../security/path-containment';
-import { bucketsOf, composeServices } from '../verification/compose-services';
 import { composeMovedNotice, createRunNetwork, startComposeServices } from '../verification/compose-runner';
-import { composeFilesInOrder, imagesFromComposeFiles } from '../verification/detect-checks';
+import { bucketsOf, composeSecrets, composeServices } from '../verification/compose-services';
+import { composeFilesInOrder, imagesFromComposeFiles, namesDatabase } from '../verification/detect-checks';
 import { type DockerRun, startTestServices, VERIFY_LABEL } from '../verification/test-services';
 
 export interface TaskAppDeps {
@@ -34,31 +34,61 @@ export interface TaskAppDeps {
   portOpen?: (port: number) => Promise<boolean>;
 }
 
+export interface TaskAppOptions {
+  worktree: string;
+  specDir: string;
+  /** Tells this app's containers apart from other runs */
+  label: string;
+  saved?: PreviewService[];
+  /** The owner's values from Settings: they win, and are never shown */
+  projectEnv?: Record<string, string>;
+}
+
 export type TaskAppResult =
   | { ok: true; url: string; reused: boolean; services: string[]; database?: string; notices?: string[] }
   | { ok: false; reason: string };
 
 const SERVER_TIMEOUT_MS = 180_000;
 const TAIL = 2000;
+/** The owner's settings say where a database is: as in the app's checks, nothing is migrated there */
+const DATABASE_NAME = /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i;
+/** A real env file in the repository: tools may read it before anything the app sets */
+const COMMITTED_ENV = /(^|\/)\.env(\.[\w-]+)?$/;
 
-/** The app of one task; `label` tells its containers apart from other runs. */
-export function createTaskApp(options: { worktree: string; specDir: string; label: string; saved?: PreviewService[] }, deps: TaskAppDeps) {
+class Stopped extends Error {
+  constructor() {
+    super('The app was stopped while it started');
+  }
+}
+
+/** The app of one task. */
+export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
   const { worktree, specDir, label } = options;
+  const projectEnv = options.projectEnv ?? {};
   let running: Extract<TaskAppResult, { ok: true }> | undefined;
+  let starting: Promise<TaskAppResult> | undefined;
+  /** Bumped by every stop: a start that began before it ends at its next step */
+  let generation = 0;
   const servers: string[] = [];
   const stops: Array<() => Promise<void>> = [];
+  /** Values never shown: the owner's, and those of the containers a start made */
+  const secrets: string[] = Object.values(projectEnv);
+  const redact = (text: string) => secrets.reduce((out, value) => (value.length >= 4 ? out.split(value).join('***') : out), text);
 
-  const stop = async () => {
+  const release = async () => {
     for (const name of servers.splice(0).reverse()) await deps.servers.stopServer(name).catch(() => false);
     for (const stopOne of stops.splice(0).reverse()) await stopOne().catch(() => {});
     running = undefined;
   };
 
-  const start = async (): Promise<TaskAppResult> => {
-    if (running) return { ...running, reused: true };
+  const run = async (mine: number): Promise<TaskAppResult> => {
+    const check = () => {
+      if (mine !== generation) throw new Stopped();
+    };
     try {
       const files = await deps.listFiles();
       const read = deps.read;
+      check();
       const { recipe } = resolveRecipe({ files, read, saved: options.saved ?? [], contained: (dir) => isPathContained(resolve(worktree, dir), worktree).contained });
       const services = recipe.kind === 'web' ? (recipe.services ?? []) : [];
       if (services.filter((service) => service.page).length !== 1) {
@@ -71,11 +101,14 @@ export function createTaskApp(options: { worktree: string; specDir: string; labe
       const compose = composeServices(composeTexts);
       const network = images.length || compose.length ? await createRunNetwork(deps.docker, VERIFY_LABEL, label) : undefined;
       if (network) stops.push(network.remove);
+      check();
       const database = await startTestServices(images, { docker: deps.docker, label, network: network?.name });
       stops.push(database.stop);
+      secrets.push(...database.started.flatMap((service) => [service.url, new URL(service.url).password]));
+      check();
       if (database.status === 'unavailable') {
-        await stop();
-        return { ok: false, reason: `The database could not start: ${database.reason ?? 'Docker did not answer'}` };
+        await release();
+        return { ok: false, reason: redact(`The database could not start: ${database.reason ?? 'Docker did not answer'}`) };
       }
       // As the Preview does: a compose service takes the compose file's own host port when it is free (and
       // not one of the project's servers), so an address the project hard-codes (Azurite's 127.0.0.1:10000) reaches it
@@ -96,20 +129,28 @@ export function createTaskApp(options: { worktree: string; specDir: string; labe
         hostPortFree: async (port) => !ownPorts.includes(port) && (await deps.servers.portFree(port)),
       });
       stops.push(others.stop);
+      secrets.push(...composeSecrets(others.started));
+      check();
       const notices = [...others.failed.map((failure) => `${failure.name}: ${failure.reason}`), ...others.moved.map(composeMovedNotice)];
       const wiring = { planned: compose, started: others.started };
       const varsFor = (dir: string) => baseEnvVars({ dir, ...exampleTexts(files, read, dir), started: database.started, compose: wiring, recipe: recipe.env });
+      const envFor = (dir: string) => ({ ...envOf(varsFor(dir)), ...projectEnv });
 
-      // Libraries first, then the recipe's migrations and seed: only on this fresh database
-      const ownDatabase = database.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
-      const build = recipe.steps?.build ?? workspaceLibraries({ files, read }, services).map((library) => ({ dir: library.dir, command: library.command }));
+      // Migrations and seed only on this fresh database: an address the owner's settings or a committed
+      // env file give may be any database, so it is left alone (as the app's checks do)
+      const ownedBy = Object.keys(projectEnv).find((name) => DATABASE_NAME.test(name))
+        ?? files.find((path) => COMMITTED_ENV.test(path) && !/\.(example|sample)$/.test(path) && namesDatabase(read(path) ?? ''));
+      const fresh = !ownedBy && database.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
+      if (ownedBy) notices.push(`${ownedBy} names a database, so the app uses that one: no migration or seed was run.`);
       const install = files.includes('package.json') ? deps.installCommand() : null;
-      const steps = [...(install ? [{ dir: '', command: install }] : []), ...build, ...(ownDatabase ? [...(recipe.steps?.migrate ?? []), ...(recipe.steps?.seed ?? [])] : [])];
+      const build = recipe.steps?.build ?? workspaceLibraries({ files, read }, services).map((library) => ({ dir: library.dir, command: library.command }));
+      const steps = [...(install ? [{ dir: '', command: install }] : []), ...build, ...(fresh ? [...(recipe.steps?.migrate ?? []), ...(recipe.steps?.seed ?? [])] : [])];
       for (const step of steps) {
-        const result = await deps.runCommand(step.command, resolve(worktree, step.dir), envOf(varsFor(step.dir)));
+        const result = await deps.runCommand(step.command, resolve(worktree, step.dir), envFor(step.dir));
+        check();
         if (result.code !== 0) {
-          await stop();
-          return { ok: false, reason: `${step.command} failed (exit ${result.code}):\n${result.output.slice(-TAIL)}` };
+          await release();
+          return { ok: false, reason: redact(`${step.command} failed (exit ${result.code}):\n${result.output.slice(-TAIL)}`) };
         }
       }
 
@@ -122,25 +163,45 @@ export function createTaskApp(options: { worktree: string; specDir: string; labe
           read,
           baseVars: varsFor,
           timeoutMs: SERVER_TIMEOUT_MS,
-          check: () => {},
+          check,
           onServer: (name) => servers.push(name),
         },
         deps.servers,
       );
+      check();
       running = {
         ok: true,
         url: up.url,
         reused: false,
         services: up.ordered.map((service) => `${service.name} at http://localhost:${up.ports[service.name]}`),
-        ...(ownDatabase ? { database: database.started.map((service) => service.kind).join(', ') } : {}),
-        ...(notices.length ? { notices } : {}),
+        ...(fresh ? { database: database.started.map((service) => service.kind).join(', ') } : {}),
+        ...(notices.length ? { notices: notices.map(redact) } : {}),
       };
       return running;
     } catch (error) {
       const { message, logTail = '' } = error as Error & { logTail?: string };
-      await stop();
-      return { ok: false, reason: `${message}${logTail ? `\n${logTail.slice(-TAIL)}` : ''}` };
+      // After a stop, the stop releases what was started
+      if (!(error instanceof Stopped)) await release();
+      return { ok: false, reason: redact(`${message}${logTail ? `\n${logTail.slice(-TAIL)}` : ''}`) };
     }
+  };
+
+  /** The running app, the start under way, or a new start: one at a time */
+  const start = async (): Promise<TaskAppResult> => {
+    if (running) return { ...running, reused: true };
+    if (!starting) {
+      starting = run(generation).finally(() => {
+        starting = undefined;
+      });
+    }
+    return starting;
+  };
+
+  /** Ends a start under way at its next step, then stops everything this app started */
+  const stop = async () => {
+    generation += 1;
+    await starting?.catch(() => undefined);
+    await release();
   };
 
   return { start, stop };

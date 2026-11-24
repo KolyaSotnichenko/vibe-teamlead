@@ -1481,7 +1481,10 @@ function startTaskApp(session: SerializableSessionConfig) {
       specDir: session.specDir,
       projectEnv: session.verification?.env,
       saved: session.verification?.previewServices,
+      signal: abortController.signal,
     });
+    // A task stopped while its app starts: the start ends and nothing is left running
+    abortController.signal.addEventListener('abort', () => void taskApp?.stop(), { once: true });
     return taskApp.start();
   };
 }

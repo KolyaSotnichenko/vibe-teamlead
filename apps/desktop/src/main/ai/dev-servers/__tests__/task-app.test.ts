@@ -105,6 +105,55 @@ describe('the app QA works against', () => {
     expect(result).toMatchObject({ ok: true, notices: [expect.stringMatching(/azurite[\s\S]*10000/)] });
   });
 
+  // As the app's checks: an address from the owner's settings may be any database, so nothing is migrated or seeded there
+  it("runs no migration or seed when the project's settings or a committed .env name a database", async () => {
+    const { deps, commands } = setup();
+    const owned = await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa', projectEnv: { DATABASE_URL: 'postgres://me:pw@db.example.com/prod' } }, deps).start();
+    expect(commands).toEqual([]);
+    expect(owned).toMatchObject({ ok: true, notices: [expect.stringMatching(/DATABASE_URL/)] });
+    expect(owned).not.toHaveProperty('database');
+    // The owner's value reaches the servers, not the throwaway one
+    const committed = setup({ 'package.json': '{}', 'preview.json': JSON.stringify(RECIPE), 'docker-compose.yml': COMPOSE, '.env': 'DATABASE_URL=postgres://u:p@prod.example.com/app\n' });
+    await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, committed.deps).start();
+    expect(committed.commands).toEqual([]);
+  });
+
+  it('starts once when asked twice at the same time', async () => {
+    const { deps, started } = setup();
+    const app = createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps);
+    const [a, b] = await Promise.all([app.start(), app.start()]);
+    expect(started).toEqual(['app-api', 'app-web']);
+    expect([a, b].every((r) => r.ok)).toBe(true);
+  });
+
+  it('a stop during the start ends it there and leaves nothing running', async () => {
+    const { deps, docker, started } = setup();
+    let release = () => {};
+    deps.runCommand = vi.fn(() => new Promise<{ code: number; output: string }>((resolve) => { release = () => resolve({ code: 0, output: '' }); }));
+    const app = createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps);
+    const starting = app.start();
+    await vi.waitFor(() => expect(deps.runCommand).toHaveBeenCalled());
+    const stopping = app.stop();
+    release();
+    await stopping;
+    expect(await starting).toMatchObject({ ok: false });
+    expect(started).toEqual([]);
+    expect(docker.mock.calls.some(([args]) => args[0] === 'rm' && args.includes('c1'))).toBe(true);
+  });
+
+  it("hides the owner's values and the database's password from what it answers", async () => {
+    const { deps, docker } = setup();
+    deps.runCommand = vi.fn(async (_c, _cwd, env) => ({ code: 1, output: `connect ${env.DATABASE_URL} with ${env.API_TOKEN}` }));
+    const result = await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa', projectEnv: { API_TOKEN: 'tok-secret-123' } }, deps).start();
+    const reason = result.ok ? '' : result.reason;
+    const run = docker.mock.calls.map(([args]) => args).find((args) => args[0] === 'run') ?? [];
+    const password = run.find((arg) => arg.startsWith('POSTGRES_PASSWORD='))?.split('=')[1] ?? '';
+    expect(password.length).toBeGreaterThan(8);
+    expect(reason).not.toContain(password);
+    expect(reason).not.toContain('tok-secret-123');
+    expect(reason).toContain('***');
+  });
+
   it('says why when the project has no recipe with a single page', async () => {
     const { deps } = setup({ 'README.md': '# x' });
     const result = await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps).start();

@@ -22,14 +22,14 @@ const COMMAND_TIMEOUT_MS = 10 * 60_000;
 const OUTPUT = 4000;
 
 /** The app of the task in `worktree`, started on demand and stopped with `stop`. */
-export function hostTaskApp(options: { worktree: string; specDir: string; projectEnv?: Record<string, string>; saved?: PreviewService[] }) {
+export function hostTaskApp(options: { worktree: string; specDir: string; projectEnv?: Record<string, string>; saved?: PreviewService[]; signal?: AbortSignal }) {
   const { worktree } = options;
   const projectEnv = options.projectEnv ?? {};
   const label = `qa-app-${createHash('sha256').update(worktree).digest('hex').slice(0, 12)}`;
   return createTaskApp(
-    { worktree, specDir: options.specDir, label, saved: options.saved },
+    { worktree, specDir: options.specDir, label, saved: options.saved, projectEnv },
     {
-      docker: hostDocker(process.env),
+      docker: hostDocker(process.env, options.signal),
       listFiles: async () => {
         const listed = await runProcess('git', readOnlyGitArgs(['ls-files', '-z', '--cached', '--others', '--exclude-standard']), {
           cwd: worktree,
@@ -50,7 +50,8 @@ export function hostTaskApp(options: { worktree: string; specDir: string; projec
         let output = '';
         const result = await runShell(command, {
           cwd,
-          env: verificationEnv(process.env, { ...env, ...projectEnv }),
+          env: verificationEnv(process.env, env),
+          signal: options.signal,
           timeoutMs: COMMAND_TIMEOUT_MS,
           killGroup: true,
           maxOutput: 1024,

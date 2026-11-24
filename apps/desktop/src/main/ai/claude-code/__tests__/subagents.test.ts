@@ -17,7 +17,7 @@ describe('helper subagents', () => {
     for (const a of Object.values(agents)) {
       // They inherit MCP servers and skills (no tool whitelist), minus anything that changes files
       expect(a.tools).toBeUndefined();
-      expect(a.disallowedTools).toEqual(expect.arrayContaining(['Write', 'Edit', 'MultiEdit', 'mcp__vibe-teamlead__update_subtask_status']));
+      expect(a.disallowedTools).toEqual(expect.arrayContaining(['Write', 'Edit', 'MultiEdit', 'mcp__vibe-teamlead__update_subtask_status', 'mcp__vibe-teamlead__start_dev_server', 'mcp__vibe-teamlead__start_app']));
       expect(a.model).toBe('inherit');
     }
     expect(agents.explorer.disallowedTools).toContain('Bash');
