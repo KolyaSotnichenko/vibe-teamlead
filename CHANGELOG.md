@@ -5,6 +5,7 @@ Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://
 ## 2.0.0-beta.67 - 2026-11-24
 
 - A task that changes existing screens (a redesign, a fix to the board) names them from the project's design library in its plan: each UI subtask lists the design files it builds to. The coder gets those files with what a person can use on each and is told the subtask isn't done while the page lacks something its design shows; QA must show every one of them in the running app before it can approve, not only the screens the task's own design drew. Before, a redesign task could pass with its board, task card and Gantt chart untouched.
+- Preview: a setting like `VITE_AUTH_API_SCOPE=api://<app id>/access_as_user` in a project's example settings is kept. The preview took it for a connection address and left it empty, and a web app that needs it showed a white page.
 - Sample data: specs ask for the project's seed script to create what the task's screens show, with a test user for each role for the one-click test sign-in, and the planner puts the seed in the subtask that adds the data, so the preview and QA have something to show.
 
 ## 2.0.0-beta.66 - 2026-11-24
