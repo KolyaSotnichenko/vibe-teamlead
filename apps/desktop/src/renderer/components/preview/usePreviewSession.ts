@@ -12,6 +12,7 @@ const DIALOG = '[role="dialog"], [role="alertdialog"], [data-over-preview]';
 import { useEffect, useRef, useState } from 'react';
 
 import type { PreviewStatus } from '../../../shared/types';
+import { clippingRects, visibleBounds } from './visible-bounds';
 
 /** `taskId`: a task's preview (its worktree), shown inside the task's window */
 export function usePreviewSession(projectId: string | null, enabled: boolean, taskId?: string) {
@@ -44,8 +45,9 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
       const rect = box?.isConnected ? box.getBoundingClientRect() : null;
       // A dialog the page sits in (the task's window) doesn't count; any other would be covered
       const covered = !box || Array.from(document.querySelectorAll(DIALOG)).some((dialog) => !dialog.contains(box));
-      const bounds = rect && !covered && rect.width > 0 && rect.height > 0
-        ? { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
+      // Only the part that is on screen: the view is drawn above the page, and nothing in it clips the view
+      const bounds = box && rect && !covered && rect.width > 0 && rect.height > 0
+        ? visibleBounds(rect, clippingRects(box), { width: window.innerWidth, height: window.innerHeight })
         : null;
       const key = JSON.stringify(bounds);
       if (key === last) return;
@@ -57,6 +59,8 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report);
     window.addEventListener('resize', report);
+    // A scroll anywhere (the task's window) moves the box without resizing it
+    window.addEventListener('scroll', report, true);
     const dialogs = typeof MutationObserver === 'undefined' ? null : new MutationObserver(report);
     dialogs?.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'data-over-preview'] });
 
@@ -73,6 +77,7 @@ export function usePreviewSession(projectId: string | null, enabled: boolean, ta
       dialogs?.disconnect();
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener('resize', report);
+      window.removeEventListener('scroll', report, true);
       void api.setBounds(null);
       void api.stop();
     };

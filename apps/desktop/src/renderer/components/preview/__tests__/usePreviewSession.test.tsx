@@ -56,6 +56,27 @@ describe('usePreviewSession', () => {
     expect(listener).toBeNull();
   });
 
+  // The task window scrolls; the preview ran past its bottom, over the footer and the window's edge
+  it("is cut to the part of its box the scrolling window shows, and follows the scroll", async () => {
+    const { result } = renderHook(() => usePreviewSession('p1', true));
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    let top = 400;
+    scroller.getBoundingClientRect = () => ({ left: 0, top: 100, width: 1000, height: 500 }) as DOMRect;
+    const box = document.createElement('div');
+    box.getBoundingClientRect = () => ({ left: 10, top, width: 800, height: 600 }) as DOMRect;
+    scroller.appendChild(box);
+    document.body.appendChild(scroller);
+    (result.current.boxRef as { current: HTMLDivElement | null }).current = box;
+    window.dispatchEvent(new Event('resize'));
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 400, width: 800, height: 200 }));
+
+    top = 150;
+    scroller.dispatchEvent(new Event('scroll'));
+    await vi.waitFor(() => expect(preview.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 150, width: 800, height: 450 }));
+    scroller.remove();
+  });
+
   it("hides the view while one of the app's dialogs is open, since the view would cover it", async () => {
     const { result } = renderHook(() => usePreviewSession('p1', true));
     const box = document.createElement('div');
