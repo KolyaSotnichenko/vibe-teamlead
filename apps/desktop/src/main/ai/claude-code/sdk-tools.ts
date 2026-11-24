@@ -22,6 +22,7 @@ import {
   recordDiscoveryTool,
   recordGotchaTool,
   updateQaStatusTool,
+  startAppTool,
   startDevServerTool,
   stopDevServerTool,
   tryPreviewRecipeTool,
@@ -132,6 +133,7 @@ const BUILD_TOOLS: readonly DefinedTool[] = [
   updateQaStatusTool,
   startDevServerTool,
   stopDevServerTool,
+  startAppTool,
   tryPreviewRecipeTool,
 ] as unknown as readonly DefinedTool[];
 

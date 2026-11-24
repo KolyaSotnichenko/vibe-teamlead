@@ -38,4 +38,13 @@ describe('QA reviewer prompt', () => {
     expect(reviewer).toMatch(/RUNNING\.md/);
     expect(reviewer).toMatch(/RUNNING\.md[^\n]*Minor/);
   });
+
+  // planner-mhp 042: QA started Postgres itself with Docker, and one session ended with "no API/DB running"
+  it('starts the whole app through the app (start_app), with its database, before any server of its own', () => {
+    for (const prompt of [reviewer, readFileSync(resolve(__dirname, '../../../../../prompts/qa_fixer.md'), 'utf-8')]) {
+      expect(prompt).toContain('mcp__vibe-teamlead__start_app');
+      expect(prompt.indexOf('start_app')).toBeLessThan(prompt.indexOf('start_dev_server'));
+      expect(prompt).toMatch(/Don't start databases or containers yourself/);
+    }
+  });
 });

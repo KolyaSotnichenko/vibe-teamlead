@@ -16,4 +16,5 @@ export { recordGotchaTool } from './record-gotcha';
 export { getSessionContextTool } from './get-session-context';
 export { updateQaStatusTool } from './update-qa-status';
 export { startDevServerTool, stopDevServerTool } from './dev-server';
+export { startAppTool } from './start-app';
 export { tryPreviewRecipeTool } from './try-preview-recipe';

@@ -12,6 +12,7 @@ import { getAugmentedEnv } from '../env-utils';
 import { isWindows } from '../platform';
 import { pathValue, withPath } from '../platform/env';
 import { commandFor, findOnPath, killTree, searchPath } from '../platform/exec';
+import { type PackageManager, needsInstall, packageManagerOf } from '../platform/package-manager';
 import { isUiFile } from '../ai/design/design-lint';
 
 interface Running {
@@ -154,7 +155,7 @@ export function stopStorybooksUnder(root: string): void {
   }
 }
 
-export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+export { type PackageManager, needsInstall, packageManagerOf };
 
 /** Environment for package-manager processes: the app's env with the full tool PATH. */
 export function toolEnv(): Record<string, string> {
@@ -184,19 +185,6 @@ export function storybookArgs(pm: PackageManager, script: string | undefined, po
 export function touchesStorybook(changed: string[], dir: string): boolean {
   const base = dir.replace(/^\.(\/|$)/, '').replace(/\/+$/, '');
   return changed.some((file) => isUiFile(file) && (!base || file === base || file.startsWith(`${base}/`)));
-}
-
-/** The package manager a folder uses, from its lockfile (npm when none). */
-export function packageManagerOf(root: string): PackageManager {
-  if (existsSync(path.join(root, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (existsSync(path.join(root, 'yarn.lock'))) return 'yarn';
-  if (existsSync(path.join(root, 'bun.lockb')) || existsSync(path.join(root, 'bun.lock'))) return 'bun';
-  return 'npm';
-}
-
-/** Dependencies are missing when neither the Storybook folder nor the root has node_modules. */
-export function needsInstall(root: string, dir: string): boolean {
-  return !existsSync(path.join(root, dir, 'node_modules')) && !existsSync(path.join(root, 'node_modules'));
 }
 
 const installs = new Map<string, Promise<void>>();

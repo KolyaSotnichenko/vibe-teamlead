@@ -67,6 +67,7 @@ import { baseFailures } from '../verification/base-fix';
 import { changedFilesSinceBase, uiChangedSince } from '../orchestration/qa-browser-scope';
 import { listCommittedFiles, takeWorkTreeSnapshot } from '../orchestration/reviewer-changes';
 import { cleanUpLeftovers, killAllDevServersNow, stopAllDevServers, stopWorktreeContainers } from '../dev-servers/dev-servers';
+import { hostTaskApp } from '../dev-servers/task-app-host';
 import { createSecurityFollowup } from '../security/followup-task';
 import { formatFixRequest, isBlocking, runStrix } from '../security/strix';
 import { projectRootFor } from '../usage/usage-ledger';
@@ -1430,9 +1431,10 @@ async function runQualityAssurance(
       // The reviewer's verdict tool refuses an approval that doesn't show the design in the running app
       const frames = runConfig.agentType === 'qa_reviewer' && touchesUi !== false ? evidenceFrames : [];
       const changed = runConfig.agentType === 'qa_reviewer' ? changedScreens() : [];
+      const withApp = { ...toolContext, startApp: startTaskApp(session) };
       const sessionToolContext = frames.length || changed.length
-        ? { ...toolContext, visualEvidence: { frames, since: await evidenceSince(), browser: true, changed } }
-        : toolContext;
+        ? { ...withApp, visualEvidence: { frames, since: await evidenceSince(), browser: true, changed } }
+        : withApp;
       const firstMessage = [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
         .filter(Boolean)
         .join('\n\n');
@@ -1469,7 +1471,23 @@ async function runQualityAssurance(
 }
 
 /** What agents left running for this task must not outlive it or hold ports for the next one. */
+/** The app QA works against (start_app), started on the first ask and stopped with the task's other resources */
+let taskApp: ReturnType<typeof hostTaskApp> | undefined;
+
+function startTaskApp(session: SerializableSessionConfig) {
+  return () => {
+    taskApp ??= hostTaskApp({
+      worktree: session.projectDir,
+      specDir: session.specDir,
+      projectEnv: session.verification?.env,
+      saved: session.verification?.previewServices,
+    });
+    return taskApp.start();
+  };
+}
+
 async function releaseTaskResources(session: SerializableSessionConfig): Promise<void> {
+  await taskApp?.stop().catch(() => {});
   await stopAllDevServers().catch(() => {});
   if (session.projectDir) await stopWorktreeContainers(session.projectDir).catch(() => {});
 }

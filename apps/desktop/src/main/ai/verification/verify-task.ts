@@ -380,7 +380,7 @@ function anyFreePort(): Promise<number> {
 }
 
 /** What the start-up check starts servers with: the app's dev-server manager, with the copy's short environment */
-function startsDeps(hostEnv: NodeJS.ProcessEnv, projectEnv: Record<string, string>): StartsCheckOptions['deps'] {
+export function startsDeps(hostEnv: NodeJS.ProcessEnv, projectEnv: Record<string, string>): StartsCheckOptions['deps'] {
   return {
     startServer: (start) => {
       // As for every check: the copy's values, then the owner's. CI is for test runners: some dev servers change under it.

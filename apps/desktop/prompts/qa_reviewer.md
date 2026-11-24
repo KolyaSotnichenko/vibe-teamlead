@@ -62,7 +62,7 @@ The security gates ran as well, on what this build changed: gitleaks (secrets), 
 
 Start only what a check needs, which after the app's own run is usually just a browser check, or nothing: tests that bring their own server need none.
 
-Start servers with the tool `mcp__vibe-teamlead__start_dev_server`: give it a `name`, the `command` (from `project_index.json` or the package scripts) and any `env`, such as the URL of another server. The app picks a free port and passes it in `PORT` (or name the variable in `port_env`, or put `{port}` in the command), waits until the server answers and returns its URL and log file. No `sleep` or `curl` loop is needed.
+Start the whole app first with `mcp__vibe-teamlead__start_app`: the app starts it by the project's recipe, with a fresh database (migrated and seeded) and the compose file's other services, and answers with the page's address. Don't start databases or containers yourself with Docker. Only when it answers that the project has no recipe, start servers with the tool `mcp__vibe-teamlead__start_dev_server`: give it a `name`, the `command` (from `project_index.json` or the package scripts) and any `env`, such as the URL of another server. The app picks a free port and passes it in `PORT` (or name the variable in `port_env`, or put `{port}` in the command), waits until the server answers and returns its URL and log file. No `sleep` or `curl` loop is needed.
 
 A server stays up for the next sessions of this task and the app stops it with the task, so don't stop it when you finish; asking again with the same request returns the one already running. Don't start dev servers from Bash, and don't look for them with `lsof` or `ps`.
 
