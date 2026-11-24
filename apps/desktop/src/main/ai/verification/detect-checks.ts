@@ -172,6 +172,14 @@ const SCHEME_KINDS: Record<string, ServiceImage['kind']> = {
   redis: 'redis', rediss: 'redis',
   mongodb: 'mongo',
 };
+/**
+ * Schemes that name something rather than a place to connect to: `api://<app id>/<scope>` is a
+ * Microsoft Entra app ID URI, the OAuth scope a web app asks for. Blanking it stopped a web app at
+ * its start (planner-mhp's preview: a white page).
+ */
+const IDENTIFIER_SCHEMES = new Set(['api']);
+/** Whether the value's scheme says it is a place to connect to: anything but http(s) and the identifiers above. */
+const connectionScheme = (scheme: string | undefined) => !!scheme && scheme !== 'http' && scheme !== 'https' && !IDENTIFIER_SCHEMES.has(scheme);
 /** Settings that by name say where a database is. Wide on purpose: a test missing a setting costs a "not verified", a real database costs far more. */
 const CONNECTION_NAME = /(^|_)(DB|DSN|DATABASE|SQL|MYSQL|MARIADB|POSTGRES|POSTGRESQL|MONGO|MONGODB|REDIS|PG[A-Z]*)(_|$)/i;
 /** Values that say so without a scheme: Go's DSN, libpq, ADO.NET, PDO */
@@ -183,7 +191,7 @@ const CONNECTION_VALUE = /@tcp\(|(^|[\s;:])(host|hostaddr|dbname)=|(^|;)\s*(serv
  */
 export function isConnectionSetting(name: string, value: string): boolean {
   const scheme = /^["']?(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(value.trim())?.[1]?.toLowerCase();
-  return (!!scheme && scheme !== 'http' && scheme !== 'https') || CONNECTION_NAME.test(name) || CONNECTION_VALUE.test(value);
+  return connectionScheme(scheme) || CONNECTION_NAME.test(name) || CONNECTION_VALUE.test(value);
 }
 
 /** Whether an env file's text says where a database is. Pure. */
@@ -226,8 +234,8 @@ export function serviceEnv(example: string, started: StartedService[], compose: 
     }
     const value = match[2].replace(/\s+#.*$/, '').trim().replace(/^(["'])(.*)\1$/, '$2');
     const scheme = /^(?:jdbc:)?([a-z][a-z0-9.-]*)(?:\+[a-z0-9.+-]*)?:\/\//i.exec(value)?.[1]?.toLowerCase();
-    if (scheme && scheme !== 'http' && scheme !== 'https') {
-      const url = SCHEME_KINDS[scheme] ? urlOf(SCHEME_KINDS[scheme]) : undefined;
+    if (connectionScheme(scheme)) {
+      const url = scheme && SCHEME_KINDS[scheme] ? urlOf(SCHEME_KINDS[scheme]) : undefined;
       if (url) entries.push([match[1], url]);
     } else if (!CONNECTION_NAME.test(match[1]) && !CONNECTION_VALUE.test(value)) {
       entries.push([match[1], value]);

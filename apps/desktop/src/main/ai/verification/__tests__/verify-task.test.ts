@@ -239,7 +239,7 @@ describe('verifyTask', () => {
       const given = startsCheck.mock.calls[0][0];
       expect(given.files).toEqual(expect.arrayContaining(['good.txt', 'task.txt', 'docker-compose.yml']));
       // git on Windows may check text out with CRLF
-      expect(readInCopy?.replace(/\r\n/g, '\n')).toBe('yes\n');
+      expect((readInCopy as string | null)?.replace(/\r\n/g, '\n')).toBe('yes\n');
       expect(given.saved).toEqual(saved);
       expect(given.cannot).toMatch(/Port 10000 is in use/);
       expect(given.cannotWhy).toEqual({ reason: 'port', ports: [10000] });

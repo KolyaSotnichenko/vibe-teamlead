@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { composeServices } from '../compose-services';
-import { composeFilesInOrder, imagesFromComposeFiles, detectChecks, serviceEnv, serviceImages } from '../detect-checks';
+import { composeFilesInOrder, imagesFromComposeFiles, detectChecks, isConnectionSetting, serviceEnv, serviceImages } from '../detect-checks';
 
 const project = (files: Record<string, string>) => detectChecks({ files: Object.keys(files), read: (path) => files[path] ?? null });
 const pkg = (scripts: Record<string, string>, extra: Record<string, unknown> = {}) => JSON.stringify({ scripts, ...extra });
@@ -191,6 +191,14 @@ describe('serviceEnv', () => {
 
   it("gives the project's own example values, so tests find the settings they need", () => {
     expect(serviceEnv('# comment\nCSRF_SECRET=abc\nPORT="3001"\nEMPTY=\n', [])).toEqual({ CSRF_SECRET: 'abc', PORT: '3001', EMPTY: '' });
+  });
+
+  // planner-mhp's preview: the scope was blanked, and the web app stopped on a white page
+  it("keeps an app ID URI (api://…), an OAuth scope that names no place to connect to", () => {
+    const example = 'VITE_AUTH_API_SCOPE=api://<api-client-id>/access_as_user\nQUEUE=amqp://rabbit:5672\n';
+    expect(serviceEnv(example, [])).toEqual({ VITE_AUTH_API_SCOPE: 'api://<api-client-id>/access_as_user' });
+    expect(isConnectionSetting('VITE_AUTH_API_SCOPE', 'api://<api-client-id>/access_as_user')).toBe(false);
+    expect(isConnectionSetting('QUEUE', 'amqp://rabbit:5672')).toBe(true);
   });
 
   it('a variable with a database address gets the temporary one, whatever its name', () => {
