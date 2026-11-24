@@ -17,8 +17,9 @@ describe('which pipeline a task runs', () => {
   });
 
   describe('Auto: what the app can check itself', () => {
-    it('a task from a spec document runs the full pipeline', () => {
-      expect(pipelineByRule({ sourceType: 'brief' }, 'Rename the button')).toEqual({ kind: 'full', by: 'rule', reason: 'brief' });
+    // The owner: "the AI agent should decide this, not a choice of words"
+    it('a task from a spec document is for the assessor, like any other', () => {
+      expect(pipelineByRule({ sourceType: 'brief' }, 'Rename the button')).toBeUndefined();
     });
 
     it('a task the architect must design runs the full pipeline', () => {
@@ -32,28 +33,21 @@ describe('which pipeline a task runs', () => {
       expect(pipelineByRule({ sourceType: 'deploy' }, 'Fix the failed CI run on main')).toMatchObject({ kind: 'short', reason: 'fix_main' });
     });
 
-    it.each([
-      'Add sign-in with email and password',
-      'Users log in with Google OAuth',
-      'Charge the card with Stripe',
-      'Add a payment page',
-      'Store personal data of customers',
-      'Migrate the users table to the new schema',
-      'Add a database migration for orders',
-      'Roles and permissions for admins',
-      'Rotate the API key',
-      'Додати авторизацію через пошту',
-      'Вхід за паролем',
-      'Оплата карткою',
-      'Зберігати персональні дані клієнтів',
-      'Міграція бази даних',
-      'Права доступу для адміністраторів',
-    ])('sign-in, money, personal data, migrations and access run the full one: %s', (text) => {
-      expect(pipelineByRule({}, text)).toEqual({ kind: 'full', by: 'rule', reason: 'sensitive' });
+    // planner-mhp: every repair of main ran the full pipeline, its text being the failing output
+    it("a fix for main stays short whatever its failing output mentions: that's the log, not what the task is about", () => {
+      const output = 'Fix main: pnpm run test fails\n FAIL src/authz/roles.test.ts\n migration 0026_offline_sync applied\n auth token expired';
+      expect(pipelineByRule({ sourceType: 'base-fix' }, output)).toEqual({ kind: 'short', by: 'rule', reason: 'fix_main' });
+      expect(pipelineByRule({ sourceType: 'deploy' }, output)).toMatchObject({ kind: 'short', reason: 'fix_main' });
     });
 
-    it('a quick fix that touches sign-in is still not light: the heavier rule wins', () => {
-      expect(pipelineByRule({ previewQuickFix: true }, 'The password field loses focus')).toMatchObject({ kind: 'full', reason: 'sensitive' });
+    it.each([
+      'Add sign-in with email and password',
+      'Charge the card with Stripe',
+      'Migrate the users table to the new schema',
+      'Права доступу для адміністраторів',
+    ])("what a task is about is the assessor's call, not a match on its words: %s", (text) => {
+      expect(pipelineByRule({}, text)).toBeUndefined();
+      expect(pipelineByRule({ previewQuickFix: true }, text)).toMatchObject({ kind: 'short', reason: 'quick_fix' });
     });
 
     it.each(['Sea battle game in the browser', 'Rename the button', 'Зробити гру морський бій', 'Add a dark footer'])(
@@ -74,7 +68,7 @@ describe('which pipeline a task runs', () => {
     it("gives way to the task's own choice, and to a task that says Auto", () => {
       expect(pipelineByRule({ pipeline: 'full' }, 'Sea battle game', 'single')).toMatchObject({ kind: 'full', reason: 'chosen' });
       expect(pipelineByRule({ pipeline: 'auto' }, 'Sea battle game', 'single')).toBeUndefined();
-      expect(pipelineByRule({ pipeline: 'auto', sourceType: 'brief' }, 'Sea battle game', 'single')).toMatchObject({ kind: 'full', reason: 'brief' });
+      expect(pipelineByRule({ pipeline: 'auto', sourceType: 'brief' }, 'Sea battle game', 'single')).toBeUndefined();
     });
 
     it('does not reach the tasks whose pipeline follows from what they are', () => {
@@ -86,7 +80,6 @@ describe('which pipeline a task runs', () => {
 
     it('"auto", nothing or nonsense as the default changes nothing', () => {
       for (const projectDefault of ['auto', undefined, 'turbo']) {
-        expect(pipelineByRule({ sourceType: 'brief' }, 'Rename the button', projectDefault)).toMatchObject({ reason: 'brief' });
         expect(pipelineByRule({}, 'Rename the button', projectDefault)).toBeUndefined();
       }
     });

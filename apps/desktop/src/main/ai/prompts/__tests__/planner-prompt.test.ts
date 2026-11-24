@@ -33,3 +33,14 @@ describe('planner prompt', () => {
     expect(planner).toMatch(/coder has no browser/);
   });
 });
+
+// The owner: the pipeline is the AI agent's call, not a choice of words
+describe('complexity assessor prompt', () => {
+  const assessor = readFileSync(resolve(__dirname, '../../../../../prompts/complexity_assessor.md'), 'utf-8');
+
+  it('judges what a task is about itself: sign-in, money, personal data, migrations and access are full', () => {
+    expect(assessor).toMatch(/decides nothing from the task's words/);
+    expect(assessor).toMatch(/migration\) is `full`/);
+    expect(assessor).toMatch(/spec document is one part of a bigger plan/);
+  });
+});

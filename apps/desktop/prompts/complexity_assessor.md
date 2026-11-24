@@ -201,6 +201,8 @@ Besides the complexity, say which pipeline the task should run. The app has thre
 
 When unsure between two, choose the heavier one: a task that turns out bigger than its pipeline wastes more than a pipeline that was fuller than needed. A `complex` task is always `full`.
 
+The app decides nothing from the task's words: what the task is really about is your judgement. A task that changes how people sign in or what they may do (roles, permissions), handles money, stores or shows personal data, or changes the database schema (a migration) is `full`, however small it looks. A task that only mentions such a thing (a test named after auth, a page that shows the signed-in user's name) is judged by what it changes. A task that came from a spec document is one part of a bigger plan: judge it by its own scope, as any other.
+
 Write the choice as `pipeline` and one plain sentence of why as `pipeline_reason` (the owner reads it on the task).
 
 ---

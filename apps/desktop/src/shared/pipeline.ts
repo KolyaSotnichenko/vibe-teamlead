@@ -93,8 +93,6 @@ export function raisedPipeline(earlier: PipelineDecision | undefined, now: Pipel
  * Sign-in, money, personal data, migrations and access, in English and Ukrainian. A word here
  * sends the task to the full pipeline; a false alarm ("design tokens") only costs a fuller run.
  */
-const SENSITIVE =
-  /\b(auth\w*|log[- ]?in|sign[- ]?in|sign[- ]?up|passwords?|oauth|sso|2fa|mfa|tokens?|api keys?|secrets?|credentials?|encrypt\w*|payments?|billing|invoices?|checkout|stripe|paddle|paypal|personal data|gdpr|pii|migrat\w*|permissions?|roles?|access control|rbac)\b|авторизац|автентифікац|парол|вхід за|вхід через|реєстрац|платіж|платеж|оплат|рахунк|персональн|міграці|шифруван|секрет|токен|прав[аи]? доступу|ролі|ролей|ролями/i;
 
 const flag = (metadata: unknown, name: string): unknown => (metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>)[name] : undefined);
 
@@ -102,29 +100,30 @@ const flag = (metadata: unknown, name: string): unknown => (metadata && typeof m
  * What decides without a model, in this order:
  * 1. the user's choice in the task;
  * 2. what the task is: one the architect designs is full; a quick fix from the preview and a task
- *    the app made to repair main are short (full when their text is about something sensitive).
- *    The project's default does not reach these: the architect needs the full pipeline, a repair
- *    of main merges by itself only after a QA review, and a quick fix is the user's own choice;
- * 3. the project's default pipeline, unless the task says "auto";
- * 4. Auto's rules: a task from a spec document is full, and so is one about something sensitive.
- * Undefined: nothing here decides, ask the assessor. `text` is the task's title and description.
+ *    the app made to repair main are short. The project's default does not reach these: the
+ *    architect needs the full pipeline, a repair of main merges by itself only after a QA review,
+ *    and a quick fix is the user's own choice;
+ * 3. the project's default pipeline, unless the task says "auto".
+ * Undefined: the assessor decides, reading the task: what it is about (sign-in, money, personal
+ * data, migrations, access) is its judgement, not a match on words. A repair of main's text is the
+ * failing output, whose logs mention auth and migrations in any project (planner-mhp: every repair
+ * ran the full pipeline), and every task from a spec document ran the full one whatever its size.
+ * `text` is the task's title and description, kept for callers.
  * Pure.
  */
-export function pipelineByRule(metadata: unknown, text: string, projectDefault?: unknown): PipelineDecision | undefined {
+export function pipelineByRule(metadata: unknown, _text: string, projectDefault?: unknown): PipelineDecision | undefined {
   const chosen = flag(metadata, 'pipeline');
   if (isPipelineKind(chosen)) return { kind: chosen, by: 'user', reason: 'chosen' };
 
   const rule = (kind: PipelineKind, reason: PipelineReason): PipelineDecision => ({ kind, by: 'rule', reason });
-  const sensitive = SENSITIVE.test(text);
   if (flag(metadata, 'architectureOnly') === true || flag(metadata, 'cloudArchitectureDesign') === true) return rule('full', 'architecture');
   const source = flag(metadata, 'sourceType');
-  if (flag(metadata, 'previewQuickFix') === true) return sensitive ? rule('full', 'sensitive') : rule('short', 'quick_fix');
-  if (source === 'base-fix' || source === 'deploy') return sensitive ? rule('full', 'sensitive') : rule('short', 'fix_main');
+  if (flag(metadata, 'previewQuickFix') === true) return rule('short', 'quick_fix');
+  // The short pipeline still has its QA reviewer
+  if (source === 'base-fix' || source === 'deploy') return rule('short', 'fix_main');
 
   if (chosen !== 'auto' && isPipelineKind(projectDefault)) return { kind: projectDefault, by: 'user', reason: 'project_default' };
 
-  if (source === 'brief') return rule('full', 'brief');
-  if (sensitive) return rule('full', 'sensitive');
   return undefined;
 }
 
