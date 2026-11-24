@@ -2,6 +2,10 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.69 - 2026-11-24
+
+- Pipelines: Auto no longer decides from a task's words. It ran the full pipeline for any task whose text said auth, token or migration, which made every repair of main full (its text is the failing output), and for every task from a spec document whatever its size. Now the complexity assessor reads each task, those from a spec document included, and chooses: a task that changes sign-in or access, money, personal data or the database schema is full, judged by what it changes. Quick fixes from the preview and repairs of main run the short pipeline, with its QA review.
+
 ## 2.0.0-beta.68 - 2026-11-24
 
 - Screen check: the app notices when a task breaks a screen it never touched. As QA shows a screen in the running app it records how it got there (path, clicks, typing, the parts that change on their own); when the task merges, the app adds it to the project's catalog of screens and takes a picture of each while its check runs the code that becomes main. Before every later QA review the app takes the same pictures of the task's code and compares them pixel by pixel, without a model. Only the screens outside the task that changed go to QA, as before and after pictures, and QA can't approve until it marks each as expected (with why) or rejects the task with a regression. The Design tab lists the other screens that changed. Web apps; the catalog fills up as tasks with a design pass QA.
