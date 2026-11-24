@@ -118,6 +118,31 @@ describe('the app QA works against', () => {
     expect(committed.commands).toEqual([]);
   });
 
+  it("runs no migration when a setting points at a database under any name", async () => {
+    const { deps, commands } = setup();
+    await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa', projectEnv: { PROD_CONN: 'postgres://me:pw@prod.example.com/app' } }, deps).start();
+    expect(commands).toEqual([]);
+  });
+
+  it('a secret cut through by the end of the output still never shows', async () => {
+    const { deps } = setup();
+    const secret = 'S3CRET-VALUE-0123456789';
+    // The kept tail starts inside the secret
+    deps.runCommand = vi.fn(async () => ({ code: 1, output: `${secret}${'x'.repeat(1990)}` }));
+    const result = await createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa', projectEnv: { API_TOKEN: secret } }, deps).start();
+    const reason = result.ok ? '' : result.reason;
+    expect(reason).not.toMatch(/0123456789/);
+  });
+
+  it('a stop sweeps every container with its label, also one whose start was cut short', async () => {
+    const { deps, docker } = setup();
+    const app = createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa-7' }, deps);
+    await app.start();
+    docker.mockClear();
+    await app.stop();
+    expect(docker.mock.calls.some(([args]) => args[0] === 'ps' && args.join(' ').includes('label=vibe-teamlead-verify=qa-7'))).toBe(true);
+  });
+
   it('starts once when asked twice at the same time', async () => {
     const { deps, started } = setup();
     const app = createTaskApp({ worktree: '/wt', specDir: '/s', label: 'qa' }, deps);

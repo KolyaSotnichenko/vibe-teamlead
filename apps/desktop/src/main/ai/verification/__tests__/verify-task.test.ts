@@ -609,6 +609,12 @@ describe('verifyTask', () => {
       expect(existsSync(ran())).toBe(false);
     });
 
+    it("run nowhere when a setting of the project's says where a database is under any name", async () => {
+      composeWith('postgres:18');
+      await check({ docker, env: { PROD_CONN: 'postgres://me:pw@prod.example.com/app' } });
+      expect(existsSync(ran())).toBe(false);
+    });
+
     it('run nowhere with only Mongo started: SQL migrations would look for another database', async () => {
       composeWith('mongo:7');
       await check({ docker });

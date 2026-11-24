@@ -22,7 +22,7 @@ import type { VerificationSummary } from '../../../shared/utils/verification-sum
 import { gitRunner, type GitRun, withoutGitHooks } from '../merge/git-merge';
 import { spawn } from 'node:child_process';
 import { resolveRecipe } from '../../preview/recipe';
-import { type Check, composeFilesInOrder, type DetectedChecks, detectChecks, imagesFromComposeFiles, namesDatabase, type ServiceImage, serviceEnv } from './detect-checks';
+import { type Check, composeFilesInOrder, detectChecks, type DetectedChecks, imagesFromComposeFiles, namesDatabase, ownDatabaseSetting, serviceEnv, type ServiceImage } from './detect-checks';
 import { ago, type CheckMemory, type CheckMemoryPlace, memoryKey, openCheckMemory } from './check-memory';
 import { type DockerRun, hostDocker, startTestServices, VERIFY_LABEL } from './test-services';
 import { createRunNetwork, startComposeServices } from './compose-runner';
@@ -553,7 +553,7 @@ async function verifyNow(options: VerifyTaskOptions): Promise<VerificationReport
         const variables = { ...serviceEnv(from.example, started.started, { planned: from.compose, started: compose.started }), ...options.env };
         env = verificationEnv(hostEnv, variables);
         // Set by the project's settings, an address may be anything, so migrations stay away from it
-        const ownDatabase = Object.keys(options.env).some((name) => /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i.test(name));
+        const ownDatabase = ownDatabaseSetting(options.env) !== undefined;
         // The migration tools here are for SQL databases
         migratable = !ownDatabase && !from.committedDatabase && started.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
         // Example values aren't secrets, the project's own values and the database addresses are

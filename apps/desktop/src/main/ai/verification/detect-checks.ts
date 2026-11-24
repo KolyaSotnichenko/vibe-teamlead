@@ -194,6 +194,14 @@ export function isConnectionSetting(name: string, value: string): boolean {
   return connectionScheme(scheme) || CONNECTION_NAME.test(name) || CONNECTION_VALUE.test(value);
 }
 
+/**
+ * The first of the owner's settings that says where a database is, by its name or by its value
+ * (`PROD_CONN=postgres://…`): the app then migrates nothing, as that may be any database. Pure.
+ */
+export function ownDatabaseSetting(env: Record<string, string>): string | undefined {
+  return Object.entries(env).find(([name, value]) => /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i.test(name) || isConnectionSetting(name, value))?.[0];
+}
+
 /** Whether an env file's text says where a database is. Pure. */
 export function namesDatabase(envText: string): boolean {
   return envText.split('\n').some((line) => {

@@ -18,7 +18,7 @@ import { type StartServicesDeps, startRecipeServices } from '../../preview/start
 import { isPathContained } from '../security/path-containment';
 import { composeMovedNotice, createRunNetwork, startComposeServices } from '../verification/compose-runner';
 import { bucketsOf, composeSecrets, composeServices } from '../verification/compose-services';
-import { composeFilesInOrder, imagesFromComposeFiles, namesDatabase } from '../verification/detect-checks';
+import { composeFilesInOrder, imagesFromComposeFiles, namesDatabase, ownDatabaseSetting } from '../verification/detect-checks';
 import { type DockerRun, startTestServices, VERIFY_LABEL } from '../verification/test-services';
 
 export interface TaskAppDeps {
@@ -50,8 +50,6 @@ export type TaskAppResult =
 
 const SERVER_TIMEOUT_MS = 180_000;
 const TAIL = 2000;
-/** The owner's settings say where a database is: as in the app's checks, nothing is migrated there */
-const DATABASE_NAME = /(DATABASE|POSTGRES|MYSQL|MONGO|^DB|^PG)/i;
 /** A real env file in the repository: tools may read it before anything the app sets */
 const COMMITTED_ENV = /(^|\/)\.env(\.[\w-]+)?$/;
 
@@ -73,11 +71,18 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
   const stops: Array<() => Promise<void>> = [];
   /** Values never shown: the owner's, and those of the containers a start made */
   const secrets: string[] = Object.values(projectEnv);
-  const redact = (text: string) => secrets.reduce((out, value) => (value.length >= 4 ? out.split(value).join('***') : out), text);
+  /** On the whole text, before any cut: a cut through a value would leave a part no match finds. Longest first. */
+  const redact = (text: string) =>
+    [...secrets].sort((a, b) => b.length - a.length).reduce((out, value) => (value.length >= 4 ? out.split(value).join('***') : out), text);
+  /** The end of a text, masked first */
+  const tailOf = (text: string) => redact(text).slice(-TAIL);
 
   const release = async () => {
     for (const name of servers.splice(0).reverse()) await deps.servers.stopServer(name).catch(() => false);
     for (const stopOne of stops.splice(0).reverse()) await stopOne().catch(() => {});
+    // Anything else with this app's label: a container whose start was cut short has no stop of its own
+    const left = await deps.docker(['ps', '-aq', '--filter', `label=${VERIFY_LABEL}=${label}`]).catch(() => ({ ok: false, stdout: '' }));
+    for (const id of left.stdout.split('\n').map((line) => line.trim()).filter(Boolean)) await deps.docker(['rm', '-f', '-v', id]).catch(() => undefined);
     running = undefined;
   };
 
@@ -138,7 +143,7 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
 
       // Migrations and seed only on this fresh database: an address the owner's settings or a committed
       // env file give may be any database, so it is left alone (as the app's checks do)
-      const ownedBy = Object.keys(projectEnv).find((name) => DATABASE_NAME.test(name))
+      const ownedBy = ownDatabaseSetting(projectEnv)
         ?? files.find((path) => COMMITTED_ENV.test(path) && !/\.(example|sample)$/.test(path) && namesDatabase(read(path) ?? ''));
       const fresh = !ownedBy && database.started.some((service) => service.kind === 'postgres' || service.kind === 'mysql');
       if (ownedBy) notices.push(`${ownedBy} names a database, so the app uses that one: no migration or seed was run.`);
@@ -150,7 +155,7 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
         check();
         if (result.code !== 0) {
           await release();
-          return { ok: false, reason: redact(`${step.command} failed (exit ${result.code}):\n${result.output.slice(-TAIL)}`) };
+          return { ok: false, reason: `${redact(step.command)} failed (exit ${result.code}):\n${tailOf(result.output)}` };
         }
       }
 
@@ -182,7 +187,7 @@ export function createTaskApp(options: TaskAppOptions, deps: TaskAppDeps) {
       const { message, logTail = '' } = error as Error & { logTail?: string };
       // After a stop, the stop releases what was started
       if (!(error instanceof Stopped)) await release();
-      return { ok: false, reason: redact(`${message}${logTail ? `\n${logTail.slice(-TAIL)}` : ''}`) };
+      return { ok: false, reason: `${redact(message)}${logTail ? `\n${tailOf(logTail)}` : ''}` };
     }
   };
 

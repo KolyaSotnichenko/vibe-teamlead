@@ -29,7 +29,8 @@ export function hostTaskApp(options: { worktree: string; specDir: string; projec
   return createTaskApp(
     { worktree, specDir: options.specDir, label, saved: options.saved, projectEnv },
     {
-      docker: hostDocker(process.env, options.signal),
+      // No abort signal for Docker: a stopped task's teardown runs Docker too. A stop ends a start between its steps.
+      docker: hostDocker(process.env),
       listFiles: async () => {
         const listed = await runProcess('git', readOnlyGitArgs(['ls-files', '-z', '--cached', '--others', '--exclude-standard']), {
           cwd: worktree,
@@ -56,7 +57,9 @@ export function hostTaskApp(options: { worktree: string; specDir: string; projec
           killGroup: true,
           maxOutput: 1024,
           onLine: (line) => {
-            output = `${output}${line}\n`.slice(-OUTPUT);
+            output = `${output}${line}\n`;
+            // Whole lines only: a cut through a value would leave a part the masking can't find
+            if (output.length > OUTPUT * 2) output = output.slice(output.indexOf('\n', output.length - OUTPUT) + 1);
           },
         });
         return { code: result.timedOut ? 124 : result.code, output };
