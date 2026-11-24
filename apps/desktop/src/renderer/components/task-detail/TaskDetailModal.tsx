@@ -41,6 +41,7 @@ import { MonoTag } from './workspace/workspace-ui';
 import { OverviewTab, type WorkspaceSection } from './overview/OverviewTab';
 import { DesignTab } from './design/DesignTab';
 import { PreviewFullScreenContext } from '../preview/preview-fullscreen';
+import { CollapsibleNotices } from './CollapsibleNotices';
 import { ScreensToCheckNotice } from './ScreensToCheckNotice';
 import { CiNotice } from './CiNotice';
 import type { DeployTarget } from '../../../shared/types/deploy';
@@ -496,7 +497,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
               </div>
 
               {/* Warnings - compact inline */}
-              <div className="mt-3 space-y-3 empty:hidden">
+              <CollapsibleNotices>
                 <ScreensToCheckNotice task={task} onOpenDesign={() => state.setActiveTab('design')} />
                 {!state.workspaceError && <MergeStateNotice task={task} />}
                 <VerificationNotice task={task} />
@@ -504,7 +505,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 <SecurityQaNotice task={task} />
                 <TurnLimitNotice task={task} />
                 <CiNotice task={task} onGoToDeploy={onGoToDeploy} />
-              </div>
+              </CollapsibleNotices>
               {(state.isStuck || state.isIncomplete) && (
                 <div className="mt-3">
                   <TaskWarnings

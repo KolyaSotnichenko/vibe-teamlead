@@ -1504,6 +1504,10 @@
       "stopHint": "The task stops in Human Review now: try the design again later, or build without it. The designer waits at most an hour in all."
     }
   },
+  "taskNotices": {
+    "hide": "Hide notices",
+    "show": "Show notices"
+  },
   "taskScreens": {
     "title_one": "Check {{count}} screen before merging",
     "title_other": "Check {{count}} screens before merging",
