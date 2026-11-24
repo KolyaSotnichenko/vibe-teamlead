@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { maskScript, navigateScript, stepScript, unmaskScript } from '../screen-replay';
 
-const run = (script: string) => (0, eval)(script) as Promise<{ ok: boolean; error?: string }>;
+// The scripts are expressions the app runs in the page; here they run in jsdom's
+const run = (script: string) => new Function(`return ${script}`)() as Promise<{ ok: boolean; error?: string }>;
 
 afterEach(() => {
   document.body.innerHTML = '';
