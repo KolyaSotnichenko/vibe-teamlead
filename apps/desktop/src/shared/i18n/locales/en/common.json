@@ -484,9 +484,7 @@
       "invalidType": "Invalid file type. Please use PNG, JPEG, GIF, or WebP.",
       "processFailed": "Failed to process image",
       "dragOver": "Drop image to attach",
-      "analysisUnsupported": "Note: Image analysis is not yet supported. Images are stored for reference but cannot be analyzed by the model.",
-      "screenshotTooLarge": "Screenshot is too large ({{size}}MB). Maximum size is {{max}}MB. Consider capturing a smaller area.",
-      "notAnalyzed": "Images were stored for reference but not analyzed by the model."
+      "screenshotTooLarge": "Screenshot is too large ({{size}}MB). Maximum size is {{max}}MB. Consider capturing a smaller area."
     },
     "title": "Insights",
     "subtitle": "Ask questions about your codebase",

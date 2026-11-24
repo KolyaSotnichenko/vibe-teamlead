@@ -38,6 +38,14 @@ export interface ClaudeAuth {
 // Session Configuration
 // =============================================================================
 
+/** An image sent to the model with the prompt */
+export interface PromptImage {
+  /** image/png, image/jpeg, image/gif or image/webp */
+  mediaType: string;
+  /** Base64 data, or a data URL */
+  data: string;
+}
+
 /**
  * Full configuration for running an agent session.
  * Passed to `runAgentSession()` to start streaming.
@@ -53,6 +61,8 @@ export interface SessionConfig {
   systemPrompt: string;
   /** Initial user message(s) to start the conversation */
   initialMessages: SessionMessage[];
+  /** Images the model sees with the first message (base64, optionally as a data URL) */
+  images?: PromptImage[];
   /** Tool context (cwd, projectDir, specDir, securityProfile) */
   toolContext: ToolContext;
   /** Maximum number of agentic turns (Claude Code `maxTurns`) */

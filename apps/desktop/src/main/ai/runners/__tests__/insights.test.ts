@@ -120,6 +120,22 @@ describe('runInsightsQuery', () => {
     expect(result.toolCalls).toEqual([]);
   });
 
+  it('sends the attached images to the session, and none when there are none', async () => {
+    await runInsightsQuery(
+      baseConfig({
+        images: [
+          { id: '1', filename: 'shot.png', mimeType: 'image/png', size: 3, data: 'AAAA' },
+          { id: '2', filename: 'thumb-only.png', mimeType: 'image/png', size: 3 },
+        ],
+      }),
+    );
+    expect(taskArgs().images).toEqual([{ mediaType: 'image/png', data: 'AAAA' }]);
+
+    mockRunClaudeTask.mockClear();
+    await runInsightsQuery(baseConfig());
+    expect(taskArgs().images).toBeUndefined();
+  });
+
   it('falls back to the final assistant text when nothing was streamed', async () => {
     emitEvents([], 'Final answer.');
 

@@ -105,6 +105,7 @@ export class InsightsExecutor extends EventEmitter {
           modelShorthand,
           thinkingLevel,
           abortSignal: controller.signal,
+          images,
         },
         (event) => {
           switch (event.type) {

@@ -51,7 +51,7 @@
 |---|---|
 | **Roadmap** | Product roadmap: the agents analyze the project (and, optionally, competitors) and propose features by priority. A feature can be turned into a task. |
 | **Ideation** | Idea generation by type: code improvements, quality, documentation, performance, security, UI/UX. An idea can be turned into a task. |
-| **Insights** | A chat about your code. The agent reads the project (through CodeGraph and files), sees the memory and can remember new things. You can see which tools it calls. |
+| **Insights** | A chat about your code. The agent reads the project (through CodeGraph and files), sees the memory and can remember new things. You can see which tools it calls. Paste or attach a screenshot and the agent sees it with your question (earlier screenshots in the chat it no longer sees). |
 
 ## Knowledge
 

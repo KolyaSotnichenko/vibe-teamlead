@@ -605,14 +605,6 @@ export function Insights({ projectId }: InsightsProps) {
           </div>
         </div>
 
-        {/* Image analysis warning */}
-        {pendingImages.length > 0 && (
-          <div className="mt-1 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-500">
-            <AlertCircle className="h-3 w-3 shrink-0" />
-            <span>{t('insights.images.analysisUnsupported')}</span>
-          </div>
-        )}
-
         {/* Image error */}
         {imageError && (
           <p className="mt-1 text-xs text-destructive">{imageError}</p>
@@ -722,7 +714,6 @@ function MessageBubble({
                   />
                 ))}
             </div>
-            <p className="text-xs text-muted-foreground italic">{t('insights.images.notAnalyzed')}</p>
           </div>
         )}
 

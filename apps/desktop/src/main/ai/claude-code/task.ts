@@ -19,7 +19,7 @@ import type { AgentType } from '../config/agent-configs';
 import { resolveModelId } from '../config/phase-config';
 import type { ThinkingLevel } from '../config/types';
 import { getSecurityProfile } from '../security/security-profile';
-import type { ClaudeAuth, SessionEventCallback, SessionResult } from '../session/types';
+import type { ClaudeAuth, PromptImage, SessionEventCallback, SessionResult } from '../session/types';
 import { type BundledTools, resolveBundledTools } from './bundled-tools';
 import { defaultClaudeAuth } from './default-auth';
 import { runAgentSession } from './runner';
@@ -37,6 +37,8 @@ export interface ClaudeTaskOptions<T = unknown> {
   systemPrompt: string;
   /** The user request */
   prompt: string;
+  /** Images the model sees with the request */
+  images?: PromptImage[];
   /** Model shorthand ('haiku' | 'sonnet' | 'opus') or full model id. Default: 'sonnet' */
   model?: string;
   thinkingLevel?: ThinkingLevel;
@@ -113,6 +115,7 @@ export async function runClaudeTask<T = unknown>(options: ClaudeTaskOptions<T>):
       auth: options.auth ?? defaultClaudeAuth(),
       systemPrompt: options.systemPrompt,
       initialMessages: [{ role: 'user', content: options.prompt }],
+      ...(options.images?.length ? { images: options.images } : {}),
       toolContext: {
         cwd,
         projectDir: cwd,

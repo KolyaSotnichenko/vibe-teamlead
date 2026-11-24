@@ -12,7 +12,7 @@ import { isMainThread } from 'node:worker_threads';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { query, type Options, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import { getPlatformKey } from '../../platform';
@@ -135,12 +135,39 @@ export function resolveBuiltinTools(configTools: readonly string[], hasSubagents
   return [...tools];
 }
 
-function buildPrompt(config: SessionConfig): string {
+/**
+ * The session's first message: the text, or with images one user message that
+ * holds the text and each image, so the model sees them.
+ */
+export function buildPrompt(config: SessionConfig): string | AsyncIterable<SDKUserMessage> {
   const userTurns = config.initialMessages
     .filter((m) => m.role === 'user')
     .map((m) => m.content.trim())
     .filter(Boolean);
-  return userTurns.length > 0 ? userTurns.join('\n\n') : 'Begin the task described in your instructions.';
+  const text = userTurns.length > 0 ? userTurns.join('\n\n') : 'Begin the task described in your instructions.';
+  const images = config.images ?? [];
+  if (images.length === 0) return text;
+  const message: SDKUserMessage = {
+    type: 'user',
+    parent_tool_use_id: null,
+    message: {
+      role: 'user',
+      content: [
+        { type: 'text', text },
+        ...images.map((image) => ({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: (image.mediaType === 'image/jpg' ? 'image/jpeg' : image.mediaType) as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+            data: image.data.replace(/^data:[^,]*,/, ''),
+          },
+        })),
+      ],
+    },
+  } as SDKUserMessage;
+  return (async function* () {
+    yield message;
+  })();
 }
 
 /** Claude Code variables that pick the model behind an alias or for background calls. */

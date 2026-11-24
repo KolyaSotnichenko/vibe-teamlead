@@ -16,7 +16,8 @@ import { join } from 'node:path';
 
 import { READ_TOOLS, runClaudeTask } from '../claude-code/task';
 import type { ModelShorthand, ThinkingLevel } from '../config/types';
-import type { StreamEvent } from '../session/types';
+import type { PromptImage, StreamEvent } from '../session/types';
+import type { ImageAttachment } from '../../../shared/types';
 import { safeParseJson } from '../../utils/json-repair';
 import { parseLLMJson } from '../schema/structured-output';
 import { TaskSuggestionSchema } from '../schema/insight-extractor';
@@ -47,6 +48,8 @@ export interface InsightsConfig {
   thinkingLevel?: ThinkingLevel;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
+  /** Images the user attached to this message (the model sees those with data) */
+  images?: ImageAttachment[];
 }
 
 /** Result of an insights query */
@@ -236,6 +239,9 @@ export async function runInsightsQuery(
     thinkingLevel = 'medium',
     abortSignal,
   } = config;
+  const images: PromptImage[] = (config.images ?? [])
+    .filter((image): image is ImageAttachment & { data: string } => Boolean(image.data))
+    .map((image) => ({ mediaType: image.mimeType, data: image.data }));
 
   const systemPrompt = buildSystemPrompt(projectDir);
 
@@ -292,6 +298,7 @@ export async function runInsightsQuery(
     const result = await runClaudeTask({
       systemPrompt: memory?.section ? `${systemPrompt}\n\n${memory.section}` : systemPrompt,
       prompt: fullPrompt,
+      ...(images.length > 0 ? { images } : {}),
       model: modelShorthand,
       thinkingLevel,
       tools: READ_TOOLS,
