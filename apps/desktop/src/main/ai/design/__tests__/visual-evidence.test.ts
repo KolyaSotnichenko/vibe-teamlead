@@ -5,7 +5,7 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { DesignFrame } from '../design-step';
-import { checkVisualEvidence, requiredFrames, taskEvidenceFrames } from '../visual-evidence';
+import { checkVisualEvidence, designFileRef, planDesignFiles, requiredFrames, taskEvidenceFrames } from '../visual-evidence';
 
 const frame = (file: string, width: number, kind: 'screen' | 'wireframe' = 'screen'): DesignFrame => ({
   file,
@@ -214,5 +214,49 @@ describe('taskEvidenceFrames', () => {
     expect(taskEvidenceFrames(specDir)).toEqual([]);
     design({ round: 1, stage: 'skipped' }, [{ file: 'screens/board.html', width: 1280, kind: 'screen' }]);
     expect(taskEvidenceFrames(specDir)).toEqual([]);
+  });
+});
+
+describe('the design files a plan names', () => {
+  it('are read as paths under design/, however the planner wrote them; anything else is dropped', () => {
+    expect(designFileRef('design/base/screens/plan-board.html')).toBe('base/screens/plan-board.html');
+    expect(designFileRef('base/wireframes/plan-board.html')).toBe('base/wireframes/plan-board.html');
+    expect(designFileRef('screens/card.html')).toBe('screens/card.html');
+    expect(designFileRef('/abs/.vibe-teamlead/specs/037-x/design/base/screens/gantt.html')).toBe('base/screens/gantt.html');
+    expect(designFileRef('design/base/screens/../../../secret.html')).toBeNull();
+    expect(designFileRef('apps/web/src/App.tsx')).toBeNull();
+    expect(designFileRef(42)).toBeNull();
+  });
+
+  it("are every subtask's design_files, once", () => {
+    writeFileSync(path.join(specDir, 'implementation_plan.json'), JSON.stringify({
+      phases: [
+        { subtasks: [{ id: 'a', design_files: ['design/base/screens/plan-board.html', 'screens/card.html'] }] },
+        { subtasks: [{ id: 'b', design_files: ['design/base/screens/plan-board.html', 'nope.txt'] }, { id: 'c' }] },
+      ],
+    }));
+    expect(planDesignFiles(specDir)).toEqual(['base/screens/plan-board.html', 'screens/card.html']);
+  });
+
+  it("make QA show the library screens the plan rebuilds too, at the widths the library draws them", () => {
+    const dir = path.join(specDir, 'design');
+    mkdirSync(path.join(dir, 'screens'), { recursive: true });
+    mkdirSync(path.join(dir, 'base', 'screens'), { recursive: true });
+    for (const f of ['screens/admin.html', 'base/screens/plan-board.html', 'base/screens/gantt.html']) writeFileSync(path.join(dir, f), '<!doctype html>');
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ round: 2, stage: 'design' }));
+    writeFileSync(path.join(dir, 'canvas.json'), JSON.stringify({ frames: [{ file: 'screens/admin.html', title: 'a', kind: 'screen', width: 1280, height: 900, x: 0, y: 0 }] }));
+    writeFileSync(path.join(dir, 'base', 'canvas.json'), JSON.stringify({ frames: [
+      { file: 'screens/plan-board.html', title: 'b', kind: 'screen', width: 1280, height: 900, x: 0, y: 0 },
+      { file: 'screens/plan-board.html', title: 'b', kind: 'screen', width: 390, height: 900, x: 0, y: 0 },
+    ] }));
+    writeFileSync(path.join(specDir, 'implementation_plan.json'), JSON.stringify({
+      phases: [{ subtasks: [{ id: 'a', design_files: ['design/base/screens/plan-board.html', 'design/base/screens/gantt.html', 'design/base/screens/missing.html'] }] }],
+    }));
+    expect(taskEvidenceFrames(specDir)).toEqual([
+      { file: 'screens/admin.html', width: 1280 },
+      { file: 'base/screens/plan-board.html', width: 1280 },
+      { file: 'base/screens/plan-board.html', width: 390 },
+      { file: 'base/screens/gantt.html', width: 1280 },
+    ]);
   });
 });

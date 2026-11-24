@@ -17,6 +17,10 @@ Right after the spec, for every task whose spec names a UI file (or names no fil
 
 Every screen a person can see gets a design and follows the design system, test or dev-only ones included: a local sign-in (one click per role), seed or stub pages, error and empty states. Specs never ask for an "unstyled" screen.
 
+**A task that changes existing screens** (a redesign, a fix to the board) names them from the project's library in its plan: each UI subtask lists the design files it builds to, the library's included. The coder gets those files with what a person can use on each, and QA must show every one of them in the running app, not only the screens the task's own design drew.
+
+**Sample data.** A screen can be checked only when it has data. Specs ask for the project's seed script to create what the task's screens show (with a test user for each role, used by the one-click test sign-in), and the planner puts the seed in the subtask that adds the data.
+
 ## When the designer stops
 
 A UI task is never built without a design unless you say so.

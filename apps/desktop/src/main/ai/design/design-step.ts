@@ -194,6 +194,8 @@ export function designReferencePrompt(
   state: DesignState | undefined,
   /** What a person can use on each screen (design-inventory.ts), read from the files by the caller */
   inventory: Array<{ file: string; items: string[] }> = [],
+  /** QA: every frame its approval must show (visual-evidence.ts), library screens the plan rebuilds included */
+  required?: Array<{ file: string; width: number }>,
 ): string {
   if (!state || state.stage === 'skipped') return '';
   const screens = frames.filter((f) => f.kind === 'screen');
@@ -216,7 +218,7 @@ export function designReferencePrompt(
       })}`
     : '';
   if (role === 'planner' || role === 'architect') {
-    return `${intro}${elements}\n\nName in each UI subtask the design files it builds (in its description), so the coder knows which screen is its reference. Every screen and state drawn here belongs to some subtask${
+    return `${intro}${elements}\n\nPut the design files each UI subtask builds in its \`design_files\` (paths like \`design/screens/<name>.html\`), so the coder gets them and QA shows each one in the running app. A subtask that changes a screen earlier tasks drew names that screen from the library, \`design/base/screens/<name>.html\` (see \`design/base/index.md\`), and builds the page to it. Every screen and state drawn here belongs to some subtask${
       inventory.length ? ', and every element listed above is built by some subtask: name the elements in its description, with the API it needs when there is none yet' : ''
     }.`;
   }
@@ -225,7 +227,7 @@ export function designReferencePrompt(
   }
   if (role === 'qa_reviewer') {
     const seen = new Set<string>();
-    const required = reference
+    const list = (required ?? reference)
       .map((f) => `${f.file} at ${f.width} px`)
       .filter((label) => (seen.has(label) ? false : (seen.add(label), true)));
     return [
@@ -234,7 +236,7 @@ export function designReferencePrompt(
       "Compare the built pages with the design in the running app: for each frame, open the page the task built at the frame's width in the browser, set up the state the frame shows, take a screenshot, and compare it with the design file (a rendered picture of it is in `design/shots/` when the app made one; otherwise read the HTML). Look at structure, content, states and styles, not pixels." +
         (inventory.length ? ' Find each element listed above on its screen: a missing element is a blocking difference.' : ''),
       'Then walk the flow: every link between screens in the design (an `<a href>` from one screen file to another) must work the same way in the built app, from the same element to the same screen or state. A missing or wrong transition is a blocking difference.',
-      `Write \`${path.join(specDir, 'design_compare.json')}\` with one entry for each of these frames:\n${required.map((r) => `- ${r}`).join('\n')}`,
+      `Write \`${path.join(specDir, 'design_compare.json')}\` with one entry for each of these frames (files under \`${path.join(specDir, 'design')}\`; those starting with base/ are screens of the project's library, in \`${path.join(specDir, 'design', 'base')}\`, that this task's plan rebuilds):\n${list.map((r) => `- ${r}`).join('\n')}`,
       'Each entry: {"file":"screens/<name>.html","width":390,"built":"qa-browser/<your screenshot>","differences":[{"severity":"blocking"|"minor","text":"…"}]}, as {"screens":[…]}. The screenshot is one you take in this review, after the last commit, saved under `qa-browser/` in the spec directory (where the browser tools save). A difference is blocking when the built page is missing an element, a state or a layout the design (and the spec) require; it goes in your QA issues like any other, and the task is rejected. Minor ones (a radius, a spacing step, both within the design system) stay in this file for the owner.',
       'A frame you cannot reach in the running app gets {"file":…,"width":…,"notShown":"<why>"} instead of "built". Starting the app, its database and the services the preview starts, signing in with its test sign-in, and making the data a screen needs (through the UI or the API) are part of this review, not reasons. A task with a frame not shown waits for the owner before it merges.',
       'The verdict tool refuses an approval when a frame has no entry, a screenshot is missing or older than the last commit, a blocking difference is left, or no frame was opened in the running app at all. If the app does not start, that is a critical issue: reject the task with it.',

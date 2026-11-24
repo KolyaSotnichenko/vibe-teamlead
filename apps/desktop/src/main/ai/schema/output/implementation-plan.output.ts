@@ -25,6 +25,8 @@ const SubtaskOutputSchema = z.object({
   service: z.string().optional(),
   /** Existing files whose patterns the coder follows (coder kickoff, code lookup) */
   patterns_from: z.array(z.string()).optional(),
+  /** The design files the subtask builds to, the library's included (coder kickoff, QA's frames) */
+  design_files: z.array(z.string()).optional(),
   /** How the coder proves the subtask; same shape as the plan file's schema keeps */
   verification: z.object({
     type: z.string(),

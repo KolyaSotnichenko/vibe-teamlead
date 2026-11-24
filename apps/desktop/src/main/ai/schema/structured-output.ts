@@ -384,6 +384,7 @@ export const IMPLEMENTATION_PLAN_SCHEMA_HINT = `\`\`\`
           "files_to_modify": ["string (optional)"],
           "files_to_create": ["string (optional)"],
           "patterns_from": ["string (optional)"],
+          "design_files": ["string (optional: design/screens/<name>.html or design/base/screens/<name>.html the subtask builds to)"],
           "verification": { "type": "command|manual", "run": "string (for command)", "scenario": "string (for manual)" }
         }
       ]

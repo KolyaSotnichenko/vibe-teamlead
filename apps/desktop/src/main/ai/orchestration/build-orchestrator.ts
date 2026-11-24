@@ -33,6 +33,8 @@ import { safeParseJson } from '../../utils/json-repair';
 import type { SessionResult } from '../session/types';
 import { readOwnerDecisions } from './owner-decisions';
 import { coderKickoffContext, findPlanSubtask, type PlanSubtaskEntry } from './coder-kickoff';
+import { designInventories } from '../design/design-inventory';
+import { designFileRef } from '../design/visual-evidence';
 import { cleanForMessage } from './message-data';
 import { iterateSubtasks } from './subtask-iterator';
 import type { SubtaskIteratorConfig, SubtaskResult } from './subtask-iterator';
@@ -658,8 +660,11 @@ export class BuildOrchestrator extends EventEmitter {
     const read = (name: string) => readFile(join(this.config.specDir, name), 'utf-8').catch(() => null);
     const [plan, spec] = await Promise.all([read('implementation_plan.json'), read('spec.md')]);
     const ownerInstruction = readOwnerDecisions(this.config.ownerDecisionsFile).instructions[subtaskId];
-    const context = coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir, ownerInstruction });
     const found = findPlanSubtask(plan, subtaskId);
+    // What a person can use on the screens the subtask builds, read from its design files
+    const refs = Array.isArray(found?.subtask.design_files) ? found.subtask.design_files.map(designFileRef).filter((r): r is string => r !== null) : [];
+    const designElements = refs.length ? designInventories(this.config.specDir, refs.map((file) => ({ file }))) : undefined;
+    const context = coderKickoffContext({ plan, spec, subtaskId, specDir: this.config.specDir, ownerInstruction, designElements });
     const log = this.config.kickoffLog ?? ((line: string) => this.emitTyped('log', line));
     if (!this.config.subtaskCodeContext) return context;
     if (!found) {

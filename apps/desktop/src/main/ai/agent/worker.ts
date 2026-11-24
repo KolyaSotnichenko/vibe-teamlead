@@ -716,10 +716,12 @@ async function assemblePrompt(
   const frames = readDesignCanvas(session.specDir).frames;
   const designState = readDesignState(session.specDir);
   // What a person can use on each screen: the planner gives each to a subtask, QA looks for each one
+  // QA shows every frame of the task's design and the library screens its plan rebuilds
+  const required = promptName === 'qa_reviewer' ? taskEvidenceFrames(session.specDir) : undefined;
   const inventory = INVENTORY_ROLES.has(promptName) && designState && designState.stage !== 'skipped'
-    ? designInventories(session.specDir, requiredFrames(frames))
+    ? designInventories(session.specDir, required ?? requiredFrames(frames))
     : [];
-  const taskDesign = designReferencePrompt(promptName, session.specDir, frames, designState, inventory);
+  const taskDesign = designReferencePrompt(promptName, session.specDir, frames, designState, inventory, required);
   const memory = await memorySection(session, memoryFocus, phaseOfPrompt(promptName));
   return [prompt, design, taskDesign, memory].filter(Boolean).join('\n\n');
 }

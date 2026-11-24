@@ -35,3 +35,19 @@ describe("the designer's notes about the prototype", () => {
     expect(prompt('designer.md')).toContain('<aside class="proto">');
   });
 });
+
+// QA and the preview can only show a screen that has data: in one project every page opened empty
+describe('sample data and test users come with the feature', () => {
+  it('the spec asks for the seed and a test user for each role when the task adds data a screen shows', () => {
+    const text = prompt('spec_writer.md');
+    expect(text).toMatch(/\*\*Seed data\.\*\*/);
+    expect(text).toMatch(/seed/);
+    expect(text).toMatch(/each role/);
+  });
+
+  it('the planner puts the seed in the subtask that adds the data, like RUNNING.md', () => {
+    const text = prompt('planner.md');
+    expect(text).toMatch(/\*\*Keep the seed true\.\*\*/);
+    expect(text).toMatch(/every screen of the design/);
+  });
+});

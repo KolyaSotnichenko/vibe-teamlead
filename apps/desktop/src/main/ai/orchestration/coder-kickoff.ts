@@ -21,6 +21,8 @@ export interface CoderKickoffInput {
   subtaskId: string;
   /** Where the files are, for the pointer line */
   specDir?: string;
+  /** What a person can use on each of the subtask's design files (design-inventory.ts), read by the caller */
+  designElements?: Array<{ file: string; items: string[] }>;
   /** What the owner said when sending this subtask back, from the app's store (never from the plan), with the fingerprint of the subtask they saw */
   ownerInstruction?: { text: string; fingerprint: string };
 }
@@ -35,6 +37,7 @@ export interface PlanSubtaskEntry {
   files_to_create?: unknown;
   files_to_modify?: unknown;
   patterns_from?: unknown;
+  design_files?: unknown;
   verification?: unknown;
   notes?: unknown;
 }
@@ -150,6 +153,7 @@ function subtaskLines(found: FoundSubtask): string[] {
     ...listLine('Files to create', subtask.files_to_create),
     ...listLine('Files to modify', subtask.files_to_modify),
     ...listLine('Patterns from', subtask.patterns_from),
+    ...listLine('Design files to build to', subtask.design_files),
     ...(verification ? [`- Verification: ${verification}`] : []),
     `- Description: ${clean(subtask.description, DESCRIPTION_MAX)}`,
     ...(clean(subtask.notes) ? [`- Notes an earlier session wrote: ${clean(subtask.notes, DESCRIPTION_MAX)}`] : []),
@@ -185,6 +189,18 @@ function criteriaLines(subtask: PlanSubtaskEntry, spec: string | null, specPath:
   return ids.map((id) => byId.get(id) ?? `- AC-${id}: not found in spec.md`);
 }
 
+/** What a person can use on the subtask's screens, read from its design files by the app. */
+function designElementLines(elements: CoderKickoffInput['designElements']): string[] {
+  if (!elements?.length) return [];
+  return ['', '## What a person can use on its screens (from the design files)', '', ...elements.map((e) => `- ${clean(e.file)}: ${e.items.map((i) => clean(i)).join('; ')}`)];
+}
+
+/** For a subtask that builds pages: open the design first; it isn't done while the page lacks what its design shows. */
+function designFilesNote(subtask: PlanSubtaskEntry, where: string): string {
+  if (!Array.isArray(subtask.design_files) || !subtask.design_files.length) return '';
+  return `Open each design file before you change code (paths in ${where}, e.g. design/base/screens/…): build the page to it, every element listed above included, with the API the project already has. The subtask is not done while the page lacks something its design shows, even when the tests pass; QA opens every one of these screens in the running app.\n\n`;
+}
+
 /** What a coder session gets instead of reading implementation_plan.json and spec.md whole. */
 export function coderKickoffContext(input: CoderKickoffInput): string {
   const where = input.specDir ? `${input.specDir}/` : 'the spec directory: ';
@@ -205,9 +221,10 @@ export function coderKickoffContext(input: CoderKickoffInput): string {
       '## Acceptance criteria it names (from spec.md)',
       '',
       ...criteriaLines(found.subtask, input.spec, `${where}spec.md`),
+      ...designElementLines(input.designElements),
     ].join('\n'),
     max: TOTAL_MAX,
-    after: `The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstructionSection(instructionFor(input, found))}`,
+    after: `${designFilesNote(found.subtask, where)}The spec is ${where}spec.md, the plan ${where}implementation_plan.json and the progress notes ${where}build-progress.txt. Read them only when you need something this doesn't say.${ownerInstructionSection(instructionFor(input, found))}`,
   });
 }
 

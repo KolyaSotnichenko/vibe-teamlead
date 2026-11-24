@@ -172,6 +172,23 @@ describe('coderKickoffContext', () => {
   });
 });
 
+describe('a subtask that builds a page', () => {
+  const plan = planWith(subtask('subtask-2-2', '[AC-1] Rebuild the board to its design.', 'pending', { design_files: ['design/base/screens/plan-board.html'] }));
+  const elements = [{ file: 'base/screens/plan-board.html', items: ['button «Додати задачу»', 'field «Виконавці»'] }];
+
+  it('gives the design files, what a person can use on each, and says to open them before changing code', () => {
+    const text = coderKickoffContext({ plan, spec: SPEC, subtaskId: 'subtask-2-2', specDir: '/w/s', designElements: elements });
+    expect(text).toContain('design/base/screens/plan-board.html');
+    expect(text).toContain('field «Виконавці»');
+    expect(text).toMatch(/Open each design file before you change code/);
+    expect(text).toMatch(/not done while/);
+  });
+
+  it('says nothing about a design for a subtask without one', () => {
+    expect(context()).not.toMatch(/Open each design file/);
+  });
+});
+
 describe('a subtask the owner sent back with an instruction', () => {
   const reopened = planWith(
     subtask('subtask-2-2', '[AC-1] Run the whole suite', 'pending', {

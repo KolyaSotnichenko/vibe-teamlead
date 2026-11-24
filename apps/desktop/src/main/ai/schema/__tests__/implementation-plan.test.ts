@@ -696,3 +696,18 @@ describe('ImplementationPlanSchema', () => {
     }
   });
 });
+
+describe('design_files', () => {
+  it("are kept: the coder builds to them and QA must show each in the running app", async () => {
+    const files = ['design/base/screens/plan-board.html'];
+    const parsed = PlanSubtaskSchema.safeParse({ id: '1', title: 'Board', status: 'pending', design_files: files });
+    expect(parsed.success && (parsed.data as { design_files?: unknown }).design_files).toEqual(files);
+    const { ImplementationPlanOutputSchema } = await import('../output/implementation-plan.output');
+    const output = ImplementationPlanOutputSchema.parse({
+      feature: 'f',
+      workflow_type: 'feature',
+      phases: [{ id: 'p', name: 'p', subtasks: [{ id: '1', title: 'Board', description: 'd', status: 'pending', files_to_create: [], files_to_modify: [], design_files: files }] }],
+    });
+    expect(output.phases[0].subtasks[0].design_files).toEqual(files);
+  });
+});

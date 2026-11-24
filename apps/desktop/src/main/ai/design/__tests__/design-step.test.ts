@@ -152,6 +152,20 @@ describe('the design checked in the running app', () => {
     expect(text).toMatch(/missing element is a blocking difference/i);
   });
 
+  it("QA's list includes the library screens the plan rebuilds, with where to find them", () => {
+    const required = [{ file: 'screens/board.html', width: 1280 }, { file: 'base/screens/plan-board.html', width: 1280 }];
+    const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory, required);
+    expect(text).toContain('base/screens/plan-board.html at 1280 px');
+    expect(text).not.toContain('screens/board.html at 390 px');
+    expect(text).toContain(path.join('/s', 'design', 'base'));
+  });
+
+  it('the planner names the design files of each UI subtask in design_files, library screens included', () => {
+    const text = designReferencePrompt('planner', '/s', frames, state, inventory);
+    expect(text).toContain('design_files');
+    expect(text).toMatch(/design\/base/);
+  });
+
   it('the planner gives every element of every screen to some subtask', () => {
     const text = designReferencePrompt('planner', '/s', frames, state, inventory);
     expect(text).toContain('field «Виконавці»');

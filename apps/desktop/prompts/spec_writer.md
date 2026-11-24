@@ -178,6 +178,8 @@ The planner turns each AC into a failing test first; the coder makes it pass; QA
 
 **Screens are designed.** Every screen a person can see, including test or dev-only ones (a local sign-in, seed or stub pages, error and empty states), follows the project's design system: never ask for an "unstyled" or "minimal" UI. A local test sign-in is convenient and styled: one-click "Sign in as <role>" for the project's roles.
 
+**Seed data.** QA, the preview and the owner can only see a screen that has data. When the task adds data a person sees (a new entity, a list, a state such as overdue or archived), the spec asks for the project's seed script to create it: realistic sample rows in the project's language, enough to fill every screen and state the task's design shows (a long list, a long name, one of each status), linked to the test users. When there is no seed script yet, the first task that stores data creates it (and the command in `preview.json`'s seed step) together with a test user for each role the project has, the users the one-click test sign-in uses. Add an acceptance criterion for it: "Given a fresh database, when the seed runs, then …" with what each screen needs, proven by an integration test that runs the seed. The seed is idempotent and only for local and test databases, never production.
+
 ### Edge Cases
 
 1. **[Edge Case]** - [How to handle it]

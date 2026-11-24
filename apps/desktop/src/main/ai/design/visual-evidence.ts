@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { closeSync, lstatSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { readDesignCanvas, readDesignState, realFileInside, type DesignFrame } from './design-step';
+import { designDir, designFile, readDesignCanvas, readDesignState, realFileInside, type DesignFrame } from './design-step';
 
 /** A frame QA must show: one file at one width */
 export interface EvidenceFrame {
@@ -180,11 +180,69 @@ export function checkVisualEvidence(options: { specDir: string; frames: Evidence
   return { problems, notShown };
 }
 
-/** The frames an approval of this task must show: none without a design, or when it was skipped. Never throws. */
+const DESIGN_REF = /^(base\/)?(wireframes|screens)\/[A-Za-z0-9_][A-Za-z0-9._-]{0,120}\.html$/;
+
+/**
+ * A design file as the planner named it in `design_files` ("design/base/screens/board.html", an
+ * absolute path, or "screens/card.html"), as a path under design/; null for anything else. Pure.
+ */
+export function designFileRef(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const at = raw.replace(/\\/g, '/').lastIndexOf('/design/');
+  const ref = at >= 0 ? raw.replace(/\\/g, '/').slice(at + '/design/'.length) : raw.replace(/^design\//, '');
+  return DESIGN_REF.test(ref) ? ref : null;
+}
+
+/** The design files the plan's subtasks build to (their `design_files`), each once. Never throws. */
+export function planDesignFiles(specDir: string): string[] {
+  try {
+    const plan = JSON.parse(readFileSync(path.join(specDir, 'implementation_plan.json'), 'utf-8')) as { phases?: Array<{ subtasks?: Array<{ design_files?: unknown }> }> };
+    const refs = (plan.phases ?? []).flatMap((phase) => phase?.subtasks ?? []).flatMap((s) => (Array.isArray(s?.design_files) ? s.design_files : []));
+    return [...new Set(refs.map(designFileRef).filter((ref): ref is string => ref !== null))];
+  } catch {
+    return [];
+  }
+}
+
+/** The library's frames (design/base/canvas.json): the widths a library screen is drawn at. Never throws. */
+function libraryWidths(specDir: string): Map<string, number[]> {
+  const widths = new Map<string, number[]>();
+  try {
+    const canvas = JSON.parse(readFileSync(path.join(designDir(specDir), 'base', 'canvas.json'), 'utf-8')) as { frames?: Array<{ file?: unknown; width?: unknown }> };
+    for (const f of canvas.frames ?? []) {
+      if (typeof f?.file !== 'string' || typeof f.width !== 'number' || !Number.isFinite(f.width)) continue;
+      const key = `base/${f.file}`;
+      widths.set(key, [...(widths.get(key) ?? []), Math.round(f.width)]);
+    }
+  } catch {
+    // no library canvas: the desktop width
+  }
+  return widths;
+}
+
+/**
+ * The frames an approval of this task must show: the task's own design, and the screens of the
+ * library its plan rebuilds (a redesign changes screens earlier tasks drew; in one project its
+ * own design had 10 screens and the board, the card and the Gantt chart were never shown). None
+ * without a design, or when it was skipped. Never throws.
+ */
 export function taskEvidenceFrames(specDir: string): EvidenceFrame[] {
   const state = readDesignState(specDir);
   if (!state || state.stage === 'skipped') return [];
-  return requiredFrames(readDesignCanvas(specDir).frames);
+  const frames = requiredFrames(readDesignCanvas(specDir).frames);
+  const library = libraryWidths(specDir);
+  const seen = new Set(frames.map((f) => `${f.file}@${f.width}`));
+  for (const ref of planDesignFiles(specDir)) {
+    const full = designFile(specDir, ref);
+    if (!full || !realFileInside(designDir(specDir), full)) continue;
+    const widths = ref.startsWith('base/') ? (library.get(ref) ?? [1280]) : frames.some((f) => f.file === ref) ? [] : [1280];
+    for (const width of widths) {
+      if (seen.has(`${ref}@${width}`)) continue;
+      seen.add(`${ref}@${width}`);
+      frames.push({ file: ref, width });
+    }
+  }
+  return frames;
 }
 
 /** The problems as one message for the reviewer. Pure. */
