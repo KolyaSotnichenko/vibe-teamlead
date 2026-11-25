@@ -78,7 +78,7 @@ export const updateQaStatusTool = Tool.define({
     executionOptions: DEFAULT_EXECUTION_OPTIONS,
   },
   inputSchema,
-  execute: (input, context) => {
+  execute: async (input, context) => {
     const { status, issues: issuesStr, tests_passed: testsStr } = input;
     if (status === 'approved' && context.agentType === 'qa_fixer') {
       return "Error: only the QA reviewer can approve. Use status 'fixes_applied'; the reviewer checks your fixes next.";
@@ -87,6 +87,9 @@ export const updateQaStatusTool = Tool.define({
     if (status === 'approved' && context.visualEvidence) {
       const { problems } = checkVisualEvidence({ specDir: context.specDir, ...context.visualEvidence });
       if (problems.length) return evidenceRefusal(problems);
+      // Then the app looks for each element of the mockups on the built pages itself (design/element-check.ts)
+      const refusal = await context.checkElements?.();
+      if (refusal) return refusal;
     }
     const planFile = path.join(context.specDir, 'implementation_plan.json');
 

@@ -49,6 +49,12 @@ export interface ToolContext {
    * and whether the session has browser tools
    */
   visualEvidence?: { frames: Array<{ file: string; width: number }>; since: number; browser: boolean; changed?: Array<{ id: string; width: number }> };
+  /**
+   * For the same reviewer, after the evidence passes: the app opens each frame the reviewer showed
+   * by screens.json and looks for every element of its mockup (design/element-check.ts). The
+   * refusal for the reviewer, or undefined when the approval may stand (the check could not run included)
+   */
+  checkElements?: () => Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------

@@ -316,6 +316,9 @@ export class WorkerBridge extends EventEmitter {
       case 'screen-check':
         void this.screenCheck(message.requestId, message.url, message.specDir, message.exclude);
         break;
+      case 'element-check':
+        void this.elementCheck(message.requestId, message.url, message.specDir, message.frames);
+        break;
 
       case 'memory-request':
         void this.handleMemoryRequest(message.requestId, message.specId, message.request);
@@ -373,6 +376,25 @@ export class WorkerBridge extends EventEmitter {
       reply = { type: 'screen-check-result', requestId, ok: true, result };
     } catch (error) {
       reply = { type: 'screen-check-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    this.worker?.postMessage(reply);
+  }
+
+  /**
+   * The frames the QA reviewer showed, opened in the task's running app by its screens.json
+   * (agent-written: only what parseScreens keeps is replayed), each with what a person can use on
+   * the page (design/element-check.ts); always replies, never throws.
+   */
+  private async elementCheck(requestId: string, url: string, specDir: string, frames: Array<{ file: string; width: number }>): Promise<void> {
+    let reply: MainToWorkerMessage;
+    try {
+      const { readTaskScreens } = await import('../design/screen-catalog');
+      const { capturePages } = await import('../design/element-check');
+      const { captureScreens } = await import('../../preview/screen-capture');
+      const pages = await capturePages(url, readTaskScreens(specDir), frames, (baseUrl, catalog) => captureScreens(baseUrl, catalog, undefined, { elements: true }));
+      reply = { type: 'element-check-result', requestId, ok: true, pages };
+    } catch (error) {
+      reply = { type: 'element-check-result', requestId, ok: false, error: error instanceof Error ? error.message : String(error) };
     }
     this.worker?.postMessage(reply);
   }

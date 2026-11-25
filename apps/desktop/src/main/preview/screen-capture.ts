@@ -3,16 +3,19 @@
  * no permissions, no downloads, never leaving the app's origin) opens the running app, signs in by
  * the catalog's steps, and for each screen moves to its path inside the app, follows its steps,
  * hides the parts that change on their own and takes a picture of the whole page at its width.
+ * Asked for the elements instead (the element check, element-check.ts), it lists what a person can
+ * use on each page and takes no picture.
  */
 
 import { randomUUID } from 'node:crypto';
 
 import { BrowserWindow, nativeImage, session } from 'electron';
 
+import { builtElementsOf } from '../ai/design/element-check';
 import type { ScreenCatalog, ScreenStep } from '../ai/design/screen-catalog';
 import type { Bitmap } from './screen-compare';
 import type { ScreenCheckDeps, ScreenShot } from './screen-check';
-import { maskScript, navigateScript, stepScript, unmaskScript } from './screen-replay';
+import { elementsScript, maskScript, navigateScript, stepScript, unmaskScript } from './screen-replay';
 
 const VIEW_HEIGHT = 900;
 /** A page script that doesn't answer in this time fails its screen */
@@ -65,8 +68,12 @@ async function runSteps(win: BrowserWindow, steps: ScreenStep[]): Promise<string
   return undefined;
 }
 
-/** Captures every screen of the catalog at `baseUrl`. One window, screens one after another. Never throws. */
-export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, signal?: AbortSignal): Promise<ScreenShot[]> {
+/**
+ * Captures every screen of the catalog at `baseUrl`. One window, screens one after another. With
+ * `elements`, each screen's shot is what a person can use on it, with no masks and no picture.
+ * Never throws.
+ */
+export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, signal?: AbortSignal, options: { elements?: boolean } = {}): Promise<ScreenShot[]> {
   const origin = new URL(baseUrl).origin;
   const partition = `screen-check-${randomUUID()}`;
   const own = session.fromPartition(partition, { cache: false });
@@ -125,6 +132,15 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
           continue;
         }
         await sleep(SETTLE_MS);
+        if (options.elements) {
+          const listed = (await run(win, elementsScript())) as { ok: boolean; error?: string; elements?: unknown };
+          // The page is the task's code: what it reports is kept only as kinds and names
+          const elements = listed.ok ? builtElementsOf(listed.elements) : null;
+          if (!onApp()) shots.push({ id: screen.id, width: screen.width, error: 'the page left the app' });
+          else if (!elements) shots.push({ id: screen.id, width: screen.width, error: typeof listed.error === 'string' ? listed.error.slice(0, 300) : 'the page could not be read' });
+          else shots.push({ id: screen.id, width: screen.width, elements });
+          continue;
+        }
         if (screen.mask.length) {
           const masked = await run(win, maskScript(screen.mask));
           if (!masked.ok) {
@@ -147,7 +163,7 @@ export async function captureScreens(baseUrl: string, catalog: ScreenCatalog, si
         shots.push({ id: screen.id, width: screen.width, error: error instanceof Error ? error.message : String(error) });
       } finally {
         // The next screen is in the same page: what this one hid is shown again
-        if (screen.mask.length) await run(win, unmaskScript());
+        if (screen.mask.length && !options.elements) await run(win, unmaskScript());
       }
     }
   } catch (error) {

@@ -135,6 +135,7 @@ export type WorkerMessage =
   | WorkerQuestionCancelledMessage
   | WorkerRenderDiagramMessage
   | WorkerScreenCheckMessage
+  | WorkerElementCheckMessage
   | WorkerMemoryRequestMessage
   | WorkerBaseFailuresMessage
   | WorkerSessionEndedMessage;
@@ -197,6 +198,19 @@ export interface WorkerScreenCheckMessage {
   specDir: string;
   /** The task's own screens (library ids): QA shows them itself */
   exclude: string[];
+}
+
+/** The QA reviewer approved a task with a design: the main process opens the frames it showed by its screens.json and lists their elements (design/element-check.ts). */
+export interface WorkerElementCheckMessage {
+  type: 'element-check';
+  taskId: string;
+  requestId: string;
+  /** The running app's page */
+  url: string;
+  /** Where the reviewer's screens.json is */
+  specDir: string;
+  /** The frames to open, as design_compare.json names them */
+  frames: Array<{ file: string; width: number }>;
 }
 
 /** An agent asked the user something; the worker waits for a 'user-answer'. */
@@ -269,7 +283,8 @@ export type MainToWorkerMessage =
       error?: string;
     }
   | { type: 'memory-result'; requestId: string; ok: boolean; text?: string; error?: string }
-  | { type: 'screen-check-result'; requestId: string; ok: boolean; result?: import('../../preview/screen-check').ScreenCheckResult; error?: string };
+  | { type: 'screen-check-result'; requestId: string; ok: boolean; result?: import('../../preview/screen-check').ScreenCheckResult; error?: string }
+  | { type: 'element-check-result'; requestId: string; ok: boolean; pages?: import('../design/element-check').FramePage[]; error?: string };
 
 // =============================================================================
 // Serialized Security Profile

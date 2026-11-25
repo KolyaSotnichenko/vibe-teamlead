@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { maskScript, navigateScript, stepScript, unmaskScript } from '../screen-replay';
+import { elementsScript, maskScript, navigateScript, stepScript, unmaskScript } from '../screen-replay';
 
 // The scripts are expressions the app runs in the page; here they run in jsdom's
 const run = (script: string) => new Function(`return ${script}`)() as Promise<{ ok: boolean; error?: string }>;
@@ -77,5 +77,62 @@ describe('the steps, run in the page', () => {
     document.body.innerHTML = '<button>it\'s "fine"</button>';
     expect(await run(stepScript({ click: { text: 'it\'s "fine"' } }))).toEqual({ ok: true });
     expect((await run(stepScript({ click: "'); throw 1; ('" }, 50))).ok).toBe(false);
+  });
+});
+
+describe('what a person can use on the built page, collected in the page', () => {
+  type Collected = { ok: boolean; elements: Array<{ kind: string; names: string[] }> };
+  const collect = () => new Function(`return ${elementsScript()}`)() as Promise<Collected>;
+  const named = (result: Collected, name: string) => result.elements.find((e) => e.names.includes(name));
+
+  it('names a field by its label, wrapping or by for, its aria-label or its placeholder', async () => {
+    document.body.innerHTML = `
+      <label for="who">Виконавці</label><select id="who"><option>Олена</option></select>
+      <label>Назва задачі <input id="title"></label>
+      <input aria-label="Пошук задач" placeholder="Пошук">
+      <span id="due-label">Термін</span><input aria-labelledby="due-label">
+      <textarea placeholder="Опис"></textarea>`;
+    const result = await collect();
+    expect(result.ok).toBe(true);
+    expect(named(result, 'Виконавці')?.kind).toBe('field');
+    expect(named(result, 'Назва задачі')?.kind).toBe('field');
+    expect(named(result, 'Пошук задач')?.names).toEqual(['Пошук задач', 'Пошук']);
+    expect(named(result, 'Термін')).toBeDefined();
+    expect(named(result, 'Опис')).toBeDefined();
+    // The options of a select are not the name of the field around it
+    expect(result.elements.some((e) => e.names.some((n) => n.includes('Олена')))).toBe(false);
+  });
+
+  it('names buttons, links, tabs and switches by aria-label, text, an image\'s alt, title or a submit\'s value', async () => {
+    document.body.innerHTML = `
+      <button>Додати <b>задачу</b></button>
+      <a href="/plans/1/settings">Налаштування плану</a>
+      <div role="tab">Історія</div>
+      <button role="switch" aria-label="Лише мої"></button>
+      <button><img alt="Закрити"></button>
+      <button title="Ще дії">⋯</button>
+      <input type="submit" value="Зберегти">
+      <details><summary>Фільтри</summary></details>`;
+    const result = await collect();
+    expect(named(result, 'Додати задачу')?.kind).toBe('button');
+    expect(named(result, 'Налаштування плану')?.kind).toBe('link');
+    expect(named(result, 'Історія')?.kind).toBe('tab');
+    expect(named(result, 'Лише мої')?.kind).toBe('switch');
+    expect(named(result, 'Закрити')).toBeDefined();
+    expect(named(result, 'Ще дії')).toBeDefined();
+    expect(named(result, 'Зберегти')?.kind).toBe('button');
+    expect(named(result, 'Фільтри')).toBeDefined();
+  });
+
+  it('skips what a person cannot see, and a link with no address', async () => {
+    document.body.innerHTML = `
+      <div style="display:none"><button>У прихованому</button></div>
+      <button hidden>Прихована</button>
+      <button style="visibility:hidden">Невидима</button>
+      <input type="hidden" value="x" aria-label="Схована">
+      <a>Без адреси</a>
+      <button>Видима</button>`;
+    const result = await collect();
+    expect(result.elements.flatMap((e) => e.names)).toEqual(['Видима']);
   });
 });

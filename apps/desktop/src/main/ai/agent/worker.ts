@@ -58,6 +58,7 @@ import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '.
 import { commitTime, currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { checkVisualEvidence, planDesignFiles, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
 import { designInventories } from '../design/design-inventory';
+import { createElementCheck, elementProblems, elementRefusal, type FramePage } from '../design/element-check';
 import { checkDesignStylesheets } from '../design/stylesheet-check';
 import { screenId } from '../design/screen-catalog';
 import { screenCheckSection } from '../design/screen-regression-prompt';
@@ -187,6 +188,8 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
     pendingRenders.get(msg.requestId)?.(msg);
   } else if (msg.type === 'screen-check-result') {
     pendingScreenChecks.get(msg.requestId)?.(msg);
+  } else if (msg.type === 'element-check-result') {
+    pendingElementChecks.get(msg.requestId)?.(msg);
   } else if (msg.type === 'memory-result') {
     pendingMemory.get(msg.requestId)?.(msg);
   } else if (msg.type === 'design-stop-wait') {
@@ -475,6 +478,32 @@ function screenCheckViaMain(url: string, specDir: string, exclude: string[]): Pr
     abortController.signal.addEventListener('abort', onAbort, { once: true });
     pendingScreenChecks.set(requestId, settle);
     postMessage({ type: 'screen-check', taskId: config.taskId, requestId, url, specDir, exclude });
+  });
+}
+
+// =============================================================================
+// Element check (the reviewer approved → main process opens its frames → what each page has)
+// =============================================================================
+
+type ElementCheckReply = Extract<MainToWorkerMessage, { type: 'element-check-result' }>;
+const pendingElementChecks = new Map<string, (reply: ElementCheckReply) => void>();
+const ELEMENT_CHECK_TIMEOUT_MS = 12 * 60_000;
+
+/** The frames' pages in the running app, opened by screens.json (design/element-check.ts); an error when that could not run. Never rejects. */
+function elementCheckViaMain(url: string, specDir: string, frames: Array<{ file: string; width: number }>): Promise<FramePage[] | { error: string }> {
+  return new Promise((resolve) => {
+    const requestId = randomUUID();
+    const settle = (reply: ElementCheckReply) => {
+      clearTimeout(timer);
+      abortController.signal.removeEventListener('abort', onAbort);
+      pendingElementChecks.delete(requestId);
+      resolve(reply.ok && reply.pages ? reply.pages : { error: reply.error ?? 'the main process gave no pages' });
+    };
+    const onAbort = () => settle({ type: 'element-check-result', requestId, ok: false, error: 'cancelled' });
+    const timer = setTimeout(() => settle({ type: 'element-check-result', requestId, ok: false, error: 'the main process did not answer in time' }), ELEMENT_CHECK_TIMEOUT_MS);
+    abortController.signal.addEventListener('abort', onAbort, { once: true });
+    pendingElementChecks.set(requestId, settle);
+    postMessage({ type: 'element-check', taskId: config.taskId, requestId, url, specDir, frames });
   });
 }
 
@@ -1355,6 +1384,15 @@ async function runQualityAssurance(
   /** The last screen check of this QA run: screens outside the task that changed since the last merge */
   let lastScreenCheck: ScreenCheckResult | undefined;
   const changedScreens = () => lastScreenCheck?.changed.map(({ id, width }) => ({ id, width })) ?? [];
+  // After an approval the app looks for each element of the mockups on the built pages itself. What
+  // it found, and which frames it could not open already, are kept here, outside every file an agent writes
+  const elementCheck = createElementCheck({
+    specDir: session.specDir,
+    startApp: startTaskApp(session),
+    capture: (url, frames) => elementCheckViaMain(url, session.specDir, frames),
+    commit: () => currentCommit(session.projectDir),
+    log: qaLog,
+  });
   const qaLoop = new QALoop({
     review,
     specDir: session.specDir,
@@ -1428,7 +1466,12 @@ async function runQualityAssurance(
       // A task that changed no UI file has no frames to show, but can still have broken a screen
       const frames = (await uiChangedSince(() => changedFilesSinceBase(session.projectDir))) === false ? [] : evidenceFrames;
       if (!frames.length && !changedScreens().length) return undefined;
-      return checkVisualEvidence({ specDir: session.specDir, frames, since: await evidenceSince(), browser: false, changed: changedScreens() });
+      const evidence = checkVisualEvidence({ specDir: session.specDir, frames, since: await evidenceSince(), browser: false, changed: changedScreens() });
+      if (evidence.problems.length || !frames.length) return evidence;
+      // An approval written by hand gets the element check too: the last one of this commit, or a new one
+      const elements = await elementCheck.check(frames);
+      if (!elements) return evidence;
+      return { ...evidence, problems: elementProblems(elements), notShown: [...evidence.notShown, ...elements.notShown] };
     },
     currentCommit: () => currentCommit(session.projectDir),
     approvals: { dir: qaApprovalsDir(), fingerprint: () => workTreeFingerprint(session.projectDir) },
@@ -1454,8 +1497,12 @@ async function runQualityAssurance(
       const frames = runConfig.agentType === 'qa_reviewer' && touchesUi !== false ? evidenceFrames : [];
       const changed = runConfig.agentType === 'qa_reviewer' ? changedScreens() : [];
       const withApp = { ...toolContext, startApp: startTaskApp(session) };
+      const checkElements = async () => {
+        const outcome = await elementCheck.check(frames);
+        return outcome ? elementRefusal(outcome) : undefined;
+      };
       const sessionToolContext = frames.length || changed.length
-        ? { ...withApp, visualEvidence: { frames, since: await evidenceSince(), browser: true, changed } }
+        ? { ...withApp, visualEvidence: { frames, since: await evidenceSince(), browser: true, changed }, ...(frames.length ? { checkElements } : {}) }
         : withApp;
       const firstMessage = [runConfig.kickoffMessage ?? buildKickoffMessage(runConfig.agentType, runConfig.specDir, runConfig.projectDir), runConfig.kickoffData]
         .filter(Boolean)

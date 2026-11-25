@@ -172,6 +172,15 @@ describe('the design checked in the running app', () => {
     expect(text).toMatch(/missing element is a blocking difference/i);
   });
 
+  // planner-mhp: an assignee picker and column controls drawn on the mockups were never built, and every task passed
+  it('QA is told the app itself opens each frame by screens.json and looks for every element, and what one not found needs', () => {
+    const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory);
+    expect(text).toMatch(/after your approval the app opens each frame you showed by screens\.json/i);
+    expect(text).toMatch(/every element of its mockup/i);
+    expect(text).toMatch(/minor difference that names it/i);
+    expect(text).toMatch(/reject the task/i);
+  });
+
   it("QA's list includes the library screens the plan rebuilds, with where to find them", () => {
     const required = [{ file: 'screens/board.html', width: 1280 }, { file: 'base/screens/plan-board.html', width: 1280 }];
     const text = designReferencePrompt('qa_reviewer', '/s', frames, state, inventory, required);

@@ -9,6 +9,7 @@
 import { copyFileSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import type { BuiltElement } from '../ai/design/element-check';
 import { type ScreenCatalog, screenFile } from '../ai/design/screen-catalog';
 import { type Bitmap, isChanged } from './screen-compare';
 
@@ -16,6 +17,8 @@ export interface ScreenShot {
   id: string;
   width: number;
   png?: Buffer;
+  /** What a person can use on the page, when the capture was asked for it instead of a picture (element-check.ts) */
+  elements?: BuiltElement[];
   /** Why the screen could not be reached (a step's element never appeared, the page failed) */
   error?: string;
 }
