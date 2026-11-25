@@ -2,6 +2,13 @@
 
 Notable changes to Vibe Teamlead. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2.0.0-beta.72 - 2026-11-25
+
+- Spec documents: the analyst covers the whole document, whatever its size. It used to propose at most 30 tasks and, for a larger document, only its first phase; the rest never became tasks and the review did not say so. Now a large document comes in parts of about 25 tasks until nothing is left; phases and priorities set the order, never what is left out; no MVP or simplified version of a requirement. The app finds the document's numbered requirements itself (FR-12, NFR-03) and asks again for any that no task covers. The review shows first what still has no task (**Not the whole brief**) and, apart, what was left out by your own words.
+- QA: the app itself looks for each element of the mockup on the built page. After QA approves, the app opens every frame QA showed, by QA's recorded steps, with no model, and compares what a person can use on the page with the mockup. An element it doesn't find must be named by QA as a blocking difference (the task is rejected) or as a minor one with the reason; otherwise the approval is refused. If the app can't make this check, or can't open a frame, the task waits for you before it merges.
+- Short pipeline (no designer): a task whose plan rebuilds screens of the project's design library now gets those screens in its folder, the coder is told what a person can use on each, and QA can't approve until every named screen is shown in the running app. Before, such tasks were approved from the diff, without opening the app.
+- Design files: a broken character reference in a mockup (`&#99999999999;`) no longer empties the list of that screen's elements.
+
 ## 2.0.0-beta.71 - 2026-11-24
 
 - QA reviews against the whole app started for it: the app starts the task's code by the Preview recipe, with a fresh database (migrated and seeded) and the compose file's other services, instead of QA starting databases itself.
