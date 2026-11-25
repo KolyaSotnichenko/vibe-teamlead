@@ -14,9 +14,10 @@
  * to open on demand. Context → Design system → Screens shows it.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { writeFileReplacingSync } from '../safe-write';
 import { type DesignFrame, designDir, designFile, frameFileOk, readDesignCanvas, realFileInside } from './design-step';
 
 /** The stylesheet a task's frames share, in the frames' own folder (the designer writes it once) */
@@ -307,6 +308,19 @@ export function selectBaseFrames(frames: LibraryFrame[], specMd: string, max = B
 const oneLine = (text: string) => text.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
 
 /**
+ * Make `dir`, a folder under `root`, refusing a link anywhere below `root` on the way to it: a recursive
+ * mkdir follows one, and the files would land where it points. Throws on a link.
+ */
+function realFolder(root: string, dir: string): void {
+  let at = root;
+  for (const part of path.relative(root, dir).split(path.sep)) {
+    at = path.join(at, part);
+    if (lstatSync(at, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`Refusing to write through a link: ${at}`);
+  }
+  mkdirSync(dir, { recursive: true });
+}
+
+/**
  * Copy the library into a task's design/base/ for its designer to start from: every file, with
  * the frames the task needs in canvas.json and the rest named in index.md. Never throws.
  */
@@ -322,21 +336,24 @@ export function copyLibraryToBase(
     if (!frames.length) return { copied: 0, listed: 0 };
     const base = path.join(specDir, 'design', 'base');
     const files = [...new Set(frames.map((f) => f.file))];
+    // The task's folder is the agents' to write in, and this copy can come after their sessions:
+    // nothing goes through a link they left, in place of a folder or of a file
     for (const file of files) {
-      mkdirSync(path.dirname(path.join(base, file)), { recursive: true });
-      copyFileSync(path.join(libraryDir(projectRoot), file), path.join(base, file));
+      realFolder(specDir, path.dirname(path.join(base, file)));
+      writeFileReplacingSync(path.join(base, file), readFileSync(path.join(libraryDir(projectRoot), file), 'utf-8'));
     }
     // The latest shared stylesheets: the designer starts its own from them
     for (const folder of FRAME_FOLDERS) {
       const css = readShared(path.join(libraryDir(projectRoot), folder));
       if (css === undefined) continue;
-      mkdirSync(path.join(base, folder), { recursive: true });
-      writeFileSync(path.join(base, folder, SHARED_STYLESHEET), css);
+      realFolder(specDir, path.join(base, folder));
+      writeFileReplacingSync(path.join(base, folder, SHARED_STYLESHEET), css);
     }
+    realFolder(specDir, base);
     const named = new Set(always);
     const chosen = [...frames.filter((f) => named.has(f.file)), ...selectBaseFrames(frames, specMd).filter((f) => !named.has(f.file))];
     const chosenFiles = new Set(chosen.map((f) => f.file));
-    writeFileSync(path.join(base, 'canvas.json'), JSON.stringify({ frames: chosen }, null, 2));
+    writeFileReplacingSync(path.join(base, 'canvas.json'), JSON.stringify({ frames: chosen }, null, 2));
     const rest = files.filter((file) => !chosenFiles.has(file)).sort();
     const index = [
       "# The rest of the project's design library",
@@ -346,7 +363,7 @@ export function copyLibraryToBase(
       ...rest.map((file) => `- ${file} — ${oneLine(frames.find((f) => f.file === file)?.title ?? '')}`),
       '',
     ].join('\n');
-    writeFileSync(path.join(base, 'index.md'), index);
+    writeFileReplacingSync(path.join(base, 'index.md'), index);
     return { copied: files.length, listed: chosen.length };
   } catch {
     return { copied: 0, listed: 0 };
@@ -366,7 +383,8 @@ export function copyLibraryForPlan(projectRoot: string, specDir: string, refs: s
     if (!named.length) return 0;
     const inLibrary = new Set(readLibrary(projectRoot).frames.map((f) => f.file));
     const base = path.join(specDir, 'design', 'base');
-    const missing = named.filter((file) => inLibrary.has(file) && !existsSync(path.join(base, file)));
+    // A link where the screen belongs is not the screen
+    const missing = named.filter((file) => inLibrary.has(file) && !realFileInside(base, path.join(base, file)));
     if (!missing.length) return 0;
     return copyLibraryToBase(projectRoot, specDir, specMd, named).copied;
   } catch {

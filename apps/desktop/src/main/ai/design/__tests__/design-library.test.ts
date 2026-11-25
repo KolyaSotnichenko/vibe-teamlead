@@ -87,6 +87,53 @@ describe('a task with no designer whose plan rebuilds library screens', () => {
   });
 });
 
+// The copy now runs after coder sessions, which can leave a link anywhere in the task's folder
+describe("a link left in the task's design folder", () => {
+  function project(): { root: string; spec: string; outside: string } {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    for (const name of ['plan-board', 'home']) {
+      mkdirSync(path.join(libraryDir(root), 'screens'), { recursive: true });
+      writeFileSync(path.join(libraryDir(root), 'screens', `${name}.html`), `<p>${name}</p>`);
+    }
+    writeFileSync(path.join(libraryDir(root), 'screens', 'styles.css'), 'body{}');
+    writeFileSync(path.join(libraryDir(root), 'canvas.json'), JSON.stringify({
+      frames: ['plan-board', 'home'].map((name, i) => ({ file: `screens/${name}.html`, title: name, kind: 'screen', width: 1280, height: 900, x: i * 1360, y: 0, taskId: '007', updatedAt: 'x' })),
+    }));
+    const spec = path.join(mkdtempSync(path.join(tmpdir(), 'vtl-wt-')), '.vibe-teamlead', 'specs', '044');
+    mkdirSync(spec, { recursive: true });
+    return { root, spec, outside: mkdtempSync(path.join(tmpdir(), 'vtl-out-')) };
+  }
+  const refs = ['base/screens/plan-board.html'];
+
+  it.each([['design'], ['design/base'], ['design/base/screens']])('in place of %s: nothing is written where it points', async (linked) => {
+    const { symlinkSync, readdirSync } = await import('node:fs');
+    const { root, spec, outside } = project();
+    mkdirSync(path.dirname(path.join(spec, linked)), { recursive: true });
+    symlinkSync(outside, path.join(spec, linked));
+    expect(copyLibraryForPlan(root, spec, refs)).toBe(0);
+    expect(copyLibraryToBase(root, spec)).toEqual({ copied: 0, listed: 0 });
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it('in place of a screen: the link is replaced by the screen, and what it pointed at is untouched', async () => {
+    const { symlinkSync, lstatSync } = await import('node:fs');
+    const { root, spec, outside } = project();
+    const target = path.join(outside, 'authorized_keys');
+    writeFileSync(target, 'secret');
+    const screens = path.join(spec, 'design', 'base', 'screens');
+    mkdirSync(screens, { recursive: true });
+    for (const name of ['plan-board.html', 'home.html', 'styles.css']) symlinkSync(target, path.join(screens, name));
+    symlinkSync(target, path.join(spec, 'design', 'base', 'canvas.json'));
+    symlinkSync(target, path.join(spec, 'design', 'base', 'index.md'));
+    // A link is not the screen: the task has no copy of it yet
+    expect(copyLibraryForPlan(root, spec, refs)).toBe(2);
+    expect(readFileSync(target, 'utf-8')).toBe('secret');
+    for (const name of ['plan-board.html', 'home.html', 'styles.css']) expect(lstatSync(path.join(screens, name)).isFile()).toBe(true);
+    expect(readFileSync(path.join(screens, 'plan-board.html'), 'utf-8')).toBe('<p>plan-board</p>');
+    expect(lstatSync(path.join(spec, 'design', 'base', 'canvas.json')).isFile()).toBe(true);
+  });
+});
+
 describe('what the library refuses', () => {
   it('a frame that is a link, or whose path leaves the library, is not copied', async () => {
     const { symlinkSync } = await import('node:fs');
