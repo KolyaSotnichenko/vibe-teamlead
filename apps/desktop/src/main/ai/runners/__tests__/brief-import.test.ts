@@ -330,6 +330,8 @@ describe('the analyst is told to cover the whole brief', () => {
     expect(prompt).toMatch(/`remaining`/);
     expect(prompt).toMatch(/`covers`/);
     expect(prompt).toMatch(/`notBuilt`/);
+    // A brief that lists what already works (an audit) has ids no task should build again
+    expect(prompt).toMatch(/already built and works/);
   });
 });
 
