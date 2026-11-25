@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { designInventories, screenInventory } from '../design-inventory';
+import { designInventories, screenInventory, screenInventoryStrict } from '../design-inventory';
 
 const page = (body: string) => `<!doctype html><html><head><title>Card</title><style>button{color:red}</style></head><body>${body}<script>document.querySelector('button')</script></body></html>`;
 
@@ -82,5 +82,14 @@ describe('designInventories', () => {
       { file: 'screens/board.html', items: ['link «Мої задачі» → my-tasks.html', 'button «Додати задачу»'] },
       { file: 'screens/card.html', items: ['field «Виконавці»'] },
     ]);
+  });
+});
+
+// A character reference too large to be a character stopped the whole page being read: the elements after it were lost
+describe('a page with a broken character reference', () => {
+  it('is still read whole', () => {
+    const html = '<main><button>A&#99999999999;B</button><button>Зберегти</button></main>';
+    expect(screenInventory(html)).toEqual(['button «AB»', 'button «Зберегти»']);
+    expect(screenInventoryStrict(html)).toEqual(['button «AB»', 'button «Зберегти»']);
   });
 });

@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ScreenCatalog } from '../screen-catalog';
-import { accountFor, builtElementsOf, capturePages, elementRefusal, isFound, normalizeLabel, unfoundElements, type BuiltElement } from '../element-check';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { accountFor, builtElementsOf, capturePages, elementRefusal, frameInventories, isFound, normalizeLabel, unfoundElements, type BuiltElement } from '../element-check';
 
 const el = (kind: string, ...names: string[]): BuiltElement => ({ kind, names });
 const page = (file: string, items: string[], elements: BuiltElement[], width = 1280) => ({ file, width, items, elements });
@@ -181,5 +185,46 @@ describe('the pages the app opens, by the reviewer\'s recipes', () => {
     const capture = async () => [{ id: 'screens/board.html', width: 1280, error: 'sign-in failed: not found: "#login"' }];
     const pages = await capturePages('http://localhost:3000', catalog, [{ file: 'screens/board.html', width: 1280 }], capture);
     expect(pages).toEqual([{ file: 'screens/board.html', width: 1280, error: 'sign-in failed: not found: "#login"' }]);
+  });
+});
+
+// The mockups in a task's folder can be written by its agents from the design's approval to the review;
+// the project's library is where the owner's approved screens are kept
+describe("the mockups' elements, checked against the project's library", () => {
+  const BOARD = '<main><button>Додати задачу</button><label for="who">Виконавці</label><select id="who"></select></main>';
+  function setup(taskCopy: string, opts: { own?: string; libraryTask?: string; inLibrary?: boolean } = {}) {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-inv-'));
+    const specDir = path.join(root, 'spec');
+    const libraryDir = path.join(root, 'library');
+    const file = opts.own ?? 'base/screens/board.html';
+    mkdirSync(path.dirname(path.join(specDir, 'design', file)), { recursive: true });
+    writeFileSync(path.join(specDir, 'design', file), taskCopy);
+    mkdirSync(path.join(libraryDir, 'screens'), { recursive: true });
+    if (opts.inLibrary !== false) writeFileSync(path.join(libraryDir, 'screens', 'board.html'), `<style>.x{}</style>${BOARD}`);
+    const library = { dir: libraryDir, frames: opts.inLibrary === false ? [] : [{ file: 'screens/board.html', taskId: opts.libraryTask ?? '007-plans' }], taskId: '044-card' };
+    return { inventory: frameInventories(specDir, [{ file, width: 1280 }, { file, width: 390 }], library).get(file) };
+  }
+
+  it("a library screen the plan rebuilds: the task's copy that says the same is used", () => {
+    expect(setup(BOARD).inventory).toEqual({ items: ['button «Додати задачу»', 'field «Виконавці»'] });
+  });
+
+  it("a copy that lists other elements than the library's screen sends the frame to the owner", () => {
+    const changed = setup('<main><button>Додати задачу</button></main>').inventory;
+    expect(changed).toEqual({ hold: expect.stringMatching(/differs from the project's design library/) });
+    expect(setup('').inventory).toEqual({ hold: expect.stringMatching(/differs/) });
+  });
+
+  it("the task's own screen is compared when the library's came from this task; another task's screen of that name is not it", () => {
+    const own = { own: 'screens/board.html' };
+    expect(setup('<main></main>', { ...own, libraryTask: '044-card' }).inventory).toEqual({ hold: expect.stringMatching(/differs/) });
+    expect(setup(BOARD, { ...own, libraryTask: '044-card' }).inventory).toEqual({ items: ['button «Додати задачу»', 'field «Виконавці»'] });
+    expect(setup('<main><a href="x.html">Нове</a></main>', { ...own, libraryTask: '007-plans' }).inventory).toEqual({ items: ['link «Нове» → x.html'] });
+  });
+
+  it('with no such screen in the library, or no library given, the copy is what there is', () => {
+    expect(setup(BOARD, { inLibrary: false }).inventory).toEqual({ items: ['button «Додати задачу»', 'field «Виконавці»'] });
+    const dir = mkdtempSync(path.join(tmpdir(), 'vtl-inv-'));
+    expect(frameInventories(dir, [{ file: 'screens/none.html', width: 1280 }]).get('screens/none.html')).toEqual({ hold: expect.stringMatching(/could not be read/) });
   });
 });

@@ -28,7 +28,7 @@ import { animatesWithGsap } from '../design/animation';
 import { designerResultOf, runDesignStep, writeDesignFailure, type DesignStepResult } from '../design/design-runner';
 import { RATE_LIMIT_PAUSE_FILE, removePauseFile, waitForRateLimitResume, writeRateLimitPauseFile } from '../orchestration/pause-handler';
 import { createDesignerWaiter } from '../design/designer-wait';
-import { copyLibraryForPlan, copyLibraryToBase, publishToLibrary } from '../design/design-library';
+import { copyLibraryForPlan, copyLibraryToBase, libraryDir, publishToLibrary, readLibrary } from '../design/design-library';
 import { designReferencePrompt, lintDesignScreens, readDesignCanvas, readDesignState, specTouchesUi } from '../design/design-step';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
@@ -58,7 +58,7 @@ import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '.
 import { commitTime, currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { checkVisualEvidence, planDesignFiles, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
 import { designInventories } from '../design/design-inventory';
-import { createElementCheck, elementProblems, elementRefusal, frameInventories, type FramePage } from '../design/element-check';
+import { createElementCheck, elementProblems, elementRefusal, frameInventories, type FramePage, type InventoryLibrary } from '../design/element-check';
 import { checkDesignStylesheets } from '../design/stylesheet-check';
 import { screenId } from '../design/screen-catalog';
 import { screenCheckSection } from '../design/screen-regression-prompt';
@@ -267,6 +267,13 @@ function specChangesUi(session: SerializableSessionConfig): boolean {
     // no spec: decided by the project alone
   }
   return specTouchesUi(specMd, { projectHasUi, isUiFile });
+}
+
+/** The project's design library for the element check: the approved screens the task's mockups are compared with */
+function inventoryLibrary(session: SerializableSessionConfig): InventoryLibrary | undefined {
+  const root = projectRootFor(session.projectDir);
+  if (!root) return undefined;
+  return { dir: libraryDir(root), frames: readLibrary(root).frames, taskId: config.taskId };
 }
 
 /**
@@ -1393,7 +1400,7 @@ async function runQualityAssurance(
     commit: () => currentCommit(session.projectDir),
     log: qaLog,
     // The mockups' elements, read now: the reviewer can write in the spec folder, design/ included
-    inventories: frameInventories(session.specDir, evidenceFrames),
+    inventories: frameInventories(session.specDir, evidenceFrames, inventoryLibrary(session)),
   });
   const qaLoop = new QALoop({
     review,

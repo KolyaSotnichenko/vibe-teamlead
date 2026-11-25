@@ -19,7 +19,11 @@ const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"'
 function decode(text: string): string {
   return text
     .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, name: string) => ENTITIES[name])
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+    // A number that is no character (too large, a surrogate) is dropped: fromCodePoint would throw, and the page with it
+    .replace(/&#(\d+);/g, (_, code: string) => {
+      const point = Number(code);
+      return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff) ? String.fromCodePoint(point) : '';
+    });
 }
 
 /** The text a person sees in a piece of markup, on one line. */
@@ -55,7 +59,21 @@ function screenTarget(href: string): string | undefined {
 
 /** The elements of one screen a person can use, in page order, each once. Never throws. */
 export function screenInventory(html: string): string[] {
+  return readInventory(html).items;
+}
+
+/**
+ * The same, or null when the page could not be read to its end: what was found until then is not
+ * the screen, and a check that looks for a screen's elements must not take it for one. Never throws.
+ */
+export function screenInventoryStrict(html: string): string[] | null {
+  const { items, whole } = readInventory(html);
+  return whole ? items : null;
+}
+
+function readInventory(html: string): { items: string[]; whole: boolean } {
   const items: string[] = [];
+  let whole = true;
   try {
     const page = withoutNotes(html);
     const labelled = new Set<string>();
@@ -107,8 +125,9 @@ export function screenInventory(html: string): string[] {
     }
   } catch {
     // a page the regexes can't read lists what was found so far
+    whole = false;
   }
-  return collapseRows([...new Set(items)]).slice(0, MAX_ITEMS);
+  return { items: collapseRows([...new Set(items)]).slice(0, MAX_ITEMS), whole };
 }
 
 /** Rows of sample data (cards, table rows) that all open one screen: the first, and how many more. Pure. */

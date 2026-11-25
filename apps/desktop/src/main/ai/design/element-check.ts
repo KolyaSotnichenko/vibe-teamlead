@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { writeFileReplacingSync } from '../safe-write';
-import { screenInventory } from './design-inventory';
+import { screenInventoryStrict } from './design-inventory';
 import { designDir, designFile, realFileInside } from './design-step';
 import { type ScreenCatalog, type ScreenRecipe, TASK_SCREENS_FILE, screenId } from './screen-catalog';
 import { COMPARE_FILE, type EvidenceFrame, type NotShownFrame } from './visual-evidence';
@@ -256,26 +256,52 @@ function differencesByFile(specDir: string): Map<string, string[]> {
   return out;
 }
 
+/** A screen's elements to look for, or why the app cannot tell what they are (the frame then goes to the owner) */
+export type FrameInventory = { items: string[] } | { hold: string };
+
+/** The project's design library, where the owner's approved screens are kept, outside the task's folder */
+export interface InventoryLibrary {
+  /** <project>/.vibe-teamlead/design/library */
+  dir: string;
+  /** Its frames (design-library.ts readLibrary), each with the task it came from */
+  frames: Array<{ file: string; taskId?: string }>;
+  /** This task: a screen of the library that came from it is its own design, as approved */
+  taskId: string;
+}
+
+/** A file's elements, or null when it is not a real file inside `root` or cannot be read whole. Never throws. */
+function inventoryOfFile(root: string, full: string | null): string[] | null {
+  if (!full || !realFileInside(root, full)) return null;
+  try {
+    return screenInventoryStrict(readFileSync(full, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The mockup's elements of each screen file of the frames (not deduplicated across screens:
- * unfoundElements does that); null for a mockup that could not be read. Read once, before any
- * review: the reviewer can write in the spec folder, the mockups included, and a mockup emptied
- * during the review would have nothing left to look for. Never throws.
+ * unfoundElements does that). Read once, before any review. The mockups in the task's folder are
+ * the agents' to write, from the design's approval on, so each is compared with the project's
+ * library: a screen of the library the plan rebuilds (base/…), and the task's own screen when the
+ * library's came from this task. A copy that lists other elements than the library's screen, or
+ * cannot be read, is not looked for at all: its frame goes to the owner. Never throws.
  */
-export function frameInventories(specDir: string, frames: EvidenceFrame[]): Map<string, string[] | null> {
-  const out = new Map<string, string[] | null>();
+export function frameInventories(specDir: string, frames: EvidenceFrame[], library?: InventoryLibrary): Map<string, FrameInventory> {
+  const out = new Map<string, FrameInventory>();
   for (const { file } of frames) {
     if (out.has(file)) continue;
-    const full = designFile(specDir, file);
-    let items: string[] | null = null;
-    if (full && realFileInside(designDir(specDir), full)) {
-      try {
-        items = screenInventory(readFileSync(full, 'utf-8'));
-      } catch {
-        // not readable: the frame goes to the owner
-      }
+    const copy = inventoryOfFile(designDir(specDir), designFile(specDir, file));
+    const inLibrary = file.startsWith('base/') ? file.slice('base/'.length) : file;
+    const approved = library?.frames.find((f) => f.file === inLibrary && (file.startsWith('base/') || f.taskId === library.taskId));
+    const theirs = approved && library ? inventoryOfFile(library.dir, path.resolve(library.dir, inLibrary)) : null;
+    if (theirs && (!copy || copy.join('\n') !== theirs.join('\n'))) {
+      out.set(file, { hold: "its mockup in the task's folder differs from the project's design library" });
+    } else if (!copy) {
+      out.set(file, { hold: 'its mockup could not be read' });
+    } else {
+      out.set(file, { items: copy });
     }
-    out.set(file, items);
   }
   return out;
 }
@@ -319,7 +345,7 @@ export interface ElementCheckDeps {
   /** A line in the task's QA log */
   log: (line: string) => void;
   /** The mockups' elements, read before any review of this QA run (frameInventories) */
-  inventories: Map<string, string[] | null>;
+  inventories: Map<string, FrameInventory>;
 }
 
 /**
@@ -383,16 +409,24 @@ export function createElementCheck(deps: ElementCheckDeps) {
       if (!Array.isArray(opened)) return held(shown, opened.notRun);
 
       // A frame whose mockup could not be read before the review has nothing to be compared with
-      const readable = (f: EvidenceFrame) => Array.isArray(deps.inventories.get(f.file));
+      const itemsOf = (f: EvidenceFrame) => {
+        const inventory = deps.inventories.get(f.file);
+        return inventory && 'items' in inventory ? inventory.items : undefined;
+      };
+      const readable = (f: EvidenceFrame) => itemsOf(f) !== undefined;
+      const heldFor = (f: EvidenceFrame) => {
+        const inventory = deps.inventories.get(f.file);
+        return inventory && 'hold' in inventory ? inventory.hold : 'its mockup could not be read';
+      };
       const pages = opened.filter(readable);
       const reached = pages.filter((p): p is FramePage & { elements: BuiltElement[] } => Array.isArray(p.elements));
-      const { looked, unfound } = unfoundElements(reached.map((p) => ({ file: p.file, width: p.width, items: deps.inventories.get(p.file) ?? [], elements: p.elements })));
+      const { looked, unfound } = unfoundElements(reached.map((p) => ({ file: p.file, width: p.width, items: itemsOf(p) ?? [], elements: p.elements })));
       const { accounted, unaccounted } = accountFor(unfound, differencesByFile(deps.specDir));
 
       const unreachable: ElementCheckOutcome['unreachable'] = [];
       const notShown: NotShownFrame[] = opened
         .filter((p) => !readable(p))
-        .map((p) => ({ file: p.file, width: p.width, reason: `${NOT_LOOKED_NOTE}its mockup could not be read` }));
+        .map((p) => ({ file: p.file, width: p.width, reason: `${NOT_LOOKED_NOTE}${heldFor(p)}` }));
       for (const p of pages) {
         if (p.elements) continue;
         const error = errorText(p.error);
