@@ -24,6 +24,8 @@ export interface BriefTaskDraft {
   category: TaskCategory;
   /** Where in the brief this comes from (heading or short quote) */
   sourceSection?: string;
+  /** The brief's requirement ids this task builds (FR-12…), when the brief has ids */
+  covers?: string[];
 }
 
 export interface BriefEpic {
@@ -45,6 +47,13 @@ export interface BriefProposal {
   openQuestions: BriefOpenQuestion[];
   /** What the analyst asked before proposing, and the answers (empty when it asked nothing) */
   clarifications?: BriefClarification[];
+  /** Parts of the brief that get no task because the user excluded them, or that are not requirements */
+  notBuilt?: Array<{ what: string; why: string }>;
+  /**
+   * What of the brief still has no task after the analyst's last part (requirement ids the app found
+   * in the brief, and the analyst's own list). Empty when the whole brief is covered.
+   */
+  uncovered?: string[];
 }
 
 /** A decision only the user can make, and the tasks whose spec depends on it */

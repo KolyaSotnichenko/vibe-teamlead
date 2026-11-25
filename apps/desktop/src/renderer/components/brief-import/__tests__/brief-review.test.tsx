@@ -109,6 +109,7 @@ describe('brief review model', () => {
   });
 });
 
+
 describe('BriefImportDialog', () => {
   let progress: ((e: BriefProgressEvent) => void) | null;
   let brief: { [K in keyof BriefAPI]: ReturnType<typeof vi.fn> };
@@ -140,6 +141,26 @@ describe('BriefImportDialog', () => {
   afterEach(cleanup);
 
   const row = (key: string) => screen.getByTestId(`brief-task-${key}`);
+
+  // planner-mhp: 35 of a BRD's 72 requirements never became a task, and nothing in the review said so
+  it('is shown first, as needing attention, with what was left out on purpose listed apart', () => {
+    const partial: BriefProposal = { ...proposal, uncovered: ['FR-41', 'Section 9: reports'], notBuilt: [{ what: 'FR-60', why: 'The brief says: payroll stays in the ERP' }] };
+    render(<BriefImportDialog projectId="p1" open onOpenChange={noop} initialProposal={partial} />);
+    const block = screen.getByRole('region', { name: /briefImport\.review\.uncovered/ });
+    expect(within(block).getByText('FR-41')).toBeInTheDocument();
+    expect(within(block).getByText('Section 9: reports')).toBeInTheDocument();
+    expect(within(block).getByText(/briefImport\.review\.uncoveredNote/)).toBeInTheDocument();
+    expect(within(block).getByText(/briefImport\.review\.uncoveredLabel/)).toBeInTheDocument();
+    const left = screen.getByRole('region', { name: /briefImport\.review\.notBuilt/ });
+    expect(within(left).getByText('FR-60')).toBeInTheDocument();
+    expect(within(left).getByText('The brief says: payroll stays in the ERP')).toBeInTheDocument();
+  });
+
+  it('says nothing when the whole brief is covered', () => {
+    render(<BriefImportDialog projectId="p1" open onOpenChange={noop} initialProposal={{ ...proposal, uncovered: [], notBuilt: [] }} />);
+    expect(screen.queryByRole('region', { name: /briefImport\.review\.uncovered/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: /briefImport\.review\.notBuilt/ })).toBeNull();
+  });
 
   it('unchecking a task drops it and the dependencies on it from what is created', async () => {
     render(<BriefImportDialog projectId="p1" open onOpenChange={noop} initialProposal={proposal} />);

@@ -98,6 +98,27 @@ export function BriefReviewStep({
 
       {/* Questions, assumptions, order */}
       <aside className="min-w-0 space-y-8">
+        {(proposal.uncovered?.length ?? 0) > 0 && (
+          <section aria-labelledby="brief-uncovered">
+            <div className="border-l-2 border-[var(--vt-signal)] bg-muted px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-destructive">
+                {t('tasks:briefImport.review.uncoveredLabel')}
+              </p>
+              <h3 id="brief-uncovered" className="mt-0.5 text-sm font-semibold text-foreground">
+                {t('tasks:briefImport.review.uncovered', { count: proposal.uncovered?.length ?? 0 })}
+              </h3>
+              <ul className="mt-2 space-y-1">
+                {proposal.uncovered?.map((item) => (
+                  <li key={item} className="text-sm text-foreground">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">{t('tasks:briefImport.review.uncoveredNote')}</p>
+            </div>
+          </section>
+        )}
+
         {proposal.openQuestions.length > 0 && (
           <section aria-labelledby="brief-questions">
             <div className="border-l-2 border-[var(--vt-signal)] bg-muted px-4 py-3">
@@ -151,6 +172,21 @@ export function BriefReviewStep({
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {(proposal.notBuilt?.length ?? 0) > 0 && (
+          <section aria-labelledby="brief-not-built" className="space-y-3">
+            <SectionHeader id="brief-not-built" title={t('tasks:briefImport.review.notBuilt')} meta={proposal.notBuilt?.length ?? 0} />
+            <ul className="space-y-2">
+              {proposal.notBuilt?.map((item) => (
+                <li key={item.what} className="border-l-2 border-foreground pl-3 text-sm">
+                  <span className="block text-foreground">{item.what}</span>
+                  {item.why && <span className="mt-0.5 block text-muted-foreground">{item.why}</span>}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">{t('tasks:briefImport.review.notBuiltNote')}</p>
           </section>
         )}
 

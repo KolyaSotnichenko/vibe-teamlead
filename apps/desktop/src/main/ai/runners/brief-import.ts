@@ -24,7 +24,11 @@ import type { StreamEvent } from '../session/types';
 
 /** Brief files larger than this are refused (they would not fit the analyst's context anyway). */
 const MAX_BRIEF_BYTES = 20 * 1024 * 1024;
-const MAX_TASKS = 30;
+/**
+ * How many times the analyst is asked for the next part of a brief. A part is about 25 tasks, so
+ * this is far more than any brief needs: it only ends a run that would never end.
+ */
+const MAX_PARTS = 40;
 
 const TEXT_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.text']);
 /** Converted to text with macOS textutil; on Windows only .docx is read (docxText) */
@@ -158,11 +162,11 @@ export async function storeBrief(
 
 /**
  * Make the proposal safe to use: unique keys, dependencies that exist and point
- * backwards (no cycles), epics that exist, and at most MAX_TASKS tasks.
+ * backwards (no cycles), epics that exist. Every task stays: a brief of any size becomes tasks.
  */
 export function normalizeProposal(briefId: string, output: BriefProposalOutput): BriefProposal {
   const seen = new Set<string>();
-  const tasks = output.tasks.slice(0, MAX_TASKS).map((task, index) => {
+  const tasks = output.tasks.map((task, index) => {
     let key = task.key.trim() || `T${index + 1}`;
     while (seen.has(key)) key = `${key}b`;
     seen.add(key);
@@ -185,6 +189,7 @@ export function normalizeProposal(briefId: string, output: BriefProposalOutput):
     priority: task.priority,
     category: task.category,
     sourceSection: task.sourceSection.trim() || undefined,
+    covers: cleanList(task.covers),
   }));
 
   return {
@@ -195,7 +200,115 @@ export function normalizeProposal(briefId: string, output: BriefProposalOutput):
     tasks: normalized,
     assumptions: output.assumptions.filter((a) => a.trim()),
     openQuestions: normalizeOpenQuestions(output.openQuestions, normalized.map((t) => t.key)),
+    notBuilt: notBuiltOf(output.notBuilt),
   };
+}
+
+/** Trimmed, non-empty strings, each once; anything else (a proposal from an older build has none) is no list. */
+function cleanList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((item): item is string => typeof item === 'string').map((item) => item.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+}
+
+function notBuiltOf(raw: unknown): Array<{ what: string; why: string }> {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Array<{ what: string; why: string }> = [];
+  for (const item of raw as Array<{ what?: unknown; why?: unknown }>) {
+    const [what] = cleanList([item?.what]);
+    if (!what || seen.has(what)) continue;
+    seen.add(what);
+    out.push({ what, why: cleanList([item?.why])[0] ?? '' });
+  }
+  return out;
+}
+
+const REQUIREMENT_ID = /\b([A-Z][A-Z0-9]{0,7})-(\d{1,4})\b/g;
+
+/**
+ * The requirement ids a brief numbers its requirements with (FR-12, NFR-03), in the order they
+ * first appear, each once. A prefix counts when the brief uses it with three numbers or more, so
+ * UTF-8 or SHA-256 are not requirements. The app checks these itself: an analyst that says the
+ * whole brief is covered is not taken at its word. Pure.
+ */
+export function briefRequirementIds(text: string): string[] {
+  const byPrefix = new Map<string, Set<string>>();
+  const ids: string[] = [];
+  for (const match of text.matchAll(REQUIREMENT_ID)) {
+    const id = match[0];
+    const numbers = byPrefix.get(match[1]) ?? new Set<string>();
+    numbers.add(match[2]);
+    byPrefix.set(match[1], numbers);
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids.filter((id) => (byPrefix.get(id.slice(0, id.lastIndexOf('-')))?.size ?? 0) >= 3);
+}
+
+/** The ids named in a list of covered or excluded items ("FR-12", "FR-12: reports", "FR-12, FR-13"). Pure. */
+function idsIn(items: string[]): Set<string> {
+  return new Set(items.flatMap((item) => [...item.matchAll(REQUIREMENT_ID)].map((m) => m[0])));
+}
+
+/** What of the brief has no task: its ids nobody covers or excludes, then the analyst's own list. Pure. */
+function uncoveredOf(briefIds: string[], output: BriefProposalOutput): string[] {
+  const covered = idsIn(output.tasks.flatMap((t) => cleanList(t.covers)));
+  const excluded = idsIn(notBuiltOf(output.notBuilt).map((n) => n.what));
+  const ids = briefIds.filter((id) => !covered.has(id) && !excluded.has(id));
+  // The analyst's lines about ids the app already lists are not said twice
+  const listed = new Set(ids);
+  const rest = cleanList(output.remaining).filter((line) => {
+    const named = [...idsIn([line])];
+    return !named.length || named.some((id) => !listed.has(id) && !covered.has(id) && !excluded.has(id)) || named.every((id) => !briefIds.includes(id));
+  });
+  return [...ids, ...rest.filter((line) => !listed.has(line))];
+}
+
+/** One proposal out of the parts the analyst returned: later tasks, epics, assumptions and questions added to the first. Pure. */
+function mergeParts(parts: BriefProposalOutput[]): BriefProposalOutput {
+  const [first, ...rest] = parts;
+  const epicKeys = new Set(first.epics.map((e) => e.key));
+  const merged: BriefProposalOutput = { ...first, epics: [...first.epics], tasks: [...first.tasks], assumptions: [...first.assumptions], openQuestions: [...first.openQuestions], notBuilt: [...(first.notBuilt ?? [])] };
+  for (const part of rest) {
+    for (const epic of part.epics ?? []) {
+      if (epicKeys.has(epic.key)) continue;
+      epicKeys.add(epic.key);
+      merged.epics.push(epic);
+    }
+    merged.tasks.push(...(part.tasks ?? []));
+    merged.assumptions.push(...(part.assumptions ?? []));
+    merged.openQuestions.push(...(part.openQuestions ?? []));
+    merged.notBuilt.push(...(part.notBuilt ?? []));
+  }
+  // What is left is what the last part says is left
+  merged.remaining = parts[parts.length - 1].remaining ?? [];
+  return merged;
+}
+
+/** The request for the next part: what exists, what is left. The titles are the analyst's own, sent back to it. Pure. */
+function nextPartPrompt(readPath: string, projectPath: string, soFar: BriefProposalOutput, left: string[]): string {
+  const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
+  const tasks = soFar.tasks.map((t) => `- ${oneLine(t.key)} — ${oneLine(t.title)}${cleanList(t.covers).length ? ` [covers: ${cleanList(t.covers).join(', ')}]` : ''}`);
+  const epics = soFar.epics.map((e) => `- ${oneLine(e.key)} — ${oneLine(e.title)}`);
+  const last = soFar.tasks.length;
+  return [
+    `The brief is at ${readPath}. Read all of it.`,
+    `The project root is ${projectPath}.`,
+    'Clarification: OFF. Do not ask questions; propose on stated assumptions.',
+    '',
+    `This is the next part of a proposal you started: the brief is larger than one answer. ${last} task(s) exist so far. Propose the tasks for what is still not covered, as described in "THE WHOLE BRIEF" in your instructions.`,
+    `Return only new tasks (keys go on from T${last + 1}; \`dependsOn\` may name earlier keys) and only new epics. Leave \`title\` and \`summary\` as they would be for the whole brief.`,
+    '',
+    'Epics so far:',
+    ...epics,
+    '',
+    'Tasks so far:',
+    ...tasks,
+    '',
+    "Parts of the brief no task covers yet (requirement ids the app found in the brief's text, and your own list from the last part):",
+    ...left.map((line) => `- ${oneLine(line)}`),
+    '',
+    'Every one of them gets a task now or in a later part, or goes under `notBuilt` with the user\'s words that exclude it (or what it is, when it is not something to build). List in `remaining` what is still left after this part.',
+  ].join('\n');
 }
 
 const TASK_KEY = /\bT\d+\b/g;
@@ -309,6 +422,16 @@ export function clarificationsMarkdown(items: BriefClarification[]): string {
   return lines.join('\n');
 }
 
+/** The brief's text when the app can read it as text (a PDF is read by the analyst only). Never throws. */
+function briefText(readPath: string): string {
+  if (!TEXT_EXTENSIONS.has(extname(readPath).toLowerCase())) return '';
+  try {
+    return readFileSync(readPath, 'utf-8');
+  } catch {
+    return '';
+  }
+}
+
 export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefProposal> {
   const { projectPath, signal, onProgress } = options;
   const brief = await storeBrief(projectPath, options.autoBuildPath, options.input);
@@ -331,9 +454,31 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
       }
     : undefined;
 
-  const result = await runClaudeTask({
-    systemPrompt,
-    prompt: [
+  /** One part of the proposal: the first asks the user (when clarifying), the next ones go on from what exists */
+  const part = (prompt: string, asking: boolean) =>
+    runClaudeTask({
+      systemPrompt,
+      prompt,
+      // Superpowers brainstorming drives the questions (only when clarifying)
+      skills: asking ? ['superpowers:brainstorming'] : [],
+      askUser: asking ? askUser : undefined,
+      // Settings → Agents → feature models (the spec document feature)
+      model: feature.model,
+      thinkingLevel: feature.thinkingLevel as ThinkingLevel,
+      tools: asking ? [...READ_TOOLS, 'AskUserQuestion', 'Skill'] : READ_TOOLS,
+      cwd: projectPath,
+      agentType: 'brief_analyst',
+      outputSchema: BriefProposalSchema,
+      maxTurns: 60,
+      abortSignal: signal,
+      onEvent: (event) => {
+        const line = progressLine(event, projectPath);
+        if (line) onProgress?.(line);
+      },
+    });
+
+  const result = await part(
+    [
       `The brief is at ${brief.readPath}. Read all of it.`,
       `The project root is ${projectPath}.`,
       clarify
@@ -341,27 +486,35 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
         : 'Clarification: OFF. Do not ask questions; propose on stated assumptions.',
       'Propose the epics and tasks as described in your instructions.',
     ].join('\n'),
-    // Superpowers brainstorming drives the questions (only when clarifying)
-    skills: clarify ? ['superpowers:brainstorming'] : [],
-    askUser,
-    // Settings → Agents → feature models (the spec document feature)
-    model: feature.model,
-    thinkingLevel: feature.thinkingLevel as ThinkingLevel,
-    tools: clarify ? [...READ_TOOLS, 'AskUserQuestion', 'Skill'] : READ_TOOLS,
-    cwd: projectPath,
-    agentType: 'brief_analyst',
-    outputSchema: BriefProposalSchema,
-    maxTurns: 60,
-    abortSignal: signal,
-    onEvent: (event) => {
-      const line = progressLine(event, projectPath);
-      if (line) onProgress?.(line);
-    },
-  });
+    clarify,
+  );
 
   if (!result.output) throw new BriefError('The analyst did not return a proposal. Try again.');
-  const proposal = { ...normalizeProposal(brief.briefId, result.output), clarifications };
+
+  // The whole brief becomes tasks: the analyst is asked for the next part while something has none.
+  // The brief's own requirement ids are checked here, not taken from what the analyst says is left
+  const briefIds = briefRequirementIds(briefText(brief.readPath));
+  const parts: BriefProposalOutput[] = [result.output];
+  let merged = mergeParts(parts);
+  let left = uncoveredOf(briefIds, merged);
+  while (left.length && parts.length < MAX_PARTS && !signal?.aborted) {
+    onProgress?.(`The brief is larger than one answer: ${merged.tasks.length} task(s) so far, ${left.length} part(s) of the brief still without a task; the analyst continues`);
+    let next: BriefProposalOutput | undefined;
+    try {
+      next = (await part(nextPartPrompt(brief.readPath, projectPath, merged, left), false)).output ?? undefined;
+    } catch {
+      // What there is stays; the rest is shown as not covered
+    }
+    // A part that adds nothing would be asked for forever
+    if (!next || (!(next.tasks ?? []).length && !(next.notBuilt ?? []).length)) break;
+    parts.push(next);
+    merged = mergeParts(parts);
+    left = uncoveredOf(briefIds, merged);
+  }
+
+  const proposal = { ...normalizeProposal(brief.briefId, merged), clarifications, uncovered: left };
   if (!proposal.tasks.length) throw new BriefError('The analyst found nothing to build in this brief.');
+  if (left.length) onProgress?.(`${left.length} part(s) of the brief have no task: they are listed with the proposal`);
   if (clarifications.length) writeFileSync(join(brief.dir, 'clarifications.md'), clarificationsMarkdown(clarifications), 'utf-8');
   writeFileSync(join(brief.dir, 'proposal.json'), JSON.stringify(proposal, null, 2), 'utf-8');
   return proposal;
@@ -399,6 +552,11 @@ export function taskDescription(
   const parts = [task.description.trim()];
   if (task.acceptanceCriteria.length) {
     parts.push('', '## Acceptance criteria (draft)', '', ...task.acceptanceCriteria.map((c) => `- ${c}`));
+  }
+  // The draft comes back from the review window: only a real list is used
+  const covers = cleanList(task.covers);
+  if (covers.length) {
+    parts.push('', `Requirements of the brief this task builds, each in full as the brief states it (not a first or simplified version): ${covers.join(', ')}`);
   }
   parts.push('', `Source: ${briefRelPath}${task.sourceSection ? ` — ${task.sourceSection}` : ''}`);
   if (clarificationsRelPath) parts.push(`Decisions from the brief Q&A: ${clarificationsRelPath}`);

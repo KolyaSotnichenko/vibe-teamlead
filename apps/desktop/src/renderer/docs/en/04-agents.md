@@ -4,7 +4,7 @@ Each agent is a Claude Code session with its own prompt (`apps/desktop/prompts/`
 
 | Agent | Role |
 |---|---|
-| **Spec analyst** (brief_analyst) | Reads the brief and the project, asks clarifying questions (Superpowers brainstorming) and splits the brief into tasks; your answers, assumptions and open questions are shown on the review step. |
+| **Spec analyst** (brief_analyst) | Reads the brief and the project, asks clarifying questions (Superpowers brainstorming) and splits the whole brief into tasks, in parts when it is large; your answers, assumptions and open questions are shown on the review step. |
 | **Complexity assessor** | Chooses the depth of the specification pipeline. |
 | **Requirements gatherer, researcher, context, discovery** | Prepare material for the spec. |
 | **Spec writer** (spec_writer) | Writes `spec.md` with ACs. |

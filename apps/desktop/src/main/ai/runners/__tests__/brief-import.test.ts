@@ -9,7 +9,7 @@ vi.mock('../../prompts/prompt-loader', () => ({ tryLoadPrompt: () => 'You are th
 vi.mock('../../../ipc-handlers/feature-settings-helper', () => ({ getFeatureSettings: () => ({ model: 'opus', thinkingLevel: 'high' }) }));
 
 import { runClaudeTask } from '../../claude-code/task';
-import { BriefError, analyzeBrief, appendBriefAnswers, docxText, normalizeProposal, recordBriefAnswers, openQuestionsByTask, readProposalQuestions, storeBrief, taskDescription } from '../brief-import';
+import { BriefError, analyzeBrief, appendBriefAnswers, briefRequirementIds, docxText, normalizeProposal, recordBriefAnswers, openQuestionsByTask, readProposalQuestions, storeBrief, taskDescription } from '../brief-import';
 import type { BriefProposalOutput } from '../../schema/brief-proposal';
 import { HOST_BSDTAR, makeZip } from '../../../platform/__tests__/host-bsdtar';
 
@@ -24,7 +24,11 @@ const task = (key: string, dependsOn: string[] = [], epic = 'E1') => ({
   priority: 'medium' as const,
   category: 'feature' as const,
   sourceSection: '2. Invoices',
+  covers: [] as string[],
 });
+
+/** What a round of the analyst says about the rest of the brief: nothing left */
+const done = { remaining: [] as string[], notBuilt: [] as Array<{ what: string; why: string }> };
 
 describe('storeBrief', () => {
   it('stores free text as brief.md in the project', async () => {
@@ -99,6 +103,7 @@ describe('normalizeProposal', () => {
       tasks: [task('T1', ['T2']), task('T2', ['T1', 'T9', 'T2']), task('T2', ['T1'], 'E7')],
       assumptions: ['One currency', ' '],
       openQuestions: [{ question: 'Which email provider?', tasks: ['T2'] }],
+      ...done,
     };
     const proposal = normalizeProposal('b1', output);
     expect(proposal.tasks.map((t) => t.key)).toEqual(['T1', 'T2', 'T2b']);
@@ -112,7 +117,7 @@ describe('normalizeProposal', () => {
 
 describe('taskDescription', () => {
   it('carries the draft criteria and a pointer to the brief section', () => {
-    const md = taskDescription({ ...normalizeProposal('b', { title: '', summary: '', epics: [], tasks: [task('T1')], assumptions: [], openQuestions: [] }).tasks[0] }, '.vibe-teamlead/briefs/b/brief.md');
+    const md = taskDescription({ ...normalizeProposal('b', { title: '', summary: '', epics: [], tasks: [task('T1')], assumptions: [], openQuestions: [], ...done }).tasks[0] }, '.vibe-teamlead/briefs/b/brief.md');
     expect(md).toContain('## Acceptance criteria (draft)');
     expect(md).toContain('- Given a, when b, then c.');
     expect(md).toContain('Source: .vibe-teamlead/briefs/b/brief.md — 2. Invoices');
@@ -120,7 +125,7 @@ describe('taskDescription', () => {
 });
 
 describe('analyzeBrief clarification', () => {
-  const output = { title: 'Bakery', summary: 's', epics: [{ key: 'E1', title: 'Orders', summary: '' }], tasks: [task('T1')], assumptions: [], openQuestions: [] };
+  const output = { title: 'Bakery', summary: 's', epics: [{ key: 'E1', title: 'Orders', summary: '' }], tasks: [task('T1')], assumptions: [], openQuestions: [], ...done };
 
   it('lets the analyst ask through the dialog with Superpowers brainstorming, and records the answers', async () => {
     const run = vi.mocked(runClaudeTask);
@@ -159,12 +164,130 @@ describe('analyzeBrief clarification', () => {
 });
 
 
+// planner-mhp: a BRD with 72 numbered requirements in three phases; the analyst was told "at most 30
+// tasks, cover the first milestone", proposed phase 1 and 35 requirements never became a task
+describe('the whole brief becomes tasks, whatever its size', () => {
+  const epics = [{ key: 'E1', title: 'Orders', summary: '' }];
+  const round = (tasks: ReturnType<typeof task>[], rest: Partial<typeof done> = {}, more: Partial<BriefProposalOutput> = {}): { output: BriefProposalOutput } =>
+    ({ output: { title: 'Bakery', summary: 's', epics, tasks, assumptions: [], openQuestions: [], ...done, ...rest, ...more } as BriefProposalOutput });
+  const covering = (key: string, covers: string[]) => ({ ...task(key), covers });
+  const project = () => mkdtempSync(join(tmpdir(), 'vtl-brief-'));
+
+  it('keeps every task the analyst proposed: nothing is cut at a count', () => {
+    const tasks = Array.from({ length: 64 }, (_, i) => task(`T${i + 1}`));
+    const proposal = normalizeProposal('b', round(tasks).output);
+    expect(proposal.tasks).toHaveLength(64);
+    expect(proposal.tasks.at(-1)?.key).toBe('T64');
+  });
+
+  it("finds the brief's requirement ids: a prefix used with three numbers or more, each id once", () => {
+    const text = 'FR-1 plans. FR-2 tasks, see FR-1. FR-10 Gantt. NFR-01, NFR-02 and NFR-03. Encoding UTF-8, hash SHA-256. INT-01 only.';
+    expect(briefRequirementIds(text)).toEqual(['FR-1', 'FR-2', 'FR-10', 'NFR-01', 'NFR-02', 'NFR-03']);
+    expect(briefRequirementIds('A bakery app with orders.')).toEqual([]);
+  });
+
+  it('asks the analyst for the next part while it says something of the brief has no task yet', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    run.mockResolvedValueOnce(round([task('T1')], { remaining: ['Section 8: reports', 'Section 9: mobile'] }) as never);
+    run.mockResolvedValueOnce(round([task('T2', ['T1'])], { remaining: ['Section 9: mobile'] }, { epics: [...epics, { key: 'E2', title: 'Reports', summary: '' }], assumptions: ['PDF reports'] }) as never);
+    run.mockResolvedValueOnce(round([task('T3')]) as never);
+    const askUser = vi.fn(async () => null);
+    const progress: string[] = [];
+
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text: 'A bakery app', clarify: true }, askUser, onProgress: (m) => progress.push(m) });
+
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(proposal.tasks.map((t) => t.key)).toEqual(['T1', 'T2', 'T3']);
+    expect(proposal.tasks[1].dependsOn).toEqual(['T1']);
+    expect(proposal.epics.map((e) => e.key)).toEqual(['E1', 'E2']);
+    expect(proposal.assumptions).toEqual(['PDF reports']);
+    expect(proposal.uncovered).toEqual([]);
+    // The next part: told what exists and what is left; questions were for the first part only
+    const second = run.mock.calls[1][0];
+    expect(second.prompt).toContain('T1 — T1 title');
+    expect(second.prompt).toContain('Section 8: reports');
+    expect(second.prompt).toContain('T2');
+    expect(second.prompt).toContain('Clarification: OFF');
+    expect(second.askUser).toBeUndefined();
+    expect(run.mock.calls[2][0].prompt).toContain('Section 9: mobile');
+    expect(run.mock.calls[2][0].prompt).not.toContain('Section 8: reports');
+    expect(progress.some((line) => /2 task\(s\) so far/.test(line))).toBe(true);
+  });
+
+  it("checks the brief's own requirement ids itself: one no task covers is asked for, whatever the analyst says", async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    // The analyst says nothing is left, and covered one requirement of three
+    run.mockResolvedValueOnce(round([covering('T1', ['FR-1'])]) as never);
+    run.mockResolvedValueOnce(round([covering('T2', [' FR-2 '])], { notBuilt: [{ what: 'FR-3', why: 'The brief says: out of scope, the ERP keeps payroll' }] }) as never);
+
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text: 'FR-1 plans. FR-2 boards. FR-3 payroll (out of scope).', clarify: false } });
+
+    expect(run).toHaveBeenCalledTimes(2);
+    const second = run.mock.calls[1][0].prompt;
+    expect(second).toContain('FR-2');
+    expect(second).toContain('FR-3');
+    expect(second).not.toMatch(/no task covers[^\n]*FR-1/);
+    expect(proposal.tasks.map((t) => t.covers)).toEqual([['FR-1'], ['FR-2']]);
+    expect(proposal.notBuilt).toEqual([{ what: 'FR-3', why: 'The brief says: out of scope, the ERP keeps payroll' }]);
+    expect(proposal.uncovered).toEqual([]);
+  });
+
+  it('stops when a part adds nothing, and says what of the brief is still without a task', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    run.mockResolvedValueOnce(round([covering('T1', ['FR-1'])], { remaining: ['Section 7: reports'] }) as never);
+    run.mockResolvedValueOnce(round([], { remaining: ['Section 7: reports'] }) as never);
+
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text: 'FR-1 plans. FR-2 boards. FR-3 reports.', clarify: false } });
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(proposal.tasks).toHaveLength(1);
+    expect(proposal.uncovered).toEqual(['FR-2', 'FR-3', 'Section 7: reports']);
+    const saved = JSON.parse(readFileSync(join(run.mock.calls[0][0].cwd as string, '.vibe-teamlead', 'briefs', proposal.briefId, 'proposal.json'), 'utf-8')) as { uncovered: string[] };
+    expect(saved.uncovered).toEqual(['FR-2', 'FR-3', 'Section 7: reports']);
+  });
+
+  it('a part that fails after the first keeps what there is, with the rest marked as not covered', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    run.mockResolvedValueOnce(round([task('T1')], { remaining: ['Section 8: reports'] }) as never);
+    run.mockRejectedValueOnce(new Error('rate limit'));
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text: 'A bakery app', clarify: false } });
+    expect(proposal.tasks).toHaveLength(1);
+    expect(proposal.uncovered).toEqual(['Section 8: reports']);
+  });
+
+  it("writes into each task which requirements of the brief it builds, in full", () => {
+    const proposal = normalizeProposal('b', round([covering('T1', ['FR-1', 'NFR-02'])]).output);
+    const md = taskDescription(proposal.tasks[0], '.vibe-teamlead/briefs/b/brief.md');
+    expect(md).toMatch(/FR-1, NFR-02/);
+    expect(md).toMatch(/in full/i);
+  });
+});
+
+describe('the analyst is told to cover the whole brief', () => {
+  it('never a phase, an MVP or a simplified version on its own; the app asks for the rest', async () => {
+    const { readFileSync: read } = await import('node:fs');
+    const prompt = read(join(__dirname, '../../../../../prompts/brief_analyst.md'), 'utf-8');
+    expect(prompt).not.toMatch(/at most 30 tasks/i);
+    expect(prompt).not.toMatch(/first milestone/i);
+    expect(prompt).toMatch(/whole brief/i);
+    expect(prompt).toMatch(/MVP/);
+    expect(prompt).toMatch(/`remaining`/);
+    expect(prompt).toMatch(/`covers`/);
+    expect(prompt).toMatch(/`notBuilt`/);
+  });
+});
+
 // The open questions of a brief reach the spec agents of the tasks they affect, and an answer given
 // in one task reaches the others through the brief's clarifications.md
 describe('open questions from the brief', () => {
   const output = (openQuestions: BriefProposalOutput['openQuestions']): BriefProposalOutput => ({
     title: 'Planner', summary: 's', epics: [{ key: 'E1', title: 'Core', summary: '' }],
     tasks: [task('T1'), task('T2', ['T1']), task('T3', ['T1'])], assumptions: [], openQuestions,
+    ...done,
   });
 
   it('keeps each question with the tasks it affects, only known task keys', () => {
