@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { QASignoffSchema } from '../../../schema/qa-signoff';
 import type { ToolContext } from '../../types';
 import { updateQaStatusTool } from '../update-qa-status';
-import { createElementCheck, elementRefusal, type FramePage } from '../../../design/element-check';
+import { createElementCheck, elementRefusal, frameInventories, type FramePage } from '../../../design/element-check';
 
 function setup(plan: Record<string, unknown> = {}) {
   const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qastatus-'));
@@ -99,7 +99,7 @@ describe('update_qa_status: the app looks for each element of the mockup on the 
   const frame = { file: 'screens/board.html', width: 1280 };
   const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 
-  function setupElements(options: { pages?: FramePage[] | ((call: number) => FramePage[]); capture?: 'fails'; app?: 'fails'; differences?: Array<{ severity: string; text: string }> } = {}) {
+  function setupElements(options: { pages?: FramePage[] | ((call: number) => FramePage[]); capture?: 'fails' | 'throws'; app?: 'fails'; mockup?: 'missing'; differences?: Array<{ severity: string; text: string }> } = {}) {
     const specDir = mkdtempSync(path.join(tmpdir(), 'vtl-qastatus-elements-'));
     writeFileSync(path.join(specDir, 'implementation_plan.json'), JSON.stringify({ phases: [] }));
     mkdirSync(path.join(specDir, 'design', 'screens'), { recursive: true });
@@ -107,6 +107,7 @@ describe('update_qa_status: the app looks for each element of the mockup on the 
       path.join(specDir, 'design', 'screens', 'board.html'),
       '<main><button>Додати задачу</button><label for="who">Виконавці</label><select id="who"></select><a href="task-card.html">Запросити прайс</a><a href="task-card.html">Купити насіння</a><a href="task-card.html">Зібрати урожай</a></main>',
     );
+    if (options.mockup === 'missing') rmSync(path.join(specDir, 'design', 'screens', 'board.html'));
     mkdirSync(path.join(specDir, 'qa-browser'));
     writeFileSync(path.join(specDir, 'qa-browser', 'board.png'), PNG);
     const writeCompare = (differences = options.differences ?? []) =>
@@ -118,6 +119,7 @@ describe('update_qa_status: the app looks for each element of the mockup on the 
     const capture = vi.fn(async () => {
       calls++;
       if (options.capture === 'fails') return { error: 'the main process did not answer' };
+      if (options.capture === 'throws') throw new Error('boom');
       const pages = options.pages ?? [{ ...frame, elements: [{ kind: 'button', names: ['Додати задачу'] }] }];
       return typeof pages === 'function' ? pages(calls) : pages;
     });
@@ -127,6 +129,8 @@ describe('update_qa_status: the app looks for each element of the mockup on the 
       capture,
       commit: async () => 'abc123',
       log,
+      // Read before any review, as the worker does
+      inventories: frameInventories(specDir, [frame]),
     });
     const checkElements = async () => {
       const outcome = await check.check([frame]);
@@ -168,14 +172,44 @@ describe('update_qa_status: the app looks for each element of the mockup on the 
     expect(t.log).toHaveBeenLastCalledWith(expect.stringMatching(/1 not found.*1 of them accounted for/));
   });
 
-  it('lets the approval stand, and says so in the log, when the check cannot run', async () => {
-    const broken = setupElements({ capture: 'fails' });
-    expect(await broken.approve()).not.toMatch(/^Error/);
-    expect(broken.signoff()?.status).toBe('approved');
-    expect(broken.log).toHaveBeenCalledWith(expect.stringMatching(/did not run.*the main process did not answer/));
-    const noApp = setupElements({ app: 'fails' });
-    expect(await noApp.approve()).not.toMatch(/^Error/);
-    expect(noApp.log).toHaveBeenCalledWith(expect.stringMatching(/did not run.*Docker is not running/));
+  // A check that could not run is not a check that passed: the owner looks before the merge
+  it('when the check cannot run, the approval is recorded and every frame goes to the owner as not shown', async () => {
+    for (const [options, why] of [[{ capture: 'fails' }, /the main process did not answer/], [{ app: 'fails' }, /Docker is not running/], [{ capture: 'throws' }, /boom/]] as const) {
+      const t = setupElements(options);
+      expect(await t.approve()).not.toMatch(/^Error/);
+      expect(t.signoff()?.status).toBe('approved');
+      expect(t.log).toHaveBeenCalledWith(expect.stringMatching(/did not run/));
+      expect(t.log).toHaveBeenCalledWith(expect.stringMatching(why));
+      expect(t.compare().screens[0].notShown).toMatch(/the app could not look at it itself/);
+      expect(t.compare().screens[0].notShown).toMatch(why);
+      // The QA loop's own check holds the merge for the owner
+      expect((await t.check.check([frame]))?.notShown).toEqual([{ ...frame, reason: expect.stringMatching(why) }]);
+    }
+  });
+
+  // The reviewer can write in the spec folder, the mockups included
+  it('looks for the elements the mockup had before the review: emptying the mockup changes nothing', async () => {
+    const t = setupElements();
+    writeFileSync(path.join(t.specDir, 'design', 'screens', 'board.html'), '<main></main>');
+    const output = await t.approve();
+    expect(output).toMatch(/^Error: approval not recorded/);
+    expect(output).toContain('field «Виконавці»');
+  });
+
+  it('a frame whose mockup could not be read goes to the owner: nothing was looked for', async () => {
+    const t = setupElements({ mockup: 'missing' });
+    expect(await t.approve()).not.toMatch(/^Error/);
+    expect(t.compare().screens[0].notShown).toMatch(/the app could not look at it itself: its mockup could not be read/);
+    expect((await t.check.check([frame]))?.notShown).toHaveLength(1);
+  });
+
+  // What comes back from the page and the capture is not always text
+  it('an error that is not text does not break the check', async () => {
+    const t = setupElements({ pages: [{ ...frame, error: { toString: () => { throw new Error('x'); } } as never }] });
+    const output = await t.approve();
+    expect(output).toMatch(/^Error: approval not recorded/);
+    expect(output).toContain('could not be opened by its recipe');
+    expect(elementRefusal({ unaccounted: [], unreachable: [{ ...frame, error: 42 as never }] })).toContain('could not be opened');
   });
 
   it('a frame the app cannot open: first the recipe is fixed, then it goes to the owner as not shown', async () => {

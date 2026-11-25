@@ -50,8 +50,21 @@ export interface ElementCheckOutcome {
 const MAX_LISTED = 30;
 /** The shortest name that counts when it is only part of the other */
 const MIN_PART = 4;
-/** What the app writes for a frame it could not open twice; only the app's own note is ever removed */
+/** What the app writes for a frame it could not open twice; only the app's own notes are ever removed */
 const UNREACHABLE_NOTE = 'the app could not open it by the recorded steps: ';
+/** And for a frame it could not look at at all: the check did not run, or the mockup could not be read */
+const NOT_LOOKED_NOTE = 'the app could not look at it itself: ';
+const APP_NOTES = [UNREACHABLE_NOTE, NOT_LOOKED_NOTE];
+
+/** An error as text of a bounded length: what comes back from a page or another process is not always a string. Never throws. */
+function errorText(error: unknown, fallback = 'the page could not be read'): string {
+  try {
+    const text = typeof error === 'string' ? error : error instanceof Error ? error.message : typeof error === 'number' ? String(error) : '';
+    return text.replace(/\s+/g, ' ').trim().slice(0, 300) || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /** The most elements of one page, names of one element and characters of one name that are kept */
 const MAX_ELEMENTS = 2000;
@@ -171,7 +184,7 @@ export function elementRefusal(outcome: Pick<ElementCheckOutcome, 'unaccounted' 
 export function elementProblems(outcome: Pick<ElementCheckOutcome, 'unaccounted' | 'unreachable'>): string[] {
   const all = [
     ...outcome.unaccounted.map((u) => `${label(u)}: ${u.item.replace(/ → \S+$/, '')} not found`),
-    ...outcome.unreachable.map((u) => `${label(u)} could not be opened by its recipe in screens.json: ${u.error.slice(0, 300)}`),
+    ...outcome.unreachable.map((u) => `${label(u)} could not be opened by its recipe in screens.json: ${errorText(u.error)}`),
   ];
   if (!all.length) return [];
   const lines = all.slice(0, MAX_LISTED);
@@ -208,7 +221,7 @@ export async function capturePages(
     const shot = shots.find((s) => s.id === id && s.width === f.width);
     if (!recipes.has(`${id}@${f.width}`)) return { ...f, error: `${TASK_SCREENS_FILE} has no recipe for ${id} at ${f.width} px` };
     if (!shot) return { ...f, error: 'the app did not open it' };
-    return shot.elements ? { ...f, elements: shot.elements } : { ...f, error: shot.error ?? 'the page could not be read' };
+    return shot.elements ? { ...f, elements: shot.elements } : { ...f, error: errorText(shot.error) };
   });
 }
 
@@ -243,15 +256,28 @@ function differencesByFile(specDir: string): Map<string, string[]> {
   return out;
 }
 
-/** The mockup's elements of a screen file (not deduplicated across screens: unfoundElements does that). Never throws. */
-function inventoryOf(specDir: string, file: string): string[] {
-  const full = designFile(specDir, file);
-  if (!full || !realFileInside(designDir(specDir), full)) return [];
-  try {
-    return screenInventory(readFileSync(full, 'utf-8'));
-  } catch {
-    return [];
+/**
+ * The mockup's elements of each screen file of the frames (not deduplicated across screens:
+ * unfoundElements does that); null for a mockup that could not be read. Read once, before any
+ * review: the reviewer can write in the spec folder, the mockups included, and a mockup emptied
+ * during the review would have nothing left to look for. Never throws.
+ */
+export function frameInventories(specDir: string, frames: EvidenceFrame[]): Map<string, string[] | null> {
+  const out = new Map<string, string[] | null>();
+  for (const { file } of frames) {
+    if (out.has(file)) continue;
+    const full = designFile(specDir, file);
+    let items: string[] | null = null;
+    if (full && realFileInside(designDir(specDir), full)) {
+      try {
+        items = screenInventory(readFileSync(full, 'utf-8'));
+      } catch {
+        // not readable: the frame goes to the owner
+      }
+    }
+    out.set(file, items);
   }
+  return out;
 }
 
 /**
@@ -269,7 +295,7 @@ function noteUnreachable(specDir: string, carried: NotShownFrame[], reached: Evi
     if (note && entry.notShown !== note.reason) {
       entry.notShown = note.reason;
       changed = true;
-    } else if (!note && reached.some((r) => key(r) === key(frame)) && textOf(entry.notShown).startsWith(UNREACHABLE_NOTE)) {
+    } else if (!note && reached.some((r) => key(r) === key(frame)) && APP_NOTES.some((own) => textOf(entry.notShown).startsWith(own))) {
       delete entry.notShown;
       changed = true;
     }
@@ -292,21 +318,32 @@ export interface ElementCheckDeps {
   commit: () => Promise<string | undefined>;
   /** A line in the task's QA log */
   log: (line: string) => void;
+  /** The mockups' elements, read before any review of this QA run (frameInventories) */
+  inventories: Map<string, string[] | null>;
 }
 
 /**
  * The element check of one QA run. It keeps, outside every file an agent writes, which frames the
  * app could not open already (a frame not opened twice goes to the owner) and the last pages it
  * opened, for the commit and the recipes they were opened with. `check` never throws; undefined
- * when there was nothing to look at or the check could not run (the approval then stands).
+ * only when there was nothing to look at. A check that could not run is not one that passed: its
+ * frames go to the owner as not shown, so the task waits for the owner before it merges.
  */
 export function createElementCheck(deps: ElementCheckDeps) {
   const triedRecipe = new Set<string>();
   let last: { key: string; pages: FramePage[] } | undefined;
 
-  const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
+  const reason = (error: unknown) => errorText(error, 'unknown error');
 
-  async function pagesOf(frames: EvidenceFrame[]): Promise<FramePage[] | undefined> {
+  /** Nothing was looked at: every frame is the owner's to look at before the merge */
+  function held(frames: EvidenceFrame[], why: string): ElementCheckOutcome {
+    deps.log(`Element check did not run: ${why}. The frames it would have opened go to the owner as not shown`);
+    const notShown = frames.map((f) => ({ file: f.file, width: f.width, reason: `${NOT_LOOKED_NOTE}${why}`.slice(0, 500) }));
+    noteUnreachable(deps.specDir, notShown, []);
+    return { unaccounted: [], unreachable: [], notShown };
+  }
+
+  async function pagesOf(frames: EvidenceFrame[]): Promise<FramePage[] | { notRun: string }> {
     let recipes = '';
     try {
       recipes = readFileSync(path.join(deps.specDir, TASK_SCREENS_FILE), 'utf-8');
@@ -316,14 +353,11 @@ export function createElementCheck(deps: ElementCheckDeps) {
     const commit = await deps.commit().catch(() => undefined);
     const runKey = commit ? [commit, recipes, ...frames.map(key)].join('\n') : undefined;
     if (runKey && last?.key === runKey) return last.pages;
-    const notRun = (why: string) => {
-      deps.log(`Element check did not run: ${why}. The approval stands without it`);
-      return undefined;
-    };
+    const notRun = (why: string) => ({ notRun: why });
     let url: string;
     try {
       const app = await deps.startApp();
-      if (!app.ok) return notRun(`the app could not start (${app.reason.split('\n')[0].slice(0, 300)})`);
+      if (!app.ok) return notRun(`the app could not start (${errorText(app.reason.split('\n')[0])})`);
       url = app.url;
     } catch (error) {
       return notRun(`the app could not start (${reason(error)})`);
@@ -334,30 +368,34 @@ export function createElementCheck(deps: ElementCheckDeps) {
     } catch (error) {
       pages = { error: reason(error) };
     }
-    if (!Array.isArray(pages)) return notRun(pages.error);
+    if (!Array.isArray(pages)) return notRun(errorText(pages.error, 'no pages'));
     if (runKey) last = { key: runKey, pages };
     return pages;
   }
 
   async function check(frames: EvidenceFrame[]): Promise<ElementCheckOutcome | undefined> {
+    let shown: EvidenceFrame[] = [];
     try {
       // Frames with a reason instead of a screenshot are the owner's to look at already
-      const shown = shownFrames(deps.specDir, frames);
+      shown = shownFrames(deps.specDir, frames);
       if (!shown.length) return undefined;
-      const pages = await pagesOf(shown);
-      if (!pages) return undefined;
+      const opened = await pagesOf(shown);
+      if (!Array.isArray(opened)) return held(shown, opened.notRun);
 
+      // A frame whose mockup could not be read before the review has nothing to be compared with
+      const readable = (f: EvidenceFrame) => Array.isArray(deps.inventories.get(f.file));
+      const pages = opened.filter(readable);
       const reached = pages.filter((p): p is FramePage & { elements: BuiltElement[] } => Array.isArray(p.elements));
-      const inventories = new Map<string, string[]>();
-      for (const p of reached) if (!inventories.has(p.file)) inventories.set(p.file, inventoryOf(deps.specDir, p.file));
-      const { looked, unfound } = unfoundElements(reached.map((p) => ({ file: p.file, width: p.width, items: inventories.get(p.file) ?? [], elements: p.elements })));
+      const { looked, unfound } = unfoundElements(reached.map((p) => ({ file: p.file, width: p.width, items: deps.inventories.get(p.file) ?? [], elements: p.elements })));
       const { accounted, unaccounted } = accountFor(unfound, differencesByFile(deps.specDir));
 
       const unreachable: ElementCheckOutcome['unreachable'] = [];
-      const notShown: NotShownFrame[] = [];
+      const notShown: NotShownFrame[] = opened
+        .filter((p) => !readable(p))
+        .map((p) => ({ file: p.file, width: p.width, reason: `${NOT_LOOKED_NOTE}its mockup could not be read` }));
       for (const p of pages) {
         if (p.elements) continue;
-        const error = p.error ?? 'the page could not be read';
+        const error = errorText(p.error);
         if (triedRecipe.has(key(p))) notShown.push({ file: p.file, width: p.width, reason: `${UNREACHABLE_NOTE}${error}`.slice(0, 500) });
         else {
           triedRecipe.add(key(p));
@@ -372,8 +410,7 @@ export function createElementCheck(deps: ElementCheckDeps) {
       );
       return { unaccounted, unreachable, notShown };
     } catch (error) {
-      deps.log(`Element check did not run: ${reason(error)}. The approval stands without it`);
-      return undefined;
+      return shown.length ? held(shown, reason(error)) : undefined;
     }
   }
 

@@ -58,7 +58,7 @@ import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '.
 import { commitTime, currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
 import { checkVisualEvidence, planDesignFiles, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
 import { designInventories } from '../design/design-inventory';
-import { createElementCheck, elementProblems, elementRefusal, type FramePage } from '../design/element-check';
+import { createElementCheck, elementProblems, elementRefusal, frameInventories, type FramePage } from '../design/element-check';
 import { checkDesignStylesheets } from '../design/stylesheet-check';
 import { screenId } from '../design/screen-catalog';
 import { screenCheckSection } from '../design/screen-regression-prompt';
@@ -1392,6 +1392,8 @@ async function runQualityAssurance(
     capture: (url, frames) => elementCheckViaMain(url, session.specDir, frames),
     commit: () => currentCommit(session.projectDir),
     log: qaLog,
+    // The mockups' elements, read now: the reviewer can write in the spec folder, design/ included
+    inventories: frameInventories(session.specDir, evidenceFrames),
   });
   const qaLoop = new QALoop({
     review,
