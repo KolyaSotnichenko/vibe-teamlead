@@ -249,6 +249,58 @@ describe('the whole brief becomes tasks, whatever its size', () => {
     expect(saved.uncovered).toEqual(['FR-2', 'FR-3', 'Section 7: reports']);
   });
 
+  // Each part is a model session: a run that goes on without covering more of the brief is money spent on nothing
+  it('stops when two parts in a row leave as much of the brief without a task, even if each adds a task', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    let n = 0;
+    run.mockImplementation(async () => round([task(`T${++n}`)].map((t) => ({ ...t, title: `Task number ${n}` })), { remaining: ['Section 8: reports'] }) as never);
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text: 'A bakery app', clarify: false } });
+    // The first part, then two that covered nothing more
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(proposal.uncovered).toEqual(['Section 8: reports']);
+    run.mockReset();
+  });
+
+  it('a part that repeats tasks or exclusions it already gave adds nothing: the run ends', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    const same = () => round([covering('T1', ['FR-1'])], { remaining: ['FR-2'], notBuilt: [{ what: 'FR-3', why: 'out of scope' }] });
+    run.mockImplementation(async () => same() as never);
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text: 'FR-1 plans. FR-2 boards. FR-3 payroll.', clarify: false } });
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(proposal.tasks).toHaveLength(1);
+    expect(proposal.notBuilt).toHaveLength(1);
+    expect(proposal.uncovered).toEqual(['FR-2']);
+    run.mockReset();
+  });
+
+  it('never runs more parts than its limit, and says what is left', async () => {
+    const run = vi.mocked(runClaudeTask);
+    run.mockReset();
+    let n = 0;
+    // Always one requirement covered and more left: honest progress that would never end
+    run.mockImplementation(async () => {
+      n++;
+      return round([{ ...covering(`T${n}`, [`FR-${n}`]), title: `Requirement ${n}` }], { remaining: Array.from({ length: 200 - n }, (_, i) => `FR-${n + 1 + i}`) }) as never;
+    });
+    const text = Array.from({ length: 200 }, (_, i) => `FR-${i + 1} something.`).join(' ');
+    const proposal = await analyzeBrief({ projectPath: project(), input: { text, clarify: false } });
+    expect(run.mock.calls.length).toBeLessThanOrEqual(16);
+    expect(proposal.tasks.length).toBe(run.mock.calls.length);
+    expect(proposal.uncovered?.length).toBe(200 - run.mock.calls.length);
+    run.mockReset();
+  });
+
+  it('reads the ids of a very large brief in bounded time and number', () => {
+    const many = Array.from({ length: 60_000 }, (_, i) => `REQ-${i % 9000} text`).join(' ');
+    const started = Date.now();
+    const ids = briefRequirementIds(many);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(ids.length).toBeLessThanOrEqual(2000);
+    expect(ids[0]).toBe('REQ-0');
+  });
+
   it('a part that fails after the first keeps what there is, with the rest marked as not covered', async () => {
     const run = vi.mocked(runClaudeTask);
     run.mockReset();

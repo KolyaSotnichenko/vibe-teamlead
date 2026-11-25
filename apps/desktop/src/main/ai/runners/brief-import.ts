@@ -25,10 +25,16 @@ import type { StreamEvent } from '../session/types';
 /** Brief files larger than this are refused (they would not fit the analyst's context anyway). */
 const MAX_BRIEF_BYTES = 20 * 1024 * 1024;
 /**
- * How many times the analyst is asked for the next part of a brief. A part is about 25 tasks, so
- * this is far more than any brief needs: it only ends a run that would never end.
+ * How many parts of a proposal one run asks the analyst for. Each part is a model session of about
+ * 25 tasks, so this is some 400 tasks, more than a brief needs; it ends a run that would not end.
+ * What is left then is shown with the proposal as not covered, never dropped in silence.
  */
-const MAX_PARTS = 40;
+const MAX_PARTS = 16;
+/** Parts in a row that may leave as much of the brief without a task before the run ends */
+const MAX_STALE_PARTS = 2;
+/** How much of a brief's text is searched for requirement ids, and how many are kept */
+const MAX_ID_SCAN_CHARS = 2_000_000;
+const MAX_BRIEF_IDS = 2000;
 
 const TEXT_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.text']);
 /** Converted to text with macOS textutil; on Windows only .docx is read (docxText) */
@@ -233,15 +239,20 @@ const REQUIREMENT_ID = /\b([A-Z][A-Z0-9]{0,7})-(\d{1,4})\b/g;
  */
 export function briefRequirementIds(text: string): string[] {
   const byPrefix = new Map<string, Set<string>>();
-  const ids: string[] = [];
-  for (const match of text.matchAll(REQUIREMENT_ID)) {
-    const id = match[0];
+  // A Set keeps the order of first appearance; a brief can be megabytes of converted text
+  const ids = new Set<string>();
+  for (const match of text.slice(0, MAX_ID_SCAN_CHARS).matchAll(REQUIREMENT_ID)) {
     const numbers = byPrefix.get(match[1]) ?? new Set<string>();
     numbers.add(match[2]);
     byPrefix.set(match[1], numbers);
-    if (!ids.includes(id)) ids.push(id);
+    ids.add(match[0]);
   }
-  return ids.filter((id) => (byPrefix.get(id.slice(0, id.lastIndexOf('-')))?.size ?? 0) >= 3);
+  const out: string[] = [];
+  for (const id of ids) {
+    if (out.length >= MAX_BRIEF_IDS) break;
+    if ((byPrefix.get(id.slice(0, id.lastIndexOf('-')))?.size ?? 0) >= 3) out.push(id);
+  }
+  return out;
 }
 
 /** The ids named in a list of covered or excluded items ("FR-12", "FR-12: reports", "FR-12, FR-13"). Pure. */
@@ -256,17 +267,21 @@ function uncoveredOf(briefIds: string[], output: BriefProposalOutput): string[] 
   const ids = briefIds.filter((id) => !covered.has(id) && !excluded.has(id));
   // The analyst's lines about ids the app already lists are not said twice
   const listed = new Set(ids);
+  const inBrief = new Set(briefIds);
   const rest = cleanList(output.remaining).filter((line) => {
     const named = [...idsIn([line])];
-    return !named.length || named.some((id) => !listed.has(id) && !covered.has(id) && !excluded.has(id)) || named.every((id) => !briefIds.includes(id));
+    return !named.length || named.some((id) => !listed.has(id) && !covered.has(id) && !excluded.has(id)) || named.every((id) => !inBrief.has(id));
   });
   return [...ids, ...rest.filter((line) => !listed.has(line))];
 }
+
+const titleKey = (title: string) => title.replace(/\s+/g, ' ').trim().toLowerCase();
 
 /** One proposal out of the parts the analyst returned: later tasks, epics, assumptions and questions added to the first. Pure. */
 function mergeParts(parts: BriefProposalOutput[]): BriefProposalOutput {
   const [first, ...rest] = parts;
   const epicKeys = new Set(first.epics.map((e) => e.key));
+  const titles = new Set(first.tasks.map((t) => titleKey(t.title)));
   const merged: BriefProposalOutput = { ...first, epics: [...first.epics], tasks: [...first.tasks], assumptions: [...first.assumptions], openQuestions: [...first.openQuestions], notBuilt: [...(first.notBuilt ?? [])] };
   for (const part of rest) {
     for (const epic of part.epics ?? []) {
@@ -274,7 +289,13 @@ function mergeParts(parts: BriefProposalOutput[]): BriefProposalOutput {
       epicKeys.add(epic.key);
       merged.epics.push(epic);
     }
-    merged.tasks.push(...(part.tasks ?? []));
+    // A task given again (the same title) is the same task: a part made of repeats adds nothing
+    for (const task of part.tasks ?? []) {
+      const title = titleKey(task.title);
+      if (titles.has(title)) continue;
+      titles.add(title);
+      merged.tasks.push(task);
+    }
     merged.assumptions.push(...(part.assumptions ?? []));
     merged.openQuestions.push(...(part.openQuestions ?? []));
     merged.notBuilt.push(...(part.notBuilt ?? []));
@@ -497,6 +518,10 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
   const parts: BriefProposalOutput[] = [result.output];
   let merged = mergeParts(parts);
   let left = uncoveredOf(briefIds, merged);
+  // Every part is a model session. The run ends when a part adds no task and no exclusion it had
+  // not given already, when parts in a row leave as much of the brief without a task, or at the
+  // limit of parts; what is left is shown with the proposal
+  let stale = 0;
   while (left.length && parts.length < MAX_PARTS && !signal?.aborted) {
     onProgress?.(`The brief is larger than one answer: ${merged.tasks.length} task(s) so far, ${left.length} part(s) of the brief still without a task; the analyst continues`);
     let next: BriefProposalOutput | undefined;
@@ -505,11 +530,14 @@ export async function analyzeBrief(options: AnalyzeBriefOptions): Promise<BriefP
     } catch {
       // What there is stays; the rest is shown as not covered
     }
-    // A part that adds nothing would be asked for forever
-    if (!next || (!(next.tasks ?? []).length && !(next.notBuilt ?? []).length)) break;
+    if (!next) break;
+    const before = { tasks: merged.tasks.length, excluded: notBuiltOf(merged.notBuilt).length, left: left.length };
     parts.push(next);
     merged = mergeParts(parts);
     left = uncoveredOf(briefIds, merged);
+    if (merged.tasks.length === before.tasks && notBuiltOf(merged.notBuilt).length === before.excluded) break;
+    stale = left.length < before.left ? 0 : stale + 1;
+    if (stale >= MAX_STALE_PARTS) break;
   }
 
   const proposal = { ...normalizeProposal(brief.briefId, merged), clarifications, uncovered: left };
