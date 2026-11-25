@@ -28,7 +28,7 @@ import { animatesWithGsap } from '../design/animation';
 import { designerResultOf, runDesignStep, writeDesignFailure, type DesignStepResult } from '../design/design-runner';
 import { RATE_LIMIT_PAUSE_FILE, removePauseFile, waitForRateLimitResume, writeRateLimitPauseFile } from '../orchestration/pause-handler';
 import { createDesignerWaiter } from '../design/designer-wait';
-import { copyLibraryToBase, publishToLibrary } from '../design/design-library';
+import { copyLibraryForPlan, copyLibraryToBase, publishToLibrary } from '../design/design-library';
 import { designReferencePrompt, lintDesignScreens, readDesignCanvas, readDesignState, specTouchesUi } from '../design/design-step';
 import { isUiFile } from '../design/design-lint';
 import { buildSubagents, helperSubagents, helpersPromptSection, SPEC_SPECIALISTS } from '../claude-code/subagents';
@@ -56,7 +56,7 @@ import { sessionCodeContext, subtaskCodeContext } from '../orchestration/code-co
 import { coderKickoffMessage } from '../orchestration/coder-kickoff';
 import { DEFAULT_QA_ITERATIONS, QALoop, qaRoundSection, type QAOutcome } from '../orchestration/qa-loop';
 import { commitTime, currentCommit, resolveBaseRef, runSecurityGates } from '../security/gates';
-import { checkVisualEvidence, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
+import { checkVisualEvidence, planDesignFiles, requiredFrames, taskEvidenceFrames } from '../design/visual-evidence';
 import { designInventories } from '../design/design-inventory';
 import { checkDesignStylesheets } from '../design/stylesheet-check';
 import { screenId } from '../design/screen-catalog';
@@ -264,6 +264,24 @@ function specChangesUi(session: SerializableSessionConfig): boolean {
     // no spec: decided by the project alone
   }
   return specTouchesUi(specMd, { projectHasUi, isUiFile });
+}
+
+/**
+ * A task no designer drew for (the short pipeline) whose plan rebuilds screens of the project's
+ * library: the library goes into its design/base/, so the coder has the files and QA must show
+ * each screen in the running app (visual-evidence.ts). Nothing when the files are there. Never throws.
+ */
+function libraryForPlan(session: SerializableSessionConfig, phase: 'coding' | 'qa'): void {
+  const root = projectRootFor(session.projectDir);
+  if (!root) return;
+  let specMd = '';
+  try {
+    specMd = readFileSync(join(session.specDir, 'spec.md'), 'utf-8');
+  } catch {
+    // no spec: the screens the plan names and the shell
+  }
+  const copied = copyLibraryForPlan(root, session.specDir, planDesignFiles(session.specDir), specMd);
+  if (copied) taskLogger(postLog, logWriter, phase)(`Design: the plan rebuilds screens of the project's design library; its ${copied} file(s) are in design/base/ for the coder, and QA shows each screen the plan names in the running app`);
 }
 
 /**
@@ -750,7 +768,8 @@ async function assemblePrompt(
   // What a person can use on each screen: the planner gives each to a subtask, QA looks for each one
   // QA shows every frame of the task's design and the library screens its plan rebuilds
   const required = promptName === 'qa_reviewer' ? taskEvidenceFrames(session.specDir) : undefined;
-  const inventory = INVENTORY_ROLES.has(promptName) && designState && designState.stage !== 'skipped'
+  // A task with no design of its own still has the library screens its plan rebuilds (QA's `required`)
+  const inventory = INVENTORY_ROLES.has(promptName) && designState?.stage !== 'skipped' && (designState || required?.length)
     ? designInventories(session.specDir, required ?? requiredFrames(frames))
     : [];
   const taskDesign = designReferencePrompt(promptName, session.specDir, frames, designState, inventory, required);
@@ -1087,6 +1106,7 @@ async function runBuildOrchestrator(
         subtaskCodeContext({ bin: session.bundled?.codegraphBin, projectDir: toolContext.cwd, subtask, signal: abortController.signal, log }),
       // What the coder was given stays in the task's log: without it nobody can tell afterwards
       kickoffLog: taskLogger(postLog, logWriter, 'coding'),
+      prepareDesignFiles: () => libraryForPlan(session, 'coding'),
 
       generatePrompt: async (agentType, _phase, context) => {
         const promptName = agentType === 'coder' ? 'coder' : agentType;
@@ -1325,6 +1345,8 @@ async function runQualityAssurance(
   const verificationBaseResults = new Map<string, CheckOutcome>();
   // A task one session built has no QA reviewer: the app's checks, then the owner (qa-loop.ts `review`)
   const review = ((await taskPipeline(session))?.kind ?? 'full') !== 'single';
+  // A task re-reviewed without a build, or one whose copy of the library is gone, still has its screens
+  libraryForPlan(session, 'qa');
   // The design's frames, fixed before any review: the reviewer can write in the spec folder, design/ included
   const evidenceFrames = taskEvidenceFrames(session.specDir);
   const qaStartedAt = Date.now();

@@ -136,6 +136,11 @@ export interface BuildOrchestratorConfig {
    * architecture and the plan. `paused` stops the build for the owner. Never rejects.
    */
   designStep?: () => Promise<{ paused?: 'wireframes' | 'design'; error?: string; failed?: string; cancelled?: boolean }>;
+  /**
+   * Before a coder's first message is built: puts the library screens the plan names where the
+   * coder reads them (a task with no designer has no copy of the library). Never throws.
+   */
+  prepareDesignFiles?: () => void;
   /** The code a coder session starts with, as a block for its first message ('' for none). Never rejects. */
   subtaskCodeContext?: (subtask: PlanSubtaskEntry, log: (line: string) => void) => Promise<string>;
   /** Where the lines about that code go, so they stay in the task's log (default: the live log only) */
@@ -661,6 +666,7 @@ export class BuildOrchestrator extends EventEmitter {
     const [plan, spec] = await Promise.all([read('implementation_plan.json'), read('spec.md')]);
     const ownerInstruction = readOwnerDecisions(this.config.ownerDecisionsFile).instructions[subtaskId];
     const found = findPlanSubtask(plan, subtaskId);
+    this.config.prepareDesignFiles?.();
     // What a person can use on the screens the subtask builds, read from its design files
     const refs = Array.isArray(found?.subtask.design_files) ? found.subtask.design_files.map(designFileRef).filter((r): r is string => r !== null) : [];
     const designElements = refs.length ? designInventories(this.config.specDir, refs.map((file) => ({ file }))) : undefined;

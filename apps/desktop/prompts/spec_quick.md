@@ -112,7 +112,7 @@ Use the **Write tool** to create `implementation_plan.json` in the spec director
 - Each subtask MUST have `id` (string) and `title` (string, short 3-10 word summary)
 - Each subtask SHOULD have `description` (detailed notes), `status` (default: "pending"), `files_to_modify`, and `verification`
 - A subtask that adds data a person sees also adds sample rows for it to the project's seed script (in `files_to_modify`), so the preview and QA have something to show
-- A subtask that builds or changes a page has `design_files`: the design files it builds to (`design/screens/<name>.html`, or `design/base/screens/<name>.html` for an existing screen)
+- A subtask that builds or changes a page has `design_files`: the design files it builds to. A screen the project already has a design of is in its design library: name `.vibe-teamlead/design/library/screens/<name>.html` (list that folder for the screen and its states; `design/base/screens/<name>.html` when the spec directory has a `design/base/`). The coder gets these files with what a person can use on each screen, and QA must show every one of them in the running app before it can approve, so name each screen and state the subtask changes, and no others
 
 ---
 

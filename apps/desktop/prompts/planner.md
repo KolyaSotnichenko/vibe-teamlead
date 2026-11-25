@@ -85,7 +85,7 @@ The shape, with one phase and one subtask (the names are illustrative):
 - `service` — the one service the subtask touches.
 - `files_to_modify`, `files_to_create` — every file the subtask changes or adds, its tests included, as paths from the project root. The app reads these lists: a subtask that names UI files gets the design system and the frontend-design skill in its session, and the code of the files it names is looked up for the coder's first message.
 - `patterns_from` — existing files whose patterns the coder should follow.
-- `design_files` — for a subtask that builds or changes a page, the design files it builds to, as paths in the spec directory: `design/screens/<name>.html` from the task's design, or `design/base/screens/<name>.html` for a screen earlier tasks drew (the library; `design/base/index.md` lists it). The coder gets them with what a person can use on each, and QA must show every one of them in the running app before it can approve. Leave it out for a subtask that changes no page.
+- `design_files` — for a subtask that builds or changes a page, the design files it builds to, as paths in the spec directory: `design/screens/<name>.html` from the task's design, or `design/base/screens/<name>.html` for a screen earlier tasks drew (the library; `design/base/index.md` lists it). When the spec directory has no `design/base/` (a task with no designer), name the library's own file instead: `.vibe-teamlead/design/library/screens/<name>.html`. The coder gets them with what a person can use on each, and QA must show every one of them in the running app before it can approve. Leave it out for a subtask that changes no page.
 - `verification` — how the coder proves the subtask (next section).
 - `status` — always `"pending"`.
 

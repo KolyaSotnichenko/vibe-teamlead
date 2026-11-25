@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -332,6 +332,23 @@ describe('a coder session', () => {
     expect(config.kickoffData).toContain('Test first: tests/limiter.test.ts');
     expect(config.kickoffData.endsWith('CODE-BLOCK')).toBe(true);
     expect(logs).toContain('Code context for subtask-2-2: 1.0 KB');
+  });
+
+  // planner-mhp 043–055: plans of the short pipeline named the library's own files; no coder was told what its screen holds
+  it("gets what a person can use on a library screen its subtask names, once the app has put the library in the task's folder", async () => {
+    const specDir = mkdtempSync(join(tmpdir(), 'vtl-ck-'));
+    writeFileSync(join(specDir, 'implementation_plan.json'), JSON.stringify({
+      phases: [{ id: '1', subtasks: [{ id: '1-1', title: 'Board card to the mockup', status: 'pending', design_files: ['.vibe-teamlead/design/library/screens/plan-board.html'] }] }],
+    }));
+    const prepareDesignFiles = vi.fn(() => {
+      mkdirSync(join(specDir, 'design', 'base', 'screens'), { recursive: true });
+      writeFileSync(join(specDir, 'design', 'base', 'screens', 'plan-board.html'), '<!doctype html><main><button>Додати задачу</button></main>');
+    });
+    const o = new BuildOrchestrator({ specDir, projectDir: specDir, prepareDesignFiles } as never);
+    const data = await (o as unknown as { coderKickoff(id: string): Promise<string> }).coderKickoff('1-1');
+    expect(prepareDesignFiles).toHaveBeenCalledTimes(1);
+    expect(data).toContain('What a person can use on its screens');
+    expect(data).toContain('Додати задачу');
   });
 
   it("logs that there is no code context when the plan doesn't have the subtask", async () => {

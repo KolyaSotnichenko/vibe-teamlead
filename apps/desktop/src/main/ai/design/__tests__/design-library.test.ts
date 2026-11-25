@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { BASE_FRAMES_MAX, copyLibraryToBase, type LibraryFrame, libraryDir, publishToLibrary, readLibrary, selectBaseFrames } from '../design-library';
+import { BASE_FRAMES_MAX, copyLibraryForPlan, copyLibraryToBase, type LibraryFrame, libraryDir, publishToLibrary, readLibrary, selectBaseFrames } from '../design-library';
 
 function taskSpec(root: string, specId: string, frames: Array<{ file: string; title: string; kind: 'wireframe' | 'screen'; html: string }>): string {
   const dir = path.join(root, '.vibe-teamlead', 'specs', specId);
@@ -47,6 +47,43 @@ describe("the project's design library", () => {
     expect(readFileSync(path.join(next, 'design', 'base', 'screens', 'roadmap.html'), 'utf-8')).toBe('v1');
     expect(existsSync(path.join(next, 'design', 'base', 'canvas.json'))).toBe(true);
     expect(copyLibraryToBase(mkdtempSync(path.join(tmpdir(), 'vtl-empty-')), next)).toEqual({ copied: 0, listed: 0 });
+  });
+});
+
+// planner-mhp 043–055: tasks of the short pipeline (no designer) rebuilt library screens that were never in their spec folder
+describe('a task with no designer whose plan rebuilds library screens', () => {
+  function project(): { root: string; spec: string } {
+    const root = mkdtempSync(path.join(tmpdir(), 'vtl-lib-'));
+    const frames = ['plan-board', 'task-card', 'home'].flatMap((name, i) =>
+      (name === 'plan-board' ? [1280, 390] : [1280]).map((width) => ({ file: `screens/${name}.html`, title: name, kind: 'screen', width, height: 900, x: i * 1360, y: 0, taskId: '007', updatedAt: '2026-11-17T10:00:00Z' })),
+    );
+    for (const file of new Set(frames.map((f) => f.file))) {
+      mkdirSync(path.dirname(path.join(libraryDir(root), file)), { recursive: true });
+      writeFileSync(path.join(libraryDir(root), file), `<p>${file}</p>`);
+    }
+    writeFileSync(path.join(libraryDir(root), 'canvas.json'), JSON.stringify({ frames }));
+    return { root, spec: path.join(mkdtempSync(path.join(tmpdir(), 'vtl-wt-')), 'spec') };
+  }
+
+  it('gets the library under design/base/, the named screens on its canvas at every width', () => {
+    const { root, spec } = project();
+    expect(copyLibraryForPlan(root, spec, ['base/screens/plan-board.html'])).toBe(3);
+    expect(readFileSync(path.join(spec, 'design', 'base', 'screens', 'plan-board.html'), 'utf-8')).toBe('<p>screens/plan-board.html</p>');
+    const canvas = JSON.parse(readFileSync(path.join(spec, 'design', 'base', 'canvas.json'), 'utf-8')) as { frames: LibraryFrame[] };
+    expect(canvas.frames.filter((f) => f.file === 'screens/plan-board.html').map((f) => f.width)).toEqual([1280, 390]);
+  });
+
+  it('copies nothing when the files are there, when the plan names no library screen, or names one the library lacks', () => {
+    const { root, spec } = project();
+    expect(copyLibraryForPlan(root, spec, [])).toBe(0);
+    expect(copyLibraryForPlan(root, spec, ['screens/own.html'])).toBe(0);
+    expect(copyLibraryForPlan(root, spec, ['base/screens/never-drawn.html'])).toBe(0);
+    expect(existsSync(path.join(spec, 'design'))).toBe(false);
+    expect(copyLibraryForPlan(root, spec, ['base/screens/task-card.html'])).toBe(3);
+    // A second call leaves the task's copy alone
+    writeFileSync(path.join(spec, 'design', 'base', 'screens', 'home.html'), 'kept');
+    expect(copyLibraryForPlan(root, spec, ['base/screens/task-card.html'])).toBe(0);
+    expect(readFileSync(path.join(spec, 'design', 'base', 'screens', 'home.html'), 'utf-8')).toBe('kept');
   });
 });
 

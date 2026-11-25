@@ -36,6 +36,15 @@ describe("the designer's notes about the prototype", () => {
   });
 });
 
+// planner-mhp 043–055: tasks "to the mockup" with no designer; nothing made QA open the screens their plans named
+describe('a plan written without a designer names the screens it rebuilds', () => {
+  it.each(['spec_quick.md', 'planner.md'])('%s points at the project\'s design library and says QA must show each screen', (name) => {
+    const text = prompt(name);
+    expect(text).toContain('.vibe-teamlead/design/library/screens/<name>.html');
+    expect(text).toMatch(/QA must show every one of them in the running app/);
+  });
+});
+
 // QA and the preview can only show a screen that has data: in one project every page opened empty
 describe('sample data and test users come with the feature', () => {
   it('the spec asks for the seed and a test user for each role when the task adds data a screen shows', () => {

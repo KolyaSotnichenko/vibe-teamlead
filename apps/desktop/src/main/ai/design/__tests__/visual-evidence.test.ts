@@ -228,6 +228,37 @@ describe('the design files a plan names', () => {
     expect(designFileRef(42)).toBeNull();
   });
 
+  // planner-mhp 043–055: plans of the short pipeline named the library's own files, and no one read them as design files
+  it("are the library's screens when the planner named the project's library itself", () => {
+    expect(designFileRef('.vibe-teamlead/design/library/screens/plan-board.html')).toBe('base/screens/plan-board.html');
+    expect(designFileRef('/Users/x/app/.vibe-teamlead/design/library/screens/task-card.html')).toBe('base/screens/task-card.html');
+    expect(designFileRef('design/library/wireframes/plan-board.html')).toBe('base/wireframes/plan-board.html');
+    expect(designFileRef('.vibe-teamlead/design/library/canvas.json')).toBeNull();
+    expect(designFileRef('.vibe-teamlead/design/library/screens/../../secret.html')).toBeNull();
+  });
+
+  // planner-mhp 043–055: twelve tasks "to the mockup" had no designer, so QA approved each without opening the app
+  it('make QA show the library screens the plan rebuilds in a task with no design of its own', () => {
+    const dir = path.join(specDir, 'design');
+    mkdirSync(path.join(dir, 'base', 'screens'), { recursive: true });
+    for (const f of ['base/screens/plan-board.html', 'base/screens/task-card.html']) writeFileSync(path.join(dir, f), '<!doctype html>');
+    writeFileSync(path.join(dir, 'base', 'canvas.json'), JSON.stringify({ frames: [
+      { file: 'screens/plan-board.html', title: 'b', kind: 'screen', width: 1280, height: 900, x: 0, y: 0 },
+      { file: 'screens/plan-board.html', title: 'b', kind: 'screen', width: 390, height: 900, x: 0, y: 0 },
+    ] }));
+    writeFileSync(path.join(specDir, 'implementation_plan.json'), JSON.stringify({
+      phases: [{ subtasks: [{ id: '1-1', design_files: ['.vibe-teamlead/design/library/screens/plan-board.html', 'design/base/screens/task-card.html', 'screens/own.html'] }] }],
+    }));
+    expect(taskEvidenceFrames(specDir)).toEqual([
+      { file: 'base/screens/plan-board.html', width: 1280 },
+      { file: 'base/screens/plan-board.html', width: 390 },
+      { file: 'base/screens/task-card.html', width: 1280 },
+    ]);
+    // The owner's "build without design" still asks for nothing
+    writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ round: 1, stage: 'skipped' }));
+    expect(taskEvidenceFrames(specDir)).toEqual([]);
+  });
+
   it("are every subtask's design_files, once", () => {
     writeFileSync(path.join(specDir, 'implementation_plan.json'), JSON.stringify({
       phases: [

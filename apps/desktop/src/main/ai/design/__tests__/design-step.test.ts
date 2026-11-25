@@ -180,6 +180,24 @@ describe('the design checked in the running app', () => {
     expect(text).toContain(path.join('/s', 'design', 'base'));
   });
 
+  // planner-mhp 043–055: the short pipeline has no designer; its QA was told nothing about the screens the plan named
+  it('QA of a task with no design of its own compares the library screens its plan rebuilds', () => {
+    const required = [{ file: 'base/screens/plan-board.html', width: 1280 }, { file: 'base/screens/plan-board.html', width: 390 }];
+    const libraryInventory = [{ file: 'base/screens/plan-board.html', items: ['button «Додати задачу»'] }];
+    const text = designReferencePrompt('qa_reviewer', '/s', [], undefined, libraryInventory, required);
+    expect(text).toContain('base/screens/plan-board.html at 1280 px');
+    expect(text).toContain('base/screens/plan-board.html at 390 px');
+    expect(text).toContain(path.join('/s', 'design', 'base'));
+    expect(text).toContain('design_compare.json');
+    expect(text).toMatch(/refuses an approval/);
+    expect(text).toContain('button «Додати задачу»');
+    expect(text).toMatch(/no design of its own/i);
+    // Nothing to compare: nothing said. The owner's "build without design" stays the owner's decision
+    expect(designReferencePrompt('qa_reviewer', '/s', [], undefined, [], [])).toBe('');
+    expect(designReferencePrompt('qa_reviewer', '/s', [], { stage: 'skipped', round: 1 }, libraryInventory, required)).toBe('');
+    expect(designReferencePrompt('coder', '/s', [], undefined, libraryInventory, required)).toBe('');
+  });
+
   it('the planner names the design files of each UI subtask in design_files, library screens included', () => {
     const text = designReferencePrompt('planner', '/s', frames, state, inventory);
     expect(text).toContain('design_files');

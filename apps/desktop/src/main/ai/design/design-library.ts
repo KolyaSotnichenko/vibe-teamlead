@@ -310,7 +310,13 @@ const oneLine = (text: string) => text.replace(/[\u0000-\u001f\u007f]+/g, ' ').r
  * Copy the library into a task's design/base/ for its designer to start from: every file, with
  * the frames the task needs in canvas.json and the rest named in index.md. Never throws.
  */
-export function copyLibraryToBase(projectRoot: string, specDir: string, specMd = ''): { copied: number; listed: number } {
+export function copyLibraryToBase(
+  projectRoot: string,
+  specDir: string,
+  specMd = '',
+  /** Library files (screens/<name>.html) on the canvas whatever the spec says: the ones a plan names */
+  always: string[] = [],
+): { copied: number; listed: number } {
   try {
     const { frames } = readLibrary(projectRoot);
     if (!frames.length) return { copied: 0, listed: 0 };
@@ -327,7 +333,8 @@ export function copyLibraryToBase(projectRoot: string, specDir: string, specMd =
       mkdirSync(path.join(base, folder), { recursive: true });
       writeFileSync(path.join(base, folder, SHARED_STYLESHEET), css);
     }
-    const chosen = selectBaseFrames(frames, specMd);
+    const named = new Set(always);
+    const chosen = [...frames.filter((f) => named.has(f.file)), ...selectBaseFrames(frames, specMd).filter((f) => !named.has(f.file))];
     const chosenFiles = new Set(chosen.map((f) => f.file));
     writeFileSync(path.join(base, 'canvas.json'), JSON.stringify({ frames: chosen }, null, 2));
     const rest = files.filter((file) => !chosenFiles.has(file)).sort();
@@ -343,5 +350,26 @@ export function copyLibraryToBase(projectRoot: string, specDir: string, specMd =
     return { copied: files.length, listed: chosen.length };
   } catch {
     return { copied: 0, listed: 0 };
+  }
+}
+
+/**
+ * The library for a task no designer drew for (the short pipeline) whose plan rebuilds screens
+ * earlier tasks drew: copied to its design/base/, where the coder reads them and QA must show
+ * them. `refs` are the plan's design files as paths under design/ (visual-evidence.ts
+ * designFileRef). Only when a screen the plan names is in the library and not in the task's copy
+ * yet, so a copy the task already has is left as it is. Returns the files copied. Never throws.
+ */
+export function copyLibraryForPlan(projectRoot: string, specDir: string, refs: string[], specMd = ''): number {
+  try {
+    const named = refs.filter((ref) => ref.startsWith('base/')).map((ref) => ref.slice('base/'.length));
+    if (!named.length) return 0;
+    const inLibrary = new Set(readLibrary(projectRoot).frames.map((f) => f.file));
+    const base = path.join(specDir, 'design', 'base');
+    const missing = named.filter((file) => inLibrary.has(file) && !existsSync(path.join(base, file)));
+    if (!missing.length) return 0;
+    return copyLibraryToBase(projectRoot, specDir, specMd, named).copied;
+  } catch {
+    return 0;
   }
 }

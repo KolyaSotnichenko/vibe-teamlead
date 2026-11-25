@@ -207,12 +207,16 @@ const DESIGN_REF = /^(base\/)?(wireframes|screens)\/[A-Za-z0-9_][A-Za-z0-9._-]{0
 
 /**
  * A design file as the planner named it in `design_files` ("design/base/screens/board.html", an
- * absolute path, or "screens/card.html"), as a path under design/; null for anything else. Pure.
+ * absolute path, or "screens/card.html"), as a path under design/; null for anything else. A file
+ * of the project's library itself (".vibe-teamlead/design/library/screens/board.html", what a
+ * plan written without a designer names: its spec folder has no copy yet) is that screen under
+ * base/. Pure.
  */
 export function designFileRef(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const at = raw.replace(/\\/g, '/').lastIndexOf('/design/');
-  const ref = at >= 0 ? raw.replace(/\\/g, '/').slice(at + '/design/'.length) : raw.replace(/^design\//, '');
+  const under = at >= 0 ? raw.replace(/\\/g, '/').slice(at + '/design/'.length) : raw.replace(/^design\//, '');
+  const ref = under.replace(/^library\//, 'base/');
   return DESIGN_REF.test(ref) ? ref : null;
 }
 
@@ -246,16 +250,20 @@ function libraryWidths(specDir: string): Map<string, number[]> {
 /**
  * The frames an approval of this task must show: the task's own design, and the screens of the
  * library its plan rebuilds (a redesign changes screens earlier tasks drew; in one project its
- * own design had 10 screens and the board, the card and the Gantt chart were never shown). None
- * without a design, or when it was skipped. Never throws.
+ * own design had 10 screens and the board, the card and the Gantt chart were never shown). A
+ * task with no design of its own (the short pipeline has no designer) shows the library screens
+ * its plan names: in that project twelve tasks "to the mockup" ran that way, and QA approved
+ * each from the diff. None when the owner had the task built without a design. Never throws.
  */
 export function taskEvidenceFrames(specDir: string): EvidenceFrame[] {
   const state = readDesignState(specDir);
-  if (!state || state.stage === 'skipped') return [];
-  const frames = requiredFrames(readDesignCanvas(specDir).frames);
+  if (state?.stage === 'skipped') return [];
+  const frames = state ? requiredFrames(readDesignCanvas(specDir).frames) : [];
   const library = libraryWidths(specDir);
   const seen = new Set(frames.map((f) => `${f.file}@${f.width}`));
   for (const ref of planDesignFiles(specDir)) {
+    // Without a design of its own, the task has only the library's screens
+    if (!state && !ref.startsWith('base/')) continue;
     const full = designFile(specDir, ref);
     if (!full || !realFileInside(designDir(specDir), full)) continue;
     const widths = ref.startsWith('base/') ? (library.get(ref) ?? [1280]) : frames.some((f) => f.file === ref) ? [] : [1280];
